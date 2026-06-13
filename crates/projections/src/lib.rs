@@ -1,11 +1,23 @@
 //! `projections` — synchronous, rebuildable read models over the event log
 //! (doc 02 / doc 10).
 //!
-//! Two projections here:
-//! - `votecount`  — running tally folded from `VoteSubmitted` / `VoteWithdrawn`.
-//! - `slot_state` — per-slot lifecycle + role-reveal, folded from `RoleAssigned`
-//!   and the engine inner events (`PlayerKilled` / `PlayerSaved`) that arrive
-//!   wrapped in a `ResolutionApplied` envelope.
+//! Projections here:
+//! - `votecount`      — the RUNNING tally. Phase-3 ruling: UNWEIGHTED, keyed by
+//!   each actor-slot's CURRENT ballot. A `VoteSubmitted` OVERWRITES that actor's
+//!   ballot; `VoteWithdrawn { actor, phase_id }` removes it; the tally is the
+//!   COUNT of targets. Backed by the `vote_ballot` table (one row per actor per
+//!   phase) so overwrite/withdraw are pure local upsert/delete. Weights remain an
+//!   engine/official-`DayVoteOutcome` concern, NOT the running tally.
+//! - `slot_state`     — per-slot lifecycle + role reveal, folded from
+//!   `RoleAssigned` and engine inner events wrapped in `ResolutionApplied`.
+//! - `game_authority` — host + cohosts per game (`GameCreated`, `CohostAdded`).
+//!   Backs `caps` HostOf / CohostOf resolution.
+//! - `slot_occupancy` — the LIVE slot→user mapping (`SlotAssigned`,
+//!   `ReplacementCompleted`). The slot id is STABLE across replacement; only the
+//!   occupant moves. Backs `caps` SlotOccupant resolution.
+//! - `phase_state`    — current phase, lock, deadline (`GameStarted`/
+//!   `PhaseAdvanced`, `DeadlineSet`/`DeadlineExtended`, `ThreadLocked`/
+//!   `ThreadUnlocked`). Backs command validation (phase open/unlocked).
 //!
 //! The centerpiece is [`append_and_project`]: it appends events AND folds them
 //! into the projection tables **in one transaction** (doc 02 synchronous
@@ -20,13 +32,15 @@ use sqlx::postgres::PgPool;
 use sqlx::Row;
 use uuid::Uuid;
 
-/// A row of the `votecount` running tally.
+/// A row of the `votecount` running tally: the COUNT of current ballots cast at
+/// `candidate_slot` in `phase_id` (unweighted; Phase-3 ruling).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VoteCountRow {
     pub game_id: Uuid,
     pub phase_id: String,
     pub candidate_slot: String,
-    pub weight: f64,
+    /// Number of slots whose CURRENT ballot targets `candidate_slot`.
+    pub count: i64,
 }
 
 /// A row of the `slot_state` projection.
@@ -37,6 +51,32 @@ pub struct SlotStateRow {
     pub alive: bool,
     pub role_key: Option<String>,
     pub role_revealed: bool,
+}
+
+/// A row of the `game_authority` projection (host/cohost per game).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameAuthorityRow {
+    pub game_id: Uuid,
+    pub user_id: String,
+    /// `"host"` | `"cohost"`.
+    pub role: String,
+}
+
+/// A row of the `slot_occupancy` projection: the slot's CURRENT occupant.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SlotOccupancyRow {
+    pub game_id: Uuid,
+    pub slot_id: String,
+    pub occupant_user_id: String,
+}
+
+/// The `phase_state` projection row: the game's current phase window.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PhaseStateRow {
+    pub game_id: Uuid,
+    pub phase_id: String,
+    pub locked: bool,
+    pub deadline: Option<i64>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -69,23 +109,21 @@ async fn fold_event(
     ev: &StoredEvent,
 ) -> Result<(), ProjectionError> {
     match ev.kind.as_str() {
-        // ── votecount (running tally) ──
+        // ── votecount (running, ballot-keyed) ──
         "VoteSubmitted" => {
+            // OVERWRITE this actor's current ballot for the phase.
             let p = &ev.payload;
             let phase_id = str_field(p, "phase_id", &ev.kind)?;
-            let candidate = vote_target(p, &ev.kind)?;
-            let weight = p.get("weight").and_then(|w| w.as_f64()).unwrap_or(1.0);
-            upsert_votecount(tx, game_id, &phase_id, &candidate, weight).await?;
+            let actor = str_field(p, "actor", &ev.kind)?;
+            let target = vote_target(p, &ev.kind)?;
+            upsert_ballot(tx, game_id, &phase_id, &actor, &target).await?;
         }
         "VoteWithdrawn" => {
-            // A withdrawal removes the prior ballot's weight from its candidate.
-            // The withdrawal carries the original target+phase so the fold stays
-            // a pure local delta (no cross-row scan needed for determinism).
+            // REMOVE this actor's ballot for the phase (no target needed).
             let p = &ev.payload;
             let phase_id = str_field(p, "phase_id", &ev.kind)?;
-            let candidate = vote_target(p, &ev.kind)?;
-            let weight = p.get("weight").and_then(|w| w.as_f64()).unwrap_or(1.0);
-            upsert_votecount(tx, game_id, &phase_id, &candidate, -weight).await?;
+            let actor = str_field(p, "actor", &ev.kind)?;
+            delete_ballot(tx, game_id, &phase_id, &actor).await?;
         }
 
         // ── slot_state ──
@@ -101,6 +139,65 @@ async fn fold_event(
                 .execute(&mut **tx)
                 .await?;
         }
+
+        // ── game_authority (caps: HostOf / CohostOf) ──
+        "GameCreated" => {
+            let host = str_field(&ev.payload, "host", &ev.kind)?;
+            upsert_authority(tx, game_id, &host, "host").await?;
+        }
+        "CohostAdded" => {
+            let cohost = str_field(&ev.payload, "user_id", &ev.kind)?;
+            upsert_authority(tx, game_id, &cohost, "cohost").await?;
+        }
+
+        // ── slot lifecycle / occupancy ──
+        "SlotAdded" => {
+            let slot_id = str_field(&ev.payload, "slot_id", &ev.kind)?;
+            ensure_slot(tx, game_id, &slot_id).await?;
+        }
+        "SlotAssigned" => {
+            // Occupancy begins: slot → user (the LIVE mapping).
+            let p = &ev.payload;
+            let slot_id = str_field(p, "slot_id", &ev.kind)?;
+            let user_id = str_field(p, "user_id", &ev.kind)?;
+            ensure_slot(tx, game_id, &slot_id).await?;
+            upsert_occupancy(tx, game_id, &slot_id, &user_id).await?;
+        }
+        "ReplacementCompleted" => {
+            // The slot id is UNCHANGED; only the occupant mapping moves. The
+            // slot's history (votes/posts) is keyed by slot_id elsewhere and is
+            // therefore preserved — THIS is the User≠Slot payoff.
+            let p = &ev.payload;
+            let slot_id = str_field(p, "slot_id", &ev.kind)?;
+            let incoming = str_field(p, "incoming_user", &ev.kind)?;
+            upsert_occupancy(tx, game_id, &slot_id, &incoming).await?;
+        }
+
+        // ── phase_state (validation: phase open / locked / deadline) ──
+        "GameStarted" | "PhaseAdvanced" => {
+            // Set the current phase; a new phase starts unlocked with no deadline.
+            let phase_id = str_field(&ev.payload, "phase_id", &ev.kind)?;
+            set_phase(tx, game_id, &phase_id).await?;
+        }
+        "DeadlineSet" | "DeadlineExtended" => {
+            let p = &ev.payload;
+            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let at =
+                p.get("at")
+                    .and_then(|v| v.as_i64())
+                    .ok_or_else(|| ProjectionError::Payload {
+                        kind: ev.kind.clone(),
+                        source: serde::de::Error::custom("missing integer field `at`"),
+                    })?;
+            ensure_phase(tx, game_id, &phase_id).await?;
+            sqlx::query("UPDATE phase_state SET deadline = $2 WHERE game_id = $1")
+                .bind(game_id)
+                .bind(at)
+                .execute(&mut **tx)
+                .await?;
+        }
+        "ThreadLocked" => set_locked(tx, game_id, true).await?,
+        "ThreadUnlocked" => set_locked(tx, game_id, false).await?,
 
         // ── engine resolution envelope: unwrap and fold inner events ──
         "ResolutionApplied" => {
@@ -122,8 +219,8 @@ async fn fold_event(
                 .await?;
         }
 
-        // Everything else (posts, channels, lifecycle) is not folded by THESE
-        // two projections. Ignored here, not rejected — other projections own it.
+        // Everything else (posts, channels) is not folded by THESE projections.
+        // Ignored here, not rejected — other projections own it.
         _ => {}
     }
     Ok(())
@@ -193,14 +290,18 @@ pub async fn append_and_project(
 pub async fn rebuild(pool: &PgPool, game_id: Uuid) -> Result<(), ProjectionError> {
     let mut tx = pool.begin().await?;
 
-    sqlx::query("DELETE FROM votecount WHERE game_id = $1")
-        .bind(game_id)
-        .execute(&mut *tx)
-        .await?;
-    sqlx::query("DELETE FROM slot_state WHERE game_id = $1")
-        .bind(game_id)
-        .execute(&mut *tx)
-        .await?;
+    for table in [
+        "vote_ballot",
+        "slot_state",
+        "game_authority",
+        "slot_occupancy",
+        "phase_state",
+    ] {
+        sqlx::query(&format!("DELETE FROM {table} WHERE game_id = $1"))
+            .bind(game_id)
+            .execute(&mut *tx)
+            .await?;
+    }
 
     // Load the stream in order (within this tx) and re-fold. We read inside the
     // tx so the rebuild is a consistent snapshot.
@@ -238,13 +339,15 @@ pub async fn rebuild(pool: &PgPool, game_id: Uuid) -> Result<(), ProjectionError
     Ok(())
 }
 
-// ───────────────────────── read helpers (for tests / queries) ─────────────────────────
+// ───────────────────────── read helpers (for tests / queries / caps) ─────────────────────────
 
-/// Read a game's votecount rows, ordered deterministically.
+/// Read a game's running votecount: COUNT of current ballots per candidate,
+/// ordered deterministically. Candidates with zero ballots are absent.
 pub async fn votecount(pool: &PgPool, game_id: Uuid) -> Result<Vec<VoteCountRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, phase_id, candidate_slot, weight FROM votecount \
-         WHERE game_id = $1 ORDER BY phase_id, candidate_slot",
+        "SELECT phase_id, target AS candidate_slot, COUNT(*) AS n \
+         FROM vote_ballot WHERE game_id = $1 \
+         GROUP BY phase_id, target ORDER BY phase_id, target",
     )
     .bind(game_id)
     .fetch_all(pool)
@@ -252,10 +355,10 @@ pub async fn votecount(pool: &PgPool, game_id: Uuid) -> Result<Vec<VoteCountRow>
     Ok(rows
         .into_iter()
         .map(|r| VoteCountRow {
-            game_id: r.get("game_id"),
+            game_id,
             phase_id: r.get("phase_id"),
             candidate_slot: r.get("candidate_slot"),
-            weight: r.get("weight"),
+            count: r.get("n"),
         })
         .collect())
 }
@@ -284,29 +387,160 @@ pub async fn slot_state(
         .collect())
 }
 
+/// Read a game's host/cohost authority rows (for `caps` resolution).
+pub async fn game_authority(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Vec<GameAuthorityRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, user_id, role FROM game_authority \
+         WHERE game_id = $1 ORDER BY role, user_id",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| GameAuthorityRow {
+            game_id: r.get("game_id"),
+            user_id: r.get("user_id"),
+            role: r.get("role"),
+        })
+        .collect())
+}
+
+/// The CURRENT occupant of a slot, if any (the live mapping for `caps`).
+pub async fn slot_occupant(
+    pool: &PgPool,
+    game_id: Uuid,
+    slot_id: &str,
+) -> Result<Option<String>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT occupant_user_id FROM slot_occupancy WHERE game_id = $1 AND slot_id = $2",
+    )
+    .bind(game_id)
+    .bind(slot_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| r.get("occupant_user_id")))
+}
+
+/// Read a game's slot_occupancy rows, ordered deterministically.
+pub async fn slot_occupancy(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Vec<SlotOccupancyRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, slot_id, occupant_user_id FROM slot_occupancy \
+         WHERE game_id = $1 ORDER BY slot_id",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| SlotOccupancyRow {
+            game_id: r.get("game_id"),
+            slot_id: r.get("slot_id"),
+            occupant_user_id: r.get("occupant_user_id"),
+        })
+        .collect())
+}
+
+/// The game's current phase window, if a phase has started.
+pub async fn phase_state(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Option<PhaseStateRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT game_id, phase_id, locked, deadline FROM phase_state WHERE game_id = $1",
+    )
+    .bind(game_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| PhaseStateRow {
+        game_id: r.get("game_id"),
+        phase_id: r.get("phase_id"),
+        locked: r.get("locked"),
+        deadline: r.get("deadline"),
+    }))
+}
+
+/// Whether a slot exists in the game (has a `slot_state` row).
+pub async fn slot_exists(
+    pool: &PgPool,
+    game_id: Uuid,
+    slot_id: &str,
+) -> Result<bool, ProjectionError> {
+    let row = sqlx::query("SELECT 1 AS x FROM slot_state WHERE game_id = $1 AND slot_id = $2")
+        .bind(game_id)
+        .bind(slot_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
+}
+
+/// Whether a slot is alive (`true`), dead (`false`), or absent (`None`).
+pub async fn slot_alive(
+    pool: &PgPool,
+    game_id: Uuid,
+    slot_id: &str,
+) -> Result<Option<bool>, ProjectionError> {
+    let row = sqlx::query("SELECT alive FROM slot_state WHERE game_id = $1 AND slot_id = $2")
+        .bind(game_id)
+        .bind(slot_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|r| r.get("alive")))
+}
+
+/// Whether a game exists (has a `game_authority` host row).
+pub async fn game_exists(pool: &PgPool, game_id: Uuid) -> Result<bool, ProjectionError> {
+    let row = sqlx::query("SELECT 1 AS x FROM game_authority WHERE game_id = $1 LIMIT 1")
+        .bind(game_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
+}
+
 // ───────────────────────── low-level upserts ─────────────────────────
 
-async fn upsert_votecount(
+async fn upsert_ballot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     game_id: Uuid,
     phase_id: &str,
-    candidate: &str,
-    delta: f64,
+    actor_slot: &str,
+    target: &str,
 ) -> Result<(), ProjectionError> {
     sqlx::query(
         r#"
-        INSERT INTO votecount (game_id, phase_id, candidate_slot, weight)
+        INSERT INTO vote_ballot (game_id, phase_id, actor_slot, target)
         VALUES ($1, $2, $3, $4)
-        ON CONFLICT (game_id, phase_id, candidate_slot)
-        DO UPDATE SET weight = votecount.weight + EXCLUDED.weight
+        ON CONFLICT (game_id, phase_id, actor_slot)
+        DO UPDATE SET target = EXCLUDED.target
         "#,
     )
     .bind(game_id)
     .bind(phase_id)
-    .bind(candidate)
-    .bind(delta)
+    .bind(actor_slot)
+    .bind(target)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn delete_ballot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query("DELETE FROM vote_ballot WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3")
+        .bind(game_id)
+        .bind(phase_id)
+        .bind(actor_slot)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
@@ -326,6 +560,101 @@ async fn ensure_slot(
     .bind(slot_id)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn upsert_authority(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    user_id: &str,
+    role: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "INSERT INTO game_authority (game_id, user_id, role) VALUES ($1, $2, $3) \
+         ON CONFLICT (game_id, user_id, role) DO NOTHING",
+    )
+    .bind(game_id)
+    .bind(user_id)
+    .bind(role)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn upsert_occupancy(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    slot_id: &str,
+    user_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO slot_occupancy (game_id, slot_id, occupant_user_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (game_id, slot_id)
+        DO UPDATE SET occupant_user_id = EXCLUDED.occupant_user_id
+        "#,
+    )
+    .bind(game_id)
+    .bind(slot_id)
+    .bind(user_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Set the current phase: a new phase starts unlocked with no deadline.
+async fn set_phase(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO phase_state (game_id, phase_id, locked, deadline)
+        VALUES ($1, $2, FALSE, NULL)
+        ON CONFLICT (game_id)
+        DO UPDATE SET phase_id = EXCLUDED.phase_id, locked = FALSE, deadline = NULL
+        "#,
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// Ensure a phase_state row exists for the game (without clobbering an existing
+/// phase). Used by deadline events that may arrive for the current phase.
+async fn ensure_phase(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO phase_state (game_id, phase_id, locked, deadline)
+        VALUES ($1, $2, FALSE, NULL)
+        ON CONFLICT (game_id) DO NOTHING
+        "#,
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn set_locked(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    locked: bool,
+) -> Result<(), ProjectionError> {
+    sqlx::query("UPDATE phase_state SET locked = $2 WHERE game_id = $1")
+        .bind(game_id)
+        .bind(locked)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 

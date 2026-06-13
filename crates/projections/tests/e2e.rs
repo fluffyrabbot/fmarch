@@ -204,18 +204,20 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
         "roles hidden until end-game"
     );
 
-    // votecount (running): D01 → slot_1 has 1.0 (2 in, 1 withdrawn), slot_3 has 1.0.
+    // votecount (running, ballot-keyed, UNWEIGHTED): D01 → slot_1 has 1 current
+    // ballot (slot_2 and slot_3 both voted slot_1, then slot_3 withdrew), and
+    // slot_3 has 1 (slot_1's ballot).
     let vc = votecount(&pool, game).await.unwrap();
-    let tally: BTreeMap<(String, String), f64> = vc
+    let tally: BTreeMap<(String, String), i64> = vc
         .iter()
-        .map(|r| ((r.phase_id.clone(), r.candidate_slot.clone()), r.weight))
+        .map(|r| ((r.phase_id.clone(), r.candidate_slot.clone()), r.count))
         .collect();
     assert_eq!(
         tally[&("D01".into(), "slot_1".into())],
-        1.0,
-        "2 votes - 1 withdrawn"
+        1,
+        "2 ballots - 1 withdrawn = 1"
     );
-    assert_eq!(tally[&("D01".into(), "slot_3".into())], 1.0);
+    assert_eq!(tally[&("D01".into(), "slot_3".into())], 1);
 }
 
 /// Rebuild determinism (REQUIRED, doc 02): after building projections
