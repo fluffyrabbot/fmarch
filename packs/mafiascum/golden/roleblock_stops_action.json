@@ -1,5 +1,5 @@
 {
-  "description": "Roleblocker (slot_4) blocks the Cop (slot_2). The Cop's Investigate is roleblockable, so it does not resolve: NO InvestigationResult is emitted. An EffectNotification informs the cop they were blocked (audience = the blocked actor).",
+  "description": "Roleblocker (slot_4) blocks the Cop (slot_2). The Cop's Investigate is roleblockable, so it does not resolve: NO InvestigationResult is emitted. An ActionInterfered event informs the cop they were roleblocked (actor = the blocked cop slot).",
   "input": {
     "game_id": "game_demo_002",
     "phase_id": "N01",
@@ -41,11 +41,10 @@
   "expected_events": [
     {
       "index": 0,
-      "kind": "EffectNotification",
+      "kind": "ActionInterfered",
       "payload": {
-        "effect": "blocked",
-        "status": "applied",
-        "audience": ["slot_2"]
+        "actor": "slot_2",
+        "reason": "roleblocked"
       }
     }
   ]

@@ -1,5 +1,5 @@
 {
-  "description": "Day 1 vote ends in a 2-2 tie between slot_2 and slot_3. VotePolicy is Plurality with tie_breaker=NoElimination, so the official outcome is NoLynch (status NoMajority, no winner, tiebreak recorded). Votes are submissions; slot_5 has withdrawn its ballot and is omitted from the active tally.",
+  "description": "Day 1 vote ends in a 2-2 tie between slot_2 and slot_3. VotePolicy is Plurality with tie_breaker=NoElimination, so the official outcome is no elimination (status Tie, no winner, tiebreak recorded). Votes are submissions; slot_5 has withdrawn its ballot and is omitted from the active tally.",
   "input": {
     "game_id": "game_demo_004",
     "phase_id": "D01",
@@ -74,7 +74,7 @@
       "index": 0,
       "kind": "DayVoteOutcome",
       "payload": {
-        "status": "NoMajority",
+        "status": "Tie",
         "winner": null,
         "contenders": ["slot_2", "slot_3"],
         "tallies": { "slot_2": 2.0, "slot_3": 2.0 },

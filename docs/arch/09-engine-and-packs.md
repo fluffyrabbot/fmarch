@@ -106,6 +106,7 @@ struct Pack {
     triggers: Vec<TriggerRule>,
     vote: VotePolicy,    // NEW vs im-human: vote rules are culture-specific
     phases: PhasePolicy, // NEW: cadence / subsegments per culture
+    investigation_overrides: Option<Map<Tag, ResultOverride>>, // OPTIONAL; result-flip table (below)
 }
 ```
 
@@ -116,15 +117,17 @@ struct Role {
     description: String,
     alignment: Option<AlignmentKey>,   // pack-defined; engine treats as opaque tag
     actions: Vec<ActionTemplate>,
+    effects: Vec<Tag>,                 // persistent effect tags carried by the role (default empty)
 }
 
 struct ActionTemplate {
     id: String,
     ability: IrAbility,
     window: Window,                 // Day | Night | Any
-    targets: TargetSpec,            // None | One | Many{max} | Group
+    targets: TargetSpec,            // None | One | Many | Group  (cardinality lives in Constraints.max_targets)
     modifiers: Vec<Modifier>,
     constraints: Constraints,
+    mode: Option<InvestigateMode>,  // REQUIRED iff ability == Investigate; absent/null otherwise
 }
 
 struct Constraints {
@@ -136,6 +139,14 @@ struct Constraints {
     x_shots: Option<u16>,          // limited-use abilities
 }
 ```
+
+> **`mode` and `Investigate`.** `IrAbility` stays a **flat tag** (we do *not* parameterize the
+> enum as `Investigate(InvestigateMode)`); the mode rides alongside on the template. `mode`
+> is **REQUIRED iff `ability == Investigate`** and **must be absent/null** for every other
+> ability. This is what distinguishes Cop (`Investigate` + `Parity`) from Tracker
+> (`Investigate` + `Track`) in the IR — without it the two info roles are indistinguishable.
+> Track/Watch/Motion results are **graph-derived** (computed from the interaction graph) and
+> are NOT configurable via `VisibilityRule` beyond hide/show.
 
 ### Precedence — who beats whom
 
@@ -158,6 +169,31 @@ struct VisibilityRule {
     unless_modifiers: Vec<Modifier>,// e.g. tracker sees target UNLESS Ninja
 }
 ```
+
+`VisibilityRule` governs hide/show of a single emitting action's fields. It does **not** flip
+a *result value* — that is the job of the `investigation_overrides` table below.
+
+### Investigation overrides — result tampering by effect tag
+
+The optional `investigation_overrides` table maps a persistent effect `Tag` to a
+`ResultOverride`, which in turn maps an `InvestigateMode` to the result value returned when
+the investigated slot carries that effect tag. This is the **canonical home for Godfather**
+(carries the `godfather` effect → a `Parity` investigation reads `town`), and is
+forward-compatible with Miller (a town role that reads scum), framers, and any other
+`Mark`-driven result tampering.
+
+```rust
+/// Optional pack table: investigation_overrides: Map<Tag, ResultOverride>
+/// e.g. { "godfather": { "Parity": "town" } }
+struct ResultOverride {
+    by_mode: Map<InvestigateMode, String>, // mode (at minimum Parity) -> overridden result value
+}
+```
+
+The resolver consults this table when emitting an `InvestigationResult`: if the investigated
+slot carries a tag present in `investigation_overrides`, and that tag's `ResultOverride` has
+an entry for the active `InvestigateMode`, the override value replaces the otherwise-derived
+result. Absent a match, the normal result stands.
 
 ### Redirects — fixpoint policy
 
@@ -245,6 +281,12 @@ struct Submission {
 A **day vote is just a submission** whose template resolves to the vote, retractable via
 `withdrawn`. This unifies night actions and votes under one ingestion path.
 
+> **DEFERRED — faction quota.** In v1 the platform submits **exactly one factional action per
+> faction per night** (the mafia night-kill is one shared submission attributed to whichever
+> mafia slot the platform names). A pack-level `faction_quota` concept ("N kills/night per
+> faction regardless of goon count") is future work and is intentionally **out of the v1
+> schema**.
+
 ## The resolver contract
 
 ```rust
@@ -265,6 +307,40 @@ struct ResolutionOutput {
 }
 ```
 
+The `StateSnapshot` the resolver reads (and that the goldens encode) is canonically:
+
+```rust
+struct StateSnapshot {
+    phase_kind: PhaseKind,          // Day | Night | Twilight
+    phase_number: u32,
+    slots: Vec<SlotState>,
+}
+
+struct SlotState {
+    slot_id: SlotId,
+    role_key: RoleKey,
+    alignment: Option<AlignmentKey>,
+    status: String,                 // "alive" | "dead" (pack-opaque status tag)
+    effects: Vec<Tag>,              // persistent effect tags currently on the slot
+}
+```
+
+`SlotState.effects` is where role-level `Role.effects` (and any `Mark`-applied tags) surface
+to the resolver — e.g. the `godfather` tag that drives `investigation_overrides`.
+
+### Scalar conventions
+
+Two resolver-input scalars are pinned so JSON authors and goldens don't drift:
+
+```rust
+type Seed        = u64;  // resolver RNG seed; a bare integer in JSON
+type LogicalTime = u64;  // monotonic logical time (submitted_at, engine timestamps); a bare integer
+```
+
+`TargetSpec` carries **no embedded count**: it is `None | One | Many | Group`. Cardinality is
+the **single responsibility of `Constraints.max_targets`** (e.g. the bus driver is
+`targets: Many` + `max_targets: 2`).
+
 `resolve` is **pure**: same inputs ⇒ same outputs, always. Its output is persisted as a
 `resolution.applied` envelope plus a `resolution.trace` event
 ([10-event-schema](10-event-schema.md)).
@@ -284,6 +360,15 @@ dispute resolution:
    it the engine emits a diagnostic note and terminates deterministically.
 5. **No hidden global state.** All transient resolution state (target maps, graph,
    effect pool, audits) lives in the resolution context and is reflected in the trace.
+6. **Explicit precedence evaluation order.** Resolution proceeds in **descending**
+   `Constraints.priority`. The canonical mafiascum phase order — the order abilities resolve —
+   is **Block → Redirect → Protect → Kill → Investigate**. `PrecedenceRule`s are consulted at
+   the point each ability resolves (not pre-computed as a static DAG). A rule's
+   `unless_modifiers` inspects the modifiers of the **BEATEN** action (the one named in
+   `beats`), never the beating action or the target — e.g. `protect_beats_kill` with
+   `unless_modifiers: [Strongman]` inspects the **Kill**'s modifiers. Track/Watch/Motion
+   results are **graph-derived** (computed from the interaction graph) and are NOT
+   configurable via `VisibilityRule` beyond hide/show.
 
 ## The trace: cross-ruleset auditability
 

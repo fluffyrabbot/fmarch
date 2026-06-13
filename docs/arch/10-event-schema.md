@@ -153,7 +153,10 @@ enum InnerEvent {
 
     // ── Information ──
     InvestigationResult,    // { mode, investigator, target, result }  mode per InvestigateMode
-    EffectNotification,     // { effect, status, audience }
+    EffectNotification,     // { effect, status, audience }  RESERVED for Mark/Clear effects — NOT the roleblock channel
+
+    // ── Interference ──
+    ActionInterfered,       // { actor: SlotId, reason: String }  e.g. reason "roleblocked"
 
     // ── Reactive ──
     Trigger,                // { trigger_id, payload }  (vengeful/hunter/retaliation)
@@ -163,11 +166,18 @@ enum InnerEvent {
 }
 ```
 
+> **`ActionInterfered` vs `EffectNotification`.** When an action fails to resolve because it
+> was interfered with (e.g. a roleblocked Cop), the resolver emits
+> `ActionInterfered { actor, reason }` (reason `"roleblocked"`) addressed to the actor whose
+> action was stopped, and emits **no** result event for the fizzled action (a roleblocked Cop
+> gets no `InvestigationResult`). `EffectNotification` is **reserved for Mark/Clear effects**
+> and is explicitly **NOT** the roleblock channel.
+
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 
 ```rust
 struct DayVoteOutcome {
-    status: VoteStatus,             // Lynch | NoLynch | NoMajority | Hammer
+    status: VoteStatus,             // Lynch | NoLynch | NoMajority | Tie | Hammer
     winner: Option<SlotId>,         // the eliminated slot, if any
     contenders: Vec<SlotId>,
     tallies: Map<SlotId, f64>,      // weighted counts
@@ -178,7 +188,28 @@ struct DayVoteOutcome {
     tiebreak: Option<String>,
     reason: Option<String>,
 }
+
+enum VoteStatus { Lynch, NoLynch, NoMajority, Tie, Hammer }
 ```
+
+`Tie` is the explicit status for a plurality/parity tie with no eliminable winner (e.g. a 2-2
+under `tie_breaker: NoElimination`); it is distinct from `NoLynch` (someone *chose* no-lynch)
+and from `NoMajority` (a majority threshold was simply not reached).
+
+`PhaseAnnouncement` (deaths revealed at a phase boundary) has the pinned payload:
+
+```rust
+struct PhaseAnnouncement {
+    phase_id: PhaseId,
+    deaths: Vec<Death>,             // empty if no one died this boundary
+}
+
+struct Death { slot_id: SlotId, cause: String }
+```
+
+`Seed` and `LogicalTime` carried on engine events are both `u64` (see
+[09](09-engine-and-packs.md)): `Seed` is the recorded resolver RNG seed; `LogicalTime`
+(`occurred_at`, `started_at`, `finished_at`) is monotonic logical time, never wall-clock.
 
 ### The trace
 

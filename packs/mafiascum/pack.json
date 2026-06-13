@@ -137,7 +137,7 @@
       ]
     },
     "godfather": {
-      "description": "Godfather. Carries out the factional kill and appears town to a Parity investigation (visibility result flip via the godfather effect tag).",
+      "description": "Godfather. Carries out the factional kill and appears town to a Parity investigation: the godfather effect tag drives an investigation_overrides result flip.",
       "alignment": "mafia",
       "actions": [
         {
@@ -277,5 +277,8 @@
       "Day": ["sod", "main", "eod"]
     },
     "twilight": false
+  },
+  "investigation_overrides": {
+    "godfather": { "Parity": "town" }
   }
 }

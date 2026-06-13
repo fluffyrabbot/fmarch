@@ -209,3 +209,38 @@ expressible as a constraint today; I relied on the platform submitting exactly o
 Everything in deliverables 1 and 2 conforms to the doc-09/doc-10 *intent*; the deviations
 above (mode field, role/slot `effects`, EffectNotification-for-roleblock, invented payload
 shapes) are the price of the docs being type-sketches rather than serialization contracts.
+
+---
+
+## Resolution (review round 1)
+
+Reviewer rulings applied; the loop is closed. One line per finding:
+
+1. **`mode` on `ActionTemplate`** — APPLIED (R1). Added `mode: Option<InvestigateMode>` to
+   `ActionTemplate`, REQUIRED iff `ability == Investigate`. `IrAbility` stays a flat tag. The
+   pack's `"mode"` on cop/tracker is now canonical, not a deviation.
+2. **Godfather result-flip home** — APPLIED (R2). Added `effects: Vec<Tag>` to `Role` and
+   `SlotState`; added optional pack table `investigation_overrides: Map<Tag, ResultOverride>`
+   (canonical home for Godfather, forward-compatible with Miller/framers). Pack gains
+   `{ "godfather": { "Parity": "town" } }`.
+3. **Track result is graph-derived** — APPLIED (R3). Documented in the IR/Investigate spec and
+   determinism rules: Track/Watch/Motion results are graph-derived and not `VisibilityRule`-
+   configurable beyond hide/show.
+4. **Blocked-action channel** — APPLIED (R4). Added `ActionInterfered { actor, reason }` inner
+   event; `EffectNotification` is reserved for Mark/Clear and is NOT the roleblock channel.
+   `roleblock_stops_action.json` now emits `ActionInterfered{actor: slot_2, reason: "roleblocked"}`
+   and no `InvestigationResult`.
+5. **Precedence evaluation order** — APPLIED (R3). Determinism rules now state descending
+   `Constraints.priority`, canonical phase order Block → Redirect → Protect → Kill →
+   Investigate, and that rules are consulted at the point each ability resolves.
+6. **`unless_modifiers` reverse-lookup** — APPLIED (R3). Documented that `unless_modifiers`
+   inspects the BEATEN action's modifiers (the one in `beats`), not the beating action/target.
+7. **`Tie` vote status** — APPLIED (R5). `VoteStatus` gains `Tie`; `day_vote_tiebreak.json`
+   status changed `NoMajority` → `Tie`.
+8. **`PhaseAnnouncement` shape** — APPLIED (R5). Pinned `{ phase_id, deaths: Vec<{slot_id, cause}> }`.
+9. **Payload-shape pins** — APPLIED (R5, R6). `StateSnapshot`/`SlotState` made canonical in
+   doc 09; `Seed = u64`, `LogicalTime = u64` pinned; `TargetSpec` reduced to
+   `None | One | Many | Group` with `Constraints.max_targets` the single source of cardinality
+   (bus_driver `Many` + `max_targets: 2` is canonical).
+10. **Faction quota** — DEFERRED (R7). One-line note added: v1 submits exactly one factional
+    action per faction per night; `faction_quota` is future work, out of the v1 schema.
