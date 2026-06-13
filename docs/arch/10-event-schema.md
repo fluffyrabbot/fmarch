@@ -84,8 +84,8 @@ enum EventKind {
     ChannelVisibilityChanged,
 
     // ── Submissions (platform → engine seam, doc 09) ──
-    VoteSubmitted,          // { actor: slot, target: slot|no_lynch, phase_id }
-    VoteWithdrawn,          // { action_id }
+    VoteSubmitted,          // { actor: slot, target: slot|no_lynch, phase_id }  (overwrites actor's current ballot)
+    VoteWithdrawn,          // { actor: slot, phase_id }  ballot-keyed: removes the actor's current ballot (the running tally is ballot-keyed, not action-keyed)
     ActionSubmitted,        // { action_id, template_id, actor, targets, phase_id }
     ActionWithdrawn,        // { action_id }
 
