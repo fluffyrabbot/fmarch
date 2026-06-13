@@ -41,6 +41,7 @@ pub enum InnerEvent {
     PlayerConverted {
         target: SlotId,
         new_role: RoleKey,
+        new_alignment: Option<crate::pack::AlignmentKey>,
         original_role: RoleKey,
         source: SlotId,
     },

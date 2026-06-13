@@ -73,6 +73,17 @@ pub struct ActionTemplate {
     /// REQUIRED iff `ability == Investigate`; absent/null otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<InvestigateMode>,
+    /// The persistent effect tag a `Mark`/`Clear` action attaches/removes
+    /// (REQUIRED for `Mark`/`Clear`; the Arsonist's `douse` Marks `"doused"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<Tag>,
+    /// When set on a `Kill`, the action ignores its submitted targets and instead
+    /// kills every slot currently carrying this persistent effect tag (the
+    /// Arsonist's `ignite` reads `"doused"`). This is the cross-phase
+    /// effect-read that proves persistent state end to end. Additive/optional so
+    /// every existing pack and golden still deserializes unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reads_effect: Option<Tag>,
 }
 
 impl ActionTemplate {
@@ -252,12 +263,18 @@ pub struct WinRule {
 
 /// A win condition over alive-counts on the post-resolution state.
 ///
-/// - `FactionEliminated(f)`     → faction `f` has **0** alive slots.
-/// - `FactionReachesParity(f)`  → faction `f`'s alive count is **>=** the alive
+/// - `FactionEliminated(f)`        → faction `f` has **0** alive slots.
+/// - `FactionReachesParity(f)`     → faction `f`'s alive count is **>=** the alive
 ///   count of all *other* factions combined (slots with no alignment count as
 ///   "other"). With exactly two factions this is the usual mafia-parity check.
+/// - `AllOtherFactionsEliminated(f)` → **every** faction other than `f` (every
+///   distinct alignment, plus alignment-less slots) has **0** alive slots, and
+///   `f` itself has `>= 1` alive. This is the minimal 3+-faction extension (R5):
+///   in a town/mafia/cult game, *town* wins only when BOTH mafia AND cult are
+///   wiped — a conjunction the two-faction conditions above cannot express.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WinCondition {
     FactionEliminated(AlignmentKey),
     FactionReachesParity(AlignmentKey),
+    AllOtherFactionsEliminated(AlignmentKey),
 }

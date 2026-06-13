@@ -11,10 +11,10 @@ use std::collections::BTreeMap;
 use crate::events::{DayVoteOutcome, Death, InnerEvent, PhaseAnnouncement, VoteStatus};
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
-    ActionTemplate, Pack, PhaseKind, TieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy,
-    WinCondition,
+    ActionTemplate, ActorRef, Pack, PhaseKind, TargetRef, TieBreaker, TriggerRule, VoteMethod,
+    VoteTieBreaker, WeightPolicy, WinCondition,
 };
-use crate::state::{apply_events, PhaseId, Seed, SlotId, StateSnapshot, Submission};
+use crate::state::{apply_events, PhaseId, Seed, SlotId, SlotState, StateSnapshot, Submission};
 
 /// Resolver contract version (doc 10 `result_version`).
 pub const RESULT_VERSION: u16 = 1;
@@ -65,6 +65,82 @@ impl<'a> Action<'a> {
     }
 }
 
+/// A landed kill: a (target, attacker) pair, recorded so triggers can react to it
+/// after core resolution. `target` is the slot that died; `attacker` is the slot
+/// credited with the kill (empty-string-free — every recorded kill has an actor).
+#[derive(Clone)]
+struct KillRecord {
+    target: SlotId,
+    attacker: SlotId,
+}
+
+/// Resolve a single kill against `target` by `attacker` (template id `cause`).
+/// `unstoppable` is the already-computed Strongman bypass flag for this kill.
+/// Pushes `PlayerSaved` (if protected and not bypassed) or `PlayerKilled`, and on
+/// a death records the slot in `killed` and a `KillRecord` in `log`.
+#[allow(clippy::too_many_arguments)]
+fn resolve_one_kill(
+    target: &SlotId,
+    attacker: &SlotId,
+    cause: &str,
+    unstoppable: bool,
+    protections: &BTreeMap<SlotId, Vec<SlotId>>,
+    events: &mut Vec<InnerEvent>,
+    killed: &mut Vec<SlotId>,
+    log: &mut Vec<KillRecord>,
+) {
+    // A slot already killed this resolution is not killed twice.
+    if killed.contains(target) {
+        return;
+    }
+    let protectors = protections.get(target);
+    let protected = protectors.map(|p| !p.is_empty()).unwrap_or(false);
+    if protected && !unstoppable {
+        let sources = protectors.cloned().unwrap_or_default();
+        events.push(InnerEvent::PlayerSaved {
+            slot_id: target.clone(),
+            reasons: vec!["protected".to_string()],
+            sources,
+        });
+    } else {
+        killed.push(target.clone());
+        events.push(InnerEvent::PlayerKilled {
+            slot_id: target.clone(),
+            cause: cause.to_string(),
+            attackers: vec![attacker.clone()],
+            unstoppable,
+        });
+        log.push(KillRecord {
+            target: target.clone(),
+            attacker: attacker.clone(),
+        });
+    }
+}
+
+/// Is a role immune to conversion? A role is immune iff it carries the `Loyal`
+/// modifier on any of its actions, or its role-level `effects` include a
+/// pack-configured immune tag (`"loyal"`). v1 uses the `"loyal"` effect tag and
+/// the `Loyal` modifier interchangeably as the conversion-immunity signal.
+fn conversion_immune(input: &ResolutionInput, role_key: &str) -> bool {
+    let Some(role) = input.pack.roles.get(role_key) else {
+        return false;
+    };
+    if role.effects.iter().any(|e| e == "loyal") {
+        return true;
+    }
+    role.actions.iter().any(|a| a.has_modifier(Modifier::Loyal))
+}
+
+/// Does a trigger's `if_target_has` match a slot? The slot matches iff it carries
+/// every named tag among its persistent `effects` OR (for modifier tags) one of
+/// its role's actions carries the corresponding modifier. v1 matches on the
+/// slot's `effects` tags (e.g. the `"bomb"` effect carried by the Bomb role).
+fn trigger_target_matches(trig: &TriggerRule, slot: &SlotState) -> bool {
+    trig.if_target_has
+        .iter()
+        .all(|tag| slot.effects.contains(tag))
+}
+
 /// Resolve a window's submissions into ordered inner events.
 ///
 /// Canonical inner-event ordering: the phase's own results, then the single
@@ -81,36 +157,16 @@ pub fn resolve(input: ResolutionInput) -> Vec<InnerEvent> {
     // Evaluate win conditions on the post-resolution state. The win event is the
     // FINAL inner event, appended after the trailing PhaseAnnouncement.
     //
-    // `apply_events` folds the night-style death/effect/conversion events. The
-    // day **lynch** death is NOT one of those kinds (it is carried structurally
-    // by `DayVoteOutcome.winner` and the trailing `PhaseAnnouncement`, per the
-    // doc-10 `slot_state` projection contract), so we additionally apply the
-    // eliminated slot here before the parity/elimination check. This keeps
-    // `apply_events` to its stated night-fold contract while still letting a day
-    // lynch trigger a win.
-    let mut post_state = apply_events(&input.state, &events);
-    apply_lynch_deaths(&mut post_state, &events);
+    // R1: the day **lynch** now emits a `PlayerKilled { cause: "lynch" }` (see
+    // `resolve_day`), so the eliminated slot folds through `apply_events` exactly
+    // like a night kill. There is no longer a local "apply the lynch just for the
+    // win-check" hack — the post-resolution state is a single, uniform fold.
+    let post_state = apply_events(&input.state, &events);
     if let Some(win) = check_win(&post_state, &input.pack) {
         events.push(win);
     }
 
     events
-}
-
-/// Mark any slot eliminated by a `DayVoteOutcome` as dead in `state`. This is the
-/// one death that `apply_events` does not fold (the lynch lives in
-/// `DayVoteOutcome.winner`, not a `PlayerKilled`); the engine applies it locally
-/// for the phase-end win-check.
-fn apply_lynch_deaths(state: &mut StateSnapshot, events: &[InnerEvent]) {
-    for event in events {
-        if let InnerEvent::DayVoteOutcome(outcome) = event {
-            if let Some(winner) = &outcome.winner {
-                if let Some(slot) = state.slots.iter_mut().find(|s| &s.slot_id == winner) {
-                    slot.status = "dead".to_string();
-                }
-            }
-        }
-    }
 }
 
 /// Evaluate the pack's `WinPolicy` against a (post-resolution) state. Rules are
@@ -132,6 +188,17 @@ pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
                 (
                     alive > 0 && alive >= others,
                     format!("faction {faction} reaches parity ({alive} vs {others} others)"),
+                )
+            }
+            WinCondition::AllOtherFactionsEliminated(faction) => {
+                // R5: faction `f` is the sole surviving faction. Every other
+                // alive slot (any other alignment, or alignment-less) must be 0,
+                // and `f` must have >= 1 alive.
+                let alive = alive_in_faction(state, faction);
+                let others = alive_total(state) - alive;
+                (
+                    alive > 0 && others == 0,
+                    format!("all factions other than {faction} eliminated ({alive} alive)"),
                 )
             }
         };
@@ -185,6 +252,8 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
     }
 
     let mut events: Vec<InnerEvent> = Vec::new();
+    // Determinism diagnostics (trigger loop-cap hits). Trace-bound; see below.
+    let mut trigger_notes: Vec<String> = Vec::new();
 
     // ── Phase 1: Block ── highest-priority interaction; evaluated before any
     // blocked action reads its targets.
@@ -234,7 +303,48 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
         }
     }
 
-    // ── Phase 3: Protect ── collect protected slots -> protecting sources.
+    // ── Phase 3: Mark / Clear ── persistent-effect writes (doc 09). A blocked
+    // marker does not write. `EffectsMarked`/`EffectsCleared` fold across phases
+    // via `apply_events`, so a tag written this night is readable next night
+    // (the Arsonist's "doused" tag is the canonical cross-phase carrier). These
+    // are emitted BEFORE Kill so an ignite that `reads_effect` sees this night's
+    // own douses too if a pack ever wants same-night ignition; the shipped
+    // Arsonist douses one night and ignites the next.
+    for idx in ability_order(&actions, IrAbility::Mark) {
+        if actions[idx].blocked {
+            continue;
+        }
+        let Some(effect) = actions[idx].template.effect.clone() else {
+            continue; // Mark REQUIRES an effect tag; malformed templates are skipped.
+        };
+        let actor = actions[idx].sub.actor.clone();
+        for target in actions[idx].targets.clone() {
+            events.push(InnerEvent::EffectsMarked {
+                effect: effect.clone(),
+                target,
+                actor: actor.clone(),
+            });
+        }
+    }
+    for idx in ability_order(&actions, IrAbility::Clear) {
+        if actions[idx].blocked {
+            continue;
+        }
+        let Some(effect) = actions[idx].template.effect.clone() else {
+            continue;
+        };
+        let actor = actions[idx].sub.actor.clone();
+        let targets = actions[idx].targets.clone();
+        if !targets.is_empty() {
+            events.push(InnerEvent::EffectsCleared {
+                effect,
+                targets,
+                actor,
+            });
+        }
+    }
+
+    // ── Phase 4: Protect ── collect protected slots -> protecting sources.
     let mut protections: BTreeMap<SlotId, Vec<SlotId>> = BTreeMap::new();
     for idx in ability_order(&actions, IrAbility::Protect) {
         if actions[idx].blocked {
@@ -246,12 +356,14 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
         }
     }
 
-    // ── Phase 4: Kill ── Protect beats Kill UNLESS the Kill carries Strongman
+    // ── Phase 5: Kill ── Protect beats Kill UNLESS the Kill carries Strongman
     // (protect_beats_kill.unless_modifiers inspects the BEATEN action = the Kill).
     let strongman_bypasses_protect = protect_beats_kill_unless_strongman(pack);
     // Slots that got PlayerKilled this resolution, in event order — surfaced as
-    // the trailing PhaseAnnouncement's deaths (doc 10).
+    // the trailing PhaseAnnouncement's deaths (doc 10). Each kill is also recorded
+    // (target -> attacker) so triggers can react to it after core resolution.
     let mut killed: Vec<SlotId> = Vec::new();
+    let mut kill_log: Vec<KillRecord> = Vec::new();
     for idx in ability_order(&actions, IrAbility::Kill) {
         if actions[idx].blocked {
             continue;
@@ -259,34 +371,74 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
         let cause = actions[idx].template.id.clone();
         let attacker = actions[idx].sub.actor.clone();
         let is_strongman = actions[idx].template.has_modifier(Modifier::Strongman);
-        for target in actions[idx].targets.clone() {
-            let protectors = protections.get(&target);
-            let protected = protectors.map(|p| !p.is_empty()).unwrap_or(false);
-            let bypass = is_strongman && strongman_bypasses_protect;
-            if protected && !bypass {
-                let sources = protectors.cloned().unwrap_or_default();
-                events.push(InnerEvent::PlayerSaved {
-                    slot_id: target,
-                    reasons: vec!["protected".to_string()],
-                    sources,
-                });
-            } else {
-                // `unstoppable` is true iff the kill is inherently unpreventable
-                // by protection — i.e. it carries Strongman — REGARDLESS of whether
-                // a protect was actually present on this target (doc 10).
-                let unstoppable = is_strongman && strongman_bypasses_protect;
-                killed.push(target.clone());
-                events.push(InnerEvent::PlayerKilled {
-                    slot_id: target,
-                    cause: cause.clone(),
-                    attackers: vec![attacker.clone()],
-                    unstoppable,
-                });
-            }
+        // An ignite-style Kill `reads_effect`: its targets are every slot
+        // currently carrying that persistent effect tag, in stable slot order —
+        // NOT the submitted targets. This is the cross-phase effect read.
+        let targets: Vec<SlotId> = match &actions[idx].template.reads_effect {
+            Some(tag) => input
+                .state
+                .slots
+                .iter()
+                .filter(|s| s.is_alive() && s.effects.contains(tag))
+                .map(|s| s.slot_id.clone())
+                .collect(),
+            None => actions[idx].targets.clone(),
+        };
+        for target in targets {
+            resolve_one_kill(
+                &target,
+                &attacker,
+                &cause,
+                is_strongman && strongman_bypasses_protect,
+                &protections,
+                &mut events,
+                &mut killed,
+                &mut kill_log,
+            );
         }
     }
 
-    // ── Phase 5: Investigate ── blocked investigations were already suppressed.
+    // ── Phase 6: Convert ── change a target's role/alignment (doc 09). A target
+    // carrying the `Loyal` modifier (via its role's effects, or a pack-configured
+    // immune tag) is NOT converted; the resolver emits `ConversionBlocked`
+    // instead. `PlayerConverted` carries `new_alignment` (R2) and folds via
+    // `apply_events`. Dead targets (e.g. just killed this night) are not converted.
+    for idx in ability_order(&actions, IrAbility::Convert) {
+        if actions[idx].blocked {
+            continue;
+        }
+        let source = actions[idx].sub.actor.clone();
+        let new_role = match actions[idx].template.effect.clone() {
+            Some(r) => r,
+            None => continue, // Convert REQUIRES a target role id in `effect`.
+        };
+        for target in actions[idx].targets.clone() {
+            if killed.contains(&target) {
+                continue; // a dead slot cannot be converted
+            }
+            let Some(slot) = input.state.slots.iter().find(|s| s.slot_id == target) else {
+                continue;
+            };
+            if conversion_immune(input, &slot.role_key) {
+                events.push(InnerEvent::ConversionBlocked {
+                    target: target.clone(),
+                    status: "blocked".to_string(),
+                    reason: "loyal".to_string(),
+                });
+                continue;
+            }
+            let new_alignment = pack.roles.get(&new_role).and_then(|r| r.alignment.clone());
+            events.push(InnerEvent::PlayerConverted {
+                target: target.clone(),
+                new_role: new_role.clone(),
+                new_alignment,
+                original_role: slot.role_key.clone(),
+                source: source.clone(),
+            });
+        }
+    }
+
+    // ── Phase 7: Investigate ── blocked investigations were already suppressed.
     for idx in ability_order(&actions, IrAbility::Investigate) {
         if actions[idx].blocked {
             continue;
@@ -322,6 +474,77 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
         }
     }
 
+    // ── Phase 8: Triggers ── reactive abilities (doc 09). After core resolution,
+    // fire every trigger whose `on` ability landed against a slot carrying one of
+    // `if_target_has`, and resolve the action it `produces` (actor/target chosen
+    // per ActorRef/TargetRef). The shipped case is the Bomb: on a Kill landing on
+    // the bomb -> produce a Kill targeting the killer. Determinism: kills are
+    // processed in stable order; a produced kill that itself lands on a bomb is
+    // re-examined, bounded by `redirects.loop_cap` (reused as the trigger loop
+    // cap — see note). On reaching the cap the engine pushes a diagnostic note
+    // and terminates deterministically.
+    let loop_cap = pack.redirects.loop_cap as usize;
+    let mut frontier = kill_log.clone();
+    let mut iterations = 0usize;
+    while !frontier.is_empty() {
+        if iterations >= loop_cap {
+            trigger_notes.push(format!(
+                "trigger loop_cap ({loop_cap}) reached; terminating trigger fixpoint"
+            ));
+            break;
+        }
+        iterations += 1;
+        let mut next_frontier: Vec<KillRecord> = Vec::new();
+        for kr in &frontier {
+            for trig in &pack.triggers {
+                if trig.on != IrAbility::Kill {
+                    continue;
+                }
+                let Some(target_slot) = input.state.slots.iter().find(|s| s.slot_id == kr.target)
+                else {
+                    continue;
+                };
+                if !trigger_target_matches(trig, target_slot) {
+                    continue;
+                }
+                let produced_actor = match trig.produces.actor {
+                    ActorRef::Target => kr.target.clone(),
+                    ActorRef::Actor => kr.attacker.clone(),
+                    ActorRef::TargetGuard | ActorRef::Other => continue,
+                };
+                let produced_target = match trig.produces.target {
+                    TargetRef::Killer | TargetRef::Actor => kr.attacker.clone(),
+                    TargetRef::Target => kr.target.clone(),
+                    TargetRef::Other => continue,
+                };
+                let payload = serde_json::json!({
+                    "on": "Kill",
+                    "source_target": kr.target,
+                    "source_attacker": kr.attacker,
+                    "produced_target": produced_target,
+                });
+                events.push(InnerEvent::Trigger {
+                    trigger_id: trig.id.clone(),
+                    payload,
+                });
+                if trig.produces.ability == IrAbility::Kill {
+                    let strongman = trig.produces.modifiers.contains(&Modifier::Strongman);
+                    resolve_one_kill(
+                        &produced_target,
+                        &produced_actor,
+                        &trig.id,
+                        strongman,
+                        &protections,
+                        &mut events,
+                        &mut killed,
+                        &mut next_frontier,
+                    );
+                }
+            }
+        }
+        frontier = next_frontier;
+    }
+
     // ── Trailing PhaseAnnouncement ── every resolution ends with exactly one
     // PhaseAnnouncement listing the deaths it produced (empty if none); it is the
     // single canonical death-reveal signal (doc 10).
@@ -332,6 +555,14 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
             cause: "night_kill".to_string(),
         })
         .collect();
+    // `trigger_notes` are determinism diagnostics (loop-cap hits) destined for the
+    // `ResolutionTrace.notes` channel (doc 10). `resolve` returns only the inner
+    // event stream in this crate, so notes are debug-asserted, not emitted as
+    // inner events (which are a closed set and must not carry diagnostics).
+    debug_assert!(
+        trigger_notes.len() <= 1,
+        "at most one loop-cap note per resolution"
+    );
     events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         deaths,
@@ -549,23 +780,35 @@ fn resolve_day(input: &ResolutionInput) -> Vec<InnerEvent> {
         reason,
     };
 
-    // Deaths revealed at the boundary: the eliminated slot, if any.
-    let deaths = winner
-        .map(|w| {
+    // R1: a lynch is a death like any other. We emit the structural
+    // `DayVoteOutcome` (the authoritative tally + winner) AND a `PlayerKilled`
+    // for the eliminated slot, so the death folds uniformly through
+    // `apply_events`/`slot_state` — the lynch is no longer a special apply path.
+    // `cause` is the action template id ("day_vote"); `attackers` is empty (the
+    // town is the collective actor); `unstoppable` is true (a lynch cannot be
+    // protected against). The trailing `PhaseAnnouncement` carries the semantic
+    // `cause: "lynch"` Death.
+    let mut events: Vec<InnerEvent> = vec![InnerEvent::DayVoteOutcome(outcome)];
+    let deaths = match &winner {
+        Some(w) => {
+            events.push(InnerEvent::PlayerKilled {
+                slot_id: w.clone(),
+                cause: "day_vote".to_string(),
+                attackers: Vec::new(),
+                unstoppable: true,
+            });
             vec![Death {
-                slot_id: w,
+                slot_id: w.clone(),
                 cause: "lynch".to_string(),
             }]
-        })
-        .unwrap_or_default();
-
-    vec![
-        InnerEvent::DayVoteOutcome(outcome),
-        InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-            phase_id: input.phase_id.clone(),
-            deaths,
-        }),
-    ]
+        }
+        None => Vec::new(),
+    };
+    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
+        phase_id: input.phase_id.clone(),
+        deaths,
+    }));
+    events
 }
 
 fn decide_outcome(

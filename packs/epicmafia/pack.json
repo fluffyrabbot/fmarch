@@ -1,0 +1,255 @@
+{
+  "name": "epicmafia",
+  "version": 1,
+  "ir_version": 1,
+  "roles": {
+    "villager": {
+      "description": "Villager. No night action; wins with the town.",
+      "alignment": "town",
+      "actions": []
+    },
+    "loyal_villager": {
+      "description": "Loyal Villager. A town villager who is immune to conversion (carries the 'loyal' effect tag). A Cult Leader recruiting this slot is rebuffed -> ConversionBlocked.",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["loyal"]
+    },
+    "doctor": {
+      "description": "Doctor. Each night protects one slot from a kill. Protect beats Kill unless the attacker is a Strongman.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "doctor_protect",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "cop": {
+      "description": "Cop. Each night investigates one slot and learns a town/scum Parity result.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "hooker": {
+      "description": "Hooker (roleblocker). Each night blocks one slot; that slot's roleblockable action does not resolve.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "hooker_block",
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "bomb": {
+      "description": "Bomb. A town role carrying the 'bomb' effect. When a Kill lands on the Bomb, a trigger fires a retaliatory Kill against the killer (see triggers/bomb_retaliates).",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["bomb"]
+    },
+    "mafia_goon": {
+      "description": "Mafia Goon. Carries out the nightly factional kill (one per night, faction-shared).",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "cult_leader": {
+      "description": "Cult Leader. Each night recruits one slot into the cult: a Convert that changes the target's role to cultist and alignment to cult. A target immune to conversion (the 'loyal' effect) rebuffs the recruit -> ConversionBlocked.",
+      "alignment": "cult",
+      "actions": [
+        {
+          "id": "cult_recruit",
+          "ability": "Convert",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 25,
+            "x_shots": null
+          },
+          "effect": "cultist"
+        }
+      ]
+    },
+    "cultist": {
+      "description": "Cultist. A slot recruited by the Cult Leader; wins with the cult.",
+      "alignment": "cult",
+      "actions": []
+    },
+    "arsonist": {
+      "description": "Arsonist. PERSISTENT-effect role. 'douse' Marks a target with the 'doused' effect (carried across phases via apply_events). 'ignite' is a Kill that reads the 'doused' effect: it kills every alive slot currently carrying 'doused', regardless of submitted target.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "douse",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "doused"
+        },
+        {
+          "id": "ignite",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "reads_effect": "doused"
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "block_stops_roleblockable",
+      "when": { "effect": "Block", "target_state": null },
+      "beats": ["Kill", "Protect", "Investigate", "Redirect", "Convert", "Mark", "Clear"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "A Block prevents the blocked slot's roleblockable action from resolving. Highest-priority interaction, evaluated before any blocked action reads its targets."
+    },
+    {
+      "id": "protect_beats_kill",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": ["Block"],
+      "unless_modifiers": ["Strongman"],
+      "notes": "Doctor's Protect saves the target from a Kill UNLESS the killing action carries Strongman. A roleblocked doctor does not protect."
+    },
+    {
+      "id": "kill_resolves",
+      "when": { "effect": "Kill", "target_state": null },
+      "beats": [],
+      "blocked_by": ["Block", "Protect"],
+      "unless_modifiers": [],
+      "notes": "A Kill removes the target from play unless stopped by Block or Protect."
+    }
+  ],
+  "visibility": {
+    "Investigate": { "sees": ["TargetId", "Result"], "unless_modifiers": ["Ninja"] },
+    "Kill": { "sees": ["TargetId"], "unless_modifiers": ["Ninja"] },
+    "Protect": { "sees": ["TargetId"], "unless_modifiers": [] },
+    "Block": { "sees": ["TargetId"], "unless_modifiers": [] }
+  },
+  "redirects": {
+    "order": ["Redirect"],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [
+    {
+      "id": "bomb_retaliates",
+      "on": "Kill",
+      "if_target_has": ["bomb"],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "modifiers": []
+      }
+    }
+  ],
+  "vote": {
+    "method": "Plurality",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["sod", "main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "AllOtherFactionsEliminated": "town" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      },
+      {
+        "winner": "cult",
+        "when": { "FactionReachesParity": "cult" }
+      }
+    ]
+  }
+}

@@ -50,8 +50,9 @@ impl SlotState {
 /// - `PlayerKilled`        → the slot's `status` becomes `"dead"`.
 /// - `EffectsMarked`       → adds `effect` to the slot's `effects` (de-duplicated).
 /// - `EffectsCleared`      → removes `effect` from each named slot's `effects`.
-/// - `PlayerConverted`     → sets the slot's `role_key` to `new_role`. (Wired now
-///   for forward-compat; conversion is not emitted by the resolver yet.)
+/// - `PlayerConverted`     → sets the slot's `role_key` to `new_role` AND its
+///   `alignment` to `new_alignment` (R2: a conversion is a faction change, not
+///   merely a role swap; the win-check reads alignment).
 ///
 /// `phase_kind` / `phase_number` are carried through unchanged: advancing the
 /// phase cursor is the engine/platform's job, not this fold's.
@@ -81,10 +82,14 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 }
             }
             InnerEvent::PlayerConverted {
-                target, new_role, ..
+                target,
+                new_role,
+                new_alignment,
+                ..
             } => {
                 if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
                     slot.role_key = new_role.clone();
+                    slot.alignment = new_alignment.clone();
                 }
             }
             // All other inner events leave state unchanged.

@@ -234,6 +234,27 @@ enum ActorRef  { Actor, Target, TargetGuard, Other }
 enum TargetRef { Actor, Target, Killer, Other }
 ```
 
+> **Trigger fixpoint & loop-cap.** After core resolution, the resolver fires every trigger
+> whose `on` ability landed on a slot matching `if_target_has` (matched against the slot's
+> persistent `effects` tags), emits a `Trigger { trigger_id, payload }`, and resolves the
+> `produces` action (a produced `Kill` runs through the same kill path — Protect still applies).
+> A produced kill that itself lands on a trigger-bearing slot is re-examined, so trigger chains
+> are a bounded fixpoint. **v1 reuses `redirects.loop_cap`** as the trigger iteration cap (no
+> separate field): on reaching it the resolver records a diagnostic note in the trace and
+> terminates deterministically. The shipped case is the **Bomb** (epicmafia): on a `Kill`
+> against the `bomb` effect → produce a `Kill` (`actor: Target`, `target: Killer`).
+
+> **Persistent-effect action fields (`effect` / `reads_effect`).** Two optional, additive
+> `ActionTemplate` fields support `Mark`/`Clear` and effect-reading kills:
+> - `effect: Tag` — the tag a `Mark`/`Clear` writes/removes (REQUIRED for those abilities), and
+>   the target role id a `Convert` recruits into (the cult leader's `effect: "cultist"`).
+> - `reads_effect: Tag` — on a `Kill`, the action ignores its submitted targets and kills every
+>   alive slot carrying that tag (the **Arsonist** `ignite` reads `"doused"`). This is the
+>   cross-phase effect read that proves persistent state end to end: `douse` Marks `"doused"`
+>   one night, `apply_events` carries it, and a later `ignite` reads it.
+>
+> Both default-absent, so every existing pack and golden deserializes unchanged.
+
 ### Vote policy (fmarch addition)
 
 Vote weight, majority vs plurality, tiebreaks, and no-lynch are culture-specific, so the
@@ -295,6 +316,16 @@ The mafiascum pack ships two rules: **town** wins on `FactionEliminated("mafia")
 wins on `FactionReachesParity("mafia")` (the elimination rule is listed first so an all-mafia-dead
 state is a town win, not a degenerate parity).
 
+> **Three+ factions (`AllOtherFactionsEliminated`).** The two-faction conditions above
+> cannot express "the survivor faction is the *only* one left" once a third faction (e.g. a
+> cult) exists: a town win then requires BOTH mafia AND cult wiped — a conjunction. v1 adds
+> one minimal condition for this: `AllOtherFactionsEliminated(f)` fires when **every**
+> alignment other than `f` (and every alignment-less slot) has 0 alive **and** `f` has `>= 1`
+> alive. The **epicmafia** pack (town/mafia/cult) ships rules in order: *town* on
+> `AllOtherFactionsEliminated("town")`, then *mafia* on `FactionReachesParity("mafia")`, then
+> *cult* on `FactionReachesParity("cult")`. Two-faction packs are unaffected (they never use
+> the new variant). This is the explicit 3-faction semantics; no case is left ambiguous.
+
 ### `apply_events` — cross-phase state evolution
 
 State carries forward between resolutions by a single pure fold:
@@ -312,11 +343,20 @@ add/remove the effect tag on the slot's `effects`; `PlayerConverted` → set the
 engine/platform's job, not this fold's. (The `Mark`/`Clear`/`Convert` arms are wired now for
 forward-compat even though the resolver does not yet *emit* those events.)
 
-> **Day lynch is not an `apply_events` death.** The day lynch is carried structurally by
-> `DayVoteOutcome.winner` (doc 10), not a `PlayerKilled`, so `apply_events` does **not** mark
-> the lynched slot dead. The resolver applies the lynch locally when building the state it
-> runs `check_win` against; persisting the eliminated slot into the next `StateSnapshot` is the
-> engine/platform's responsibility.
+> **Day lynch emits a `PlayerKilled` (R1).** A day lynch is carried structurally by
+> `DayVoteOutcome.winner` **and** additionally emits a `PlayerKilled { slot_id, cause:
+> "day_vote", attackers: [], unstoppable: true }`, so the lynch death folds **uniformly**
+> through `apply_events`/`slot_state` exactly like a night kill — no special "apply the lynch
+> locally just for the win-check" path. (The trailing `PhaseAnnouncement` still carries the
+> semantic `Death { cause: "lynch" }`.) The post-resolution state the engine runs `check_win`
+> against is therefore a single, plain `apply_events` fold.
+>
+> **R4 — next `StateSnapshot` & the phase cursor.** The state the *next* resolution reads is
+> built from the `slot_state`/effects projection (the fold of `PlayerKilled/Saved/Converted` +
+> `EffectsMarked/Cleared`), not handed back by `resolve`. **Advancing the phase cursor**
+> (`phase_kind`/`phase_number` → the next window) is a **lifecycle command**, not the engine's
+> job: `apply_events` carries the cursor through unchanged, and the platform sets the next
+> window before invoking `resolve` again.
 
 ### Win-check in the resolver
 

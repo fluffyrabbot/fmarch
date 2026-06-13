@@ -1,0 +1,75 @@
+{
+  "description": "CONVERSION primitive. The Cult Leader (slot_1) recruits a plain Villager (slot_2): a Convert that changes slot_2's role to 'cultist' and alignment to 'cult' -> PlayerConverted (carrying new_alignment, R2). Extra town keeps any faction below a win threshold so the golden stays focused on the conversion. See variant_note for the Loyal-target ConversionBlocked.",
+  "input": {
+    "game_id": "epic_cult_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "slots": [
+        { "slot_id": "slot_1", "role_key": "cult_leader", "alignment": "cult", "status": "alive", "effects": [] },
+        { "slot_id": "slot_2", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_3", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_4", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_5", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "template_id": "cult_recruit",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "epicmafia",
+    "seed": 11
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_2",
+        "new_role": "cultist",
+        "new_alignment": "cult",
+        "original_role": "villager",
+        "source": "slot_1"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ],
+  "variant_note": {
+    "description": "If slot_2 is role 'loyal_villager' (carries the 'loyal' effect), the recruit is rebuffed: conversion_immune fires -> ConversionBlocked instead of PlayerConverted. State is otherwise identical.",
+    "expected_events": [
+      {
+        "index": 0,
+        "kind": "ConversionBlocked",
+        "payload": {
+          "target": "slot_2",
+          "status": "blocked",
+          "reason": "loyal"
+        }
+      },
+      {
+        "index": 1,
+        "kind": "PhaseAnnouncement",
+        "payload": {
+          "phase_id": "N01",
+          "deaths": []
+        }
+      }
+    ]
+  }
+}

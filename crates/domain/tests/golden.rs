@@ -23,16 +23,28 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn load_pack() -> Pack {
-    let p = repo_root().join("packs/mafiascum/pack.json");
+fn load_pack_named(name: &str) -> Pack {
+    let p = repo_root().join("packs").join(name).join("pack.json");
     let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
-    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize pack.json: {e}"))
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize {name}/pack.json: {e}"))
+}
+
+fn load_pack() -> Pack {
+    load_pack_named("mafiascum")
+}
+
+fn load_golden_in(pack: &str, name: &str) -> Value {
+    let p = repo_root()
+        .join("packs")
+        .join(pack)
+        .join("golden")
+        .join(name);
+    let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize {name}: {e}"))
 }
 
 fn load_golden(name: &str) -> Value {
-    let p = repo_root().join("packs/mafiascum/golden").join(name);
-    let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
-    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize {name}: {e}"))
+    load_golden_in("mafiascum", name)
 }
 
 /// The `input` block of a golden, minus `pack` (a name string the harness
@@ -74,12 +86,15 @@ fn run(input_json: &Value, pack: Pack) -> Vec<Value> {
         .collect()
 }
 
-/// `DayVoteOutcome.reason` is optional, non-canonical human-readable prose (doc
-/// 10): the platform may rewrite/localize it, so it is NOT part of the asserted
-/// contract. Strip it before comparison so equality ignores it.
+/// Strip non-canonical, non-asserted fields before comparison:
+/// - `DayVoteOutcome.reason` — optional, localizable human prose (doc 10).
+/// - `WinReached.reason` — R3: a resolver-derived string, but NOT part of the
+///   asserted golden contract (the contract is `{winner}`); strip it exactly as
+///   we strip `DayVoteOutcome.reason`.
 fn strip_noncanonical(v: &Value) -> Value {
     let mut v = v.clone();
-    if v.get("kind").and_then(Value::as_str) == Some("DayVoteOutcome") {
+    let kind = v.get("kind").and_then(Value::as_str).map(str::to_string);
+    if matches!(kind.as_deref(), Some("DayVoteOutcome") | Some("WinReached")) {
         if let Some(payload) = v.get_mut("payload").and_then(Value::as_object_mut) {
             payload.remove("reason");
         }
@@ -172,6 +187,57 @@ fn golden_day_vote_tiebreak() {
     let golden = load_golden("day_vote_tiebreak.json");
     let got = run(&golden["input"], load_pack());
     assert_events_eq(&got, &expected_events(&golden), "day_vote_tiebreak");
+}
+
+// ───────────────────────── epicmafia (Phase 3.5b) ─────────────────────────
+
+#[test]
+fn epicmafia_pack_deserializes() {
+    let pack = load_pack_named("epicmafia");
+    assert_eq!(pack.name, "epicmafia");
+    assert_eq!(pack.ir_version, 1);
+    assert!(pack.roles.contains_key("bomb"));
+    assert!(pack.roles.contains_key("cult_leader"));
+    assert!(pack.roles.contains_key("arsonist"));
+    assert_eq!(pack.triggers.len(), 1);
+    assert_eq!(pack.triggers[0].id, "bomb_retaliates");
+    // Round-trips losslessly (incl. the new effect/reads_effect action fields).
+    let v = serde_json::to_value(&pack).expect("serialize epicmafia pack");
+    let back: Pack = serde_json::from_value(v).expect("re-deserialize epicmafia pack");
+    assert_eq!(back.roles.len(), pack.roles.len());
+}
+
+#[test]
+fn golden_bomb_trigger() {
+    let golden = load_golden_in("epicmafia", "bomb_trigger.json");
+    let got = run(&golden["input"], load_pack_named("epicmafia"));
+    assert_events_eq(&got, &expected_events(&golden), "bomb_trigger");
+}
+
+#[test]
+fn golden_cult_convert() {
+    let golden = load_golden_in("epicmafia", "cult_convert.json");
+    let got = run(&golden["input"], load_pack_named("epicmafia"));
+    assert_events_eq(&got, &expected_events(&golden), "cult_convert");
+}
+
+#[test]
+fn golden_cult_convert_loyal_variant() {
+    // Swap slot_2's role to `loyal_villager` (carries the "loyal" effect). The
+    // recruit is rebuffed -> ConversionBlocked instead of PlayerConverted.
+    let golden = load_golden_in("epicmafia", "cult_convert.json");
+    let mut input = golden["input"].clone();
+    for slot in input["state"]["slots"].as_array_mut().unwrap() {
+        if slot["slot_id"] == "slot_2" {
+            slot["role_key"] = Value::from("loyal_villager");
+        }
+    }
+    let got = run(&input, load_pack_named("epicmafia"));
+    let expected = golden["variant_note"]["expected_events"]
+        .as_array()
+        .expect("variant expected_events")
+        .clone();
+    assert_events_eq(&got, &expected, "cult_convert loyal variant");
 }
 
 #[test]

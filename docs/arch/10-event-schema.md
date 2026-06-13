@@ -144,7 +144,7 @@ enum InnerEvent {
     // ── Core night results ──
     PlayerKilled,           // { slot_id, cause, attackers, unstoppable }  see below
     PlayerSaved,            // { slot_id, reasons, sources }
-    PlayerConverted,        // { target, new_role, original_role, source }
+    PlayerConverted,        // { target, new_role, new_alignment, original_role, source }  (R2: carries the new alignment; apply_events updates BOTH role_key and alignment)
     ConversionBlocked,      // { target, status, reason }
 
     // ── Persistent effects (Mark/Clear) ──
@@ -181,10 +181,11 @@ enum InnerEvent {
 > happened to land unopposed is `unstoppable: false`.
 
 > **`cause` vocabulary (two fields, two layers).** `PlayerKilled.cause` is the killing
-> action template's `id` (mechanical attribution, e.g. `"factional_kill"`). `Death.cause`
-> (inside `PhaseAnnouncement`, below) is a **semantic** tag; the v1 vocabulary is
-> `{ "lynch", "night_kill" }`. These are deliberately different fields serving different
-> layers — do not conflate them.
+> action template's `id` (mechanical attribution, e.g. `"factional_kill"`; a day lynch uses
+> `"day_vote"` per R1; a trigger-produced kill uses the trigger's `id`, e.g.
+> `"bomb_retaliates"`). `Death.cause` (inside `PhaseAnnouncement`, below) is a **semantic**
+> tag; the v1 vocabulary is `{ "lynch", "night_kill" }`. These are deliberately different
+> fields serving different layers — do not conflate them.
 
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 
@@ -250,10 +251,12 @@ struct WinReached {
 }
 ```
 
-Unlike `DayVoteOutcome.reason`, `WinReached.reason` **is** part of the asserted golden
-contract in v1 (it is a stable, resolver-derived string, not localizable prose). `metadata` is
-reserved for future structured detail and is `null` in v1. A reveal-flags projection flips role
-visibility off `WinReached` ([How events feed projections](#how-events-feed-projections)).
+`WinReached.reason` is a stable, resolver-derived string, but (R3) it is **NOT part of the
+asserted golden contract** — the asserted contract is `{winner}`. The golden harness **strips
+`WinReached.reason` before comparison**, exactly as it strips `DayVoteOutcome.reason`; the
+resolver may still emit prose there for humans. `metadata` is reserved for future structured
+detail and is `null` in v1. A reveal-flags projection flips role visibility off `WinReached`
+([How events feed projections](#how-events-feed-projections)).
 
 `Seed` and `LogicalTime` carried on engine events are both `u64` (see
 [09](09-engine-and-packs.md)): `Seed` is the recorded resolver RNG seed; `LogicalTime`

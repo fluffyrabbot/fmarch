@@ -22,9 +22,13 @@ fn repo_root() -> PathBuf {
 }
 
 fn load_pack() -> Pack {
-    let p = repo_root().join("packs/mafiascum/pack.json");
+    load_pack_named("mafiascum")
+}
+
+fn load_pack_named(name: &str) -> Pack {
+    let p = repo_root().join("packs").join(name).join("pack.json");
     let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
-    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize pack.json: {e}"))
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("deserialize {name}/pack.json: {e}"))
 }
 
 fn slot(id: &str, role: &str, alignment: &str, status: &str) -> SlotState {
@@ -135,11 +139,14 @@ fn apply_player_converted_changes_role() {
         &[InnerEvent::PlayerConverted {
             target: "a".to_string(),
             new_role: "mafia_goon".to_string(),
+            new_alignment: Some("mafia".to_string()),
             original_role: "vanilla_townie".to_string(),
             source: "cult".to_string(),
         }],
     );
     assert_eq!(find(&next, "a").role_key, "mafia_goon");
+    // R2: a conversion is a faction change — alignment must move with the role.
+    assert_eq!(find(&next, "a").alignment.as_deref(), Some("mafia"));
 }
 
 #[test]
@@ -224,6 +231,61 @@ fn check_win_none_when_game_continues() {
         ],
     };
     assert!(check_win(&state, &pack).is_none());
+}
+
+// ───────────────── epicmafia 3-faction win semantics (R5) ─────────────────
+
+#[test]
+fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
+    let pack = load_pack_named("epicmafia");
+    // mafia dead but cult still alive -> NOT a town win yet (AllOthers not met).
+    let still_cult = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 3,
+        slots: vec![
+            slot("a", "villager", "town", "alive"),
+            slot("b", "villager", "town", "alive"),
+            slot("m", "mafia_goon", "mafia", "dead"),
+            slot("c", "cultist", "cult", "alive"),
+        ],
+    };
+    // town(2) vs others(1 cult): town AllOthers? no. mafia parity? 0 -> no.
+    // cult parity? 1 >= 2? no. So no win while the cult survives.
+    assert!(check_win(&still_cult, &pack).is_none());
+
+    // Both mafia AND cult eliminated -> town wins via AllOtherFactionsEliminated.
+    let both_dead = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 4,
+        slots: vec![
+            slot("a", "villager", "town", "alive"),
+            slot("b", "villager", "town", "alive"),
+            slot("m", "mafia_goon", "mafia", "dead"),
+            slot("c", "cultist", "cult", "dead"),
+        ],
+    };
+    match check_win(&both_dead, &pack) {
+        Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
+        other => panic!("expected town win, got {other:?}"),
+    }
+}
+
+#[test]
+fn epicmafia_cult_wins_at_parity() {
+    let pack = load_pack_named("epicmafia");
+    // cult(1) vs others(1 town) -> cult parity fires (mafia already gone).
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 2,
+        slots: vec![
+            slot("t", "villager", "town", "alive"),
+            slot("c", "cult_leader", "cult", "alive"),
+        ],
+    };
+    match check_win(&state, &pack) {
+        Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "cult"),
+        other => panic!("expected cult win, got {other:?}"),
+    }
 }
 
 // ───────────────────── multi-phase end-to-end ─────────────────────
@@ -339,20 +401,163 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         |e| matches!(e, InnerEvent::DayVoteOutcome(o) if o.winner.as_deref() == Some("slot_1")),
     );
     assert!(lynched, "slot_1 should be lynched on D02");
+    // R1: the lynch ALSO emits a PlayerKilled so the death folds uniformly.
+    assert!(
+        day_events.iter().any(|e| matches!(
+            e,
+            InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable }
+                if slot_id == "slot_1" && cause == "day_vote" && attackers.is_empty() && *unstoppable
+        )),
+        "the lynch must emit a PlayerKilled (cause=day_vote, unstoppable, no attackers)"
+    );
     match day_events.last() {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
         other => panic!("expected trailing town WinReached, got {other:?}"),
     }
-    // Contract note: `apply_events` folds the night-style death events; the day
-    // *lynch* is carried by `DayVoteOutcome.winner` (doc 10) and is NOT one of
-    // apply_events' folded kinds, so the lynched slot is still "alive" after the
-    // fold alone. The resolver applies the lynch locally for its phase-end
-    // win-check; persisting it into the next StateSnapshot is the engine's job.
+    // Contract note (R1): the lynch now folds through `apply_events` like any
+    // other death, because the resolver emits a `PlayerKilled` for it. The
+    // lynched slot is therefore "dead" after the fold — no special apply path.
     let after_d02 = apply_events(&d02, &day_events);
     assert_eq!(
         find(&after_d02, "slot_1").status,
-        "alive",
-        "apply_events does not fold the lynch death (DayVoteOutcome.winner)"
+        "dead",
+        "R1: apply_events folds the lynch PlayerKilled to dead"
+    );
+}
+
+// ─────────────────── arsonist: persistent cross-phase ───────────────────
+
+/// PERSISTENT-effect primitive, end to end across phases (doc 09). N01: the
+/// Arsonist `douse`s two slots -> `EffectsMarked`. The marks are folded forward
+/// with `apply_events`, surviving the phase boundary on the carried state. N02:
+/// the Arsonist `ignite`s -> a Kill that READS the "doused" effect and kills
+/// every doused slot. This proves a persistent effect written one phase is read
+/// the next, with no per-night re-submission of the targets.
+#[test]
+fn arsonist_persistent_effect_carries_across_phases() {
+    let pack = load_pack_named("epicmafia");
+
+    let n01 = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        slots: vec![
+            slot("slot_1", "arsonist", "mafia", "alive"),
+            slot("slot_2", "villager", "town", "alive"),
+            slot("slot_3", "villager", "town", "alive"),
+            slot("slot_4", "villager", "town", "alive"),
+        ],
+    };
+
+    // N01: douse slot_2.
+    let n01_events = resolve(ResolutionInput {
+        game_id: "arson".to_string(),
+        phase_id: "N01".to_string(),
+        state: n01.clone(),
+        submissions: vec![Submission {
+            action_id: "d1".to_string(),
+            actor: "slot_1".to_string(),
+            template_id: "douse".to_string(),
+            targets: vec!["slot_2".to_string()],
+            phase_id: "N01".to_string(),
+            submitted_at: 1,
+            withdrawn: false,
+            metadata: Default::default(),
+        }],
+        pack: pack.clone(),
+        seed: 1,
+    });
+    assert!(
+        n01_events.iter().any(|e| matches!(
+            e,
+            InnerEvent::EffectsMarked { effect, target, .. }
+                if effect == "doused" && target == "slot_2"
+        )),
+        "N01 douse must emit EffectsMarked(doused, slot_2)"
+    );
+    // No kill on N01 (douse alone never kills).
+    assert!(
+        !n01_events
+            .iter()
+            .any(|e| matches!(e, InnerEvent::PlayerKilled { .. })),
+        "douse alone must not kill"
+    );
+
+    // Fold N01 forward: slot_2 now carries the persistent "doused" tag.
+    let after_n01 = apply_events(&n01, &n01_events);
+    assert_eq!(
+        find(&after_n01, "slot_2").effects,
+        vec!["doused".to_string()]
+    );
+
+    // N02: douse slot_3, then ignite. Advance the phase cursor (engine's job).
+    let mut n02 = after_n01.clone();
+    n02.phase_number = 2;
+    let n02_events = resolve(ResolutionInput {
+        game_id: "arson".to_string(),
+        phase_id: "N02".to_string(),
+        state: n02.clone(),
+        submissions: vec![
+            Submission {
+                action_id: "d2".to_string(),
+                actor: "slot_1".to_string(),
+                template_id: "douse".to_string(),
+                targets: vec!["slot_3".to_string()],
+                phase_id: "N02".to_string(),
+                submitted_at: 1,
+                withdrawn: false,
+                metadata: Default::default(),
+            },
+            Submission {
+                action_id: "ig".to_string(),
+                actor: "slot_1".to_string(),
+                template_id: "ignite".to_string(),
+                targets: vec![],
+                phase_id: "N02".to_string(),
+                submitted_at: 2,
+                withdrawn: false,
+                metadata: Default::default(),
+            },
+        ],
+        pack: pack.clone(),
+        seed: 1,
+    });
+
+    // ignite reads the "doused" effect off the state. slot_2 was doused on N01
+    // (and carried across via apply_events); slot_3's N02 douse (priority 60) is
+    // emitted before ignite (priority 30) but folds onto state only after this
+    // resolution — so this night ignite kills exactly the PRE-EXISTING doused
+    // slot_2, proving cross-phase persistence (not same-night same-resolution).
+    let killed: Vec<&str> = n02_events
+        .iter()
+        .filter_map(|e| match e {
+            InnerEvent::PlayerKilled { slot_id, cause, .. } if cause == "ignite" => {
+                Some(slot_id.as_str())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        killed,
+        vec!["slot_2"],
+        "ignite must kill exactly the slot doused on the PRIOR night (slot_2)"
+    );
+
+    // And slot_3's fresh douse is recorded this night for a FUTURE ignite.
+    assert!(
+        n02_events.iter().any(|e| matches!(
+            e,
+            InnerEvent::EffectsMarked { effect, target, .. }
+                if effect == "doused" && target == "slot_3"
+        )),
+        "N02 douse must mark slot_3 for a later ignite"
+    );
+
+    // Fold N02: slot_2 dead, slot_3 now doused (ready for the next ignite).
+    let after_n02 = apply_events(&n02, &n02_events);
+    assert_eq!(find(&after_n02, "slot_2").status, "dead");
+    assert_eq!(
+        find(&after_n02, "slot_3").effects,
+        vec!["doused".to_string()]
     );
 }
 
