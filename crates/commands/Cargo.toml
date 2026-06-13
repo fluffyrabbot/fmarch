@@ -1,0 +1,25 @@
+[package]
+name = "commands"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+caps = { path = "../caps" }
+projections = { path = "../projections" }
+eventstore = { path = "../eventstore" }
+domain = { path = "../domain" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+    "json",
+    "macros",
+    "migrate",
+] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

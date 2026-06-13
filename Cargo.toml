@@ -5,6 +5,7 @@ members = [
     "crates/eventstore",
     "crates/projections",
     "crates/caps",
+    "crates/commands",
 ]
 
 [workspace.package]
