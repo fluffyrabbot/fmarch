@@ -12,7 +12,7 @@
 use caps::Principal;
 use commands::{handle, Ack, Command, Reject, VoteTarget};
 use projections::votecount;
-use sqlx::PgPool;
+use sqlx::{Acquire, PgPool};
 use uuid::Uuid;
 
 // ───────────────────────── helpers ─────────────────────────
@@ -510,16 +510,27 @@ async fn changing_vote_overwrites_and_withdraw_removes(pool: PgPool) {
 
 /// An eventstore `Conflict` surfaces — through the real pipeline `handle` — as
 /// the retryable `Reject::StreamConflict`. We block the next stream slot with an
-/// uncommitted concurrent append, then drive a real `handle` call that races for
-/// the same slot; one wins, the other gets the typed retryable reject.
+/// uncommitted concurrent append, then park the real `handle` call inside its
+/// insert path until the conflicting row is committed. This proves the typed
+/// retryable reject without relying on scheduler timing.
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let lock_key = 41_004_i64;
+
+    install_deadline_insert_blocker(&pool, game, lock_key).await;
+
+    let mut conn_a = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *conn_a)
+        .await
+        .unwrap();
 
     // tx_a holds an uncommitted append at the next stream_seq (base+1). It will
-    // commit shortly, so a concurrent `handle` that also computed `base` and
-    // targets base+1 collides on the UNIQUE constraint → typed Conflict.
-    let mut tx_a = pool.begin().await.unwrap();
+    // commit after the handler has computed the same base and reached its insert
+    // path, so the handler collides on the UNIQUE constraint → typed Conflict.
+    let mut tx_a = conn_a.begin().await.unwrap();
     eventstore::append_in_tx(
         &mut tx_a,
         game,
@@ -534,11 +545,12 @@ async fn conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
     .await
     .unwrap();
 
-    // The pipeline call (its own pool connection). Its append blocks on tx_a's
-    // uncommitted row; we commit tx_a mid-flight so the pipeline then trips the
-    // UNIQUE violation rather than appending after it.
+    // The pipeline call (its own pool connection). The test trigger blocks it on
+    // `pg_advisory_lock(lock_key)` immediately before its INSERT into `events`.
+    // Once `pg_stat_activity` shows that wait, we know the handler already read
+    // the stale stream max and is parked inside the append path.
     let pool2 = pool.clone();
-    let handler = async move {
+    let handler = tokio::spawn(async move {
         handle(
             &pool2,
             &user("host_h"),
@@ -549,13 +561,17 @@ async fn conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
             },
         )
         .await
-    };
-    let committer = async {
-        tokio::task::yield_now().await;
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        tx_a.commit().await.unwrap();
-    };
-    let (res, ()) = tokio::join!(handler, committer);
+    });
+
+    wait_for_advisory_wait(&pool).await;
+    tx_a.commit().await.unwrap();
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *conn_a)
+        .await
+        .unwrap();
+
+    let res = handler.await.unwrap();
 
     let err = res.expect_err("the racing handle must lose to tx_a");
     assert_eq!(
@@ -564,6 +580,64 @@ async fn conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
         "Conflict → retryable StreamConflict"
     );
     assert!(err.is_retryable(), "the caller is told to reload + retry");
+}
+
+async fn install_deadline_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
+    let function_sql = format!(
+        r#"
+        CREATE OR REPLACE FUNCTION test_block_deadline_insert() RETURNS trigger AS $$
+        BEGIN
+            IF NEW.stream_id = '{game}'::uuid AND NEW.kind = 'DeadlineExtended' THEN
+                PERFORM pg_advisory_lock({lock_key});
+                PERFORM pg_advisory_unlock({lock_key});
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        "#
+    );
+    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_deadline_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER test_block_deadline_insert
+            BEFORE INSERT ON events
+            FOR EACH ROW EXECUTE FUNCTION test_block_deadline_insert()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn wait_for_advisory_wait(pool: &PgPool) {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            let waiting: bool = sqlx::query_scalar(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND wait_event_type = 'Lock'
+                      AND wait_event = 'advisory'
+                )
+                "#,
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("handler reached the advisory-lock gate before timing out");
 }
 
 // A trivial Ack sanity helper kept to ensure the type is exercised.
