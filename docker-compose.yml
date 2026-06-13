@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: fmarch_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fmarch
+      POSTGRES_PASSWORD: fmarch
+      POSTGRES_DB: fmarch
+    ports:
+      # host 5544 -> container 5432 (project-specific, avoids collisions)
+      - "5544:5432"
+    volumes:
+      - fmarch_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fmarch -d fmarch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  fmarch_pgdata:
