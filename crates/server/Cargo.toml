@@ -1,0 +1,16 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+api = { path = "../api" }
+axum = "0.8"
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "postgres",
+    "migrate",
+] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

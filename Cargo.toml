@@ -6,6 +6,9 @@ members = [
     "crates/projections",
     "crates/caps",
     "crates/commands",
+    "crates/wire",
+    "crates/api",
+    "crates/server",
 ]
 
 [workspace.package]
