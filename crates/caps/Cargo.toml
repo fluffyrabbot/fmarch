@@ -1,0 +1,15 @@
+[package]
+name = "caps"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+projections = { path = "../projections" }
+serde = { version = "1", features = ["derive"] }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio",
+    "postgres",
+    "uuid",
+] }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = "1"
