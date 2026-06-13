@@ -74,9 +74,22 @@ fn run(input_json: &Value, pack: Pack) -> Vec<Value> {
         .collect()
 }
 
+/// `DayVoteOutcome.reason` is optional, non-canonical human-readable prose (doc
+/// 10): the platform may rewrite/localize it, so it is NOT part of the asserted
+/// contract. Strip it before comparison so equality ignores it.
+fn strip_noncanonical(v: &Value) -> Value {
+    let mut v = v.clone();
+    if v.get("kind").and_then(Value::as_str) == Some("DayVoteOutcome") {
+        if let Some(payload) = v.get_mut("payload").and_then(Value::as_object_mut) {
+            payload.remove("reason");
+        }
+    }
+    v
+}
+
 /// Assert two event sequences are equal: order-sensitive across events,
 /// field-order-insensitive within each (serde_json::Value equality already
-/// ignores object key order).
+/// ignores object key order). `DayVoteOutcome.reason` is ignored (non-canonical).
 fn assert_events_eq(got: &[Value], expected: &[Value], scenario: &str) {
     assert_eq!(
         got.len(),
@@ -84,6 +97,8 @@ fn assert_events_eq(got: &[Value], expected: &[Value], scenario: &str) {
         "{scenario}: event count mismatch\n got: {got:#?}\n exp: {expected:#?}"
     );
     for (i, (g, e)) in got.iter().zip(expected.iter()).enumerate() {
+        let g = strip_noncanonical(g);
+        let e = strip_noncanonical(e);
         assert_eq!(
             g, e,
             "{scenario}: event[{i}] mismatch\n got: {g:#?}\n exp: {e:#?}"

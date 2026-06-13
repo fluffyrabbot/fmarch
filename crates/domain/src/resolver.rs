@@ -161,6 +161,9 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
     // ── Phase 4: Kill ── Protect beats Kill UNLESS the Kill carries Strongman
     // (protect_beats_kill.unless_modifiers inspects the BEATEN action = the Kill).
     let strongman_bypasses_protect = protect_beats_kill_unless_strongman(pack);
+    // Slots that got PlayerKilled this resolution, in event order — surfaced as
+    // the trailing PhaseAnnouncement's deaths (doc 10).
+    let mut killed: Vec<SlotId> = Vec::new();
     for idx in ability_order(&actions, IrAbility::Kill) {
         if actions[idx].blocked {
             continue;
@@ -180,9 +183,11 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
                     sources,
                 });
             } else {
-                // `unstoppable` is true when a Strongman kill overrode a present
-                // protect on this target.
-                let unstoppable = protected && bypass;
+                // `unstoppable` is true iff the kill is inherently unpreventable
+                // by protection — i.e. it carries Strongman — REGARDLESS of whether
+                // a protect was actually present on this target (doc 10).
+                let unstoppable = is_strongman && strongman_bypasses_protect;
+                killed.push(target.clone());
                 events.push(InnerEvent::PlayerKilled {
                     slot_id: target,
                     cause: cause.clone(),
@@ -228,6 +233,21 @@ fn resolve_night(input: &ResolutionInput) -> Vec<InnerEvent> {
             }
         }
     }
+
+    // ── Trailing PhaseAnnouncement ── every resolution ends with exactly one
+    // PhaseAnnouncement listing the deaths it produced (empty if none); it is the
+    // single canonical death-reveal signal (doc 10).
+    let deaths = killed
+        .into_iter()
+        .map(|slot_id| Death {
+            slot_id,
+            cause: "night_kill".to_string(),
+        })
+        .collect();
+    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
+        phase_id: input.phase_id.clone(),
+        deaths,
+    }));
 
     events
 }

@@ -142,7 +142,7 @@ enum InnerEvent {
     PhaseAnnouncement,      // deaths revealed at phase boundary
 
     // ── Core night results ──
-    PlayerKilled,           // { slot_id, cause, attackers, unstoppable }
+    PlayerKilled,           // { slot_id, cause, attackers, unstoppable }  see below
     PlayerSaved,            // { slot_id, reasons, sources }
     PlayerConverted,        // { target, new_role, original_role, source }
     ConversionBlocked,      // { target, status, reason }
@@ -173,6 +173,19 @@ enum InnerEvent {
 > gets no `InvestigationResult`). `EffectNotification` is **reserved for Mark/Clear effects**
 > and is explicitly **NOT** the roleblock channel.
 
+> **`PlayerKilled.unstoppable`.** `unstoppable = true` **iff the kill is inherently
+> unpreventable by protection** — i.e. the killing action carries the `Strongman` modifier
+> ([09](09-engine-and-packs.md)) — **REGARDLESS of whether a protect was actually present on
+> the target**. It is a property of the kill, not of this particular night's matchup: a
+> Strongman kill against an unprotected slot is still `unstoppable: true`; a plain kill that
+> happened to land unopposed is `unstoppable: false`.
+
+> **`cause` vocabulary (two fields, two layers).** `PlayerKilled.cause` is the killing
+> action template's `id` (mechanical attribution, e.g. `"factional_kill"`). `Death.cause`
+> (inside `PhaseAnnouncement`, below) is a **semantic** tag; the v1 vocabulary is
+> `{ "lynch", "night_kill" }`. These are deliberately different fields serving different
+> layers — do not conflate them.
+
 `DayVoteOutcome` carries the full tally so projections and disputes have everything:
 
 ```rust
@@ -196,16 +209,30 @@ enum VoteStatus { Lynch, NoLynch, NoMajority, Tie, Hammer }
 under `tie_breaker: NoElimination`); it is distinct from `NoLynch` (someone *chose* no-lynch)
 and from `NoMajority` (a majority threshold was simply not reached).
 
+`DayVoteOutcome.reason` is **optional, non-canonical human-readable prose** (the platform may
+rewrite or localize it). It MUST NOT be relied on for replay and is **not part of the asserted
+contract**: golden comparison ignores it. The resolver may still emit prose there for humans;
+projections and disputes key off the structured fields (`status`, `winner`, `tiebreak`, the
+tallies), never `reason`.
+
 `PhaseAnnouncement` (deaths revealed at a phase boundary) has the pinned payload:
 
 ```rust
 struct PhaseAnnouncement {
     phase_id: PhaseId,
-    deaths: Vec<Death>,             // empty if no one died this boundary
+    deaths: Vec<Death>,             // empty if no one died this resolution
 }
 
 struct Death { slot_id: SlotId, cause: String }
 ```
+
+**Every resolution emits exactly ONE trailing `PhaseAnnouncement` as its final inner event.**
+It lists the deaths produced in that resolution — for a night, the slots that got
+`PlayerKilled` (each `{ slot_id, cause: "night_kill" }`, in event order); for a day, the
+lynched slot if any (`cause: "lynch"`) — and is `deaths: []` when no one died. This single
+canonical death-reveal signal always fires, even on a resolution that produces only saves,
+interferences, or a tie. `Death.cause` is the **semantic** tag (`{ "lynch", "night_kill" }`),
+distinct from `PlayerKilled.cause` (the action template `id`) above.
 
 `Seed` and `LogicalTime` carried on engine events are both `u64` (see
 [09](09-engine-and-packs.md)): `Seed` is the recorded resolver RNG seed; `LogicalTime`

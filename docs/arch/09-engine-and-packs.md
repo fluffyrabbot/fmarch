@@ -147,6 +147,10 @@ struct Constraints {
 > (`Investigate` + `Track`) in the IR — without it the two info roles are indistinguishable.
 > Track/Watch/Motion results are **graph-derived** (computed from the interaction graph) and
 > are NOT configurable via `VisibilityRule` beyond hide/show.
+>
+> **v1 scope.** v1 implements **Track** with result shape `{ "visited": [SlotId, …] }`
+> (the post-redirect targets the tracked slot visited). **Watch** and **Motion** are
+> out of v1 scope.
 
 ### Precedence — who beats whom
 
@@ -195,6 +199,9 @@ slot carries a tag present in `investigation_overrides`, and that tag's `ResultO
 an entry for the active `InvestigateMode`, the override value replaces the otherwise-derived
 result. Absent a match, the normal result stands.
 
+> **v1 scope.** The `investigation_overrides` inner map keys are the `InvestigateMode`
+> variant *name string* (e.g. `"Parity"`).
+
 ### Redirects — fixpoint policy
 
 ```rust
@@ -204,6 +211,10 @@ struct RedirectPolicy {
     tie_breaker: TieBreaker,        // Stable | Random | First
 }
 ```
+
+> **v1 scope.** v1 handles the bus-driver case of **exactly 2 distinct targets** (swap `a`↔`b`);
+> other cardinalities are out of v1 scope. `tie_breaker` governs competing redirects onto the
+> same slot and is **not exercised in v1**.
 
 ### Triggers — reactive abilities
 
@@ -344,6 +355,10 @@ the **single responsibility of `Constraints.max_targets`** (e.g. the bus driver 
 `resolve` is **pure**: same inputs ⇒ same outputs, always. Its output is persisted as a
 `resolution.applied` envelope plus a `resolution.trace` event
 ([10-event-schema](10-event-schema.md)).
+
+> **v1 golden coverage.** Stacked kills, multiple protectors on one slot, and stacked blocks
+> all **compose** in the engine, but are **not yet golden-covered** (deferred). The v1 goldens
+> exercise the single-actor cases of each interaction.
 
 ## Determinism rules (non-negotiable — inherited from im-human)
 

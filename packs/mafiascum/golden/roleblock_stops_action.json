@@ -46,6 +46,14 @@
         "actor": "slot_2",
         "reason": "roleblocked"
       }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
     }
   ]
 }

@@ -49,6 +49,14 @@
         "attackers": ["slot_3"],
         "unstoppable": false
       }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [{ "slot_id": "slot_2", "cause": "night_kill" }]
+      }
     }
   ]
 }
