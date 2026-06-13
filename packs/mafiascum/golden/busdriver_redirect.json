@@ -1,0 +1,54 @@
+{
+  "description": "Bus Driver (slot_5) swaps slot_1 and slot_2. Mafia Goon (slot_3) aims the factional kill at slot_1. After the swap, the kill lands on slot_2 instead. No protect present -> PlayerKilled on slot_2. The redirect graph edge (slot_1 -> slot_2) is recorded in the trace.",
+  "input": {
+    "game_id": "game_demo_003",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "slots": [
+        { "slot_id": "slot_1", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_2", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_3", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] },
+        { "slot_id": "slot_4", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
+        { "slot_id": "slot_5", "role_key": "bus_driver", "alignment": "town", "status": "alive", "effects": [] }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_5",
+        "template_id": "bus_driver_swap",
+        "targets": ["slot_1", "slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "sub_002",
+        "actor": "slot_3",
+        "template_id": "factional_kill",
+        "targets": ["slot_1"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 626262
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "factional_kill",
+        "attackers": ["slot_3"],
+        "unstoppable": false
+      }
+    }
+  ]
+}

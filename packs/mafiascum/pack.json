@@ -1,0 +1,281 @@
+{
+  "name": "mafiascum",
+  "version": 1,
+  "ir_version": 1,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Vanilla Townie. No night action; wins with the town.",
+      "alignment": "town",
+      "actions": []
+    },
+    "cop": {
+      "description": "Cop. Each night, investigates one slot and learns a town/scum parity result. Result flips on a Godfather.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "doctor": {
+      "description": "Doctor. Each night, protects one slot from a kill. Protect beats Kill unless the attacker is a Strongman.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "doctor_protect",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "roleblocker": {
+      "description": "Roleblocker. Each night, blocks one slot; that slot's roleblockable action does not resolve.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "roleblocker_block",
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "tracker": {
+      "description": "Tracker. Each night, watches one slot and learns whom that slot visited. Sees the target unless the visitor's action is Ninja.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "tracker_track",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 40,
+            "x_shots": null
+          },
+          "mode": "Track"
+        }
+      ]
+    },
+    "bus_driver": {
+      "description": "Bus Driver. Each night, swaps two slots; actions aimed at one land on the other.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "bus_driver_swap",
+          "ability": "Redirect",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_goon": {
+      "description": "Mafia Goon. Carries out the nightly factional kill (one per night, faction-shared).",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "godfather": {
+      "description": "Godfather. Carries out the factional kill and appears town to a Parity investigation (visibility result flip via the godfather effect tag).",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ],
+      "effects": ["godfather"]
+    },
+    "ninja": {
+      "description": "Ninja. Carries out the factional kill; the kill is hidden from track/watch/investigate (Ninja modifier on the action).",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Ninja"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "strongman": {
+      "description": "Strongman. Carries out the factional kill; the kill bypasses Protect (Strongman modifier on the action).",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Strongman"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "block_stops_roleblockable",
+      "when": { "effect": "Block", "target_state": null },
+      "beats": ["Kill", "Protect", "Investigate", "Redirect"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "A Block prevents the blocked slot's roleblockable action from resolving. Only abilities whose action carries roleblockable=true are stopped; the Roleblocker's own Block is not roleblockable. Block is the highest-priority interaction and is evaluated before targets are read by the blocked action."
+    },
+    {
+      "id": "redirect_before_targets_read",
+      "when": { "effect": "Redirect", "target_state": null },
+      "beats": ["Kill", "Protect", "Investigate"],
+      "blocked_by": ["Block"],
+      "unless_modifiers": [],
+      "notes": "Redirect (bus drive) rewrites target maps before Kill/Protect/Investigate read their targets. A roleblocked bus driver does not swap. Resolved under RedirectPolicy with loop_cap."
+    },
+    {
+      "id": "protect_beats_kill",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": ["Block"],
+      "unless_modifiers": ["Strongman"],
+      "notes": "Doctor's Protect saves the target from a Kill, UNLESS the killing action carries the Strongman modifier. A roleblocked doctor does not protect."
+    },
+    {
+      "id": "kill_resolves",
+      "when": { "effect": "Kill", "target_state": null },
+      "beats": [],
+      "blocked_by": ["Block", "Protect"],
+      "unless_modifiers": [],
+      "notes": "A Kill removes the target from play unless stopped by Block (roleblocked killer) or Protect (doctored target). Strongman is handled by protect_beats_kill's unless_modifiers, which removes Protect from this Kill's blocked_by at evaluation time."
+    }
+  ],
+  "visibility": {
+    "Investigate": {
+      "sees": ["TargetId", "Result"],
+      "unless_modifiers": ["Ninja"]
+    },
+    "Kill": {
+      "sees": ["TargetId"],
+      "unless_modifiers": ["Ninja"]
+    },
+    "Protect": {
+      "sees": ["TargetId"],
+      "unless_modifiers": []
+    },
+    "Block": {
+      "sees": ["TargetId"],
+      "unless_modifiers": []
+    },
+    "Redirect": {
+      "sees": ["TargetId"],
+      "unless_modifiers": ["Ninja"]
+    }
+  },
+  "redirects": {
+    "order": ["Redirect"],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Plurality",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["sod", "main", "eod"]
+    },
+    "twilight": false
+  }
+}
