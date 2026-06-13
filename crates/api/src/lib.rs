@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 use wire::{
-    AckMsg, CapabilityGrant, ClientMsg, Envelope, Hello, ProjectionDelta, RejectCode, RejectMsg,
-    ServerMsg, VoteCountDelta, PROTOCOL_VERSION,
+    AckMsg, CapabilityGrant, ClientEnvelope, Hello, ProjectionDelta, RejectCode, RejectMsg,
+    ServerEnvelope, ServerMsg, VoteCountDelta, PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -63,28 +63,28 @@ async fn healthz() -> Json<Health> {
 
 async fn command(
     State(state): State<ApiState>,
-    Json(envelope): Json<Envelope<ClientMsg>>,
+    Json(envelope): Json<ClientEnvelope>,
 ) -> impl IntoResponse {
     if envelope.v != PROTOCOL_VERSION {
-        return Json(Envelope::new(
+        return Json(ServerEnvelope::new(
             envelope.id,
             ServerMsg::Reject(protocol_reject("unsupported protocol version")),
         ));
     }
 
-    let ClientMsg::Command(msg) = envelope.body else {
-        return Json(Envelope::new(
+    let wire::ClientMsg::Command(msg) = envelope.body else {
+        return Json(ServerEnvelope::new(
             envelope.id,
             ServerMsg::Reject(protocol_reject("expected command message")),
         ));
     };
 
     let principal = Principal::user(msg.principal_user_id);
-    let body = match commands::handle(&state.pool, &principal, msg.command).await {
+    let body = match commands::handle(&state.pool, &principal, msg.command.into()).await {
         Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
     };
-    Json(Envelope::new(envelope.id, body))
+    Json(ServerEnvelope::new(envelope.id, body))
 }
 
 async fn votecount(
@@ -116,7 +116,7 @@ async fn ws(
 
 async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
     let hello = hello_for(&state, params.principal_user_id.as_deref(), params.game).await;
-    if let Ok(text) = serde_json::to_string(&Envelope::new(0, ServerMsg::Hello(hello))) {
+    if let Ok(text) = serde_json::to_string(&ServerEnvelope::new(0, ServerMsg::Hello(hello))) {
         let _ = socket.send(Message::Text(text.into())).await;
     }
 }

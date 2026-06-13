@@ -1,14 +1,16 @@
 use api::router;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
-use commands::{Command, VoteTarget};
 use futures_util::StreamExt;
 use tower::ServiceExt;
 use uuid::Uuid;
-use wire::{ClientMsg, CommandMsg, Envelope, ProjectionDelta, ServerMsg, PROTOCOL_VERSION};
+use wire::{
+    ClientEnvelope, ClientMsg, Command, CommandMsg, ProjectionDelta, ServerEnvelope, ServerMsg,
+    VoteTarget, PROTOCOL_VERSION,
+};
 
-fn command_envelope(id: u64, principal_user_id: &str, command: Command) -> Envelope<ClientMsg> {
-    Envelope::new(
+fn command_envelope(id: u64, principal_user_id: &str, command: Command) -> ClientEnvelope {
+    ClientEnvelope::new(
         id,
         ClientMsg::Command(CommandMsg {
             principal_user_id: principal_user_id.to_string(),
@@ -22,7 +24,7 @@ async fn post_command(
     id: u64,
     principal_user_id: &str,
     command: Command,
-) -> Envelope<ServerMsg> {
+) -> ServerEnvelope {
     let body = serde_json::to_vec(&command_envelope(id, principal_user_id, command)).unwrap();
     let response = app
         .oneshot(
@@ -40,7 +42,7 @@ async fn post_command(
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn expect_ack(envelope: Envelope<ServerMsg>) {
+fn expect_ack(envelope: ServerEnvelope) {
     match envelope.body {
         ServerMsg::Ack(ack) => assert!(!ack.stream_seqs.is_empty()),
         other => panic!("expected Ack, got {other:?}"),
@@ -164,7 +166,7 @@ async fn websocket_hello_announces_protocol(pool: sqlx::PgPool) {
         .unwrap();
     let msg = socket.next().await.unwrap().unwrap();
     let text = msg.into_text().unwrap();
-    let envelope: Envelope<ServerMsg> = serde_json::from_str(&text).unwrap();
+    let envelope: ServerEnvelope = serde_json::from_str(&text).unwrap();
 
     assert_eq!(envelope.v, PROTOCOL_VERSION);
     assert_eq!(envelope.id, 0);
