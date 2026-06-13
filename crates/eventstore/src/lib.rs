@@ -35,8 +35,8 @@ pub enum ActorId {
 }
 
 /// An event ready to be appended. `stream_seq` is assigned by the store
-/// (`current_max + 1..`), never by the caller — that is the optimistic
-/// concurrency mechanism.
+/// (`current_max + 1..`) while holding the stream's append lock, never by the
+/// caller.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EventInput {
     /// `EventKind` discriminant tag, e.g. `"VoteSubmitted"`, `"ResolutionApplied"`.
@@ -93,8 +93,9 @@ pub struct StoredEvent {
 /// Typed errors from the store.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
-    /// Optimistic-concurrency conflict: a concurrent append already took the
-    /// `(stream_id, stream_seq)` slot. **Retryable** — reload and retry (doc 02/03).
+    /// Defensive conflict guard: the `(stream_id, stream_seq)` slot was already
+    /// taken despite the stream append lock. This should only happen if a writer
+    /// bypasses the store path.
     #[error("append conflict on stream {stream_id} at stream_seq {stream_seq} (retryable)")]
     Conflict { stream_id: Uuid, stream_seq: i64 },
     #[error(transparent)]
@@ -110,6 +111,24 @@ impl StoreError {
 
 /// The unique-violation SQLSTATE for the `(stream_id, stream_seq)` constraint.
 const PG_UNIQUE_VIOLATION: &str = "23505";
+
+fn stream_lock_key(stream_id: Uuid) -> i64 {
+    let bytes = stream_id.as_u128().to_be_bytes();
+    let high = i64::from_be_bytes(bytes[0..8].try_into().expect("slice length"));
+    let low = i64::from_be_bytes(bytes[8..16].try_into().expect("slice length"));
+    high ^ low
+}
+
+async fn lock_stream_append(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(stream_lock_key(stream_id))
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
+}
 
 /// Read the current max `stream_seq` for a stream within the given executor.
 /// Returns 0 for an empty stream (so the first event lands at `stream_seq = 1`).
@@ -128,9 +147,12 @@ where
 
 /// Append `events` to `stream_id` at `current_max + 1..`, inside `tx`.
 ///
-/// Returns the assigned `stream_seq` values in order. A concurrent append racing
-/// for the same slot trips the UNIQUE constraint and surfaces as
-/// [`StoreError::Conflict`] (retryable) — never a panic.
+/// Returns the assigned `stream_seq` values in order. Concurrent appends to the
+/// same stream are serialized with a transaction-scoped advisory lock before
+/// `current_max` is read, so ordinary same-game bursts wait and land at the next
+/// free stream sequence instead of surfacing a retry to the caller. The UNIQUE
+/// constraint remains as a defensive backstop and still maps to
+/// [`StoreError::Conflict`] if another writer bypasses this store path.
 ///
 /// This is the shared core; [`append`] wraps it in its own transaction and
 /// `projections::append_and_project` reuses it so the projection fold commits in
@@ -144,6 +166,7 @@ pub async fn append_in_tx(
         return Ok(Vec::new());
     }
 
+    lock_stream_append(tx, stream_id).await?;
     let base = current_stream_seq(&mut **tx, stream_id).await?;
     let mut out = Vec::with_capacity(events.len());
 

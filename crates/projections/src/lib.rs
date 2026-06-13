@@ -26,10 +26,10 @@
 //!
 //! Runtime sqlx queries only (no `query!` macro) so `cargo build` needs no DB.
 
-use eventstore::{EventInput, StoreError, StoredEvent, append_in_tx};
+use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use sqlx::postgres::PgPool;
+use sqlx::Row;
 use uuid::Uuid;
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
@@ -264,9 +264,9 @@ async fn fold_inner(
 // ───────────────────────── public API ─────────────────────────
 
 /// Append `events` to `stream_id` AND fold them into the projections, **in one
-/// DB transaction** (doc 02 synchronous projections). The append's optimistic
-/// concurrency still applies: a conflicting concurrent append returns
-/// [`StoreError::Conflict`] (via [`ProjectionError::Store`]) and the whole tx —
+/// DB transaction** (doc 02 synchronous projections). Appends to the same stream
+/// serialize in the event store before stream_seq assignment; if the defensive
+/// unique constraint is still tripped by an out-of-band writer, the whole tx —
 /// projection updates included — rolls back.
 ///
 /// `game_id` keys the projections; it equals `stream_id` for game streams.

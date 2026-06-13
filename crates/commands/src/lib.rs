@@ -9,8 +9,9 @@
 //! 2. **validate** — domain rules: phase open/unlocked, slot alive, the actor IS
 //!    the slot's current occupant, target valid, host-gating.
 //! 3. **produce events** — the platform [`eventstore::EventInput`]s.
-//! 4. **persist** — [`projections::append_and_project`] in one tx; an eventstore
-//!    `Conflict` surfaces as the retryable [`Reject::StreamConflict`].
+//! 4. **persist** — [`projections::append_and_project`] in one tx; same-stream
+//!    appends serialize in the store, with [`Reject::StreamConflict`] reserved
+//!    for defensive unique-constraint conflicts.
 //! 5. **ack** — [`Ack`] or a TYPED [`Reject`].
 //!
 //! Authority is RESOLVED once and PASSED INWARD: validation receives a
@@ -19,8 +20,8 @@
 
 use caps::{Capability, CapabilitySet, Principal};
 use eventstore::{ActorId, EventInput};
-use projections::{ProjectionError, append_and_project_in_tx};
-use sqlx::{Row, postgres::PgPool};
+use projections::{append_and_project_in_tx, ProjectionError};
+use sqlx::{postgres::PgPool, Row};
 use uuid::Uuid;
 
 mod model;
@@ -312,7 +313,7 @@ async fn submit_vote(
         0,
     );
 
-    // 4. persist (one tx; Conflict → StreamConflict).
+    // 4. persist (one tx; same-stream appends serialize in the store).
     persist(pool, game, &[ev], receipt).await
 }
 
@@ -450,7 +451,11 @@ async fn require_game(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
 
 /// Least-authority gate: require `cap`, mapping a miss to `deny`.
 fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), Reject> {
-    if caps.grants(cap) { Ok(()) } else { Err(deny) }
+    if caps.grants(cap) {
+        Ok(())
+    } else {
+        Err(deny)
+    }
 }
 
 /// The principal must be the slot's CURRENT occupant. We distinguish "this slot

@@ -41,7 +41,7 @@ client frame ─▶ decode (CBOR, versioned)
              ─▶ produce events
              ─▶ BEGIN tx
                    insert command receipt claim (principal, command_id)
-                   append events  (optimistic concurrency on (stream_id, stream_seq))
+                   append events  (per-stream append lock assigns stream_seq)
                    fold into synchronous projections
                    store ack on command receipt
                  COMMIT
@@ -55,8 +55,9 @@ client frame ─▶ decode (CBOR, versioned)
 - **Validation is total.** Every command handler can state its preconditions; illegal
   transitions (voting in a locked phase, posting as a dead slot) are rejected with a typed
   domain error, not a panic. Errors are actionable and cross the boundary cleanly.
-- **Optimistic concurrency** via the `(stream_id, stream_seq)` unique constraint
-  ([02](02-event-sourcing.md)). On conflict: reload, revalidate, retry (bounded).
+- **Append serialization** uses a transaction-scoped per-stream lock before assigning
+  `stream_seq` ([02](02-event-sourcing.md)). Same-game bursts wait and commit in order;
+  `(stream_id, stream_seq)` uniqueness remains a defensive backstop.
 - **Idempotency** is keyed by `(principal, command_id)`, not by the per-connection envelope
   id. A duplicate command id returns the stored ack from the first committed attempt and
   does not run validation or append again.

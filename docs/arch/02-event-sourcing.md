@@ -47,9 +47,10 @@ events
 - **Streams** are aggregates. The natural aggregate is the **game**; a game's entire
   history is one stream, which keeps a game internally consistent and easy to replay,
   archive, or export as a unit. Platform-level streams (users, auth) are separate.
-- `(stream_id, stream_seq)` uniqueness gives **optimistic concurrency**: a command reads
-  the current `stream_seq`, computes new events at `stream_seq+1…`, and the unique
-  constraint rejects a conflicting concurrent append. Retry on conflict.
+- A transaction-scoped per-stream append lock serializes writers before `stream_seq`
+  assignment, so same-game bursts wait and take the next sequence instead of surfacing a
+  retry to clients. `(stream_id, stream_seq)` uniqueness remains the database backstop for
+  writers that bypass the store path.
 - Append-only. There is no `UPDATE` and no `DELETE` on `events`. Ever. Corrections are new
   events (a `PostEdited`, a `VoteRetracted`), not mutations.
 

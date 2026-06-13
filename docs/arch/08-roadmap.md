@@ -10,7 +10,7 @@ of the same shape.
 A single game, one channel, real votes, live, with the two irreversible mechanics exercised.
 
 1. **Event store + one projection, end-to-end.**
-   Append-only `events` table, optimistic concurrency, and the `votecount` projection folded
+   Append-only `events` table, serialized stream appends, and the `votecount` projection folded
    from `VoteCast`/`VoteRetracted` in one transaction with the append
    ([02](02-event-sourcing.md)). Proves: the log, sync projections, replay determinism.
 
