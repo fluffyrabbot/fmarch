@@ -119,9 +119,11 @@ Examples:
   just made (e.g. your own post appearing, your vote in the count). The command handler
   appends events and updates these projections in **one DB transaction**. Strong
   read-your-writes, no eventual-consistency surprises in the hot path.
-- **Asynchronous listeners** (Postgres `LISTEN/NOTIFY` on new `seq`) for fan-out work that
-  can lag slightly: pushing deltas to other connected clients, the board index,
-  notifications. See [03-backend](03-backend.md).
+- **Asynchronous listeners** can use Postgres `LISTEN/NOTIFY` on new `seq` for fan-out
+  work that can lag slightly: pushing deltas to other connected clients, the board index,
+  notifications. `NOTIFY` is only a wakeup optimization; the durable source of delivery
+  truth is the committed `events.seq` cursor. A listener that misses a notification catches
+  up by querying events after its last delivered `seq`. See [03-backend](03-backend.md).
 
 This split keeps the author's own experience strictly consistent while letting broadcast
 and secondary read models scale independently.
@@ -155,5 +157,8 @@ always discardable and re-derivable. Not needed for v1.
 - **End-game reveal** flips a flag in `slot_state`; a rebuild proves it was always correct.
 - The **wire protocol** ([04](04-wire-protocol.md)) ships projection *deltas*, which are
   just the events the client is allowed to see, framed compactly.
+- Network retries use durable command receipts keyed by `(principal, command_id)`: if a
+  command committed but its ack was lost, retry returns the original ack instead of
+  appending duplicate events.
 
 Continue to [03-backend](03-backend.md).

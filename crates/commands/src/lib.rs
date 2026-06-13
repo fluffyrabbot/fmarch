@@ -19,12 +19,27 @@
 
 use caps::{Capability, CapabilitySet, Principal};
 use eventstore::{ActorId, EventInput};
-use projections::{append_and_project, ProjectionError};
-use sqlx::postgres::PgPool;
+use projections::{ProjectionError, append_and_project_in_tx};
+use sqlx::{Row, postgres::PgPool};
 use uuid::Uuid;
 
 mod model;
 pub use model::{Ack, Command, Reject, VoteTarget};
+
+#[derive(Debug, Clone)]
+struct ReceiptClaim {
+    principal_user_id: String,
+    command_id: Uuid,
+}
+
+impl ReceiptClaim {
+    fn new(principal: &Principal, command_id: Uuid) -> Self {
+        ReceiptClaim {
+            principal_user_id: principal.user_id().to_string(),
+            command_id,
+        }
+    }
+}
 
 /// The result of a successful command: the stream sequences it appended.
 impl Ack {
@@ -35,9 +50,36 @@ impl Ack {
 
 /// Handle one command end-to-end. The single entry point Phase 4 will wrap.
 pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> Result<Ack, Reject> {
+    handle_inner(pool, principal, command, None).await
+}
+
+/// Handle a network command with durable idempotency. If `(principal,
+/// command_id)` has already committed, return the original ack without
+/// revalidating against current state or appending new events.
+pub async fn handle_idempotent(
+    pool: &PgPool,
+    principal: &Principal,
+    command_id: Uuid,
+    command: Command,
+) -> Result<Ack, Reject> {
+    let receipt = ReceiptClaim::new(principal, command_id);
+    if let Some(ack) = load_receipt(pool, &receipt).await? {
+        return Ok(ack);
+    }
+    handle_inner(pool, principal, command, Some(&receipt)).await
+}
+
+async fn handle_inner(
+    pool: &PgPool,
+    principal: &Principal,
+    command: Command,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
-        Command::CreateGame { game, pack } => create_game(pool, principal, game, pack).await,
+        Command::CreateGame { game, pack } => {
+            create_game(pool, principal, game, pack, receipt).await
+        }
         Command::AddSlot { game, slot } => {
             host_lifecycle(
                 pool,
@@ -46,11 +88,12 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "SlotAdded",
                 serde_json::json!({ "slot_id": slot }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
         Command::AssignSlot { game, slot, user } => {
-            assign_slot(pool, principal, game, slot, user).await
+            assign_slot(pool, principal, game, slot, user, receipt).await
         }
         Command::AssignRole {
             game,
@@ -64,6 +107,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "RoleAssigned",
                 serde_json::json!({ "slot_id": slot, "role_key": role_key }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -75,6 +119,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "CohostAdded",
                 serde_json::json!({ "user_id": user }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -86,6 +131,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "GameStarted",
                 serde_json::json!({ "phase_id": phase }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -97,6 +143,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "PhaseAdvanced",
                 serde_json::json!({ "phase_id": phase }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -108,6 +155,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "ThreadLocked",
                 serde_json::json!({ "channel_id": "main" }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -119,6 +167,7 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
                 "ThreadUnlocked",
                 serde_json::json!({ "channel_id": "main" }),
                 ActorId::Host,
+                receipt,
             )
             .await
         }
@@ -128,24 +177,35 @@ pub async fn handle(pool: &PgPool, principal: &Principal, command: Command) -> R
             game,
             actor_slot,
             target,
-        } => submit_vote(pool, principal, game, actor_slot, target).await,
+        } => submit_vote(pool, principal, game, actor_slot, target, receipt).await,
         Command::WithdrawVote { game, actor_slot } => {
-            withdraw_vote(pool, principal, game, actor_slot).await
+            withdraw_vote(pool, principal, game, actor_slot, receipt).await
         }
         Command::SubmitPost {
             game,
             actor_slot,
             body,
-        } => submit_post(pool, principal, game, actor_slot, body).await,
+        } => submit_post(pool, principal, game, actor_slot, body, receipt).await,
         Command::ExtendDeadline { game, phase, at } => {
-            extend_deadline(pool, principal, game, phase, at).await
+            extend_deadline(pool, principal, game, phase, at, receipt).await
         }
         Command::ProcessReplacement {
             game,
             slot,
             outgoing_user,
             incoming_user,
-        } => process_replacement(pool, principal, game, slot, outgoing_user, incoming_user).await,
+        } => {
+            process_replacement(
+                pool,
+                principal,
+                game,
+                slot,
+                outgoing_user,
+                incoming_user,
+                receipt,
+            )
+            .await
+        }
     }
 }
 
@@ -159,6 +219,7 @@ async fn create_game(
     principal: &Principal,
     game: Uuid,
     pack: String,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     if projections::game_exists(pool, game).await? {
         return Err(Reject::UnknownGame); // already exists → treat as bad request
@@ -171,7 +232,7 @@ async fn create_game(
         ActorId::User(host.clone()),
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 /// A host-gated lifecycle command that appends a single event. Resolves
@@ -183,11 +244,18 @@ async fn host_lifecycle(
     kind: &str,
     payload: serde_json::Value,
     actor: ActorId,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    persist(pool, game, &[EventInput::new(kind, 1, payload, actor, 0)]).await
+    persist(
+        pool,
+        game,
+        &[EventInput::new(kind, 1, payload, actor, 0)],
+        receipt,
+    )
+    .await
 }
 
 async fn assign_slot(
@@ -196,6 +264,7 @@ async fn assign_slot(
     game: Uuid,
     slot: String,
     user: String,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
@@ -210,7 +279,7 @@ async fn assign_slot(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 // ───────────────────────── slice handlers ─────────────────────────
@@ -221,6 +290,7 @@ async fn submit_vote(
     game: Uuid,
     actor_slot: String,
     target: VoteTarget,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
 
@@ -243,7 +313,7 @@ async fn submit_vote(
     );
 
     // 4. persist (one tx; Conflict → StreamConflict).
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 async fn withdraw_vote(
@@ -251,6 +321,7 @@ async fn withdraw_vote(
     principal: &Principal,
     game: Uuid,
     actor_slot: String,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
@@ -269,7 +340,7 @@ async fn withdraw_vote(
         ActorId::Slot(actor_slot.clone()),
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 async fn submit_post(
@@ -278,6 +349,7 @@ async fn submit_post(
     game: Uuid,
     actor_slot: String,
     body: String,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
@@ -298,7 +370,7 @@ async fn submit_post(
         ActorId::Slot(actor_slot.clone()),
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 async fn extend_deadline(
@@ -307,6 +379,7 @@ async fn extend_deadline(
     game: Uuid,
     phase: String,
     at: i64,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
@@ -319,7 +392,7 @@ async fn extend_deadline(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 /// The irreversible mechanic: swap the human behind a STABLE `SlotId`. The slot
@@ -333,6 +406,7 @@ async fn process_replacement(
     slot: String,
     outgoing_user: String,
     incoming_user: String,
+    receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
@@ -360,7 +434,7 @@ async fn process_replacement(
         ActorId::Host,
         0,
     );
-    persist(pool, game, &[ev]).await
+    persist(pool, game, &[ev], receipt).await
 }
 
 // ───────────────────────── shared validation helpers ─────────────────────────
@@ -376,11 +450,7 @@ async fn require_game(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
 
 /// Least-authority gate: require `cap`, mapping a miss to `deny`.
 fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), Reject> {
-    if caps.grants(cap) {
-        Ok(())
-    } else {
-        Err(deny)
-    }
+    if caps.grants(cap) { Ok(()) } else { Err(deny) }
 }
 
 /// The principal must be the slot's CURRENT occupant. We distinguish "this slot
@@ -440,18 +510,127 @@ async fn validate_target(pool: &PgPool, game: Uuid, target: &VoteTarget) -> Resu
     }
 }
 
-/// Persist via `append_and_project` in one tx; map eventstore `Conflict` to the
-/// retryable `StreamConflict`. Returns the assigned stream sequences.
-async fn persist(pool: &PgPool, game: Uuid, events: &[EventInput]) -> Result<Ack, Reject> {
-    match append_and_project(pool, game, events).await {
-        Ok(stored) => Ok(Ack::from_seqs(
-            stored.iter().map(|s| s.stream_seq).collect(),
-        )),
-        Err(ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => {
-            Err(Reject::StreamConflict)
+async fn load_receipt(pool: &PgPool, receipt: &ReceiptClaim) -> Result<Option<Ack>, Reject> {
+    let row = sqlx::query(
+        "SELECT stream_seqs FROM command_receipt \
+         WHERE principal_user_id = $1 AND command_id = $2",
+    )
+    .bind(&receipt.principal_user_id)
+    .bind(receipt.command_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))?;
+
+    Ok(row.map(|row| Ack {
+        stream_seqs: row.get("stream_seqs"),
+    }))
+}
+
+async fn claim_receipt_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game: Uuid,
+    receipt: &ReceiptClaim,
+) -> Result<bool, Reject> {
+    let result = sqlx::query(
+        "INSERT INTO command_receipt \
+         (principal_user_id, command_id, stream_id, stream_seqs) \
+         VALUES ($1, $2, $3, ARRAY[]::BIGINT[]) \
+         ON CONFLICT (principal_user_id, command_id) DO NOTHING",
+    )
+    .bind(&receipt.principal_user_id)
+    .bind(receipt.command_id)
+    .bind(game)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))?;
+
+    Ok(result.rows_affected() == 1)
+}
+
+async fn load_receipt_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    receipt: &ReceiptClaim,
+) -> Result<Ack, Reject> {
+    let row = sqlx::query(
+        "SELECT stream_seqs FROM command_receipt \
+         WHERE principal_user_id = $1 AND command_id = $2",
+    )
+    .bind(&receipt.principal_user_id)
+    .bind(receipt.command_id)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))?;
+
+    Ok(Ack {
+        stream_seqs: row.get("stream_seqs"),
+    })
+}
+
+async fn store_receipt_ack_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    receipt: &ReceiptClaim,
+    ack: &Ack,
+) -> Result<(), Reject> {
+    sqlx::query(
+        "UPDATE command_receipt SET stream_seqs = $3 \
+         WHERE principal_user_id = $1 AND command_id = $2",
+    )
+    .bind(&receipt.principal_user_id)
+    .bind(receipt.command_id)
+    .bind(&ack.stream_seqs)
+    .execute(&mut **tx)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))?;
+
+    Ok(())
+}
+
+/// Persist via `append_and_project_in_tx`; when a receipt claim is present, the
+/// claim, event append, projection fold, and ack storage are atomic. A duplicate
+/// `(principal, command_id)` returns the stored ack and appends nothing.
+async fn persist(
+    pool: &PgPool,
+    game: Uuid,
+    events: &[EventInput],
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+
+    let owns_receipt = if let Some(receipt) = receipt {
+        if !claim_receipt_in_tx(&mut tx, game, receipt).await? {
+            let ack = load_receipt_in_tx(&mut tx, receipt).await?;
+            tx.commit()
+                .await
+                .map_err(|e| Reject::Internal(e.to_string()))?;
+            return Ok(ack);
         }
-        Err(e) => Err(Reject::Internal(e.to_string())),
+        true
+    } else {
+        false
+    };
+
+    let stored = match append_and_project_in_tx(&mut tx, game, events).await {
+        Ok(stored) => stored,
+        Err(ProjectionError::Store(eventstore::StoreError::Conflict { .. })) => {
+            return Err(Reject::StreamConflict);
+        }
+        Err(e) => return Err(Reject::Internal(e.to_string())),
+    };
+    let ack = Ack::from_seqs(stored.iter().map(|s| s.stream_seq).collect());
+
+    if owns_receipt {
+        if let Some(receipt) = receipt {
+            store_receipt_ack_in_tx(&mut tx, receipt, &ack).await?;
+        }
     }
+
+    tx.commit()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(ack)
 }
 
 impl From<ProjectionError> for Reject {

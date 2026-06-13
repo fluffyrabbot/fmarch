@@ -125,6 +125,7 @@ pub struct Hello {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct CommandMsg {
+    pub command_id: Uuid,
     pub principal_user_id: String,
     pub command: Command,
 }

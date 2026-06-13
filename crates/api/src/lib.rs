@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 use wire::{
-    AckMsg, CapabilityGrant, ClientEnvelope, Hello, ProjectionDelta, RejectCode, RejectMsg,
-    ServerEnvelope, ServerMsg, VoteCountDelta, PROTOCOL_VERSION,
+    AckMsg, CapabilityGrant, ClientEnvelope, Hello, PROTOCOL_VERSION, ProjectionDelta, RejectCode,
+    RejectMsg, ServerEnvelope, ServerMsg, VoteCountDelta,
 };
 
 #[derive(Clone)]
@@ -80,7 +80,14 @@ async fn command(
     };
 
     let principal = Principal::user(msg.principal_user_id);
-    let body = match commands::handle(&state.pool, &principal, msg.command.into()).await {
+    let body = match commands::handle_idempotent(
+        &state.pool,
+        &principal,
+        msg.command_id,
+        msg.command.into(),
+    )
+    .await
+    {
         Ok(ack) => ServerMsg::Ack(AckMsg::from(ack)),
         Err(reject) => ServerMsg::Reject(RejectMsg::from(reject)),
     };

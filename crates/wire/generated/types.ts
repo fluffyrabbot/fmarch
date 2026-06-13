@@ -5,7 +5,7 @@ export type VoteTarget = { "Slot": string } | "NoLynch";
 
 export type Command = { "CreateGame": { game: string, pack: string, } } | { "AddSlot": { game: string, slot: string, } } | { "AssignSlot": { game: string, slot: string, user: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "AddCohost": { game: string, user: string, } } | { "StartGame": { game: string, phase: string, } } | { "OpenDayPhase": { game: string, phase: string, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitPost": { game: string, actor_slot: string, body: string, } } | { "ExtendDeadline": { game: string, phase: string, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_user: string, incoming_user: string, } };
 
-export type CommandMsg = { principal_user_id: string, command: Command, };
+export type CommandMsg = { command_id: string, principal_user_id: string, command: Command, };
 
 export type ClientMsg = { "kind": "Command", "body": CommandMsg } | { "kind": "SubscribeGame", "body": { game: string, } };
 

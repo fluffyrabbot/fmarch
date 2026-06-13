@@ -1,18 +1,28 @@
 use api::router;
-use axum::body::{to_bytes, Body};
+use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    ClientEnvelope, ClientMsg, Command, CommandMsg, ProjectionDelta, ServerEnvelope, ServerMsg,
-    VoteTarget, PROTOCOL_VERSION,
+    ClientEnvelope, ClientMsg, Command, CommandMsg, PROTOCOL_VERSION, ProjectionDelta,
+    ServerEnvelope, ServerMsg, VoteTarget,
 };
 
-fn command_envelope(id: u64, principal_user_id: &str, command: Command) -> ClientEnvelope {
+fn stable_command_id(id: u64) -> Uuid {
+    Uuid::from_u128(id as u128)
+}
+
+fn command_envelope_with_command_id(
+    id: u64,
+    command_id: Uuid,
+    principal_user_id: &str,
+    command: Command,
+) -> ClientEnvelope {
     ClientEnvelope::new(
         id,
         ClientMsg::Command(CommandMsg {
+            command_id,
             principal_user_id: principal_user_id.to_string(),
             command,
         }),
@@ -25,7 +35,23 @@ async fn post_command(
     principal_user_id: &str,
     command: Command,
 ) -> ServerEnvelope {
-    let body = serde_json::to_vec(&command_envelope(id, principal_user_id, command)).unwrap();
+    post_command_with_command_id(app, id, stable_command_id(id), principal_user_id, command).await
+}
+
+async fn post_command_with_command_id(
+    app: axum::Router,
+    id: u64,
+    command_id: Uuid,
+    principal_user_id: &str,
+    command: Command,
+) -> ServerEnvelope {
+    let body = serde_json::to_vec(&command_envelope_with_command_id(
+        id,
+        command_id,
+        principal_user_id,
+        command,
+    ))
+    .unwrap();
     let response = app
         .oneshot(
             Request::builder()
@@ -42,9 +68,12 @@ async fn post_command(
     serde_json::from_slice(&bytes).unwrap()
 }
 
-fn expect_ack(envelope: ServerEnvelope) {
+fn expect_ack(envelope: ServerEnvelope) -> Vec<i64> {
     match envelope.body {
-        ServerMsg::Ack(ack) => assert!(!ack.stream_seqs.is_empty()),
+        ServerMsg::Ack(ack) => {
+            assert!(!ack.stream_seqs.is_empty());
+            ack.stream_seqs
+        }
         other => panic!("expected Ack, got {other:?}"),
     }
 }
@@ -151,6 +180,85 @@ async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
                 && v.candidate_slot == "slot_2"
                 && v.count == 1
     )));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: sqlx::PgPool) {
+    let app = router(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            2,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot_1".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            3,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot_1".into(),
+                user: "user_a".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            4,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+
+    let command_id = Uuid::new_v4();
+    let command = Command::SubmitPost {
+        game,
+        actor_slot: "slot_1".into(),
+        body: "commit happened; ack vanished".into(),
+    };
+
+    let first_ack = expect_ack(
+        post_command_with_command_id(app.clone(), 5, command_id, "user_a", command.clone()).await,
+    );
+    let retry_ack =
+        expect_ack(post_command_with_command_id(app, 6, command_id, "user_a", command).await);
+    assert_eq!(retry_ack, first_ack);
+
+    let post_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(post_count, 1, "retry must not append a duplicate post");
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

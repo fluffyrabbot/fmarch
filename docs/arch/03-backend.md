@@ -34,15 +34,18 @@ The backend is **CQRS-flavored** but pragmatic:
 ```
 client frame ─▶ decode (CBOR, versioned)
              ─▶ authenticate (session) ─────────────┐
+             ─▶ claim durable command_id receipt ────┤ retry boundary
              ─▶ resolve capability for this action ──┤ trust boundary
              ─▶ load aggregate state @ stream_seq ───┘
              ─▶ validate (domain rules; phase open? vote legal? slot alive?)
              ─▶ produce events
              ─▶ BEGIN tx
+                   insert command receipt claim (principal, command_id)
                    append events  (optimistic concurrency on (stream_id, stream_seq))
                    fold into synchronous projections
+                   store ack on command receipt
                  COMMIT
-             ─▶ NOTIFY new seq        (wakes async fan-out)
+             ─▶ NOTIFY new seq        (best-effort wakeup for async fan-out)
              ─▶ ack to caller
 ```
 
@@ -54,6 +57,9 @@ client frame ─▶ decode (CBOR, versioned)
   domain error, not a panic. Errors are actionable and cross the boundary cleanly.
 - **Optimistic concurrency** via the `(stream_id, stream_seq)` unique constraint
   ([02](02-event-sourcing.md)). On conflict: reload, revalidate, retry (bounded).
+- **Idempotency** is keyed by `(principal, command_id)`, not by the per-connection envelope
+  id. A duplicate command id returns the stored ack from the first committed attempt and
+  does not run validation or append again.
 
 ## Live delivery
 
@@ -72,6 +78,9 @@ it may see (a spectator never receives scumchat frames; the bytes don't leave th
 - Fan-out is **async** ([02](02-event-sourcing.md)) — it must not block the committing
   command. The author's own synchronous projections already reflect their action; everyone
   else gets the delta a beat later.
+- `events.seq` is the durable resume cursor. `LISTEN/NOTIFY` may wake fan-out workers, but
+  it is not the delivery log; reconnects and missed wakeups catch up by querying committed
+  events after the last delivered `seq`.
 - Subscriptions are scoped: a client subscribes to a game / channel set, and the server
   resolves visibility per delta. Visibility is computed from the `channel_membership` and
   `slot_state` projections, never trusted from the client.

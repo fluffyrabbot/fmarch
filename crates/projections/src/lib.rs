@@ -26,10 +26,10 @@
 //!
 //! Runtime sqlx queries only (no `query!` macro) so `cargo build` needs no DB.
 
-use eventstore::{append_in_tx, EventInput, StoreError, StoredEvent};
+use eventstore::{EventInput, StoreError, StoredEvent, append_in_tx};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgPool;
 use sqlx::Row;
+use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 /// A row of the `votecount` running tally: the COUNT of current ballots cast at
@@ -276,11 +276,24 @@ pub async fn append_and_project(
     events: &[EventInput],
 ) -> Result<Vec<StoredEvent>, ProjectionError> {
     let mut tx = pool.begin().await?;
-    let stored = append_in_tx(&mut tx, stream_id, events).await?;
-    for ev in &stored {
-        fold_event(&mut tx, stream_id, ev).await?;
-    }
+    let stored = append_and_project_in_tx(&mut tx, stream_id, events).await?;
     tx.commit().await?;
+    Ok(stored)
+}
+
+/// Append `events` and fold synchronous projections inside an existing
+/// transaction. This is the atomic seam used by network command receipts: the
+/// receipt row, event append, and hot projections all commit or roll back
+/// together.
+pub async fn append_and_project_in_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+    events: &[EventInput],
+) -> Result<Vec<StoredEvent>, ProjectionError> {
+    let stored = append_in_tx(tx, stream_id, events).await?;
+    for ev in &stored {
+        fold_event(tx, stream_id, ev).await?;
+    }
     Ok(stored)
 }
 

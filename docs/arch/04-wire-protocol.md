@@ -41,7 +41,9 @@ Envelope {
 ```
 
 - **Client → Server: Commands.** `id` lets the client correlate the `Ack`/`Reject` to the
-  command it sent.
+  command it sent. Each command body also carries a durable `command_id` used for
+  idempotency across reconnects and lost acks; retrying the same `(principal, command_id)`
+  returns the original ack and appends no duplicate events.
 - **Server → Client: Events / Deltas / Acks.** Projection deltas ([03](03-backend.md)),
   command acknowledgements, and errors.
 
