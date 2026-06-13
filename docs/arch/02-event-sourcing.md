@@ -29,14 +29,20 @@ events
   seq          BIGSERIAL  PRIMARY KEY      -- global total order
   stream_id    UUID       NOT NULL         -- aggregate id (usually game_id)
   stream_seq   BIGINT     NOT NULL         -- per-stream order; (stream_id, stream_seq) UNIQUE
-  type         TEXT       NOT NULL         -- variant tag, e.g. "VoteCast"
+  kind         TEXT       NOT NULL         -- variant tag, e.g. "VoteSubmitted"
   version      SMALLINT   NOT NULL         -- schema version of this event type
   payload      JSONB      NOT NULL         -- typed body (see evolution rules below)
-  actor        UUID                        -- user who caused it (nullable for system)
-  occurred_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-  -- metadata: capability used, request id, client version, for audit
-  meta         JSONB
+  actor        JSONB      NOT NULL         -- ActorId enum, serialized {type,id} (Slot/Host/System/User) — not a UUID
+  occurred_at  BIGINT     NOT NULL         -- LogicalTime (u64); deterministic, not wall-clock (docs 09/10)
+  causation_id UUID                        -- command/event that caused this (nullable)
+  meta         JSONB      NOT NULL DEFAULT '{}'  -- capability used, request id, run_id, for audit
 ```
+
+> Shipped in [03-backend](03-backend.md)'s `eventstore` crate. `actor` is `JSONB` (not a
+> UUID) because `ActorId` is a 4-variant enum and slot/user ids are strings; `occurred_at` is
+> `BIGINT` logical time, not `TIMESTAMPTZ`, to honor the determinism rule. A DB-level trigger
+> hard-rejects `UPDATE`/`DELETE`/`TRUNCATE` on `events`, enforcing append-only in Postgres
+> itself.
 
 - **Streams** are aggregates. The natural aggregate is the **game**; a game's entire
   history is one stream, which keeps a game internally consistent and easy to replay,
