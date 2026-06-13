@@ -107,6 +107,7 @@ struct Pack {
     vote: VotePolicy,    // NEW vs im-human: vote rules are culture-specific
     phases: PhasePolicy, // NEW: cadence / subsegments per culture
     investigation_overrides: Option<Map<Tag, ResultOverride>>, // OPTIONAL; result-flip table (below)
+    win: WinPolicy,      // win conditions, evaluated on the post-resolution state (below)
 }
 ```
 
@@ -269,6 +270,63 @@ struct PhasePolicy {
 For v1 we ship **only the forum cadence** (long day with SOD/EOD subsegments, two-segment
 night, optional twilight). Chat-mafia / real-time variants are future packs; the structure
 already accommodates them.
+
+### Win policy (fmarch addition)
+
+Win detection is a pack table over the **post-resolution state** — minimal but real:
+
+```rust
+struct WinPolicy { rules: Vec<WinRule> }            // empty => engine never declares a win
+struct WinRule   { winner: AlignmentKey, when: WinCondition }
+
+enum WinCondition {
+    FactionEliminated(AlignmentKey),     // the named faction has 0 alive
+    FactionReachesParity(AlignmentKey),  // the named faction's alive count >= all OTHER alive combined
+}
+```
+
+Rules are evaluated **in order** on the state *after* the resolution's events are folded
+forward (`apply_events`, below); the **first match wins**. `FactionEliminated(f)` fires when
+`f` has zero alive slots. `FactionReachesParity(f)` fires when `f`'s alive count is `>=` the
+combined alive count of every *other* faction (slots with no alignment count as "other"); for
+robustness it requires `f` itself to have `>= 1` alive, so a wiped faction never "reaches
+parity" with the empty set. With exactly two factions this is the usual mafia-parity check.
+The mafiascum pack ships two rules: **town** wins on `FactionEliminated("mafia")`; **mafia**
+wins on `FactionReachesParity("mafia")` (the elimination rule is listed first so an all-mafia-dead
+state is a town win, not a degenerate parity).
+
+### `apply_events` — cross-phase state evolution
+
+State carries forward between resolutions by a single pure fold:
+
+```rust
+fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapshot  // PURE
+```
+
+Deterministic (no clock/RNG); folds only the state-bearing inner events:
+`PlayerKilled` → that slot's `status` becomes `"dead"`; `EffectsMarked`/`EffectsCleared` →
+add/remove the effect tag on the slot's `effects`; `PlayerConverted` → set the slot's
+`role_key` to the new role. Every other inner event — `PlayerSaved`, `InvestigationResult`,
+`DayVoteOutcome`, `PhaseAnnouncement`, `WinReached`, … — is a **no-op**. `phase_kind` /
+`phase_number` are carried through unchanged: advancing the phase cursor is the
+engine/platform's job, not this fold's. (The `Mark`/`Clear`/`Convert` arms are wired now for
+forward-compat even though the resolver does not yet *emit* those events.)
+
+> **Day lynch is not an `apply_events` death.** The day lynch is carried structurally by
+> `DayVoteOutcome.winner` (doc 10), not a `PlayerKilled`, so `apply_events` does **not** mark
+> the lynched slot dead. The resolver applies the lynch locally when building the state it
+> runs `check_win` against; persisting the eliminated slot into the next `StateSnapshot` is the
+> engine/platform's responsibility.
+
+### Win-check in the resolver
+
+After a resolution produces its inner events, the resolver computes the post-resolution state
+(via `apply_events`, plus the local lynch application above), evaluates `WinPolicy`, and — iff
+a rule fires — appends a `WinReached { winner, reason }` as the **FINAL** inner event, after
+the trailing `PhaseAnnouncement`. Canonical inner-event order is therefore: *phase results →
+the one trailing `PhaseAnnouncement` → optional `WinReached`*. Win-check runs **once, at phase
+end**, never mid-resolution. A standalone `check_win(state, pack) -> Option<WinReached>` is
+also exposed for callers that want to test a state directly.
 
 ## Submissions: the platform → engine seam
 

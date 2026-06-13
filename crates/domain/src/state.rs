@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::events::InnerEvent;
 use crate::pack::{AlignmentKey, PhaseKind, RoleKey, Tag};
 
 pub type SlotId = String;
@@ -35,6 +36,62 @@ impl SlotState {
     pub fn is_alive(&self) -> bool {
         self.status == "alive"
     }
+}
+
+/// Deterministically fold a resolution's inner events onto a state to produce
+/// the next state — the canonical "how state carries forward between
+/// resolutions" (doc 09). PURE: no clock, no RNG; a plain left fold whose result
+/// depends only on `(state, events)`.
+///
+/// Mutation contract (only these inner-event kinds change state; all others —
+/// `PlayerSaved`, `InvestigationResult`, `DayVoteOutcome`, `PhaseAnnouncement`,
+/// `WinReached`, … — are no-ops):
+///
+/// - `PlayerKilled`        → the slot's `status` becomes `"dead"`.
+/// - `EffectsMarked`       → adds `effect` to the slot's `effects` (de-duplicated).
+/// - `EffectsCleared`      → removes `effect` from each named slot's `effects`.
+/// - `PlayerConverted`     → sets the slot's `role_key` to `new_role`. (Wired now
+///   for forward-compat; conversion is not emitted by the resolver yet.)
+///
+/// `phase_kind` / `phase_number` are carried through unchanged: advancing the
+/// phase cursor is the engine/platform's job, not this fold's.
+pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapshot {
+    let mut next = state.clone();
+    for event in events {
+        match event {
+            InnerEvent::PlayerKilled { slot_id, .. } => {
+                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == slot_id) {
+                    slot.status = "dead".to_string();
+                }
+            }
+            InnerEvent::EffectsMarked { effect, target, .. } => {
+                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
+                    if !slot.effects.contains(effect) {
+                        slot.effects.push(effect.clone());
+                    }
+                }
+            }
+            InnerEvent::EffectsCleared {
+                effect, targets, ..
+            } => {
+                for target in targets {
+                    if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
+                        slot.effects.retain(|e| e != effect);
+                    }
+                }
+            }
+            InnerEvent::PlayerConverted {
+                target, new_role, ..
+            } => {
+                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
+                    slot.role_key = new_role.clone();
+                }
+            }
+            // All other inner events leave state unchanged.
+            _ => {}
+        }
+    }
+    next
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

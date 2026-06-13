@@ -28,6 +28,11 @@ pub struct Pack {
     pub phases: PhasePolicy,
     #[serde(default)]
     pub investigation_overrides: Option<BTreeMap<Tag, ResultOverride>>,
+    /// Win conditions evaluated on the post-resolution state. Optional so older
+    /// packs (and goldens) without a `win` table still deserialize; an absent
+    /// table means no win is ever declared by the engine.
+    #[serde(default)]
+    pub win: WinPolicy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,4 +232,32 @@ pub enum PhaseKind {
 pub struct ResultOverride {
     #[serde(flatten)]
     pub by_mode: BTreeMap<InvestigateMode, String>,
+}
+
+/// Win conditions, evaluated in order on the post-resolution state; the FIRST
+/// matching rule wins (doc 09). An empty `rules` list means the engine never
+/// declares a win (e.g. a host-adjudicated game).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WinPolicy {
+    #[serde(default)]
+    pub rules: Vec<WinRule>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WinRule {
+    /// The alignment that wins when `when` holds.
+    pub winner: AlignmentKey,
+    pub when: WinCondition,
+}
+
+/// A win condition over alive-counts on the post-resolution state.
+///
+/// - `FactionEliminated(f)`     → faction `f` has **0** alive slots.
+/// - `FactionReachesParity(f)`  → faction `f`'s alive count is **>=** the alive
+///   count of all *other* factions combined (slots with no alignment count as
+///   "other"). With exactly two factions this is the usual mafia-parity check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WinCondition {
+    FactionEliminated(AlignmentKey),
+    FactionReachesParity(AlignmentKey),
 }

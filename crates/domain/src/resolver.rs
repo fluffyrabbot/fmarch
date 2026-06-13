@@ -12,8 +12,9 @@ use crate::events::{DayVoteOutcome, Death, InnerEvent, PhaseAnnouncement, VoteSt
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
     ActionTemplate, Pack, PhaseKind, TieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy,
+    WinCondition,
 };
-use crate::state::{PhaseId, Seed, SlotId, StateSnapshot, Submission};
+use crate::state::{apply_events, PhaseId, Seed, SlotId, StateSnapshot, Submission};
 
 /// Resolver contract version (doc 10 `result_version`).
 pub const RESULT_VERSION: u16 = 1;
@@ -65,11 +66,98 @@ impl<'a> Action<'a> {
 }
 
 /// Resolve a window's submissions into ordered inner events.
+///
+/// Canonical inner-event ordering: the phase's own results, then the single
+/// trailing `PhaseAnnouncement` (doc 10), then — iff the post-resolution state
+/// satisfies a `WinPolicy` rule — a final `WinReached`. Win-check runs **once**,
+/// at phase end, on the state produced by folding this resolution's events
+/// (`apply_events`); it never runs mid-resolution.
 pub fn resolve(input: ResolutionInput) -> Vec<InnerEvent> {
-    match input.state.phase_kind {
+    let mut events = match input.state.phase_kind {
         PhaseKind::Day | PhaseKind::Twilight => resolve_day(&input),
         PhaseKind::Night => resolve_night(&input),
+    };
+
+    // Evaluate win conditions on the post-resolution state. The win event is the
+    // FINAL inner event, appended after the trailing PhaseAnnouncement.
+    //
+    // `apply_events` folds the night-style death/effect/conversion events. The
+    // day **lynch** death is NOT one of those kinds (it is carried structurally
+    // by `DayVoteOutcome.winner` and the trailing `PhaseAnnouncement`, per the
+    // doc-10 `slot_state` projection contract), so we additionally apply the
+    // eliminated slot here before the parity/elimination check. This keeps
+    // `apply_events` to its stated night-fold contract while still letting a day
+    // lynch trigger a win.
+    let mut post_state = apply_events(&input.state, &events);
+    apply_lynch_deaths(&mut post_state, &events);
+    if let Some(win) = check_win(&post_state, &input.pack) {
+        events.push(win);
     }
+
+    events
+}
+
+/// Mark any slot eliminated by a `DayVoteOutcome` as dead in `state`. This is the
+/// one death that `apply_events` does not fold (the lynch lives in
+/// `DayVoteOutcome.winner`, not a `PlayerKilled`); the engine applies it locally
+/// for the phase-end win-check.
+fn apply_lynch_deaths(state: &mut StateSnapshot, events: &[InnerEvent]) {
+    for event in events {
+        if let InnerEvent::DayVoteOutcome(outcome) = event {
+            if let Some(winner) = &outcome.winner {
+                if let Some(slot) = state.slots.iter_mut().find(|s| &s.slot_id == winner) {
+                    slot.status = "dead".to_string();
+                }
+            }
+        }
+    }
+}
+
+/// Evaluate the pack's `WinPolicy` against a (post-resolution) state. Rules are
+/// tried in order; the FIRST match wins and yields a `WinReached`. Returns
+/// `None` if no rule fires. PURE: a fold over alive-counts, no clock/RNG.
+pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
+    for rule in &pack.win.rules {
+        let (fires, reason) = match &rule.when {
+            WinCondition::FactionEliminated(faction) => {
+                let alive = alive_in_faction(state, faction);
+                (
+                    alive == 0,
+                    format!("faction {faction} eliminated (0 alive)"),
+                )
+            }
+            WinCondition::FactionReachesParity(faction) => {
+                let alive = alive_in_faction(state, faction);
+                let others = alive_total(state) - alive;
+                (
+                    alive > 0 && alive >= others,
+                    format!("faction {faction} reaches parity ({alive} vs {others} others)"),
+                )
+            }
+        };
+        if fires {
+            return Some(InnerEvent::WinReached {
+                winner: rule.winner.clone(),
+                reason,
+                metadata: serde_json::Value::Null,
+            });
+        }
+    }
+    None
+}
+
+/// Count alive slots whose alignment equals `faction`.
+fn alive_in_faction(state: &StateSnapshot, faction: &str) -> usize {
+    state
+        .slots
+        .iter()
+        .filter(|s| s.is_alive() && s.alignment.as_deref() == Some(faction))
+        .count()
+}
+
+/// Total alive slots, all factions (and alignment-less slots) included.
+fn alive_total(state: &StateSnapshot) -> usize {
+    state.slots.iter().filter(|s| s.is_alive()).count()
 }
 
 // ───────────────────────────── Night ─────────────────────────────

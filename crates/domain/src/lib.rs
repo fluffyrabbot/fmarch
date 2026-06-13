@@ -14,6 +14,6 @@ pub use events::{
     DayVoteOutcome, Death, InnerEvent, PhaseAnnouncement, ResolutionApplied, VoteStatus,
 };
 pub use ir::{InvestigateMode, IrAbility, Modifier};
-pub use pack::Pack;
-pub use resolver::{resolve, ResolutionInput, RESULT_VERSION};
-pub use state::{SlotState, StateSnapshot, Submission};
+pub use pack::{Pack, WinCondition, WinPolicy, WinRule};
+pub use resolver::{check_win, resolve, ResolutionInput, RESULT_VERSION};
+pub use state::{apply_events, SlotState, StateSnapshot, Submission};

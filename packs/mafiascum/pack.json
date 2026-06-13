@@ -280,5 +280,17 @@
   },
   "investigation_overrides": {
     "godfather": { "Parity": "town" }
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
   }
 }

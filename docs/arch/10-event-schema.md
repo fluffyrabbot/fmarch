@@ -234,6 +234,27 @@ canonical death-reveal signal always fires, even on a resolution that produces o
 interferences, or a tie. `Death.cause` is the **semantic** tag (`{ "lynch", "night_kill" }`),
 distinct from `PlayerKilled.cause` (the action template `id`) above.
 
+> **`PhaseAnnouncement` is the *final* inner event UNLESS a win is reached.** When the
+> post-resolution state satisfies the pack's `WinPolicy` ([09](09-engine-and-packs.md)), the
+> resolver appends a single `WinReached` *after* the trailing `PhaseAnnouncement`, making it the
+> true final inner event. Canonical order: *phase results → `PhaseAnnouncement` → optional
+> `WinReached`*. Win-check runs once at phase end, never mid-resolution.
+
+`WinReached` (engine-declared victory) has the pinned payload:
+
+```rust
+struct WinReached {
+    winner: AlignmentKey,           // the winning faction tag (pack-opaque, e.g. "town" / "mafia")
+    reason: String,                 // human-readable cause, e.g. "faction mafia reaches parity (1 vs 1 others)"
+    metadata: Json,                 // optional structured detail; `null` in v1 (RESERVED)
+}
+```
+
+Unlike `DayVoteOutcome.reason`, `WinReached.reason` **is** part of the asserted golden
+contract in v1 (it is a stable, resolver-derived string, not localizable prose). `metadata` is
+reserved for future structured detail and is `null` in v1. A reveal-flags projection flips role
+visibility off `WinReached` ([How events feed projections](#how-events-feed-projections)).
+
 `Seed` and `LogicalTime` carried on engine events are both `u64` (see
 [09](09-engine-and-packs.md)): `Seed` is the recorded resolver RNG seed; `LogicalTime`
 (`occurred_at`, `started_at`, `finished_at`) is monotonic logical time, never wall-clock.

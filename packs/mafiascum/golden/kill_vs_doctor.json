@@ -76,7 +76,17 @@
           "phase_id": "N01",
           "deaths": [{ "slot_id": "slot_3", "cause": "night_kill" }]
         }
+      },
+      {
+        "index": 2,
+        "kind": "WinReached",
+        "payload": {
+          "winner": "mafia",
+          "reason": "faction mafia reaches parity (1 vs 1 others)",
+          "metadata": null
+        }
       }
-    ]
+    ],
+    "win_arithmetic": "Post-resolution alive: slot_1 mafia (alive), slot_2 town (alive), slot_3 dead. mafia eliminated? no (1 alive). mafia parity: alive=1 >= others=1 -> mafia wins (first matching rule after town-eliminated check fails)."
   }
 }

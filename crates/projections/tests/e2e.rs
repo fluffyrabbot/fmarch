@@ -85,11 +85,16 @@ fn wrap(inner: Vec<domain::InnerEvent>) -> ResolutionApplied {
 fn scenario_events(pack: &Pack) -> Vec<EventInput> {
     let mut evs = Vec::new();
 
-    // RoleAssigned for each slot (platform events).
+    // RoleAssigned for each slot (platform events). slot_4/slot_5 are extra
+    // townies so that killing slot_3 leaves town ahead of mafia (no win-condition
+    // is reached) — this scenario intentionally stays mid-game so role-reveal
+    // remains off.
     for (sid, role) in [
         ("slot_1", "mafia_goon"),
         ("slot_2", "doctor"),
         ("slot_3", "vanilla_townie"),
+        ("slot_4", "vanilla_townie"),
+        ("slot_5", "vanilla_townie"),
     ] {
         evs.push(EventInput::new(
             "RoleAssigned",
@@ -139,6 +144,8 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
             slot("slot_1", "mafia_goon", "mafia"),
             slot("slot_2", "doctor", "town"),
             slot("slot_3", "vanilla_townie", "town"),
+            slot("slot_4", "vanilla_townie", "town"),
+            slot("slot_5", "vanilla_townie", "town"),
         ],
     };
     let subs = vec![submission(
@@ -192,10 +199,14 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
     let slots = slot_state(&pool, game).await.unwrap();
     let by_id: BTreeMap<_, _> = slots.iter().map(|s| (s.slot_id.clone(), s)).collect();
 
-    assert_eq!(by_id.len(), 3, "three slots projected");
+    assert_eq!(by_id.len(), 5, "five slots projected");
     assert!(by_id["slot_1"].alive, "slot_1 alive");
     assert!(by_id["slot_2"].alive, "slot_2 alive");
     assert!(!by_id["slot_3"].alive, "slot_3 killed at night → dead");
+    assert!(
+        by_id["slot_4"].alive && by_id["slot_5"].alive,
+        "extra townies alive"
+    );
 
     // role_key folded from RoleAssigned; not revealed (no GameCompleted/WinReached).
     assert_eq!(by_id["slot_2"].role_key.as_deref(), Some("doctor"));
