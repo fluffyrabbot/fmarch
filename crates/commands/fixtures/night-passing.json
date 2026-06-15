@@ -1,0 +1,33 @@
+{
+  "seed": 77001,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "doctor"
+    },
+    {
+      "slot": "slot_2",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_3",
+      "role": "vanilla_townie"
+    }
+  ],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "doctor_protect",
+      "action_id": "protect_slot_3",
+      "targets": ["slot_3"]
+    },
+    {
+      "actor_slot": "slot_2",
+      "template_id": "factional_kill",
+      "action_id": "kill_slot_3",
+      "targets": ["slot_3"]
+    }
+  ]
+}

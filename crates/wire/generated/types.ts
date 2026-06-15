@@ -3,7 +3,9 @@
 
 export type VoteTarget = { "Slot": string } | "NoLynch";
 
-export type Command = { "CreateGame": { game: string, pack: string, } } | { "AddSlot": { game: string, slot: string, } } | { "AssignSlot": { game: string, slot: string, user: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "AddCohost": { game: string, user: string, } } | { "StartGame": { game: string, phase: string, } } | { "OpenDayPhase": { game: string, phase: string, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitPost": { game: string, actor_slot: string, body: string, } } | { "ExtendDeadline": { game: string, phase: string, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_user: string, incoming_user: string, } };
+export type HostPromptDecision = { "SelectSlot": { slot: string, } } | "Acknowledge";
+
+export type Command = { "CreateGame": { game: string, pack: string, } } | { "AddSlot": { game: string, slot: string, } } | { "AssignSlot": { game: string, slot: string, user: string, } } | { "AssignRole": { game: string, slot: string, role_key: string, } } | { "AddCohost": { game: string, user: string, } } | { "StartGame": { game: string, phase: string, } } | { "OpenDayPhase": { game: string, phase: string, } } | { "AdvancePhase": { game: string, } } | { "AdvancePhaseByDeadline": { game: string, phase: string, observed_at: bigint, } } | { "LockThread": { game: string, } } | { "UnlockThread": { game: string, } } | { "ResolvePhase": { game: string, seed: bigint, } } | { "CompleteGame": { game: string, } } | { "ResolveHostPrompt": { game: string, prompt_id: string, decision: HostPromptDecision, } } | { "SubmitVote": { game: string, actor_slot: string, target: VoteTarget, } } | { "WithdrawVote": { game: string, actor_slot: string, } } | { "SubmitAction": { game: string, action_id: string, actor_slot: string, template_id: string, targets: Array<string>, grant_id: string | null, } } | { "WithdrawAction": { game: string, action_id: string, actor_slot: string, } } | { "SubmitPost": { game: string, actor_slot: string, body: string, } } | { "ExtendDeadline": { game: string, phase: string, at: bigint, } } | { "ProcessReplacement": { game: string, slot: string, outgoing_user: string, incoming_user: string, } };
 
 export type CommandMsg = { command_id: string, principal_user_id: string, command: Command, };
 
@@ -13,13 +15,41 @@ export type ClientEnvelope = { v: number, id: bigint, body: ClientMsg, };
 
 export type AckMsg = { stream_seqs: Array<bigint>, };
 
-export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "InvalidTarget" | "StreamConflict" | "UnknownGame" | "UnknownSlot" | "Internal";
+export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "InvalidRole" | "StreamConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "InvalidPromptDecision" | "Internal";
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 
 export type VoteCountDelta = { game: string, phase_id: string, candidate_slot: string, count: bigint, };
 
-export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
+export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: bigint, event_index: number, status: string, winner_slot: string | null, contenders: unknown, tallies: unknown, votes: unknown, weights: unknown, majority: number | null, thresholds: unknown, total_weight: number, tiebreak: string | null, reason: string | null, };
+
+export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author_slot: string | null, author_user: string | null, phase_id: string, body: string, occurred_at: bigint, };
+
+export type ThreadPage = { posts: Array<ThreadPost>, next_before_seq: bigint | null, };
+
+export type PlayerNotification = { game: string, phase_id: string, event_index: number, audience_slot: string, effect: string, status: string, };
+
+export type PlayerInvestigationResult = { game: string, phase_id: string, event_index: number, audience_slot: string, mode: string, target_slot: string, result: unknown, };
+
+export type HostPhaseControl = { game: string, source_seq: bigint, stream_seq: bigint, prompt_id: string, prompt_kind: string | null, prompt_reason: string | null, source_phase_id: string, target_phase_id: string, reason: string, skipped_phase_id: string | null, resolved_by: string | null, resolved_at: bigint | null, occurred_at: bigint, };
+
+export type ResolutionTraceDecisionRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number | null, stage: string, source: string, outcome: string, detail: unknown, };
+
+export type ResolutionTraceEdgeRow = { row_index: number, applied_stream_seq: bigint | null, from: string, to: string, kind: string, detail: unknown, };
+
+export type ResolutionTraceGeneratedRow = { row_index: number, applied_stream_seq: bigint | null, action_id: string, source: string, actor: string, targets: Array<string>, detail: unknown, };
+
+export type ResolutionTraceEffectChangeRow = { row_index: number, applied_stream_seq: bigint | null, effect: string, target: string, operation: string, detail: unknown, };
+
+export type ResolutionTraceVisibilityRow = { row_index: number, applied_stream_seq: bigint | null, event_index: number, audience: Array<string>, policy: string, detail: unknown, };
+
+export type ResolutionTraceNoteRow = { row_index: number, applied_stream_seq: bigint | null, note: string, };
+
+export type ResolutionTraceInspectionRun = { phase_id: string, run_id: string, applied_stream_seq: bigint | null, trace_stream_seq: bigint, trace_version: number, decisions: Array<ResolutionTraceDecisionRow>, edges: Array<ResolutionTraceEdgeRow>, generated: Array<ResolutionTraceGeneratedRow>, effect_changes: Array<ResolutionTraceEffectChangeRow>, visibility: Array<ResolutionTraceVisibilityRow>, notes: Array<ResolutionTraceNoteRow>, };
+
+export type ResolutionTraceInspectionReport = { game: string, traces: Array<ResolutionTraceInspectionRun>, };
+
+export type ProjectionDelta = { "kind": "VoteCountChanged", "body": VoteCountDelta } | { "kind": "DayVoteOutcomeApplied", "body": DayVoteOutcomeDelta } | { "kind": "ResyncRequired", "body": { from_seq: bigint, } };
 
 export type CapabilityGrant = { "kind": "GlobalAdmin" } | { "kind": "GlobalMod" } | { "kind": "HostOf", "body": { game: string, } } | { "kind": "CohostOf", "body": { game: string, } } | { "kind": "SlotOccupant", "body": { slot: string, } } | { "kind": "ChannelMember", "body": { channel: string, } } | { "kind": "DeadViewer", "body": { game: string, } };
 

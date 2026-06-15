@@ -19,13 +19,13 @@ CREATE TABLE IF NOT EXISTS events (
     occurred_at  BIGINT      NOT NULL,              -- LogicalTime (u64), deterministic
     causation_id UUID        NULL,                  -- command/event that caused this
     meta         JSONB       NOT NULL DEFAULT '{}', -- audit metadata
-    -- Defensive backstop: append_in_tx serializes stream writers before assigning
-    -- stream_seq; this rejects any out-of-band writer that still collides.
+    -- Optimistic concurrency: a conflicting concurrent append at the same
+    -- (stream_id, stream_seq) is rejected by this unique constraint. Retry.
     CONSTRAINT events_stream_seq_unique UNIQUE (stream_id, stream_seq)
 );
 
 -- The UNIQUE constraint already provides a (stream_id, stream_seq) index used to
--- compute the stream head and to order a stream load; `seq` is the PK (indexed).
+-- compute current_max and to order a stream load; `seq` is the PK (indexed).
 -- An explicit stream-ordered index name documents the load path.
 CREATE INDEX IF NOT EXISTS events_stream_order_idx ON events (stream_id, stream_seq);
 

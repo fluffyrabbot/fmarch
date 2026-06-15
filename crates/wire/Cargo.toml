@@ -8,5 +8,6 @@ commands = { path = "../commands" }
 projections = { path = "../projections" }
 caps = { path = "../caps" }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 ts-rs = { version = "10", features = ["uuid-impl"] }
 uuid = { version = "1", features = ["v4", "serde"] }

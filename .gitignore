@@ -1,5 +1,6 @@
 # Rust
 /target
+**/target/
 **/*.rs.bk
 Cargo.lock.orig
 
@@ -21,3 +22,7 @@ dist/
 # Logs / local
 *.log
 /tmp/
+
+# Python
+__pycache__/
+*.pyc

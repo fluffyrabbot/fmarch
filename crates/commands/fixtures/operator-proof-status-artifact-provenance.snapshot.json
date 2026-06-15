@@ -1,0 +1,503 @@
+{
+  "contract_version": 1,
+  "game": "00000000-0000-0000-0000-000000000000",
+  "manifest_version": 1,
+  "execution": "local-only command copy",
+  "summary": {
+    "production": {
+      "total_artifact_rows": 10,
+      "trusted": 10,
+      "stale": 0,
+      "missing": 0,
+      "malformed": 0,
+      "path_mismatch": 0,
+      "version_mismatch": 0,
+      "input_mismatch": 0,
+      "drifted": 0,
+      "non_trusted": 0
+    },
+    "fixtures": {
+      "total_artifact_rows": 5,
+      "trusted": 0,
+      "stale": 1,
+      "missing": 1,
+      "malformed": 1,
+      "path_mismatch": 1,
+      "version_mismatch": 1,
+      "input_mismatch": 0,
+      "drifted": 0,
+      "non_trusted": 5
+    }
+  },
+  "families": [
+    {
+      "heading": "Game-Specific Audits",
+      "fixture": false,
+      "runs": [
+        {
+          "id": "projection-rebuild-audit",
+          "row_id": "proof-run-projection-rebuild-audit",
+          "family": "Projection rebuild audit",
+          "scope": "Game-specific",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p projections --bin audit_rebuild -- 00000000-0000-0000-0000-000000000000",
+          "artifact": null,
+          "proof_boundary": "Replays this game stream inside a rollback-only transaction."
+        },
+        {
+          "id": "resolution-replay-audit",
+          "row_id": "proof-run-resolution-replay-audit",
+          "family": "Resolution replay audit",
+          "scope": "Game-specific",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin audit_resolution -- 00000000-0000-0000-0000-000000000000",
+          "artifact": null,
+          "proof_boundary": "Rebuilds stored resolution envelopes for this game and reports drift."
+        },
+        {
+          "id": "resolution-trace-inspection",
+          "row_id": "proof-run-resolution-trace-inspection",
+          "family": "Resolution trace inspection",
+          "scope": "Game-specific",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin inspect_trace -- 00000000-0000-0000-0000-000000000000",
+          "artifact": null,
+          "proof_boundary": "Flattens stored trace rows for this game; optional run_id remains CLI-only."
+        }
+      ]
+    },
+    {
+      "heading": "Local-Only Regression Lanes",
+      "fixture": false,
+      "runs": [
+        {
+          "id": "large-action-graph-regression",
+          "row_id": "proof-run-large-action-graph-regression",
+          "family": "Large action graph regression",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands large_action_graph_resolves_and_audits_within_regression_ceiling -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Fixed dense Mafiascum N01 graph with replay, trace, rebuild, and duration ceilings."
+        },
+        {
+          "id": "seeded-day-vote-replay",
+          "row_id": "proof-run-seeded-day-vote-replay",
+          "family": "Seeded day-vote replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Fixed day-vote seeds through command resolution and the audit trio."
+        },
+        {
+          "id": "seeded-mafiascum-night-graph-replay",
+          "row_id": "proof-run-seeded-mafiascum-night-graph-replay",
+          "family": "Seeded Mafiascum night graph replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Fixed night-action seeds across protect, roleblock, tracking, watching, redirect, and kill families."
+        },
+        {
+          "id": "seeded-trigger-dependency-replay",
+          "row_id": "proof-run-seeded-trigger-dependency-replay",
+          "family": "Seeded trigger/dependency replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Fixed PGO, Babysitter, and Hider trigger/dependency seeds under replay, trace, and rebuild audits."
+        },
+        {
+          "id": "seeded-persistent-trigger-replay",
+          "row_id": "proof-run-seeded-persistent-trigger-replay",
+          "family": "Seeded persistent trigger replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Two-phase Hunter retaliation and Cupid/Lovers folded state consumed by later resolution."
+        },
+        {
+          "id": "generated-mafiascum-night-replay",
+          "row_id": "proof-run-generated-mafiascum-night-replay",
+          "family": "Generated Mafiascum night replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Bounded generated N01 cases with seed/roster/action failure output."
+        },
+        {
+          "id": "generated-chinese-structured-night-replay",
+          "row_id": "proof-run-generated-chinese-structured-night-replay",
+          "family": "Generated Chinese Structured night replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Chinese Structured N01 fixed seeds across wolf, witch, guard, prophet, cupid, hunter, and passive roles."
+        },
+        {
+          "id": "generated-chinese-structured-day-replay",
+          "row_id": "proof-run-generated-chinese-structured-day-replay",
+          "family": "Generated Chinese Structured day replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Chinese Structured D01 fixed seeds for sheriff election, Knight duel, self-destruct, and votes."
+        },
+        {
+          "id": "generated-mafia-universe-ita-replay",
+          "row_id": "proof-run-generated-mafia-universe-ita-replay",
+          "family": "Generated Mafia Universe ITA replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Mafia Universe D01 ITA fixed seeds with deterministic hit/miss outcomes and audit trio."
+        },
+        {
+          "id": "generated-epicmafia-prompt-night-replay",
+          "row_id": "proof-run-generated-epicmafia-prompt-night-replay",
+          "family": "Generated Epicmafia prompt/night replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Epicmafia PK prompt and Bomb/Cult night fixed seeds under replay, trace, and rebuild audits."
+        },
+        {
+          "id": "generated-default-open-night-replay",
+          "row_id": "proof-run-generated-default-open-night-replay",
+          "family": "Generated default_open night replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Copyright-free default_open N01 seeds under the same audit trio."
+        },
+        {
+          "id": "generated-default-open-day-replay",
+          "row_id": "proof-run-generated-default-open-day-replay",
+          "family": "Generated default_open day replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Copyright-free default_open D01 vote seeds under the same audit trio."
+        },
+        {
+          "id": "night-fixture-minimizer",
+          "row_id": "proof-run-night-fixture-minimizer",
+          "family": "Night fixture minimizer",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin minimize_night_fixture -- crates/commands/fixtures/night-passing.json",
+          "artifact": null,
+          "proof_boundary": "Replays a checked-in fixture; add --reduce only when preserving a captured failure class."
+        },
+        {
+          "id": "checked-game-specific-audit-bundle",
+          "row_id": "proof-run-checked-game-specific-audit-bundle",
+          "family": "Checked game-specific audit bundle",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --output target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json crates/commands/fixtures/night-passing.json",
+          "artifact": {
+            "path": "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
+            "state": "trusted",
+            "modified_at_unix_seconds": 1781383182,
+            "age_seconds": 2221,
+            "freshness_max_age_seconds": 86400,
+            "trusted_metadata": {
+              "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+              "manifest_version": 1
+            }
+          },
+          "proof_boundary": "Seeds a fixture-backed game, expands the manifest's game-specific command templates for that id, executes them, and fails on mismatched audit counts."
+        },
+        {
+          "id": "game-specific-audit-artifact-retention",
+          "row_id": "proof-run-game-specific-audit-artifact-retention",
+          "family": "Game-specific audit artifact retention",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_game_specific_audits -- --compare-with target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json --output target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json crates/commands/fixtures/night-passing.json",
+          "artifact": {
+            "path": "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
+            "state": "trusted",
+            "modified_at_unix_seconds": 1781383182,
+            "age_seconds": 2221,
+            "freshness_max_age_seconds": 86400,
+            "trusted_metadata": {
+              "game_id": "3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
+              "manifest_version": 1,
+              "retention_comparison_normalized_match": true
+            }
+          },
+          "proof_boundary": "Regenerates the checked game-specific bundle and fails unless the old and new reports match after normalizing expected rerun drift fields."
+        },
+        {
+          "id": "operator-proof-status-export",
+          "row_id": "proof-run-operator-proof-status-export",
+          "family": "Operator proof status export",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "cargo run -q -p commands --bin export_operator_proof_status -- --fixture artifact-provenance --output target/operator-proof/current-status-audit-check.json 00000000-0000-0000-0000-000000000000",
+          "artifact": null,
+          "proof_boundary": "Exports the artifact-provenance proof-run status contract without starting Axum, touching Postgres, or executing proof commands."
+        },
+        {
+          "id": "operator-proof-status-snapshot-audit",
+          "row_id": "proof-run-operator-proof-status-snapshot-audit",
+          "family": "Operator proof status snapshot audit",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "cargo run -q -p commands --bin audit_operator_proof_status -- --output target/operator-proof/current-status-audit-report.json crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json target/operator-proof/current-status-audit-check.json",
+          "artifact": {
+            "path": "target/operator-proof/current-status-audit-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384398,
+            "age_seconds": 1005,
+            "freshness_max_age_seconds": 86400,
+            "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
+            "actual_path": "target/operator-proof/current-status-audit-check.json",
+            "diff_count": 0
+          },
+          "proof_boundary": "Compares the saved normalized artifact-provenance status snapshot against the latest exported status, writes the audit report artifact, and fails on row-addressed contract drift."
+        },
+        {
+          "id": "operator-proof-artifact-go-no-go",
+          "row_id": "proof-run-operator-proof-artifact-go-no-go",
+          "family": "Operator proof artifact go/no-go",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "cargo run -q -p commands --bin audit_operator_proof_artifacts -- --output target/operator-proof/current-artifact-go-no-go-report.json 00000000-0000-0000-0000-000000000000",
+          "artifact": {
+            "path": "target/operator-proof/current-artifact-go-no-go-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384398,
+            "age_seconds": 1004,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0
+          },
+          "proof_boundary": "Loads the published proof-run manifest, classifies artifact-provenance rows, writes the compact go/no-go report with trusted metadata for artifact rows that have proof-specific counters, and fails if any production artifact row is not trusted."
+        },
+        {
+          "id": "operator-proof-artifact-retention",
+          "row_id": "proof-run-operator-proof-artifact-retention",
+          "family": "Operator proof artifact retention",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "cargo run -q -p commands --bin audit_operator_proof_artifact_retention -- --output target/operator-proof/current-artifact-retention-report.json target/operator-proof/previous-artifact-go-no-go-report.json target/operator-proof/current-artifact-go-no-go-report.json",
+          "artifact": {
+            "path": "target/operator-proof/current-artifact-retention-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384398,
+            "age_seconds": 1004,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0
+          },
+          "proof_boundary": "Compares the previous and current go/no-go reports after normalizing wall-clock freshness and fails on production artifact state regressions."
+        },
+        {
+          "id": "operator-proof-projection-rebuild",
+          "row_id": "proof-run-operator-proof-projection-rebuild",
+          "family": "Operator proof projection rebuild",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_projection_rebuild_artifact -- --output target/operator-proof/current-projection-rebuild-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+          "artifact": {
+            "path": "target/operator-proof/current-projection-rebuild-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384399,
+            "age_seconds": 1004,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0
+          },
+          "proof_boundary": "Runs the projection rebuild audit for the checked fixture game inside a rollback-only transaction, writes a versioned report with table counts, and fails on rebuild drift."
+        },
+        {
+          "id": "operator-proof-resolution-diff",
+          "row_id": "proof-run-operator-proof-resolution-diff",
+          "family": "Operator proof resolution diff",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_resolution_diff_artifact -- --output target/operator-proof/current-resolution-diff-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+          "artifact": {
+            "path": "target/operator-proof/current-resolution-diff-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384399,
+            "age_seconds": 1003,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0
+          },
+          "proof_boundary": "Runs the resolution replay diff for the checked fixture game, writes a versioned report with normalized stream-detail fields and row-addressed envelope diffs, and fails on resolution drift."
+        },
+        {
+          "id": "operator-proof-trace-inspection",
+          "row_id": "proof-run-operator-proof-trace-inspection",
+          "family": "Operator proof trace inspection",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+          "artifact": {
+            "path": "target/operator-proof/current-trace-inspection-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384400,
+            "age_seconds": 1003,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0
+          },
+          "proof_boundary": "Exports the host/admin trace inspection for the checked fixture game, writes a versioned report with normalized stream fields and row-count summaries, and fails when no stored trace is available."
+        },
+        {
+          "id": "operator-proof-large-action-graph-performance",
+          "row_id": "proof-run-operator-proof-large-action-graph-performance",
+          "family": "Operator proof large action graph performance",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json",
+          "artifact": {
+            "path": "target/operator-proof/current-large-action-graph-performance-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781384400,
+            "age_seconds": 1002,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0,
+            "trusted_metadata": {
+              "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+              "resolve_elapsed_ms": 321,
+              "threshold_ms": 20000,
+              "trace_row_count": 74,
+              "phase_trace_anchored": true,
+              "decision_trace_anchored": true
+            }
+          },
+          "proof_boundary": "Runs the dense Mafiascum N01 large-action-graph scenario, writes a versioned report with fixture dimensions, replay/projection status, trace row count, explicit phase/decision trace anchoring flags, elapsed milliseconds, and the configured regression ceiling, and fails when the ceiling, audits, or trace anchors fail."
+        },
+        {
+          "id": "operator-proof-determinism-fuzz",
+          "row_id": "proof-run-operator-proof-determinism-fuzz",
+          "family": "Operator proof determinism fuzz",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
+          "artifact": {
+            "path": "target/operator-proof/current-determinism-fuzz-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781385393,
+            "age_seconds": 10,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0,
+            "trusted_metadata": {
+              "family_count": 11,
+              "seed_count": 55,
+              "expected_family_count": 11,
+              "expected_seed_count": 55,
+              "family_manifest_matched": true
+            }
+          },
+          "proof_boundary": "Runs the known seeded command-pipeline replay/projection/trace scenario families as local Postgres integration tests, writes a versioned report with exact expected family/seed manifest coverage and first failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is deterministic generator coverage, not exhaustive state-space verification."
+        }
+      ]
+    },
+    {
+      "heading": "Operator Proof Fixtures",
+      "fixture": true,
+      "runs": [
+        {
+          "id": "missing-artifact-provenance-guard",
+          "row_id": "proof-run-missing-artifact-provenance-guard",
+          "family": "Missing artifact provenance guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/missing-artifact-provenance-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/missing-artifact-provenance-guard.json",
+            "state": "missing"
+          },
+          "proof_boundary": "Fixture-only row proving absent local artifacts remain display-only."
+        },
+        {
+          "id": "malformed-artifact-metadata-guard",
+          "row_id": "proof-run-malformed-artifact-metadata-guard",
+          "family": "Malformed artifact metadata guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/malformed-artifact-metadata-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/malformed-artifact-metadata-guard.json",
+            "state": "malformed"
+          },
+          "proof_boundary": "Fixture-only row proving malformed local artifact JSON remains display-only and does not emit parsed metadata."
+        },
+        {
+          "id": "stale-artifact-provenance-guard",
+          "row_id": "proof-run-stale-artifact-provenance-guard",
+          "family": "Stale artifact provenance guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/stale-artifact-provenance-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/stale-artifact-provenance-guard.json",
+            "state": "stale",
+            "modified_at_unix_seconds": 946684800,
+            "age_seconds": 834700603,
+            "freshness_max_age_seconds": 86400
+          },
+          "proof_boundary": "Fixture-only row proving valid but old local artifacts remain display-only."
+        },
+        {
+          "id": "path-mismatch-artifact-provenance-guard",
+          "row_id": "proof-run-path-mismatch-artifact-provenance-guard",
+          "family": "Path mismatch artifact provenance guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/path-mismatch-artifact-provenance-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/path-mismatch-artifact-provenance-guard.json",
+            "state": "path_mismatch",
+            "reported_path": "target/operator-proof/wrong-artifact-provenance-guard.json"
+          },
+          "proof_boundary": "Fixture-only row proving artifacts whose internal path does not match the manifest row remain display-only."
+        },
+        {
+          "id": "version-mismatch-artifact-provenance-guard",
+          "row_id": "proof-run-version-mismatch-artifact-provenance-guard",
+          "family": "Version mismatch artifact provenance guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/version-mismatch-artifact-provenance-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/version-mismatch-artifact-provenance-guard.json",
+            "state": "version_mismatch",
+            "artifact_version": 2,
+            "expected_version": 1
+          },
+          "proof_boundary": "Fixture-only row proving artifacts whose manifest version is incompatible remain display-only."
+        }
+      ]
+    }
+  ]
+}

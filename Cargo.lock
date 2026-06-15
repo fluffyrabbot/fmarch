@@ -2249,6 +2249,7 @@ dependencies = [
  "commands",
  "projections",
  "serde",
+ "serde_json",
  "ts-rs",
  "uuid",
 ]

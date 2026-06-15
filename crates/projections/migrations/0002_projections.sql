@@ -23,21 +23,24 @@ CREATE TABLE IF NOT EXISTS votecount (
     PRIMARY KEY (game_id, phase_id, candidate_slot)
 );
 
--- ── slot_state: per-slot lifecycle + role reveal (doc 10 folds from RoleAssigned,
+-- ── slot_state: per-slot lifecycle + role/alignment reveal (doc 10 folds from RoleAssigned,
 -- PlayerKilled, PlayerSaved, ...).
 --
 -- RULING (doc under-specifies role-reveal timing): `role_key` is populated on
--- RoleAssigned but `role_revealed` stays FALSE until end-of-game reveal
--- (WinReached / GameCompleted flip it, doc 10). The data is present from
--- assignment; visibility is a separate flag a rebuild proves was always correct
--- (doc 02 end-game reveal). PlayerSaved is folded as an explicit no-op that
--- keeps the slot alive (it cancels a would-be kill at resolution time; by the
--- time a save is recorded the slot was never marked dead).
+-- RoleAssigned, PlayerKilled flips the killed slot's `role_revealed` and/or
+-- `alignment_revealed` according to pack-owned death reveal policy, and
+-- end-of-game reveal (WinReached / GameCompleted) flips every slot. The data
+-- is present from assignment; visibility is a separate flag a rebuild proves
+-- was always correct. PlayerSaved is folded as an
+-- explicit no-op that keeps the slot alive (it cancels a would-be kill at
+-- resolution time; by the time a save is recorded the slot was never marked
+-- dead).
 CREATE TABLE IF NOT EXISTS slot_state (
     game_id       UUID NOT NULL,
     slot_id       TEXT NOT NULL,
     alive         BOOLEAN NOT NULL DEFAULT TRUE,
     role_key      TEXT NULL,
     role_revealed BOOLEAN NOT NULL DEFAULT FALSE,
+    alignment_revealed BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (game_id, slot_id)
 );

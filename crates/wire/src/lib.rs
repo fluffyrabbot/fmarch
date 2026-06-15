@@ -107,7 +107,7 @@ pub enum ClientMsg {
     SubscribeGame { game: Uuid },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
 pub enum ServerMsg {
     Hello(Hello),
@@ -145,6 +145,25 @@ impl From<VoteTarget> for commands::VoteTarget {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub enum HostPromptDecision {
+    SelectSlot { slot: String },
+    Acknowledge,
+}
+
+impl From<HostPromptDecision> for commands::HostPromptDecision {
+    fn from(decision: HostPromptDecision) -> Self {
+        match decision {
+            HostPromptDecision::SelectSlot { slot } => {
+                commands::HostPromptDecision::SelectSlot { slot }
+            }
+            HostPromptDecision::Acknowledge => commands::HostPromptDecision::Acknowledge {
+                metadata: serde_json::json!({}),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub enum Command {
     CreateGame {
@@ -177,11 +196,31 @@ pub enum Command {
         game: Uuid,
         phase: String,
     },
+    AdvancePhase {
+        game: Uuid,
+    },
+    AdvancePhaseByDeadline {
+        game: Uuid,
+        phase: String,
+        observed_at: i64,
+    },
     LockThread {
         game: Uuid,
     },
     UnlockThread {
         game: Uuid,
+    },
+    ResolvePhase {
+        game: Uuid,
+        seed: u64,
+    },
+    CompleteGame {
+        game: Uuid,
+    },
+    ResolveHostPrompt {
+        game: Uuid,
+        prompt_id: String,
+        decision: HostPromptDecision,
     },
     SubmitVote {
         game: Uuid,
@@ -190,6 +229,20 @@ pub enum Command {
     },
     WithdrawVote {
         game: Uuid,
+        actor_slot: String,
+    },
+    SubmitAction {
+        game: Uuid,
+        action_id: String,
+        actor_slot: String,
+        template_id: String,
+        targets: Vec<String>,
+        #[serde(default)]
+        grant_id: Option<String>,
+    },
+    WithdrawAction {
+        game: Uuid,
+        action_id: String,
         actor_slot: String,
     },
     SubmitPost {
@@ -232,8 +285,29 @@ impl From<Command> for commands::Command {
             Command::OpenDayPhase { game, phase } => {
                 commands::Command::OpenDayPhase { game, phase }
             }
+            Command::AdvancePhase { game } => commands::Command::AdvancePhase { game },
+            Command::AdvancePhaseByDeadline {
+                game,
+                phase,
+                observed_at,
+            } => commands::Command::AdvancePhaseByDeadline {
+                game,
+                phase,
+                observed_at,
+            },
             Command::LockThread { game } => commands::Command::LockThread { game },
             Command::UnlockThread { game } => commands::Command::UnlockThread { game },
+            Command::ResolvePhase { game, seed } => commands::Command::ResolvePhase { game, seed },
+            Command::CompleteGame { game } => commands::Command::CompleteGame { game },
+            Command::ResolveHostPrompt {
+                game,
+                prompt_id,
+                decision,
+            } => commands::Command::ResolveHostPrompt {
+                game,
+                prompt_id,
+                decision: decision.into(),
+            },
             Command::SubmitVote {
                 game,
                 actor_slot,
@@ -246,6 +320,30 @@ impl From<Command> for commands::Command {
             Command::WithdrawVote { game, actor_slot } => {
                 commands::Command::WithdrawVote { game, actor_slot }
             }
+            Command::SubmitAction {
+                game,
+                action_id,
+                actor_slot,
+                template_id,
+                targets,
+                grant_id,
+            } => commands::Command::SubmitAction {
+                game,
+                action_id,
+                actor_slot,
+                template_id,
+                targets,
+                grant_id,
+            },
+            Command::WithdrawAction {
+                game,
+                action_id,
+                actor_slot,
+            } => commands::Command::WithdrawAction {
+                game,
+                action_id,
+                actor_slot,
+            },
             Command::SubmitPost {
                 game,
                 actor_slot,
@@ -312,10 +410,15 @@ pub enum RejectCode {
     NotHost,
     PhaseLocked,
     SlotNotAlive,
+    VoteNotAllowed,
     InvalidTarget,
+    InvalidRole,
     StreamConflict,
     UnknownGame,
     UnknownSlot,
+    UnknownPrompt,
+    PromptAlreadyResolved,
+    InvalidPromptDecision,
     Internal,
 }
 
@@ -327,19 +430,25 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::NotHost => RejectCode::NotHost,
             commands::Reject::PhaseLocked => RejectCode::PhaseLocked,
             commands::Reject::SlotNotAlive => RejectCode::SlotNotAlive,
+            commands::Reject::VoteNotAllowed => RejectCode::VoteNotAllowed,
             commands::Reject::InvalidTarget => RejectCode::InvalidTarget,
+            commands::Reject::InvalidRole(_) => RejectCode::InvalidRole,
             commands::Reject::StreamConflict => RejectCode::StreamConflict,
             commands::Reject::UnknownGame => RejectCode::UnknownGame,
             commands::Reject::UnknownSlot => RejectCode::UnknownSlot,
+            commands::Reject::UnknownPrompt => RejectCode::UnknownPrompt,
+            commands::Reject::PromptAlreadyResolved => RejectCode::PromptAlreadyResolved,
+            commands::Reject::InvalidPromptDecision => RejectCode::InvalidPromptDecision,
             commands::Reject::Internal(_) => RejectCode::Internal,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
 pub enum ProjectionDelta {
     VoteCountChanged(VoteCountDelta),
+    DayVoteOutcomeApplied(DayVoteOutcomeDelta),
     ResyncRequired { from_seq: i64 },
 }
 
@@ -362,6 +471,371 @@ impl From<projections::VoteCountRow> for VoteCountDelta {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct DayVoteOutcomeDelta {
+    pub game: Uuid,
+    pub phase_id: String,
+    pub source_seq: i64,
+    pub event_index: i32,
+    pub status: String,
+    pub winner_slot: Option<String>,
+    #[ts(type = "unknown")]
+    pub contenders: serde_json::Value,
+    #[ts(type = "unknown")]
+    pub tallies: serde_json::Value,
+    #[ts(type = "unknown")]
+    pub votes: serde_json::Value,
+    #[ts(type = "unknown")]
+    pub weights: serde_json::Value,
+    pub majority: Option<f64>,
+    #[ts(type = "unknown")]
+    pub thresholds: serde_json::Value,
+    pub total_weight: f64,
+    pub tiebreak: Option<String>,
+    pub reason: Option<String>,
+}
+
+impl From<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
+    fn from(row: projections::DayVoteOutcomeRow) -> Self {
+        DayVoteOutcomeDelta {
+            game: row.game_id,
+            phase_id: row.phase_id,
+            source_seq: row.source_seq,
+            event_index: row.event_index,
+            status: row.status,
+            winner_slot: row.winner_slot,
+            contenders: row.contenders,
+            tallies: row.tallies,
+            votes: row.votes,
+            weights: row.weights,
+            majority: row.majority,
+            thresholds: row.thresholds,
+            total_weight: row.total_weight,
+            tiebreak: row.tiebreak,
+            reason: row.reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadPost {
+    pub game: Uuid,
+    pub source_seq: i64,
+    pub stream_seq: i64,
+    pub channel_id: String,
+    pub author_slot: Option<String>,
+    pub author_user: Option<String>,
+    pub phase_id: String,
+    pub body: String,
+    pub occurred_at: i64,
+}
+
+impl From<projections::ThreadPostRow> for ThreadPost {
+    fn from(row: projections::ThreadPostRow) -> Self {
+        ThreadPost {
+            game: row.game_id,
+            source_seq: row.source_seq,
+            stream_seq: row.stream_seq,
+            channel_id: row.channel_id,
+            author_slot: row.author_slot,
+            author_user: row.author_user,
+            phase_id: row.phase_id,
+            body: row.body,
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadPage {
+    pub posts: Vec<ThreadPost>,
+    pub next_before_seq: Option<i64>,
+}
+
+impl From<projections::ThreadViewPage> for ThreadPage {
+    fn from(page: projections::ThreadViewPage) -> Self {
+        ThreadPage {
+            posts: page.posts.into_iter().map(ThreadPost::from).collect(),
+            next_before_seq: page.next_before_seq,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PlayerNotification {
+    pub game: Uuid,
+    pub phase_id: String,
+    pub event_index: i32,
+    pub audience_slot: String,
+    pub effect: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PlayerInvestigationResult {
+    pub game: Uuid,
+    pub phase_id: String,
+    pub event_index: i32,
+    pub audience_slot: String,
+    pub mode: String,
+    pub target_slot: String,
+    #[ts(type = "unknown")]
+    pub result: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostPhaseControl {
+    pub game: Uuid,
+    pub source_seq: i64,
+    pub stream_seq: i64,
+    pub prompt_id: String,
+    pub prompt_kind: Option<String>,
+    pub prompt_reason: Option<String>,
+    pub source_phase_id: String,
+    pub target_phase_id: String,
+    pub reason: String,
+    pub skipped_phase_id: Option<String>,
+    pub resolved_by: Option<String>,
+    pub resolved_at: Option<i64>,
+    pub occurred_at: i64,
+}
+
+impl From<projections::HostPhaseControlRow> for HostPhaseControl {
+    fn from(row: projections::HostPhaseControlRow) -> Self {
+        HostPhaseControl {
+            game: row.game_id,
+            source_seq: row.source_seq,
+            stream_seq: row.stream_seq,
+            prompt_id: row.prompt_id,
+            prompt_kind: row.prompt_kind,
+            prompt_reason: row.prompt_reason,
+            source_phase_id: row.source_phase_id,
+            target_phase_id: row.target_phase_id,
+            reason: row.reason,
+            skipped_phase_id: row.skipped_phase_id,
+            resolved_by: row.resolved_by,
+            resolved_at: row.resolved_at,
+            occurred_at: row.occurred_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceInspectionReport {
+    pub game: Uuid,
+    pub traces: Vec<ResolutionTraceInspectionRun>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceInspectionRun {
+    pub phase_id: String,
+    pub run_id: String,
+    pub applied_stream_seq: Option<i64>,
+    pub trace_stream_seq: i64,
+    pub trace_version: u16,
+    pub decisions: Vec<ResolutionTraceDecisionRow>,
+    pub edges: Vec<ResolutionTraceEdgeRow>,
+    pub generated: Vec<ResolutionTraceGeneratedRow>,
+    pub effect_changes: Vec<ResolutionTraceEffectChangeRow>,
+    pub visibility: Vec<ResolutionTraceVisibilityRow>,
+    pub notes: Vec<ResolutionTraceNoteRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceDecisionRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub event_index: Option<usize>,
+    pub stage: String,
+    pub source: String,
+    pub outcome: String,
+    #[ts(type = "unknown")]
+    pub detail: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceEdgeRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+    #[ts(type = "unknown")]
+    pub detail: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceGeneratedRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub action_id: String,
+    pub source: String,
+    pub actor: String,
+    pub targets: Vec<String>,
+    #[ts(type = "unknown")]
+    pub detail: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceEffectChangeRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub effect: String,
+    pub target: String,
+    pub operation: String,
+    #[ts(type = "unknown")]
+    pub detail: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceVisibilityRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub event_index: usize,
+    pub audience: Vec<String>,
+    pub policy: String,
+    #[ts(type = "unknown")]
+    pub detail: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ResolutionTraceNoteRow {
+    pub row_index: usize,
+    pub applied_stream_seq: Option<i64>,
+    pub note: String,
+}
+
+impl From<commands::ResolutionTraceInspectionReport> for ResolutionTraceInspectionReport {
+    fn from(report: commands::ResolutionTraceInspectionReport) -> Self {
+        ResolutionTraceInspectionReport {
+            game: report.game_id,
+            traces: report.traces.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceInspectionRun> for ResolutionTraceInspectionRun {
+    fn from(run: commands::ResolutionTraceInspectionRun) -> Self {
+        ResolutionTraceInspectionRun {
+            phase_id: run.phase_id,
+            run_id: run.run_id,
+            applied_stream_seq: run.applied_stream_seq,
+            trace_stream_seq: run.trace_stream_seq,
+            trace_version: run.trace_version,
+            decisions: run.decisions.into_iter().map(Into::into).collect(),
+            edges: run.edges.into_iter().map(Into::into).collect(),
+            generated: run.generated.into_iter().map(Into::into).collect(),
+            effect_changes: run.effect_changes.into_iter().map(Into::into).collect(),
+            visibility: run.visibility.into_iter().map(Into::into).collect(),
+            notes: run.notes.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceDecisionRow> for ResolutionTraceDecisionRow {
+    fn from(row: commands::ResolutionTraceDecisionRow) -> Self {
+        ResolutionTraceDecisionRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            event_index: row.event_index,
+            stage: row.stage,
+            source: row.source,
+            outcome: row.outcome,
+            detail: row.detail,
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceEdgeRow> for ResolutionTraceEdgeRow {
+    fn from(row: commands::ResolutionTraceEdgeRow) -> Self {
+        ResolutionTraceEdgeRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            from: row.from,
+            to: row.to,
+            kind: row.kind,
+            detail: row.detail,
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceGeneratedRow> for ResolutionTraceGeneratedRow {
+    fn from(row: commands::ResolutionTraceGeneratedRow) -> Self {
+        ResolutionTraceGeneratedRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            action_id: row.action_id,
+            source: row.source,
+            actor: row.actor,
+            targets: row.targets,
+            detail: row.detail,
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceEffectChangeRow> for ResolutionTraceEffectChangeRow {
+    fn from(row: commands::ResolutionTraceEffectChangeRow) -> Self {
+        ResolutionTraceEffectChangeRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            effect: row.effect,
+            target: row.target,
+            operation: row.operation,
+            detail: row.detail,
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceVisibilityRow> for ResolutionTraceVisibilityRow {
+    fn from(row: commands::ResolutionTraceVisibilityRow) -> Self {
+        ResolutionTraceVisibilityRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            event_index: row.event_index,
+            audience: row.audience,
+            policy: row.policy,
+            detail: row.detail,
+        }
+    }
+}
+
+impl From<commands::ResolutionTraceNoteRow> for ResolutionTraceNoteRow {
+    fn from(row: commands::ResolutionTraceNoteRow) -> Self {
+        ResolutionTraceNoteRow {
+            row_index: row.row_index,
+            applied_stream_seq: row.applied_stream_seq,
+            note: row.note,
+        }
+    }
+}
+
+impl From<projections::PlayerNotificationRow> for PlayerNotification {
+    fn from(row: projections::PlayerNotificationRow) -> Self {
+        PlayerNotification {
+            game: row.game_id,
+            phase_id: row.phase_id,
+            event_index: row.event_index,
+            audience_slot: row.audience_slot,
+            effect: row.effect,
+            status: row.status,
+        }
+    }
+}
+
+impl From<projections::PlayerInvestigationResultRow> for PlayerInvestigationResult {
+    fn from(row: projections::PlayerInvestigationResultRow) -> Self {
+        PlayerInvestigationResult {
+            game: row.game_id,
+            phase_id: row.phase_id,
+            event_index: row.event_index,
+            audience_slot: row.audience_slot,
+            mode: row.mode,
+            target_slot: row.target_slot,
+            result: row.result,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "body")]
 pub enum CapabilityGrant {
@@ -378,9 +852,13 @@ pub mod typescript {
     use ts_rs::TS;
 
     use crate::{
-        AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg, Hello,
-        ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, VoteCountDelta,
-        VoteTarget,
+        AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg,
+        DayVoteOutcomeDelta, Hello, HostPhaseControl, HostPromptDecision,
+        PlayerInvestigationResult, PlayerNotification, ProjectionDelta, RejectCode, RejectMsg,
+        ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
+        ResolutionTraceGeneratedRow, ResolutionTraceInspectionReport, ResolutionTraceInspectionRun,
+        ResolutionTraceNoteRow, ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg,
+        ThreadPage, ThreadPost, VoteCountDelta, VoteTarget,
     };
 
     const HEADER: &str = "// This file is @generated by wire::typescript::render.\n// Run `cargo run -p wire --bin export_types` to regenerate.\n\n";
@@ -388,6 +866,7 @@ pub mod typescript {
     pub fn render() -> String {
         let mut out = String::from(HEADER);
         push::<VoteTarget>(&mut out);
+        push::<HostPromptDecision>(&mut out);
         push::<Command>(&mut out);
         push::<CommandMsg>(&mut out);
         push::<ClientMsg>(&mut out);
@@ -396,6 +875,20 @@ pub mod typescript {
         push::<RejectCode>(&mut out);
         push::<RejectMsg>(&mut out);
         push::<VoteCountDelta>(&mut out);
+        push::<DayVoteOutcomeDelta>(&mut out);
+        push::<ThreadPost>(&mut out);
+        push::<ThreadPage>(&mut out);
+        push::<PlayerNotification>(&mut out);
+        push::<PlayerInvestigationResult>(&mut out);
+        push::<HostPhaseControl>(&mut out);
+        push::<ResolutionTraceDecisionRow>(&mut out);
+        push::<ResolutionTraceEdgeRow>(&mut out);
+        push::<ResolutionTraceGeneratedRow>(&mut out);
+        push::<ResolutionTraceEffectChangeRow>(&mut out);
+        push::<ResolutionTraceVisibilityRow>(&mut out);
+        push::<ResolutionTraceNoteRow>(&mut out);
+        push::<ResolutionTraceInspectionRun>(&mut out);
+        push::<ResolutionTraceInspectionReport>(&mut out);
         push::<ProjectionDelta>(&mut out);
         push::<CapabilityGrant>(&mut out);
         push::<Hello>(&mut out);
@@ -409,7 +902,12 @@ pub mod typescript {
         if decl.starts_with("type ") {
             out.push_str("export ");
         }
-        out.push_str(&decl);
+        for (idx, line) in decl.lines().enumerate() {
+            if idx > 0 {
+                out.push('\n');
+            }
+            out.push_str(line.trim_end());
+        }
         out.push_str("\n\n");
     }
 }

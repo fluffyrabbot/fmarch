@@ -7,12 +7,16 @@
 
 use std::collections::BTreeMap;
 
-use domain::events::{IndexedEvent, ResolutionApplied, ResolutionCounts};
-use domain::pack::{Pack, PhaseKind};
-use domain::state::{SlotState, StateSnapshot, Submission};
-use domain::{resolve, ResolutionInput, RESULT_VERSION};
+use domain::events::{IndexedEvent, ResolutionCounts};
+use domain::pack::{GrantKind, Pack, PhaseKind};
+use domain::state::{RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission};
+use domain::{resolve, InnerEvent, ResolutionApplied, ResolutionInput};
 use eventstore::{ActorId, EventInput};
-use projections::{append_and_project, rebuild, slot_state, votecount};
+use projections::{
+    action_counters, action_grants, append_and_project, audit_rebuild, day_vote_outcomes,
+    host_phase_controls, host_prompts, phase_state, player_notifications, rebuild, slot_effects,
+    slot_state, votecount,
+};
 use uuid::Uuid;
 
 fn load_pack() -> Pack {
@@ -29,8 +33,21 @@ fn slot(id: &str, role: &str, align: &str) -> SlotState {
         slot_id: id.into(),
         role_key: role.into(),
         alignment: Some(align.into()),
-        status: "alive".into(),
+        role_reveal: RevealState::Private,
+        alignment_reveal: RevealState::Private,
+        status: SlotLifecycle::Alive,
+        status_tags: vec![],
         effects: vec![],
+    }
+}
+
+fn empty_phase_announcement(index: usize, phase_id: &str) -> IndexedEvent {
+    IndexedEvent {
+        index,
+        event: InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
+            phase_id: phase_id.into(),
+            deaths: Vec::new(),
+        }),
     }
 }
 
@@ -44,39 +61,6 @@ fn submission(action_id: &str, actor: &str, template: &str, target: &str, at: u6
         submitted_at: at,
         withdrawn: false,
         metadata: BTreeMap::new(),
-    }
-}
-
-/// Wrap the resolver's inner events into a `ResolutionApplied` envelope (doc 10).
-fn wrap(inner: Vec<domain::InnerEvent>) -> ResolutionApplied {
-    let kills = inner
-        .iter()
-        .filter(|e| matches!(e, domain::InnerEvent::PlayerKilled { .. }))
-        .count();
-    let saves = inner
-        .iter()
-        .filter(|e| matches!(e, domain::InnerEvent::PlayerSaved { .. }))
-        .count();
-    let events: Vec<IndexedEvent> = inner
-        .into_iter()
-        .enumerate()
-        .map(|(index, event)| IndexedEvent { index, event })
-        .collect();
-    ResolutionApplied {
-        phase_id: "N01".into(),
-        phase_kind: PhaseKind::Night,
-        phase_number: 1,
-        run_id: "run_e2e_001".into(),
-        result_version: RESULT_VERSION,
-        seed: 424242,
-        counts: ResolutionCounts {
-            events: events.len(),
-            kills,
-            saves,
-        },
-        events,
-        started_at: 100,
-        finished_at: 200,
     }
 }
 
@@ -135,11 +119,26 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         ActorId::Slot("slot_3".into()),
         23,
     ));
+    evs.push(EventInput::new(
+        "PostSubmitted",
+        1,
+        serde_json::json!({
+            "channel_id": "main",
+            "slot_or_user": { "slot": "slot_2" },
+            "body": "I think slot 1 is caught.",
+            "phase_id": "D01",
+        }),
+        ActorId::Slot("slot_2".into()),
+        24,
+    ));
 
     // Night-1 resolution: Mafia kills slot_3, no protection → PlayerKilled.
     let state = StateSnapshot {
+        phase_id: "N01".into(),
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
         slots: vec![
             slot("slot_1", "mafia_goon", "mafia"),
             slot("slot_2", "doctor", "town"),
@@ -147,6 +146,21 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
             slot("slot_4", "vanilla_townie", "town"),
             slot("slot_5", "vanilla_townie", "town"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let subs = vec![submission(
         "sub_001",
@@ -155,27 +169,30 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         "slot_3",
         1,
     )];
-    let inner = resolve(ResolutionInput {
+    let output = resolve(ResolutionInput {
         game_id: "game_e2e".into(),
         phase_id: "N01".into(),
+        run_id: "run_e2e_001".into(),
         state,
         submissions: subs,
+        day_phase_inputs: Default::default(),
         pack: pack.clone(),
         seed: 424242,
+        logical_time: 100,
     });
     // Sanity: the engine actually killed slot_3.
     assert!(
-        inner.iter().any(
-            |e| matches!(e, domain::InnerEvent::PlayerKilled { slot_id, .. } if slot_id == "slot_3")
+        output.applied.events.iter().any(
+            |indexed| matches!(&indexed.event, domain::InnerEvent::PlayerKilled { slot_id, .. } if slot_id == "slot_3")
         ),
-        "expected the resolver to kill slot_3, got {inner:?}"
+        "expected the resolver to kill slot_3, got {:?}",
+        output.applied.events
     );
 
-    let applied = wrap(inner);
     evs.push(EventInput::new(
         "ResolutionApplied",
         1,
-        serde_json::to_value(&applied).unwrap(),
+        serde_json::to_value(&output.applied).unwrap(),
         ActorId::System,
         200,
     ));
@@ -208,11 +225,24 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
         "extra townies alive"
     );
 
-    // role_key folded from RoleAssigned; not revealed (no GameCompleted/WinReached).
+    // role_key folded from RoleAssigned; ordinary death flips reveal only the
+    // killed slot while living roles remain hidden.
     assert_eq!(by_id["slot_2"].role_key.as_deref(), Some("doctor"));
     assert!(
         !by_id["slot_1"].role_revealed,
-        "roles hidden until end-game"
+        "living roles remain hidden until end-game"
+    );
+    assert!(
+        !by_id["slot_1"].alignment_revealed,
+        "living alignments remain hidden until end-game"
+    );
+    assert!(
+        by_id["slot_3"].role_revealed,
+        "killed slot should be revealed by the ordinary death flip"
+    );
+    assert!(
+        by_id["slot_3"].alignment_revealed,
+        "killed slot alignment should be revealed by the ordinary death flip"
     );
 
     // votecount (running, ballot-keyed, UNWEIGHTED): D01 → slot_1 has 1 current
@@ -229,6 +259,446 @@ async fn engine_store_projection(pool: sqlx::PgPool) {
         "2 ballots - 1 withdrawn = 1"
     );
     assert_eq!(tally[&("D01".into(), "slot_3".into())], 1);
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .unwrap();
+    assert_eq!(thread.posts.len(), 2);
+    let player_post = thread
+        .posts
+        .iter()
+        .find(|post| post.author_slot.as_deref() == Some("slot_2"))
+        .expect("slot_2 player post");
+    assert_eq!(player_post.phase_id, "D01");
+    assert_eq!(player_post.body, "I think slot 1 is caught.");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn official_day_vote_outcome_projection_records_and_rebuilds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let outcome = domain::DayVoteOutcome {
+        status: domain::VoteStatus::NoLynch,
+        winner: None,
+        contenders: vec!["no_lynch".into()],
+        tallies: BTreeMap::from([("no_lynch".into(), 2.0)]),
+        votes: BTreeMap::from([
+            ("slot_1".into(), "no_lynch".into()),
+            ("slot_2".into(), "no_lynch".into()),
+        ]),
+        weights: BTreeMap::from([("slot_1".into(), 1.0), ("slot_2".into(), 1.0)]),
+        majority: Some(2.0),
+        thresholds: BTreeMap::from([("slot_1".into(), 2.0), ("slot_2".into(), 2.0)]),
+        total_weight: 2.0,
+        tiebreak: None,
+        reason: Some("no_lynch reached the vote threshold".into()),
+    };
+    let applied = ResolutionApplied {
+        phase_id: "D01".into(),
+        phase_kind: PhaseKind::Day,
+        phase_number: 1,
+        run_id: "run_day_vote_outcome_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 22,
+        started_at: 22,
+        finished_at: 23,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::DayVoteOutcome(outcome),
+            },
+            empty_phase_announcement(1, "D01"),
+        ],
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(applied).unwrap(),
+            ActorId::System,
+            9,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let rows = day_vote_outcomes(&pool, game).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].phase_id, "D01");
+    assert_eq!(rows[0].source_seq, 1);
+    assert_eq!(rows[0].status, "NoLynch");
+    assert_eq!(rows[0].winner_slot, None);
+    assert_eq!(rows[0].votes["slot_1"], "no_lynch");
+    assert_eq!(rows[0].tallies["no_lynch"], 2.0);
+
+    let before = serde_json::to_string(&rows).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before,
+        serde_json::to_string(&day_vote_outcomes(&pool, game).await.unwrap()).unwrap(),
+        "official day vote outcome rebuild must match incremental fold"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn effect_notifications_project_per_audience_slot_and_rebuild(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "N00".into(),
+        phase_kind: PhaseKind::Night,
+        phase_number: 0,
+        run_id: "run_notifications_001".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 10,
+        started_at: 10,
+        finished_at: 11,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::EffectNotification {
+                    effect: "lovers_link".into(),
+                    status: "link_001".into(),
+                    audience: vec!["slot_2".into(), "slot_3".into()],
+                },
+            },
+            empty_phase_announcement(1, "N00"),
+        ],
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "SlotAdded",
+                1,
+                serde_json::json!({ "slot_id": "slot_2" }),
+                ActorId::Host,
+                1,
+            ),
+            EventInput::new(
+                "SlotAdded",
+                1,
+                serde_json::json!({ "slot_id": "slot_3" }),
+                ActorId::Host,
+                2,
+            ),
+            EventInput::new(
+                "ResolutionApplied",
+                1,
+                serde_json::to_value(applied).unwrap(),
+                ActorId::System,
+                3,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let notices = player_notifications(&pool, game).await.unwrap();
+    assert_eq!(notices.len(), 2);
+    assert_eq!(notices[0].phase_id, "N00");
+    assert_eq!(notices[0].event_index, 0);
+    assert_eq!(notices[0].audience_slot, "slot_2");
+    assert_eq!(notices[0].effect, "lovers_link");
+    assert_eq!(notices[0].status, "link_001");
+    assert_eq!(notices[1].audience_slot, "slot_3");
+
+    let notices_before = serde_json::to_string(&notices).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        notices_before,
+        serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
+        "player_notification rebuild must preserve explicit-audience notices"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_prompt_projection_records_and_rebuilds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "D01".into(),
+        phase_kind: PhaseKind::Day,
+        phase_number: 1,
+        run_id: "run_host_prompt_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 101,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::HostPromptIssued(domain::HostPromptIssued {
+                    prompt_id: "D01:skip_next_day:slot_1".into(),
+                    kind: "skip_next_day".into(),
+                    subject: Some("slot_1".into()),
+                    reason: "beloved_princess_lynched".into(),
+                    phase_id: "D01".into(),
+                    phase_kind: PhaseKind::Day,
+                    phase_number: 1,
+                    metadata: serde_json::json!({
+                        "policy": "beloved_princess",
+                        "death_cause": "lynch",
+                        "role": "beloved_princess"
+                    }),
+                }),
+            },
+            empty_phase_announcement(1, "D01"),
+        ],
+        started_at: 10,
+        finished_at: 11,
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[
+            EventInput::new(
+                "SlotAdded",
+                1,
+                serde_json::json!({ "slot_id": "slot_1" }),
+                ActorId::Host,
+                1,
+            ),
+            EventInput::new(
+                "ResolutionApplied",
+                1,
+                serde_json::to_value(applied).unwrap(),
+                ActorId::System,
+                2,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let before = host_prompts(&pool, game).await.unwrap();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].phase_id, "D01");
+    assert_eq!(before[0].event_index, 0);
+    assert_eq!(before[0].prompt_id, "D01:skip_next_day:slot_1");
+    assert_eq!(before[0].kind, "skip_next_day");
+    assert_eq!(before[0].subject_slot.as_deref(), Some("slot_1"));
+    assert_eq!(before[0].reason, "beloved_princess_lynched");
+    assert_eq!(before[0].phase_kind, "Day");
+    assert_eq!(before[0].phase_number, 1);
+    assert_eq!(before[0].metadata["policy"], "beloved_princess");
+    assert_eq!(before[0].status, "pending");
+    assert_eq!(before[0].decision, None);
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "HostPromptResolved",
+            1,
+            serde_json::json!({
+                "prompt_id": "D01:skip_next_day:slot_1",
+                "phase_id": "D01",
+                "kind": "skip_next_day",
+                "reason": "beloved_princess_lynched",
+                "decision": {
+                    "kind": "acknowledge",
+                    "metadata": { "skip_phase": "D02" }
+                },
+                "resolved_by": "host_h"
+            }),
+            ActorId::Host,
+            3,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let before = host_prompts(&pool, game).await.unwrap();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].status, "resolved");
+    assert_eq!(before[0].resolved_by.as_deref(), Some("host_h"));
+    assert_eq!(before[0].resolved_at, Some(3));
+    assert_eq!(
+        before[0].decision.as_ref().unwrap()["metadata"]["skip_phase"],
+        "D02"
+    );
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "PhaseAdvanced",
+            1,
+            serde_json::json!({
+                "phase_id": "N02",
+                "source_prompt_id": "D01:skip_next_day:slot_1",
+                "source_phase_id": "D01",
+                "skipped_phase_id": "D02",
+                "reason": "skip_next_day"
+            }),
+            ActorId::Host,
+            4,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let controls = host_phase_controls(&pool, game).await.unwrap();
+    assert_eq!(controls.len(), 1);
+    assert_eq!(controls[0].prompt_id, "D01:skip_next_day:slot_1");
+    assert_eq!(controls[0].prompt_kind.as_deref(), Some("skip_next_day"));
+    assert_eq!(
+        controls[0].prompt_reason.as_deref(),
+        Some("beloved_princess_lynched")
+    );
+    assert_eq!(controls[0].source_phase_id, "D01");
+    assert_eq!(controls[0].target_phase_id, "N02");
+    assert_eq!(controls[0].skipped_phase_id.as_deref(), Some("D02"));
+    assert_eq!(controls[0].reason, "skip_next_day");
+    assert_eq!(controls[0].resolved_by.as_deref(), Some("host_h"));
+    assert_eq!(controls[0].resolved_at, Some(3));
+    assert_eq!(controls[0].occurred_at, 4);
+
+    let before_json = serde_json::to_string(&before).unwrap();
+    let controls_before_json = serde_json::to_string(&controls).unwrap();
+    let audit = audit_rebuild(&pool, game).await.unwrap();
+    assert!(
+        audit.ok,
+        "rollback replay audit should find byte-identical projection rows: {audit:?}"
+    );
+    let control_audit = audit
+        .tables
+        .iter()
+        .find(|table| table.table == "host_phase_control")
+        .expect("host_phase_control audit table");
+    assert_eq!(control_audit.before_rows, 1);
+    assert_eq!(control_audit.rebuilt_rows, 1);
+    assert_eq!(
+        controls_before_json,
+        serde_json::to_string(&host_phase_controls(&pool, game).await.unwrap()).unwrap(),
+        "rollback replay audit must not mutate live projection rows"
+    );
+
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before_json,
+        serde_json::to_string(&host_prompts(&pool, game).await.unwrap()).unwrap(),
+        "host_prompt rebuild must preserve operator prompts"
+    );
+    assert_eq!(
+        controls_before_json,
+        serde_json::to_string(&host_phase_controls(&pool, game).await.unwrap()).unwrap(),
+        "host_phase_control rebuild must preserve prompt phase-control audit rows"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn phase_advanced_validates_host_prompt_phase_control_and_rolls_back(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "GameStarted",
+            1,
+            serde_json::json!({ "phase_id": "D01" }),
+            ActorId::Host,
+            1,
+        )],
+    )
+    .await
+    .unwrap();
+
+    for (payload, expected) in [
+        (
+            serde_json::json!({
+                "phase_id": "N02",
+                "source_prompt_id": "",
+                "source_phase_id": "D01",
+                "skipped_phase_id": "D02",
+                "reason": "skip_next_day"
+            }),
+            "source_prompt_id must not be empty",
+        ),
+        (
+            serde_json::json!({
+                "phase_id": "N02",
+                "source_prompt_id": "D01:skip_next_day:slot_1",
+                "skipped_phase_id": "D02",
+                "reason": "skip_next_day"
+            }),
+            "source_phase_id must not be empty",
+        ),
+        (
+            serde_json::json!({
+                "phase_id": "N02",
+                "source_prompt_id": "D01:skip_next_day:slot_1",
+                "source_phase_id": "D01",
+                "skipped_phase_id": "",
+                "reason": "skip_next_day"
+            }),
+            "skipped_phase_id must not be empty",
+        ),
+    ] {
+        let err = append_and_project(
+            &pool,
+            game,
+            &[EventInput::new(
+                "PhaseAdvanced",
+                1,
+                payload,
+                ActorId::Host,
+                2,
+            )],
+        )
+        .await
+        .expect_err("malformed host-prompt phase-control payload should be rejected");
+        assert!(
+            err.to_string().contains(expected),
+            "expected error containing {expected:?}, got {err}"
+        );
+        assert_eq!(
+            phase_state(&pool, game).await.unwrap().unwrap().phase_id,
+            "D01",
+            "malformed PhaseAdvanced must roll back before moving phase_state"
+        );
+    }
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "PhaseAdvanced",
+            1,
+            serde_json::json!({
+                "phase_id": "N02",
+                "source_prompt_id": "D01:skip_next_day:slot_1",
+                "source_phase_id": "D01",
+                "skipped_phase_id": "D02",
+                "reason": "skip_next_day"
+            }),
+            ActorId::Host,
+            2,
+        )],
+    )
+    .await
+    .expect("valid host-prompt phase-control payload should project");
+    assert_eq!(
+        phase_state(&pool, game).await.unwrap().unwrap().phase_id,
+        "N02"
+    );
 }
 
 /// Rebuild determinism (REQUIRED, doc 02): after building projections
@@ -245,14 +715,21 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
     // Snapshot the incrementally-built projections.
     let vc_before = votecount(&pool, game).await.unwrap();
     let ss_before = slot_state(&pool, game).await.unwrap();
+    let thread_before = projections::thread_view(&pool, game, None, 50)
+        .await
+        .unwrap();
     let vc_before_json = serde_json::to_string(&vc_before).unwrap();
     let ss_before_json = serde_json::to_string(&ss_before).unwrap();
+    let thread_before_json = serde_json::to_string(&thread_before).unwrap();
 
     // Rebuild from the log alone.
     rebuild(&pool, game).await.unwrap();
 
     let vc_after = votecount(&pool, game).await.unwrap();
     let ss_after = slot_state(&pool, game).await.unwrap();
+    let thread_after = projections::thread_view(&pool, game, None, 50)
+        .await
+        .unwrap();
 
     // Byte-for-byte identical (same canonical ordering on both reads).
     assert_eq!(
@@ -265,6 +742,11 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
         serde_json::to_string(&ss_after).unwrap(),
         "slot_state: rebuild != incremental"
     );
+    assert_eq!(
+        thread_before_json,
+        serde_json::to_string(&thread_after).unwrap(),
+        "thread_view: rebuild != incremental"
+    );
 
     // And rebuilding twice is also identical (idempotent).
     rebuild(&pool, game).await.unwrap();
@@ -273,6 +755,354 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
         serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
         "second rebuild diverged"
     );
+    assert_eq!(
+        thread_before_json,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "second thread_view rebuild diverged"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "N01".into(),
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        run_id: "run_effect_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 99,
+        counts: ResolutionCounts {
+            events: 4,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::EffectsMarked {
+                    effect: "doused".into(),
+                    target: "slot_1".into(),
+                    actor: "slot_a".into(),
+                    source_action: Some("douse_n01".into()),
+                    phase_id: Some("N01".into()),
+                    phase_kind: Some(PhaseKind::Night),
+                    phase_number: Some(1),
+                    duration: domain::EffectDuration::Persistent,
+                    visibility: domain::EffectVisibility::Target,
+                },
+            },
+            IndexedEvent {
+                index: 1,
+                event: InnerEvent::EffectsMarked {
+                    effect: "doused".into(),
+                    target: "slot_2".into(),
+                    actor: "slot_a".into(),
+                    source_action: Some("douse_n01".into()),
+                    phase_id: Some("N01".into()),
+                    phase_kind: Some(PhaseKind::Night),
+                    phase_number: Some(1),
+                    duration: domain::EffectDuration::Persistent,
+                    visibility: domain::EffectVisibility::Target,
+                },
+            },
+            IndexedEvent {
+                index: 2,
+                event: InnerEvent::EffectsCleared {
+                    effect: "doused".into(),
+                    targets: vec!["slot_1".into()],
+                    actor: "slot_a".into(),
+                },
+            },
+            empty_phase_announcement(3, "N01"),
+        ],
+        started_at: 10,
+        finished_at: 11,
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(applied).unwrap(),
+            ActorId::System,
+            10,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let before = slot_effects(&pool, game).await.unwrap();
+    assert_eq!(
+        before
+            .iter()
+            .map(|effect| (
+                effect.slot_id.as_str(),
+                effect.effect.as_str(),
+                effect.source_slot.as_str(),
+                effect.source_action.as_deref(),
+                effect.phase_id.as_deref(),
+                effect.phase_kind.as_deref(),
+                effect.phase_number,
+                effect.duration.as_str(),
+                effect.visibility.as_str(),
+            ))
+            .collect::<Vec<_>>(),
+        vec![(
+            "slot_2",
+            "doused",
+            "slot_a",
+            Some("douse_n01"),
+            Some("N01"),
+            Some("Night"),
+            Some(1),
+            "Persistent",
+            "Target",
+        )],
+        "EffectsCleared removes only the named targets and preserves source metadata"
+    );
+
+    let before_json = serde_json::to_string(&before).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before_json,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect: rebuild != incremental"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "N01".into(),
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        run_id: "run_grant_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 100,
+        counts: ResolutionCounts {
+            events: 3,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::ActionGranted {
+                    grant_id: "extra_action".into(),
+                    kind: GrantKind::ExtraAction,
+                    actor: "slot_1".into(),
+                    target: "slot_2".into(),
+                    source_action: "motivate_n01".into(),
+                    uses: 1,
+                    vote_weight: None,
+                    phase_id: "N01".into(),
+                    phase_kind: PhaseKind::Night,
+                    phase_number: 1,
+                },
+            },
+            IndexedEvent {
+                index: 1,
+                event: InnerEvent::ActionGrantConsumed {
+                    grant_id: "extra_action".into(),
+                    actor: "slot_2".into(),
+                    action_id: "cop_extra_n02".into(),
+                    source_action: "motivate_n01".into(),
+                    phase_id: "N02".into(),
+                    phase_kind: PhaseKind::Night,
+                    phase_number: 2,
+                    remaining_uses: 0,
+                },
+            },
+            empty_phase_announcement(2, "N01"),
+        ],
+        started_at: 10,
+        finished_at: 11,
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(applied).unwrap(),
+            ActorId::System,
+            10,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let before = action_grants(&pool, game).await.unwrap();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0].slot_id, "slot_2");
+    assert_eq!(before[0].grant_id, "extra_action");
+    assert_eq!(before[0].kind, "ExtraAction");
+    assert_eq!(before[0].source_slot, "slot_1");
+    assert_eq!(before[0].source_action, "motivate_n01");
+    assert_eq!(before[0].uses, 0);
+
+    let before_json = serde_json::to_string(&before).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before_json,
+        serde_json::to_string(&action_grants(&pool, game).await.unwrap()).unwrap(),
+        "action_grant: rebuild != incremental"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn action_counter_projection_records_and_rebuilds(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "N01".into(),
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        run_id: "run_action_counter_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 101,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::ActionUseCounted {
+                    counter_id: "x_shot:night_kill".into(),
+                    actor: "slot_1".into(),
+                    template_id: "night_kill".into(),
+                    consumed_action: "vig_n01".into(),
+                    cadence_policy: "x_shot".into(),
+                    phase_scope: "game".into(),
+                    limit: 1,
+                    used: 1,
+                    remaining: 0,
+                    phase_id: "N01".into(),
+                    phase_kind: PhaseKind::Night,
+                    phase_number: 1,
+                },
+            },
+            empty_phase_announcement(1, "N01"),
+        ],
+        started_at: 10,
+        finished_at: 11,
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(applied).unwrap(),
+            ActorId::System,
+            10,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let before = action_counters(&pool, game).await.unwrap();
+    assert_eq!(before.len(), 1);
+    let counter = &before[0];
+    assert_eq!(counter.slot_id, "slot_1");
+    assert_eq!(counter.counter_id, "x_shot:night_kill");
+    assert_eq!(counter.template_id, "night_kill");
+    assert_eq!(counter.consumed_action, "vig_n01");
+    assert_eq!(counter.cadence_policy, "x_shot");
+    assert_eq!(counter.phase_scope, "game");
+    assert_eq!(counter.limit, 1);
+    assert_eq!(counter.used, 1);
+    assert_eq!(counter.remaining, 0);
+    assert_eq!(counter.phase_id, "N01");
+    assert_eq!(counter.phase_kind, "Night");
+    assert_eq!(counter.phase_number, 1);
+
+    let before_json = serde_json::to_string(&before).unwrap();
+    rebuild(&pool, game).await.unwrap();
+    assert_eq!(
+        before_json,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter: rebuild != incremental"
+    );
+}
+
+/// PostSubmitted folds into `thread_view` with stable event cursors. The public
+/// main thread ignores private-channel posts and pages newest windows while
+/// returning rows oldest-to-newest for rendering.
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let mut events = Vec::new();
+    for (idx, body) in [
+        "first visible post",
+        "second visible post",
+        "third visible post",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        events.push(EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "main",
+                "slot_or_user": { "slot": "slot_1" },
+                "body": body,
+                "phase_id": "D01",
+            }),
+            ActorId::Slot("slot_1".into()),
+            30 + idx as i64,
+        ));
+    }
+    events.push(EventInput::new(
+        "PostSubmitted",
+        1,
+        serde_json::json!({
+            "channel_id": "scum_chat",
+            "slot_or_user": { "slot": "slot_2" },
+            "body": "private post",
+            "phase_id": "D01",
+        }),
+        ActorId::Slot("slot_2".into()),
+        40,
+    ));
+
+    append_and_project(&pool, game, &events).await.unwrap();
+
+    let latest = projections::thread_view(&pool, game, None, 2)
+        .await
+        .unwrap();
+    assert_eq!(
+        latest
+            .posts
+            .iter()
+            .map(|post| post.body.as_str())
+            .collect::<Vec<_>>(),
+        vec!["second visible post", "third visible post"]
+    );
+    assert!(
+        latest.next_before_seq.is_some(),
+        "a full page with an extra older row exposes an older-page cursor"
+    );
+
+    let older = projections::thread_view(&pool, game, latest.next_before_seq, 2)
+        .await
+        .unwrap();
+    assert_eq!(older.posts.len(), 1);
+    assert_eq!(older.posts[0].body, "first visible post");
+    assert_eq!(older.next_before_seq, None);
 }
 
 /// `append_and_project` is one transaction: a conflicting concurrent append

@@ -10,6 +10,21 @@ pub enum VoteTarget {
     NoLynch,
 }
 
+/// Host/admin decision for a durable engine prompt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum HostPromptDecision {
+    /// Select a slot for a prompt that asks the host to choose a player, such
+    /// as a PK / host-decided tied vote.
+    SelectSlot { slot: String },
+    /// Mark an operational prompt handled without emitting further engine
+    /// effects. Useful for prompt kinds that drive external workflow.
+    Acknowledge {
+        #[serde(default)]
+        metadata: serde_json::Value,
+    },
+}
+
 /// The commands the pipeline accepts. Slice commands + the minimal bootstrap
 /// lifecycle needed to stand a game up in tests (kept minimal, host-gated where
 /// appropriate). `game` is the stream id (= game id).
@@ -32,16 +47,56 @@ pub enum Command {
         slot: String,
         role_key: String,
     },
+    /// Set a slot's resolver-visible lifecycle. Host-gated.
+    SetSlotStatus {
+        game: Uuid,
+        slot: String,
+        status: domain::SlotLifecycle,
+    },
+    /// Add a pack-visible status tag to a slot. Host-gated.
+    AddSlotStatusTag {
+        game: Uuid,
+        slot: String,
+        tag: String,
+    },
+    /// Remove a pack-visible status tag from a slot. Host-gated.
+    RemoveSlotStatusTag {
+        game: Uuid,
+        slot: String,
+        tag: String,
+    },
     /// Delegate cohost authority to a user. Host-gated.
     AddCohost { game: Uuid, user: String },
     /// Freeze the roster and start the game at `phase`. Host-gated.
     StartGame { game: Uuid, phase: String },
     /// Open a Day phase (the votable window). Host-gated.
     OpenDayPhase { game: Uuid, phase: String },
+    /// Advance from a resolved, locked phase to the next phase declared by the
+    /// pack cadence. Host-gated.
+    AdvancePhase { game: Uuid },
+    /// Record deadline-expiry evidence and advance from a resolved, locked
+    /// phase through the same pack-cadence derivation. Host-gated until a
+    /// scheduler principal exists.
+    AdvancePhaseByDeadline {
+        game: Uuid,
+        phase: String,
+        observed_at: i64,
+    },
     /// Lock the main thread (votes/posts blocked). Host-gated.
     LockThread { game: Uuid },
     /// Unlock the main thread. Host-gated.
     UnlockThread { game: Uuid },
+    /// Resolve the current phase by loading snapshot + submissions and applying
+    /// the domain resolver. Host-gated.
+    ResolvePhase { game: Uuid, seed: u64 },
+    /// Mark the game complete and reveal final role/alignment facts. Host-gated.
+    CompleteGame { game: Uuid },
+    /// Resolve a durable host/admin prompt emitted by the engine. Host-gated.
+    ResolveHostPrompt {
+        game: Uuid,
+        prompt_id: String,
+        decision: HostPromptDecision,
+    },
 
     // ── slice commands ──
     /// Cast/overwrite a vote as `actor_slot`. Requires `SlotOccupant(actor_slot)`.
@@ -52,6 +107,22 @@ pub enum Command {
     },
     /// Withdraw `actor_slot`'s current ballot. Requires `SlotOccupant`.
     WithdrawVote { game: Uuid, actor_slot: String },
+    /// Submit or replace an action choice as `actor_slot`. Requires `SlotOccupant(actor_slot)`.
+    SubmitAction {
+        game: Uuid,
+        action_id: String,
+        actor_slot: String,
+        template_id: String,
+        targets: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        grant_id: Option<String>,
+    },
+    /// Withdraw an active action choice. Requires `SlotOccupant(actor_slot)`.
+    WithdrawAction {
+        game: Uuid,
+        action_id: String,
+        actor_slot: String,
+    },
     /// Post as `actor_slot` (attributed to the slot). Requires `SlotOccupant`.
     SubmitPost {
         game: Uuid,
@@ -94,9 +165,15 @@ pub enum Reject {
     /// The acting slot is dead / not in play.
     #[error("slot not alive")]
     SlotNotAlive,
+    /// The acting slot is alive but has no voting authority under the current pack state.
+    #[error("vote not allowed")]
+    VoteNotAllowed,
     /// The vote/action target is invalid.
     #[error("invalid target")]
     InvalidTarget,
+    /// The referenced role key does not exist in the game's pack.
+    #[error("invalid role: {0}")]
+    InvalidRole(String),
     /// Optimistic-concurrency conflict — reload, revalidate, RETRY (bounded).
     #[error("stream conflict (retryable)")]
     StreamConflict,
@@ -106,6 +183,15 @@ pub enum Reject {
     /// The referenced slot does not exist in the game.
     #[error("unknown slot")]
     UnknownSlot,
+    /// The referenced host/admin prompt does not exist.
+    #[error("unknown prompt")]
+    UnknownPrompt,
+    /// The host/admin prompt has already been resolved.
+    #[error("prompt already resolved")]
+    PromptAlreadyResolved,
+    /// The prompt decision is malformed for the prompt kind.
+    #[error("invalid prompt decision")]
+    InvalidPromptDecision,
     /// An unexpected internal/storage error (not a domain rejection).
     #[error("internal error: {0}")]
     Internal(String),
