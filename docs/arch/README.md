@@ -38,6 +38,7 @@ proceed without relitigating settled decisions.
 8. [08-roadmap](08-roadmap.md) — the first vertical slice and build order
 9. [09-engine-and-packs](09-engine-and-packs.md) — the multi-ruleset resolution engine, IR, and packs
 10. [10-event-schema](10-event-schema.md) — concrete event taxonomy & result contract
+11. [11-engine-port-checklist](11-engine-port-checklist.md) — source-derived checklist and build order for porting im-human day/night resolution
 
 ## The one idea everything hangs on
 

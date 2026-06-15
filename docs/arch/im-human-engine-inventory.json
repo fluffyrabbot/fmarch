@@ -1,0 +1,3754 @@
+{
+  "actions": [
+    {
+      "culture": "chinese_structured",
+      "name": "link_lovers",
+      "primitives": [
+        "mark"
+      ],
+      "role": "cupid",
+      "source": "v4/drafts/chinese/cupid.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "night_guard",
+      "primitives": [
+        "guard"
+      ],
+      "role": "guard",
+      "source": "v4/drafts/chinese/guard.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "knight_duel",
+      "primitives": [
+        "kill"
+      ],
+      "role": "knight",
+      "source": "v4/drafts/chinese/knight.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "prophet",
+      "source": "v4/drafts/chinese/prophet.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "sheriff_election",
+      "primitives": [
+        "info"
+      ],
+      "role": "sheriff_badge_helper",
+      "source": "v4/drafts/chinese/sheriff_badge_helper.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "sheriff_pass",
+      "primitives": [
+        "info"
+      ],
+      "role": "sheriff_badge_helper",
+      "source": "v4/drafts/chinese/sheriff_badge_helper.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "sheriff_destroy",
+      "primitives": [
+        "info"
+      ],
+      "role": "sheriff_badge_helper",
+      "source": "v4/drafts/chinese/sheriff_badge_helper.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "day_self_destruct",
+      "primitives": [
+        "kill"
+      ],
+      "role": "white_wolf_king",
+      "source": "v4/drafts/chinese/white_wolf_king.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "night_kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "white_wolf_king",
+      "source": "v4/drafts/chinese/white_wolf_king.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "heal_potion",
+      "primitives": [
+        "protect"
+      ],
+      "role": "witch",
+      "source": "v4/drafts/chinese/witch.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "poison_potion",
+      "primitives": [
+        "mark"
+      ],
+      "role": "witch",
+      "source": "v4/drafts/chinese/witch.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "night_kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "wolf",
+      "source": "v4/drafts/chinese/wolf.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "beauty_mark",
+      "primitives": [
+        "mark"
+      ],
+      "role": "wolf_beauty",
+      "source": "v4/drafts/chinese/wolf_beauty.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "reveal_town",
+      "primitives": [
+        "info"
+      ],
+      "role": "innocent_child",
+      "source": "v4/drafts/mafia_universe/innocent_child.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_alignment_cop",
+      "source": "v4/drafts/mafia_universe/mafia_alignment_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mark_alignment",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_alignment_oracle",
+      "source": "v4/drafts/mafia_universe/mafia_alignment_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "douse",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_arsonist",
+      "source": "v4/drafts/mafia_universe/mafia_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "ignite",
+      "primitives": [
+        "ignite"
+      ],
+      "role": "mafia_arsonist",
+      "source": "v4/drafts/mafia_universe/mafia_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "bodyguard",
+      "primitives": [
+        "protect",
+        "guard",
+        "trigger"
+      ],
+      "role": "mafia_bodyguard",
+      "source": "v4/drafts/mafia_universe/mafia_bodyguard.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "bus_drive",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "mafia_bus_driver",
+      "source": "v4/drafts/mafia_universe/mafia_bus_driver.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "commute",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "mafia_commuter",
+      "source": "v4/drafts/mafia_universe/mafia_commuter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_cop",
+      "source": "v4/drafts/mafia_universe/mafia_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "day_desperado",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_day_desperado",
+      "source": "v4/drafts/mafia_universe/mafia_day_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_day_vigilante",
+      "source": "v4/drafts/mafia_universe/mafia_day_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "mafia_doctor",
+      "source": "v4/drafts/mafia_universe/mafia_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "empower",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_empowerer",
+      "source": "v4/drafts/mafia_universe/mafia_empowerer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "extinguish",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_firefighter",
+      "source": "v4/drafts/mafia_universe/mafia_firefighter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "result_mod",
+      "primitives": [
+        "result_mod",
+        "mark"
+      ],
+      "role": "mafia_framer",
+      "source": "v4/drafts/mafia_universe/mafia_framer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "send_fruit",
+      "primitives": [
+        "info"
+      ],
+      "role": "mafia_fruit_vendor",
+      "source": "v4/drafts/mafia_universe/mafia_fruit_vendor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "full_role_scan",
+      "primitives": [
+        "info"
+      ],
+      "role": "mafia_full_cop",
+      "source": "v4/drafts/mafia_universe/mafia_full_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_goon",
+      "source": "v4/drafts/mafia_universe/mafia_goon.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "gunsmith",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_gunsmith",
+      "source": "v4/drafts/mafia_universe/mafia_gunsmith.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "cure_poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_healer",
+      "source": "v4/drafts/mafia_universe/mafia_healer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "grant_item",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "mafia_inventor",
+      "source": "v4/drafts/mafia_universe/mafia_inventor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/mafia_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "mafia_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/mafia_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "mafia_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/mafia_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "track",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/mafia_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "jail",
+      "primitives": [
+        "protect",
+        "block"
+      ],
+      "role": "mafia_jailkeeper",
+      "source": "v4/drafts/mafia_universe/mafia_jailkeeper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "janitor_kill",
+      "primitives": [
+        "kill",
+        "conceal"
+      ],
+      "role": "mafia_janitor",
+      "source": "v4/drafts/mafia_universe/mafia_janitor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "motion_detector",
+      "primitives": [
+        "info"
+      ],
+      "role": "mafia_motion_detector",
+      "source": "v4/drafts/mafia_universe/mafia_motion_detector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "motivate",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "mafia_motivator",
+      "source": "v4/drafts/mafia_universe/mafia_motivator.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "neapolitan",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_neapolitan",
+      "source": "v4/drafts/mafia_universe/mafia_neapolitan.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "night_desperado",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_night_desperado",
+      "source": "v4/drafts/mafia_universe/mafia_night_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_ninja",
+      "source": "v4/drafts/mafia_universe/mafia_ninja.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "parity_scan",
+      "primitives": [
+        "investigate",
+        "parity"
+      ],
+      "role": "mafia_parity_cop",
+      "source": "v4/drafts/mafia_universe/mafia_parity_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "cure_poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_poison_doctor",
+      "source": "v4/drafts/mafia_universe/mafia_poison_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_poisoner",
+      "source": "v4/drafts/mafia_universe/mafia_poisoner.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "power_role_kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_power_role_killer",
+      "source": "v4/drafts/mafia_universe/mafia_power_role_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "redirect",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "mafia_redirector",
+      "source": "v4/drafts/mafia_universe/mafia_redirector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "role_scan",
+      "primitives": [
+        "info"
+      ],
+      "role": "mafia_role_cop",
+      "source": "v4/drafts/mafia_universe/mafia_role_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mark_role",
+      "primitives": [
+        "mark"
+      ],
+      "role": "mafia_role_oracle",
+      "source": "v4/drafts/mafia_universe/mafia_role_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "mafia_roleblocker",
+      "source": "v4/drafts/mafia_universe/mafia_roleblocker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "rolestop",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "mafia_rolestopper",
+      "source": "v4/drafts/mafia_universe/mafia_rolestopper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "strongman_kill",
+      "primitives": [
+        "kill",
+        "pierce"
+      ],
+      "role": "mafia_strongman",
+      "source": "v4/drafts/mafia_universe/mafia_strongman.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "track",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_tracker",
+      "source": "v4/drafts/mafia_universe/mafia_tracker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "inherit_role",
+      "primitives": [
+        "convert"
+      ],
+      "role": "mafia_universal_backup",
+      "source": "v4/drafts/mafia_universe/mafia_universal_backup.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_vanilla",
+      "primitives": [
+        "info"
+      ],
+      "role": "mafia_vanilla_cop",
+      "source": "v4/drafts/mafia_universe/mafia_vanilla_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_vigilante",
+      "source": "v4/drafts/mafia_universe/mafia_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "voyeur",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_voyeur",
+      "source": "v4/drafts/mafia_universe/mafia_voyeur.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "watch",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "mafia_watcher",
+      "source": "v4/drafts/mafia_universe/mafia_watcher.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "serial_killer",
+      "source": "v4/drafts/mafia_universe/serial_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_alignment_cop",
+      "source": "v4/drafts/mafia_universe/town_alignment_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mark_alignment",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_alignment_oracle",
+      "source": "v4/drafts/mafia_universe/town_alignment_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "douse",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_arsonist",
+      "source": "v4/drafts/mafia_universe/town_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "ignite",
+      "primitives": [
+        "ignite"
+      ],
+      "role": "town_arsonist",
+      "source": "v4/drafts/mafia_universe/town_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "bodyguard",
+      "primitives": [
+        "protect",
+        "guard",
+        "trigger"
+      ],
+      "role": "town_bodyguard",
+      "source": "v4/drafts/mafia_universe/town_bodyguard.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "bus_drive",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "town_bus_driver",
+      "source": "v4/drafts/mafia_universe/town_bus_driver.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "commute",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "town_commuter",
+      "source": "v4/drafts/mafia_universe/town_commuter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_cop",
+      "source": "v4/drafts/mafia_universe/town_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "day_desperado",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_day_desperado",
+      "source": "v4/drafts/mafia_universe/town_day_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_day_vigilante",
+      "source": "v4/drafts/mafia_universe/town_day_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "town_doctor",
+      "source": "v4/drafts/mafia_universe/town_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "empower",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_empowerer",
+      "source": "v4/drafts/mafia_universe/town_empowerer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "extinguish",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_firefighter",
+      "source": "v4/drafts/mafia_universe/town_firefighter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "extinguish",
+      "primitives": [],
+      "role": "town_firefighter_preempt",
+      "source": "v4/drafts/mafia_universe/town_firefighter_preempt.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "result_mod",
+      "primitives": [
+        "result_mod",
+        "mark"
+      ],
+      "role": "town_framer",
+      "source": "v4/drafts/mafia_universe/town_framer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "send_fruit",
+      "primitives": [
+        "info"
+      ],
+      "role": "town_fruit_vendor",
+      "source": "v4/drafts/mafia_universe/town_fruit_vendor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "full_role_scan",
+      "primitives": [
+        "info"
+      ],
+      "role": "town_full_cop",
+      "source": "v4/drafts/mafia_universe/town_full_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "gunsmith",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_gunsmith",
+      "source": "v4/drafts/mafia_universe/town_gunsmith.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "cure_poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_healer",
+      "source": "v4/drafts/mafia_universe/town_healer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "grant_item",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "town_inventor",
+      "source": "v4/drafts/mafia_universe/town_inventor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/town_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "town_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/town_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "town_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/town_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "track",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/town_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "jail",
+      "primitives": [
+        "protect",
+        "block"
+      ],
+      "role": "town_jailkeeper",
+      "source": "v4/drafts/mafia_universe/town_jailkeeper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "janitor_kill",
+      "primitives": [
+        "kill",
+        "conceal"
+      ],
+      "role": "town_janitor",
+      "source": "v4/drafts/mafia_universe/town_janitor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "motion_detector",
+      "primitives": [
+        "info"
+      ],
+      "role": "town_motion_detector",
+      "source": "v4/drafts/mafia_universe/town_motion_detector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "motivate",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "town_motivator",
+      "source": "v4/drafts/mafia_universe/town_motivator.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "neapolitan",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_neapolitan",
+      "source": "v4/drafts/mafia_universe/town_neapolitan.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "night_desperado",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_night_desperado",
+      "source": "v4/drafts/mafia_universe/town_night_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_ninja",
+      "source": "v4/drafts/mafia_universe/town_ninja.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "parity_scan",
+      "primitives": [
+        "investigate",
+        "parity"
+      ],
+      "role": "town_parity_cop",
+      "source": "v4/drafts/mafia_universe/town_parity_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "cure_poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_poison_doctor",
+      "source": "v4/drafts/mafia_universe/town_poison_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_poisoner",
+      "source": "v4/drafts/mafia_universe/town_poisoner.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "power_role_kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_power_role_killer",
+      "source": "v4/drafts/mafia_universe/town_power_role_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "redirect",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "town_redirector",
+      "source": "v4/drafts/mafia_universe/town_redirector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "role_scan",
+      "primitives": [
+        "info"
+      ],
+      "role": "town_role_cop",
+      "source": "v4/drafts/mafia_universe/town_role_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mark_role",
+      "primitives": [
+        "mark"
+      ],
+      "role": "town_role_oracle",
+      "source": "v4/drafts/mafia_universe/town_role_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "town_roleblocker",
+      "source": "v4/drafts/mafia_universe/town_roleblocker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "rolestop",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "town_rolestopper",
+      "source": "v4/drafts/mafia_universe/town_rolestopper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "strongman_kill",
+      "primitives": [
+        "kill",
+        "pierce"
+      ],
+      "role": "town_strongman",
+      "source": "v4/drafts/mafia_universe/town_strongman.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "track",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_tracker",
+      "source": "v4/drafts/mafia_universe/town_tracker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "inherit_role",
+      "primitives": [
+        "convert"
+      ],
+      "role": "town_universal_backup",
+      "source": "v4/drafts/mafia_universe/town_universal_backup.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "investigate_vanilla",
+      "primitives": [
+        "info"
+      ],
+      "role": "town_vanilla_cop",
+      "source": "v4/drafts/mafia_universe/town_vanilla_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "town_vigilante",
+      "source": "v4/drafts/mafia_universe/town_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "voyeur",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_voyeur",
+      "source": "v4/drafts/mafia_universe/town_voyeur.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "watch",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "town_watcher",
+      "source": "v4/drafts/mafia_universe/town_watcher.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "douse",
+      "primitives": [
+        "mark"
+      ],
+      "role": "arsonist",
+      "source": "v4/drafts/mafiascum/arsonist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "ignite",
+      "primitives": [
+        "kill"
+      ],
+      "role": "arsonist",
+      "source": "v4/drafts/mafiascum/arsonist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "babysit",
+      "primitives": [
+        "protect",
+        "trigger"
+      ],
+      "role": "babysitter",
+      "source": "v4/drafts/mafiascum/babysitter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bodyguard",
+      "primitives": [
+        "protect",
+        "guard",
+        "trigger"
+      ],
+      "role": "bodyguard",
+      "source": "v4/drafts/mafiascum/bodyguard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bus_drive",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "bus_driver",
+      "source": "v4/drafts/mafiascum/bus_driver.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "commute",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "commuter",
+      "source": "v4/drafts/mafiascum/commuter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "investigate_alignment",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "cop",
+      "source": "v4/drafts/mafiascum/cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "inspect_corpse",
+      "primitives": [
+        "info"
+      ],
+      "role": "coroner",
+      "source": "v4/drafts/mafiascum/coroner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "cpr_protect",
+      "primitives": [
+        "protect",
+        "kill"
+      ],
+      "role": "cpr_doctor",
+      "source": "v4/drafts/mafiascum/cpr_doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "convert",
+      "primitives": [
+        "convert"
+      ],
+      "role": "cultist",
+      "source": "v4/drafts/mafiascum/cultist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "day_vigilante",
+      "source": "v4/drafts/mafiascum/day_vigilante.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "deprogram",
+      "primitives": [
+        "convert"
+      ],
+      "role": "deprogrammer",
+      "source": "v4/drafts/mafiascum/deprogrammer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "doctor",
+      "source": "v4/drafts/mafiascum/doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "protect",
+      "primitives": [
+        "protect"
+      ],
+      "role": "faith_healer",
+      "source": "v4/drafts/mafiascum/faith_healer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "follow",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "follower",
+      "source": "v4/drafts/mafiascum/follower.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "result_mod",
+      "primitives": [
+        "result_mod",
+        "mark"
+      ],
+      "role": "framer",
+      "source": "v4/drafts/mafiascum/framer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "friendly_neighbor",
+      "primitives": [
+        "info"
+      ],
+      "role": "friendly_neighbor",
+      "source": "v4/drafts/mafiascum/friendly_neighbor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "send_fruit",
+      "primitives": [
+        "info"
+      ],
+      "role": "fruit_vendor",
+      "source": "v4/drafts/mafiascum/fruit_vendor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "duel",
+      "primitives": [
+        "info"
+      ],
+      "role": "gladiator",
+      "source": "v4/drafts/mafiascum/gladiator.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "goon",
+      "source": "v4/drafts/mafiascum/goon.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "veto",
+      "primitives": [
+        "info"
+      ],
+      "role": "governor",
+      "source": "v4/drafts/mafiascum/governor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "gunsmith",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "gunsmith",
+      "source": "v4/drafts/mafiascum/gunsmith.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "hide",
+      "primitives": [
+        "untargetable",
+        "trigger",
+        "mark"
+      ],
+      "role": "hider",
+      "source": "v4/drafts/mafiascum/hider.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "hooker",
+      "source": "v4/drafts/mafiascum/hooker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "guard_retaliate",
+      "primitives": [
+        "protect",
+        "guard",
+        "trigger"
+      ],
+      "role": "huntsman",
+      "source": "v4/drafts/mafiascum/huntsman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "reveal_town",
+      "primitives": [
+        "info"
+      ],
+      "role": "innocent_child",
+      "source": "v4/drafts/mafiascum/innocent_child.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "grant_item",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "inventor",
+      "source": "v4/drafts/mafiascum/inventor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "jailer",
+      "source": "v4/drafts/mafiascum/jailer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "jail",
+      "primitives": [
+        "protect",
+        "block"
+      ],
+      "role": "jailkeeper",
+      "source": "v4/drafts/mafiascum/jailkeeper.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "janitor_kill",
+      "primitives": [
+        "kill",
+        "conceal"
+      ],
+      "role": "janitor",
+      "source": "v4/drafts/mafiascum/janitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "result_mod",
+      "primitives": [
+        "result_mod",
+        "mark"
+      ],
+      "role": "lawyer",
+      "source": "v4/drafts/mafiascum/lawyer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_goon",
+      "source": "v4/drafts/mafiascum/mafia_goon.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "janitor_kill",
+      "primitives": [
+        "kill",
+        "conceal"
+      ],
+      "role": "mafia_janitor",
+      "source": "v4/drafts/mafiascum/mafia_janitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "mafia_ninja",
+      "source": "v4/drafts/mafiascum/mafia_ninja.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "mafia_roleblocker",
+      "source": "v4/drafts/mafiascum/mafia_roleblocker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "strongman_kill",
+      "primitives": [
+        "kill",
+        "pierce"
+      ],
+      "role": "mafia_strongman",
+      "source": "v4/drafts/mafiascum/mafia_strongman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mailman",
+      "primitives": [
+        "info"
+      ],
+      "role": "mailman",
+      "source": "v4/drafts/mafiascum/mailman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "motion_detector",
+      "primitives": [
+        "info"
+      ],
+      "role": "motion_detector",
+      "source": "v4/drafts/mafiascum/motion_detector.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "motivate",
+      "primitives": [
+        "schedule"
+      ],
+      "role": "motivator",
+      "source": "v4/drafts/mafiascum/motivator.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "neapolitan",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "neapolitan",
+      "source": "v4/drafts/mafiascum/neapolitan.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "neighborize",
+      "primitives": [
+        "info"
+      ],
+      "role": "neighborizer",
+      "source": "v4/drafts/mafiascum/neighborizer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "ninja",
+      "source": "v4/drafts/mafiascum/ninja.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "observe",
+      "primitives": [
+        "info"
+      ],
+      "role": "observer",
+      "source": "v4/drafts/mafiascum/observer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "cure_poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "poison_doctor",
+      "source": "v4/drafts/mafiascum/poison_doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "poison",
+      "primitives": [
+        "mark"
+      ],
+      "role": "poisoner",
+      "source": "v4/drafts/mafiascum/poisoner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "investigate_killer",
+      "primitives": [
+        "info"
+      ],
+      "role": "psychologist",
+      "source": "v4/drafts/mafiascum/psychologist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "investigate_pt",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "pt_cop",
+      "source": "v4/drafts/mafiascum/pt_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "redirect",
+      "primitives": [
+        "retarget"
+      ],
+      "role": "redirector",
+      "source": "v4/drafts/mafiascum/redirector.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "report",
+      "primitives": [
+        "info"
+      ],
+      "role": "reporter",
+      "source": "v4/drafts/mafiascum/reporter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_scan",
+      "primitives": [
+        "info"
+      ],
+      "role": "role_cop",
+      "source": "v4/drafts/mafiascum/role_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_guard",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "role_guard",
+      "source": "v4/drafts/mafiascum/role_guard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_watcher",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "role_watcher",
+      "source": "v4/drafts/mafiascum/role_watcher.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "block",
+      "primitives": [
+        "block"
+      ],
+      "role": "roleblocker",
+      "source": "v4/drafts/mafiascum/roleblocker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "rolestop",
+      "primitives": [
+        "untargetable"
+      ],
+      "role": "rolestopper",
+      "source": "v4/drafts/mafiascum/rolestopper.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "security_guard",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "security_guard",
+      "source": "v4/drafts/mafiascum/security_guard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "serial_killer",
+      "source": "v4/drafts/mafiascum/serial_killer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "shield",
+      "primitives": [
+        "protect",
+        "trigger"
+      ],
+      "role": "shield",
+      "source": "v4/drafts/mafiascum/shield.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "investigate_specialist",
+      "primitives": [
+        "info"
+      ],
+      "role": "specialist",
+      "source": "v4/drafts/mafiascum/specialist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "strongman_kill",
+      "primitives": [
+        "kill",
+        "pierce"
+      ],
+      "role": "strongman",
+      "source": "v4/drafts/mafiascum/strongman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "track",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "tracker",
+      "source": "v4/drafts/mafiascum/tracker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "traffic_analyst",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "traffic_analyst",
+      "source": "v4/drafts/mafiascum/traffic_analyst.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "inherit_role",
+      "primitives": [
+        "convert"
+      ],
+      "role": "universal_backup",
+      "source": "v4/drafts/mafiascum/universal_backup.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "investigate_vanilla",
+      "primitives": [
+        "info"
+      ],
+      "role": "vanilla_cop",
+      "source": "v4/drafts/mafiascum/vanilla_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vanillaize",
+      "primitives": [
+        "info"
+      ],
+      "role": "vanillaiser",
+      "source": "v4/drafts/mafiascum/vanillaiser.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vanillaize",
+      "primitives": [
+        "info"
+      ],
+      "role": "vanillizer",
+      "source": "v4/drafts/mafiascum/vanillizer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "vigilante",
+      "source": "v4/drafts/mafiascum/vigilante.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "visit",
+      "primitives": [
+        "info"
+      ],
+      "role": "visitor",
+      "source": "v4/drafts/mafiascum/visitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "watch",
+      "primitives": [
+        "investigate"
+      ],
+      "role": "watcher",
+      "source": "v4/drafts/mafiascum/watcher.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "werewolf",
+      "source": "v4/drafts/mafiascum/werewolf.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "day_self_destruct",
+      "primitives": [
+        "kill"
+      ],
+      "role": "white_wolf_king",
+      "source": "v4/drafts/mafiascum/white_wolf_king.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "night_kill",
+      "primitives": [
+        "kill"
+      ],
+      "role": "white_wolf_king",
+      "source": "v4/drafts/mafiascum/white_wolf_king.json"
+    }
+  ],
+  "culture_notes": [
+    {
+      "name": "chinese_structured:cupid",
+      "note": "Link executed during pre-game / Night 0. Lovers inherit linked_death passive plus config-defined knowledge/cascade.",
+      "source": "v4/drafts/chinese/cupid.json"
+    },
+    {
+      "name": "chinese_structured:guard",
+      "note": "Config controls self-protect, repeat-target limits, and double-save behaviour with Witch.",
+      "source": "v4/drafts/chinese/guard.json"
+    },
+    {
+      "name": "chinese_structured:hunter",
+      "note": "Trigger availability (poison vs heal deaths) is driven by culture config.",
+      "source": "v4/drafts/chinese/hunter.json"
+    },
+    {
+      "name": "chinese_structured:idiot",
+      "note": "Day-only trigger; no night actions.",
+      "source": "v4/drafts/chinese/idiot.json"
+    },
+    {
+      "name": "chinese_structured:knight",
+      "note": "Duel resolves immediately during day phase before vote.",
+      "source": "v4/drafts/chinese/knight.json"
+    },
+    {
+      "name": "chinese_structured:knight",
+      "note": "Outcome depends on target alignment.",
+      "source": "v4/drafts/chinese/knight.json"
+    },
+    {
+      "name": "chinese_structured:lovers_helper",
+      "note": "Not draftable. Provides catalog metadata for applying the lovers persistent effect outside Cupid's pre-game action.",
+      "source": "v4/drafts/chinese/lovers_helper.json"
+    },
+    {
+      "name": "chinese_structured:prophet",
+      "note": "Investigation reveals alignment only; no role specifics.",
+      "source": "v4/drafts/chinese/prophet.json"
+    },
+    {
+      "name": "chinese_structured:prophet",
+      "note": "Scenario DSL should apply culture-configured result strings.",
+      "source": "v4/drafts/chinese/prophet.json"
+    },
+    {
+      "name": "chinese_structured:sheriff_badge_helper",
+      "note": "Not draftable. Provides catalog intent metadata for sheriff badge lifecycle commands.",
+      "source": "v4/drafts/chinese/sheriff_badge_helper.json"
+    },
+    {
+      "name": "chinese_structured:white_wolf_carry",
+      "note": "Attach as persistent effect or modifier to the designated wolf when option enabled.",
+      "source": "v4/drafts/chinese/white_wolf_carry.json"
+    },
+    {
+      "name": "chinese_structured:white_wolf_king",
+      "note": "Self-destruct resolves during the designated day window, sacrificing the king while issuing an extra kill on the chosen target.",
+      "source": "v4/drafts/chinese/white_wolf_king.json"
+    },
+    {
+      "name": "chinese_structured:witch",
+      "note": "Heal potion availability obeys culture toggles (self-save rules, night-one allowance).",
+      "source": "v4/drafts/chinese/witch.json"
+    },
+    {
+      "name": "chinese_structured:witch",
+      "note": "Poison potion is once per game; culture resolves timing relative to guard/witch order.",
+      "source": "v4/drafts/chinese/witch.json"
+    },
+    {
+      "name": "chinese_structured:wolf",
+      "note": "Factional kill resolves via coordinated wolf vote; individual entry mirrors the shared kill template.",
+      "source": "v4/drafts/chinese/wolf.json"
+    },
+    {
+      "name": "chinese_structured:wolf_beauty",
+      "note": "Charm action overwrites previous mark. Drag triggers on day elimination (lynch or witch poison).",
+      "source": "v4/drafts/chinese/wolf_beauty.json"
+    }
+  ],
+  "day_steps": [
+    {
+      "name": "announcement",
+      "source": "lib/engine_v4/resolve/day_steps/announcement_step.ex"
+    },
+    {
+      "name": "ita_session",
+      "source": "lib/engine_v4/resolve/day_steps/ita_session_step.ex"
+    },
+    {
+      "name": "knight_duel",
+      "source": "lib/engine_v4/resolve/day_steps/knight_duel_step.ex"
+    },
+    {
+      "name": "last_words",
+      "source": "lib/engine_v4/resolve/day_steps/last_words_step.ex"
+    },
+    {
+      "name": "sheriff_badge",
+      "source": "lib/engine_v4/resolve/day_steps/sheriff_badge_step.ex"
+    },
+    {
+      "name": "vote",
+      "source": "lib/engine_v4/resolve/day_steps/vote_step.ex"
+    },
+    {
+      "name": "wolf_self_destruct",
+      "source": "lib/engine_v4/resolve/day_steps/wolf_self_destruct_step.ex"
+    }
+  ],
+  "modifiers": [
+    {
+      "kind": "action",
+      "name": "activated",
+      "source": "lib/engine_v4/modifiers/action/activated.ex"
+    },
+    {
+      "kind": "action",
+      "name": "announcing",
+      "source": "lib/engine_v4/modifiers/action/announcing.ex"
+    },
+    {
+      "kind": "action",
+      "name": "backup",
+      "source": "lib/engine_v4/modifiers/action/backup.ex"
+    },
+    {
+      "kind": "action",
+      "name": "better_ita_chance",
+      "source": "lib/engine_v4/modifiers/action/better_ita_chance.ex"
+    },
+    {
+      "kind": "action",
+      "name": "blocked",
+      "source": "lib/engine_v4/modifiers/action/blocked.ex"
+    },
+    {
+      "kind": "action",
+      "name": "combined",
+      "source": "lib/engine_v4/modifiers/action/combined.ex"
+    },
+    {
+      "kind": "action",
+      "name": "complex",
+      "source": "lib/engine_v4/modifiers/action/complex.ex"
+    },
+    {
+      "kind": "action",
+      "name": "compulsive",
+      "source": "lib/engine_v4/modifiers/action/compulsive.ex"
+    },
+    {
+      "kind": "action",
+      "name": "cycle_x",
+      "source": "lib/engine_v4/modifiers/action/cycle_x.ex"
+    },
+    {
+      "kind": "action",
+      "name": "day",
+      "source": "lib/engine_v4/modifiers/action/day.ex"
+    },
+    {
+      "kind": "action",
+      "name": "disabled_endgame",
+      "source": "lib/engine_v4/modifiers/action/disabled_endgame.ex"
+    },
+    {
+      "kind": "action",
+      "name": "disloyal",
+      "source": "lib/engine_v4/modifiers/action/disloyal.ex"
+    },
+    {
+      "kind": "action",
+      "name": "doublevoter",
+      "source": "lib/engine_v4/modifiers/action/doublevoter.ex"
+    },
+    {
+      "kind": "action",
+      "name": "even_cycle",
+      "source": "lib/engine_v4/modifiers/action/even_cycle.ex"
+    },
+    {
+      "kind": "action",
+      "name": "even_night",
+      "source": "lib/engine_v4/modifiers/action/even_night.ex"
+    },
+    {
+      "kind": "action",
+      "name": "godfather",
+      "source": "lib/engine_v4/modifiers/action/godfather.ex"
+    },
+    {
+      "kind": "action",
+      "name": "hated",
+      "source": "lib/engine_v4/modifiers/action/hated.ex"
+    },
+    {
+      "kind": "action",
+      "name": "indecisive",
+      "source": "lib/engine_v4/modifiers/action/indecisive.ex"
+    },
+    {
+      "kind": "action",
+      "name": "lazy",
+      "source": "lib/engine_v4/modifiers/action/lazy.ex"
+    },
+    {
+      "kind": "action",
+      "name": "lost",
+      "source": "lib/engine_v4/modifiers/action/lost.ex"
+    },
+    {
+      "kind": "action",
+      "name": "loud",
+      "source": "lib/engine_v4/modifiers/action/loud.ex"
+    },
+    {
+      "kind": "action",
+      "name": "loved",
+      "source": "lib/engine_v4/modifiers/action/loved.ex"
+    },
+    {
+      "kind": "action",
+      "name": "lover",
+      "source": "lib/engine_v4/modifiers/action/lover.ex"
+    },
+    {
+      "kind": "action",
+      "name": "loyal",
+      "source": "lib/engine_v4/modifiers/action/loyal.ex"
+    },
+    {
+      "kind": "action",
+      "name": "macho",
+      "source": "lib/engine_v4/modifiers/action/macho.ex"
+    },
+    {
+      "kind": "action",
+      "name": "mason",
+      "source": "lib/engine_v4/modifiers/action/mason.ex"
+    },
+    {
+      "kind": "action",
+      "name": "neighbor",
+      "source": "lib/engine_v4/modifiers/action/neighbor.ex"
+    },
+    {
+      "kind": "action",
+      "name": "night_specific",
+      "source": "lib/engine_v4/modifiers/action/night_specific.ex"
+    },
+    {
+      "kind": "action",
+      "name": "non_consecutive",
+      "source": "lib/engine_v4/modifiers/action/non_consecutive.ex"
+    },
+    {
+      "kind": "action",
+      "name": "non_consecutive_night",
+      "source": "lib/engine_v4/modifiers/action/non_consecutive_night.ex"
+    },
+    {
+      "kind": "action",
+      "name": "novice",
+      "source": "lib/engine_v4/modifiers/action/novice.ex"
+    },
+    {
+      "kind": "action",
+      "name": "odd_cycle",
+      "source": "lib/engine_v4/modifiers/action/odd_cycle.ex"
+    },
+    {
+      "kind": "action",
+      "name": "odd_night",
+      "source": "lib/engine_v4/modifiers/action/odd_night.ex"
+    },
+    {
+      "kind": "action",
+      "name": "percent_ita_vulnerability",
+      "source": "lib/engine_v4/modifiers/action/percent_ita_vulnerability.ex"
+    },
+    {
+      "kind": "action",
+      "name": "personal",
+      "source": "lib/engine_v4/modifiers/action/personal.ex"
+    },
+    {
+      "kind": "action",
+      "name": "recluse",
+      "source": "lib/engine_v4/modifiers/action/recluse.ex"
+    },
+    {
+      "kind": "action",
+      "name": "roaming",
+      "source": "lib/engine_v4/modifiers/action/roaming.ex"
+    },
+    {
+      "kind": "action",
+      "name": "self_targetable",
+      "source": "lib/engine_v4/modifiers/action/self_targetable.ex"
+    },
+    {
+      "kind": "action",
+      "name": "simple",
+      "source": "lib/engine_v4/modifiers/action/simple.ex"
+    },
+    {
+      "kind": "action",
+      "name": "simultaneous",
+      "source": "lib/engine_v4/modifiers/action/simultaneous.ex"
+    },
+    {
+      "kind": "action",
+      "name": "stealthy",
+      "source": "lib/engine_v4/modifiers/action/stealthy.ex"
+    },
+    {
+      "kind": "action",
+      "name": "strong_willed",
+      "source": "lib/engine_v4/modifiers/action/strong_willed.ex"
+    },
+    {
+      "kind": "action",
+      "name": "strongman",
+      "source": "lib/engine_v4/modifiers/action/strongman.ex"
+    },
+    {
+      "kind": "action",
+      "name": "tiebreaker",
+      "source": "lib/engine_v4/modifiers/action/tiebreaker.ex"
+    },
+    {
+      "kind": "action",
+      "name": "treestump",
+      "source": "lib/engine_v4/modifiers/action/treestump.ex"
+    },
+    {
+      "kind": "action",
+      "name": "triplevoter",
+      "source": "lib/engine_v4/modifiers/action/triplevoter.ex"
+    },
+    {
+      "kind": "action",
+      "name": "uncooperative",
+      "source": "lib/engine_v4/modifiers/action/uncooperative.ex"
+    },
+    {
+      "kind": "action",
+      "name": "vengeful",
+      "source": "lib/engine_v4/modifiers/action/vengeful.ex"
+    },
+    {
+      "kind": "action",
+      "name": "voteless",
+      "source": "lib/engine_v4/modifiers/action/voteless.ex"
+    },
+    {
+      "kind": "action",
+      "name": "weak",
+      "source": "lib/engine_v4/modifiers/action/weak.ex"
+    },
+    {
+      "kind": "action",
+      "name": "worse_ita_chance",
+      "source": "lib/engine_v4/modifiers/action/worse_ita_chance.ex"
+    },
+    {
+      "kind": "action",
+      "name": "x_cycle_cooldown",
+      "source": "lib/engine_v4/modifiers/action/x_cycle_cooldown.ex"
+    },
+    {
+      "kind": "action",
+      "name": "x_shot",
+      "source": "lib/engine_v4/modifiers/action/x_shot.ex"
+    },
+    {
+      "kind": "action",
+      "name": "x_voter",
+      "source": "lib/engine_v4/modifiers/action/x_voter.ex"
+    },
+    {
+      "kind": "action",
+      "name": "xn_ita_shields",
+      "source": "lib/engine_v4/modifiers/action/xn_ita_shields.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "alignment_only_flip",
+      "source": "lib/engine_v4/modifiers/effect/alignment_only_flip.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "bulletproof",
+      "source": "lib/engine_v4/modifiers/effect/bulletproof.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "bulletproof_vest",
+      "source": "lib/engine_v4/modifiers/effect/bulletproof_vest.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "flipless",
+      "source": "lib/engine_v4/modifiers/effect/flipless.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "janitor",
+      "source": "lib/engine_v4/modifiers/effect/janitor.ex"
+    },
+    {
+      "kind": "effect",
+      "name": "ninja",
+      "source": "lib/engine_v4/modifiers/effect/ninja.ex"
+    }
+  ],
+  "primitives": [
+    {
+      "line": 128,
+      "name": "babysitter",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 127,
+      "name": "beloved_princess",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 80,
+      "name": "block",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 86,
+      "name": "bodyguard",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 126,
+      "name": "bomb",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 91,
+      "name": "busdrive",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 102,
+      "name": "cleanse",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 108,
+      "name": "commute",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 110,
+      "name": "conceal",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 119,
+      "name": "condemner",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 121,
+      "name": "condemner_win",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 95,
+      "name": "convert",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 101,
+      "name": "cure_poison",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 98,
+      "name": "douse",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 118,
+      "name": "executioner",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 120,
+      "name": "executioner_win",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 85,
+      "name": "guard",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 100,
+      "name": "heal_poison",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 129,
+      "name": "hider",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 125,
+      "name": "hunter",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 99,
+      "name": "ignite",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 112,
+      "name": "info",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 93,
+      "name": "investigate",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 82,
+      "name": "kill",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 122,
+      "name": "lynch_target_win",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 96,
+      "name": "mark",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 105,
+      "name": "mark_cleansed",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 92,
+      "name": "mirror",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 94,
+      "name": "parity",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 123,
+      "name": "pgo",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 115,
+      "name": "phase_skip",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 83,
+      "name": "pierce",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 97,
+      "name": "poison",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 87,
+      "name": "protect",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 89,
+      "name": "redirect",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 107,
+      "name": "restore_mutation",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 111,
+      "name": "result_mod",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 88,
+      "name": "retarget",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 81,
+      "name": "roleblock",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 113,
+      "name": "schedule",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 84,
+      "name": "strongman",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 117,
+      "name": "super_saint",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 90,
+      "name": "swap",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 114,
+      "name": "trigger",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 109,
+      "name": "untargetable",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 106,
+      "name": "vanillaize",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 116,
+      "name": "vengeful",
+      "source": "lib/engine_v4/role_spec.ex"
+    },
+    {
+      "line": 124,
+      "name": "visitor_kill",
+      "source": "lib/engine_v4/role_spec.ex"
+    }
+  ],
+  "result_event_kinds": [
+    {
+      "name": "day.vote.outcome",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "day.vote.recorded",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "effects.cleared",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "effects.conversion_blocked",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "effects.marked",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "ingest.halt",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "investigation.result",
+      "source_count": 10,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "ita.session.closed",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.session.opened",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.session.updated",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.shot.buffered",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.shot.invalidated",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.shot.queued",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.shot.refunded",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "ita.shot.resolved",
+      "source_count": 1,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex"
+      ]
+    },
+    {
+      "name": "note.cupid.link",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.day.announcement",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.day.last_words",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.knight.duel",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.sheriff.pass",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.wolf.carry",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.wolf.self_destruct",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "note.wolf_beauty.drag",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "phase.announcement",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "player.converted",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "player.effect_notification",
+      "source_count": 1,
+      "sources": [
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "player.killed",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "player.saved",
+      "source_count": 7,
+      "sources": [
+        "lib/engine_v4/result_emitter.ex",
+        "schemas/json/engine_v4/engine_v4_result.schema.json"
+      ]
+    },
+    {
+      "name": "win.condemner",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/resolve/triggers.ex",
+        "test/engine_v4/result/result_win_triggers_test.exs"
+      ]
+    },
+    {
+      "name": "win.executioner",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/resolve/triggers.ex",
+        "test/engine_v4/result/result_win_triggers_test.exs"
+      ]
+    },
+    {
+      "name": "win.jester",
+      "source_count": 2,
+      "sources": [
+        "lib/engine_v4/resolve/triggers.ex",
+        "test/engine_v4/result/result_mafiascum_passives_test.exs"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "culture": "chinese_structured",
+      "name": "cupid",
+      "source": "v4/drafts/chinese/cupid.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "guard",
+      "source": "v4/drafts/chinese/guard.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "hunter",
+      "source": "v4/drafts/chinese/hunter.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "idiot",
+      "source": "v4/drafts/chinese/idiot.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "knight",
+      "source": "v4/drafts/chinese/knight.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "lovers_helper",
+      "source": "v4/drafts/chinese/lovers_helper.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "prophet",
+      "source": "v4/drafts/chinese/prophet.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "sheriff_badge_helper",
+      "source": "v4/drafts/chinese/sheriff_badge_helper.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "villager",
+      "source": "v4/drafts/chinese/villager.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "white_wolf_carry",
+      "source": "v4/drafts/chinese/white_wolf_carry.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "white_wolf_king",
+      "source": "v4/drafts/chinese/white_wolf_king.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "witch",
+      "source": "v4/drafts/chinese/witch.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "wolf",
+      "source": "v4/drafts/chinese/wolf.json"
+    },
+    {
+      "culture": "chinese_structured",
+      "name": "wolf_beauty",
+      "source": "v4/drafts/chinese/wolf_beauty.json"
+    },
+    {
+      "culture": "core",
+      "name": "jack_of_all_trades",
+      "source": "v4/drafts/core/jack_of_all_trades_base.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "blank_mafia_role",
+      "source": "v4/drafts/mafia_universe/blank_mafia_role.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "blank_town_role",
+      "source": "v4/drafts/mafia_universe/blank_town_role.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "godfather",
+      "source": "v4/drafts/mafia_universe/godfather.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "innocent_child",
+      "source": "v4/drafts/mafia_universe/innocent_child.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "lover",
+      "source": "v4/drafts/mafia_universe/lover.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_alignment_cop",
+      "source": "v4/drafts/mafia_universe/mafia_alignment_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_alignment_oracle",
+      "source": "v4/drafts/mafia_universe/mafia_alignment_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_arsonist",
+      "source": "v4/drafts/mafia_universe/mafia_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_bodyguard",
+      "source": "v4/drafts/mafia_universe/mafia_bodyguard.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_bomber",
+      "source": "v4/drafts/mafia_universe/mafia_bomber.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_bus_driver",
+      "source": "v4/drafts/mafia_universe/mafia_bus_driver.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_commuter",
+      "source": "v4/drafts/mafia_universe/mafia_commuter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_cop",
+      "source": "v4/drafts/mafia_universe/mafia_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_day_desperado",
+      "source": "v4/drafts/mafia_universe/mafia_day_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_day_vigilante",
+      "source": "v4/drafts/mafia_universe/mafia_day_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_doctor",
+      "source": "v4/drafts/mafia_universe/mafia_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_empowerer",
+      "source": "v4/drafts/mafia_universe/mafia_empowerer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_firefighter",
+      "source": "v4/drafts/mafia_universe/mafia_firefighter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_framer",
+      "source": "v4/drafts/mafia_universe/mafia_framer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_fruit_vendor",
+      "source": "v4/drafts/mafia_universe/mafia_fruit_vendor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_full_cop",
+      "source": "v4/drafts/mafia_universe/mafia_full_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_goon",
+      "source": "v4/drafts/mafia_universe/mafia_goon.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_gunsmith",
+      "source": "v4/drafts/mafia_universe/mafia_gunsmith.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_healer",
+      "source": "v4/drafts/mafia_universe/mafia_healer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_inventor",
+      "source": "v4/drafts/mafia_universe/mafia_inventor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/mafia_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_jailkeeper",
+      "source": "v4/drafts/mafia_universe/mafia_jailkeeper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_janitor",
+      "source": "v4/drafts/mafia_universe/mafia_janitor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_motion_detector",
+      "source": "v4/drafts/mafia_universe/mafia_motion_detector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_motivator",
+      "source": "v4/drafts/mafia_universe/mafia_motivator.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_neapolitan",
+      "source": "v4/drafts/mafia_universe/mafia_neapolitan.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_night_desperado",
+      "source": "v4/drafts/mafia_universe/mafia_night_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_ninja",
+      "source": "v4/drafts/mafia_universe/mafia_ninja.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_parity_cop",
+      "source": "v4/drafts/mafia_universe/mafia_parity_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_poison_doctor",
+      "source": "v4/drafts/mafia_universe/mafia_poison_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_poisoner",
+      "source": "v4/drafts/mafia_universe/mafia_poisoner.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_power_role_killer",
+      "source": "v4/drafts/mafia_universe/mafia_power_role_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_redirector",
+      "source": "v4/drafts/mafia_universe/mafia_redirector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_role_cop",
+      "source": "v4/drafts/mafia_universe/mafia_role_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_role_oracle",
+      "source": "v4/drafts/mafia_universe/mafia_role_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_roleblocker",
+      "source": "v4/drafts/mafia_universe/mafia_roleblocker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_rolestopper",
+      "source": "v4/drafts/mafia_universe/mafia_rolestopper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_strongman",
+      "source": "v4/drafts/mafia_universe/mafia_strongman.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_tracker",
+      "source": "v4/drafts/mafia_universe/mafia_tracker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_treestump",
+      "source": "v4/drafts/mafia_universe/mafia_treestump.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_universal_backup",
+      "source": "v4/drafts/mafia_universe/mafia_universal_backup.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_vanilla_cop",
+      "source": "v4/drafts/mafia_universe/mafia_vanilla_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_vigilante",
+      "source": "v4/drafts/mafia_universe/mafia_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_voyeur",
+      "source": "v4/drafts/mafia_universe/mafia_voyeur.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mafia_watcher",
+      "source": "v4/drafts/mafia_universe/mafia_watcher.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "mason",
+      "source": "v4/drafts/mafia_universe/mason.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "miller",
+      "source": "v4/drafts/mafia_universe/miller.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "neighbor",
+      "source": "v4/drafts/mafia_universe/neighbor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "serial_killer",
+      "source": "v4/drafts/mafia_universe/serial_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_alignment_cop",
+      "source": "v4/drafts/mafia_universe/town_alignment_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_alignment_oracle",
+      "source": "v4/drafts/mafia_universe/town_alignment_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_arsonist",
+      "source": "v4/drafts/mafia_universe/town_arsonist.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_bodyguard",
+      "source": "v4/drafts/mafia_universe/town_bodyguard.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_bomber",
+      "source": "v4/drafts/mafia_universe/town_bomber.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_bus_driver",
+      "source": "v4/drafts/mafia_universe/town_bus_driver.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_commuter",
+      "source": "v4/drafts/mafia_universe/town_commuter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_cop",
+      "source": "v4/drafts/mafia_universe/town_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_day_desperado",
+      "source": "v4/drafts/mafia_universe/town_day_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_day_vigilante",
+      "source": "v4/drafts/mafia_universe/town_day_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_doctor",
+      "source": "v4/drafts/mafia_universe/town_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_empowerer",
+      "source": "v4/drafts/mafia_universe/town_empowerer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_firefighter",
+      "source": "v4/drafts/mafia_universe/town_firefighter.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_firefighter_preempt",
+      "source": "v4/drafts/mafia_universe/town_firefighter_preempt.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_framer",
+      "source": "v4/drafts/mafia_universe/town_framer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_fruit_vendor",
+      "source": "v4/drafts/mafia_universe/town_fruit_vendor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_full_cop",
+      "source": "v4/drafts/mafia_universe/town_full_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_gunsmith",
+      "source": "v4/drafts/mafia_universe/town_gunsmith.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_healer",
+      "source": "v4/drafts/mafia_universe/town_healer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_inventor",
+      "source": "v4/drafts/mafia_universe/town_inventor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_jack_of_all_trades",
+      "source": "v4/drafts/mafia_universe/town_jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_jailkeeper",
+      "source": "v4/drafts/mafia_universe/town_jailkeeper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_janitor",
+      "source": "v4/drafts/mafia_universe/town_janitor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_motion_detector",
+      "source": "v4/drafts/mafia_universe/town_motion_detector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_motivator",
+      "source": "v4/drafts/mafia_universe/town_motivator.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_neapolitan",
+      "source": "v4/drafts/mafia_universe/town_neapolitan.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_night_desperado",
+      "source": "v4/drafts/mafia_universe/town_night_desperado.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_ninja",
+      "source": "v4/drafts/mafia_universe/town_ninja.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_parity_cop",
+      "source": "v4/drafts/mafia_universe/town_parity_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_poison_doctor",
+      "source": "v4/drafts/mafia_universe/town_poison_doctor.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_poisoner",
+      "source": "v4/drafts/mafia_universe/town_poisoner.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_power_role_killer",
+      "source": "v4/drafts/mafia_universe/town_power_role_killer.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_redirector",
+      "source": "v4/drafts/mafia_universe/town_redirector.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_role_cop",
+      "source": "v4/drafts/mafia_universe/town_role_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_role_oracle",
+      "source": "v4/drafts/mafia_universe/town_role_oracle.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_roleblocker",
+      "source": "v4/drafts/mafia_universe/town_roleblocker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_rolestopper",
+      "source": "v4/drafts/mafia_universe/town_rolestopper.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_strongman",
+      "source": "v4/drafts/mafia_universe/town_strongman.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_tracker",
+      "source": "v4/drafts/mafia_universe/town_tracker.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_treestump",
+      "source": "v4/drafts/mafia_universe/town_treestump.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_universal_backup",
+      "source": "v4/drafts/mafia_universe/town_universal_backup.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_vanilla_cop",
+      "source": "v4/drafts/mafia_universe/town_vanilla_cop.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_vigilante",
+      "source": "v4/drafts/mafia_universe/town_vigilante.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_voyeur",
+      "source": "v4/drafts/mafia_universe/town_voyeur.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "town_watcher",
+      "source": "v4/drafts/mafia_universe/town_watcher.json"
+    },
+    {
+      "culture": "mafia_universe",
+      "name": "vanilla_town",
+      "source": "v4/drafts/mafia_universe/vanilla_town.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "arsonist",
+      "source": "v4/drafts/mafiascum/arsonist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "ascetic",
+      "source": "v4/drafts/mafiascum/ascetic.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "babysitter",
+      "source": "v4/drafts/mafiascum/babysitter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "beloved_princess",
+      "source": "v4/drafts/mafiascum/beloved_princess.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bodyguard",
+      "source": "v4/drafts/mafiascum/bodyguard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bomb",
+      "source": "v4/drafts/mafiascum/bomb.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bulletproof",
+      "source": "v4/drafts/mafiascum/bulletproof.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "bus_driver",
+      "source": "v4/drafts/mafiascum/bus_driver.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "commuter",
+      "source": "v4/drafts/mafiascum/commuter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "condemner",
+      "source": "v4/drafts/mafiascum/condemner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "cop",
+      "source": "v4/drafts/mafiascum/cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "coroner",
+      "source": "v4/drafts/mafiascum/coroner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "cpr_doctor",
+      "source": "v4/drafts/mafiascum/cpr_doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "cultist",
+      "source": "v4/drafts/mafiascum/cultist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "day_vigilante",
+      "source": "v4/drafts/mafiascum/day_vigilante.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "deprogrammer",
+      "source": "v4/drafts/mafiascum/deprogrammer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "doctor",
+      "source": "v4/drafts/mafiascum/doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "doublevoter",
+      "source": "v4/drafts/mafiascum/doublevoter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "encryptor",
+      "source": "v4/drafts/mafiascum/encryptor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "executioner",
+      "source": "v4/drafts/mafiascum/executioner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "faith_healer",
+      "source": "v4/drafts/mafiascum/faith_healer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "follower",
+      "source": "v4/drafts/mafiascum/follower.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "framer",
+      "source": "v4/drafts/mafiascum/framer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "friendly_neighbor",
+      "source": "v4/drafts/mafiascum/friendly_neighbor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "fruit_vendor",
+      "source": "v4/drafts/mafiascum/fruit_vendor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "gladiator",
+      "source": "v4/drafts/mafiascum/gladiator.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "godfather",
+      "source": "v4/drafts/mafiascum/godfather.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "goon",
+      "source": "v4/drafts/mafiascum/goon.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "governor",
+      "source": "v4/drafts/mafiascum/governor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "gunsmith",
+      "source": "v4/drafts/mafiascum/gunsmith.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "hero",
+      "source": "v4/drafts/mafiascum/hero.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "hider",
+      "source": "v4/drafts/mafiascum/hider.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "hooker",
+      "source": "v4/drafts/mafiascum/hooker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "hunter",
+      "source": "v4/drafts/mafiascum/hunter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "huntsman",
+      "source": "v4/drafts/mafiascum/huntsman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "innocent_child",
+      "source": "v4/drafts/mafiascum/innocent_child.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "inventor",
+      "source": "v4/drafts/mafiascum/inventor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "jack_of_all_trades",
+      "source": "v4/drafts/mafiascum/jack_of_all_trades.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "jailer",
+      "source": "v4/drafts/mafiascum/jailer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "jailkeeper",
+      "source": "v4/drafts/mafiascum/jailkeeper.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "janitor",
+      "source": "v4/drafts/mafiascum/janitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "jester",
+      "source": "v4/drafts/mafiascum/jester.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "lawyer",
+      "source": "v4/drafts/mafiascum/lawyer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "lightning_rod",
+      "source": "v4/drafts/mafiascum/lightning_rod.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "loved",
+      "source": "v4/drafts/mafiascum/loved.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "lover",
+      "source": "v4/drafts/mafiascum/lover.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mafia_goon",
+      "source": "v4/drafts/mafiascum/mafia_goon.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mafia_janitor",
+      "source": "v4/drafts/mafiascum/mafia_janitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mafia_ninja",
+      "source": "v4/drafts/mafiascum/mafia_ninja.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mafia_roleblocker",
+      "source": "v4/drafts/mafiascum/mafia_roleblocker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mafia_strongman",
+      "source": "v4/drafts/mafiascum/mafia_strongman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mailman",
+      "source": "v4/drafts/mafiascum/mailman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "mason",
+      "source": "v4/drafts/mafiascum/mason.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "miller",
+      "source": "v4/drafts/mafiascum/miller.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "motion_detector",
+      "source": "v4/drafts/mafiascum/motion_detector.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "motivator",
+      "source": "v4/drafts/mafiascum/motivator.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "neapolitan",
+      "source": "v4/drafts/mafiascum/neapolitan.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "neighbor",
+      "source": "v4/drafts/mafiascum/neighbor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "neighborizer",
+      "source": "v4/drafts/mafiascum/neighborizer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "ninja",
+      "source": "v4/drafts/mafiascum/ninja.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "observer",
+      "source": "v4/drafts/mafiascum/observer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "paranoid_gun_owner",
+      "source": "v4/drafts/mafiascum/paranoid_gun_owner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "pgo",
+      "source": "v4/drafts/mafiascum/pgo.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "poison_doctor",
+      "source": "v4/drafts/mafiascum/poison_doctor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "poisoner",
+      "source": "v4/drafts/mafiascum/poisoner.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "psychologist",
+      "source": "v4/drafts/mafiascum/psychologist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "pt_cop",
+      "source": "v4/drafts/mafiascum/pt_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "redirector",
+      "source": "v4/drafts/mafiascum/redirector.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "reporter",
+      "source": "v4/drafts/mafiascum/reporter.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_cop",
+      "source": "v4/drafts/mafiascum/role_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_guard",
+      "source": "v4/drafts/mafiascum/role_guard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "role_watcher",
+      "source": "v4/drafts/mafiascum/role_watcher.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "roleblocker",
+      "source": "v4/drafts/mafiascum/roleblocker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "rolestopper",
+      "source": "v4/drafts/mafiascum/rolestopper.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "saulus",
+      "source": "v4/drafts/mafiascum/saulus.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "security_guard",
+      "source": "v4/drafts/mafiascum/security_guard.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "serial_killer",
+      "source": "v4/drafts/mafiascum/serial_killer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "shield",
+      "source": "v4/drafts/mafiascum/shield.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "specialist",
+      "source": "v4/drafts/mafiascum/specialist.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "strongman",
+      "source": "v4/drafts/mafiascum/strongman.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "super_saint",
+      "source": "v4/drafts/mafiascum/super_saint.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "survivor",
+      "source": "v4/drafts/mafiascum/survivor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "tracker",
+      "source": "v4/drafts/mafiascum/tracker.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "traffic_analyst",
+      "source": "v4/drafts/mafiascum/traffic_analyst.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "traitor",
+      "source": "v4/drafts/mafiascum/traitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "universal_backup",
+      "source": "v4/drafts/mafiascum/universal_backup.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vanilla_cop",
+      "source": "v4/drafts/mafiascum/vanilla_cop.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vanillaiser",
+      "source": "v4/drafts/mafiascum/vanillaiser.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vanillizer",
+      "source": "v4/drafts/mafiascum/vanillizer.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vengeful",
+      "source": "v4/drafts/mafiascum/vengeful.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "vigilante",
+      "source": "v4/drafts/mafiascum/vigilante.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "virgin",
+      "source": "v4/drafts/mafiascum/virgin.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "visitor",
+      "source": "v4/drafts/mafiascum/visitor.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "watcher",
+      "source": "v4/drafts/mafiascum/watcher.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "werewolf",
+      "source": "v4/drafts/mafiascum/werewolf.json"
+    },
+    {
+      "culture": "mafiascum",
+      "name": "white_wolf_king",
+      "source": "v4/drafts/mafiascum/white_wolf_king.json"
+    }
+  ],
+  "source_root": "/Users/fluffypro/apps/im-human",
+  "test_families": [
+    {
+      "example": "test/engine_v4/action_spec_primitives_test.exs",
+      "name": "action_spec_primitives_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/action_spec_test.exs",
+      "name": "action_spec_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/culture_rules_test.exs",
+      "name": "culture_rules_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/cultures/mafia_universe_data_test.exs",
+      "name": "cultures",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/e2e/simulate_task_test.exs",
+      "name": "e2e",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/effects/cleanse_test.exs",
+      "name": "effects",
+      "test_count": 4
+    },
+    {
+      "example": "test/engine_v4/feature_flags_test.exs",
+      "name": "feature_flags_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/init/chat_provisioner_db_test.exs",
+      "name": "init",
+      "test_count": 4
+    },
+    {
+      "example": "test/engine_v4/intent/chinese_alias_coverage_test.exs",
+      "name": "intent",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/intent_catalog_test.exs",
+      "name": "intent_catalog_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/ita/runtime_test.exs",
+      "name": "ita",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/modifiers/action/activated_test.exs",
+      "name": "modifiers/action",
+      "test_count": 53
+    },
+    {
+      "example": "test/engine_v4/modifiers/effect/alignment_only_flip_test.exs",
+      "name": "modifiers/effect",
+      "test_count": 6
+    },
+    {
+      "example": "test/engine_v4/policy/conflict/cn_langrensha_test.exs",
+      "name": "policy/conflict",
+      "test_count": 2
+    },
+    {
+      "example": "test/engine_v4/policy/win/standard_test.exs",
+      "name": "policy/win",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/registry_role_api_test.exs",
+      "name": "registry_role_api_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/resolve/commute_ignite_test.exs",
+      "name": "resolve",
+      "test_count": 34
+    },
+    {
+      "example": "test/engine_v4/resolve/culture/cupid_lovers_cascade_test.exs",
+      "name": "resolve/culture",
+      "test_count": 12
+    },
+    {
+      "example": "test/engine_v4/resolve/culture/chinese/full_flow_test.exs",
+      "name": "resolve/culture/chinese",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/resolve/day_steps/announcement_step_test.exs",
+      "name": "resolve/day_steps",
+      "test_count": 4
+    },
+    {
+      "example": "test/engine_v4/resolve/effects/ita_shot_test.exs",
+      "name": "resolve/effects",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/resolve/graph/builder_order_executor_test.exs",
+      "name": "resolve/graph",
+      "test_count": 3
+    },
+    {
+      "example": "test/engine_v4/resolve/phases/conflicts_test.exs",
+      "name": "resolve/phases",
+      "test_count": 9
+    },
+    {
+      "example": "test/engine_v4/result/result_ascetic_investigation_block_test.exs",
+      "name": "result",
+      "test_count": 46
+    },
+    {
+      "example": "test/engine_v4/roles/catalog_loader_test.exs",
+      "name": "roles",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/spec_validation_test.exs",
+      "name": "spec_validation_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/time_test.exs",
+      "name": "time_test",
+      "test_count": 1
+    },
+    {
+      "example": "test/engine_v4/util/validator_test.exs",
+      "name": "util",
+      "test_count": 1
+    }
+  ]
+}

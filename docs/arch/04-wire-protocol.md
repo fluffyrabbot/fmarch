@@ -24,6 +24,9 @@ must still load in a current client). We get both with a schema-first, generated
   (votecount ticks, deadline countdown, new posts).
 - **WebSocket** carries the live bidirectional stream. REST (also CBOR, or JSON for
   debuggability on cold endpoints) carries uploads and cold loads ([03](03-backend.md)).
+  Cold projection DTOs include `ThreadPage`, `PlayerNotification`, host/cohost-only
+  `HostPhaseControl`, and host/cohost-only `ResolutionTraceInspectionReport`; live deltas remain a
+  narrower `ProjectionDelta` stream until the push layer grows per-recipient notification delivery.
 - JSON remains available behind a content-negotiation header for debugging and tooling —
   the *types* are identical; only the encoding differs.
 
@@ -48,7 +51,8 @@ Envelope {
   command acknowledgements, and errors.
 
 ```
-Command  (C→S):  Vote { slot, target } | Unvote | SubmitPost { channel, body, attachments }
+Command  (C→S):  SubmitVote { slot, target } | WithdrawVote | SubmitAction { slot, template, targets, grant_id? }
+                 | WithdrawAction { action_id } | SubmitPost { channel, body, attachments }
                  | SetDeadline { game, at } | RequestReplacement { slot } | ...
 ServerMsg (S→C): Ack { id } | Reject { id, error } | Delta { projection, change }
                  | Hello { protocol_v, server_v, caps } | Resync { from_seq } | ...

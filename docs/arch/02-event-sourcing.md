@@ -47,12 +47,48 @@ events
 - **Streams** are aggregates. The natural aggregate is the **game**; a game's entire
   history is one stream, which keeps a game internally consistent and easy to replay,
   archive, or export as a unit. Platform-level streams (users, auth) are separate.
-- A transaction-scoped per-stream append lock serializes writers before `stream_seq`
-  assignment, so same-game bursts wait and take the next sequence instead of surfacing a
-  retry to clients. `(stream_id, stream_seq)` uniqueness remains the database backstop for
-  writers that bypass the store path.
+- `(stream_id, stream_seq)` uniqueness gives **optimistic concurrency**: a command reads
+  the current `stream_seq`, computes new events at `stream_seq+1…`, and the unique
+  constraint rejects a conflicting concurrent append. Retry on conflict.
 - Append-only. There is no `UPDATE` and no `DELETE` on `events`. Ever. Corrections are new
   events (a `PostEdited`, a `VoteRetracted`), not mutations.
+
+## Projection replay audits
+
+Projection rebuilds are also exposed as an operator audit command:
+
+```bash
+DATABASE_URL=postgres://... cargo run -p projections --bin audit_rebuild -- <game_uuid>
+```
+
+The command snapshots each rebuildable projection table for the game, replays the event stream
+inside a rollback-only transaction, compares the rebuilt rows to the live rows, prints a JSON
+`ProjectionAuditReport`, and exits non-zero if any table drifts. It currently proves projection
+row determinism.
+
+Stored resolution envelopes have a narrower command-side audit:
+
+```bash
+DATABASE_URL=postgres://... cargo run -p commands --bin audit_resolution -- <game_uuid>
+```
+
+That command scans stored `ResolutionApplied` / `ResolutionTrace` pairs, reruns ordinary
+`ResolvePhase` envelopes from the event-stream prefix using the stored seed/run id/logical time,
+reruns PK `ResolveHostPrompt` envelopes from `HostPromptIssued` + `HostPromptResolved`, prints a
+JSON `ResolutionEnvelopeAuditReport`, and exits non-zero on drift. Revote and skip-next-day prompt
+decisions do not produce resolution envelopes; their `PhaseAdvanced` consequences are covered by
+the host phase-control projection audit.
+
+Stored traces can also be inspected without rerunning the resolver:
+
+```bash
+DATABASE_URL=postgres://... cargo run -p commands --bin inspect_trace -- <game_uuid> [run_id]
+```
+
+`inspect_trace` and the host/cohost-only REST trace endpoint flatten `ResolutionTrace` decisions,
+edges, generated actions, effect changes, visibility rows, and notes into stream-sequence anchored
+rows for operator dispute review. Seeded fuzzing, large-graph performance checks, and a browser
+diff UI remain separate hardening work.
 
 ## Event taxonomy (illustrative, not exhaustive)
 
@@ -110,6 +146,7 @@ Examples:
 | `thread_view` | rendered, paginated posts for a channel (with edit/retract applied) |
 | `votecount` | **running** tally per phase (folded from vote submissions, as-of any post); the **official** outcome is the engine's `DayVoteOutcome`, not this projection — see [09](09-engine-and-packs.md), [10](10-event-schema.md) |
 | `slot_state` | per-slot lifecycle, current occupant, role-visibility flag |
+| `player_notification` | one row per `EffectNotification` audience slot, including private engine notices such as Cupid lover knowledge |
 | `phase_state` | current phase, deadline, lock status per game |
 | `channel_membership` | who can read/post where (drives authz reads) |
 | `game_index` | board listing: active games, hosts, phase, deadline |
