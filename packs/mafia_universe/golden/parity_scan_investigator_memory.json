@@ -1,0 +1,157 @@
+{
+  "description": "Mafia Universe parity scan: Parity Cops record investigator-scoped baselines and later emit same/different comparisons.",
+  "input": {
+    "game_id": "game_mu_parity_scan_memory_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "investigation_memory": [
+        {
+          "investigator": "slot_2",
+          "target": "slot_5",
+          "mode": "Parity",
+          "scope": "Investigator",
+          "result": "town",
+          "source_action": "mu_mafia_parity_scan_n01",
+          "template_id": "parity_scan",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ],
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_parity_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_parity_cop",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_parity_scan_n02",
+        "actor": "slot_1",
+        "template_id": "parity_scan",
+        "targets": ["slot_3"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_mafia_parity_scan_n02",
+        "actor": "slot_2",
+        "template_id": "parity_scan",
+        "targets": ["slot_4"],
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 712005
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "result": "scum"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationMemoryRecorded",
+      "payload": {
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "mode": "Parity",
+        "scope": "Investigator",
+        "result": "scum",
+        "source_action": "mu_town_parity_scan_n02",
+        "template_id": "parity_scan",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "result": "same"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "InvestigationMemoryRecorded",
+      "payload": {
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "mode": "Parity",
+        "scope": "Investigator",
+        "result": "town",
+        "source_action": "mu_mafia_parity_scan_n02",
+        "template_id": "parity_scan",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

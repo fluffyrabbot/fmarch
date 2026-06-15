@@ -1,0 +1,111 @@
+{
+  "description": "Innocent Child reveals town alignment during the day. The reveal is public alignment-only state; it does not reveal role or cause a death.",
+  "input": {
+    "game_id": "game_demo_reveal_town_001",
+    "phase_id": "D01",
+    "state": {
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_id": "D01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "innocent_child",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "reveal_town_001",
+        "actor": "slot_1",
+        "template_id": "reveal_town",
+        "targets": [],
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 949597
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "AlignmentRevealed",
+      "payload": {
+        "slot_id": "slot_1",
+        "alignment": "town",
+        "source_action": "reveal_town_001",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "status": "NoLynch",
+        "winner": null,
+        "contenders": [],
+        "tallies": {},
+        "votes": {},
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0
+        },
+        "majority": 2.0,
+        "thresholds": {
+          "slot_1": 2.0,
+          "slot_2": 2.0,
+          "slot_3": 2.0
+        },
+        "total_weight": 3.0,
+        "tiebreak": null,
+        "reason": null
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "D01",
+        "deaths": []
+      }
+    }
+  ]
+}

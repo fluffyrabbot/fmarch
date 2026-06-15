@@ -1,0 +1,118 @@
+{
+  "name": "test_invalid_reference_contract",
+  "version": 1,
+  "ir_version": 13,
+  "roles": {
+    "malformed_reference_user": {
+      "description": "Test role with malformed references into pack-owned catalogs.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "kill_missing_effected_slots",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "reads_effect": "missing_effect"
+        }
+      ]
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with a single factional kill action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "protect_before_kill",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": [],
+      "unless_modifiers": []
+    }
+  ],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "effects": {},
+  "guard_policy": {
+    "enabled": true,
+    "guard_action_ids": ["missing_guard"],
+    "witch_heal_action_ids": [],
+    "guard_blockable_causes": ["factional_kill"],
+    "guard_self_allowed": true,
+    "guard_night_one_allowed": true,
+    "same_target_witch": "NoDeath"
+  },
+  "investigation_results": {
+    "parity": {
+      "town": "town",
+      "non_town": "scum",
+      "alignment_results": {
+        "town": "town",
+        "mafia": "scum",
+        "missing_alignment": "mystery"
+      }
+    }
+  },
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": {
+      "PerRole": {
+        "ghost_role": 2.0
+      }
+    },
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

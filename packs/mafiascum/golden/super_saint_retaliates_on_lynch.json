@@ -1,0 +1,230 @@
+{
+  "description": "TRIGGER lynch primitive. A Super-Saint is lynched by day vote; the super_saint_retaliates trigger kills the latest active voter on that wagon.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_1"
+        ],
+        "majority": 4.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_1": 4.0
+        },
+        "thresholds": {
+          "slot_1": 4.0,
+          "slot_2": 4.0,
+          "slot_3": 4.0,
+          "slot_4": 4.0,
+          "slot_5": 4.0,
+          "slot_6": 4.0,
+          "slot_7": 4.0
+        },
+        "tiebreak": null,
+        "total_weight": 7.0,
+        "votes": {
+          "slot_2": "slot_1",
+          "slot_3": "slot_1",
+          "slot_4": "slot_1",
+          "slot_5": "slot_1"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0,
+          "slot_6": 1.0,
+          "slot_7": 1.0
+        },
+        "winner": "slot_1"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_1",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "Trigger",
+      "payload": {
+        "payload": {
+          "on": "Lynch",
+          "produced_actor": "slot_1",
+          "produced_target": "slot_2",
+          "source_actor": "slot_2",
+          "source_cause": "lynch",
+          "source_target": "slot_1"
+        },
+        "trigger_id": "super_saint_retaliates"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1"
+        ],
+        "cause": "super_saint_retaliates",
+        "slot_id": "slot_2",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "lynch"
+          },
+          {
+            "slot_id": "slot_2",
+            "cause": "super_saint_retaliates"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_super_saint_001",
+    "pack": "mafiascum",
+    "phase_id": "D01",
+    "seed": 42,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [
+            "super_saint"
+          ],
+          "role_key": "super_saint",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_6",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_7",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_004",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

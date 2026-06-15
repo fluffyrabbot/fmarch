@@ -1,0 +1,101 @@
+{
+  "name": "test_invalid_win_policy_contract",
+  "version": 1,
+  "ir_version": 25,
+  "roles": {
+    "malformed_win_townie": {
+      "description": "Town-aligned test role for malformed win policy contracts.",
+      "alignment": "town",
+      "actions": []
+    },
+    "jester": {
+      "description": "Independent self-lynch test role for malformed win policy contracts.",
+      "alignment": "jester",
+      "actions": []
+    },
+    "executioner": {
+      "description": "Independent target-lynch test role for malformed win policy contracts.",
+      "alignment": "executioner",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role for malformed win policy contracts.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "mafia",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "town",
+        "when": { "FactionReachesParity": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "AllOtherFactionsEliminated": "town" }
+      },
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      }
+    ]
+  },
+  "effects": {
+    "execution_target": { "duration": "Persistent", "visibility": "Hidden" }
+  },
+  "target_lynch_win_policies": [
+    {
+      "id": "executioner_primary",
+      "target_effect": "execution_target",
+      "eligible_roles": ["executioner"],
+      "winner": "executioner"
+    },
+    {
+      "id": "executioner_shadow",
+      "target_effect": "execution_target",
+      "eligible_roles": ["executioner"],
+      "winner": "executioner"
+    }
+  ],
+  "self_lynch_win_policies": [
+    {
+      "id": "jester_primary",
+      "eligible_roles": ["jester"],
+      "winner": "jester",
+      "source_event": "win.jester"
+    },
+    {
+      "id": "jester_shadow",
+      "eligible_roles": ["jester"],
+      "winner": "jester",
+      "source_event": "win.jester"
+    }
+  ]
+}

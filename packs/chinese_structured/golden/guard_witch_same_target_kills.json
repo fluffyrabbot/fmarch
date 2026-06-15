@@ -1,0 +1,172 @@
+{
+  "description": "Chinese Guard and Witch same-target policy can be culture-owned. With same_target_witch=KillTarget, the Guard+Witch double protection itself kills the protected target with the pack-declared cause.",
+  "pack_overrides": {
+    "guard_policy": {
+      "same_target_witch": "KillTarget",
+      "same_target_witch_kill_cause": "guard_witch_same_target"
+    }
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_2",
+        "cadence_policy": "x_shot",
+        "consumed_action": "heal_001",
+        "counter_id": "x_shot:heal_potion",
+        "limit": 1,
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "heal_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1",
+          "slot_2"
+        ],
+        "cause": "guard_witch_same_target",
+        "slot_id": "slot_3",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "cause": "guard_witch_same_target",
+            "slot_id": "slot_3"
+          }
+        ],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_guard_witch_same_target_kills_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930206,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "guard",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "guard_001",
+        "actor": "slot_1",
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "night_guard",
+        "withdrawn": false
+      },
+      {
+        "action_id": "heal_001",
+        "actor": "slot_2",
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "heal_potion",
+        "withdrawn": false
+      },
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_4",
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "wolf_night_kill",
+        "withdrawn": false
+      }
+    ]
+  }
+}

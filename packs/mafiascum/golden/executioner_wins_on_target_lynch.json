@@ -1,0 +1,220 @@
+{
+  "description": "Executioner independent win. A previously targeted slot is lynched by day vote, so the living Executioner wins after the phase announcement.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_2"
+        ],
+        "majority": 4.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_2": 4.0
+        },
+        "thresholds": {
+          "slot_1": 4.0,
+          "slot_2": 4.0,
+          "slot_3": 4.0,
+          "slot_4": 4.0,
+          "slot_5": 4.0,
+          "slot_6": 4.0
+        },
+        "tiebreak": null,
+        "total_weight": 6.0,
+        "votes": {
+          "slot_1": "slot_2",
+          "slot_3": "slot_2",
+          "slot_4": "slot_2",
+          "slot_5": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0,
+          "slot_6": 1.0
+        },
+        "winner": "slot_2"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "lynch"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": {
+          "effect": "execution_target",
+          "owner": "slot_1",
+          "policy": "executioner",
+          "source_action": "executioner_target_n01",
+          "target": "slot_2",
+          "target_phase_id": "N01",
+          "target_phase_kind": "Night",
+          "target_phase_number": 1
+        },
+        "reason": "executioner slot_1 target slot_2 lynched",
+        "winner": "executioner"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_executioner_win_001",
+    "pack": "mafiascum",
+    "phase_id": "D01",
+    "seed": 44,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "executioner",
+          "effects": [],
+          "role_key": "executioner",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [
+            "execution_target"
+          ],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ],
+      "target_lynch_win_targets": [
+        {
+          "effect": "execution_target",
+          "owner": "slot_1",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "policy": "executioner",
+          "source_action": "executioner_target_n01",
+          "target": "slot_2"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_004",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

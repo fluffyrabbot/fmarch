@@ -1,0 +1,76 @@
+{
+  "description": "Mafia Universe Fruit Vendor: Town Fruit Vendor sends fruit as a private target notification without creating persistent effects.",
+  "input": {
+    "game_id": "game_mu_fruit_vendor_town_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_fruit_vendor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_send_fruit_001",
+        "actor": "slot_1",
+        "template_id": "send_fruit",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 713001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectNotification",
+      "payload": {
+        "effect": "fruit_received",
+        "status": "marked",
+        "audience": ["slot_2"]
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

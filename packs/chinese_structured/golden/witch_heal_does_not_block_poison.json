@@ -1,0 +1,165 @@
+{
+  "description": "Chinese Witch heal is an ordinary Protect for kills, but guard_policy reserves poison_potion blocking for Guard actions. A healed target still dies to Witch poison without Guard.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_1",
+        "cadence_policy": "x_shot",
+        "consumed_action": "heal_001",
+        "counter_id": "x_shot:heal_potion",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "heal_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_2",
+        "cadence_policy": "x_shot",
+        "consumed_action": "poison_001",
+        "counter_id": "x_shot:poison_potion",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "poison_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_2"
+        ],
+        "cause": "poison_potion",
+        "slot_id": "slot_3",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "poison_potion"
+          }
+        ],
+        "phase_id": "N02"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_heal_not_poison_antidote_001",
+    "pack": "chinese_structured",
+    "phase_id": "N02",
+    "seed": 930204,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N02",
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "heal_001",
+        "actor": "slot_1",
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "heal_potion",
+        "withdrawn": false
+      },
+      {
+        "action_id": "poison_001",
+        "actor": "slot_2",
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "poison_potion",
+        "withdrawn": false
+      }
+    ]
+  }
+}

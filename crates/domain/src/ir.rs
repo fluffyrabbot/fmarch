@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 /// IR ability vocabulary. Closed set, versioned by `ir_version`.
-/// v1 ships these 8. `IrAbility` is a **flat tag**: the Investigate mode rides
+/// v1 shipped the first 8 abilities. `IrAbility` is a **flat tag**: the Investigate mode rides
 /// alongside on the `ActionTemplate` (`mode`), it is not folded into the enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum IrAbility {
@@ -15,15 +15,31 @@ pub enum IrAbility {
     Convert,
     Mark,
     Clear,
+    Grant,
+    Link,
+    Retaliate,
+    Badge,
+    Duel,
+    ItaShot,
+    SelfDestruct,
+    Visit,
+    RevealTown,
+    VoteDuel,
 }
 
 /// Investigate is parameterized by mode rather than split into many primitives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum InvestigateMode {
     Parity,
+    Vanilla,
+    Neapolitan,
+    Gunsmith,
+    Role,
+    FullRole,
     Track,
     Watch,
     Motion,
+    PriorMotion,
 }
 
 /// Capability flags adjusting how an ability interacts with the
@@ -33,6 +49,27 @@ pub enum Modifier {
     Strongman,
     Ninja,
     Loyal,
+    Bodyguard,
+    Martyr,
+    Cpr,
+    Weak,
+    Lazy,
+    Loud,
+    Announcing,
+    XShot,
+    OddNight,
+    EvenNight,
+    NonConsecutive,
+    Indecisive,
+    Uncooperative,
+    Roaming,
+    DisabledEndgame,
+    Compulsive,
+    Simultaneous,
     Roleblockable,
     Reflexive,
+    Personal,
+    StrongWilled,
+    Babysitter,
+    Hider,
 }

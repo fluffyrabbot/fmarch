@@ -1,0 +1,144 @@
+{
+  "description": "Chinese Cupid links two lovers during the setup night with a foldable PlayersLinked event.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_1",
+        "cadence_policy": "x_shot",
+        "consumed_action": "link_001",
+        "counter_id": "x_shot:link_lovers",
+        "limit": 1,
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "link_lovers",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayersLinked",
+      "payload": {
+        "link_id": "link_001",
+        "slots": [
+          "slot_2",
+          "slot_3"
+        ],
+        "source": "slot_1"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": [
+          "slot_2",
+          "slot_3"
+        ],
+        "effect": "lovers_link",
+        "status": "link_001"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_cupid_link_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930501,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "cupid",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "prophet",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "link_001",
+        "actor": "slot_1",
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2",
+          "slot_3"
+        ],
+        "template_id": "link_lovers",
+        "withdrawn": false
+      }
+    ]
+  }
+}

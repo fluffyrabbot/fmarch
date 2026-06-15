@@ -1,0 +1,116 @@
+{
+  "description": "Mafia Universe investigation: Mafia Framer marks a town target, then Town Cop reads that same target as scum.",
+  "input": {
+    "game_id": "game_mu_investigation_framer_parity_override_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_framer",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "town_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_frame_001",
+        "actor": "slot_1",
+        "template_id": "frame",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_cop_001",
+        "actor": "slot_2",
+        "template_id": "cop_investigate",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 702004
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "duration": "Persistent",
+        "effect": "framed",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "mu_frame_001",
+        "target": "slot_3",
+        "visibility": "Hidden"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_2",
+        "target": "slot_3",
+        "result": "scum"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

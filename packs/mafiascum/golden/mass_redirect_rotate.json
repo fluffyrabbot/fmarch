@@ -1,0 +1,173 @@
+{
+  "description": "Traffic Controller (slot_1) rotates slot_2 -> slot_3 -> slot_4 -> slot_2. Mafia Goon's kill moves from slot_2 to slot_3, Doctor's protect moves from slot_3 to slot_4, and Watcher's watch moves from slot_4 to slot_2.",
+  "input": {
+    "game_id": "game_demo_mass_redirect_rotate_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "traffic_controller",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "watcher",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "rotate_targets_n01",
+        "actor": "slot_1",
+        "template_id": "mass_redirect",
+        "targets": [
+          "slot_2",
+          "slot_3",
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "kill_rotate_n01",
+        "actor": "slot_5",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "protect_rotate_n01",
+        "actor": "slot_6",
+        "template_id": "doctor_protect",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "watch_rotate_n01",
+        "actor": "slot_7",
+        "template_id": "watch",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 838383
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_5"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Watch",
+        "investigator": "slot_7",
+        "target": "slot_2",
+        "result": {
+          "visitors": [
+            "slot_1"
+          ]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "factional_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

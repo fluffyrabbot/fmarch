@@ -1,0 +1,123 @@
+{
+  "name": "test_invalid_effect_contract",
+  "version": 1,
+  "ir_version": 1,
+  "roles": {
+    "malformed_effect_user": {
+      "description": "Test role with malformed effect/read-effect action contracts.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "mark_without_effect",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          }
+        },
+        {
+          "id": "kill_with_illegal_effect",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "effect": "doused"
+        },
+        {
+          "id": "check_with_illegal_reads_effect",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "mode": "Parity",
+          "reads_effect": "doused"
+        }
+      ]
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with a single factional kill action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "effects": {
+    "doused": {
+      "duration": "Persistent",
+      "visibility": "ActorAndTarget"
+    }
+  },
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

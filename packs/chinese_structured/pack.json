@@ -1,0 +1,437 @@
+{
+  "name": "chinese_structured",
+  "version": 1,
+  "ir_version": 46,
+  "roles": {
+    "villager": {
+      "description": "Villager. No night action; wins with the town.",
+      "alignment": "town",
+      "actions": []
+    },
+    "wolf": {
+      "description": "Wolf. Performs the faction night kill for the wolf team; a pending White Wolf carry token may split a submitted extra target into a generated carry kill.",
+      "alignment": "wolf",
+      "actions": [
+        {
+          "id": "wolf_night_kill",
+          "source_ids": ["night_kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "white_wolf_king": {
+      "description": "White Wolf King. During the day, may self-destruct to trade self for one chosen target.",
+      "alignment": "wolf",
+      "actions": [
+        {
+          "id": "day_self_destruct",
+          "ability": "SelfDestruct",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 95,
+            "x_shots": 1
+          },
+          "self_destruct": {
+            "cause": "self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+          }
+        }
+      ]
+    },
+    "white_wolf_carry": {
+      "description": "White Wolf Carry. Passive White Wolf variant that leaves one carry token for the next wolf faction kill.",
+      "alignment": "wolf",
+      "actions": []
+    },
+    "wolf_beauty": {
+      "description": "Wolf Beauty. Charms one target at night; if lynched or poisoned during the day, drags the current charmed target down.",
+      "alignment": "wolf",
+      "actions": [
+        {
+          "id": "beauty_mark",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "wolf_beauty_mark"
+        }
+      ]
+    },
+    "witch": {
+      "description": "Witch. Carries one heal potion and one poison potion with Chinese structured timing policy.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "heal_potion",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": 1
+          }
+        },
+        {
+          "id": "poison_potion",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 55,
+            "x_shots": 1
+          }
+        }
+      ]
+    },
+    "guard": {
+      "description": "Guard. Protects one slot at night; Chinese structured policy controls poison blocking and Witch double-save behavior.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "night_guard",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "hunter": {
+      "description": "Hunter. Chooses a final target; if the Hunter dies to an allowed culture-configured cause, that target is killed.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "hunter_retaliate",
+          "ability": "Retaliate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 35,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "idiot": {
+      "description": "Idiot. Survives the first lynch, then loses vote power.",
+      "alignment": "town",
+      "actions": []
+    },
+    "cupid": {
+      "description": "Cupid. Links two slots as lovers during the setup night; if either later dies, the linked partner dies too.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "link_lovers",
+          "ability": "Link",
+          "effect": "lovers_link",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 100,
+            "x_shots": 1
+          }
+        }
+      ]
+    },
+    "prophet": {
+      "description": "Prophet. Each night checks one slot and receives a good/evil alignment result.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_alignment",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "knight": {
+      "description": "Knight. Once per game during the day, duels a target; wolves die on success, otherwise the Knight dies.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "knight_duel",
+          "ability": "Duel",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": 1
+          },
+          "duel": {
+            "hostile_alignments": ["wolf"]
+          }
+        }
+      ]
+    },
+    "sheriff_badge_helper": {
+      "description": "Helper template exposing sheriff election, pass, and destroy actions for Chinese Structured Werewolf.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "sheriff_election",
+          "ability": "Badge",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 100,
+            "x_shots": null
+          },
+          "badge": {
+            "badge_id": "sheriff_badge",
+            "operation": "Elect",
+            "vote_weight": 1.5
+          }
+        },
+        {
+          "id": "sheriff_pass",
+          "ability": "Badge",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 100,
+            "x_shots": null
+          },
+          "badge": {
+            "badge_id": "sheriff_badge",
+            "operation": "Pass",
+            "vote_weight": null
+          }
+        },
+        {
+          "id": "sheriff_destroy",
+          "ability": "Badge",
+          "window": "Day",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 100,
+            "x_shots": null
+          },
+          "badge": {
+            "badge_id": "sheriff_badge",
+            "operation": "Destroy",
+            "vote_weight": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "protect_before_guard_blockable_kills",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "Chinese Guard and Witch heal protection are evaluated before kill effects. guard_policy narrows which Protect action ids can block configured kill causes such as Witch poison_potion."
+    }
+  ],
+  "visibility": {},
+  "visibility_families": [
+    "EffectAudiences"
+  ],
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["sheriff", "wolf_self_destruct", "main", "eod"],
+      "Night": ["cupid_link", "heal_potion", "night_guard", "beauty_mark", "poison_potion", "hunter_retaliate", "wolf_kill", "prophet"]
+    },
+    "twilight": false
+  },
+  "investigation_results": {
+    "parity": {
+      "town": "good",
+      "non_town": "evil",
+      "alignment_results": {
+        "town": "good",
+        "wolf": "evil"
+      }
+    }
+  },
+  "effects": {
+    "wolf_beauty_mark": {
+      "duration": "Persistent",
+      "visibility": "Hidden"
+    },
+    "idiot_vote_loss": {
+      "duration": "Persistent",
+      "visibility": "Public"
+    },
+    "lovers_link": {
+      "duration": "Persistent",
+      "visibility": "Hidden"
+    }
+  },
+  "wolf_carry": {
+    "enabled": true,
+    "token_id": "white_wolf_carry_token",
+    "cause": "wolf_carry",
+    "eligible_roles": ["white_wolf_king", "white_wolf_carry"],
+    "wolf_kill_roles": ["wolf"]
+  },
+  "wolf_beauty": {
+    "enabled": true,
+    "mark_effect": "wolf_beauty_mark",
+    "drag_cause": "trigger:wolf_beauty_drag",
+    "eligible_roles": ["wolf_beauty"],
+    "death_causes": ["lynch", "poison", "witch_poison", "poison_potion"]
+  },
+  "guard_policy": {
+    "enabled": true,
+    "guard_action_ids": ["night_guard"],
+    "witch_heal_action_ids": ["heal_potion"],
+    "guard_blockable_causes": ["poison_potion"],
+    "guard_self_allowed": true,
+    "guard_night_one_allowed": true,
+    "same_target_witch": "NoDeath"
+  },
+  "faction_actions": {
+    "enabled": true,
+    "actions": [
+      {
+        "action_id": "wolf_night_kill",
+        "alignment": "wolf",
+        "max_resolved_submissions": 1,
+        "target_tie": "BlockAll"
+      }
+    ]
+  },
+  "death_retaliation": {
+    "enabled": true,
+    "eligible_roles": ["hunter"],
+    "timing": "ImmediateBeforePhaseAnnouncement",
+    "allowed_death_causes": ["wolf_night_kill", "lynch"],
+    "suppressed_death_causes": ["poison", "poison_potion"]
+  },
+  "idiot_policy": {
+    "enabled": true,
+    "eligible_roles": ["idiot"],
+    "vote_loss_effect": "idiot_vote_loss",
+    "survival_reason": "idiot_survival"
+  },
+  "lover_policy": {
+    "enabled": true,
+    "link_effect": "lovers_link",
+    "suicide_cause": "lover_suicide",
+    "suicide_on_lover_death": true,
+    "lovers_known_to_each_other": true,
+    "source_helper_role": "lovers_helper"
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "wolf" }
+      },
+      {
+        "winner": "wolf",
+        "when": { "FactionReachesParity": "wolf" }
+      }
+    ]
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "description": "A folded VoteWeight grant can make the first live day ballot hammer. Only slot_1 and slot_2 are alive; slot_1 contributes 2.0 from vote_power_boost, reaches the 2.0 majority threshold alone, and later ballots are ignored.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_2"
+        ],
+        "majority": 2.0,
+        "reason": null,
+        "status": "Hammer",
+        "tallies": {
+          "slot_2": 2.0
+        },
+        "thresholds": {
+          "slot_1": 2.0,
+          "slot_2": 2.0
+        },
+        "tiebreak": null,
+        "total_weight": 3.0,
+        "votes": {
+          "slot_1": "slot_2"
+        },
+        "weights": {
+          "slot_1": 2.0,
+          "slot_2": 1.0
+        },
+        "winner": "slot_2"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "lynch"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": null,
+        "reason": "faction mafia eliminated (0 alive)",
+        "winner": "town"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_dynamic_vote_hammer_001",
+    "pack": "test_dynamic_vote_hammer",
+    "phase_id": "D01",
+    "seed": 727280,
+    "state": {
+      "action_grants": [
+        {
+          "actor": "slot_3",
+          "grant_id": "vote_power_boost",
+          "kind": "VoteWeight",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "source_action": "grant_vote_power_n01",
+          "target": "slot_1",
+          "uses": 1,
+          "vote_weight": 2.0
+        }
+      ],
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vote_granter",
+          "slot_id": "slot_3",
+          "status": "dead"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_after_hammer",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

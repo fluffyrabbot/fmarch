@@ -1,0 +1,89 @@
+{
+  "description": "TRIGGER win observation primitive. Ordinary faction win policy is about to fire, so the resolver emits Win observations before the trailer; the Win Witness trigger records a Trigger event while WinReached remains final.",
+  "input": {
+    "game_id": "game_demo_win_witness_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "win_witness_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "win_witness"
+          ]
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [],
+    "pack": "mafiascum",
+    "seed": 44
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "win_witness_observes",
+        "payload": {
+          "on": "Win",
+          "source_target": "slot_1",
+          "source_actor": "slot_1",
+          "source_cause": "win:town",
+          "produced_actor": "slot_1",
+          "produced_target": "slot_1"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    },
+    {
+      "index": 2,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "town",
+        "reason": "faction mafia eliminated (0 alive)",
+        "metadata": null
+      }
+    }
+  ]
+}

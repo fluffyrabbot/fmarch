@@ -1,0 +1,67 @@
+{
+  "name": "test_pack_v0_legacy_shape",
+  "version": 0,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Legacy v0 town-aligned test role with no actions.",
+      "alignment": "town",
+      "action_templates": []
+    },
+    "mafia_goon": {
+      "description": "Legacy v0 mafia-aligned test role with a factional kill.",
+      "alignment": "mafia",
+      "action_templates": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "action_order": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "vote_policy": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phase_policy": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

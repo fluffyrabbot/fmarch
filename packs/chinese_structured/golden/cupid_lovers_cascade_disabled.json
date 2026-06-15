@@ -1,0 +1,153 @@
+{
+  "description": "Chinese lover policy can disable lover-suicide cascade while preserving the folded Cupid link.",
+  "pack_overrides": {
+    "lover_policy": {
+      "suicide_on_lover_death": false
+    }
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1"
+        ],
+        "cause": "wolf_night_kill",
+        "slot_id": "slot_2",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "wolf_night_kill"
+          }
+        ],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_cupid_cascade_disabled_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930503,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [
+        {
+          "link_id": "link_001",
+          "slots": [
+            "slot_2",
+            "slot_3"
+          ],
+          "source": "slot_5"
+        }
+      ],
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "prophet",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "cupid",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_6",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_7",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_1",
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "wolf_night_kill",
+        "withdrawn": false
+      }
+    ]
+  }
+}

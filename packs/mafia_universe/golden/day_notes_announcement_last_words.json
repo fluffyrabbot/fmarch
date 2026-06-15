@@ -1,0 +1,215 @@
+{
+  "description": "Mafia Universe day-note culture emits a prior-night death announcement and records last words for the lynched slot without changing state outside the normal PlayerKilled/PhaseAnnouncement fold.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayAnnouncement",
+      "payload": {
+        "attackers": [
+          "slot_4"
+        ],
+        "cause": "factional_kill",
+        "day": 2,
+        "night": 1,
+        "phase_id": "D02",
+        "player_id": "slot_5",
+        "recorded_at": 77,
+        "role_key": "mafia_goon",
+        "sequence": 0,
+        "source_action_id": "nightkill_001",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_3"
+        ],
+        "majority": 3.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_3": 3.0
+        },
+        "thresholds": {
+          "slot_1": 3.0,
+          "slot_2": 3.0,
+          "slot_3": 3.0,
+          "slot_4": 3.0
+        },
+        "tiebreak": null,
+        "total_weight": 4.0,
+        "votes": {
+          "slot_1": "slot_3",
+          "slot_2": "slot_3",
+          "slot_4": "slot_3"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0
+        },
+        "winner": "slot_3"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_3",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "LastWordsRecorded",
+      "payload": {
+        "day": 2,
+        "phase_id": "D02",
+        "player_id": "slot_3",
+        "reason": "lynch",
+        "sequence": 0,
+        "vote": {
+          "majority": 3.0,
+          "status": "Lynch",
+          "tallies": {
+            "slot_3": 3.0
+          },
+          "total_weight": 4.0,
+          "winner": "slot_3"
+        }
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "lynch"
+          }
+        ],
+        "phase_id": "D02"
+      }
+    }
+  ],
+  "input": {
+    "day_phase_inputs": {
+      "night_victims": [
+        {
+          "attackers": [
+            "slot_4"
+          ],
+          "cause": "factional_kill",
+          "player_id": "slot_5",
+          "recorded_at": 77,
+          "role_key": "mafia_goon",
+          "source_action_id": "nightkill_001",
+          "unstoppable": false
+        }
+      ]
+    },
+    "game_id": "mu_day_notes_001",
+    "pack": "mafia_universe",
+    "phase_id": "D02",
+    "seed": 920001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D02",
+      "phase_kind": "Day",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "dead"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_1",
+        "phase_id": "D02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_2",
+        "phase_id": "D02",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_4",
+        "phase_id": "D02",
+        "submitted_at": 3,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,151 @@
+{
+  "description": "Vanilla Cop, Neapolitan, and Gunsmith resolve negative role-set checks from pack-owned mafiascum role sets.",
+  "input": {
+    "game_id": "game_mafiascum_role_set_info_negative_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "vanilla_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "neapolitan",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "gunsmith",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vanilla_check_001",
+        "actor": "slot_1",
+        "template_id": "investigate_vanilla",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "neapolitan_001",
+        "actor": "slot_2",
+        "template_id": "neapolitan",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "gunsmith_001",
+        "actor": "slot_3",
+        "template_id": "gunsmith",
+        "targets": ["slot_6"],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 912102
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Vanilla",
+        "investigator": "slot_1",
+        "target": "slot_4",
+        "result": {
+          "vanilla": false
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Neapolitan",
+        "investigator": "slot_2",
+        "target": "slot_5",
+        "result": {
+          "vanilla_town": false
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Gunsmith",
+        "investigator": "slot_3",
+        "target": "slot_6",
+        "result": {
+          "has_gun": false
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

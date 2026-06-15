@@ -1,0 +1,120 @@
+{
+  "description": "One-shot Vigilante kills slot_2. The allowed action records a typed ActionUseCounted counter for night_kill before the kill resolves.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_1",
+        "cadence_policy": "x_shot",
+        "consumed_action": "sub_001",
+        "counter_id": "x_shot:night_kill",
+        "limit": 1,
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "night_kill",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1"
+        ],
+        "cause": "night_kill",
+        "slot_id": "slot_2",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "cause": "night_kill",
+            "slot_id": "slot_2"
+          }
+        ],
+        "phase_id": "N01"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": null,
+        "reason": "faction mafia eliminated (0 alive)",
+        "winner": "town"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_xshot_001",
+    "pack": "mafiascum",
+    "phase_id": "N01",
+    "seed": 101001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vigilante",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "night_kill",
+        "withdrawn": false
+      }
+    ]
+  }
+}

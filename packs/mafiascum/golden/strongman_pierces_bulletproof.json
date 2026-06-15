@@ -1,0 +1,102 @@
+{
+  "description": "Strongman kills Bulletproof slot_2. In the mafiascum v1 pack, Strongman bypasses both Protect and bulletproof target-state saves.",
+  "input": {
+    "game_id": "game_demo_strongman_bulletproof_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "strongman",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "bulletproof",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "template_id": "strongman_kill",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 959595
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "strongman_kill",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "strongman_kill"
+          }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "mafia",
+        "reason": "faction mafia reaches parity (1 vs 1 others)",
+        "metadata": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "name": "test_precedence_order_contract",
+  "version": 1,
+  "ir_version": 1,
+  "roles": {
+    "fast_killer": {
+      "description": "Test role whose Kill is ordered before Protect by pack precedence.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "late_doctor": {
+      "description": "Test role whose Protect priority is higher but loses to Kill via precedence.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "self_protect",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [
+    {
+      "id": "kill_before_protect",
+      "when": { "effect": "Kill", "target_state": null },
+      "beats": ["Protect"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "Command/projection regression fixture: Kill must resolve before higher-priority Protect."
+    }
+  ],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "effects": {},
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

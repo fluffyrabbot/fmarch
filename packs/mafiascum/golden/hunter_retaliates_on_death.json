@@ -1,0 +1,138 @@
+{
+  "description": "HUNTER chosen retaliation. A prior RetaliationArmed fact says slot_1 chose slot_2. When mafia kills slot_1, hunter_retaliate kills slot_2 in the same resolution.",
+  "input": {
+    "game_id": "game_demo_hunter_fire_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "hunter",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "retaliations": [
+        {
+          "retaliation_id": "hunt_001",
+          "actor": "slot_1",
+          "target": "slot_2",
+          "source_action": "hunter_retaliate"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "kill_001",
+        "actor": "slot_3",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 52
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_3"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "hunter_retaliate",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_2",
+            "cause": "hunter_retaliate"
+          }
+        ]
+      }
+    }
+  ]
+}

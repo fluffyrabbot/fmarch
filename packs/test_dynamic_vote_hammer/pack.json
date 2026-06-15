@@ -1,0 +1,90 @@
+{
+  "name": "test_dynamic_vote_hammer",
+  "version": 1,
+  "ir_version": 2,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "vote_granter": {
+      "description": "Town-aligned test role that can grant an explicit dynamic vote weight.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "grant_vote_power",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 61
+          },
+          "grant": {
+            "grant_id": "vote_power_boost",
+            "kind": "VoteWeight",
+            "uses": 1,
+            "vote_weight": 2.0,
+            "visibility": "Target"
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": true,
+    "weights": {
+      "Dynamic": {
+        "base": 1.0,
+        "grant_rules": [
+          {
+            "grant_id": "vote_power_boost",
+            "priority": 10
+          }
+        ]
+      }
+    },
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

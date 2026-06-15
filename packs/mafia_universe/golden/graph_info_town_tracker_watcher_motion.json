@@ -1,0 +1,173 @@
+{
+  "description": "Mafia Universe graph info: Town Tracker, Watcher, and Motion Detector read visible night visits from the same NAR graph.",
+  "input": {
+    "game_id": "game_mu_graph_info_town_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "town_doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_tracker",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_watcher",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "town_motion_detector",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_goon_kill_001",
+        "actor": "slot_1",
+        "template_id": "factional_kill",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_doctor_protect_001",
+        "actor": "slot_2",
+        "template_id": "doctor_protect",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_tracker_track_001",
+        "actor": "slot_4",
+        "template_id": "track",
+        "targets": ["slot_1"],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_watcher_watch_001",
+        "actor": "slot_5",
+        "template_id": "watch",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_motion_detect_001",
+        "actor": "slot_6",
+        "template_id": "motion_detector",
+        "targets": ["slot_1"],
+        "phase_id": "N01",
+        "submitted_at": 5,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 703001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_3",
+        "reasons": ["protected"],
+        "sources": ["slot_2"]
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Track",
+        "investigator": "slot_4",
+        "target": "slot_1",
+        "result": {
+          "visited": ["slot_3"]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Watch",
+        "investigator": "slot_5",
+        "target": "slot_3",
+        "result": {
+          "visitors": ["slot_1", "slot_2"]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Motion",
+        "investigator": "slot_6",
+        "target": "slot_1",
+        "result": {
+          "motion": true
+        }
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

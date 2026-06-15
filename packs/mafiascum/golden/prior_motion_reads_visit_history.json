@@ -1,0 +1,107 @@
+{
+  "description": "Traffic Analyst reads folded N01 visit history in N02: slot_1 had prior visible motion because they visited slot_3.",
+  "input": {
+    "game_id": "game_mafiascum_prior_motion_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "visit_history": [
+        {
+          "actor": "slot_1",
+          "target": "slot_3",
+          "template_id": "visit",
+          "source_action": "visit_n01",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "visible": true
+        }
+      ],
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "visitor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "traffic_analyst",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "prior_motion_n02",
+        "actor": "slot_2",
+        "template_id": "prior_motion",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 242424
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "PriorMotion",
+        "investigator": "slot_2",
+        "target": "slot_1",
+        "result": {
+          "prior_motion": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

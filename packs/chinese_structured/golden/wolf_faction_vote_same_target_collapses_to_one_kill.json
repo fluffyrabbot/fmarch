@@ -1,0 +1,151 @@
+{
+  "description": "Chinese wolf faction target voting. Two wolves submit the shared wolf_night_kill against the same primary target; the faction policy keeps one official kill and suppresses the duplicate team vote.",
+  "input": {
+    "game_id": "chinese_wolf_faction_vote_same_target_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "wolf",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "wolf",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [],
+      "action_grants": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "retaliations": [],
+      "wolf_carry_tokens": [],
+      "wolf_beauty_marks": [],
+      "badges": []
+    },
+    "submissions": [
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_1",
+        "template_id": "wolf_night_kill",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false
+      },
+      {
+        "action_id": "wolfkill_002",
+        "actor": "slot_2",
+        "template_id": "wolf_night_kill",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "withdrawn": false
+      }
+    ],
+    "pack": "chinese_structured",
+    "seed": 420102
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_2",
+        "reason": "faction_vote_superseded"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "wolf_night_kill",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "wolf_night_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

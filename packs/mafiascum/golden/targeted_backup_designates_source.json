@@ -1,0 +1,104 @@
+{
+  "description": "Universal Backup targets a source slot and emits a durable BackupTargeted fact for later inheritance.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "duration": "Persistent",
+        "effect": "backup_target",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "target_backup_n01",
+        "target": "slot_2",
+        "visibility": "Hidden"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "BackupTargeted",
+      "payload": {
+        "backup": "slot_1",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "target_backup_n01",
+        "source_role": "cop",
+        "source_target": "slot_2"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_targeted_backup_designate_001",
+    "pack": "mafiascum",
+    "phase_id": "N01",
+    "seed": 818181,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "universal_backup",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "cop",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "target_backup_n01",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "target_backup",
+        "withdrawn": false
+      }
+    ]
+  }
+}

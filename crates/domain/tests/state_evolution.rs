@@ -7,10 +7,12 @@
 
 use std::path::PathBuf;
 
-use domain::events::InnerEvent;
-use domain::pack::{Pack, PhaseKind};
-use domain::resolver::{check_win, resolve, ResolutionInput};
-use domain::state::{apply_events, SlotState, StateSnapshot, Submission};
+use domain::events::{InnerEvent, VoteStatus};
+use domain::pack::{DeathRevealMode, GrantKind, Pack, PhaseKind, VoteMethod, VoteTieBreaker};
+use domain::resolver::{check_win, resolve, resolve_events, ResolutionInput};
+use domain::state::{
+    apply_events, RevealState, SlotLifecycle, SlotState, StateSnapshot, Submission,
+};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -36,7 +38,15 @@ fn slot(id: &str, role: &str, alignment: &str, status: &str) -> SlotState {
         slot_id: id.to_string(),
         role_key: role.to_string(),
         alignment: Some(alignment.to_string()),
-        status: status.to_string(),
+        role_reveal: RevealState::Private,
+        alignment_reveal: RevealState::Private,
+        status: match status {
+            "alive" => SlotLifecycle::Alive,
+            "dead" => SlotLifecycle::Dead,
+            "modkilled" => SlotLifecycle::Modkilled,
+            other => panic!("unknown test slot lifecycle {other}"),
+        },
+        status_tags: Vec::new(),
         effects: Vec::new(),
     }
 }
@@ -56,7 +66,25 @@ fn apply_player_killed_marks_dead() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -65,12 +93,165 @@ fn apply_player_killed_marks_dead() {
             cause: "factional_kill".to_string(),
             attackers: vec!["m".to_string()],
             unstoppable: false,
+            death_reveal: DeathRevealMode::Full,
         }],
     );
-    assert_eq!(find(&next, "a").status, "dead");
+    assert_eq!(find(&next, "a").status, SlotLifecycle::Dead);
+    assert_eq!(find(&next, "a").role_reveal, RevealState::Public);
+    assert_eq!(find(&next, "a").alignment_reveal, RevealState::Public);
+
+    let concealed = apply_events(
+        &state,
+        &[InnerEvent::PlayerKilled {
+            slot_id: "a".to_string(),
+            cause: "janitor_kill".to_string(),
+            attackers: vec!["m".to_string()],
+            unstoppable: false,
+            death_reveal: DeathRevealMode::Concealed,
+        }],
+    );
+    assert_eq!(find(&concealed, "a").status, SlotLifecycle::Dead);
+    assert_eq!(find(&concealed, "a").role_reveal, RevealState::Private);
+    assert_eq!(find(&concealed, "a").alignment_reveal, RevealState::Private);
+
+    let alignment_only = apply_events(
+        &state,
+        &[InnerEvent::PlayerKilled {
+            slot_id: "a".to_string(),
+            cause: "strongman_kill".to_string(),
+            attackers: vec!["m".to_string()],
+            unstoppable: true,
+            death_reveal: DeathRevealMode::AlignmentOnly,
+        }],
+    );
+    assert_eq!(find(&alignment_only, "a").status, SlotLifecycle::Dead);
+    assert_eq!(find(&alignment_only, "a").role_reveal, RevealState::Private);
+    assert_eq!(
+        find(&alignment_only, "a").alignment_reveal,
+        RevealState::Public
+    );
+
     // Phase cursor is carried through unchanged by the fold.
     assert_eq!(next.phase_number, 1);
     assert!(matches!(next.phase_kind, PhaseKind::Night));
+}
+
+#[test]
+fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 1,
+        phase_id: "D01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("slot_1", "white_wolf_king", "wolf", "dead")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let queued = apply_events(
+        &state,
+        &[InnerEvent::WolfCarryQueued {
+            owner_id: "slot_1".to_string(),
+            token_id: "white_wolf_carry_token".to_string(),
+            cause: "wolf_carry".to_string(),
+            role_key: "white_wolf_king".to_string(),
+            phase_id: "D01".to_string(),
+            phase_kind: PhaseKind::Day,
+            phase_number: 1,
+        }],
+    );
+    assert_eq!(queued.wolf_carry_tokens.len(), 1);
+    assert_eq!(queued.wolf_carry_tokens[0].owner_id, "slot_1");
+
+    let consumed = apply_events(
+        &queued,
+        &[InnerEvent::WolfCarryUsed {
+            owner_id: "slot_1".to_string(),
+            target_id: "slot_4".to_string(),
+            source_action_id: "wolfkill_001:wolf_carry:1".to_string(),
+            effect_id: "white_wolf_carry_token:wolfkill_001:wolf_carry:1".to_string(),
+            role_key: "white_wolf_king".to_string(),
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+        }],
+    );
+    assert!(consumed.wolf_carry_tokens.is_empty());
+}
+
+#[test]
+fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("slot_1", "wolf_beauty", "wolf", "alive"),
+            slot("slot_2", "villager", "town", "alive"),
+            slot("slot_3", "villager", "town", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let marked = apply_events(
+        &state,
+        &[InnerEvent::WolfBeautyMarked {
+            beauty_id: "slot_1".to_string(),
+            target_id: "slot_2".to_string(),
+            effect: "wolf_beauty_mark".to_string(),
+            source_action: "beauty_001".to_string(),
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+        }],
+    );
+    assert_eq!(marked.wolf_beauty_marks.len(), 1);
+    assert_eq!(marked.wolf_beauty_marks[0].target_id, "slot_2");
+
+    let replaced = apply_events(
+        &marked,
+        &[InnerEvent::WolfBeautyMarked {
+            beauty_id: "slot_1".to_string(),
+            target_id: "slot_3".to_string(),
+            effect: "wolf_beauty_mark".to_string(),
+            source_action: "beauty_002".to_string(),
+            phase_id: "N02".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 2,
+        }],
+    );
+    assert_eq!(replaced.wolf_beauty_marks.len(), 1);
+    assert_eq!(replaced.wolf_beauty_marks[0].target_id, "slot_3");
 }
 
 #[test]
@@ -78,7 +259,25 @@ fn apply_player_saved_is_a_noop() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -88,7 +287,7 @@ fn apply_player_saved_is_a_noop() {
             sources: vec!["doc".to_string()],
         }],
     );
-    assert_eq!(find(&next, "a").status, "alive");
+    assert_eq!(find(&next, "a").status, SlotLifecycle::Alive);
 }
 
 #[test]
@@ -96,7 +295,25 @@ fn apply_effects_mark_then_clear() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let marked = apply_events(
         &state,
@@ -105,16 +322,39 @@ fn apply_effects_mark_then_clear() {
                 effect: "poisoned".to_string(),
                 target: "a".to_string(),
                 actor: "p".to_string(),
+                source_action: Some("poison".to_string()),
+                phase_id: Some("N01".to_string()),
+                phase_kind: Some(PhaseKind::Night),
+                phase_number: Some(1),
+                duration: domain::EffectDuration::Persistent,
+                visibility: domain::EffectVisibility::Actor,
             },
             // Re-marking the same effect is idempotent (de-duplicated).
             InnerEvent::EffectsMarked {
                 effect: "poisoned".to_string(),
                 target: "a".to_string(),
                 actor: "p".to_string(),
+                source_action: Some("poison".to_string()),
+                phase_id: Some("N01".to_string()),
+                phase_kind: Some(PhaseKind::Night),
+                phase_number: Some(1),
+                duration: domain::EffectDuration::Persistent,
+                visibility: domain::EffectVisibility::Actor,
             },
         ],
     );
     assert_eq!(find(&marked, "a").effects, vec!["poisoned".to_string()]);
+    assert_eq!(marked.effect_records.len(), 1);
+    let record = &marked.effect_records[0];
+    assert_eq!(record.effect, "poisoned");
+    assert_eq!(record.target, "a");
+    assert_eq!(record.source, "p");
+    assert_eq!(record.source_action.as_deref(), Some("poison"));
+    assert_eq!(record.phase_id.as_deref(), Some("N01"));
+    assert_eq!(record.phase_kind, Some(PhaseKind::Night));
+    assert_eq!(record.phase_number, Some(1));
+    assert_eq!(record.duration, domain::EffectDuration::Persistent);
+    assert_eq!(record.visibility, domain::EffectVisibility::Actor);
 
     let cleared = apply_events(
         &marked,
@@ -125,6 +365,112 @@ fn apply_effects_mark_then_clear() {
         }],
     );
     assert!(find(&cleared, "a").effects.is_empty());
+    assert!(cleared.effect_records.is_empty());
+}
+
+#[test]
+fn apply_delayed_death_queue_then_resolve() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+    let queued = apply_events(
+        &state,
+        &[InnerEvent::DelayedDeathQueued {
+            queue_id: "poisoned:a:poison_001".to_string(),
+            target: "a".to_string(),
+            cause: "poison".to_string(),
+            effect: "poisoned".to_string(),
+            source: "p".to_string(),
+            source_action: "poison_001".to_string(),
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+        }],
+    );
+    assert_eq!(queued.delayed_deaths.len(), 1);
+    assert_eq!(queued.delayed_deaths[0].queue_id, "poisoned:a:poison_001");
+    assert_eq!(queued.delayed_deaths[0].source_action, "poison_001");
+
+    let resolved = apply_events(
+        &queued,
+        &[InnerEvent::DelayedDeathResolved {
+            queue_id: "poisoned:a:poison_001".to_string(),
+            target: "a".to_string(),
+            cause: "poison".to_string(),
+            effect: "poisoned".to_string(),
+            outcome: "applied".to_string(),
+            phase_id: "N02".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 2,
+        }],
+    );
+    assert!(resolved.delayed_deaths.is_empty());
+}
+
+#[test]
+fn apply_visit_recorded_appends_history() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "visitor", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+    let next = apply_events(
+        &state,
+        &[InnerEvent::VisitRecorded {
+            actor: "a".to_string(),
+            target: "b".to_string(),
+            template_id: "visit".to_string(),
+            source_action: "visit_n01".to_string(),
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+            visible: true,
+        }],
+    );
+
+    assert_eq!(next.visit_history.len(), 1);
+    assert_eq!(next.visit_history[0].actor, "a");
+    assert_eq!(next.visit_history[0].target, "b");
+    assert_eq!(next.visit_history[0].source_action, "visit_n01");
+    assert!(next.visit_history[0].visible);
 }
 
 #[test]
@@ -132,7 +478,25 @@ fn apply_player_converted_changes_role() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -141,12 +505,65 @@ fn apply_player_converted_changes_role() {
             new_role: "mafia_goon".to_string(),
             new_alignment: Some("mafia".to_string()),
             original_role: "vanilla_townie".to_string(),
+            original_alignment: Some("town".to_string()),
             source: "cult".to_string(),
         }],
     );
     assert_eq!(find(&next, "a").role_key, "mafia_goon");
     // R2: a conversion is a faction change — alignment must move with the role.
     assert_eq!(find(&next, "a").alignment.as_deref(), Some("mafia"));
+    assert_eq!(next.conversion_origins.len(), 1);
+    assert_eq!(next.conversion_origins[0].target, "a");
+    assert_eq!(next.conversion_origins[0].original_role, "vanilla_townie");
+    assert_eq!(
+        next.conversion_origins[0].original_alignment.as_deref(),
+        Some("town")
+    );
+}
+
+#[test]
+fn apply_player_converted_keeps_first_origin() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 2,
+        phase_id: "N02".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "cultist", "cult", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: vec![domain::ConversionOriginRecord {
+            target: "a".to_string(),
+            original_role: "cop".to_string(),
+            original_alignment: Some("town".to_string()),
+            source: "cult_leader".to_string(),
+        }],
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+    let next = apply_events(
+        &state,
+        &[InnerEvent::PlayerConverted {
+            target: "a".to_string(),
+            new_role: "mafia_goon".to_string(),
+            new_alignment: Some("mafia".to_string()),
+            original_role: "cultist".to_string(),
+            original_alignment: Some("cult".to_string()),
+            source: "converter".to_string(),
+        }],
+    );
+    assert_eq!(next.conversion_origins.len(), 1);
+    assert_eq!(next.conversion_origins[0].original_role, "cop");
 }
 
 #[test]
@@ -154,10 +571,28 @@ fn apply_events_is_a_pure_fold() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "mafia_goon", "mafia", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     let events = vec![
         InnerEvent::PlayerKilled {
@@ -165,6 +600,7 @@ fn apply_events_is_a_pure_fold() {
             cause: "factional_kill".to_string(),
             attackers: vec!["b".to_string()],
             unstoppable: false,
+            death_reveal: DeathRevealMode::Full,
         },
         InnerEvent::PhaseAnnouncement(domain::events::PhaseAnnouncement {
             phase_id: "N01".to_string(),
@@ -178,7 +614,688 @@ fn apply_events_is_a_pure_fold() {
         serde_json::to_string(&x).unwrap(),
         serde_json::to_string(&y).unwrap()
     );
-    assert_eq!(find(&state, "a").status, "alive", "input must not mutate");
+    assert_eq!(
+        find(&state, "a").status,
+        SlotLifecycle::Alive,
+        "input must not mutate"
+    );
+}
+
+#[test]
+fn apply_action_recorded_extends_history() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 2,
+        phase_id: "N02".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "non_consecutive_cop", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[InnerEvent::ActionRecorded {
+            actor: "a".to_string(),
+            template_id: "investigate_alignment".to_string(),
+            targets: vec!["b".to_string()],
+            phase_id: "N02".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 2,
+            status: "resolved".to_string(),
+        }],
+    );
+
+    assert_eq!(next.action_history.len(), 1);
+    assert_eq!(next.action_history[0].targets, vec!["b"]);
+    assert!(state.action_history.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_action_granted_extends_grants() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "motivator", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[InnerEvent::ActionGranted {
+            grant_id: "extra_action".to_string(),
+            kind: GrantKind::ExtraAction,
+            actor: "a".to_string(),
+            target: "b".to_string(),
+            source_action: "motivate_n01".to_string(),
+            uses: 1,
+            vote_weight: None,
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+        }],
+    );
+
+    assert_eq!(next.action_grants.len(), 1);
+    assert_eq!(next.action_grants[0].grant_id, "extra_action");
+    assert_eq!(next.action_grants[0].target, "b");
+    assert_eq!(next.action_grants[0].source_action, "motivate_n01");
+    assert!(state.action_grants.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 2,
+        phase_id: "N02".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("a", "motivator", "town", "alive"),
+            slot("b", "cop", "town", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: vec![
+            domain::state::ActionGrantRecord {
+                grant_id: "extra_action".to_string(),
+                kind: GrantKind::ExtraAction,
+                actor: "a".to_string(),
+                target: "b".to_string(),
+                source_action: "motivate_n01".to_string(),
+                uses: 1,
+                vote_weight: None,
+                phase_id: "N01".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 1,
+            },
+            domain::state::ActionGrantRecord {
+                grant_id: "extra_action".to_string(),
+                kind: GrantKind::ExtraAction,
+                actor: "a".to_string(),
+                target: "b".to_string(),
+                source_action: "motivate_n02".to_string(),
+                uses: 1,
+                vote_weight: None,
+                phase_id: "N02".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 2,
+            },
+        ],
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[InnerEvent::ActionGrantConsumed {
+            grant_id: "extra_action".to_string(),
+            actor: "b".to_string(),
+            action_id: "cop_extra_n02".to_string(),
+            source_action: "motivate_n01".to_string(),
+            phase_id: "N02".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 2,
+            remaining_uses: 0,
+        }],
+    );
+
+    assert_eq!(next.action_grants[0].uses, 0);
+    assert_eq!(next.action_grants[1].uses, 1);
+    assert_eq!(state.action_grants[0].uses, 1, "input must not mutate");
+}
+
+#[test]
+fn apply_action_use_counted_upserts_counter_state() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "vigilante", "town", "alive")],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[InnerEvent::ActionUseCounted {
+            counter_id: "x_shot:night_kill".to_string(),
+            actor: "a".to_string(),
+            template_id: "night_kill".to_string(),
+            consumed_action: "vig_n01".to_string(),
+            cadence_policy: "x_shot".to_string(),
+            phase_scope: "game".to_string(),
+            limit: 1,
+            used: 1,
+            remaining: 0,
+            phase_id: "N01".to_string(),
+            phase_kind: PhaseKind::Night,
+            phase_number: 1,
+        }],
+    );
+
+    assert_eq!(next.use_counters.len(), 1);
+    let counter = &next.use_counters[0];
+    assert_eq!(counter.counter_id, "x_shot:night_kill");
+    assert_eq!(counter.actor, "a");
+    assert_eq!(counter.template_id, "night_kill");
+    assert_eq!(counter.consumed_action, "vig_n01");
+    assert_eq!(counter.cadence_policy, "x_shot");
+    assert_eq!(counter.phase_scope, "game");
+    assert_eq!(counter.limit, 1);
+    assert_eq!(counter.used, 1);
+    assert_eq!(counter.remaining, 0);
+    assert!(state.use_counters.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_players_linked_extends_links() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("a", "vanilla_townie", "town", "alive"),
+            slot("b", "vanilla_townie", "town", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[
+            InnerEvent::PlayersLinked {
+                link_id: "link_001".to_string(),
+                slots: vec!["a".to_string(), "b".to_string()],
+                source: "cupid".to_string(),
+            },
+            InnerEvent::PlayersLinked {
+                link_id: "link_001".to_string(),
+                slots: vec!["a".to_string(), "b".to_string()],
+                source: "cupid".to_string(),
+            },
+        ],
+    );
+
+    assert_eq!(next.linked_slots.len(), 1);
+    assert_eq!(next.linked_slots[0].slots, vec!["a", "b"]);
+    assert!(state.linked_slots.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_retaliation_armed_upserts_choice() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("a", "hunter", "town", "alive"),
+            slot("b", "mafia_goon", "mafia", "alive"),
+            slot("c", "mafia_goon", "mafia", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[
+            InnerEvent::RetaliationArmed {
+                retaliation_id: "hunt_001".to_string(),
+                actor: "a".to_string(),
+                target: "b".to_string(),
+                source_action: "hunter_retaliate".to_string(),
+            },
+            InnerEvent::RetaliationArmed {
+                retaliation_id: "hunt_001".to_string(),
+                actor: "a".to_string(),
+                target: "c".to_string(),
+                source_action: "hunter_retaliate".to_string(),
+            },
+        ],
+    );
+
+    assert_eq!(next.retaliations.len(), 1);
+    assert_eq!(next.retaliations[0].target, "c");
+    assert!(state.retaliations.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_backup_targeted_upserts_choice() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("a", "universal_backup", "town", "alive"),
+            slot("b", "cop", "town", "alive"),
+            slot("c", "doctor", "town", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[
+            InnerEvent::BackupTargeted {
+                backup: "a".to_string(),
+                source_target: "b".to_string(),
+                source_role: "cop".to_string(),
+                source_action: "target_backup_n01".to_string(),
+                phase_id: "N01".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 1,
+            },
+            InnerEvent::BackupTargeted {
+                backup: "a".to_string(),
+                source_target: "c".to_string(),
+                source_role: "doctor".to_string(),
+                source_action: "target_backup_n02".to_string(),
+                phase_id: "N02".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 2,
+            },
+        ],
+    );
+
+    assert_eq!(next.backup_targets.len(), 1);
+    assert_eq!(next.backup_targets[0].source_target, "c");
+    assert_eq!(next.backup_targets[0].source_role, "doctor");
+    assert!(state.backup_targets.is_empty(), "input must not mutate");
+}
+
+#[test]
+fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("a", "executioner", "executioner", "alive"),
+            slot("b", "vanilla_townie", "town", "alive"),
+            slot("c", "doctor", "town", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let next = apply_events(
+        &state,
+        &[
+            InnerEvent::TargetLynchWinTargeted {
+                policy: "executioner".to_string(),
+                owner: "a".to_string(),
+                target: "b".to_string(),
+                effect: "execution_target".to_string(),
+                source_action: "executioner_target_n01".to_string(),
+                phase_id: "N01".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 1,
+            },
+            InnerEvent::TargetLynchWinTargeted {
+                policy: "executioner".to_string(),
+                owner: "a".to_string(),
+                target: "c".to_string(),
+                effect: "execution_target".to_string(),
+                source_action: "executioner_target_n02".to_string(),
+                phase_id: "N02".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 2,
+            },
+            InnerEvent::TargetLynchWinTargeted {
+                policy: "condemner".to_string(),
+                owner: "a".to_string(),
+                target: "b".to_string(),
+                effect: "condemner_target".to_string(),
+                source_action: "condemner_target_n02".to_string(),
+                phase_id: "N02".to_string(),
+                phase_kind: PhaseKind::Night,
+                phase_number: 2,
+            },
+        ],
+    );
+
+    assert_eq!(next.target_lynch_win_targets.len(), 2);
+    assert_eq!(next.target_lynch_win_targets[0].target, "c");
+    assert_eq!(
+        next.target_lynch_win_targets[0].source_action,
+        "executioner_target_n02"
+    );
+    assert_eq!(next.target_lynch_win_targets[1].policy, "condemner");
+    assert_eq!(next.target_lynch_win_targets[1].target, "b");
+    assert!(
+        state.target_lynch_win_targets.is_empty(),
+        "input must not mutate"
+    );
+}
+
+#[test]
+fn resolve_returns_applied_trace_and_post_state() {
+    let pack = load_pack();
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 1,
+        phase_id: "D01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "mafia_goon", "mafia", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let output = resolve(ResolutionInput {
+        game_id: "output".to_string(),
+        phase_id: "D01".to_string(),
+        run_id: "output:D01:1".to_string(),
+        state,
+        submissions: vec![
+            vote("v1", "slot_1", "slot_3", 1),
+            vote("v2", "slot_2", "slot_3", 2),
+        ],
+        day_phase_inputs: Default::default(),
+        pack,
+        seed: 9,
+        logical_time: 42,
+    });
+
+    assert_eq!(output.applied.run_id, "output:D01:1");
+    assert_eq!(output.trace.run_id, output.applied.run_id);
+    assert_eq!(output.applied.started_at, 42);
+    assert!(output
+        .trace
+        .decisions
+        .iter()
+        .any(|decision| decision.outcome == "day_vote_outcome"));
+    assert_eq!(
+        find(&output.post_state, "slot_3").status,
+        SlotLifecycle::Dead
+    );
+}
+
+#[test]
+fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
+    let mut pack = load_pack();
+    pack.vote.method = VoteMethod::Plurality;
+    pack.vote.tie_breaker = VoteTieBreaker::Random;
+
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "vanilla_townie", "town", "alive"),
+            slot("slot_4", "vanilla_townie", "town", "alive"),
+            slot("slot_5", "mafia_goon", "mafia", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let resolve_winner = |seed| {
+        let output = resolve(ResolutionInput {
+            game_id: format!("vote-random-{seed}"),
+            phase_id: "D02".to_string(),
+            run_id: format!("vote-random:D02:{seed}"),
+            state: state.clone(),
+            submissions: vec![
+                vote("vote_1", "slot_1", "slot_3", 1),
+                vote("vote_2", "slot_2", "slot_4", 2),
+            ],
+            day_phase_inputs: Default::default(),
+            pack: pack.clone(),
+            seed,
+            logical_time: 100 + seed,
+        });
+        output
+            .applied
+            .events
+            .into_iter()
+            .find_map(|event| match event.event {
+                InnerEvent::DayVoteOutcome(outcome) => Some(outcome),
+                _ => None,
+            })
+            .expect("resolution should emit a day vote outcome")
+    };
+
+    let seed_one_first = resolve_winner(1);
+    let seed_one_again = resolve_winner(1);
+    let seed_four = resolve_winner(4);
+
+    assert_eq!(seed_one_first.status, VoteStatus::Lynch);
+    assert_eq!(seed_one_first.winner.as_deref(), Some("slot_3"));
+    assert_eq!(seed_one_first.tiebreak.as_deref(), Some("Random"));
+    assert_eq!(seed_one_first, seed_one_again);
+    assert_eq!(seed_four.status, VoteStatus::Lynch);
+    assert_eq!(seed_four.winner.as_deref(), Some("slot_4"));
+    assert_eq!(seed_four.tiebreak.as_deref(), Some("Random"));
+    assert_ne!(seed_one_first.winner, seed_four.winner);
+}
+
+#[test]
+fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
+    let mut pack = load_pack();
+    pack.vote.method = VoteMethod::Majority;
+    pack.vote.no_lynch_allowed = true;
+
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "mafia_goon", "mafia", "alive"),
+        ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let output = resolve(ResolutionInput {
+        game_id: "no-lynch".to_string(),
+        phase_id: "D02".to_string(),
+        run_id: "no-lynch:D02:1".to_string(),
+        state,
+        submissions: vec![
+            vote("vote_1", "slot_1", "no_lynch", 1),
+            vote("vote_2", "slot_2", "no_lynch", 2),
+        ],
+        day_phase_inputs: Default::default(),
+        pack,
+        seed: 11,
+        logical_time: 111,
+    });
+
+    let outcome = output
+        .applied
+        .events
+        .iter()
+        .find_map(|event| match &event.event {
+            InnerEvent::DayVoteOutcome(outcome) => Some(outcome),
+            _ => None,
+        })
+        .expect("resolution should emit a day vote outcome");
+    assert_eq!(outcome.status, VoteStatus::NoLynch);
+    assert_eq!(outcome.winner, None);
+    assert_eq!(
+        outcome.tallies.get("no_lynch").copied(),
+        Some(2.0),
+        "no_lynch is an official pack-governed vote target"
+    );
+    assert!(
+        output.applied.events.iter().all(|event| !matches!(
+            &event.event,
+            InnerEvent::PlayerKilled { cause, .. } if cause == "day_vote"
+        )),
+        "a no-lynch outcome must not emit a day-vote kill"
+    );
 }
 
 // ───────────────────────── check_win ─────────────────────────
@@ -189,11 +1306,29 @@ fn check_win_town_when_mafia_eliminated() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Day,
         phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "dead"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
@@ -207,10 +1342,28 @@ fn check_win_mafia_at_parity() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "mafia"),
@@ -224,11 +1377,29 @@ fn check_win_none_when_game_continues() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Day,
         phase_number: 1,
+        phase_id: "D01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     assert!(check_win(&state, &pack).is_none());
 }
@@ -242,12 +1413,30 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
     let still_cult = StateSnapshot {
         phase_kind: PhaseKind::Day,
         phase_number: 3,
+        phase_id: "D03".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
         slots: vec![
             slot("a", "villager", "town", "alive"),
             slot("b", "villager", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "dead"),
             slot("c", "cultist", "cult", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     // town(2) vs others(1 cult): town AllOthers? no. mafia parity? 0 -> no.
     // cult parity? 1 >= 2? no. So no win while the cult survives.
@@ -257,12 +1446,30 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
     let both_dead = StateSnapshot {
         phase_kind: PhaseKind::Day,
         phase_number: 4,
+        phase_id: "D04".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
         slots: vec![
             slot("a", "villager", "town", "alive"),
             slot("b", "villager", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "dead"),
             slot("c", "cultist", "cult", "dead"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     match check_win(&both_dead, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
@@ -277,10 +1484,28 @@ fn epicmafia_cult_wins_at_parity() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 2,
+        phase_id: "N02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
         slots: vec![
             slot("t", "villager", "town", "alive"),
             slot("c", "cult_leader", "cult", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "cult"),
@@ -301,15 +1526,34 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     let n01 = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("slot_1", "mafia_goon", "mafia", "alive"),
             slot("slot_2", "vanilla_townie", "town", "alive"),
             slot("slot_3", "vanilla_townie", "town", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
-    let night_events = resolve(ResolutionInput {
+    let night_events = resolve_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "N01".to_string(),
+        run_id: "mp:N01:1".to_string(),
         state: n01.clone(),
         submissions: vec![Submission {
             action_id: "k1".to_string(),
@@ -321,8 +1565,10 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             withdrawn: false,
             metadata: Default::default(),
         }],
+        day_phase_inputs: Default::default(),
         pack: pack.clone(),
         seed: 1,
+        logical_time: 1,
     });
 
     // After N01: slot_2 dead. Alive = slot_1 mafia + slot_3 town = parity 1-1,
@@ -336,25 +1582,44 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
 
     // Fold the night forward: state must carry slot_2's death across the phase.
     let after_n01 = apply_events(&n01, &night_events);
-    assert_eq!(find(&after_n01, "slot_2").status, "dead");
-    assert_eq!(find(&after_n01, "slot_1").status, "alive");
-    assert_eq!(find(&after_n01, "slot_3").status, "alive");
+    assert_eq!(find(&after_n01, "slot_2").status, SlotLifecycle::Dead);
+    assert_eq!(find(&after_n01, "slot_1").status, SlotLifecycle::Alive);
+    assert_eq!(find(&after_n01, "slot_3").status, SlotLifecycle::Alive);
 
     // Now demonstrate the negative case: a roster that does NOT reach a win on
     // the night, then reaches one on the following day lynch.
     let n01_safe = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
         slots: vec![
             slot("slot_1", "mafia_goon", "mafia", "alive"),
             slot("slot_2", "vanilla_townie", "town", "alive"),
             slot("slot_3", "vanilla_townie", "town", "alive"),
             slot("slot_4", "vanilla_townie", "town", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
-    let night_safe = resolve(ResolutionInput {
+    let night_safe = resolve_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "N01".to_string(),
+        run_id: "mp:N01:safe".to_string(),
         state: n01_safe.clone(),
         submissions: vec![Submission {
             action_id: "k1".to_string(),
@@ -366,8 +1631,10 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             withdrawn: false,
             metadata: Default::default(),
         }],
+        day_phase_inputs: Default::default(),
         pack: pack.clone(),
         seed: 1,
+        logical_time: 1,
     });
     // After this night: mafia 1, town 2 -> no parity, no win yet.
     assert!(
@@ -377,23 +1644,26 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         "no win should fire while town outnumbers mafia"
     );
     let after_safe = apply_events(&n01_safe, &night_safe);
-    assert_eq!(find(&after_safe, "slot_2").status, "dead");
+    assert_eq!(find(&after_safe, "slot_2").status, SlotLifecycle::Dead);
 
     // D02 on the carried-forward state (advance the cursor — the engine's job,
     // not apply_events'): town lynches the mafia goon. Mafia eliminated -> town wins.
     let mut d02 = after_safe.clone();
     d02.phase_kind = PhaseKind::Day;
     d02.phase_number = 2;
-    let day_events = resolve(ResolutionInput {
+    let day_events = resolve_events(ResolutionInput {
         game_id: "mp".to_string(),
         phase_id: "D02".to_string(),
+        run_id: "mp:D02:1".to_string(),
         state: d02.clone(),
         submissions: vec![
             vote("v1", "slot_3", "slot_1", 1),
             vote("v2", "slot_4", "slot_1", 2),
         ],
         pack: pack.clone(),
+        day_phase_inputs: Default::default(),
         seed: 1,
+        logical_time: 2,
     });
 
     // slot_1 (the only mafia) is lynched -> mafia eliminated -> town wins.
@@ -405,7 +1675,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     assert!(
         day_events.iter().any(|e| matches!(
             e,
-            InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable }
+            InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
                 if slot_id == "slot_1" && cause == "day_vote" && attackers.is_empty() && *unstoppable
         )),
         "the lynch must emit a PlayerKilled (cause=day_vote, unstoppable, no attackers)"
@@ -420,7 +1690,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
     let after_d02 = apply_events(&d02, &day_events);
     assert_eq!(
         find(&after_d02, "slot_1").status,
-        "dead",
+        SlotLifecycle::Dead,
         "R1: apply_events folds the lynch PlayerKilled to dead"
     );
 }
@@ -440,18 +1710,37 @@ fn arsonist_persistent_effect_carries_across_phases() {
     let n01 = StateSnapshot {
         phase_kind: PhaseKind::Night,
         phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
         slots: vec![
             slot("slot_1", "arsonist", "mafia", "alive"),
             slot("slot_2", "villager", "town", "alive"),
             slot("slot_3", "villager", "town", "alive"),
             slot("slot_4", "villager", "town", "alive"),
         ],
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
     };
 
     // N01: douse slot_2.
-    let n01_events = resolve(ResolutionInput {
+    let n01_events = resolve_events(ResolutionInput {
         game_id: "arson".to_string(),
         phase_id: "N01".to_string(),
+        run_id: "arson:N01:1".to_string(),
         state: n01.clone(),
         submissions: vec![Submission {
             action_id: "d1".to_string(),
@@ -463,8 +1752,10 @@ fn arsonist_persistent_effect_carries_across_phases() {
             withdrawn: false,
             metadata: Default::default(),
         }],
+        day_phase_inputs: Default::default(),
         pack: pack.clone(),
         seed: 1,
+        logical_time: 1,
     });
     assert!(
         n01_events.iter().any(|e| matches!(
@@ -492,9 +1783,10 @@ fn arsonist_persistent_effect_carries_across_phases() {
     // N02: douse slot_3, then ignite. Advance the phase cursor (engine's job).
     let mut n02 = after_n01.clone();
     n02.phase_number = 2;
-    let n02_events = resolve(ResolutionInput {
+    let n02_events = resolve_events(ResolutionInput {
         game_id: "arson".to_string(),
         phase_id: "N02".to_string(),
+        run_id: "arson:N02:1".to_string(),
         state: n02.clone(),
         submissions: vec![
             Submission {
@@ -519,7 +1811,9 @@ fn arsonist_persistent_effect_carries_across_phases() {
             },
         ],
         pack: pack.clone(),
+        day_phase_inputs: Default::default(),
         seed: 1,
+        logical_time: 2,
     });
 
     // ignite reads the "doused" effect off the state. slot_2 was doused on N01
@@ -554,7 +1848,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
 
     // Fold N02: slot_2 dead, slot_3 now doused (ready for the next ignite).
     let after_n02 = apply_events(&n02, &n02_events);
-    assert_eq!(find(&after_n02, "slot_2").status, "dead");
+    assert_eq!(find(&after_n02, "slot_2").status, SlotLifecycle::Dead);
     assert_eq!(
         find(&after_n02, "slot_3").effects,
         vec!["doused".to_string()]

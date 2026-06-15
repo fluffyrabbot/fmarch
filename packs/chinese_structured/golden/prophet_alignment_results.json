@@ -1,0 +1,132 @@
+{
+  "description": "Chinese Prophet investigate_alignment uses the ordinary Parity investigation mode but pack-owned good/evil result strings.",
+  "input": {
+    "game_id": "chinese_prophet_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "prophet",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "prophet",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "wolf",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [],
+      "action_grants": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "retaliations": [],
+      "wolf_carry_tokens": [],
+      "wolf_beauty_marks": [],
+      "badges": []
+    },
+    "submissions": [
+      {
+        "action_id": "prophet_001",
+        "actor": "slot_1",
+        "template_id": "investigate_alignment",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false
+      },
+      {
+        "action_id": "prophet_002",
+        "actor": "slot_2",
+        "template_id": "investigate_alignment",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false
+      }
+    ],
+    "pack": "chinese_structured",
+    "seed": 930401
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "result": "evil"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "result": "good"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

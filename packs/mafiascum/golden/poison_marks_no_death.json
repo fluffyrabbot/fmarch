@@ -1,0 +1,124 @@
+{
+  "description": "Poisoner marks a target with poisoned. The mark persists, but fresh poison does not kill in the same resolution.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": [
+          "slot_2"
+        ],
+        "effect": "poisoned",
+        "status": "marked"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "duration": "Persistent",
+        "effect": "poisoned",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "sub_001",
+        "target": "slot_2",
+        "visibility": "Target"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DelayedDeathQueued",
+      "payload": {
+        "queue_id": "poisoned:slot_2:sub_001",
+        "target": "slot_2",
+        "cause": "poison",
+        "effect": "poisoned",
+        "source": "slot_1",
+        "source_action": "sub_001",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_poison_001",
+    "pack": "mafiascum",
+    "phase_id": "N01",
+    "seed": 101010,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "poisoner",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_4",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "poison",
+        "withdrawn": false
+      }
+    ]
+  }
+}

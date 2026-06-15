@@ -1,0 +1,112 @@
+{
+  "description": "Condemner target setup. The Condemner marks one target with the hidden condemner_target effect, producing a durable TargetLynchWinTargeted relation for later lynch-win checks.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "duration": "Persistent",
+        "effect": "condemner_target",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "condemner_target_n01",
+        "target": "slot_2",
+        "visibility": "Hidden"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "TargetLynchWinTargeted",
+      "payload": {
+        "effect": "condemner_target",
+        "owner": "slot_1",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "policy": "condemner",
+        "source_action": "condemner_target_n01",
+        "target": "slot_2"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_condemner_target_001",
+    "pack": "mafiascum",
+    "phase_id": "N01",
+    "seed": 45,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "condemner",
+          "effects": [],
+          "role_key": "condemner",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "condemner_target_n01",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "condemner_target",
+        "withdrawn": false
+      }
+    ]
+  }
+}

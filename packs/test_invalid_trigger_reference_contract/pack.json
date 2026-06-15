@@ -1,0 +1,106 @@
+{
+  "name": "test_invalid_trigger_reference_contract",
+  "version": 1,
+  "ir_version": 24,
+  "roles": {
+    "malformed_trigger_user": {
+      "description": "Test role with trigger filter tags.",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["known_trigger_target", "known_trigger_actor"]
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with a single factional kill action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "effects": {},
+  "triggers": [
+    {
+      "id": "missing_effect_trigger",
+      "on": "Kill",
+      "if_target_has": ["", "missing_tag", "known_trigger_target", "known_trigger_target"],
+      "if_actor_has": ["", "missing_actor_tag", "known_trigger_actor", "known_trigger_actor"],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "modifiers": []
+      }
+    },
+    {
+      "id": "missing_effect_trigger",
+      "on": "Kill",
+      "if_target_has": ["known_trigger_target"],
+      "produces": {
+        "ability": "Protect",
+        "actor": "TargetGuard",
+        "target": "Other",
+        "modifiers": []
+      }
+    },
+    {
+      "id": "bad_kill_modifiers",
+      "on": "Kill",
+      "if_target_has": ["known_trigger_target"],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Actor",
+        "modifiers": ["Ninja", "Strongman", "Strongman"]
+      }
+    }
+  ],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

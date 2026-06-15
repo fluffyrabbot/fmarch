@@ -1,0 +1,178 @@
+{
+  "description": "Sheriff election assigns the badge before the day vote, making the elected owner's ballot weigh 1.5 in the official DayVoteOutcome.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "BadgeChanged",
+      "payload": {
+        "actor": "slot_1",
+        "badge_id": "sheriff_badge",
+        "destroyed": false,
+        "owner": "slot_2",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "previous_owner": null,
+        "reason": "elected",
+        "source_action": "badge_el_001",
+        "vote_weight": 1.5
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_4"
+        ],
+        "majority": 3.0,
+        "reason": null,
+        "status": "NoMajority",
+        "tallies": {
+          "slot_4": 2.5
+        },
+        "thresholds": {
+          "slot_1": 3.0,
+          "slot_2": 3.0,
+          "slot_3": 3.0,
+          "slot_4": 3.0,
+          "slot_5": 3.0
+        },
+        "tiebreak": null,
+        "total_weight": 5.5,
+        "votes": {
+          "slot_2": "slot_4",
+          "slot_3": "slot_4"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.5,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0
+        },
+        "winner": null
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "cn_demo_001",
+    "pack": "chinese_structured",
+    "phase_id": "D01",
+    "seed": 800001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "sheriff_badge_helper",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "sheriff_badge_helper",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "badge_el_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "sheriff_election",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_001",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

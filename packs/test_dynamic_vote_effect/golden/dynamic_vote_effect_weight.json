@@ -1,0 +1,195 @@
+{
+  "description": "Day majority vote with dynamic effect-based vote weights. A slot carrying the folded vote_empowered effect contributes 2.0, raising total weight to 6.0 and combining with two ordinary votes to reach the 4.0 majority threshold.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_3"
+        ],
+        "majority": 4.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_2": 1.0,
+          "slot_3": 4.0,
+          "slot_4": 1.0
+        },
+        "thresholds": {
+          "slot_1": 4.0,
+          "slot_2": 4.0,
+          "slot_3": 4.0,
+          "slot_4": 4.0,
+          "slot_5": 4.0
+        },
+        "tiebreak": null,
+        "total_weight": 6.0,
+        "votes": {
+          "slot_1": "slot_3",
+          "slot_2": "slot_3",
+          "slot_3": "slot_4",
+          "slot_4": "slot_2",
+          "slot_5": "slot_3"
+        },
+        "weights": {
+          "slot_1": 2.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0
+        },
+        "winner": "slot_3"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_3",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "lynch"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_dynamic_vote_effect_001",
+    "pack": "test_dynamic_vote_effect",
+    "phase_id": "D01",
+    "seed": 727276,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [
+            "vote_empowered"
+          ],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_004",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_005",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 5,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

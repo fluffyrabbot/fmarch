@@ -1,0 +1,53 @@
+{
+  "name": "test_hammer_majority",
+  "version": 1,
+  "ir_version": 1,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": true,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

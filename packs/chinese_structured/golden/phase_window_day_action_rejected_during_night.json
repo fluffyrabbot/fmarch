@@ -1,0 +1,103 @@
+{
+  "description": "A valid Day-window action injected into a Night phase is rejected by the pure resolver with the im-human day_specific reason before night resolution continues.",
+  "input": {
+    "game_id": "chinese_phase_window_day_action_night_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930402,
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "white_wolf_king",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [],
+      "action_grants": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "retaliations": [],
+      "wolf_carry_tokens": [],
+      "wolf_beauty_marks": [],
+      "badges": []
+    },
+    "submissions": [
+      {
+        "action_id": "self_wrong_night_001",
+        "actor": "slot_1",
+        "template_id": "day_self_destruct",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ]
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_1",
+        "reason": "day_specific"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

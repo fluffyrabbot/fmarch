@@ -103,7 +103,7 @@ evaluated? The answer matters and the docs give no global evaluation order — j
 `Vec<PrecedenceRule>` plus per-action `priority`.
 
 I imposed an order via `priority` on the action templates (Block 90 > Redirect 80 > Protect
-70 > Investigate 50/40 > Kill 30) and wrote precedence-rule `notes` asserting "Block is
+70 > Kill 30 > Investigate 20/10) and wrote precedence-rule `notes` asserting "Block is
 evaluated first" and "Redirect rewrites targets before Kill/Protect read them." **This is my
 construction; the docs neither prescribe nor forbid it.** Two pack authors could encode the
 same roles and get different results on the roleblocked-doctor-vs-strongman corner.
@@ -180,7 +180,9 @@ serialization contract:
 
 ## 10. Factional kill: one event source, multiple potential actors (not a blocker, noted)
 
-Mafia Goon / Godfather / Ninja / Strongman all share `template_id: "factional_kill"`. The
+Mafia Goon / Godfather / Ninja share `template_id: "factional_kill"`; Strongman uses the
+observed role-specific `template_id: "strongman_kill"` so the port keeps that im-human action
+id visible in the pack and parity matrix. The
 faction submits **one** kill. The engine is user-agnostic and slot-only, so "which slot
 submitted the factional kill" is just whichever mafia slot the platform attributes it to.
 This works fine under the current model (the submission carries `actor: SlotId`), but doc 09
@@ -219,20 +221,25 @@ Reviewer rulings applied; the loop is closed. One line per finding:
 1. **`mode` on `ActionTemplate`** — APPLIED (R1). Added `mode: Option<InvestigateMode>` to
    `ActionTemplate`, REQUIRED iff `ability == Investigate`. `IrAbility` stays a flat tag. The
    pack's `"mode"` on cop/tracker is now canonical, not a deviation.
-2. **Godfather result-flip home** — APPLIED (R2). Added `effects: Vec<Tag>` to `Role` and
-   `SlotState`; added optional pack table `investigation_overrides: Map<Tag, ResultOverride>`
-   (canonical home for Godfather, forward-compatible with Miller/framers). Pack gains
-   `{ "godfather": { "Parity": "town" } }`.
-3. **Track result is graph-derived** — APPLIED (R3). Documented in the IR/Investigate spec and
-   determinism rules: Track/Watch/Motion results are graph-derived and not `VisibilityRule`-
-   configurable beyond hide/show.
+2. **Godfather/Miller/Framer result-flip home** — APPLIED (R2). Added `effects: Vec<Tag>` to
+   `Role` and `SlotState`; added optional pack table
+   `investigation_overrides: Map<Tag, ResultOverride>` (canonical home for Godfather,
+   Miller, and Mark-driven Framer). Pack now carries `godfather -> town`, `miller -> scum`,
+   and `framed -> scum` Parity overrides, with goldens for all three.
+3. **Track/Watch/Motion results are graph-derived** — APPLIED (R9). Documented in the
+   IR/Investigate spec and determinism rules: Track returns visited slots, Watch returns
+   visitors, and Motion returns a boolean active/inactive result from resolved post-redirect,
+   non-blocked, non-hidden visits. Goldens cover ordinary Track, multi-visitor Watch, visible
+   Motion, and Ninja-hidden Watch/Motion.
 4. **Blocked-action channel** — APPLIED (R4). Added `ActionInterfered { actor, reason }` inner
    event; `EffectNotification` is reserved for Mark/Clear and is NOT the roleblock channel.
    `roleblock_stops_action.json` now emits `ActionInterfered{actor: slot_2, reason: "roleblocked"}`
-   and no `InvestigationResult`.
-5. **Precedence evaluation order** — APPLIED (R3). Determinism rules now state descending
-   `Constraints.priority`, canonical phase order Block → Redirect → Protect → Kill →
-   Investigate, and that rules are consulted at the point each ability resolves.
+   and no `InvestigationResult`. Roleblock suppression now also emits structured
+   `DecisionTrace` detail with the suppressed action and blocking source.
+5. **Precedence evaluation order** — APPLIED (R3). The resolver now derives v1 night ability
+   order from pack precedence plus `Constraints.priority`; the mafiascum pack order is
+   Block → Redirect → Protect → Mark → Clear → Grant → Kill → Investigate, and validation
+   rejects ambiguous priority ties, cycles, and unsupported precedence fields.
 6. **`unless_modifiers` reverse-lookup** — APPLIED (R3). Documented that `unless_modifiers`
    inspects the BEATEN action's modifiers (the one in `beats`), not the beating action/target.
 7. **`Tie` vote status** — APPLIED (R5). `VoteStatus` gains `Tie`; `day_vote_tiebreak.json`
@@ -244,3 +251,180 @@ Reviewer rulings applied; the loop is closed. One line per finding:
    (bus_driver `Many` + `max_targets: 2` is canonical).
 10. **Faction quota** — DEFERRED (R7). One-line note added: v1 submits exactly one factional
     action per faction per night; `faction_quota` is future work, out of the v1 schema.
+11. **Composed Jailkeeper and Bodyguard intercept** — APPLIED (R8). Added additive
+    `ActionTemplate.additional_abilities` so one `jail` submission resolves as both Block and
+    Protect, without command-side phantom actions. Added `Modifier::Bodyguard` so a Protect can
+    save the target and kill the protector via `bodyguard_intercept`. Goldens cover
+    `bodyguard_intercept.json`, `jailkeeper_block_protect.json`, and
+    `roleblock_stops_doctor_protect.json`. Protect saves and strongman protection bypasses now
+    emit structured `DecisionTrace` detail, including protectors and bypass outcome, with a
+    persisted command/projection rebuild proof.
+12. **Ordered redirect graph** — APPLIED (R10). Added `ActionTemplate.redirect` with
+    `Swap`, `Pull`, and `Retarget` kinds. The resolver applies grouped redirect rules once per
+    redirect action, bounded by `redirects.loop_cap`, so Bus Driver swaps stay one-hop while
+    separate redirect actions compose deterministically. Goldens cover Bus Driver preservation,
+    Lightning Rod pull, and a two-redirect cycle. Redirect rewrites now emit deterministic
+    `ResolutionTrace.edges`, graph truncation emits a loop-cap note, and a command/projection
+    test proves the persisted trace envelope survives rebuild.
+13. **Target-state gates** — APPLIED (R11). Added `effect_duration: Resolution` for
+    same-night-only Mark effects such as Commuter. Resolver target-state checks now read role
+    effects, slot effects, and same-resolution transient marks. Goldens cover Bulletproof,
+    bulletproof vest consumption, Commuter dodging kill/investigation, passive untargetable
+    blocking kill/investigation, and Strongman piercing Bulletproof. Commuted skipped kills and
+    untargetable investigation interference now emit structured `DecisionTrace` detail, with a
+    persisted command/projection rebuild proof. Rolestop/shield-all action variants remain future
+    work.
+14. **Action constraints and announcement modifiers** — APPLIED (R12). Added
+    `constraints.phase_parity` for odd/even night actions, strict v1 one-shot support via
+    `constraints.x_shots = 1` plus typed `ActionUseCounted` / `action_counter` state, Weak
+    Parity backlash, macho target-state protection immunity, and Loud/Announcing public
+    notifications. Bulletproof vest consumption now records `shield:bulletproof_vest` in the same
+    typed counter surface, and `constraints.cooldown_cycles` records
+    `cooldown:<template_id>` counters for same-phase-kind cooldowns. `constraints.active_from`
+    models Novice/Activated phase gates with command rejection and resolver suppression. Added
+    `ActionRecorded` and `StateSnapshot.action_history` for target-repeat non-consecutive and
+    Compulsive missing-action audit. Goldens cover each proven path, and a command/projection
+    test proves N01 history blocks a repeated N02 target after persistence/rebuild. Multi-shot
+    counters remain future work.
+15. **Persistent poison/douse/cleanse timing** — APPLIED (R13). Poison is modeled as a
+    persistent `Mark("poisoned")`; pending poison kills on a later night unless a same-resolution
+    `Clear("poisoned")` resolves first. Arson douse/ignite uses the same persistent-effect
+    surface: `Mark("doused")`, `Kill.reads_effect = "doused"`, and `Clear("doused")` preempts
+    ignite. Goldens cover poison mark/no same-night death, pending poison death, cure preemption,
+    ignite from carried douse, and cleanse preemption. A command/projection test proves poison
+    mark, cure, delayed death, and rebuild through the persisted event stream. Pending poison
+    applied, cure preemption, and cleanse-before-ignite read-effect preemption now emit
+    structured `DecisionTrace` detail with persisted command/projection rebuild proof.
+16. **Effect policy table** — APPLIED (R14). Added pack-level `effects` metadata as the
+    canonical home for Mark/Clear lifecycle and visibility: `commuted` is now
+    `duration: Resolution` / `visibility: Hidden`, while `poisoned` and `doused` remain
+    persistent but can emit explicit-audience notifications (`Target` and `ActorAndTarget`,
+    respectively). Resolver Mark/Clear output now emits `EffectNotification` for non-hidden
+    effect policy, and goldens cover poison mark, poison cure, douse cleanse, and Commuter
+    target-state gating. Richer persisted effect metadata — source, phase, exact expiry, and
+    visibility in the `slot_effect` projection — remains future work; the projection still
+    stores only the v1 effect tag.
+17. **Generated grant surface** — APPLIED (R15). Added v2 `IrAbility::Grant` with
+    `GrantSpec { grant_id, kind, uses, visibility }`, plus state-bearing
+    `ActionGranted` and the rebuildable `action_grant` projection. The mafiascum pack now
+    carries `motivator.motivate` (`ExtraAction`) and `inventor.grant_item` (`Item`), both with
+    target-private `EffectNotification` output. Goldens cover both grant kinds, a
+    command/projection test proves `Command::ResolvePhase` appends/projects a motivator grant,
+    and the trace `generated` table derives rows from `ActionGranted`. `SubmitAction.grant_id`
+    now consumes extra-action and item grants through durable `ActionGrantConsumed`; the
+    generated vest item also writes ordinary persistent state that later resolves through the
+    vest-save path.
+18. **Conversion origin, deprogramming, and backup inheritance** — APPLIED (R16/R17). Enriched
+    `PlayerConverted` with `original_alignment` and added folded
+    `StateSnapshot.conversion_origins`, so restore-original mechanics read a real event-derived
+    memory surface. Added structured `ConversionSpec` with `AssignRole` and `RestoreOriginal`;
+    mafiascum now carries `cult_leader.cult_recruit`, `deprogrammer.deprogram`, `cultist`, and
+    passive `backup_cop` (`backup:cop`). R17 adds `backup_policy`, `universal_backup.target_backup`
+    (`inherit_role`), and folded `BackupTargeted` source choices. Goldens cover deprogramming
+    from recorded origin, passive backup-cop inheritance, and targeted backup inheritance after
+    the selected source dies; conversion assignment and restore-original deprogramming now emit
+    structured `DecisionTrace` detail with persisted command/projection rebuild proof. Passive
+    and targeted backup inheritance now also emit structured attribution traces; the targeted
+    backup command/projection vertical persists and rebuild-preserves that trace envelope.
+    Multi-source backup priority variants remain future work.
+19. **Trigger observations for vengeful, PGO, and Super-Saint** — APPLIED (R17). Generalized
+    trigger matching from ability-only `on` values to `TriggerOn` observations so packs can react
+    to `Kill`, `Visit`, and `Lynch` without role-specific resolver branches. Added mafiascum
+    canonical `vengeful`, `paranoid_gun_owner`, and `super_saint` passive roles plus trigger table
+    rows; goldens prove Vengeful Townie retaliation, PGO visitor kills, and Super-Saint lynch
+    retaliation against the latest active voter on the wagon. Command/projection tests prove the
+    PGO trigger death and Super-Saint lynch trigger through persisted `Command::ResolvePhase` plus
+    rebuild. A protected PGO visitor is now proven to be saved by ordinary Doctor protection, with
+    persisted protect-vs-generated-kill `DecisionTrace` detail and rebuild-preserved trace
+    envelope. A Bodyguard-protected PGO visitor is now proven to survive while the Bodyguard dies
+    from `bodyguard_intercept`, with `intercepts: true` in the persisted trace and rebuild-preserved
+    slot state. A pack-declared `unstoppable_vengeful_retaliates` trigger-produced kill now carries
+    `Strongman`, bypasses Doctor and Bodyguard protection through the same kill policy, leaves the
+    bypassed Bodyguard alive, and rebuild-preserves its persisted bypass trace envelopes. Trigger
+    loop-cap diagnostics now flow into `ResolutionTrace.notes` with a cyclic retaliation fixture and
+    persisted trigger-trace rebuild assertion. Beloved Princess now emits a durable host prompt
+    through policy; broader trigger-family policy remains future work.
+19a. **Mason/neighbor private-channel metadata** — APPLIED (R29). Mafiascum now declares
+    canonical `mason`, `neighbor`, `friendly_neighbor`, and `neighborizer` roles plus a
+    pack-owned `private_channels` table. `StartGame` emits deterministic
+    `PrivateChannelDeclared` events for setup groups with at least two members, and the
+    rebuildable `private_channel_member` projection stores membership metadata without leaking it
+    into public `thread_view`. Pack validation enforces v29, declared roles, unique groups/roles,
+    and the im-human alignment-reveal split: Mason reveals Town, Neighbor reveals no alignment.
+20. **Target-lynch independent wins** — APPLIED (R19). Replaced the single Executioner-specific
+    policy with v19 `target_lynch_win_policies`, the foldable `TargetLynchWinTargeted`
+    owner-target event, and mafiascum `executioner.executioner_target` plus
+    `condemner.condemner_target` hidden persistent Mark actions. Goldens prove both target
+    designation flows and later independent `WinReached` events when the chosen target is lynched.
+    A Condemner command/projection vertical proves the generalized relation survives persisted
+    `Command::ResolvePhase`, carries into the day snapshot, reveals roles on target-lynch win, and
+    rebuild-preserves slot state, slot effects, and the target-lynch trace envelope.
+21. **Beloved Princess host prompt** — APPLIED (R20). Added v20 `beloved_princess_policy`,
+    the closed `HostPromptIssued` inner event, and the rebuildable `host_prompt` projection.
+    Mafiascum `beloved_princess` now emits a `skip_next_day` host prompt when lynched, before the
+    trailing `PhaseAnnouncement`. Goldens prove the resolver event order and trace decision, and a
+    command/projection vertical proves the prompt persists through `Command::ResolvePhase` and
+    rebuilds identically. Broader vote-result host prompts are tracked separately below.
+22. **No-majority revote host prompt** — APPLIED (R21/R22). Added v21
+    `day_vote_prompt_policies`, with mafiascum mapping official `NoMajority` outcomes to a
+    `HostPromptIssued { kind: "revote", reason: "no_majority" }` before the trailing
+    `PhaseAnnouncement`. The existing tie/no-majority and Loved-threshold goldens now prove the
+    prompt event; a trace assertion proves deterministic prompt attribution, and the Loved
+    threshold command/projection vertical proves the `host_prompt` row rebuilds identically.
+    The same generic policy now maps epicmafia `HostDecides` `Tie` outcomes to
+    `HostPromptIssued { kind: "pk", reason: "host_decides_tie" }`, with a focused golden,
+    trace assertion, and command/projection rebuild proof. R22 adds pack-declared
+    `host_prompt_resolution_effects` rows for PK, revote, and skip-next-day prompts, with strict
+    validation for decision/effect compatibility and producer coverage. `Command::ResolveHostPrompt`
+    now maps projected prompts plus host decisions through those pack rows into a typed
+    command-side `HostPromptEffect`, records `HostPromptResolved`, resolves the prompt row, and
+    appends the host-selected PK kill through validated `ResolutionApplied`/`ResolutionTrace`
+    envelopes. Host-prompt `PhaseAdvanced` payloads are now command-constructed through typed
+    provenance fields, projection-validated before `phase_state` moves, and folded into host-only
+    `host_phase_control` audit rows. Resolving a mafiascum
+    no-majority revote prompt now advances to a fresh `D01R1` vote window; a command/projection
+    vertical proves that the second `ResolvePhase` reads only the revote ballots, lynches, and
+    rebuilds prompt, phase, and slot state identically. Resolving a Beloved Princess
+    skip-next-day prompt now appends durable phase control to `N02` with `D02` recorded as the
+    skipped day, rejects votes in that night window, and rebuilds prompt, phase, and slot state
+    identically. Automated host scheduling around skipped day/night cadence remains future work.
+23. **Cupid links and lover suicide** — APPLIED (R18). Added v3 `IrAbility::Link`, the
+    state-bearing `PlayersLinked` result event, and folded `StateSnapshot.linked_slots`, so
+    cross-slot lover state is event-derived and available to later resolutions. The mafiascum
+    pack now carries `cupid.link_lovers`; goldens prove Cupid setup and lover-suicide generated
+    death, and a command/projection test proves the link carries through persisted
+    `Command::ResolvePhase` plus rebuild. Lover-suicide generated deaths now emit structured
+    `DecisionTrace` attribution keyed by the folded link id, and the command/projection vertical
+    rebuild-preserves that trace envelope. Hunter choice, babysitter/hider targeting policy, and
+    lover private-channel metadata remain future work.
+24. **Hunter chosen retaliation** — APPLIED (R19). Added v4 `IrAbility::Retaliate`, the
+    state-bearing `RetaliationArmed` result event, and folded `StateSnapshot.retaliations`, so a
+    Hunter can choose a target before dying and later generate a deterministic retaliation kill
+    from event-derived state. The mafiascum pack now carries `hunter.hunter_retaliate`; goldens
+    prove arming and later death-triggered retaliation, and a command/projection test proves the
+    armed choice carries through persisted `Command::ResolvePhase` plus rebuild. Same-resolution
+    post-trigger hunter choices and babysitter/hider targeting policy remain future work.
+25. **Babysitter guard dependency** — APPLIED (R20). Added v5 `Modifier::Babysitter` as a
+    pack-gated modifier that is legal only on `Protect` actions. The mafiascum pack now carries
+    `babysitter.babysit`; the resolver records a guard dependency when the action protects a
+    ward, and if the Babysitter dies in the same resolution the ward receives a generated
+    `PlayerKilled` with cause `babysit`. A golden proves the target is first saved by Babysitter
+    protection and then dies when the Babysitter is killed; a command/projection test proves the
+    generated death through persisted `Command::ResolvePhase` plus rebuild. The generated ward
+    death now emits structured `DecisionTrace` attribution carrying the submitted babysit action
+    id, and the command/projection test rebuild-preserves that trace envelope. Hider targeting
+    policy and broader guard/witch culture policy remain future work.
+26. **Hider hide link** — APPLIED (R21). Added v6 `Modifier::Hider` as a pack-gated modifier
+    legal only on one-target, resolution-scoped `Mark` actions. The mafiascum pack now carries
+    `hider.hide` and hidden `hide_link`; the resolver records a same-resolution host-to-hider
+    dependency, grants transient `untargetable` to the Hider only behind a known non-mafia host,
+    and generates a `PlayerKilled` with the pack-declared
+    `standard_nar.hide_dependency_cause_policy` cause if the host dies. Goldens prove direct kill
+    suppression behind a town host and generated Hider death on host death; a command/projection
+    test proves both through persisted `Command::ResolvePhase` plus rebuild. The generated hider
+    death now emits structured `DecisionTrace` attribution carrying the submitted hide action id
+    and template id,
+    and the command/projection test rebuild-preserves that trace envelope. im-human currently has
+    contradictory town-host host-death expectations across docs/death-trigger code and at least
+    one regression, so exact culture-policy variants remain future work alongside broader
+    guard/witch policy.

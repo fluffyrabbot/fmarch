@@ -1,0 +1,102 @@
+{
+  "description": "Inventor grants one single-use item to a target and privately notifies that target.",
+  "input": {
+    "game_id": "game_demo_inventor_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "inventor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "template_id": "grant_item",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 515151
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionGranted",
+      "payload": {
+        "grant_id": "single_use_item",
+        "kind": "Item",
+        "actor": "slot_1",
+        "target": "slot_2",
+        "source_action": "sub_001",
+        "uses": 1,
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectNotification",
+      "payload": {
+        "effect": "grant",
+        "status": "single_use_item",
+        "audience": [
+          "slot_2"
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

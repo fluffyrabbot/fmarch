@@ -1,0 +1,207 @@
+{
+  "description": "Death reveal policy is pack-owned: Janitor kill conceals by cause, Flipless conceals by target effect, and AlignmentOnly reveals alignment while keeping role private.",
+  "input": {
+    "game_id": "game_death_reveal_policy",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_janitor",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "godfather",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": [
+            "godfather"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "strongman",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "flipless_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "flipless"
+          ]
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "alignment_only_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "alignment_only_flip"
+          ]
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_8",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_9",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_10",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_janitor",
+        "actor": "slot_1",
+        "template_id": "janitor_kill",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "sub_flipless",
+        "actor": "slot_2",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_5"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "sub_alignment_only",
+        "actor": "slot_3",
+        "template_id": "strongman_kill",
+        "targets": [
+          "slot_6"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 7308
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_4",
+        "cause": "janitor_kill",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false,
+        "death_reveal": "Concealed"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_5",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_2"
+        ],
+        "unstoppable": false,
+        "death_reveal": "Concealed"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_6",
+        "cause": "strongman_kill",
+        "attackers": [
+          "slot_3"
+        ],
+        "unstoppable": true,
+        "death_reveal": "AlignmentOnly"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_4",
+            "cause": "janitor_kill"
+          },
+          {
+            "slot_id": "slot_5",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_6",
+            "cause": "strongman_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

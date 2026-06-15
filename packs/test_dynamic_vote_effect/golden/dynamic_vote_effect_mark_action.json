@@ -1,0 +1,119 @@
+{
+  "description": "A legal Night Mark action creates the folded vote_empowered effect consumed by the dynamic vote-weight policy on a later day.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": [
+          "slot_1",
+          "slot_2",
+          "slot_3",
+          "slot_4",
+          "slot_5"
+        ],
+        "effect": "vote_empowered",
+        "status": "marked"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_5",
+        "duration": "Persistent",
+        "effect": "vote_empowered",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "empower_vote_n01",
+        "target": "slot_1",
+        "visibility": "Public"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_dynamic_vote_mark_001",
+    "pack": "test_dynamic_vote_effect",
+    "phase_id": "N01",
+    "seed": 727277,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vote_enabler",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "empower_vote_n01",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "empower_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

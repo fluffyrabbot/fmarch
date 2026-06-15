@@ -1,0 +1,152 @@
+{
+  "description": "Mafia Universe inventor: a target spends a bulletproof vest item and marks themself with persistent bulletproof_vest.",
+  "input": {
+    "game_id": "game_mu_inventor_vest_item_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_inventor",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_grants": [
+        {
+          "grant_id": "bulletproof_vest_item",
+          "kind": "Item",
+          "actor": "slot_1",
+          "target": "slot_2",
+          "source_action": "fixture:mu_preloaded_bulletproof_vest_item",
+          "uses": 1,
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_vest_item_mark_001",
+        "actor": "slot_2",
+        "template_id": "bulletproof_vest_item",
+        "targets": ["slot_2"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {
+          "grant_id": "bulletproof_vest_item"
+        }
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 710005
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionGrantConsumed",
+      "payload": {
+        "grant_id": "bulletproof_vest_item",
+        "actor": "slot_2",
+        "action_id": "mu_vest_item_mark_001",
+        "source_action": "fixture:mu_preloaded_bulletproof_vest_item",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "remaining_uses": 0
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_2",
+        "cadence_policy": "inventory",
+        "consumed_action": "mu_vest_item_mark_001",
+        "counter_id": "inventory:bulletproof_vest_item",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "grant",
+        "remaining": 0,
+        "template_id": "bulletproof_vest_item",
+        "used": 1
+      }
+    },
+    {
+      "index": 2,
+      "kind": "EffectNotification",
+      "payload": {
+        "effect": "bulletproof_vest",
+        "status": "marked",
+        "audience": ["slot_2"]
+      }
+    },
+    {
+      "index": 3,
+      "kind": "EffectsMarked",
+      "payload": {
+        "effect": "bulletproof_vest",
+        "target": "slot_2",
+        "actor": "slot_2",
+        "source_action": "mu_vest_item_mark_001",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "duration": "Persistent",
+        "visibility": "Target"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+{
+  "description": "Rolestopper marks slot_3 untargetable for this resolution, and Shield marks slot_4 and slot_6 untargetable. Kills aimed at slot_3/slot_4 are skipped and Cop receives ActionInterfered for checking shielded slot_4.",
+  "input": {
+    "game_id": "game_demo_rolestop_shield_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "rolestopper",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "shield",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "rolestop_slot3_n01",
+        "actor": "slot_1",
+        "template_id": "rolestop",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "shield_slot4_slot6_n01",
+        "actor": "slot_2",
+        "template_id": "shield",
+        "targets": [
+          "slot_4",
+          "slot_6"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "kill_rolestopped_n01",
+        "actor": "slot_5",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "kill_shielded_n01",
+        "actor": "slot_7",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "cop_check_shielded_n01",
+        "actor": "slot_6",
+        "template_id": "cop_investigate",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 5,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 969696
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_6",
+        "reason": "untargetable"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "description": "Mafia Universe role-set info: Town Vanilla Cop, Neapolitan, and Gunsmith read pack-owned role sets.",
+  "input": {
+    "game_id": "game_mu_role_set_info_town_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_vanilla_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "town_neapolitan",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_gunsmith",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_vanilla_cop_001",
+        "actor": "slot_1",
+        "template_id": "investigate_vanilla",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_town_neapolitan_001",
+        "actor": "slot_2",
+        "template_id": "neapolitan",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_town_gunsmith_001",
+        "actor": "slot_3",
+        "template_id": "gunsmith",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 712001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Vanilla",
+        "investigator": "slot_1",
+        "target": "slot_4",
+        "result": {
+          "vanilla": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Neapolitan",
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "result": {
+          "vanilla_town": true
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Gunsmith",
+        "investigator": "slot_3",
+        "target": "slot_5",
+        "result": {
+          "has_gun": true
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

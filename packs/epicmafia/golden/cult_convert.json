@@ -6,12 +6,58 @@
     "state": {
       "phase_kind": "Night",
       "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
       "slots": [
-        { "slot_id": "slot_1", "role_key": "cult_leader", "alignment": "cult", "status": "alive", "effects": [] },
-        { "slot_id": "slot_2", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_3", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_4", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_5", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] }
+        {
+          "slot_id": "slot_1",
+          "role_key": "cult_leader",
+          "alignment": "cult",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
       ]
     },
     "submissions": [
@@ -19,7 +65,9 @@
         "action_id": "sub_001",
         "actor": "slot_1",
         "template_id": "cult_recruit",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -38,6 +86,7 @@
         "new_role": "cultist",
         "new_alignment": "cult",
         "original_role": "villager",
+        "original_alignment": "town",
         "source": "slot_1"
       }
     },

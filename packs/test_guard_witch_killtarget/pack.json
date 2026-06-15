@@ -1,0 +1,126 @@
+{
+  "name": "test_guard_witch_killtarget",
+  "version": 1,
+  "ir_version": 13,
+  "roles": {
+    "guard": {
+      "description": "Guard for same-target Witch conflict tests.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "night_guard",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70
+          }
+        }
+      ]
+    },
+    "witch": {
+      "description": "Witch heal for same-target Guard conflict tests.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "heal_potion",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": 1
+          }
+        }
+      ]
+    },
+    "wolf": {
+      "description": "Wolf kill source for same-target Guard conflict tests.",
+      "alignment": "wolf",
+      "actions": [
+        {
+          "id": "wolf_night_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30
+          }
+        }
+      ]
+    },
+    "villager": {
+      "description": "Vanilla town target.",
+      "alignment": "town",
+      "actions": []
+    }
+  },
+  "precedence": [
+    {
+      "id": "protect_before_guard_blockable_kills",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": [],
+      "unless_modifiers": []
+    }
+  ],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {},
+    "twilight": false
+  },
+  "guard_policy": {
+    "enabled": true,
+    "guard_action_ids": ["night_guard"],
+    "witch_heal_action_ids": ["heal_potion"],
+    "guard_blockable_causes": ["poison_potion"],
+    "guard_self_allowed": true,
+    "guard_night_one_allowed": true,
+    "same_target_witch": "KillTarget",
+    "same_target_witch_kill_cause": "guard_witch_same_target"
+  },
+  "effects": {},
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "wolf" }
+      },
+      {
+        "winner": "wolf",
+        "when": { "FactionReachesParity": "wolf" }
+      }
+    ]
+  }
+}

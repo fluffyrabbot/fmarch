@@ -1,0 +1,124 @@
+{
+  "description": "TRIGGER visit primitive. A Roleblocker visits a Paranoid Gun Owner; the pgo_shoots_visitor trigger observes the Visit and produces a Kill against the visitor.",
+  "input": {
+    "game_id": "game_demo_pgo_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "roleblocker",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "paranoid_gun_owner",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "pgo"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "block_001",
+        "actor": "slot_1",
+        "template_id": "roleblocker_block",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 32
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "pgo_shoots_visitor",
+        "payload": {
+          "on": "Visit",
+          "source_target": "slot_2",
+          "source_actor": "slot_1",
+          "source_cause": "roleblocker_block",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_1"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "pgo_shoots_visitor",
+        "attackers": [
+          "slot_2"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "pgo_shoots_visitor"
+          }
+        ]
+      }
+    }
+  ]
+}

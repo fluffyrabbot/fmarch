@@ -1,0 +1,144 @@
+{
+  "description": "A Chinese Guard policy variant can disable Guard on night one by requiring the Guard action to become active from N02.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_1",
+        "reason": "activated_inactive"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_2"
+        ],
+        "cause": "wolf_night_kill",
+        "slot_id": "slot_3",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "cause": "wolf_night_kill",
+            "slot_id": "slot_3"
+          }
+        ],
+        "phase_id": "N01"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": null,
+        "winner": "wolf"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_guard_night_one_disabled_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930208,
+    "state": {
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Night": [
+            "night_guard",
+            "wolf_kill"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "role_key": "guard",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "role_key": "wolf",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "role_key": "villager",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "guard_001",
+        "actor": "slot_1",
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "night_guard"
+      },
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_2",
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "wolf_night_kill"
+      }
+    ]
+  },
+  "pack_overrides": {
+    "guard_policy": {
+      "guard_night_one_allowed": false
+    },
+    "roles": {
+      "guard": {
+        "actions": [
+          {
+            "ability": "Protect",
+            "constraints": {
+              "active_from": {
+                "phase_kind": "Night",
+                "phase_number": 2,
+                "reason": "Activated"
+              },
+              "max_targets": 1,
+              "priority": 70,
+              "roleblockable": true,
+              "self_allowed": true,
+              "unique_targets": true
+            },
+            "id": "night_guard",
+            "modifiers": [
+              "Reflexive"
+            ],
+            "targets": "One",
+            "window": "Night"
+          }
+        ]
+      }
+    }
+  }
+}

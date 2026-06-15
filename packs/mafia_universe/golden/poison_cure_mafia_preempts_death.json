@@ -1,0 +1,126 @@
+{
+  "description": "Mafia Universe poison: Mafia Poison Doctor clears poisoned before pending poison death resolves.",
+  "input": {
+    "game_id": "game_mu_poison_cure_mafia_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_poison_doctor",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": ["poisoned"]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_poisoner",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "delayed_deaths": [
+        {
+          "queue_id": "poisoned:slot_2:mu_prev_town_poison",
+          "target": "slot_2",
+          "cause": "poison",
+          "effect": "poisoned",
+          "source": "slot_3",
+          "source_action": "mu_prev_town_poison",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_mafia_cure_001",
+        "actor": "slot_1",
+        "template_id": "cure_poison",
+        "targets": ["slot_2"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 707004
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": ["slot_2"],
+        "effect": "poisoned",
+        "status": "cleared"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectsCleared",
+      "payload": {
+        "actor": "slot_1",
+        "effect": "poisoned",
+        "targets": ["slot_2"]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DelayedDeathResolved",
+      "payload": {
+        "queue_id": "poisoned:slot_2:mu_prev_town_poison",
+        "target": "slot_2",
+        "cause": "poison",
+        "effect": "poisoned",
+        "outcome": "preempted_by_clear",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

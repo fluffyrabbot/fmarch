@@ -1,0 +1,2271 @@
+{
+  "name": "mafia_universe",
+  "version": 1,
+  "ir_version": 46,
+  "item_actions": {
+    "parity_scanner_item": {
+      "id": "parity_scanner_item",
+      "ability": "Investigate",
+      "window": "Night",
+      "targets": "One",
+      "modifiers": [],
+      "constraints": {
+        "max_targets": 1,
+        "self_allowed": false,
+        "unique_targets": true,
+        "roleblockable": true,
+        "priority": 20,
+        "x_shots": null
+      },
+      "mode": "Parity"
+    },
+    "bulletproof_vest_item": {
+      "id": "bulletproof_vest_item",
+      "ability": "Mark",
+      "window": "Night",
+      "targets": "One",
+      "modifiers": ["Reflexive"],
+      "constraints": {
+        "max_targets": 1,
+        "self_allowed": true,
+        "unique_targets": true,
+        "roleblockable": true,
+        "priority": 60,
+        "x_shots": null
+      },
+      "effect": "bulletproof_vest"
+    }
+  },
+  "roles": {
+    "town_ita_shooter": {
+      "description": "Town ITA participant for the first Mafia Universe ITA vertical.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "ita_shot",
+          "ability": "ItaShot",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_ita_sharpshooter": {
+      "description": "Town ITA participant with better ITA chance.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "ita_shot",
+          "ability": "ItaShot",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_ita_bad_shot": {
+      "description": "Town ITA participant with worse ITA chance.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "ita_shot",
+          "ability": "ItaShot",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_vanilla": {
+      "description": "Town-aligned vanilla participant.",
+      "alignment": "town",
+      "actions": []
+    },
+    "town_treestump": {
+      "description": "Town-aligned Treestump. Remains in thread without a vote after elimination.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_treestump": {
+      "description": "Mafia-aligned Treestump. Remains in thread without a vote after elimination.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned vanilla participant. May carry the ordinary factional night kill.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_roleblocker": {
+      "description": "Mafia Roleblocker. Blocks the first matching roleblockable night action from the target.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "roleblocker_block",
+          "source_ids": ["block"],
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_jack_of_all_trades": {
+      "description": "Mafia Jack of All Trades. Carries one-shot parity investigate, protect, block, and track choices.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate_alignment"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": 1
+          },
+          "mode": "Parity"
+        },
+        {
+          "id": "doctor_protect",
+          "source_ids": ["protect"],
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": 1
+          }
+        },
+        {
+          "id": "roleblocker_block",
+          "source_ids": ["block"],
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": 1
+          }
+        },
+        {
+          "id": "track",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": 1
+          },
+          "mode": "Track"
+        }
+      ]
+    },
+    "town_doctor": {
+      "description": "Town Doctor. Protects one slot from ordinary night kills.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "doctor_protect",
+          "source_ids": ["protect"],
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_bodyguard": {
+      "description": "Town Bodyguard. Protects one slot and dies intercepting a blocked kill.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "bodyguard",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Bodyguard"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_martyr": {
+      "description": "Town Martyr. Protects one slot and dies in the target's place through Martyr attribution.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "martyr_protect",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Martyr"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_cpr_doctor": {
+      "description": "Town CPR Doctor. Saves an attacked target and harms an unattacked target.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cpr_protect",
+          "ability": "Protect",
+          "additional_abilities": ["Kill"],
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Cpr"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_cop": {
+      "description": "Town Cop. Each night, investigates one slot and receives a town/scum parity result.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate", "investigate_alignment"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "innocent_child": {
+      "description": "Innocent Child. May publicly reveal their town alignment during the day without revealing role.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "reveal_town",
+          "ability": "RevealTown",
+          "window": "Day",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": true,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_parity_cop": {
+      "description": "Town Parity Cop. Each night, scans one slot and compares later scans against this investigator's prior parity baseline.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "parity_scan",
+          "source_ids": ["parityCheck"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity",
+          "result_memory": {
+            "record": true,
+            "compare_previous": true,
+            "scope": "Investigator",
+            "output": "SameDifferent"
+          }
+        }
+      ]
+    },
+    "town_vanilla_cop": {
+      "description": "Town Vanilla Cop. Each night, checks whether one slot is vanilla.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_vanilla",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Vanilla"
+        }
+      ]
+    },
+    "town_neapolitan": {
+      "description": "Town Neapolitan. Each night, checks whether one slot is Vanilla Town.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "neapolitan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Neapolitan"
+        }
+      ]
+    },
+    "town_gunsmith": {
+      "description": "Town Gunsmith. Each night, checks whether one slot has a gun-bearing role.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "gunsmith",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Gunsmith"
+        }
+      ]
+    },
+    "town_role_cop": {
+      "description": "Town Role Cop. Each night, learns one target's role key.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "role_scan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Role"
+        }
+      ]
+    },
+    "town_full_cop": {
+      "description": "Town Full Cop. Each night, learns one target's role key and alignment.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "full_role_scan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "FullRole"
+        }
+      ]
+    },
+    "town_framer": {
+      "description": "Town Framer. Marks one target so a same-night parity investigation reads scum.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "frame",
+          "source_ids": ["result_mod"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 40,
+            "x_shots": null
+          },
+          "effect": "framed"
+        }
+      ]
+    },
+    "town_tracker": {
+      "description": "Town Tracker. Each night, follows one slot and learns which visible slots that target visited.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "track",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Track"
+        }
+      ]
+    },
+    "town_watcher": {
+      "description": "Town Watcher. Each night, watches one slot and learns which visible actors visited that target.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "watch",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Watch"
+        }
+      ]
+    },
+    "town_motion_detector": {
+      "description": "Town Motion Detector. Each night, checks whether one slot visibly acted or was visibly visited.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "motion_detector",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Motion"
+        }
+      ]
+    },
+    "town_bus_driver": {
+      "description": "Town Bus Driver. Each night, swaps two slots so actions aimed at either land on the other.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "bus_driver_swap",
+          "source_ids": ["bus_drive"],
+          "ability": "Redirect",
+          "redirect": "Swap",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_redirector": {
+      "description": "Town Redirector. Each night, retargets actions aimed at the first submitted slot to the second submitted slot.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "redirect",
+          "ability": "Redirect",
+          "redirect": "Retarget",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_empowerer": {
+      "description": "Town Empowerer. Each night, empowers one target so their same-night actions ignore blocks and redirects.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "empower",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          },
+          "effect": "empowered",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "town_commuter": {
+      "description": "Town Commuter. Each night, self-commutes and becomes untargetable for the current resolution.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "commute",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive", "Personal"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "personal_only": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 75,
+            "x_shots": null
+          },
+          "effect": "commuted"
+        }
+      ]
+    },
+    "town_rolestopper": {
+      "description": "Town Rolestopper. Each night, makes one other slot untargetable for the current resolution.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "rolestop",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 75,
+            "x_shots": null
+          },
+          "effect": "untargetable",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "miller": {
+      "description": "Miller. Town-aligned but reads as scum to parity investigations.",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["miller"]
+    },
+    "town_roleblocker": {
+      "description": "Town Roleblocker. Blocks the first matching roleblockable night action from the target.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "roleblocker_block",
+          "source_ids": ["block"],
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_jack_of_all_trades": {
+      "description": "Town Jack of All Trades. Carries one-shot parity investigate, protect, block, and track choices.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate_alignment"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": 1
+          },
+          "mode": "Parity"
+        },
+        {
+          "id": "doctor_protect",
+          "source_ids": ["protect"],
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": 1
+          }
+        },
+        {
+          "id": "roleblocker_block",
+          "source_ids": ["block"],
+          "ability": "Block",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": 1
+          }
+        },
+        {
+          "id": "track",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["XShot"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": 1
+          },
+          "mode": "Track"
+        }
+      ]
+    },
+    "town_jailkeeper": {
+      "description": "Town Jailkeeper. Blocks and protects one target through the same night action.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "jail",
+          "ability": "Block",
+          "additional_abilities": ["Protect"],
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_poisoner": {
+      "description": "Town Poisoner. Each night marks one slot as poisoned; unresolved poison kills on the next night unless cured.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "poison",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 45,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "town_poison_doctor": {
+      "description": "Town Poison Doctor. Each night cures one poisoned slot before pending poison death resolves.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cure_poison",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "town_healer": {
+      "description": "Town Healer. Mafia Universe alias of Poison Doctor: each night cures one poisoned slot before pending poison death resolves.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cure_poison",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "town_arsonist": {
+      "description": "Town Arsonist. Douses slots with a persistent mark, then ignites all slots doused before the current resolution.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "douse",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "doused"
+        },
+        {
+          "id": "ignite",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "reads_effect": "doused"
+        }
+      ]
+    },
+    "town_firefighter": {
+      "description": "Town Firefighter. Each night extinguishes one doused slot before ignite reads carried douse marks.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "extinguish",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "doused"
+        }
+      ]
+    },
+    "town_firefighter_preempt": {
+      "description": "Town Firefighter Preempt. Mafia Universe alias of Firefighter with explicit ignite-preemption culture note: each night extinguishes one doused slot before ignite reads carried douse marks.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "extinguish",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "doused"
+        }
+      ]
+    },
+    "town_motivator": {
+      "description": "Town Motivator. Each night grants one target a private single-use extra action.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "motivate",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "grant": {
+            "grant_id": "extra_action",
+            "kind": "ExtraAction",
+            "uses": 1,
+            "visibility": "Target"
+          }
+        }
+      ]
+    },
+    "town_fruit_vendor": {
+      "description": "Town Fruit Vendor. Each night sends fruit as a private target notification with no persistent mechanical effect.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "send_fruit",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 55,
+            "x_shots": null
+          },
+          "effect": "fruit_received",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "town_night_desperado": {
+      "description": "Town Night Desperado. Each night may attempt an ordinary non-factional kill; same-alignment targets trigger a self-kill failback.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "night_desperado",
+          "source_ids": ["desperado"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "alignment_failback": {
+            "hostile_alignments": ["mafia"]
+          }
+        }
+      ]
+    },
+    "town_vigilante": {
+      "description": "Town Vigilante. Each night may perform an ordinary non-factional kill.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "vigilante_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_day_vigilante": {
+      "description": "Town Day Vigilante. Each day may perform an ordinary non-factional kill before the vote outcome is resolved.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "day_vigilante_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 60,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_day_desperado": {
+      "description": "Town Day Desperado. Each day may shoot one target before the vote outcome; a non-mafia target causes the Desperado to die instead.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "day_desperado",
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 60,
+            "x_shots": null
+          },
+          "alignment_failback": {
+            "hostile_alignments": ["mafia"]
+          }
+        }
+      ]
+    },
+    "town_ninja": {
+      "description": "Town Ninja. Each night may perform an ordinary non-factional kill hidden from graph-derived visit results.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "ninja_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Ninja"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_power_role_killer": {
+      "description": "Town Power Role Killer. Each night may kill only a target whose role is outside the pack's vanilla role set.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "power_role_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "target_role_filter": "PowerRole",
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_inventor": {
+      "description": "Town Inventor. Each night chooses one private item to grant to a target.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "grant_item",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "grant_options": [
+            {
+              "grant_id": "parity_scanner_item",
+              "kind": "Item",
+              "uses": 1,
+              "visibility": "Target"
+            },
+            {
+              "grant_id": "bulletproof_vest_item",
+              "kind": "Item",
+              "uses": 1,
+              "visibility": "Target"
+            }
+          ]
+        }
+      ]
+    },
+    "mafia_strongman": {
+      "description": "Mafia Strongman. Carries a factional kill that bypasses ordinary protection.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "strongman_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Strongman"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "godfather": {
+      "description": "Mafia Godfather. Carries the factional kill and reads as town to parity investigations.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ],
+      "effects": ["godfather"]
+    },
+    "mafia_parity_cop": {
+      "description": "Mafia Parity Cop. Each night, scans one slot and compares later scans against this investigator's prior parity baseline.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "parity_scan",
+          "source_ids": ["parityCheck"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity",
+          "result_memory": {
+            "record": true,
+            "compare_previous": true,
+            "scope": "Investigator",
+            "output": "SameDifferent"
+          }
+        }
+      ]
+    },
+    "mafia_framer": {
+      "description": "Mafia Framer. Marks one target so a same-night parity investigation reads scum.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "frame",
+          "source_ids": ["result_mod"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 40,
+            "x_shots": null
+          },
+          "effect": "framed"
+        }
+      ]
+    },
+    "mafia_vanilla_cop": {
+      "description": "Mafia Vanilla Cop. Each night, checks whether one slot is vanilla.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "investigate_vanilla",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Vanilla"
+        }
+      ]
+    },
+    "mafia_neapolitan": {
+      "description": "Mafia Neapolitan. Each night, checks whether one slot is Vanilla Town.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "neapolitan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Neapolitan"
+        }
+      ]
+    },
+    "mafia_gunsmith": {
+      "description": "Mafia Gunsmith. Each night, checks whether one slot has a gun-bearing role.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "gunsmith",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Gunsmith"
+        }
+      ]
+    },
+    "mafia_role_cop": {
+      "description": "Mafia Role Cop. Each night, learns one target's role key.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "role_scan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Role"
+        }
+      ]
+    },
+    "mafia_full_cop": {
+      "description": "Mafia Full Cop. Each night, learns one target's role key and alignment.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "full_role_scan",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "FullRole"
+        }
+      ]
+    },
+    "mafia_tracker": {
+      "description": "Mafia Tracker. Each night, follows one slot and learns which visible slots that target visited.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "track",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Track"
+        }
+      ]
+    },
+    "mafia_watcher": {
+      "description": "Mafia Watcher. Each night, watches one slot and learns which visible actors visited that target.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "watch",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Watch"
+        }
+      ]
+    },
+    "mafia_motion_detector": {
+      "description": "Mafia Motion Detector. Each night, checks whether one slot visibly acted or was visibly visited.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "motion_detector",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Motion"
+        }
+      ]
+    },
+    "mafia_bus_driver": {
+      "description": "Mafia Bus Driver. Each night, swaps two slots so actions aimed at either land on the other.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "bus_driver_swap",
+          "source_ids": ["bus_drive"],
+          "ability": "Redirect",
+          "redirect": "Swap",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_redirector": {
+      "description": "Mafia Redirector. Each night, retargets actions aimed at the first submitted slot to the second submitted slot.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "redirect",
+          "ability": "Redirect",
+          "redirect": "Retarget",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_empowerer": {
+      "description": "Mafia Empowerer. Each night, empowers one target so their same-night actions ignore blocks and redirects.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "empower",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          },
+          "effect": "empowered",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "mafia_commuter": {
+      "description": "Mafia Commuter. Each night, self-commutes and becomes untargetable for the current resolution.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "commute",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Reflexive", "Personal"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": true,
+            "personal_only": true,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 75,
+            "x_shots": null
+          },
+          "effect": "commuted"
+        }
+      ]
+    },
+    "mafia_rolestopper": {
+      "description": "Mafia Rolestopper. Each night, makes one other slot untargetable for the current resolution.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "rolestop",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 75,
+            "x_shots": null
+          },
+          "effect": "untargetable",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "mafia_poisoner": {
+      "description": "Mafia Poisoner. Each night marks one slot as poisoned; unresolved poison kills on the next night unless cured.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "poison",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 45,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "mafia_poison_doctor": {
+      "description": "Mafia Poison Doctor. Each night cures one poisoned slot before pending poison death resolves.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "cure_poison",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "mafia_healer": {
+      "description": "Mafia Healer. Mafia Universe alias of Poison Doctor: each night cures one poisoned slot before pending poison death resolves.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "cure_poison",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "poisoned"
+        }
+      ]
+    },
+    "mafia_arsonist": {
+      "description": "Mafia Arsonist. Douses slots with a persistent mark, then ignites all slots doused before the current resolution.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "douse",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "doused"
+        },
+        {
+          "id": "ignite",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "None",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 0,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "reads_effect": "doused"
+        }
+      ]
+    },
+    "mafia_firefighter": {
+      "description": "Mafia Firefighter. Each night extinguishes one doused slot before ignite reads carried douse marks.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "extinguish",
+          "ability": "Clear",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "doused"
+        }
+      ]
+    },
+    "mafia_motivator": {
+      "description": "Mafia Motivator. Each night grants one target a private single-use extra action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "motivate",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "grant": {
+            "grant_id": "extra_action",
+            "kind": "ExtraAction",
+            "uses": 1,
+            "visibility": "Target"
+          }
+        }
+      ]
+    },
+    "mafia_fruit_vendor": {
+      "description": "Mafia Fruit Vendor. Each night sends fruit as a private target notification with no persistent mechanical effect.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "send_fruit",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 55,
+            "x_shots": null
+          },
+          "effect": "fruit_received",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
+    "mafia_night_desperado": {
+      "description": "Mafia Night Desperado. Each night may attempt an ordinary non-factional kill; same-alignment targets trigger a self-kill failback.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "night_desperado",
+          "source_ids": ["desperado"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          },
+          "alignment_failback": {
+            "hostile_alignments": ["town"]
+          }
+        }
+      ]
+    },
+    "mafia_vigilante": {
+      "description": "Mafia Vigilante. Each night may perform an ordinary non-factional kill.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "vigilante_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_day_vigilante": {
+      "description": "Mafia Day Vigilante. Each day may perform an ordinary non-factional kill before the vote outcome is resolved.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "day_vigilante_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 60,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_day_desperado": {
+      "description": "Mafia Day Desperado. Each day may shoot one target before the vote outcome; a non-town target causes the Desperado to die instead.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "day_desperado",
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 60,
+            "x_shots": null
+          },
+          "alignment_failback": {
+            "hostile_alignments": ["town"]
+          }
+        }
+      ]
+    },
+    "mafia_ninja": {
+      "description": "Mafia Ninja. Each night may perform an ordinary non-factional kill hidden from graph-derived visit results.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "ninja_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Ninja"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_power_role_killer": {
+      "description": "Mafia Power Role Killer. Each night may kill only a target whose role is outside the pack's vanilla role set.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "power_role_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "target_role_filter": "PowerRole",
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_inventor": {
+      "description": "Mafia Inventor. Each night chooses one private item to grant to a target.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "grant_item",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
+          },
+          "grant_options": [
+            {
+              "grant_id": "parity_scanner_item",
+              "kind": "Item",
+              "uses": 1,
+              "visibility": "Target"
+            },
+            {
+              "grant_id": "bulletproof_vest_item",
+              "kind": "Item",
+              "uses": 1,
+              "visibility": "Target"
+            }
+          ]
+        }
+      ]
+    },
+    "mafia_ita_evasive": {
+      "description": "Mafia-aligned target with percent ITA hit-chance reduction.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "mafia_ita_shielded": {
+      "description": "Mafia-aligned target with one ITA shield.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "mafia_ita_evasive_shielded": {
+      "description": "Mafia-aligned target that composes percent ITA vulnerability with one ITA shield.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [
+    {
+      "id": "block_stops_roleblockable",
+      "when": { "effect": "Block", "target_state": null },
+      "beats": ["Kill", "Protect", "Investigate", "Redirect", "Mark", "Clear", "Grant"],
+      "blocked_by": [],
+      "unless_modifiers": [],
+      "notes": "A Block prevents the target slot's first matching roleblockable night action from resolving."
+    },
+    {
+      "id": "redirect_before_targets_read",
+      "when": { "effect": "Redirect", "target_state": null },
+      "beats": ["Kill", "Protect", "Investigate"],
+      "blocked_by": ["Block"],
+      "unless_modifiers": [],
+      "notes": "Redirect actions rewrite target maps before kill/protect/investigation actions read targets."
+    },
+    {
+      "id": "protect_beats_kill",
+      "when": { "effect": "Protect", "target_state": null },
+      "beats": ["Kill"],
+      "blocked_by": ["Block"],
+      "unless_modifiers": ["Strongman"],
+      "notes": "Protection saves against ordinary kills; Strongman bypasses this protection."
+    },
+    {
+      "id": "kill_resolves",
+      "when": { "effect": "Kill", "target_state": null },
+      "beats": [],
+      "blocked_by": ["Block", "Protect"],
+      "unless_modifiers": [],
+      "notes": "A Kill removes the target unless the actor is blocked or the target is protected."
+    }
+  ],
+  "standard_nar": {
+    "enabled": true,
+    "kill_stacking": "AggregateAttackers",
+    "conflict_families": [
+      "BlockSuppressesActions",
+      "ProtectBlocksKills",
+      "StrongmanBypassesProtect",
+      "KillStacking",
+      "InterceptProtection",
+      "CprProtection",
+      "TargetStateSave",
+      "TargetStateGate"
+    ],
+    "block_action_ids": ["roleblocker_block", "jail"],
+    "protect_action_ids": ["doctor_protect", "jail"],
+    "kill_action_ids": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+    "team_kill_action_ids": ["factional_kill"],
+    "bodyguard_action_ids": ["bodyguard"],
+    "martyr_action_ids": ["martyr_protect"],
+    "cpr_action_ids": ["cpr_protect"],
+    "jailkeep_action_ids": ["jail"],
+    "strongman_action_ids": ["strongman_kill"],
+    "strongman_bypasses_protect": true,
+    "kill_cause_ids": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "strongman_kill", "vigilante_kill"],
+    "target_state_save_tags": ["bulletproof_vest"],
+    "target_state_gate_tags": ["commuted", "untargetable"],
+    "empower_effects": ["empowered"],
+    "intercept_cause_policy": {
+      "bodyguard": "bodyguard_intercept",
+      "martyr_protect": "martyr_intercept"
+    },
+    "cpr_harm_cause_policy": {
+      "cpr_protect": "cpr_protect"
+    },
+    "guard_dependency_cause_policy": {},
+    "hide_dependency_cause_policy": {},
+    "chosen_retaliation_cause_policy": {},
+    "generated_kill_cause_policy": {},
+    "trigger_fixpoint_policy": {},
+    "protection_cause_policy": {
+      "doctor_protect": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      },
+      "bodyguard": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      },
+      "martyr_protect": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      },
+      "cpr_protect": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      },
+      "jail": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      }
+    },
+    "target_state_save_policy": {
+      "bulletproof_vest": {
+        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "bypasses": ["strongman_kill"]
+      }
+    },
+    "target_state_gate_policy": {
+      "commuted": {
+        "blocks": ["Kill", "Investigate"]
+      },
+      "untargetable": {
+        "blocks": ["Kill", "Investigate"]
+      }
+    },
+    "suppression_policy": {
+      "roleblocker_block": {
+        "scope": "FirstMatchingAction",
+        "suppresses": [
+          "bodyguard",
+          "bus_driver_swap",
+          "commute",
+          "cpr_protect",
+          "cop_investigate",
+          "cure_poison",
+          "doctor_protect",
+          "douse",
+          "empower",
+          "extinguish",
+          "frame",
+          "full_role_scan",
+          "factional_kill",
+          "grant_item",
+          "gunsmith",
+          "ignite",
+          "investigate_vanilla",
+          "jail",
+          "martyr_protect",
+          "motion_detector",
+          "motivate",
+          "neapolitan",
+          "night_desperado",
+          "ninja_kill",
+          "parity_scan",
+          "parity_scanner_item",
+          "poison",
+          "power_role_kill",
+          "redirect",
+          "role_scan",
+          "rolestop",
+          "bulletproof_vest_item",
+          "send_fruit",
+          "strongman_kill",
+          "track",
+          "vigilante_kill",
+          "watch"
+        ],
+        "bypasses": ["roleblocker_block"]
+      },
+      "jail": {
+        "scope": "FirstMatchingAction",
+        "suppresses": [
+          "bodyguard",
+          "bus_driver_swap",
+          "commute",
+          "cpr_protect",
+          "cop_investigate",
+          "cure_poison",
+          "doctor_protect",
+          "douse",
+          "empower",
+          "extinguish",
+          "frame",
+          "full_role_scan",
+          "factional_kill",
+          "grant_item",
+          "gunsmith",
+          "ignite",
+          "investigate_vanilla",
+          "jail",
+          "martyr_protect",
+          "motion_detector",
+          "motivate",
+          "neapolitan",
+          "night_desperado",
+          "ninja_kill",
+          "parity_scan",
+          "parity_scanner_item",
+          "poison",
+          "power_role_kill",
+          "redirect",
+          "role_scan",
+          "rolestop",
+          "bulletproof_vest_item",
+          "send_fruit",
+          "strongman_kill",
+          "track",
+          "vigilante_kill",
+          "watch"
+        ],
+        "bypasses": ["roleblocker_block"]
+      }
+    }
+  },
+  "visibility": {
+    "Investigate": {
+      "sees": ["TargetId", "Result"],
+      "unless_modifiers": ["Ninja"]
+    },
+    "Redirect": {
+      "sees": ["TargetId"],
+      "unless_modifiers": []
+    },
+    "Grant": {
+      "sees": ["TargetId"],
+      "unless_modifiers": []
+    }
+  },
+  "visibility_families": [
+    "PrivateInvestigationResults",
+    "GraphVisitResults",
+    "StealthNinjaVisits",
+    "ResultTampering",
+    "EffectAudiences",
+    "GrantAudiences"
+  ],
+  "redirects": {
+    "order": ["Redirect"],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["ita_sessions", "main", "eod"]
+    },
+    "twilight": false
+  },
+  "ita": {
+    "default_hit_chance": 0.5,
+    "auto_close": true,
+    "modifier_components": {
+      "better_ita_chance": { "hit_bonus": 0.25 },
+      "worse_ita_chance": { "hit_penalty": 0.25 },
+      "percent_ita_vulnerability": { "target_evade": 0.25 },
+      "one_ita_shield": { "shields": 1 }
+    },
+    "role_modifier_refs": {
+      "town_ita_sharpshooter": ["better_ita_chance"],
+      "town_ita_bad_shot": ["worse_ita_chance"],
+      "mafia_ita_evasive": ["percent_ita_vulnerability"],
+      "mafia_ita_shielded": ["one_ita_shield"],
+      "mafia_ita_evasive_shielded": ["percent_ita_vulnerability", "one_ita_shield"]
+    },
+    "vote_conflict": "ResolveShotsBeforeVote",
+    "sessions": [
+      {
+        "session_id": "d1",
+        "label": "Day 1 ITA",
+        "day": 1,
+        "window": "ita_sessions",
+        "shot_limit": 1,
+        "hit_chance": 0.5
+      }
+    ]
+  },
+  "day_notes": {
+    "announcements": {
+      "enabled": true,
+      "night_deaths_n1": true,
+      "night_deaths_after_n1": true,
+      "multiple_night_deaths_n2plus": true
+    },
+    "last_words": {
+      "day_deaths": true
+    }
+  },
+  "treestump_policy": {
+    "enabled": true,
+    "status_tag": "treestump",
+    "eligible_roles": ["mafia_treestump", "town_treestump"]
+  },
+  "investigation_overrides": {
+    "framed": { "Parity": "scum" },
+    "godfather": { "Parity": "town" },
+    "miller": { "Parity": "scum" }
+  },
+  "investigation_results": {
+    "role_sets": {
+      "vanilla_roles": ["mafia_goon", "town_vanilla"],
+      "gun_bearing_roles": ["godfather", "mafia_goon", "mafia_strongman"]
+    }
+  },
+  "effects": {
+    "bulletproof_vest": { "duration": "Persistent", "visibility": "Target" },
+    "commuted": { "duration": "Resolution", "visibility": "Hidden" },
+    "doused": { "duration": "Persistent", "visibility": "ActorAndTarget" },
+    "empowered": { "duration": "Resolution", "visibility": "Hidden" },
+    "fruit_received": { "duration": "Resolution", "visibility": "Target" },
+    "framed": { "duration": "Persistent", "visibility": "Hidden" },
+    "godfather": { "duration": "Persistent", "visibility": "Hidden" },
+    "miller": { "duration": "Persistent", "visibility": "Hidden" },
+    "poisoned": { "duration": "Persistent", "visibility": "Target" },
+    "untargetable": { "duration": "Resolution", "visibility": "Hidden" }
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

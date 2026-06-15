@@ -1,0 +1,74 @@
+{
+  "name": "test_skip_next_day_day_only",
+  "version": 1,
+  "ir_version": 22,
+  "roles": {
+    "beloved_princess": {
+      "description": "Town-aligned test Beloved Princess for unsupported skip-next-day cadence proof.",
+      "alignment": "town",
+      "actions": []
+    },
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "beloved_princess_policy": {
+    "enabled": true,
+    "eligible_roles": ["beloved_princess"],
+    "prompt_kind": "skip_next_day",
+    "prompt_reason": "beloved_princess_lynched",
+    "death_causes": ["lynch"]
+  },
+  "host_prompt_resolution_effects": [
+    {
+      "id": "beloved_princess_skip_next_day",
+      "prompt_kind": "skip_next_day",
+      "prompt_reason": "beloved_princess_lynched",
+      "decision": "Acknowledge",
+      "effect": "SkipNextDay"
+    }
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

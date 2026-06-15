@@ -6,12 +6,60 @@
     "state": {
       "phase_kind": "Night",
       "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
       "slots": [
-        { "slot_id": "slot_1", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] },
-        { "slot_id": "slot_2", "role_key": "bomb", "alignment": "town", "status": "alive", "effects": ["bomb"] },
-        { "slot_id": "slot_3", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_4", "role_key": "villager", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_5", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] }
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "bomb",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "bomb"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
       ]
     },
     "submissions": [
@@ -19,7 +67,9 @@
         "action_id": "sub_001",
         "actor": "slot_1",
         "template_id": "factional_kill",
-        "targets": ["slot_2"],
+        "targets": [
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -36,7 +86,9 @@
       "payload": {
         "slot_id": "slot_2",
         "cause": "factional_kill",
-        "attackers": ["slot_1"],
+        "attackers": [
+          "slot_1"
+        ],
         "unstoppable": false
       }
     },
@@ -48,7 +100,9 @@
         "payload": {
           "on": "Kill",
           "source_target": "slot_2",
-          "source_attacker": "slot_1",
+          "source_actor": "slot_1",
+          "source_cause": "factional_kill",
+          "produced_actor": "slot_2",
           "produced_target": "slot_1"
         }
       }
@@ -59,7 +113,9 @@
       "payload": {
         "slot_id": "slot_1",
         "cause": "bomb_retaliates",
-        "attackers": ["slot_2"],
+        "attackers": [
+          "slot_2"
+        ],
         "unstoppable": false
       }
     },
@@ -69,8 +125,14 @@
       "payload": {
         "phase_id": "N01",
         "deaths": [
-          { "slot_id": "slot_2", "cause": "night_kill" },
-          { "slot_id": "slot_1", "cause": "night_kill" }
+          {
+            "slot_id": "slot_2",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_1",
+            "cause": "bomb_retaliates"
+          }
         ]
       }
     }

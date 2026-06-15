@@ -1,7 +1,7 @@
 {
   "name": "epicmafia",
   "version": 1,
-  "ir_version": 1,
+  "ir_version": 46,
   "roles": {
     "villager": {
       "description": "Villager. No night action; wins with the town.",
@@ -50,7 +50,7 @@
             "self_allowed": false,
             "unique_targets": true,
             "roleblockable": true,
-            "priority": 50,
+            "priority": 20,
             "x_shots": null
           },
           "mode": "Parity"
@@ -203,10 +203,17 @@
     "Protect": { "sees": ["TargetId"], "unless_modifiers": [] },
     "Block": { "sees": ["TargetId"], "unless_modifiers": [] }
   },
+  "visibility_families": [
+    "PrivateInvestigationResults",
+    "EffectAudiences"
+  ],
   "redirects": {
     "order": ["Redirect"],
     "loop_cap": 8,
     "tie_breaker": "Stable"
+  },
+  "effects": {
+    "doused": { "duration": "Persistent", "visibility": "ActorAndTarget" }
   },
   "triggers": [
     {
@@ -227,7 +234,28 @@
     "self_vote_allowed": false,
     "hammer": false,
     "weights": "Equal",
-    "tie_breaker": "NoElimination"
+    "tie_breaker": "HostDecides"
+  },
+  "day_vote_prompt_policies": [
+    {
+      "id": "pk_host_decides_tie",
+      "statuses": ["Tie"],
+      "prompt_kind": "pk",
+      "prompt_reason": "host_decides_tie"
+    }
+  ],
+  "host_prompt_resolution_effects": [
+    {
+      "id": "pk_host_decides_tie",
+      "prompt_kind": "pk",
+      "prompt_reason": "host_decides_tie",
+      "decision": "SelectSlot",
+      "effect": "PkKill"
+    }
+  ],
+  "conversion_policy": {
+    "on_dead_target": "Block",
+    "on_pending_death": "Block"
   },
   "phases": {
     "cadence": ["Day", "Night"],
@@ -236,6 +264,11 @@
     },
     "twilight": false
   },
+  "win_families": [
+    "AllOtherFactionsEliminated",
+    "FactionParity",
+    "CultParity"
+  ],
   "win": {
     "rules": [
       {

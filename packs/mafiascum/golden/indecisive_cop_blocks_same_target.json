@@ -1,0 +1,119 @@
+{
+  "description": "Indecisive Cop cannot target the same slot two nights in a row; the suppressed attempt is recorded for audit history.",
+  "input": {
+    "game_id": "game_demo_indecisive_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "indecisive_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [
+        {
+          "actor": "slot_1",
+          "template_id": "investigate_alignment",
+          "targets": [
+            "slot_2"
+          ],
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "status": "resolved"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "template_id": "investigate_alignment",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 126101
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_1",
+        "reason": "indecisive"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ActionRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "template_id": "investigate_alignment",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "status": "suppressed"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

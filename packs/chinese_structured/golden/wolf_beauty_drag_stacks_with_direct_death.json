@@ -1,0 +1,204 @@
+{
+  "description": "Chinese Witch poison kills a marked Wolf Beauty while a wolf kill directly kills the charmed target in the same night. The Beauty drag note is still emitted, and the dragged death stacks onto the direct wolf_night_kill PlayerKilled event.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_3",
+        "cadence_policy": "x_shot",
+        "consumed_action": "poison_001",
+        "counter_id": "x_shot:poison_potion",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "poison_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_3"
+        ],
+        "cause": "poison_potion",
+        "slot_id": "slot_1",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_4",
+          "slot_1"
+        ],
+        "cause": "wolf_night_kill",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "WolfBeautyDragged",
+      "payload": {
+        "beauty_id": "slot_1",
+        "cause": "trigger:wolf_beauty_drag",
+        "dragged_ids": [
+          "slot_2"
+        ],
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "poison_potion"
+          },
+          {
+            "slot_id": "slot_2",
+            "cause": "wolf_night_kill"
+          }
+        ],
+        "phase_id": "N02"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_wolf_beauty_drag_stack_001",
+    "pack": "chinese_structured",
+    "phase_id": "N02",
+    "seed": 930301,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N02",
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf_beauty",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [
+            "wolf_beauty_mark"
+          ],
+          "role_key": "villager",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [
+        {
+          "beauty_id": "slot_1",
+          "effect": "wolf_beauty_mark",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "source_action": "beauty_001",
+          "target_id": "slot_2"
+        }
+      ],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "poison_001",
+        "actor": "slot_3",
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "poison_potion",
+        "withdrawn": false
+      },
+      {
+        "action_id": "wolf_kill_001",
+        "actor": "slot_4",
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "wolf_night_kill",
+        "withdrawn": false
+      }
+    ]
+  }
+}

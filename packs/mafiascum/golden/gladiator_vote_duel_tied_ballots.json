@@ -1,0 +1,163 @@
+{
+  "description": "Gladiator challenges one target during the day and the official duel ballots are tied at the top tally. The duel still resolves among challenger and target by the pack-declared seeded random vote-duel tie breaker.",
+  "input": {
+    "game_id": "game_demo_gladiator_duel_tied_ballots_001",
+    "phase_id": "D01",
+    "state": {
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_id": "D01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "gladiator",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "duel_001",
+        "actor": "slot_1",
+        "template_id": "duel",
+        "targets": ["slot_2"],
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "vote_duel_challenger_001",
+        "actor": "slot_3",
+        "template_id": "day_vote",
+        "targets": ["slot_1"],
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "vote_duel_target_001",
+        "actor": "slot_4",
+        "template_id": "day_vote",
+        "targets": ["slot_2"],
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 949598
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "VoteDuelDeclared",
+      "payload": {
+        "challenger": "slot_1",
+        "target": "slot_2",
+        "source_action": "duel_001",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "status": "Lynch",
+        "winner": "slot_1",
+        "contenders": ["slot_1", "slot_2"],
+        "tallies": {
+          "slot_1": 1.0,
+          "slot_2": 1.0
+        },
+        "votes": {
+          "slot_3": "slot_1",
+          "slot_4": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0
+        },
+        "majority": 3.0,
+        "thresholds": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 3.0,
+          "slot_4": 3.0,
+          "slot_5": 3.0
+        },
+        "total_weight": 5.0,
+        "tiebreak": "Random",
+        "reason": "seeded random tie_breaker selected slot_1"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "day_vote",
+        "attackers": [],
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "D01",
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "lynch"
+          }
+        ]
+      }
+    }
+  ]
+}

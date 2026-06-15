@@ -1,0 +1,116 @@
+{
+  "description": "A legal Night Grant action creates a folded VoteWeight grant that can later drive the dynamic vote-weight policy.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionGranted",
+      "payload": {
+        "actor": "slot_5",
+        "grant_id": "vote_power_boost",
+        "kind": "VoteWeight",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "source_action": "grant_vote_power_n01",
+        "target": "slot_1",
+        "uses": 1,
+        "vote_weight": 2.0
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": [
+          "slot_1"
+        ],
+        "effect": "grant",
+        "status": "vote_power_boost"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_dynamic_vote_grant_001",
+    "pack": "test_dynamic_vote_effect",
+    "phase_id": "N01",
+    "seed": 727278,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vote_granter",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "grant_vote_power_n01",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "grant_vote_power",
+        "withdrawn": false
+      }
+    ]
+  }
+}

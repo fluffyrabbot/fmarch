@@ -1,0 +1,192 @@
+{
+  "description": "Mafia Universe ITA session has a pack-owned one-shot session limit. A shooter with an exhausted day_session counter is interfered before a second shot queues.",
+  "input": {
+    "game_id": "mu_ita_limit_001",
+    "pack": "mafia_universe",
+    "phase_id": "D01",
+    "seed": 910002,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_ita_shooter",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ],
+      "use_counters": [
+        {
+          "actor": "slot_1",
+          "cadence_policy": "day_session",
+          "consumed_action": "ita_001",
+          "counter_id": "day_session:d1:ita_shot",
+          "limit": 1,
+          "phase_id": "D01",
+          "phase_kind": "Day",
+          "phase_number": 1,
+          "phase_scope": "session",
+          "remaining": 0,
+          "template_id": "ita_shot",
+          "used": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "ita_002",
+        "actor": "slot_1",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 20,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      }
+    ]
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ItaSessionOpened",
+      "payload": {
+        "day": 1,
+        "label": "Day 1 ITA",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "session_id": "d1",
+        "status": "open",
+        "window": "ita_sessions"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_1",
+        "reason": "day_session_exhausted"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "ItaSessionUpdated",
+      "payload": {
+        "counters": {
+          "global_shots_fired": 0,
+          "hits_landed": 0,
+          "per_shooter": {},
+          "per_target": {},
+          "shots_missed": 0,
+          "shots_resolved": 0
+        },
+        "global_shots_fired": 0,
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "queue_delta": 0,
+        "queue_length": 0,
+        "session_id": "d1",
+        "shots_resolved": 0
+      }
+    },
+    {
+      "index": 3,
+      "kind": "ItaSessionClosed",
+      "payload": {
+        "last_status": "open",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "session_id": "d1"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [],
+        "majority": 3.0,
+        "reason": null,
+        "status": "NoLynch",
+        "tallies": {},
+        "thresholds": {
+          "slot_1": 3.0,
+          "slot_2": 3.0,
+          "slot_3": 3.0,
+          "slot_4": 3.0,
+          "slot_5": 3.0
+        },
+        "tiebreak": null,
+        "total_weight": 5.0,
+        "votes": {},
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0
+        },
+        "winner": null
+      }
+    },
+    {
+      "index": 5,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D01"
+      }
+    }
+  ]
+}

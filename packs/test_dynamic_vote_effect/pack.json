@@ -1,0 +1,124 @@
+{
+  "name": "test_dynamic_vote_effect",
+  "version": 1,
+  "ir_version": 2,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "vote_enabler": {
+      "description": "Town-aligned test role that can grant an effect-based dynamic vote weight.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "empower_vote",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60
+          },
+          "effect": "vote_empowered"
+        }
+      ]
+    },
+    "vote_granter": {
+      "description": "Town-aligned test role that can grant an explicit dynamic vote weight.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "grant_vote_power",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 61
+          },
+          "grant": {
+            "grant_id": "vote_power_boost",
+            "kind": "VoteWeight",
+            "uses": 1,
+            "vote_weight": 2.0,
+            "visibility": "Target"
+          }
+        }
+      ]
+    }
+  },
+  "effects": {
+    "vote_empowered": {
+      "duration": "Persistent",
+      "visibility": "Public"
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": {
+      "Dynamic": {
+        "base": 1.0,
+        "effect_rules": [
+          {
+            "effect": "vote_empowered",
+            "weight": 2.0,
+            "priority": 10
+          }
+        ],
+        "grant_rules": [
+          {
+            "grant_id": "vote_power_boost",
+            "priority": 20
+          }
+        ]
+      }
+    },
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

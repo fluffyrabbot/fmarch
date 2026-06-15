@@ -1,0 +1,179 @@
+{
+  "description": "A pending White Wolf carry token owned by the passive white_wolf_carry role lets the next wolf faction kill split one extra submitted target into a generated carry kill.",
+  "input": {
+    "game_id": "chinese_wolf_carry_passive_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "white_wolf_carry",
+          "alignment": "wolf",
+          "status": "dead",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "dead",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "wolf",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [],
+      "action_grants": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "retaliations": [],
+      "wolf_carry_tokens": [
+        {
+          "owner_id": "slot_1",
+          "token_id": "white_wolf_carry_token",
+          "cause": "wolf_carry",
+          "role_key": "white_wolf_carry",
+          "phase_id": "D01",
+          "phase_kind": "Day",
+          "phase_number": 1
+        }
+      ],
+      "badges": []
+    },
+    "submissions": [
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_6",
+        "template_id": "wolf_night_kill",
+        "targets": [
+          "slot_3",
+          "slot_4"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false
+      }
+    ],
+    "pack": "chinese_structured",
+    "seed": 930013
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "wolf_night_kill",
+        "attackers": [
+          "slot_6"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "WolfCarryUsed",
+      "payload": {
+        "owner_id": "slot_1",
+        "target_id": "slot_4",
+        "source_action_id": "wolfkill_001:wolf_carry:1",
+        "effect_id": "white_wolf_carry_token:wolfkill_001:wolf_carry:1",
+        "role_key": "white_wolf_carry",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_4",
+        "cause": "wolf_carry",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "wolf_night_kill"
+          },
+          {
+            "slot_id": "slot_4",
+            "cause": "wolf_carry"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,159 @@
+{
+  "description": "TRIGGER death primitive with Strongman production against Bodyguard protection. Mafia kills an Unstoppable Vengeful Townie; the pack trigger produces a Strongman Kill against the killing actor, bypassing Bodyguard protection without killing the Bodyguard.",
+  "input": {
+    "game_id": "game_demo_unstoppable_vengeful_bodyguard_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "unstoppable_vengeful_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "unstoppable_vengeful"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "bodyguard",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "kill_001",
+        "actor": "slot_1",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "bodyguard_001",
+        "actor": "slot_3",
+        "template_id": "bodyguard",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 41
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "unstoppable_vengeful_retaliates",
+        "payload": {
+          "on": "Kill",
+          "source_target": "slot_2",
+          "source_actor": "slot_1",
+          "source_cause": "factional_kill",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_1"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "unstoppable_vengeful_retaliates",
+        "attackers": [
+          "slot_2"
+        ],
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_1",
+            "cause": "unstoppable_vengeful_retaliates"
+          }
+        ]
+      }
+    }
+  ]
+}

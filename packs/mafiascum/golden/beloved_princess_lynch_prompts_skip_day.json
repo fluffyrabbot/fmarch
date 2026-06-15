@@ -1,0 +1,206 @@
+{
+  "description": "Beloved Princess lynch prompt. A lynched Beloved Princess dies normally and emits a host prompt to skip the next day before the trailing PhaseAnnouncement.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_1"
+        ],
+        "majority": 4.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_1": 4.0
+        },
+        "thresholds": {
+          "slot_1": 4.0,
+          "slot_2": 4.0,
+          "slot_3": 4.0,
+          "slot_4": 4.0,
+          "slot_5": 4.0,
+          "slot_6": 4.0
+        },
+        "tiebreak": null,
+        "total_weight": 6.0,
+        "votes": {
+          "slot_2": "slot_1",
+          "slot_3": "slot_1",
+          "slot_4": "slot_1",
+          "slot_5": "slot_1"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0,
+          "slot_6": 1.0
+        },
+        "winner": "slot_1"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_1",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "HostPromptIssued",
+      "payload": {
+        "kind": "skip_next_day",
+        "metadata": {
+          "death_cause": "lynch",
+          "policy": "beloved_princess",
+          "role": "beloved_princess"
+        },
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "prompt_id": "D01:skip_next_day:slot_1",
+        "reason": "beloved_princess_lynched",
+        "subject": "slot_1"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "lynch"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_beloved_princess_001",
+    "pack": "mafiascum",
+    "phase_id": "D01",
+    "seed": 47,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "beloved_princess",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_004",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

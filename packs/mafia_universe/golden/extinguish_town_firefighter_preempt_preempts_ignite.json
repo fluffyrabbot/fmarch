@@ -1,0 +1,102 @@
+{
+  "description": "Mafia Universe firefighting: Town Firefighter Preempt alias extinguishes doused before ignite reads carried douse marks, so no arson kill lands.",
+  "input": {
+    "game_id": "game_mu_extinguish_town_firefighter_preempt_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_arsonist",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "town_firefighter_preempt",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": ["doused"]
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_firefighter_preempt_extinguish_001",
+        "actor": "slot_2",
+        "template_id": "extinguish",
+        "targets": ["slot_3"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_ignite_firefighter_preempted_001",
+        "actor": "slot_1",
+        "template_id": "ignite",
+        "targets": [],
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 708006
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": ["slot_2", "slot_3"],
+        "effect": "doused",
+        "status": "cleared"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "EffectsCleared",
+      "payload": {
+        "actor": "slot_2",
+        "effect": "doused",
+        "targets": ["slot_3"]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": []
+      }
+    }
+  ]
+}

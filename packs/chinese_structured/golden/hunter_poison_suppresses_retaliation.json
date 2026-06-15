@@ -1,0 +1,157 @@
+{
+  "description": "Chinese death_retaliation policy suppresses Hunter's chosen final shot when the Hunter dies to Witch poison_potion.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_3",
+        "cadence_policy": "x_shot",
+        "consumed_action": "poison_001",
+        "counter_id": "x_shot:poison_potion",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "poison_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_3"
+        ],
+        "cause": "poison_potion",
+        "slot_id": "slot_1",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "poison_potion"
+          }
+        ],
+        "phase_id": "N02"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_hunter_poison_suppressed_001",
+    "pack": "chinese_structured",
+    "phase_id": "N02",
+    "seed": 930208,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N02",
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [
+        {
+          "actor": "slot_1",
+          "retaliation_id": "hunt_001",
+          "source_action": "hunter_retaliate",
+          "target": "slot_2"
+        }
+      ],
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "hunter",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "poison_001",
+        "actor": "slot_3",
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "poison_potion",
+        "withdrawn": false
+      }
+    ]
+  }
+}

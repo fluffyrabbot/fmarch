@@ -1,0 +1,108 @@
+{
+  "description": "A Vanillaiser attempts to convert a Cop that was already killed earlier in the same night; the pack conversion policy blocks conversion of dead targets and records the decision.",
+  "input": {
+    "game_id": "game_demo_conversion_dead_target_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "vanillaiser",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "kill_001",
+        "actor": "slot_3",
+        "template_id": "factional_kill",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "convert_001",
+        "actor": "slot_1",
+        "template_id": "vanillaize",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 616167
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "factional_kill",
+        "attackers": ["slot_3"],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ConversionBlocked",
+      "payload": {
+        "target": "slot_2",
+        "status": "blocked",
+        "reason": "dead_target"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "factional_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

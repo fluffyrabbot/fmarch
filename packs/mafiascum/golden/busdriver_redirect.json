@@ -6,12 +6,58 @@
     "state": {
       "phase_kind": "Night",
       "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
       "slots": [
-        { "slot_id": "slot_1", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_2", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_3", "role_key": "mafia_goon", "alignment": "mafia", "status": "alive", "effects": [] },
-        { "slot_id": "slot_4", "role_key": "vanilla_townie", "alignment": "town", "status": "alive", "effects": [] },
-        { "slot_id": "slot_5", "role_key": "bus_driver", "alignment": "town", "status": "alive", "effects": [] }
+        {
+          "slot_id": "slot_1",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "bus_driver",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
       ]
     },
     "submissions": [
@@ -19,7 +65,10 @@
         "action_id": "sub_001",
         "actor": "slot_5",
         "template_id": "bus_driver_swap",
-        "targets": ["slot_1", "slot_2"],
+        "targets": [
+          "slot_1",
+          "slot_2"
+        ],
         "phase_id": "N01",
         "submitted_at": 1,
         "withdrawn": false,
@@ -29,7 +78,9 @@
         "action_id": "sub_002",
         "actor": "slot_3",
         "template_id": "factional_kill",
-        "targets": ["slot_1"],
+        "targets": [
+          "slot_1"
+        ],
         "phase_id": "N01",
         "submitted_at": 2,
         "withdrawn": false,
@@ -46,7 +97,9 @@
       "payload": {
         "slot_id": "slot_2",
         "cause": "factional_kill",
-        "attackers": ["slot_3"],
+        "attackers": [
+          "slot_3"
+        ],
         "unstoppable": false
       }
     },
@@ -55,7 +108,12 @@
       "kind": "PhaseAnnouncement",
       "payload": {
         "phase_id": "N01",
-        "deaths": [{ "slot_id": "slot_2", "cause": "night_kill" }]
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "factional_kill"
+          }
+        ]
       }
     }
   ]

@@ -1,0 +1,111 @@
+{
+  "description": "TRIGGER phase-boundary primitive. A phase-end doomed slot is still alive after core night resolution, so the PhaseEnd observation triggers a generated self-kill before the trailing PhaseAnnouncement.",
+  "input": {
+    "game_id": "game_demo_phase_end_doom_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "phase_end_doomed_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "phase_end_doomed"
+          ]
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [],
+    "pack": "mafiascum",
+    "seed": 43
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "Trigger",
+      "payload": {
+        "trigger_id": "phase_end_doom_claims",
+        "payload": {
+          "on": "PhaseEnd",
+          "source_target": "slot_1",
+          "source_actor": "slot_1",
+          "source_cause": "phase_end:N01",
+          "produced_actor": "slot_1",
+          "produced_target": "slot_1"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "phase_end_doom_claims",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "phase_end_doom_claims"
+          }
+        ]
+      }
+    }
+  ]
+}

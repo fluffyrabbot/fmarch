@@ -1,0 +1,589 @@
+{
+  "description": "Mafia Universe ITA modifier components compose into effective role policy. Better chance, worse chance, target evade, one-shot shields, and a composed evade+shield target all fold through one resolver path.",
+  "pack_overrides": {
+    "ita": {
+      "sessions": [
+        {
+          "session_id": "d1",
+          "label": "Day 1 ITA",
+          "day": 1,
+          "window": "ita_sessions",
+          "hit_chance": 0.5
+        }
+      ]
+    }
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ItaSessionOpened",
+      "payload": {
+        "day": 1,
+        "label": "Day 1 ITA",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "session_id": "d1",
+        "status": "open",
+        "window": "ita_sessions"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ItaShotQueued",
+      "payload": {
+        "action_id": "ita_better_shielded",
+        "actor": "slot_1",
+        "counters": {
+          "global_shots_fired": 1,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1
+          },
+          "per_target": {
+            "slot_4": 1
+          },
+          "shots_missed": 0,
+          "shots_resolved": 0
+        },
+        "previous_queue_length": 0,
+        "queue_length": 1,
+        "queue_position": 1,
+        "session_id": "d1",
+        "submitted_at": 10,
+        "targets": [
+          "slot_4"
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "ItaShotResolved",
+      "payload": {
+        "action_id": "ita_better_shielded",
+        "actor": "slot_1",
+        "counters": {
+          "global_shots_fired": 1,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1
+          },
+          "per_target": {
+            "slot_4": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0
+          },
+          "shields_spent": {
+            "slot_4": 1
+          },
+          "shots_blocked": 1,
+          "shots_missed": 0,
+          "shots_resolved": 1
+        },
+        "hit_chance": 0.75,
+        "kill": false,
+        "outcome": "Blocked",
+        "protection_path": "shield",
+        "roll": 0.7460370934125392,
+        "session_id": "d1",
+        "shield_after": 0,
+        "shield_before": 1,
+        "shield_spent": true,
+        "submitted_at": 10,
+        "target": "slot_4",
+        "timestamp": 10
+      }
+    },
+    {
+      "index": 3,
+      "kind": "ItaShotQueued",
+      "payload": {
+        "action_id": "ita_evade_miss",
+        "actor": "slot_3",
+        "counters": {
+          "global_shots_fired": 2,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_3": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_6": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0
+          },
+          "shields_spent": {
+            "slot_4": 1
+          },
+          "shots_blocked": 1,
+          "shots_missed": 0,
+          "shots_resolved": 1
+        },
+        "previous_queue_length": 1,
+        "queue_length": 2,
+        "queue_position": 2,
+        "session_id": "d1",
+        "submitted_at": 20,
+        "targets": [
+          "slot_6"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "kind": "ItaShotResolved",
+      "payload": {
+        "action_id": "ita_evade_miss",
+        "actor": "slot_3",
+        "counters": {
+          "global_shots_fired": 2,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_3": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_6": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0
+          },
+          "shields_spent": {
+            "slot_4": 1
+          },
+          "shots_blocked": 1,
+          "shots_missed": 1,
+          "shots_resolved": 2
+        },
+        "hit_chance": 0.25,
+        "kill": false,
+        "outcome": "Miss",
+        "roll": 0.8658211334046935,
+        "session_id": "d1",
+        "submitted_at": 20,
+        "target": "slot_6",
+        "timestamp": 20
+      }
+    },
+    {
+      "index": 5,
+      "kind": "ItaShotQueued",
+      "payload": {
+        "action_id": "ita_composed_blocked",
+        "actor": "slot_8",
+        "counters": {
+          "global_shots_fired": 3,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_3": 1,
+            "slot_8": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_6": 1,
+            "slot_9": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0
+          },
+          "shields_spent": {
+            "slot_4": 1
+          },
+          "shots_blocked": 1,
+          "shots_missed": 1,
+          "shots_resolved": 2
+        },
+        "previous_queue_length": 2,
+        "queue_length": 3,
+        "queue_position": 3,
+        "session_id": "d1",
+        "submitted_at": 30,
+        "targets": [
+          "slot_9"
+        ]
+      }
+    },
+    {
+      "index": 6,
+      "kind": "ItaShotResolved",
+      "payload": {
+        "action_id": "ita_composed_blocked",
+        "actor": "slot_8",
+        "counters": {
+          "global_shots_fired": 3,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_3": 1,
+            "slot_8": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_6": 1,
+            "slot_9": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0,
+            "slot_9": 0
+          },
+          "shields_spent": {
+            "slot_4": 1,
+            "slot_9": 1
+          },
+          "shots_blocked": 2,
+          "shots_missed": 1,
+          "shots_resolved": 3
+        },
+        "hit_chance": 0.5,
+        "kill": false,
+        "outcome": "Blocked",
+        "protection_path": "shield",
+        "roll": 0.2558499337502125,
+        "session_id": "d1",
+        "shield_after": 0,
+        "shield_before": 1,
+        "shield_spent": true,
+        "submitted_at": 30,
+        "target": "slot_9",
+        "timestamp": 30
+      }
+    },
+    {
+      "index": 7,
+      "kind": "ItaShotQueued",
+      "payload": {
+        "action_id": "ita_worse_miss",
+        "actor": "slot_2",
+        "counters": {
+          "global_shots_fired": 4,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_2": 1,
+            "slot_3": 1,
+            "slot_8": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_5": 1,
+            "slot_6": 1,
+            "slot_9": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0,
+            "slot_9": 0
+          },
+          "shields_spent": {
+            "slot_4": 1,
+            "slot_9": 1
+          },
+          "shots_blocked": 2,
+          "shots_missed": 1,
+          "shots_resolved": 3
+        },
+        "previous_queue_length": 3,
+        "queue_length": 4,
+        "queue_position": 4,
+        "session_id": "d1",
+        "submitted_at": 40,
+        "targets": [
+          "slot_5"
+        ]
+      }
+    },
+    {
+      "index": 8,
+      "kind": "ItaShotResolved",
+      "payload": {
+        "action_id": "ita_worse_miss",
+        "actor": "slot_2",
+        "counters": {
+          "global_shots_fired": 4,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_2": 1,
+            "slot_3": 1,
+            "slot_8": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_5": 1,
+            "slot_6": 1,
+            "slot_9": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0,
+            "slot_9": 0
+          },
+          "shields_spent": {
+            "slot_4": 1,
+            "slot_9": 1
+          },
+          "shots_blocked": 2,
+          "shots_missed": 2,
+          "shots_resolved": 4
+        },
+        "hit_chance": 0.25,
+        "kill": false,
+        "outcome": "Miss",
+        "roll": 0.943316327860261,
+        "session_id": "d1",
+        "submitted_at": 40,
+        "target": "slot_5",
+        "timestamp": 40
+      }
+    },
+    {
+      "index": 9,
+      "kind": "ItaSessionUpdated",
+      "payload": {
+        "counters": {
+          "global_shots_fired": 4,
+          "hits_landed": 0,
+          "per_shooter": {
+            "slot_1": 1,
+            "slot_2": 1,
+            "slot_3": 1,
+            "slot_8": 1
+          },
+          "per_target": {
+            "slot_4": 1,
+            "slot_5": 1,
+            "slot_6": 1,
+            "slot_9": 1
+          },
+          "shields_remaining": {
+            "slot_4": 0,
+            "slot_9": 0
+          },
+          "shields_spent": {
+            "slot_4": 1,
+            "slot_9": 1
+          },
+          "shots_blocked": 2,
+          "shots_missed": 2,
+          "shots_resolved": 4
+        },
+        "global_shots_fired": 4,
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "queue_delta": -4,
+        "queue_length": 0,
+        "session_id": "d1",
+        "shots_resolved": 4
+      }
+    },
+    {
+      "index": 10,
+      "kind": "ItaSessionClosed",
+      "payload": {
+        "last_status": "open",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "session_id": "d1"
+      }
+    },
+    {
+      "index": 11,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [],
+        "majority": 5.0,
+        "reason": null,
+        "status": "NoLynch",
+        "tallies": {},
+        "thresholds": {
+          "slot_1": 5.0,
+          "slot_2": 5.0,
+          "slot_3": 5.0,
+          "slot_4": 5.0,
+          "slot_5": 5.0,
+          "slot_6": 5.0,
+          "slot_7": 5.0,
+          "slot_8": 5.0,
+          "slot_9": 5.0
+        },
+        "tiebreak": null,
+        "total_weight": 9.0,
+        "votes": {},
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0,
+          "slot_6": 1.0,
+          "slot_7": 1.0,
+          "slot_8": 1.0,
+          "slot_9": 1.0
+        },
+        "winner": null
+      }
+    },
+    {
+      "index": 12,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "mu_ita_modifiers_001",
+    "pack": "mafia_universe",
+    "phase_id": "D01",
+    "seed": 17,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_ita_sharpshooter",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_ita_bad_shot",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_ita_shooter",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_ita_shielded",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_ita_evasive",
+          "slot_id": "slot_6",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_7",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_ita_sharpshooter",
+          "slot_id": "slot_8",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_ita_evasive_shielded",
+          "slot_id": "slot_9",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "ita_better_shielded",
+        "actor": "slot_1",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 10,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      },
+      {
+        "action_id": "ita_evade_miss",
+        "actor": "slot_3",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 20,
+        "targets": [
+          "slot_6"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      },
+      {
+        "action_id": "ita_composed_blocked",
+        "actor": "slot_8",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 30,
+        "targets": [
+          "slot_9"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      },
+      {
+        "action_id": "ita_worse_miss",
+        "actor": "slot_2",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 40,
+        "targets": [
+          "slot_5"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      }
+    ]
+  }
+}

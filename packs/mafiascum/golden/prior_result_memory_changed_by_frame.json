@@ -1,0 +1,166 @@
+{
+  "description": "Comparison Cop has a prior town parity baseline for slot_3; same-night Framer changes the current result to scum and the resolver records the new baseline.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "duration": "Persistent",
+        "effect": "framed",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "source_action": "sub_001",
+        "target": "slot_3",
+        "visibility": "Hidden"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "investigator": "slot_2",
+        "mode": "Parity",
+        "result": {
+          "changed": true,
+          "current": "scum",
+          "previous": "town"
+        },
+        "target": "slot_3"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationMemoryRecorded",
+      "payload": {
+        "investigator": "slot_2",
+        "mode": "Parity",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "result": "scum",
+        "source_action": "sub_002",
+        "target": "slot_3",
+        "template_id": "compare_parity"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N02"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_mafiascum_prior_memory_001",
+    "pack": "mafiascum",
+    "phase_id": "N02",
+    "seed": 949494,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N02",
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "investigation_memory": [
+        {
+          "investigator": "slot_2",
+          "mode": "Parity",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "result": "town",
+          "source_action": "sub_prev",
+          "target": "slot_3",
+          "template_id": "compare_parity"
+        }
+      ],
+      "slots": [
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "framer",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "comparison_cop",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "frame",
+        "withdrawn": false
+      },
+      {
+        "action_id": "sub_002",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "compare_parity",
+        "withdrawn": false
+      }
+    ]
+  }
+}

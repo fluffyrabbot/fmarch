@@ -1,0 +1,107 @@
+{
+  "name": "test_dynamic_vote_pk",
+  "version": 1,
+  "ir_version": 22,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "vote_granter": {
+      "description": "Town-aligned test role that can grant an explicit dynamic vote weight.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "grant_vote_power",
+          "ability": "Grant",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 61
+          },
+          "grant": {
+            "grant_id": "vote_power_boost",
+            "kind": "VoteWeight",
+            "uses": 1,
+            "vote_weight": 2.0,
+            "visibility": "Target"
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Plurality",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": {
+      "Dynamic": {
+        "base": 1.0,
+        "grant_rules": [
+          {
+            "grant_id": "vote_power_boost",
+            "priority": 10
+          }
+        ]
+      }
+    },
+    "threshold_adjustments": {},
+    "tie_breaker": "HostDecides"
+  },
+  "day_vote_prompt_policies": [
+    {
+      "id": "pk_host_decides_tie",
+      "statuses": ["Tie"],
+      "prompt_kind": "pk",
+      "prompt_reason": "host_decides_tie"
+    }
+  ],
+  "host_prompt_resolution_effects": [
+    {
+      "id": "pk_host_decides_tie",
+      "prompt_kind": "pk",
+      "prompt_reason": "host_decides_tie",
+      "decision": "SelectSlot",
+      "effect": "PkKill"
+    }
+  ],
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

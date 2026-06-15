@@ -1,0 +1,150 @@
+{
+  "description": "Chinese Witch heal potion is modeled as a one-shot night Protect action. It saves the target from the ordinary wolf faction kill.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_1",
+        "cadence_policy": "x_shot",
+        "consumed_action": "heal_001",
+        "counter_id": "x_shot:heal_potion",
+        "limit": 1,
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "heal_potion",
+        "used": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerSaved",
+      "payload": {
+        "reasons": [
+          "protected"
+        ],
+        "slot_id": "slot_3",
+        "sources": [
+          "slot_1"
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "chinese_witch_heal_001",
+    "pack": "chinese_structured",
+    "phase_id": "N01",
+    "seed": 930202,
+    "state": {
+      "action_grants": [],
+      "action_history": [],
+      "badges": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sheriff",
+            "wolf_self_destruct",
+            "main",
+            "eod"
+          ],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "retaliations": [],
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "witch",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "wolf",
+          "effects": [],
+          "role_key": "wolf",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "villager",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ],
+      "wolf_beauty_marks": [],
+      "wolf_carry_tokens": []
+    },
+    "submissions": [
+      {
+        "action_id": "heal_001",
+        "actor": "slot_1",
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "heal_potion",
+        "withdrawn": false
+      },
+      {
+        "action_id": "wolfkill_001",
+        "actor": "slot_2",
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "wolf_night_kill",
+        "withdrawn": false
+      }
+    ]
+  }
+}

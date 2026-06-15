@@ -1,0 +1,87 @@
+{
+  "name": "test_trigger_loop_cap",
+  "version": 1,
+  "ir_version": 24,
+  "roles": {
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "vengeful_townie": {
+      "description": "Town-aligned test role whose death emits a retaliatory kill through the trigger table.",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["vengeful"]
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with a single factional kill action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "factional_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 1,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [
+    {
+      "id": "vengeful_retaliates",
+      "on": "Kill",
+      "if_target_has": ["vengeful"],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Actor",
+        "modifiers": []
+      }
+    }
+  ],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

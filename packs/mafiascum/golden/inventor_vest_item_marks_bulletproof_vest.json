@@ -1,0 +1,149 @@
+{
+  "description": "A target who received an Inventor vest item spends it on the pack-declared generated item action; the item is consumed and marks the actor with a persistent bulletproof_vest effect.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionGrantConsumed",
+      "payload": {
+        "action_id": "sub_vest_001",
+        "actor": "slot_2",
+        "grant_id": "bulletproof_vest_item",
+        "source_action": "fixture:preloaded_bulletproof_vest_item",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "remaining_uses": 0
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_2",
+        "cadence_policy": "inventory",
+        "consumed_action": "sub_vest_001",
+        "counter_id": "inventory:bulletproof_vest_item",
+        "limit": 1,
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "phase_scope": "grant",
+        "remaining": 0,
+        "template_id": "bulletproof_vest_item",
+        "used": 1
+      }
+    },
+    {
+      "index": 2,
+      "kind": "EffectNotification",
+      "payload": {
+        "audience": [
+          "slot_2"
+        ],
+        "effect": "bulletproof_vest",
+        "status": "marked"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_2",
+        "duration": "Persistent",
+        "effect": "bulletproof_vest",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "source_action": "sub_vest_001",
+        "target": "slot_2",
+        "visibility": "Target"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N02"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_inventor_vest_item_001",
+    "pack": "mafiascum",
+    "phase_id": "N02",
+    "seed": 717171,
+    "state": {
+      "action_grants": [
+        {
+          "actor": "slot_1",
+          "grant_id": "bulletproof_vest_item",
+          "kind": "Item",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "source_action": "fixture:preloaded_bulletproof_vest_item",
+          "target": "slot_2",
+          "uses": 1
+        }
+      ],
+      "phase_deadline": null,
+      "phase_id": "N02",
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "inventor",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_vest_001",
+        "actor": "slot_2",
+        "metadata": {
+          "grant_id": "bulletproof_vest_item"
+        },
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "bulletproof_vest_item",
+        "withdrawn": false
+      }
+    ]
+  }
+}
