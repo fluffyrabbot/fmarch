@@ -134,6 +134,7 @@ MODIFIER_MAP = {
     "bulletproof_vest": "bulletproof_vest",
     "backup": "backup_policy",
     "better_ita_chance": "ita.modifier_components.hit_bonus",
+    "combined": "additional_abilities",
     "worse_ita_chance": "ita.modifier_components.hit_penalty",
     "percent_ita_vulnerability": "ita.modifier_components.target_evade",
     "xn_ita_shields": "ita.modifier_components.shields",
@@ -816,10 +817,14 @@ def rust_enum_variants(text: str, enum_name: str) -> set[str]:
 def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
     ir_text = read_text(fmarch_root / "crates/domain/src/ir.rs")
     events_text = read_text(fmarch_root / "crates/domain/src/events.rs")
+    pack_src_text = read_text(fmarch_root / "crates/domain/src/pack.rs")
     resolver_text = read_text(fmarch_root / "crates/domain/src/resolver.rs")
     commands_text = read_text(fmarch_root / "crates/commands/src/lib.rs")
     command_tests_text = read_text(fmarch_root / "crates/commands/tests/pipeline.rs")
     projections_text = read_text(fmarch_root / "crates/projections/src/lib.rs")
+    domain_tests_text = "\n".join(
+        read_text(p) for p in sorted((fmarch_root / "crates/domain/tests").glob("*.rs"))
+    )
     pack_text = "\n".join(read_text(p) for p in sorted((fmarch_root / "packs").glob("*/pack.json")))
     golden_text = "\n".join(read_text(p) for p in sorted((fmarch_root / "packs").glob("*/golden/*.json")))
     golden_text_by_pack: dict[str, str] = {}
@@ -994,10 +999,13 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         "modes": rust_enum_variants(ir_text, "InvestigateMode"),
         "modifiers": rust_enum_variants(ir_text, "Modifier"),
         "events": rust_enum_variants(events_text, "InnerEvent"),
+        "ir_text": ir_text,
+        "pack_src_text": pack_src_text,
         "resolver_text": resolver_text,
         "commands_text": commands_text,
         "command_tests_text": command_tests_text,
         "projections_text": projections_text,
+        "domain_tests_text": domain_tests_text,
         "pack_text": pack_text,
         "golden_text": golden_text,
         "golden_text_by_pack": golden_text_by_pack,
@@ -1799,6 +1807,31 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             modeled = fmarch["pack_vote_threshold_adjustments"].get(f"mafiascum:{name}") == expected
             implemented = modeled and "threshold_adjustments" in resolver and "thresholds.insert" in resolver
             integrated = modeled and "Command::ResolvePhase" in commands if implemented else False
+        elif name == "combined":
+            modeled = '"additional_abilities"' in fmarch["pack_text"]
+            implemented = (
+                modeled
+                and "pub additional_abilities: Vec<IrAbility>" in fmarch["pack_src_text"]
+                and "composite_action_abilities_are_strict" in fmarch["domain_tests_text"]
+                and "self.additional_abilities.contains(&ability)" in fmarch["pack_src_text"]
+            )
+            golden = (
+                "cpr_saves_attacked_target"
+                in fmarch["golden_names_by_pack"].get("mafiascum", set())
+                and "jailkeeper_block_protect"
+                in fmarch["golden_names_by_pack"].get("mafiascum", set())
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_persists_cpr_harm_policy" in command_tests
+                and "host_resolve_phase_persists_jailkeeper_block_plus_protect_policy"
+                in command_tests
+            )
+            notes = (
+                "im-human Combined metadata becomes explicit multi-primitive "
+                "`additional_abilities`; CPR Protect+Kill and Jailkeeper "
+                "Block+Protect prove pack, resolver, golden, and command seams"
+            )
         else:
             modeled = canonical in fmarch["modifiers"] or canonical in fmarch["pack_modifiers"]
             implemented = bool(canonical and f"Modifier::{canonical}" in resolver)
@@ -2187,6 +2220,13 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         golden = (
             name.lower() in goldens
             or (canonical and canonical.lower() in goldens)
+            or (
+                name == "combined"
+                and "cpr_saves_attacked_target"
+                in fmarch["golden_names_by_pack"].get("mafiascum", set())
+                and "jailkeeper_block_protect"
+                in fmarch["golden_names_by_pack"].get("mafiascum", set())
+            )
             or (name == "x_cycle_cooldown" and "cooldown_cop" in goldens)
             or (
                 name

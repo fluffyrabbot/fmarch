@@ -220,7 +220,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `backup` | `backup_policy` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `better_ita_chance` | `ita.modifier_components.hit_bonus` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `blocked` | `Roleblockable` | 1 | no | yes | yes | yes | yes |  |
-| modifier:action | `combined` |  | 1 | yes | no | no | no | no |  |
+| modifier:action | `combined` | `additional_abilities` | 1 | no | yes | yes | yes | yes | im-human Combined metadata becomes explicit multi-primitive `additional_abilities`; CPR Protect+Kill and Jailkeeper Block+Protect prove pack, resolver, golden, and command seams |
 | modifier:action | `complex` |  | 1 | yes | no | no | no | no |  |
 | modifier:action | `compulsive` | `Compulsive` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `cycle_x` |  | 1 | yes | no | no | no | no |  |
