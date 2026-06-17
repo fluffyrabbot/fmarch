@@ -136,6 +136,7 @@ MODIFIER_MAP = {
     "better_ita_chance": "ita.modifier_components.hit_bonus",
     "combined": "additional_abilities",
     "complex": "target_role_filter:PowerRole",
+    "cycle_x": "cooldown_cycles",
     "worse_ita_chance": "ita.modifier_components.hit_penalty",
     "percent_ita_vulnerability": "ita.modifier_components.target_evade",
     "xn_ita_shields": "ita.modifier_components.shields",
@@ -1890,11 +1891,17 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "self_allowed=false rejects actor self-targeting" in command_tests
                 and "bad_self_kill" in command_tests
             )
-        elif name == "x_cycle_cooldown":
+        elif name in {"cycle_x", "x_cycle_cooldown"}:
             modeled = "cooldown_cycles" in fmarch["pack_text"]
             implemented = "constraints.cooldown_cycles" in resolver and "cooldown:" in resolver
             golden = "cooldown_cop" in goldens
             integrated = implemented and "cooldown_cop_n02" in command_tests and "action_counter" in commands
+            if name == "cycle_x":
+                notes = (
+                    "im-human CycleX and XCycleCooldown both write dynamic "
+                    "cycle-cooldown metadata; fmarch models that as "
+                    "`constraints.cooldown_cycles` with folded action counters"
+                )
         elif name == "compulsive":
             integrated = (
                 implemented
@@ -2263,7 +2270,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "power_role_killer_rejects_vanilla_target"
                 in fmarch["golden_names_by_pack"].get("mafia_universe", set())
             )
-            or (name == "x_cycle_cooldown" and "cooldown_cop" in goldens)
+            or (name in {"cycle_x", "x_cycle_cooldown"} and "cooldown_cop" in goldens)
             or (
                 name
                 in {

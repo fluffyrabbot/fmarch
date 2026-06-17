@@ -223,7 +223,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `combined` | `additional_abilities` | 1 | no | yes | yes | yes | yes | im-human Combined metadata becomes explicit multi-primitive `additional_abilities`; CPR Protect+Kill and Jailkeeper Block+Protect prove pack, resolver, golden, and command seams |
 | modifier:action | `complex` | `target_role_filter:PowerRole` | 1 | no | yes | yes | yes | yes | im-human Complex metadata maps to pack-owned `target_role_filter: PowerRole`; Mafia Universe Power Role Killer proves vanilla rejection and power-role kills |
 | modifier:action | `compulsive` | `Compulsive` | 1 | no | yes | yes | yes | yes |  |
-| modifier:action | `cycle_x` |  | 1 | yes | no | no | no | no |  |
+| modifier:action | `cycle_x` | `cooldown_cycles` | 1 | no | yes | yes | yes | yes | im-human CycleX and XCycleCooldown both write dynamic cycle-cooldown metadata; fmarch models that as `constraints.cooldown_cycles` with folded action counters |
 | modifier:action | `disabled_endgame` | `DisabledEndgame` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `disloyal` | `Disloyal` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `doublevoter` | `vote.weight=2` | 1 | no | yes | yes | yes | yes |  |
