@@ -982,7 +982,11 @@ fn win_families_are_strict_and_versioned() {
 
     value["ir_version"] = json!(45);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >=",
+    );
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
     value["ir_version"] = json!(47);
@@ -1276,7 +1280,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 57",
+        "pack declares features requiring ir_version >= 58",
     );
     assert_issue(&err, "ir_version", "private_channels");
     assert_issue(&err, "ir_version", "Simultaneous");
@@ -1291,6 +1295,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
         "ir_version",
         "visitor role/identity investigation modes",
     );
+    assert_issue(&err, "ir_version", "vote.tiebreaker_roles");
     assert_issue(&err, "ir_version", "Disloyal");
 }
 
@@ -4427,7 +4432,11 @@ fn standard_nar_action_chance_policy_is_strict_and_versioned() {
 
     value["ir_version"] = json!(42);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >=",
+    );
     assert_issue(
         &err,
         "standard_nar.action_chance",
@@ -4467,7 +4476,11 @@ fn standard_nar_conflict_families_are_strict_and_versioned() {
 
     value["ir_version"] = json!(43);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >=",
+    );
     assert_issue(
         &err,
         "standard_nar.conflict_families",
@@ -4517,7 +4530,11 @@ fn visibility_families_are_strict_and_versioned() {
 
     value["ir_version"] = json!(44);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >=",
+    );
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
@@ -6896,6 +6913,37 @@ fn vote_threshold_adjustments_must_reference_roles() {
         &err,
         "vote.threshold_adjustments",
         "unknown role `missing_role`",
+    );
+}
+
+#[test]
+fn vote_tiebreaker_roles_must_reference_roles() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(58);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["vote"]["tiebreaker_roles"] = json!(["townie"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(57);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["vote"]["tiebreaker_roles"] = json!(["townie"]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "ir_version", "vote.tiebreaker_roles");
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(58);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["vote"]["tiebreaker_roles"] = json!(["townie", "missing_role", "townie"]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "vote.tiebreaker_roles", "unknown role `missing_role`");
+    assert_issue(
+        &err,
+        "vote.tiebreaker_roles",
+        "duplicate tiebreaker role `townie`",
     );
 }
 

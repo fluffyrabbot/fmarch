@@ -8667,6 +8667,8 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     } else {
         policy.tie_breaker
     };
+    let role_tiebreaker_winner =
+        role_tiebreaker_winner(&vote_state, &contenders, &policy.tiebreaker_roles);
 
     let (status, winner, contenders, tiebreak, reason) = decide_outcome(
         &tallies,
@@ -8675,6 +8677,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         majority,
         &thresholds,
         tie_breaker,
+        role_tiebreaker_winner,
         input.seed,
         NO_LYNCH_TARGET,
         duel_forced_elimination,
@@ -10528,6 +10531,23 @@ fn tally_votes(
     tallies
 }
 
+fn role_tiebreaker_winner(
+    state: &StateSnapshot,
+    contenders: &[SlotId],
+    tiebreaker_roles: &[String],
+) -> Option<SlotId> {
+    if tiebreaker_roles.is_empty() {
+        return None;
+    }
+    contenders.iter().find_map(|contender| {
+        let slot = state.slots.iter().find(|slot| &slot.slot_id == contender)?;
+        tiebreaker_roles
+            .iter()
+            .any(|role_key| role_key == &slot.role_key)
+            .then(|| contender.clone())
+    })
+}
+
 fn decide_outcome(
     tallies: &BTreeMap<SlotId, f64>,
     top_contenders: &[SlotId],
@@ -10535,6 +10555,7 @@ fn decide_outcome(
     majority: Option<f64>,
     thresholds: &BTreeMap<SlotId, f64>,
     tie_breaker: VoteTieBreaker,
+    role_tiebreaker_winner: Option<SlotId>,
     seed: Seed,
     no_lynch_target: &str,
     force_top_contenders: bool,
@@ -10605,6 +10626,16 @@ fn decide_outcome(
     }
 
     // A tie among multiple contenders.
+    if let Some(winner) = role_tiebreaker_winner.filter(|winner| contenders.contains(winner)) {
+        return (
+            VoteStatus::Lynch,
+            Some(winner.clone()),
+            contenders,
+            Some("RoleTiebreaker".to_string()),
+            Some(format!("role tiebreaker selected {winner}")),
+        );
+    }
+
     match tie_breaker {
         VoteTieBreaker::NoElimination => {
             let names = contenders.join(" and ");

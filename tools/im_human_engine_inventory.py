@@ -137,6 +137,7 @@ MODIFIER_MAP = {
     "combined": "additional_abilities",
     "complex": "target_role_filter:PowerRole",
     "cycle_x": "cooldown_cycles",
+    "tiebreaker": "vote.tiebreaker_roles",
     "worse_ita_chance": "ita.modifier_components.hit_penalty",
     "percent_ita_vulnerability": "ita.modifier_components.target_evade",
     "xn_ita_shields": "ita.modifier_components.shields",
@@ -1902,6 +1903,29 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                     "cycle-cooldown metadata; fmarch models that as "
                     "`constraints.cooldown_cycles` with folded action counters"
                 )
+        elif name == "tiebreaker":
+            modeled = '"tiebreaker_roles"' in fmarch["pack_text"]
+            implemented = (
+                modeled
+                and "role_tiebreaker_winner" in resolver
+                and "RoleTiebreaker" in resolver
+                and "vote_tiebreaker_roles_must_reference_roles"
+                in fmarch["domain_tests_text"]
+            )
+            golden = (
+                "role_tiebreaker_selects_tied_candidate"
+                in fmarch["golden_names_by_pack"].get("test_role_tiebreaker_vote", set())
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_uses_pack_declared_role_tiebreaker"
+                in command_tests
+            )
+            notes = (
+                "im-human Tiebreaker vote metadata maps to pack-owned "
+                "`vote.tiebreaker_roles`; a plurality fixture proves the role "
+                "candidate tie policy before ordinary fallback resolution"
+            )
         elif name == "compulsive":
             integrated = (
                 implemented
@@ -2271,6 +2295,11 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 in fmarch["golden_names_by_pack"].get("mafia_universe", set())
             )
             or (name in {"cycle_x", "x_cycle_cooldown"} and "cooldown_cop" in goldens)
+            or (
+                name == "tiebreaker"
+                and "role_tiebreaker_selects_tied_candidate"
+                in fmarch["golden_names_by_pack"].get("test_role_tiebreaker_vote", set())
+            )
             or (
                 name
                 in {

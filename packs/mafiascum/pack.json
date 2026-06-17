@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 57,
+  "ir_version": 58,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -61,6 +61,11 @@
     },
     "voteless": {
       "description": "Voteless. Town-aligned role whose ballot is recordable but contributes zero votes under the pack vote policy.",
+      "alignment": "town",
+      "actions": []
+    },
+    "tiebreaker": {
+      "description": "Tiebreaker. If this slot is tied for the official day elimination, pack vote policy selects it before the ordinary tie-breaker.",
       "alignment": "town",
       "actions": []
     },
@@ -3621,6 +3626,7 @@
       "loved": 1.0,
       "hated": -1.0
     },
+    "tiebreaker_roles": ["tiebreaker"],
     "tie_breaker": "NoElimination",
     "vote_duel_tie_breaker": "Random"
   },

@@ -254,7 +254,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `stealthy` | `Ninja` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `strong_willed` | `StrongWilled` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `strongman` | `Strongman` | 1 | no | yes | yes | yes | yes |  |
-| modifier:action | `tiebreaker` |  | 1 | yes | no | no | no | no |  |
+| modifier:action | `tiebreaker` | `vote.tiebreaker_roles` | 1 | no | yes | yes | yes | yes | im-human Tiebreaker vote metadata maps to pack-owned `vote.tiebreaker_roles`; a plurality fixture proves the role candidate tie policy before ordinary fallback resolution |
 | modifier:action | `treestump` | `treestump_policy` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `triplevoter` | `vote.weight=3` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `uncooperative` | `Uncooperative` | 1 | no | yes | yes | yes | yes |  |

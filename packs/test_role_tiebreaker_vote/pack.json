@@ -1,0 +1,64 @@
+{
+  "name": "test_role_tiebreaker_vote",
+  "version": 1,
+  "ir_version": 58,
+  "roles": {
+    "tiebreaker": {
+      "description": "Test role selected by vote.tiebreaker_roles when tied for elimination.",
+      "alignment": "town",
+      "actions": []
+    },
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "visibility_families": [],
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Plurality",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tiebreaker_roles": ["tiebreaker"],
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"]
+    },
+    "twilight": false
+  },
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ]
+}

@@ -14804,6 +14804,131 @@ async fn host_resolve_phase_uses_pack_declared_vote_weights(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_uses_pack_declared_role_tiebreaker(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "test_role_tiebreaker_vote".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "tiebreaker"),
+        ("slot_2", "user_2", "vanilla_townie"),
+        ("slot_3", "user_3", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (user_id, actor_slot, target) in [
+        ("user_1", "slot_1", "slot_2"),
+        ("user_3", "slot_3", "slot_1"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot(target.into()),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 585858 })
+        .await
+        .expect("host resolves role-tiebreaker day vote");
+
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied: domain::ResolutionApplied = serde_json::from_value(payload).unwrap();
+    let outcome = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::DayVoteOutcome(outcome) => Some(outcome),
+            _ => None,
+        })
+        .expect("role tiebreaker day outcome");
+    assert_eq!(outcome.status, domain::VoteStatus::Lynch);
+    assert_eq!(outcome.winner.as_deref(), Some("slot_1"));
+    assert_eq!(outcome.tiebreak.as_deref(), Some("RoleTiebreaker"));
+    assert_eq!(
+        outcome.contenders,
+        vec!["slot_1".to_string(), "slot_2".to_string()]
+    );
+    assert_eq!(outcome.tallies.get("slot_1"), Some(&1.0));
+    assert_eq!(outcome.tallies.get("slot_2"), Some(&1.0));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let killed = slots.iter().find(|s| s.slot_id == "slot_1").unwrap();
+    assert!(!killed.alive, "role-tiebreaker winner is lynched");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must match incremental role-tiebreaker resolve projection"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_uses_pack_declared_triplevoter_weight(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

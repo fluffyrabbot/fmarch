@@ -1532,6 +1532,8 @@ pub struct VotePolicy {
     pub weights: WeightPolicy,
     #[serde(default)]
     pub threshold_adjustments: BTreeMap<RoleKey, f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tiebreaker_roles: Vec<RoleKey>,
     pub tie_breaker: VoteTieBreaker,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vote_duel_tie_breaker: Option<VoteDuelTieBreaker>,
@@ -8730,6 +8732,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if !pack.day_vote_prompt_policies.is_empty() {
         require_ir(&mut required, &mut reasons, 21, "day_vote_prompt_policies");
     }
+    if !pack.vote.tiebreaker_roles.is_empty() {
+        require_ir(&mut required, &mut reasons, 58, "vote.tiebreaker_roles");
+    }
     if !pack.host_prompt_resolution_effects.is_empty() {
         require_ir(
             &mut required,
@@ -9655,6 +9660,29 @@ fn validate_vote_policy(
                 format!(
                     "role `{role_key}` has invalid vote threshold adjustment {adjustment}; expected finite value"
                 ),
+            );
+        }
+    }
+
+    let mut seen_tiebreaker_roles = BTreeSet::new();
+    for role_key in &policy.tiebreaker_roles {
+        if role_key.trim().is_empty() {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                "tiebreaker role must not be empty",
+            );
+        } else if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                format!("unknown role `{role_key}`"),
+            );
+        } else if !seen_tiebreaker_roles.insert(role_key.as_str()) {
+            issue(
+                issues,
+                "vote.tiebreaker_roles",
+                format!("duplicate tiebreaker role `{role_key}`"),
             );
         }
     }
