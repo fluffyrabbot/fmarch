@@ -135,6 +135,7 @@ MODIFIER_MAP = {
     "backup": "backup_policy",
     "better_ita_chance": "ita.modifier_components.hit_bonus",
     "combined": "additional_abilities",
+    "complex": "target_role_filter:PowerRole",
     "worse_ita_chance": "ita.modifier_components.hit_penalty",
     "percent_ita_vulnerability": "ita.modifier_components.target_evade",
     "xn_ita_shields": "ita.modifier_components.shields",
@@ -1832,6 +1833,34 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "`additional_abilities`; CPR Protect+Kill and Jailkeeper "
                 "Block+Protect prove pack, resolver, golden, and command seams"
             )
+        elif name == "complex":
+            modeled = (
+                '"target_role_filter": "PowerRole"' in fmarch["pack_text"]
+                and '"vanilla_roles"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "target_role_filter_error" in resolver
+                and 'reason: "invalid_target_role"' in resolver
+                and "target_role_filter_is_strict_and_versioned"
+                in fmarch["domain_tests_text"]
+            )
+            golden = (
+                "power_role_killer_kills_power_roles"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
+                and "power_role_killer_rejects_vanilla_target"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_carries_mafia_universe_power_role_killer_filter"
+                in command_tests
+            )
+            notes = (
+                "im-human Complex metadata maps to pack-owned "
+                "`target_role_filter: PowerRole`; Mafia Universe Power Role "
+                "Killer proves vanilla rejection and power-role kills"
+            )
         else:
             modeled = canonical in fmarch["modifiers"] or canonical in fmarch["pack_modifiers"]
             implemented = bool(canonical and f"Modifier::{canonical}" in resolver)
@@ -2226,6 +2255,13 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 in fmarch["golden_names_by_pack"].get("mafiascum", set())
                 and "jailkeeper_block_protect"
                 in fmarch["golden_names_by_pack"].get("mafiascum", set())
+            )
+            or (
+                name == "complex"
+                and "power_role_killer_kills_power_roles"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
+                and "power_role_killer_rejects_vanilla_target"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
             )
             or (name == "x_cycle_cooldown" and "cooldown_cop" in goldens)
             or (
