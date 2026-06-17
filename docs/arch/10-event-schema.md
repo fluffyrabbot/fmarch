@@ -171,7 +171,10 @@ enum InnerEvent {
     WolfBeautyDragged,      // { beauty_id, dragged_ids, cause, phase_id, phase_kind, phase_number }
     ItaSessionOpened,       // { session_id, label, day, window, status, phase_id, phase_kind, phase_number }
     ItaShotQueued,          // { session_id, action_id, actor, targets, submitted_at, queue_position, queue_length, previous_queue_length, counters }
+    ItaShotBuffered,        // { session_id, action_id, actor_id, targets, submitted_at, release_at, delay_ms }
+    ItaShotInvalidated,     // { session_id, action_id, actor_id, target_id, reason, invalidated_by?, submitted_at, timestamp }
     ItaShotResolved,        // { session_id, action_id, actor, target, outcome, hit_chance, roll, kill, submitted_at, timestamp, counters }
+    ItaShotRefunded,        // { session_id, action_id, actor_id, target_id, reason, policy?, hit_chance?, roll?, hp_before?, hp_after?, protection_path?, submitted_at, timestamp, counters }
     ItaSessionUpdated,      // { session_id, queue_length, queue_delta, shots_resolved, global_shots_fired, counters, phase_id, phase_kind, phase_number }
     ItaSessionClosed,       // { session_id, last_status, phase_id, phase_kind, phase_number }
     PlayersLinked,          // { link_id, slots, source }
@@ -236,6 +239,9 @@ unknown Rust events.
 | `ita.session.updated` | `ItaSessionUpdated` | implemented for resolved-shot counter snapshots |
 | `ita.session.closed` | `ItaSessionClosed` | implemented for auto-closing pack sessions |
 | `ita.shot.queued` | `ItaShotQueued` | implemented for accepted ITA shots |
+| `ita.shot.buffered` | `ItaShotBuffered` | canonical contract/import schema frozen; resolver buffering policy still pending |
+| `ita.shot.invalidated` | `ItaShotInvalidated` | canonical contract/import schema frozen; resolver queue invalidation policy still pending |
+| `ita.shot.refunded` | `ItaShotRefunded` | canonical contract/import schema frozen; resolver refund policy still pending |
 | `ita.shot.resolved` | `ItaShotResolved` | implemented for deterministic hit/miss plus paired `PlayerKilled` on hit |
 | — fmarch local | `PlayersLinked` | implemented; folds Cupid/lovers-style cross-slot link state; later day/night cascade is pack-policy gated |
 | — fmarch local | `RetaliationArmed` | implemented; folds Hunter-style chosen death retaliation state |
@@ -245,8 +251,6 @@ unknown Rust events.
 | `win.executioner` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through target-lynch independent win metadata |
 | `win.condemner` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through target-lynch independent win metadata |
 | `win.jester` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through self-lynch independent win metadata |
-| `ita.shot.buffered` / `ita.shot.invalidated` / `ita.shot.refunded` |  | unsupported; deferred ITA buffering/refund policy |
-
 > **`ActionInterfered` vs `EffectNotification`.** When an action fails to resolve because it
 > was interfered with (e.g. a roleblocked Cop), the resolver emits
 > `ActionInterfered { actor, reason }` (reason `"roleblocked"`) addressed to the actor whose

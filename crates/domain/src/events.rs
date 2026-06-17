@@ -229,6 +229,26 @@ pub enum InnerEvent {
         previous_queue_length: u32,
         counters: ItaCounters,
     },
+    ItaShotBuffered {
+        session_id: String,
+        action_id: String,
+        actor_id: SlotId,
+        targets: Vec<SlotId>,
+        submitted_at: u64,
+        release_at: u64,
+        delay_ms: u64,
+    },
+    ItaShotInvalidated {
+        session_id: String,
+        action_id: String,
+        actor_id: SlotId,
+        target_id: SlotId,
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        invalidated_by: Option<String>,
+        submitted_at: u64,
+        timestamp: u64,
+    },
     ItaShotResolved {
         session_id: String,
         action_id: String,
@@ -244,6 +264,28 @@ pub enum InnerEvent {
         shield_after: Option<u32>,
         #[serde(default, skip_serializing_if = "is_false")]
         shield_spent: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        protection_path: Option<String>,
+        submitted_at: u64,
+        timestamp: u64,
+        counters: ItaCounters,
+    },
+    ItaShotRefunded {
+        session_id: String,
+        action_id: String,
+        actor_id: SlotId,
+        target_id: SlotId,
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hit_chance: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        roll: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hp_before: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hp_after: Option<u32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         protection_path: Option<String>,
         submitted_at: u64,
@@ -549,6 +591,8 @@ pub struct ItaCounters {
     pub shots_missed: u32,
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub shots_blocked: u32,
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub shots_refunded: u32,
     #[serde(default)]
     pub per_shooter: BTreeMap<SlotId, u32>,
     #[serde(default)]
@@ -557,6 +601,8 @@ pub struct ItaCounters {
     pub shields_remaining: BTreeMap<SlotId, u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub shields_spent: BTreeMap<SlotId, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub refunded_by_reason: BTreeMap<String, u32>,
 }
 
 fn is_zero_u32(value: &u32) -> bool {

@@ -18,11 +18,7 @@ from typing import Any
 from im_human_engine_inventory import RESULT_KIND_MAP
 
 
-UNSUPPORTED_RESULT_KINDS = {
-    "ita.shot.buffered",
-    "ita.shot.invalidated",
-    "ita.shot.refunded",
-}
+UNSUPPORTED_RESULT_KINDS: set[str] = set()
 
 EVENT_KIND_KEYS = ("kind", "event", "result_kind")
 PHASE_KINDS = {"Day", "Night", "Twilight", "Instant"}
@@ -416,6 +412,49 @@ EVENT_PAYLOAD_SHAPES: dict[str, dict[str, Any]] = {
             "counters": "object",
         },
     },
+    "ItaShotBuffered": {
+        "required": {
+            "session_id",
+            "action_id",
+            "actor_id",
+            "targets",
+            "submitted_at",
+            "release_at",
+            "delay_ms",
+        },
+        "optional": set(),
+        "types": {
+            "session_id": "str",
+            "action_id": "str",
+            "actor_id": "str",
+            "targets": "array",
+            "submitted_at": "int",
+            "release_at": "int",
+            "delay_ms": "int",
+        },
+    },
+    "ItaShotInvalidated": {
+        "required": {
+            "session_id",
+            "action_id",
+            "actor_id",
+            "target_id",
+            "reason",
+            "submitted_at",
+            "timestamp",
+        },
+        "optional": {"invalidated_by"},
+        "types": {
+            "session_id": "str",
+            "action_id": "str",
+            "actor_id": "str",
+            "target_id": "str",
+            "reason": "str",
+            "invalidated_by": "nullable_str",
+            "submitted_at": "int",
+            "timestamp": "int",
+        },
+    },
     "ItaShotResolved": {
         "required": {
             "session_id",
@@ -448,6 +487,42 @@ EVENT_PAYLOAD_SHAPES: dict[str, dict[str, Any]] = {
             "shield_before": "nullable_int",
             "shield_after": "nullable_int",
             "shield_spent": "bool",
+            "protection_path": "nullable_str",
+            "submitted_at": "int",
+            "timestamp": "int",
+            "counters": "object",
+        },
+    },
+    "ItaShotRefunded": {
+        "required": {
+            "session_id",
+            "action_id",
+            "actor_id",
+            "target_id",
+            "reason",
+            "submitted_at",
+            "timestamp",
+            "counters",
+        },
+        "optional": {
+            "policy",
+            "hit_chance",
+            "roll",
+            "hp_before",
+            "hp_after",
+            "protection_path",
+        },
+        "types": {
+            "session_id": "str",
+            "action_id": "str",
+            "actor_id": "str",
+            "target_id": "str",
+            "reason": "str",
+            "policy": "nullable_str",
+            "hit_chance": "nullable_number",
+            "roll": "nullable_number",
+            "hp_before": "nullable_int",
+            "hp_after": "nullable_int",
             "protection_path": "nullable_str",
             "submitted_at": "int",
             "timestamp": "int",

@@ -1387,6 +1387,87 @@ fn ita_session_payloads_pass_contract_validation() {
 }
 
 #[test]
+fn ita_buffered_invalidated_and_refunded_payloads_pass_contract_validation() {
+    let payload = json!({
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "run_id": "resolution:test:D01:ita_extended",
+        "result_version": RESULT_VERSION,
+        "seed": 19,
+        "counts": {
+            "events": 3,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "ItaShotBuffered",
+                "payload": {
+                    "session_id": "d1",
+                    "action_id": "ita_buffered_001",
+                    "actor_id": "slot_1",
+                    "targets": ["slot_4"],
+                    "submitted_at": 10,
+                    "release_at": 1010,
+                    "delay_ms": 1000
+                }
+            },
+            {
+                "index": 1,
+                "kind": "ItaShotInvalidated",
+                "payload": {
+                    "session_id": "d1",
+                    "action_id": "ita_invalidated_001",
+                    "actor_id": "slot_2",
+                    "target_id": "slot_4",
+                    "reason": "target_dead",
+                    "invalidated_by": "ita_buffered_001",
+                    "submitted_at": 11,
+                    "timestamp": 12
+                }
+            },
+            {
+                "index": 2,
+                "kind": "ItaShotRefunded",
+                "payload": {
+                    "session_id": "d1",
+                    "action_id": "ita_refunded_001",
+                    "actor_id": "slot_3",
+                    "target_id": "slot_4",
+                    "reason": "target_dead",
+                    "policy": "REFUND_SHOT",
+                    "hit_chance": 0.5,
+                    "roll": 0.3,
+                    "hp_before": 0,
+                    "hp_after": 0,
+                    "protection_path": "hp",
+                    "submitted_at": 13,
+                    "timestamp": 14,
+                    "counters": {
+                        "global_shots_fired": 3,
+                        "shots_resolved": 1,
+                        "hits_landed": 0,
+                        "shots_missed": 0,
+                        "shots_refunded": 1,
+                        "per_shooter": { "slot_3": 1 },
+                        "per_target": { "slot_4": 1 },
+                        "refunded_by_reason": { "target_dead": 1 }
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("extended ITA shot payloads should pass");
+    assert_eq!(applied.counts.events, 4);
+}
+
+#[test]
 fn action_granted_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "N01",

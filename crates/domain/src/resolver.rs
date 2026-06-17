@@ -36,7 +36,7 @@ use crate::state::{
 use serde::{Deserialize, Serialize};
 
 /// Resolver contract version (doc 10 `result_version`).
-pub const RESULT_VERSION: u16 = 18;
+pub const RESULT_VERSION: u16 = 19;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -5167,6 +5167,56 @@ fn build_trace(
                 });
                 "ita_shot_queued"
             }
+            InnerEvent::ItaShotBuffered {
+                session_id,
+                action_id,
+                actor_id,
+                targets,
+                submitted_at,
+                release_at,
+                delay_ms,
+            } => {
+                generated.push(GeneratedActionTrace {
+                    action_id: action_id.clone(),
+                    source: "ItaShotBuffered".to_string(),
+                    actor: actor_id.clone(),
+                    targets: targets.clone(),
+                    detail: serde_json::json!({
+                        "session_id": session_id,
+                        "submitted_at": submitted_at,
+                        "release_at": release_at,
+                        "delay_ms": delay_ms,
+                        "event_index": indexed.index,
+                    }),
+                });
+                "ita_shot_buffered"
+            }
+            InnerEvent::ItaShotInvalidated {
+                session_id,
+                action_id,
+                actor_id,
+                target_id,
+                reason,
+                invalidated_by,
+                submitted_at,
+                timestamp,
+            } => {
+                generated.push(GeneratedActionTrace {
+                    action_id: action_id.clone(),
+                    source: "ItaShotInvalidated".to_string(),
+                    actor: actor_id.clone(),
+                    targets: vec![target_id.clone()],
+                    detail: serde_json::json!({
+                        "session_id": session_id,
+                        "reason": reason,
+                        "invalidated_by": invalidated_by,
+                        "submitted_at": submitted_at,
+                        "timestamp": timestamp,
+                        "event_index": indexed.index,
+                    }),
+                });
+                "ita_shot_invalidated"
+            }
             InnerEvent::ItaShotResolved {
                 session_id,
                 action_id,
@@ -5204,6 +5254,44 @@ fn build_trace(
                     detail,
                 });
                 "ita_shot_resolved"
+            }
+            InnerEvent::ItaShotRefunded {
+                session_id,
+                action_id,
+                actor_id,
+                target_id,
+                reason,
+                policy,
+                hit_chance,
+                roll,
+                hp_before,
+                hp_after,
+                protection_path,
+                submitted_at,
+                timestamp,
+                counters,
+            } => {
+                generated.push(GeneratedActionTrace {
+                    action_id: action_id.clone(),
+                    source: "ItaShotRefunded".to_string(),
+                    actor: actor_id.clone(),
+                    targets: vec![target_id.clone()],
+                    detail: serde_json::json!({
+                        "session_id": session_id,
+                        "reason": reason,
+                        "policy": policy,
+                        "hit_chance": hit_chance,
+                        "roll": roll,
+                        "hp_before": hp_before,
+                        "hp_after": hp_after,
+                        "protection_path": protection_path,
+                        "submitted_at": submitted_at,
+                        "timestamp": timestamp,
+                        "counters": counters,
+                        "event_index": indexed.index,
+                    }),
+                });
+                "ita_shot_refunded"
             }
             InnerEvent::ItaSessionUpdated {
                 session_id,

@@ -22,7 +22,7 @@ class UnportedImHumanInventoryReportTests(unittest.TestCase):
                     "| Category | im-human item | Canonical fmarch | Sources | Unsupported | Modeled in pack | Implemented in resolver | Covered by golden | Integrated command/projection | Notes |",
                     "|---|---|---:|---|---|---|---|---|---|---|",
                     "| primitive | `mark_cleansed` |  | 1 | yes | no | no | no | no |  |",
-                    "| result_event_kind | `ita.shot.buffered` |  | 1 | yes | no | no | no | no |  |",
+                    "| result_event_kind | `ita.shot.buffered` | `ItaShotBuffered` | 1 | yes | no | no | no | no | schema frozen |",
                     "| culture_note | `culture:done` | `Policy` | 1 | no | yes | yes | yes | yes | covered |",
                     "| test_family | `init` | `out_of_scope: init` | 4 | yes | no | no | no | no | outside slot-only resolver |",
                 ]
@@ -42,6 +42,8 @@ class UnportedImHumanInventoryReportTests(unittest.TestCase):
             self.assertEqual(report["requested_category_counts"]["culture_note"], 0)
             self.assertEqual(report["classification_counts"]["not_yet_ported"], 2)
             self.assertEqual(report["classification_counts"]["explicit_out_of_scope"], 1)
+            buffered = report["requested_categories"]["result_event_kind"]["rows"][0]
+            self.assertIn("canonical fmarch schema coverage", buffered["rationale"])
 
 
 if __name__ == "__main__":

@@ -335,10 +335,10 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | result_event_kind | `ita.session.closed` | `ItaSessionClosed` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.opened` | `ItaSessionOpened` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.updated` | `ItaSessionUpdated` | 1 | no | yes | yes | yes | yes |  |
-| result_event_kind | `ita.shot.buffered` |  | 1 | yes | no | no | no | no |  |
-| result_event_kind | `ita.shot.invalidated` |  | 1 | yes | no | no | no | no |  |
+| result_event_kind | `ita.shot.buffered` | `ItaShotBuffered` | 1 | yes | no | no | no | no | canonical Rust result event and im-human fixture importer/schema validation are frozen; pack policy, resolver production, goldens, and command/projection integration remain pending |
+| result_event_kind | `ita.shot.invalidated` | `ItaShotInvalidated` | 1 | yes | no | no | no | no | canonical Rust result event and im-human fixture importer/schema validation are frozen; pack policy, resolver production, goldens, and command/projection integration remain pending |
 | result_event_kind | `ita.shot.queued` | `ItaShotQueued` | 1 | no | yes | yes | yes | yes |  |
-| result_event_kind | `ita.shot.refunded` |  | 1 | yes | no | no | no | no |  |
+| result_event_kind | `ita.shot.refunded` | `ItaShotRefunded` | 1 | yes | no | no | no | no | canonical Rust result event and im-human fixture importer/schema validation are frozen; pack policy, resolver production, goldens, and command/projection integration remain pending |
 | result_event_kind | `ita.shot.resolved` | `ItaShotResolved` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `note.cupid.link` | `PlayersLinked` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `note.day.announcement` | `DayAnnouncement` | 2 | no | yes | yes | yes | yes |  |

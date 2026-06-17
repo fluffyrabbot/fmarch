@@ -191,8 +191,17 @@ RESULT_KIND_MAP = {
     "ita.session.updated": "ItaSessionUpdated",
     "ita.session.closed": "ItaSessionClosed",
     "ita.shot.queued": "ItaShotQueued",
+    "ita.shot.buffered": "ItaShotBuffered",
+    "ita.shot.invalidated": "ItaShotInvalidated",
+    "ita.shot.refunded": "ItaShotRefunded",
     "ita.shot.resolved": "ItaShotResolved",
     "win.reached": "WinReached",
+}
+
+ITA_DEFERRED_SHOT_RESULT_KINDS = {
+    "ita.shot.buffered",
+    "ita.shot.invalidated",
+    "ita.shot.refunded",
 }
 
 DAY_STEP_MAP = {
@@ -2408,6 +2417,16 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             implemented = bool(canonical and f"InnerEvent::{canonical}" in resolver)
             golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
             integrated = bool(canonical and (canonical in projections or canonical in command_tests))
+        if name in ITA_DEFERRED_SHOT_RESULT_KINDS:
+            modeled = False
+            implemented = False
+            golden = False
+            integrated = False
+            notes = (
+                "canonical Rust result event and im-human fixture importer/schema validation "
+                "are frozen; pack policy, resolver production, goldens, and command/projection "
+                "integration remain pending"
+            )
         rows.append(
             row(
                 "result_event_kind",

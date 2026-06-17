@@ -3,7 +3,7 @@
   "phase_kind": "Day",
   "phase_number": 1,
   "run_id": "imhuman:v4:day_vote_resolution",
-  "result_version": 18,
+  "result_version": 19,
   "seed": 17,
   "counts": {
     "events": 4,

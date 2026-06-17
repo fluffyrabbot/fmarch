@@ -1,0 +1,73 @@
+{
+  "format": "im-human-engine-v4-result",
+  "phase_id": "D01",
+  "phase_kind": "Day",
+  "phase_number": 1,
+  "run_id": "imhuman:v4:ita_shot_lifecycle",
+  "seed": 19,
+  "started_at": 100,
+  "finished_at": 101,
+  "events": [
+    {
+      "kind": "ita.shot.buffered",
+      "payload": {
+        "session_id": "ita_d01",
+        "action_id": "ita_buffered_001",
+        "actor_id": "slot_1",
+        "targets": [
+          "slot_4"
+        ],
+        "submitted_at": 10,
+        "release_at": 1010,
+        "delay_ms": 1000
+      }
+    },
+    {
+      "kind": "ita.shot.invalidated",
+      "payload": {
+        "session_id": "ita_d01",
+        "action_id": "ita_invalidated_001",
+        "actor_id": "slot_2",
+        "target_id": "slot_4",
+        "reason": "target_dead",
+        "invalidated_by": "ita_buffered_001",
+        "submitted_at": 11,
+        "timestamp": 12
+      }
+    },
+    {
+      "kind": "ita.shot.refunded",
+      "payload": {
+        "session_id": "ita_d01",
+        "action_id": "ita_refunded_001",
+        "actor_id": "slot_3",
+        "target_id": "slot_4",
+        "reason": "target_dead",
+        "policy": "REFUND_SHOT",
+        "hit_chance": 0.5,
+        "roll": 0.3,
+        "hp_before": 0,
+        "hp_after": 0,
+        "protection_path": "hp",
+        "submitted_at": 13,
+        "timestamp": 14,
+        "counters": {
+          "global_shots_fired": 3,
+          "shots_resolved": 1,
+          "hits_landed": 0,
+          "shots_missed": 0,
+          "shots_refunded": 1,
+          "per_shooter": {
+            "slot_3": 1
+          },
+          "per_target": {
+            "slot_4": 1
+          },
+          "refunded_by_reason": {
+            "target_dead": 1
+          }
+        }
+      }
+    }
+  ]
+}

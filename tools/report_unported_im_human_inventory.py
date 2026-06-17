@@ -63,6 +63,11 @@ def rationale(row: dict[str, Any], classification: str) -> str:
     if row["category"] == "primitive":
         return "source primitive remains unsupported by pack/resolver/golden/command coverage"
     if row["category"] == "result_event_kind":
+        if row["canonical_fmarch"]:
+            return (
+                "source result event kind has canonical fmarch schema coverage but remains "
+                "unsupported by pack/resolver/golden/command coverage"
+            )
         return "source result event kind has no canonical fmarch event/schema coverage"
     if row["category"] == "culture_note":
         return "source culture note has no modeled fmarch policy or proof coverage"
