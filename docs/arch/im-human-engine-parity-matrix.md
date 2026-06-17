@@ -305,7 +305,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `kill` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
 | primitive | `lynch_target_win` | `TargetLynchWinTargeted+WinReached` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `mark` | `Mark` | 1 | no | yes | yes | yes | yes |  |
-| primitive | `mark_cleansed` |  | 1 | yes | no | no | no | no |  |
+| primitive | `mark_cleansed` | `EffectsCleared` | 1 | no | yes | yes | yes | yes | im-human emits `mark_cleansed` from Cleanse/HealPoison; fmarch's canonical `EffectsCleared` event carries the cleared effect, targets, actor, notifications, and rebuildable slot-effect removal |
 | primitive | `mirror` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `parity` | `Investigate` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `pgo` | `TriggerOn::Visit+pgo_shoots_visitor` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |

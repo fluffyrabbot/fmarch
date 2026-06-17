@@ -52,6 +52,7 @@ PRIMITIVE_MAP = {
     "cleanse": "Clear",
     "heal_poison": "Clear",
     "cure_poison": "Clear",
+    "mark_cleansed": "EffectsCleared",
     "ignite": "Kill",
     "commute": "target_state_gate:commuted",
     "untargetable": "target_state_gate:untargetable",
@@ -1357,6 +1358,20 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "InnerEvent::InfoResult" in resolver
                 and "player_info_result" in projections
             )
+        elif name == "mark_cleansed":
+            canonical = "EffectsCleared"
+            modeled = (
+                "Clear" in fmarch["pack_abilities"]
+                and "EffectsCleared" in fmarch["events"]
+                and "slot_effect" in projections
+            )
+            implemented = (
+                modeled
+                and "IrAbility::Clear" in resolver
+                and "InnerEvent::EffectsCleared" in resolver
+                and "cleared_effects.insert" in resolver
+                and "emit_effect_notification" in resolver
+            )
         else:
             canonical = PRIMITIVE_MAP.get(name, "")
             modeled = canonical in fmarch["ir"] or canonical in fmarch["pack_abilities"]
@@ -1518,6 +1533,25 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 implemented
                 and "host_resolve_phase_projects_mafiascum_info_results" in command_tests
             )
+        elif name == "mark_cleansed":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
+            mafia_universe_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafia_universe", set()
+            )
+            golden = (
+                "cleanse_preempts_ignite" in mafiascum_golden_names
+                and "cure_poison_preempts_death" in mafiascum_golden_names
+                and "extinguish_town_preempts_ignite" in mafia_universe_golden_names
+                and "effectscleared" in goldens
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_persists_cleanse_read_effect_trace_decision"
+                in command_tests
+                and "host_resolve_phase_carries_poison_cure_and_delayed_death"
+                in command_tests
+                and "slot_effect rebuild must preserve poison/cure history" in command_tests
+            )
         else:
             golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
             integrated = "ActionSubmitted" in commands if implemented else False
@@ -1530,6 +1564,13 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         )
         notes = append_note(notes, trigger_policy_note_for_primitive(name, fmarch))
         notes = append_note(notes, death_reveal_note_for_primitive(name, fmarch))
+        if name == "mark_cleansed":
+            notes = append_note(
+                notes,
+                "im-human emits `mark_cleansed` from Cleanse/HealPoison; fmarch's canonical "
+                "`EffectsCleared` event carries the cleared effect, targets, actor, "
+                "notifications, and rebuildable slot-effect removal",
+            )
         rows.append(
             row(
                 category,
