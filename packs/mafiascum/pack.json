@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 46,
+  "ir_version": 57,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -102,6 +102,118 @@
             "roleblockable": false,
             "priority": 70,
             "x_shots": null
+          }
+        }
+      ]
+    },
+    "day_self_destructor": {
+      "description": "Day Self-Destructor. May publicly self-destruct during the day, sacrificing self to kill one chosen target before the official vote resolves.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "day_self_destruct",
+          "ability": "SelfDestruct",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 95,
+            "x_shots": 1
+          },
+          "self_destruct": {
+            "cause": "self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+          }
+        }
+      ]
+    },
+    "white_wolf_king": {
+      "description": "White Wolf King. Mafiascum dual-window role with a day self-destruct shot and an ordinary personal night kill.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "day_self_destruct",
+          "ability": "SelfDestruct",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 95,
+            "x_shots": null
+          },
+          "self_destruct": {
+            "cause": "self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+          }
+        },
+        {
+          "id": "night_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "day_vigilante": {
+      "description": "Day Vigilante. May perform an ordinary non-factional kill during the day before the vote outcome is resolved.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "day_vigilante_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 60,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "governor": {
+      "description": "Governor. May publicly veto the current day's elimination target, cancelling the lynch after the official vote outcome is known.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "veto",
+          "ability": "Veto",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 100,
+            "x_shots": 1
           }
         }
       ]
@@ -277,6 +389,72 @@
         }
       ]
     },
+    "psychologist": {
+      "description": "Psychologist. Each night, checks whether one slot has a role that can kill.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_killer",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Killer"
+        }
+      ]
+    },
+    "specialist": {
+      "description": "Specialist. Each night, checks whether one slot is in the pack-declared specialist role set.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_specialist",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Specialist"
+        }
+      ]
+    },
+    "pt_cop": {
+      "description": "PT Cop. Each night, checks which setup-declared private topics one slot can access.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_pt",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "PtAccess"
+        }
+      ]
+    },
     "role_cop": {
       "description": "Role Cop. Each night, checks one slot and learns that slot's role key.",
       "alignment": "town",
@@ -296,6 +474,29 @@
             "x_shots": null
           },
           "mode": "Role"
+        }
+      ]
+    },
+    "coroner": {
+      "description": "Coroner. Each night, inspects one dead slot and learns that corpse's role key and alignment.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "inspect_corpse",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "target_state": "Dead",
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "FullRole"
         }
       ]
     },
@@ -403,6 +604,9 @@
       "actions": [
         {
           "id": "bodyguard",
+          "source_ids": [
+            "guard_retaliate"
+          ],
           "ability": "Protect",
           "window": "Night",
           "targets": "One",
@@ -679,6 +883,7 @@
         },
         {
           "id": "track",
+          "source_ids": ["follow"],
           "ability": "Investigate",
           "window": "Night",
           "targets": "One",
@@ -785,6 +990,72 @@
             "x_shots": null
           },
           "mode": "Watch"
+        }
+      ]
+    },
+    "role_watcher": {
+      "description": "Role Watcher. Each night, watches one slot and learns the unique role keys of visible visitors, without learning identities.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "role_watcher",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "RoleWatcher"
+        }
+      ]
+    },
+    "role_guard": {
+      "description": "Role Guard. Each night, tells the chosen slot the unique role keys of visible visitors that targeted that slot, without revealing identities.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "role_guard",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "RoleGuard"
+        }
+      ]
+    },
+    "security_guard": {
+      "description": "Security Guard. Each night, tells the chosen slot which visible actors visited that slot, ignoring Ninja-hidden visitors.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "security_guard",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "SecurityGuard"
         }
       ]
     },
@@ -1216,6 +1487,7 @@
       "actions": [
         {
           "id": "night_kill",
+          "source_ids": ["kill"],
           "ability": "Kill",
           "window": "Night",
           "targets": "One",
@@ -1341,6 +1613,107 @@
         }
       ]
     },
+    "mailman": {
+      "description": "Mailman. Sends an anonymous private message notice to one target at night.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "mailman",
+          "ability": "Info",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 11,
+            "x_shots": null
+          },
+          "info": {
+            "kind": "mailman",
+            "audience": "Target",
+            "payload": {
+              "message": "anonymous"
+            }
+          }
+        }
+      ]
+    },
+    "observer": {
+      "description": "Observer. Sends a private observation result about one target at night.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "observe",
+          "ability": "Info",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 11,
+            "x_shots": null
+          },
+          "info": {
+            "kind": "observe",
+            "audience": "Actor"
+          }
+        }
+      ]
+    },
+    "reporter": {
+      "description": "Reporter. Sends a private report result about one target at night.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "report",
+          "ability": "Info",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 11,
+            "x_shots": null
+          },
+          "info": {
+            "kind": "report",
+            "audience": "Actor"
+          }
+        }
+      ]
+    },
+    "fruit_vendor": {
+      "description": "Fruit Vendor. Each night sends fruit as a private target notification with no persistent mechanical effect.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "send_fruit",
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 55,
+            "x_shots": null
+          },
+          "effect": "fruit_received",
+          "effect_duration": "Resolution"
+        }
+      ]
+    },
     "mason": {
       "description": "Mason. Confirmed town private-chat member; setup declares a private mason channel for matching roles.",
       "alignment": "town",
@@ -1386,6 +1759,9 @@
       "actions": [
         {
           "id": "prior_motion",
+          "source_ids": [
+            "traffic_analyst"
+          ],
           "ability": "Investigate",
           "window": "Night",
           "targets": "One",
@@ -1408,6 +1784,7 @@
       "actions": [
         {
           "id": "bus_driver_swap",
+          "source_ids": ["bus_drive"],
           "ability": "Redirect",
           "redirect": "Swap",
           "window": "Night",
@@ -1499,6 +1876,7 @@
       "actions": [
         {
           "id": "factional_kill",
+          "source_ids": ["kill"],
           "ability": "Kill",
           "window": "Night",
           "targets": "One",
@@ -1568,6 +1946,9 @@
       "actions": [
         {
           "id": "frame",
+          "source_ids": [
+            "result_mod"
+          ],
           "ability": "Mark",
           "window": "Night",
           "targets": "One",
@@ -1581,6 +1962,31 @@
             "x_shots": null
           },
           "effect": "framed"
+        }
+      ]
+    },
+    "lawyer": {
+      "description": "Lawyer. Each night marks one slot as lawyered; a same-night Parity investigation reads that target as town.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "lawyer_cover",
+          "source_ids": [
+            "result_mod"
+          ],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 40,
+            "x_shots": null
+          },
+          "effect": "lawyered"
         }
       ]
     },
@@ -1718,12 +2124,35 @@
       "actions": [
         {
           "id": "factional_kill",
+          "source_ids": ["kill"],
           "ability": "Kill",
           "window": "Night",
           "targets": "One",
           "modifiers": [
             "Ninja"
           ],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "serial_killer": {
+      "description": "Serial Killer. Independent night killer; wins only as the sole surviving faction.",
+      "alignment": "independent",
+      "actions": [
+        {
+          "id": "night_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
           "constraints": {
             "max_targets": 1,
             "self_allowed": false,
@@ -1881,10 +2310,43 @@
       "actions": [
         {
           "id": "cult_recruit",
+          "source_ids": [
+            "convert"
+          ],
           "ability": "Convert",
           "window": "Night",
           "targets": "One",
           "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 25,
+            "x_shots": null
+          },
+          "conversion": {
+            "mode": "AssignRole",
+            "role": "cultist"
+          }
+        }
+      ]
+    },
+    "disloyal_cult_leader": {
+      "description": "Disloyal Cult Leader. Uses a disloyal recruit that only resolves on cross-alignment targets.",
+      "alignment": "cult",
+      "actions": [
+        {
+          "id": "disloyal_cult_recruit",
+          "source_ids": [
+            "convert"
+          ],
+          "ability": "Convert",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [
+            "Disloyal"
+          ],
           "constraints": {
             "max_targets": 1,
             "self_allowed": false,
@@ -2225,19 +2687,20 @@
         "effect": "Block",
         "target_state": null
       },
-      "beats": [
-        "Kill",
-        "Protect",
-        "Investigate",
-        "Redirect",
-        "Mark",
-        "Clear",
-        "Grant",
-        "Convert",
-        "Link",
-        "Retaliate",
-        "Visit"
-      ],
+        "beats": [
+          "Kill",
+          "Protect",
+          "Investigate",
+          "Redirect",
+          "Mark",
+          "Clear",
+          "Grant",
+          "Convert",
+          "Link",
+          "Retaliate",
+          "Visit",
+          "Info"
+        ],
       "blocked_by": [],
       "unless_modifiers": [],
       "notes": "A Block prevents the blocked slot's roleblockable action from resolving. Only abilities whose action carries roleblockable=true are stopped; the Roleblocker's own Block is not roleblockable. Block is the highest-priority interaction and is evaluated before targets are read by the blocked action."
@@ -2248,16 +2711,17 @@
         "effect": "Redirect",
         "target_state": null
       },
-      "beats": [
-        "Kill",
-        "Protect",
-        "Investigate",
-        "Grant",
-        "Convert",
-        "Link",
-        "Retaliate",
-        "Visit"
-      ],
+        "beats": [
+          "Kill",
+          "Protect",
+          "Investigate",
+          "Grant",
+          "Convert",
+          "Link",
+          "Retaliate",
+          "Visit",
+          "Info"
+        ],
       "blocked_by": [
         "Block"
       ],
@@ -2705,6 +3169,7 @@
           "cop_investigate",
           "cpr_protect",
           "cult_recruit",
+          "disloyal_cult_recruit",
           "cure_poison",
           "death_mark",
           "deprogram",
@@ -2714,6 +3179,7 @@
           "faith_healer_protect",
           "factional_kill",
           "frame",
+          "lawyer_cover",
           "friendly_neighbor",
           "janitor_kill",
           "grant_item",
@@ -2722,10 +3188,15 @@
           "hide",
           "hunter_retaliate",
           "ignite",
+          "inspect_corpse",
           "investigate_alignment",
+          "investigate_killer",
+          "investigate_pt",
+          "investigate_specialist",
           "investigate_vanilla",
           "jail",
           "link_lovers",
+          "mailman",
           "martyr_protect",
           "mass_redirect",
           "motion_detector",
@@ -2733,11 +3204,17 @@
           "neapolitan",
           "neighborize",
           "night_kill",
+          "observe",
           "poison",
           "prior_motion",
           "redirect",
+          "report",
+          "role_guard",
           "role_scan",
+          "role_watcher",
           "rolestop",
+          "security_guard",
+          "send_fruit",
           "shield",
           "single_use_item",
           "strongman_kill",
@@ -2768,6 +3245,7 @@
           "cop_investigate",
           "cpr_protect",
           "cult_recruit",
+          "disloyal_cult_recruit",
           "cure_poison",
           "death_mark",
           "deprogram",
@@ -2777,6 +3255,7 @@
           "faith_healer_protect",
           "factional_kill",
           "frame",
+          "lawyer_cover",
           "friendly_neighbor",
           "janitor_kill",
           "grant_item",
@@ -2785,10 +3264,15 @@
           "hide",
           "hunter_retaliate",
           "ignite",
+          "inspect_corpse",
           "investigate_alignment",
+          "investigate_killer",
+          "investigate_pt",
+          "investigate_specialist",
           "investigate_vanilla",
           "jail",
           "link_lovers",
+          "mailman",
           "martyr_protect",
           "mass_redirect",
           "motion_detector",
@@ -2796,11 +3280,17 @@
           "neapolitan",
           "neighborize",
           "night_kill",
+          "observe",
           "poison",
           "prior_motion",
           "redirect",
+          "report",
+          "role_guard",
           "role_scan",
+          "role_watcher",
           "rolestop",
+          "security_guard",
+          "send_fruit",
           "shield",
           "single_use_item",
           "strongman_kill",
@@ -2832,6 +3322,7 @@
           "cop_investigate",
           "cpr_protect",
           "cult_recruit",
+          "disloyal_cult_recruit",
           "cure_poison",
           "death_mark",
           "deprogram",
@@ -2841,6 +3332,7 @@
           "faith_healer_protect",
           "factional_kill",
           "frame",
+          "lawyer_cover",
           "friendly_neighbor",
           "janitor_kill",
           "grant_item",
@@ -2849,10 +3341,15 @@
           "hide",
           "hunter_retaliate",
           "ignite",
+          "inspect_corpse",
           "investigate_alignment",
+          "investigate_killer",
+          "investigate_pt",
+          "investigate_specialist",
           "investigate_vanilla",
           "jail",
           "link_lovers",
+          "mailman",
           "martyr_protect",
           "mass_redirect",
           "motion_detector",
@@ -2860,12 +3357,18 @@
           "neapolitan",
           "neighborize",
           "night_kill",
+          "observe",
           "poison",
           "prior_motion",
           "redirect",
+          "report",
+          "role_guard",
           "role_scan",
           "roleblocker_block",
+          "role_watcher",
           "rolestop",
+          "security_guard",
+          "send_fruit",
           "shield",
           "single_use_item",
           "strongman_kill",
@@ -3139,6 +3642,9 @@
     "framed": {
       "Parity": "scum"
     },
+    "lawyered": {
+      "Parity": "town"
+    },
     "godfather": {
       "Parity": "town"
     },
@@ -3159,8 +3665,35 @@
         "ninja",
         "strongman",
         "mafia_janitor",
+        "day_vigilante",
+        "white_wolf_king",
         "vigilante",
         "simultaneous_vigilante"
+      ],
+      "killer_roles": [
+        "mafia_goon",
+        "lost_mafia_goon",
+        "recluse_mafia_goon",
+        "godfather",
+        "ninja",
+        "strongman",
+        "mafia_janitor",
+        "day_self_destructor",
+        "white_wolf_king",
+        "vigilante",
+        "day_vigilante",
+        "simultaneous_vigilante",
+        "cpr_doctor",
+        "hunter",
+        "vengeful",
+        "unstoppable_vengeful_townie",
+        "super_saint",
+        "death_cursed_townie",
+        "paranoid_gun_owner",
+        "selective_visit_killer"
+      ],
+      "specialist_roles": [
+        "specialist"
       ]
     }
   },
@@ -3205,7 +3738,15 @@
       "duration": "Persistent",
       "visibility": "Hidden"
     },
+    "fruit_received": {
+      "duration": "Resolution",
+      "visibility": "Target"
+    },
     "framed": {
+      "duration": "Persistent",
+      "visibility": "Hidden"
+    },
+    "lawyered": {
       "duration": "Persistent",
       "visibility": "Hidden"
     },
@@ -3325,7 +3866,7 @@
     }
   ],
   "win_families": [
-    "FactionElimination",
+    "AllOtherFactionsEliminated",
     "FactionParity",
     "TargetLynchIndependent",
     "SelfLynchIndependent",
@@ -3334,16 +3875,23 @@
   "win": {
     "rules": [
       {
+        "winner": "independent",
+        "when": {
+          "AllOtherFactionsEliminated": "independent"
+        }
+      },
+      {
         "winner": "town",
         "when": {
-          "FactionEliminated": "mafia"
+          "AllOtherFactionsEliminated": "town"
         }
       },
       {
         "winner": "mafia",
         "when": {
           "FactionReachesParity": "mafia"
-        }
+        },
+        "blocked_by_alive": ["independent"]
       }
     ]
   }

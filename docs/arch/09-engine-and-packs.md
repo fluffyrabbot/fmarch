@@ -1080,7 +1080,7 @@ freshness, manifest version, and diff count; the shared classifier distinguishes
 malformed, stale, path-mismatched, input-mismatched, drifted, and trusted saved reports. The same
 API vertical proves the v1 contract for all five trusted artifact
 rows and all five untrusted fixture rows, plus the artifact-less status export row and trusted
-status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 10`,
+status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 11`,
 `production.non_trusted = 0`,
 `fixtures.non_trusted = 5`), and compares the host/cohost HTTP status JSON with the no-server
 shared model after normalizing the current game id and wall-clock-derived artifact age/mtime
@@ -1200,6 +1200,18 @@ failing seed, and fails on failed, missing, or manifest-mismatched seeded famili
 deterministic generator coverage, not exhaustive state-space verification.` This command was rerun
 locally and emitted `ok: true`, `family_count: 11`, `seed_count: 55`, `expected_family_count: 11`,
 `expected_seed_count: 55`, and `family_manifest_matched: true`.
+`operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
+path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+prove_command_projection_resolution -- --output
+target/operator-proof/current-command-projection-resolution-report.json
+crates/commands/fixtures/night-passing.json`, and proof boundary `Local-Postgres-only proof: seeds
+the checked fixture through commands::handle, runs Command::ResolvePhase against the local
+DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that
+generated game, writes the saved report under target/operator-proof, and does not prove hosted,
+multi-node, production, browser, or exhaustive state-space behavior.` This command was run against a
+scratch database on the local Postgres service and emitted `ok: true`, 20 matched projection tables,
+one matched resolution envelope, zero drifted tables, zero drifted phases, and zero diffs.
 The API manifest unit test now mechanically checks those artifact doc-truth rows in both this
 engine note and the checklist: every manifest row with an `artifact_path` must have its artifact
 path, rendered command, exact proof boundary, current `trusted` artifact state, and production
@@ -1214,8 +1226,10 @@ from the generated report. The current artifact reports `ok: false`, `freshness.
 14 tracked inputs, eight parsed build-order phases, 190 exhaustive checklist rows, 159 checked
 rows, 31 unchecked rows, 0 rows marked `partly proven`, 587 parity-matrix rows, and 326
 unsupported parity rows. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-browser-fetched JSON surface, all 10 required go/no-go metadata needles present, and trusted
-metadata rows for both large-action and determinism proof rows. This is a completion blocker and
+browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
+present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
+trusted command/projection proof row that has not yet been promoted into the browser-smoke required
+needle set. This is a completion blocker and
 an honest proof boundary: the local operator artifacts and browser metadata evidence are healthy,
 but the full im-human parity port is not done.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,

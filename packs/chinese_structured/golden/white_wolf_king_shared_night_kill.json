@@ -1,0 +1,121 @@
+{
+  "description": "Chinese White Wolf King participates in the shared wolf night kill via the im-human night_kill source alias and canonical wolf_night_kill action.",
+  "input": {
+    "game_id": "chinese_white_wolf_king_night_kill_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sheriff", "wolf_self_destruct", "main", "eod"],
+          "Night": [
+            "cupid_link",
+            "heal_potion",
+            "night_guard",
+            "beauty_mark",
+            "poison_potion",
+            "hunter_retaliate",
+            "wolf_kill",
+            "prophet"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "white_wolf_king",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "wolf",
+          "alignment": "wolf",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "villager",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "action_history": [],
+      "action_grants": [],
+      "conversion_origins": [],
+      "linked_slots": [],
+      "retaliations": [],
+      "wolf_carry_tokens": [],
+      "wolf_beauty_marks": [],
+      "badges": []
+    },
+    "submissions": [
+      {
+        "action_id": "wwk_night_kill_001",
+        "actor": "slot_1",
+        "template_id": "wolf_night_kill",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "chinese_structured",
+    "seed": 420109
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "wolf_night_kill",
+        "attackers": ["slot_1"],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "wolf_night_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

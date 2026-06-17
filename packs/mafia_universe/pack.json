@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 46,
+  "ir_version": 58,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -103,6 +103,21 @@
     "town_vanilla": {
       "description": "Town-aligned vanilla participant.",
       "alignment": "town",
+      "actions": []
+    },
+    "vanilla_town": {
+      "description": "Mafia Universe draft alias for a town-aligned vanilla participant.",
+      "alignment": "town",
+      "actions": []
+    },
+    "blank_town_role": {
+      "description": "Mafia Universe blank town role placeholder with no active abilities.",
+      "alignment": "town",
+      "actions": []
+    },
+    "blank_mafia_role": {
+      "description": "Mafia Universe blank mafia role placeholder with no active abilities.",
+      "alignment": "mafia",
       "actions": []
     },
     "town_treestump": {
@@ -273,6 +288,49 @@
         }
       ]
     },
+    "mafia_doctor": {
+      "description": "Mafia Doctor. Protects one slot from ordinary night kills.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "doctor_protect",
+          "source_ids": ["protect"],
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_bodyguard": {
+      "description": "Mafia Bodyguard. Protects one slot and dies intercepting a blocked kill.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "bodyguard",
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Bodyguard"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
     "town_martyr": {
       "description": "Town Martyr. Protects one slot and dies in the target's place through Martyr attribution.",
       "alignment": "town",
@@ -336,6 +394,167 @@
             "x_shots": null
           },
           "mode": "Parity"
+        }
+      ]
+    },
+    "mafia_cop": {
+      "description": "Mafia Cop. Each night, investigates one slot and receives a town/scum parity result.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate", "investigate_alignment"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "town_alignment_cop": {
+      "description": "Town Alignment Cop. Mafia Universe draft alias of a parity cop using the investigate action id.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "mafia_alignment_cop": {
+      "description": "Mafia Alignment Cop. Mafia Universe draft alias of a parity cop using the investigate action id.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "cop_investigate",
+          "source_ids": ["investigate"],
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
+    "town_alignment_oracle": {
+      "description": "Town Alignment Oracle. Each night, marks one slot; if this Oracle later dies, the marked target's alignment is publicly revealed.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "mark_alignment",
+          "source_ids": ["markAlignment"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "alignment_oracle_mark"
+        }
+      ]
+    },
+    "mafia_alignment_oracle": {
+      "description": "Mafia Alignment Oracle. Each night, marks one slot; if this Oracle later dies, the marked target's alignment is publicly revealed.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "mark_alignment",
+          "source_ids": ["markAlignment"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "alignment_oracle_mark"
+        }
+      ]
+    },
+    "town_role_oracle": {
+      "description": "Town Role Oracle. Each night, marks one slot; if this Oracle later dies, the marked target's role is publicly revealed.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "mark_role",
+          "source_ids": ["markRole"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "role_oracle_mark"
+        }
+      ]
+    },
+    "mafia_role_oracle": {
+      "description": "Mafia Role Oracle. Each night, marks one slot; if this Oracle later dies, the marked target's role is publicly revealed.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "mark_role",
+          "source_ids": ["markRole"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 60,
+            "x_shots": null
+          },
+          "effect": "role_oracle_mark"
         }
       ]
     },
@@ -563,6 +782,28 @@
             "x_shots": null
           },
           "mode": "Watch"
+        }
+      ]
+    },
+    "town_voyeur": {
+      "description": "Town Voyeur. Each night, watches one slot and learns which visible action ids targeted that slot.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "voyeur",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Voyeur"
         }
       ]
     },
@@ -804,6 +1045,28 @@
     "town_jailkeeper": {
       "description": "Town Jailkeeper. Blocks and protects one target through the same night action.",
       "alignment": "town",
+      "actions": [
+        {
+          "id": "jail",
+          "ability": "Block",
+          "additional_abilities": ["Protect"],
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_jailkeeper": {
+      "description": "Mafia Jailkeeper. Blocks and protects one target through the same night action.",
+      "alignment": "mafia",
       "actions": [
         {
           "id": "jail",
@@ -1065,6 +1328,50 @@
             "priority": 30,
             "x_shots": null
           }
+        }
+      ]
+    },
+    "town_janitor": {
+      "description": "Town Janitor. Each night may perform an ordinary non-factional kill whose death flip is concealed by the pack death_reveal policy.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "janitor_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "town_universal_backup": {
+      "description": "Town Universal Backup. Chooses one source target and inherits that target's role if the source later dies.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "target_backup",
+          "source_ids": ["inherit_role"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "backup_target"
         }
       ]
     },
@@ -1443,6 +1750,28 @@
         }
       ]
     },
+    "mafia_voyeur": {
+      "description": "Mafia Voyeur. Each night, watches one slot and learns which visible action ids targeted that slot.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "voyeur",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "Voyeur"
+        }
+      ]
+    },
     "mafia_motion_detector": {
       "description": "Mafia Motion Detector. Each night, checks whether one slot visibly acted or was visibly visited.",
       "alignment": "mafia",
@@ -1802,6 +2131,50 @@
         }
       ]
     },
+    "mafia_janitor": {
+      "description": "Mafia Janitor. Each night may perform an ordinary non-factional kill whose death flip is concealed by the pack death_reveal policy.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "janitor_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "mafia_universal_backup": {
+      "description": "Mafia Universal Backup. Chooses one source target and inherits that target's role if the source later dies.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "target_backup",
+          "source_ids": ["inherit_role"],
+          "ability": "Mark",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 65,
+            "x_shots": null
+          },
+          "effect": "backup_target"
+        }
+      ]
+    },
     "mafia_day_vigilante": {
       "description": "Mafia Day Vigilante. Each day may perform an ordinary non-factional kill before the vote outcome is resolved.",
       "alignment": "mafia",
@@ -1859,6 +2232,28 @@
           "window": "Night",
           "targets": "One",
           "modifiers": ["Ninja"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "serial_killer": {
+      "description": "Mafia Universe Serial Killer. Independent killer with an ordinary protectable night kill.",
+      "alignment": "independent",
+      "actions": [
+        {
+          "id": "serial_killer_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
           "constraints": {
             "max_targets": 1,
             "self_allowed": false,
@@ -1992,7 +2387,7 @@
     ],
     "block_action_ids": ["roleblocker_block", "jail"],
     "protect_action_ids": ["doctor_protect", "jail"],
-    "kill_action_ids": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+    "kill_action_ids": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
     "team_kill_action_ids": ["factional_kill"],
     "bodyguard_action_ids": ["bodyguard"],
     "martyr_action_ids": ["martyr_protect"],
@@ -2000,7 +2395,7 @@
     "jailkeep_action_ids": ["jail"],
     "strongman_action_ids": ["strongman_kill"],
     "strongman_bypasses_protect": true,
-    "kill_cause_ids": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "strongman_kill", "vigilante_kill"],
+    "kill_cause_ids": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "strongman_kill", "vigilante_kill"],
     "target_state_save_tags": ["bulletproof_vest"],
     "target_state_gate_tags": ["commuted", "untargetable"],
     "empower_effects": ["empowered"],
@@ -2018,29 +2413,29 @@
     "trigger_fixpoint_policy": {},
     "protection_cause_policy": {
       "doctor_protect": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "bodyguard": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "martyr_protect": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "cpr_protect": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "jail": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       }
     },
     "target_state_save_policy": {
       "bulletproof_vest": {
-        "blocks": ["factional_kill", "ignite", "night_desperado", "ninja_kill", "power_role_kill", "vigilante_kill"],
+        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       }
     },
@@ -2073,8 +2468,11 @@
           "gunsmith",
           "ignite",
           "investigate_vanilla",
-          "jail",
-          "martyr_protect",
+        "janitor_kill",
+        "jail",
+        "mark_alignment",
+        "mark_role",
+        "martyr_protect",
           "motion_detector",
           "motivate",
           "neapolitan",
@@ -2089,8 +2487,11 @@
           "rolestop",
           "bulletproof_vest_item",
           "send_fruit",
+          "serial_killer_kill",
           "strongman_kill",
+          "target_backup",
           "track",
+          "voyeur",
           "vigilante_kill",
           "watch"
         ],
@@ -2116,8 +2517,11 @@
           "gunsmith",
           "ignite",
           "investigate_vanilla",
-          "jail",
-          "martyr_protect",
+        "janitor_kill",
+        "jail",
+        "mark_alignment",
+        "mark_role",
+        "martyr_protect",
           "motion_detector",
           "motivate",
           "neapolitan",
@@ -2132,14 +2536,29 @@
           "rolestop",
           "bulletproof_vest_item",
           "send_fruit",
+          "serial_killer_kill",
           "strongman_kill",
+          "target_backup",
           "track",
+          "voyeur",
           "vigilante_kill",
           "watch"
         ],
         "bypasses": ["roleblocker_block"]
       }
     }
+  },
+  "death_reveal": {
+    "default": "Full",
+    "by_cause": {
+      "janitor_kill": "Concealed"
+    },
+    "by_effect": {}
+  },
+  "backup_policy": {
+    "enabled": true,
+    "passive_effect_prefix": "backup:",
+    "targeted_effect": "backup_target"
   },
   "visibility": {
     "Investigate": {
@@ -2161,7 +2580,8 @@
     "StealthNinjaVisits",
     "ResultTampering",
     "EffectAudiences",
-    "GrantAudiences"
+    "GrantAudiences",
+    "DeathRevealVariants"
   ],
   "redirects": {
     "order": ["Redirect"],
@@ -2241,6 +2661,8 @@
     }
   },
   "effects": {
+    "alignment_oracle_mark": { "duration": "Persistent", "visibility": "Hidden" },
+    "backup_target": { "duration": "Persistent", "visibility": "Hidden" },
     "bulletproof_vest": { "duration": "Persistent", "visibility": "Target" },
     "commuted": { "duration": "Resolution", "visibility": "Hidden" },
     "doused": { "duration": "Persistent", "visibility": "ActorAndTarget" },
@@ -2250,8 +2672,21 @@
     "godfather": { "duration": "Persistent", "visibility": "Hidden" },
     "miller": { "duration": "Persistent", "visibility": "Hidden" },
     "poisoned": { "duration": "Persistent", "visibility": "Target" },
+    "role_oracle_mark": { "duration": "Persistent", "visibility": "Hidden" },
     "untargetable": { "duration": "Resolution", "visibility": "Hidden" }
   },
+  "effect_source_death_reveals": [
+    {
+      "id": "alignment_oracle_reveals_marked_target",
+      "effect": "alignment_oracle_mark",
+      "reveal": "Alignment"
+    },
+    {
+      "id": "role_oracle_reveals_marked_target",
+      "effect": "role_oracle_mark",
+      "reveal": "Role"
+    }
+  ],
   "win_families": [
     "FactionElimination",
     "FactionParity"

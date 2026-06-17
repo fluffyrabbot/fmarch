@@ -1,0 +1,108 @@
+{
+  "description": "Psychologist uses investigate_killer to learn whether targets are in the pack-declared killer role set.",
+  "input": {
+    "game_id": "game_mafiascum_psychologist_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "psychologist",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "psychologist",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "psychologist_positive_001",
+        "actor": "slot_1",
+        "template_id": "investigate_killer",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "psychologist_negative_001",
+        "actor": "slot_2",
+        "template_id": "investigate_killer",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 912204
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Killer",
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "result": {
+          "killer": true
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Killer",
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "result": {
+          "killer": false
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

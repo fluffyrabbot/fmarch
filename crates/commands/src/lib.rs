@@ -941,8 +941,12 @@ async fn submit_action(
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
     let phase = require_open_phase(pool, game).await?;
     require_slot_alive(pool, game, &actor_slot).await?;
-    let pack = load_pack(&current_pack_name(pool, game).await?)?;
-    validate_action_submission(
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let pack_name = pack_name_from_stream(&stream)?;
+    let pack = load_pack(&pack_name)?;
+    let action_window = validate_action_submission(
         pool,
         game,
         &pack,
@@ -961,17 +965,67 @@ async fn submit_action(
         "targets": targets,
         "phase_id": phase
     });
-    if let Some(grant_id) = grant_id {
-        payload["grant_id"] = serde_json::Value::String(grant_id);
+    if action_window == Window::Instant {
+        payload["instant_resolved"] = serde_json::Value::Bool(true);
+    }
+    if let Some(grant_id) = &grant_id {
+        payload["grant_id"] = serde_json::Value::String(grant_id.clone());
     }
     let ev = EventInput::new(
         "ActionSubmitted",
         1,
-        payload,
+        payload.clone(),
         ActorId::Slot(actor_slot.clone()),
         0,
     );
-    persist(pool, game, &[ev], receipt).await
+    let mut events = vec![ev];
+    if action_window == Window::Instant {
+        let next_seq = stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
+        let phase_kind = phase_kind(&phase)?;
+        let phase_number = phase_number(&phase)?;
+        let state = current_snapshot(&stream, &pack, &phase, phase_kind, phase_number)?;
+        let submission = domain::Submission {
+            action_id: action_id.clone(),
+            actor: actor_slot.clone(),
+            template_id: template_id.clone(),
+            targets: targets.clone(),
+            phase_id: phase.clone(),
+            submitted_at: next_seq as u64,
+            withdrawn: false,
+            metadata: metadata_from_payload(&payload),
+        };
+        let run_id = format!("instant:{game}:{phase}:{action_id}:{next_seq}");
+        let output = domain::resolve_instant(domain::ResolutionInput {
+            game_id: game.to_string(),
+            phase_id: phase.clone(),
+            run_id,
+            state,
+            submissions: vec![submission],
+            day_phase_inputs: domain::DayPhaseInputs::default(),
+            pack,
+            seed: next_seq as u64,
+            logical_time: next_seq as u64,
+        });
+        domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
+            .map_err(|e| Reject::Internal(format!("invalid instant resolution result: {e}")))?;
+        domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
+            .map_err(|e| Reject::Internal(format!("invalid instant resolution trace: {e}")))?;
+        events.push(EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(output.applied).map_err(|e| Reject::Internal(e.to_string()))?,
+            ActorId::System,
+            next_seq + 1,
+        ));
+        events.push(EventInput::new(
+            "ResolutionTrace",
+            1,
+            serde_json::to_value(output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
+            ActorId::System,
+            next_seq + 2,
+        ));
+    }
+    persist(pool, game, &events, receipt).await
 }
 
 async fn withdraw_action(
@@ -1130,7 +1184,11 @@ async fn resolve_phase(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if stream.iter().any(|ev| {
-        ev.kind == "ResolutionApplied" && ev.payload["phase_id"].as_str() == Some(&phase.phase_id)
+        ev.kind == "ResolutionApplied"
+            && ev.payload["phase_id"].as_str() == Some(&phase.phase_id)
+            && ev.payload["run_id"]
+                .as_str()
+                .is_some_and(|run_id| run_id.starts_with("resolution:"))
     }) {
         return Err(Reject::InvalidTarget);
     }
@@ -2771,6 +2829,7 @@ fn current_snapshot(
     let phase_policy = pack.phases.clone();
     let phase_deadline = current_phase_deadline(stream, phase_id);
     let mut slots: BTreeMap<String, domain::SlotState> = BTreeMap::new();
+    let mut private_channels = Vec::new();
     let mut effect_records = Vec::new();
     let mut action_history = Vec::new();
     let mut use_counters = Vec::new();
@@ -2853,6 +2912,7 @@ fn current_snapshot(
                     phase_deadline,
                     phase_policy: phase_policy.clone(),
                     slots: slots.values().cloned().collect(),
+                    private_channels: private_channels.clone(),
                     effect_records: effect_records.clone(),
                     action_history: action_history.clone(),
                     use_counters: use_counters.clone(),
@@ -2897,6 +2957,46 @@ fn current_snapshot(
                     .into_iter()
                     .map(|slot| (slot.slot_id.clone(), slot))
                     .collect();
+                private_channels = folded.private_channels;
+            }
+            "PrivateChannelDeclared" => {
+                let channel_id = str_payload(ev, "channel_id")?;
+                let kind = str_payload(ev, "kind")?;
+                let reveals_alignment = str_payload(ev, "reveals_alignment")?;
+                let source = str_payload(ev, "source")?;
+                let Some(members) = ev.payload["members"].as_array() else {
+                    return Err(Reject::Internal(format!(
+                        "event {}#{} missing private channel members",
+                        ev.kind, ev.stream_seq
+                    )));
+                };
+                private_channels.retain(|record: &domain::PrivateChannelRecord| {
+                    record.channel_id != channel_id
+                });
+                for member in members {
+                    let Some(slot_id) = member.get("slot_id").and_then(|value| value.as_str())
+                    else {
+                        return Err(Reject::Internal(format!(
+                            "event {}#{} has private channel member without slot_id",
+                            ev.kind, ev.stream_seq
+                        )));
+                    };
+                    let Some(role_key) = member.get("role_key").and_then(|value| value.as_str())
+                    else {
+                        return Err(Reject::Internal(format!(
+                            "event {}#{} has private channel member without role_key",
+                            ev.kind, ev.stream_seq
+                        )));
+                    };
+                    private_channels.push(domain::PrivateChannelRecord {
+                        channel_id: channel_id.clone(),
+                        kind: kind.clone(),
+                        slot_id: slot_id.to_string(),
+                        role_key: role_key.to_string(),
+                        reveals_alignment: reveals_alignment.clone(),
+                        source: source.clone(),
+                    });
+                }
             }
             "EffectsMarked" => {
                 let effect = str_payload(ev, "effect")?;
@@ -3023,6 +3123,7 @@ fn current_snapshot(
         phase_deadline,
         phase_policy,
         slots,
+        private_channels,
         effect_records,
         action_history,
         use_counters,
@@ -3117,6 +3218,9 @@ fn current_submissions(
                 }
             }
             "ActionSubmitted" if ev.payload["phase_id"].as_str() == Some(phase_id) => {
+                if ev.payload["instant_resolved"].as_bool().unwrap_or(false) {
+                    continue;
+                }
                 if let (Some(action_id), Some(template_id), Some(actor)) = (
                     ev.payload["action_id"].as_str(),
                     ev.payload["template_id"].as_str(),
@@ -3465,7 +3569,7 @@ async fn validate_action_submission(
     template_id: &str,
     targets: &[String],
     grant_id: Option<&str>,
-) -> Result<(), Reject> {
+) -> Result<Window, Reject> {
     let phase_kind = phase_kind(phase_id)?;
     let phase_number = phase_number(phase_id)?;
     let slots = projections::slot_state(pool, game).await?;
@@ -3493,11 +3597,7 @@ async fn validate_action_submission(
         return Err(Reject::InvalidTarget);
     }
 
-    let window_matches = match template.window {
-        Window::Any => true,
-        Window::Day => phase_kind == domain::pack::PhaseKind::Day,
-        Window::Night => phase_kind == domain::pack::PhaseKind::Night,
-    };
+    let window_matches = template.window.matches_phase_kind(phase_kind);
     if !window_matches {
         return Err(Reject::PhaseLocked);
     }
@@ -3683,7 +3783,7 @@ async fn validate_action_submission(
             TargetState::Alive | TargetState::Dead => {}
         }
     }
-    Ok(())
+    Ok(template.window)
 }
 
 fn target_role_filter_rejected(
@@ -3972,7 +4072,7 @@ async fn active_action_exists(
                     && ev.payload["actor"].as_str() == Some(actor_slot)
                     && ev.payload["action_id"].as_str() == Some(action_id) =>
             {
-                active = true;
+                active = !ev.payload["instant_resolved"].as_bool().unwrap_or(false);
             }
             "ActionWithdrawn"
                 if ev.payload["action_id"].as_str() == Some(action_id)

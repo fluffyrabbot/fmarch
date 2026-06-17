@@ -1,0 +1,147 @@
+{
+  "description": "Mafia Universe Universal Backup: town and mafia variants choose source targets through inherit_role and emit durable BackupTargeted facts for later inheritance.",
+  "input": {
+    "game_id": "game_mu_backup_designate_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_universal_backup",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_universal_backup",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_backup_n01",
+        "actor": "slot_1",
+        "template_id": "target_backup",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_mafia_backup_n01",
+        "actor": "slot_2",
+        "template_id": "target_backup",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 716011
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_1",
+        "target": "slot_3",
+        "effect": "backup_target",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "duration": "Persistent",
+        "visibility": "Hidden",
+        "source_action": "mu_town_backup_n01"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "BackupTargeted",
+      "payload": {
+        "backup": "slot_1",
+        "source_target": "slot_3",
+        "source_role": "town_cop",
+        "source_action": "mu_town_backup_n01",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 2,
+      "kind": "EffectsMarked",
+      "payload": {
+        "actor": "slot_2",
+        "target": "slot_4",
+        "effect": "backup_target",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "duration": "Persistent",
+        "visibility": "Hidden",
+        "source_action": "mu_mafia_backup_n01"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "BackupTargeted",
+      "payload": {
+        "backup": "slot_2",
+        "source_target": "slot_4",
+        "source_role": "mafia_goon",
+        "source_action": "mu_mafia_backup_n01",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

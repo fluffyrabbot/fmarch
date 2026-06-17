@@ -1,7 +1,7 @@
 {
   "name": "test_trigger_loop_cap",
   "version": 1,
-  "ir_version": 24,
+  "ir_version": 46,
   "roles": {
     "vanilla_townie": {
       "description": "Town-aligned test role with no actions.",
@@ -72,6 +72,7 @@
     },
     "twilight": false
   },
+  "win_families": ["FactionElimination", "FactionParity"],
   "win": {
     "rules": [
       {

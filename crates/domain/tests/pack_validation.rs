@@ -375,6 +375,33 @@ fn personal_modifier_matches_personal_only_contract() {
 }
 
 #[test]
+fn disloyal_modifier_requires_targets_and_current_ir_version() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(56);
+    value["roles"]["cop"]["actions"][0]["modifiers"] = json!(["Disloyal"]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].modifiers",
+        "Disloyal requires ir_version >= 57",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(57);
+    value["roles"]["cop"]["actions"][0]["ability"] = json!("Info");
+    value["roles"]["cop"]["actions"][0]["targets"] = json!("None");
+    value["roles"]["cop"]["actions"][0]["constraints"]["max_targets"] = json!(0);
+    value["roles"]["cop"]["actions"][0]["modifiers"] = json!(["Disloyal"]);
+    value["roles"]["cop"]["actions"][0]["info"] = json!({ "kind": "test_info" });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].targets",
+        "Disloyal actions must target at least one slot",
+    );
+}
+
+#[test]
 fn lazy_modifier_matches_lazy_endgame_contract() {
     let mut value = valid_pack_value();
     value["roles"]["cop"]["actions"][0]["modifiers"] = json!(["Lazy"]);
@@ -912,16 +939,53 @@ fn win_policy_rules_must_not_duplicate_terminal_conditions() {
 }
 
 #[test]
+fn win_rule_alive_blockers_are_strict_and_versioned() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(52);
+    value["roles"]["serial_killer"] = json!({
+        "description": "Independent test killer.",
+        "alignment": "independent",
+        "actions": []
+    });
+    value["win"]["rules"][1]["blocked_by_alive"] = json!(["independent"]);
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(&err, "ir_version", "requiring ir_version >= 53");
+    assert_issue(&err, "ir_version", "win_rule_blockers");
+
+    value["ir_version"] = json!(53);
+    value["win"]["rules"][1]["blocked_by_alive"] =
+        json!(["independent", "independent", "ghost", "mafia"]);
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "win.rules[1].blocked_by_alive",
+        "duplicate win rule blocker `independent`",
+    );
+    assert_issue(
+        &err,
+        "win.rules[1].blocked_by_alive",
+        "unknown alignment `ghost`",
+    );
+    assert_issue(
+        &err,
+        "win.rules[1].blocked_by_alive",
+        "win rule blockers must not include the winning alignment",
+    );
+}
+
+#[test]
 fn win_families_are_strict_and_versioned() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();
 
     value["ir_version"] = json!(45);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "requiring ir_version >= 46");
+    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
-    value["ir_version"] = json!(46);
+    value["ir_version"] = json!(47);
     value["win_families"]
         .as_array_mut()
         .unwrap()
@@ -1008,6 +1072,62 @@ fn phase_policy_shape_is_strict() {
 }
 
 #[test]
+fn twilight_action_window_is_strict_and_versioned() {
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_twilight_window")).unwrap();
+    validate_pack(&pack_from_value(value.clone())).unwrap();
+
+    value["ir_version"] = json!(47);
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(&err, "ir_version", "Twilight action window");
+
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_twilight_window")).unwrap();
+    value["phases"]["cadence"] = json!(["Day", "Night"]);
+    value["phases"]["twilight"] = json!(false);
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.twilight_self_destructor.actions[0].window",
+        "action window Twilight is absent from phases.cadence",
+    );
+
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_twilight_window")).unwrap();
+    value["roles"]["twilight_self_destructor"]["actions"][0]["constraints"]["active_from"] = json!({
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "reason": "Activated"
+    });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.twilight_self_destructor.actions[0].constraints.active_from.phase_kind",
+        "active_from.phase_kind must match the action window",
+    );
+}
+
+#[test]
+fn instant_action_window_is_strict_and_versioned() {
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_instant_window")).unwrap();
+    validate_pack(&pack_from_value(value.clone())).unwrap();
+
+    value["ir_version"] = json!(48);
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(&err, "ir_version", "Instant action window");
+
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_instant_window")).unwrap();
+    value["phases"]["cadence"] = json!(["Day"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value: Value = serde_json::from_str(&load_pack_raw("test_instant_window")).unwrap();
+    value["roles"]["instant_self_destructor"]["actions"][0]["window"] = json!("Night");
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.instant_self_destructor.actions[0].window",
+        "Day, Twilight, or Instant window",
+    );
+}
+
+#[test]
 fn shipped_pack_night_order_is_pack_derived() {
     let mafiascum = load_pack_named("mafiascum");
     assert_eq!(
@@ -1025,6 +1145,7 @@ fn shipped_pack_night_order_is_pack_derived() {
             IrAbility::Convert,
             IrAbility::Investigate,
             IrAbility::Visit,
+            IrAbility::Info,
         ]
     );
 
@@ -1131,10 +1252,10 @@ fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
 fn invalid_versions_are_rejected() {
     let mut value = valid_pack_value();
     value["version"] = json!(2);
-    value["ir_version"] = json!(47);
+    value["ir_version"] = json!(59);
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 47");
+    assert_issue(&err, "ir_version", "unsupported IR version 59");
 }
 
 #[test]
@@ -1142,7 +1263,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 47");
+    assert_issue(&err, "ir_version", "unsupported IR version 59");
 }
 
 #[test]
@@ -1155,7 +1276,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 46",
+        "pack declares features requiring ir_version >= 57",
     );
     assert_issue(&err, "ir_version", "private_channels");
     assert_issue(&err, "ir_version", "Simultaneous");
@@ -1163,6 +1284,14 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(&err, "ir_version", "death_reveal");
     assert_issue(&err, "ir_version", "self_lynch_win_policies");
     assert_issue(&err, "ir_version", "Rotate");
+    assert_issue(&err, "ir_version", "win_rule_blockers");
+    assert_issue(&err, "ir_version", "Info");
+    assert_issue(
+        &err,
+        "ir_version",
+        "visitor role/identity investigation modes",
+    );
+    assert_issue(&err, "ir_version", "Disloyal");
 }
 
 #[test]
@@ -1277,6 +1406,52 @@ fn action_field_combinations_are_strict() {
         &err,
         "roles.cop.actions[0].constraints.cycle_parity",
         "cycle_parity must not be combined with phase_parity",
+    );
+}
+
+#[test]
+fn info_action_field_combinations_are_strict() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(54);
+    value["roles"]["cop"]["actions"][0]["ability"] = json!("Info");
+    value["roles"]["cop"]["actions"][0]["mode"] = Value::Null;
+
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].info",
+        "Info actions must declare info",
+    );
+
+    let mut value = valid_pack_value();
+    value["roles"]["cop"]["actions"][0]["info"] = json!({ "kind": "observe" });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].info",
+        "info is only legal on Info actions",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(54);
+    value["roles"]["cop"]["actions"][0]["ability"] = json!("Info");
+    value["roles"]["cop"]["actions"][0]["mode"] = Value::Null;
+    value["roles"]["cop"]["actions"][0]["info"] = json!({
+        "kind": "",
+        "audience": "Target"
+    });
+    value["roles"]["cop"]["actions"][0]["targets"] = json!("None");
+    value["roles"]["cop"]["actions"][0]["constraints"]["max_targets"] = json!(0);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].info.kind",
+        "info kind must not be empty",
+    );
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].info.audience",
+        "target-audience Info actions require targets",
     );
 }
 
@@ -1530,7 +1705,9 @@ fn role_set_investigation_modes_are_strict() {
     value["roles"]["cop"]["actions"][0]["mode"] = json!("Vanilla");
     value["investigation_results"]["role_sets"] = json!({
         "vanilla_roles": ["townie", "missing_role", "townie"],
-        "gun_bearing_roles": ["missing_gun_role"]
+        "gun_bearing_roles": ["missing_gun_role"],
+        "killer_roles": ["missing_killer_role", "missing_killer_role"],
+        "specialist_roles": ["missing_specialist_role", "missing_specialist_role"]
     });
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(
@@ -1553,14 +1730,110 @@ fn role_set_investigation_modes_are_strict() {
         "investigation_results.role_sets.gun_bearing_roles",
         "unknown gun-bearing role `missing_gun_role`",
     );
+    assert_issue(
+        &err,
+        "investigation_results.role_sets.killer_roles",
+        "duplicate value `missing_killer_role`",
+    );
+    assert_issue(
+        &err,
+        "investigation_results.role_sets.killer_roles",
+        "unknown killer role `missing_killer_role`",
+    );
+    assert_issue(
+        &err,
+        "investigation_results.role_sets.specialist_roles",
+        "duplicate value `missing_specialist_role`",
+    );
+    assert_issue(
+        &err,
+        "investigation_results.role_sets.specialist_roles",
+        "unknown specialist role `missing_specialist_role`",
+    );
 
     let mut value = valid_pack_value();
     value["ir_version"] = json!(36);
     value["roles"]["cop"]["actions"][0]["mode"] = json!("Gunsmith");
     value["investigation_results"]["role_sets"] = json!({
         "vanilla_roles": ["townie"],
-        "gun_bearing_roles": ["cultist"]
+        "gun_bearing_roles": ["cultist"],
+        "specialist_roles": []
     });
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(49);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Killer");
+    value["investigation_results"]["role_sets"] = json!({
+        "vanilla_roles": ["townie"],
+        "gun_bearing_roles": ["cultist"],
+        "killer_roles": ["arsonist"],
+        "specialist_roles": []
+    });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].mode",
+        "killer role-set investigation mode requires ir_version >= 50",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(50);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Killer");
+    value["investigation_results"]["role_sets"] = json!({
+        "vanilla_roles": ["townie"],
+        "gun_bearing_roles": ["cultist"],
+        "killer_roles": ["arsonist"],
+        "specialist_roles": []
+    });
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(50);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Specialist");
+    value["investigation_results"]["role_sets"] = json!({
+        "vanilla_roles": ["townie"],
+        "gun_bearing_roles": ["cultist"],
+        "killer_roles": ["arsonist"],
+        "specialist_roles": ["cop"]
+    });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].mode",
+        "specialist role-set investigation mode requires ir_version >= 51",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(51);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Specialist");
+    value["investigation_results"]["role_sets"] = json!({
+        "vanilla_roles": ["townie"],
+        "gun_bearing_roles": ["cultist"],
+        "killer_roles": ["arsonist"],
+        "specialist_roles": ["cop"]
+    });
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(51);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("PtAccess");
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].mode",
+        "PT access investigation mode requires ir_version >= 52",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(52);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("PtAccess");
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 
@@ -1595,6 +1868,126 @@ fn full_role_disclosure_investigation_modes_are_strict() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(38);
     value["roles"]["cop"]["actions"][0]["mode"] = json!("FullRole");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn visitor_role_identity_investigation_modes_are_strict() {
+    for mode in ["RoleWatcher", "RoleGuard", "SecurityGuard"] {
+        let mut value = valid_pack_value();
+        value["roles"]["cop"]["actions"][0]["mode"] = json!(mode);
+        let err = validate_pack(&pack_from_value(value)).unwrap_err();
+        assert_issue(
+            &err,
+            "roles.cop.actions[0].mode",
+            "visitor role/identity investigation modes require ir_version >= 55",
+        );
+
+        let mut value = valid_pack_value();
+        value["ir_version"] = json!(55);
+        value["roles"]["cop"]["actions"][0]["mode"] = json!(mode);
+        value["visibility_families"] = json!(["EffectAudiences"]);
+        value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+        validate_pack(&pack_from_value(value)).unwrap();
+    }
+}
+
+#[test]
+fn voyeur_investigation_mode_is_strict() {
+    let mut value = valid_pack_value();
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Voyeur");
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].mode",
+        "voyeur action investigation mode requires ir_version >= 56",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(56);
+    value["roles"]["cop"]["actions"][0]["mode"] = json!("Voyeur");
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn effect_source_death_reveal_policy_is_strict() {
+    let mut value = valid_pack_value();
+    value["effect_source_death_reveals"] = json!([{
+        "id": "oracle_reveal",
+        "effect": "doused",
+        "reveal": "Alignment"
+    }]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "effect_source_death_reveals",
+        "effect source-death reveal policies require ir_version >= 57",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(57);
+    value["effect_source_death_reveals"] = json!([
+        {
+            "id": "oracle_reveal",
+            "effect": "missing_effect",
+            "reveal": "Alignment"
+        },
+        {
+            "id": "oracle_reveal",
+            "effect": "doused",
+            "reveal": "Alignment"
+        }
+    ]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "effect_source_death_reveals[0].effect",
+        "unknown effect source-death reveal effect `missing_effect`",
+    );
+    assert_issue(
+        &err,
+        "effect_source_death_reveals[1].id",
+        "duplicate effect source-death reveal policy `oracle_reveal`",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(57);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["effect_source_death_reveals"] = json!([{
+        "id": "oracle_reveal",
+        "effect": "doused",
+        "reveal": "Alignment"
+    }]);
+    validate_pack(&pack_from_value(value)).unwrap();
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(57);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["effect_source_death_reveals"] = json!([{
+        "id": "role_oracle_reveal",
+        "effect": "doused",
+        "reveal": "Role"
+    }]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "effect_source_death_reveals[0].reveal",
+        "effect source-death role reveal policies require ir_version >= 58",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(58);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["effect_source_death_reveals"] = json!([{
+        "id": "role_oracle_reveal",
+        "effect": "doused",
+        "reveal": "Role"
+    }]);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 
@@ -2579,6 +2972,46 @@ fn vote_duel_actions_require_explicit_duel_tie_breaker() {
 }
 
 #[test]
+fn veto_actions_require_v47_day_target_shape() {
+    let mut value = valid_pack_value();
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("Veto");
+    action["mode"] = Value::Null;
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "roles.cop.actions[0].ability", "Veto requires");
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(47);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("Veto");
+    action["mode"] = Value::Null;
+    action["window"] = json!("Night");
+    action["targets"] = json!("Many");
+    action["constraints"]["max_targets"] = json!(2);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "roles.cop.actions[0].window", "Day window");
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].targets",
+        "target exactly one slot",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(47);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("Veto");
+    action["mode"] = Value::Null;
+    action["window"] = json!("Day");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
 fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
     let mut value = valid_pack_value();
     let action = &mut value["roles"]["cop"]["actions"][0];
@@ -2768,7 +3201,7 @@ fn ita_modifier_components_require_v32_and_fold_strictly() {
 }
 
 #[test]
-fn self_destruct_actions_require_v10_payload_and_day_target_shape() {
+fn self_destruct_actions_require_v10_payload_and_day_or_twilight_target_shape() {
     let mut value = valid_pack_value();
     let action = &mut value["roles"]["cop"]["actions"][0];
     action["ability"] = json!("SelfDestruct");
@@ -2801,7 +3234,11 @@ fn self_destruct_actions_require_v10_payload_and_day_target_shape() {
         "unstoppable": true
     });
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
-    assert_issue(&err, "roles.cop.actions[0].window", "Day window");
+    assert_issue(
+        &err,
+        "roles.cop.actions[0].window",
+        "Day, Twilight, or Instant window",
+    );
     assert_issue(
         &err,
         "roles.cop.actions[0].targets",
@@ -3990,7 +4427,7 @@ fn standard_nar_action_chance_policy_is_strict_and_versioned() {
 
     value["ir_version"] = json!(42);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "requiring ir_version >= 46");
+    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
     assert_issue(
         &err,
         "standard_nar.action_chance",
@@ -4004,7 +4441,7 @@ fn standard_nar_action_chance_policy_is_strict_and_versioned() {
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
-    value["ir_version"] = json!(46);
+    value["ir_version"] = json!(47);
     value["standard_nar"]["action_chance"]["faith_healer_protect"]["chance"] = json!(1.25);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
@@ -4030,7 +4467,7 @@ fn standard_nar_conflict_families_are_strict_and_versioned() {
 
     value["ir_version"] = json!(43);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "requiring ir_version >= 46");
+    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
     assert_issue(
         &err,
         "standard_nar.conflict_families",
@@ -4039,7 +4476,7 @@ fn standard_nar_conflict_families_are_strict_and_versioned() {
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
-    value["ir_version"] = json!(46);
+    value["ir_version"] = json!(47);
     value["standard_nar"]["conflict_families"]
         .as_array_mut()
         .unwrap()
@@ -4080,11 +4517,11 @@ fn visibility_families_are_strict_and_versioned() {
 
     value["ir_version"] = json!(44);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
-    assert_issue(&err, "ir_version", "requiring ir_version >= 46");
+    assert_issue(&err, "ir_version", "pack declares features requiring ir_version >=");
     assert_issue(&err, "visibility_families", "requires ir_version >= 45");
     assert_issue(&err, "win_families", "requires ir_version >= 46");
 
-    value["ir_version"] = json!(46);
+    value["ir_version"] = json!(47);
     value["visibility_families"]
         .as_array_mut()
         .unwrap()

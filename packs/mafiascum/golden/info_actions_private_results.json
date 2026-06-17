@@ -1,0 +1,181 @@
+{
+  "description": "Mailman, Observer, and Reporter are generic info actions. Mailman emits an anonymous private result to the target; Observer and Reporter emit private results to their actors.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InfoResult",
+      "payload": {
+        "actor": "slot_1",
+        "audience": [
+          "slot_4"
+        ],
+        "kind": "mailman",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "result": {
+          "kind": "mailman",
+          "message": "anonymous",
+          "source_action": "sub_001",
+          "target": "slot_4"
+        },
+        "source_action": "sub_001",
+        "target": "slot_4",
+        "template_id": "mailman"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InfoResult",
+      "payload": {
+        "actor": "slot_2",
+        "audience": [
+          "slot_2"
+        ],
+        "kind": "observe",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "result": {
+          "kind": "observe",
+          "source_action": "sub_002",
+          "target": "slot_4"
+        },
+        "source_action": "sub_002",
+        "target": "slot_4",
+        "template_id": "observe"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InfoResult",
+      "payload": {
+        "actor": "slot_3",
+        "audience": [
+          "slot_3"
+        ],
+        "kind": "report",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "result": {
+          "kind": "report",
+          "source_action": "sub_003",
+          "target": "slot_4"
+        },
+        "source_action": "sub_003",
+        "target": "slot_4",
+        "template_id": "report"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "N01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_mafiascum_info_001",
+    "pack": "mafiascum",
+    "phase_id": "N01",
+    "seed": 868686,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "N01",
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "mailman",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "observer",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "reporter",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "mailman",
+        "withdrawn": false
+      },
+      {
+        "action_id": "sub_002",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "observe",
+        "withdrawn": false
+      },
+      {
+        "action_id": "sub_003",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "report",
+        "withdrawn": false
+      }
+    ]
+  }
+}

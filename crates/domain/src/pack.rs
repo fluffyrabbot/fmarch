@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 46;
+pub const SUPPORTED_IR_VERSION: u16 = 58;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -51,6 +51,11 @@ pub struct Pack {
     /// override duration during migration.
     #[serde(default)]
     pub effects: BTreeMap<Tag, EffectPolicy>,
+    /// Optional source-death reveal policies keyed by persistent effect tag.
+    /// This covers Oracle-style marks: if the slot that placed the effect dies,
+    /// the marked target's declared fact is publicly revealed.
+    #[serde(default)]
+    pub effect_source_death_reveals: Vec<EffectSourceDeathRevealPolicy>,
     /// Optional Mafia Universe-style ITA policy. Present only for packs that
     /// expose `ItaShot` day actions.
     #[serde(default)]
@@ -180,7 +185,30 @@ impl Role {
 pub enum Window {
     Day,
     Night,
+    Twilight,
+    Instant,
     Any,
+}
+
+impl Window {
+    pub fn required_phase_kind(self) -> Option<PhaseKind> {
+        match self {
+            Window::Day => Some(PhaseKind::Day),
+            Window::Night => Some(PhaseKind::Night),
+            Window::Twilight => Some(PhaseKind::Twilight),
+            Window::Instant => None,
+            Window::Any => None,
+        }
+    }
+
+    pub fn matches_phase_kind(self, phase_kind: PhaseKind) -> bool {
+        self.required_phase_kind()
+            .is_none_or(|required| required == phase_kind)
+    }
+
+    pub fn is_night_resolution_window(self) -> bool {
+        matches!(self, Window::Night | Window::Any)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -254,6 +282,19 @@ pub struct EffectPolicy {
     pub duration: EffectDuration,
     #[serde(default)]
     pub visibility: EffectVisibility,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EffectSourceDeathRevealPolicy {
+    pub id: String,
+    pub effect: Tag,
+    pub reveal: EffectSourceDeathRevealKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EffectSourceDeathRevealKind {
+    Alignment,
+    Role,
 }
 
 fn default_effect_duration() -> EffectDuration {
@@ -1209,6 +1250,23 @@ pub enum PhaseParity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfoSpec {
+    pub kind: String,
+    #[serde(default)]
+    pub audience: InfoAudience,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub payload: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum InfoAudience {
+    #[default]
+    Actor,
+    Target,
+    ActorAndTarget,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionTemplate {
     pub id: String,
     /// Source-catalog action ids that this fmarch template intentionally covers.
@@ -1231,6 +1289,10 @@ pub struct ActionTemplate {
     /// state-bearing engine surface, not a player-facing result formatting flag.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_memory: Option<ResultMemorySpec>,
+    /// REQUIRED iff `ability == Info`; describes a private, non-investigative
+    /// result/notification emitted to the configured audience.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub info: Option<InfoSpec>,
     /// The persistent effect tag a `Mark`/`Clear` action attaches/removes, or
     /// the cross-slot link type a `Link` action creates (REQUIRED for
     /// `Mark`/`Clear`; the Arsonist's `douse` Marks `"doused"`).
@@ -1621,6 +1683,10 @@ pub struct RoleSetInvestigationPolicy {
     pub vanilla_roles: Vec<RoleKey>,
     #[serde(default)]
     pub gun_bearing_roles: Vec<RoleKey>,
+    #[serde(default)]
+    pub killer_roles: Vec<RoleKey>,
+    #[serde(default)]
+    pub specialist_roles: Vec<RoleKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1665,6 +1731,9 @@ pub struct WinRule {
     /// The alignment that wins when `when` holds.
     pub winner: AlignmentKey,
     pub when: WinCondition,
+    /// Alignments that must have zero living slots before this rule can fire.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocked_by_alive: Vec<AlignmentKey>,
 }
 
 /// A win condition over alive-counts on the post-resolution state.
@@ -1966,6 +2035,14 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
         &mut issues,
         "death_reveal",
         &pack.death_reveal,
+        pack.ir_version,
+        pack,
+        &effect_tags,
+    );
+    validate_effect_source_death_reveals(
+        &mut issues,
+        "effect_source_death_reveals",
+        &pack.effect_source_death_reveals,
         pack.ir_version,
         pack,
         &effect_tags,
@@ -2570,6 +2647,7 @@ fn validate_win_policy(
     for (idx, rule) in win.rules.iter().enumerate() {
         let winner_path = format!("win.rules[{idx}].winner");
         let when_path = format!("win.rules[{idx}].when");
+        let blockers_path = format!("win.rules[{idx}].blocked_by_alive");
         let condition_label = win_condition_label(&rule.when);
         if !conditions.insert(condition_label.clone()) {
             issue(
@@ -2609,6 +2687,24 @@ fn validate_win_policy(
                         "AllOtherFactionsEliminated rules must award the surviving faction",
                     );
                 }
+            }
+        }
+        let mut blockers = BTreeSet::new();
+        for blocker in &rule.blocked_by_alive {
+            validate_alignment_ref(issues, blockers_path.clone(), blocker, alignments);
+            if blocker == &rule.winner {
+                issue(
+                    issues,
+                    blockers_path.clone(),
+                    "win rule blockers must not include the winning alignment",
+                );
+            }
+            if !blockers.insert(blocker.as_str()) {
+                issue(
+                    issues,
+                    blockers_path.clone(),
+                    format!("duplicate win rule blocker `{blocker}`"),
+                );
             }
         }
     }
@@ -3430,10 +3526,9 @@ fn validate_faction_action_policy(
             );
             continue;
         }
-        if !matches
-            .iter()
-            .any(|action| action.window != Window::Day && action.has_ability(IrAbility::Kill))
-        {
+        if !matches.iter().any(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
+        }) {
             issue(
                 issues,
                 format!("{spec_path}.action_id"),
@@ -3785,7 +3880,10 @@ fn validate_standard_nar_action_chance_policy(
                 action_path.clone(),
                 format!("unknown standard_nar action `{action_id}`"),
             );
-        } else if !matches.iter().any(|action| action.window != Window::Day) {
+        } else if !matches
+            .iter()
+            .any(|action| action.window.is_night_resolution_window())
+        {
             issue(
                 issues,
                 action_path.clone(),
@@ -3900,10 +3998,9 @@ fn validate_standard_nar_team_kill_actions(
             );
             continue;
         }
-        if !matches
-            .iter()
-            .any(|action| action.window != Window::Day && action.has_ability(IrAbility::Kill))
-        {
+        if !matches.iter().any(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
+        }) {
             issue(
                 issues,
                 path.clone(),
@@ -4099,7 +4196,7 @@ fn standard_nar_generated_trigger_feed_actions(pack: &Pack) -> BTreeMap<String, 
     let generated_triggers = standard_nar_generated_kill_source_ids(pack);
     let mut feeds: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (_, action) in standard_nar_pack_actions(pack) {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         for (trigger_id, trigger) in &generated_triggers {
@@ -4132,7 +4229,7 @@ fn action_can_feed_trigger(action: &ActionTemplate, on: TriggerOn) -> bool {
 fn standard_nar_night_action_abilities(pack: &Pack) -> BTreeMap<String, BTreeSet<IrAbility>> {
     let mut actions = BTreeMap::new();
     for (_, action) in standard_nar_pack_actions(pack) {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         let entry = actions
@@ -4165,7 +4262,7 @@ fn standard_nar_night_action_roleblockability(
     let mut actions = BTreeMap::new();
     for (role_key, role) in &pack.roles {
         for action in &role.actions {
-            if action.window == Window::Day {
+            if !action.window.is_night_resolution_window() {
                 continue;
             }
             record_standard_nar_action_roleblockability(
@@ -4179,7 +4276,7 @@ fn standard_nar_night_action_roleblockability(
         }
     }
     for (grant_id, action) in &pack.item_actions {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         record_standard_nar_action_roleblockability(
@@ -5061,7 +5158,7 @@ fn standard_nar_guard_dependency_source_ids(pack: &Pack) -> BTreeSet<String> {
         .into_iter()
         .map(|(_, action)| action)
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && action.has_modifier(Modifier::Babysitter)
         })
@@ -5074,7 +5171,7 @@ fn standard_nar_hide_dependency_source_ids(pack: &Pack) -> BTreeSet<String> {
         .into_iter()
         .map(|(_, action)| action)
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Mark)
                 && action.has_modifier(Modifier::Hider)
         })
@@ -5086,7 +5183,9 @@ fn standard_nar_chosen_retaliation_source_ids(pack: &Pack) -> BTreeMap<String, &
     standard_nar_pack_actions(pack)
         .into_iter()
         .map(|(_, action)| action)
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Retaliate))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Retaliate)
+        })
         .map(|action| (action.id.clone(), action))
         .collect()
 }
@@ -5115,7 +5214,7 @@ fn standard_nar_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
 fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
     let mut causes = BTreeSet::new();
     for (_, action) in standard_nar_pack_actions(pack) {
-        if action.window != Window::Day
+        if action.window.is_night_resolution_window()
             && (action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate))
             && !pack
                 .standard_nar
@@ -5265,7 +5364,7 @@ fn validate_standard_nar_declares_block_protect_actions(
         .collect::<BTreeSet<_>>();
 
     for (source, action) in standard_nar_pack_actions(pack) {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         if action.has_ability(IrAbility::Block) && !declared_blocks.contains(&action.id) {
@@ -5304,7 +5403,7 @@ fn validate_standard_nar_declares_kill_actions(
         .cloned()
         .collect::<BTreeSet<_>>();
     for (source, action) in standard_nar_pack_actions(pack) {
-        if action.window == Window::Day || !action.has_ability(IrAbility::Kill) {
+        if !action.window.is_night_resolution_window() || !action.has_ability(IrAbility::Kill) {
             continue;
         }
         if policy
@@ -5335,7 +5434,7 @@ fn validate_standard_nar_declares_strongman_actions(
 ) {
     let declared_strongman_kills = policy.strongman_action_ids.iter().collect::<BTreeSet<_>>();
     for (source, action) in standard_nar_pack_actions(pack) {
-        if action.window != Window::Day
+        if action.window.is_night_resolution_window()
             && action.has_ability(IrAbility::Kill)
             && action.has_modifier(Modifier::Strongman)
             && !declared_strongman_kills.contains(&action.id)
@@ -5718,7 +5817,7 @@ fn validate_standard_nar_empower_effects(
 
         let mut produced_by_mark = false;
         for (owner, action) in standard_nar_pack_actions(pack) {
-            if action.window == Window::Day
+            if !action.window.is_night_resolution_window()
                 || !action.has_ability(IrAbility::Mark)
                 || action.effect.as_deref() != Some(effect.as_str())
             {
@@ -5746,6 +5845,134 @@ fn validate_standard_nar_empower_effects(
                 path.clone(),
                 format!(
                     "standard_nar empower effect `{effect}` must be produced by a night Mark action"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_effect_source_death_reveals(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policies: &[EffectSourceDeathRevealPolicy],
+    ir_version: u16,
+    pack: &Pack,
+    effect_tags: &BTreeSet<&str>,
+) {
+    if policies.is_empty() {
+        return;
+    }
+    if ir_version < 57 {
+        issue(
+            issues,
+            path,
+            "effect source-death reveal policies require ir_version >= 57",
+        );
+    }
+
+    let mut ids = BTreeSet::new();
+    let mut effects = BTreeSet::new();
+    for (idx, policy) in policies.iter().enumerate() {
+        let policy_path = format!("{path}[{idx}]");
+        if policy.reveal == EffectSourceDeathRevealKind::Role && ir_version < 58 {
+            issue(
+                issues,
+                format!("{policy_path}.reveal"),
+                "effect source-death role reveal policies require ir_version >= 58",
+            );
+        }
+        if policy.id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{policy_path}.id"),
+                "effect source-death reveal policy id must not be empty",
+            );
+        } else if !ids.insert(policy.id.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.id"),
+                format!(
+                    "duplicate effect source-death reveal policy `{}`",
+                    policy.id
+                ),
+            );
+        }
+
+        if policy.effect.trim().is_empty() {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                "effect source-death reveal effect must not be empty",
+            );
+            continue;
+        }
+        if !effects.insert(policy.effect.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "duplicate effect source-death reveal effect `{}`",
+                    policy.effect
+                ),
+            );
+        }
+        if !effect_tags.contains(policy.effect.as_str()) {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "unknown effect source-death reveal effect `{}`",
+                    policy.effect
+                ),
+            );
+            continue;
+        }
+
+        let Some(effect_policy) = pack.effects.get(&policy.effect) else {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must declare effect metadata",
+                    policy.effect
+                ),
+            );
+            continue;
+        };
+        if effect_policy.duration != EffectDuration::Persistent {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must be persistent",
+                    policy.effect
+                ),
+            );
+        }
+
+        let produced_by_persistent_mark =
+            standard_nar_pack_actions(pack)
+                .into_iter()
+                .any(|(_, action)| {
+                    action.has_ability(IrAbility::Mark)
+                        && action.effect.as_deref() == Some(policy.effect.as_str())
+                        && action
+                            .effect_duration
+                            .or_else(|| {
+                                pack.effects
+                                    .get(&policy.effect)
+                                    .map(|policy| policy.duration)
+                            })
+                            .unwrap_or(EffectDuration::Persistent)
+                            == EffectDuration::Persistent
+                });
+        if !produced_by_persistent_mark {
+            issue(
+                issues,
+                format!("{policy_path}.effect"),
+                format!(
+                    "effect source-death reveal effect `{}` must be produced by a persistent Mark action",
+                    policy.effect
                 ),
             );
         }
@@ -6131,7 +6358,7 @@ fn validate_standard_nar_bucket(
         }
         if !matches
             .iter()
-            .any(|action| action.window != Window::Day && predicate(action))
+            .any(|action| action.window.is_night_resolution_window() && predicate(action))
         {
             issue(
                 issues,
@@ -6226,10 +6453,9 @@ fn validate_policy_action_ref(
         issue(issues, path, format!("unknown {label} `{action_id}`"));
         return;
     }
-    if !matches
-        .iter()
-        .any(|action| action.has_ability(required_ability) && action.window != Window::Day)
-    {
+    if !matches.iter().any(|action| {
+        action.has_ability(required_ability) && action.window.is_night_resolution_window()
+    }) {
         issue(
             issues,
             path,
@@ -6249,7 +6475,7 @@ fn policy_action_templates<'a>(
         .filter(|action| {
             action.id == action_id
                 && action.has_ability(required_ability)
-                && action.window != Window::Day
+                && action.window.is_night_resolution_window()
         })
         .collect()
 }
@@ -7229,6 +7455,16 @@ fn validate_investigation_result_policy(
         format!("{path}.role_sets.gun_bearing_roles"),
         &policy.role_sets.gun_bearing_roles,
     );
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.killer_roles"),
+        &policy.role_sets.killer_roles,
+    );
+    validate_unique_strings(
+        issues,
+        format!("{path}.role_sets.specialist_roles"),
+        &policy.role_sets.specialist_roles,
+    );
     for role_key in &policy.role_sets.vanilla_roles {
         if !role_keys.contains(role_key.as_str()) {
             issue(
@@ -7244,6 +7480,24 @@ fn validate_investigation_result_policy(
                 issues,
                 format!("{path}.role_sets.gun_bearing_roles"),
                 format!("unknown gun-bearing role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.role_sets.killer_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.killer_roles"),
+                format!("unknown killer role `{role_key}`"),
+            );
+        }
+    }
+    for role_key in &policy.role_sets.specialist_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.role_sets.specialist_roles"),
+                format!("unknown specialist role `{role_key}`"),
             );
         }
     }
@@ -7314,6 +7568,13 @@ fn validate_action(
             "Hider requires ir_version >= 6",
         );
     }
+    if ir_version < 57 && action.modifiers.contains(&Modifier::Disloyal) {
+        issue(
+            issues,
+            format!("{path}.modifiers"),
+            "Disloyal requires ir_version >= 57",
+        );
+    }
     if ir_version < 7 && abilities.contains(&IrAbility::Badge) {
         issue(
             issues,
@@ -7361,6 +7622,13 @@ fn validate_action(
             issues,
             format!("{path}.ability"),
             "VoteDuel requires ir_version >= 34",
+        );
+    }
+    if ir_version < 47 && abilities.contains(&IrAbility::Veto) {
+        issue(
+            issues,
+            format!("{path}.ability"),
+            "Veto requires ir_version >= 47",
         );
     }
     if action.modifiers.contains(&Modifier::Babysitter) && !abilities.contains(&IrAbility::Protect)
@@ -7438,6 +7706,27 @@ fn validate_action(
                 "role-set investigation modes require ir_version >= 36",
             );
         }
+        if ir_version < 50 && matches!(action.mode, Some(InvestigateMode::Killer)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "killer role-set investigation mode requires ir_version >= 50",
+            );
+        }
+        if ir_version < 51 && matches!(action.mode, Some(InvestigateMode::Specialist)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "specialist role-set investigation mode requires ir_version >= 51",
+            );
+        }
+        if ir_version < 52 && matches!(action.mode, Some(InvestigateMode::PtAccess)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "PT access investigation mode requires ir_version >= 52",
+            );
+        }
         if ir_version < 37 && matches!(action.mode, Some(InvestigateMode::Role)) {
             issue(
                 issues,
@@ -7452,11 +7741,75 @@ fn validate_action(
                 "full role disclosure investigation modes require ir_version >= 38",
             );
         }
+        if ir_version < 55
+            && matches!(
+                action.mode,
+                Some(
+                    InvestigateMode::RoleWatcher
+                        | InvestigateMode::RoleGuard
+                        | InvestigateMode::SecurityGuard
+                )
+            )
+        {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "visitor role/identity investigation modes require ir_version >= 55",
+            );
+        }
+        if ir_version < 56 && matches!(action.mode, Some(InvestigateMode::Voyeur)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "voyeur action investigation mode requires ir_version >= 56",
+            );
+        }
     } else if action.mode.is_some() {
         issue(
             issues,
             format!("{path}.mode"),
             "mode is only legal on Investigate actions",
+        );
+    }
+    if abilities.contains(&IrAbility::Info) {
+        if ir_version < 54 {
+            issue(
+                issues,
+                format!("{path}.ability"),
+                "Info requires ir_version >= 54",
+            );
+        }
+        let Some(info) = &action.info else {
+            issue(
+                issues,
+                format!("{path}.info"),
+                "Info actions must declare info",
+            );
+            return;
+        };
+        if info.kind.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.info.kind"),
+                "info kind must not be empty",
+            );
+        }
+        if matches!(
+            info.audience,
+            InfoAudience::Target | InfoAudience::ActorAndTarget
+        ) && (action.targets == TargetSpec::None || action.constraints.max_targets == 0)
+        {
+            issue(
+                issues,
+                format!("{path}.info.audience"),
+                "target-audience Info actions require targets",
+            );
+        }
+    } else if action.info.is_some() {
+        issue(
+            issues,
+            format!("{path}.info"),
+            "info is only legal on Info actions",
         );
     }
     if let Some(memory) = &action.result_memory {
@@ -7885,6 +8238,22 @@ fn validate_action(
             );
         }
     }
+    if abilities.contains(&IrAbility::Veto) {
+        if action.window != Window::Day {
+            issue(
+                issues,
+                format!("{path}.window"),
+                "Veto actions must use the Day window",
+            );
+        }
+        if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
+            issue(
+                issues,
+                format!("{path}.targets"),
+                "Veto actions must target exactly one slot",
+            );
+        }
+    }
     if abilities.contains(&IrAbility::ItaShot) {
         if action.window != Window::Day {
             issue(
@@ -7925,11 +8294,14 @@ fn validate_action(
                 "SelfDestruct actions must declare self_destruct",
             ),
         }
-        if action.window != Window::Day {
+        if !matches!(
+            action.window,
+            Window::Day | Window::Twilight | Window::Instant
+        ) {
             issue(
                 issues,
                 format!("{path}.window"),
-                "SelfDestruct actions must use the Day window",
+                "SelfDestruct actions must use the Day, Twilight, or Instant window",
             );
         }
         if action.targets != TargetSpec::One || action.constraints.max_targets != 1 {
@@ -8174,6 +8546,13 @@ fn validate_action(
             "Simultaneous actions must not be standard_nar team kills",
         );
     }
+    if action.has_modifier(Modifier::Disloyal) && action.targets == TargetSpec::None {
+        issue(
+            issues,
+            format!("{path}.targets"),
+            "Disloyal actions must target at least one slot",
+        );
+    }
 
     match action.redirect {
         Some(RedirectKind::Swap | RedirectKind::Retarget)
@@ -8251,11 +8630,7 @@ fn validate_action(
                 "active_from.phase_number must be greater than zero",
             );
         }
-        let window_matches = match action.window {
-            Window::Any => true,
-            Window::Day => active_from.phase_kind == PhaseKind::Day,
-            Window::Night => active_from.phase_kind == PhaseKind::Night,
-        };
+        let window_matches = action.window.matches_phase_kind(active_from.phase_kind);
         if !window_matches {
             issue(
                 issues,
@@ -8271,12 +8646,7 @@ fn validate_action(
             "phases.cadence",
             "phase cadence must declare at least one phase kind",
         );
-    } else if action.window != Window::Any {
-        let required = match action.window {
-            Window::Day => PhaseKind::Day,
-            Window::Night => PhaseKind::Night,
-            Window::Any => unreachable!(),
-        };
+    } else if let Some(required) = action.window.required_phase_kind() {
         if !cadence.contains(&required) {
             issue(
                 issues,
@@ -8374,6 +8744,26 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if pack.death_reveal != DeathRevealPolicy::default() {
         require_ir(&mut required, &mut reasons, 26, "death_reveal");
     }
+    if !pack.effect_source_death_reveals.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            57,
+            "effect_source_death_reveals",
+        );
+        if pack
+            .effect_source_death_reveals
+            .iter()
+            .any(|policy| policy.reveal == EffectSourceDeathRevealKind::Role)
+        {
+            require_ir(
+                &mut required,
+                &mut reasons,
+                58,
+                "effect_source_death_reveals.Role",
+            );
+        }
+    }
     if !pack.standard_nar.conflict_families.is_empty() {
         require_ir(
             &mut required,
@@ -8387,6 +8777,14 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if !pack.win_families.is_empty() {
         require_ir(&mut required, &mut reasons, 46, "win_families");
+    }
+    if pack
+        .win
+        .rules
+        .iter()
+        .any(|rule| !rule.blocked_by_alive.is_empty())
+    {
+        require_ir(&mut required, &mut reasons, 53, "win_rule_blockers");
     }
     if !pack.standard_nar.action_chance.is_empty() {
         require_ir(
@@ -8405,6 +8803,13 @@ fn record_action_required_ir_version(
     required: &mut u16,
     reasons: &mut BTreeSet<&'static str>,
 ) {
+    if action.window == Window::Twilight {
+        require_ir(required, reasons, 48, "Twilight action window");
+    }
+    if action.window == Window::Instant {
+        require_ir(required, reasons, 49, "Instant action window");
+    }
+
     for ability in action.abilities() {
         match ability {
             IrAbility::Grant => require_ir(required, reasons, 2, "Grant"),
@@ -8417,6 +8822,8 @@ fn record_action_required_ir_version(
             IrAbility::Visit => require_ir(required, reasons, 24, "Visit"),
             IrAbility::RevealTown => require_ir(required, reasons, 33, "RevealTown"),
             IrAbility::VoteDuel => require_ir(required, reasons, 34, "VoteDuel"),
+            IrAbility::Veto => require_ir(required, reasons, 47, "Veto"),
+            IrAbility::Info => require_ir(required, reasons, 54, "Info"),
             IrAbility::Kill
             | IrAbility::Protect
             | IrAbility::Block
@@ -8433,6 +8840,9 @@ fn record_action_required_ir_version(
     }
     if action.modifiers.contains(&Modifier::Hider) {
         require_ir(required, reasons, 6, "Hider");
+    }
+    if action.modifiers.contains(&Modifier::Disloyal) {
+        require_ir(required, reasons, 57, "Disloyal");
     }
     if action.modifiers.contains(&Modifier::Simultaneous) {
         require_ir(required, reasons, 28, "Simultaneous");
@@ -8460,6 +8870,20 @@ fn record_action_required_ir_version(
     ) {
         require_ir(required, reasons, 36, "role-set investigation modes");
     }
+    if matches!(action.mode, Some(InvestigateMode::Killer)) {
+        require_ir(required, reasons, 50, "killer role-set investigation mode");
+    }
+    if matches!(action.mode, Some(InvestigateMode::Specialist)) {
+        require_ir(
+            required,
+            reasons,
+            51,
+            "specialist role-set investigation mode",
+        );
+    }
+    if matches!(action.mode, Some(InvestigateMode::PtAccess)) {
+        require_ir(required, reasons, 52, "PT access investigation mode");
+    }
     if matches!(action.mode, Some(InvestigateMode::Role)) {
         require_ir(required, reasons, 37, "role disclosure investigation modes");
     }
@@ -8470,6 +8894,24 @@ fn record_action_required_ir_version(
             38,
             "full role disclosure investigation modes",
         );
+    }
+    if matches!(
+        action.mode,
+        Some(
+            InvestigateMode::RoleWatcher
+                | InvestigateMode::RoleGuard
+                | InvestigateMode::SecurityGuard
+        )
+    ) {
+        require_ir(
+            required,
+            reasons,
+            55,
+            "visitor role/identity investigation modes",
+        );
+    }
+    if matches!(action.mode, Some(InvestigateMode::Voyeur)) {
+        require_ir(required, reasons, 56, "voyeur action investigation mode");
     }
     if matches!(action.redirect, Some(RedirectKind::Rotate)) {
         require_ir(required, reasons, 25, "Rotate");
@@ -8682,9 +9124,35 @@ mod tests {
             ("Visit", 24, "Visit"),
             ("RevealTown", 33, "RevealTown"),
             ("VoteDuel", 34, "VoteDuel"),
+            ("Veto", 47, "Veto"),
+            ("Info", 54, "Info"),
         ] {
-            assert_versioned_action(test_action(ability), expected_version, reason);
+            let mut action = test_action(ability);
+            if ability == "Info" {
+                action["info"] = json!({ "kind": "test_info" });
+            }
+            assert_versioned_action(action, expected_version, reason);
         }
+
+        let mut twilight_action = test_action("SelfDestruct");
+        twilight_action["window"] = json!("Twilight");
+        twilight_action["self_destruct"] = json!({
+            "cause": "twilight_self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+        });
+        assert_versioned_action(twilight_action, 48, "Twilight action window");
+
+        let mut instant_action = test_action("SelfDestruct");
+        instant_action["window"] = json!("Instant");
+        instant_action["self_destruct"] = json!({
+            "cause": "instant_self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+        });
+        assert_versioned_action(instant_action, 49, "Instant action window");
 
         let mut babysitter = test_action("Protect");
         babysitter["modifiers"] = json!(["Babysitter"]);
@@ -8694,6 +9162,14 @@ mod tests {
         hider["modifiers"] = json!(["Hider"]);
         hider["effect"] = json!("hide_link");
         assert_versioned_action(hider, 6, "Hider");
+
+        let mut disloyal = test_action("Convert");
+        disloyal["modifiers"] = json!(["Disloyal"]);
+        disloyal["conversion"] = json!({
+            "mode": "AssignRole",
+            "role": "cultist"
+        });
+        assert_versioned_action(disloyal, 57, "Disloyal");
 
         let mut result_memory = test_action("Investigate");
         result_memory["result_memory"] = json!({ "record": true });
@@ -8720,6 +9196,22 @@ mod tests {
         role_set_mode["mode"] = json!("Vanilla");
         assert_versioned_action(role_set_mode, 36, "role-set investigation modes");
 
+        let mut killer_mode = test_action("Investigate");
+        killer_mode["mode"] = json!("Killer");
+        assert_versioned_action(killer_mode, 50, "killer role-set investigation mode");
+
+        let mut specialist_mode = test_action("Investigate");
+        specialist_mode["mode"] = json!("Specialist");
+        assert_versioned_action(
+            specialist_mode,
+            51,
+            "specialist role-set investigation mode",
+        );
+
+        let mut pt_access_mode = test_action("Investigate");
+        pt_access_mode["mode"] = json!("PtAccess");
+        assert_versioned_action(pt_access_mode, 52, "PT access investigation mode");
+
         let mut role_disclosure_mode = test_action("Investigate");
         role_disclosure_mode["mode"] = json!("Role");
         assert_versioned_action(
@@ -8735,6 +9227,20 @@ mod tests {
             38,
             "full role disclosure investigation modes",
         );
+
+        for mode in ["RoleWatcher", "RoleGuard", "SecurityGuard"] {
+            let mut visitor_identity_mode = test_action("Investigate");
+            visitor_identity_mode["mode"] = json!(mode);
+            assert_versioned_action(
+                visitor_identity_mode,
+                55,
+                "visitor role/identity investigation modes",
+            );
+        }
+
+        let mut voyeur_mode = test_action("Investigate");
+        voyeur_mode["mode"] = json!("Voyeur");
+        assert_versioned_action(voyeur_mode, 56, "voyeur action investigation mode");
 
         let mut rotate = test_action("Redirect");
         rotate["targets"] = json!("Many");
@@ -9273,7 +9779,7 @@ fn night_ability_priorities(pack: &Pack) -> BTreeMap<IrAbility, i32> {
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
     {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         for ability in night_order_abilities(action) {

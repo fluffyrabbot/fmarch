@@ -1,0 +1,216 @@
+{
+  "description": "Mafia Universe culture aliases: alignment cop roles use the investigate draft id as parity checks, blank/vanilla roles are setup-only roles, and Serial Killer's ordinary kill is protectable by Mafia Doctor.",
+  "input": {
+    "game_id": "game_mu_culture_alias_alignment_cops_serial_killer_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_alignment_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_alignment_cop",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_cop",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "mafia_doctor",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "serial_killer",
+          "alignment": "independent",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "blank_town_role",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "blank_mafia_role",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_8",
+          "role_key": "vanilla_town",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_9",
+          "role_key": "mafia_bodyguard",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_10",
+          "role_key": "mafia_jailkeeper",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_11",
+          "role_key": "vanilla_town",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_12",
+          "role_key": "blank_town_role",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_13",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_alignment_cop_001",
+        "actor": "slot_1",
+        "template_id": "cop_investigate",
+        "targets": ["slot_7"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_mafia_alignment_cop_001",
+        "actor": "slot_2",
+        "template_id": "cop_investigate",
+        "targets": ["slot_6"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_mafia_cop_001",
+        "actor": "slot_3",
+        "template_id": "cop_investigate",
+        "targets": ["slot_8"],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_mafia_doctor_001",
+        "actor": "slot_4",
+        "template_id": "doctor_protect",
+        "targets": ["slot_7"],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_serial_killer_001",
+        "actor": "slot_5",
+        "template_id": "serial_killer_kill",
+        "targets": ["slot_7"],
+        "phase_id": "N01",
+        "submitted_at": 5,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 712055
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_7",
+        "reasons": ["protected"],
+        "sources": ["slot_4"]
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_1",
+        "target": "slot_7",
+        "result": "scum"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_2",
+        "target": "slot_6",
+        "result": "town"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "Parity",
+        "investigator": "slot_3",
+        "target": "slot_8",
+        "result": "town"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

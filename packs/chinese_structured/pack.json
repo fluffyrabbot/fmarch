@@ -31,7 +31,7 @@
       ]
     },
     "white_wolf_king": {
-      "description": "White Wolf King. During the day, may self-destruct to trade self for one chosen target.",
+      "description": "White Wolf King. During the day, may self-destruct to trade self for one chosen target; at night, participates in the shared wolf faction kill.",
       "alignment": "wolf",
       "actions": [
         {
@@ -53,6 +53,22 @@
             "kill_target": true,
             "sacrifice_actor": true,
             "unstoppable": true
+          }
+        },
+        {
+          "id": "wolf_night_kill",
+          "source_ids": ["night_kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "Many",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 2,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 50,
+            "x_shots": null
           }
         }
       ]

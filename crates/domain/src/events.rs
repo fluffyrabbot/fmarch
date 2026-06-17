@@ -30,6 +30,14 @@ pub enum InnerEvent {
         sequence: u64,
     },
     DayVoteOutcome(DayVoteOutcome),
+    VoteVetoed {
+        governor: SlotId,
+        target: SlotId,
+        source_action: String,
+        phase_id: PhaseId,
+        phase_kind: crate::pack::PhaseKind,
+        phase_number: u32,
+    },
     DayAnnouncement(DayAnnouncement),
     LastWordsRecorded(LastWordsRecorded),
     HostPromptIssued(HostPromptIssued),
@@ -329,6 +337,18 @@ pub enum InnerEvent {
         target: SlotId,
         result: serde_json::Value,
     },
+    InfoResult {
+        actor: SlotId,
+        target: SlotId,
+        kind: String,
+        audience: Vec<SlotId>,
+        result: serde_json::Value,
+        source_action: String,
+        template_id: String,
+        phase_id: PhaseId,
+        phase_kind: crate::pack::PhaseKind,
+        phase_number: u32,
+    },
     InvestigationMemoryRecorded {
         investigator: SlotId,
         target: SlotId,
@@ -348,6 +368,14 @@ pub enum InnerEvent {
     AlignmentRevealed {
         slot_id: SlotId,
         alignment: crate::pack::AlignmentKey,
+        source_action: String,
+        phase_id: PhaseId,
+        phase_kind: crate::pack::PhaseKind,
+        phase_number: u32,
+    },
+    RoleRevealed {
+        slot_id: SlotId,
+        role_key: RoleKey,
         source_action: String,
         phase_id: PhaseId,
         phase_kind: crate::pack::PhaseKind,
@@ -843,10 +871,18 @@ fn validate_investigation_result_invariant(
             crate::ir::InvestigateMode::Vanilla => &["vanilla"],
             crate::ir::InvestigateMode::Neapolitan => &["vanilla_town"],
             crate::ir::InvestigateMode::Gunsmith => &["has_gun"],
+            crate::ir::InvestigateMode::Killer => &["killer"],
+            crate::ir::InvestigateMode::Specialist => &["specialist"],
+            crate::ir::InvestigateMode::PtAccess => &["pt_access"],
             crate::ir::InvestigateMode::Role => &["role"],
             crate::ir::InvestigateMode::FullRole => &["alignment", "role"],
             crate::ir::InvestigateMode::Track => &["visited"],
             crate::ir::InvestigateMode::Watch => &["visitors"],
+            crate::ir::InvestigateMode::RoleWatcher | crate::ir::InvestigateMode::RoleGuard => {
+                &["visitor_roles"]
+            }
+            crate::ir::InvestigateMode::SecurityGuard => &["visitors"],
+            crate::ir::InvestigateMode::Voyeur => &["actions"],
             crate::ir::InvestigateMode::Motion => &["motion"],
             crate::ir::InvestigateMode::PriorMotion => &["prior_motion"],
             crate::ir::InvestigateMode::Parity => unreachable!("Parity handled above"),
@@ -878,10 +914,9 @@ fn validate_investigation_result_object(
         let valid = match *key {
             "alignment" | "role" | "current" => value.as_str().is_some(),
             "previous" => value.is_null() || value.as_str().is_some(),
-            "changed" | "vanilla" | "vanilla_town" | "has_gun" | "motion" | "prior_motion" => {
-                value.as_bool().is_some()
-            }
-            "visited" | "visitors" => value
+            "changed" | "vanilla" | "vanilla_town" | "has_gun" | "killer" | "specialist"
+            | "motion" | "prior_motion" => value.as_bool().is_some(),
+            "actions" | "pt_access" | "visited" | "visitors" | "visitor_roles" => value
                 .as_array()
                 .is_some_and(|items| items.iter().all(|item| item.as_str().is_some())),
             _ => false,

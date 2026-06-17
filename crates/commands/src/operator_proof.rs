@@ -15,6 +15,7 @@ pub const PROOF_RUN_GO_NO_GO_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const PROOF_RUN_GO_NO_GO_RETENTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const PROJECTION_REBUILD_AUDIT_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const RESOLUTION_DIFF_REPORT_ARTIFACT_VERSION: u16 = 1;
+pub const COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
@@ -66,6 +67,7 @@ pub enum ProofRunArtifactKind {
     OperatorProofGoNoGoRetentionReport,
     ProjectionRebuildAuditReport,
     ResolutionDiffReport,
+    CommandProjectionResolutionReport,
     TraceInspectionReport,
     LargeActionGraphPerformanceReport,
     DeterminismFuzzReport,
@@ -153,6 +155,14 @@ pub enum ProofRunArtifactState {
     ResolutionDiffReportPresent {
         artifact_version: u16,
         game_id: Uuid,
+        phase_count: usize,
+        diff_count: usize,
+        freshness: ProofRunArtifactFreshness,
+    },
+    CommandProjectionResolutionReportPresent {
+        artifact_version: u16,
+        game_id: Uuid,
+        table_count: usize,
         phase_count: usize,
         diff_count: usize,
         freshness: ProofRunArtifactFreshness,
@@ -442,6 +452,21 @@ pub struct OperatorResolutionDiff {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorCommandProjectionResolutionReport {
+    pub artifact_version: u16,
+    pub artifact_path: String,
+    pub ok: bool,
+    pub game_id: Uuid,
+    pub fixture_path: String,
+    pub pack: String,
+    pub phase: String,
+    pub resolve_seed: u64,
+    pub proof_boundary: String,
+    pub projection_rebuild: OperatorProjectionRebuildAuditReport,
+    pub resolution_diff: OperatorResolutionDiffReport,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OperatorTraceInspectionReport {
     pub artifact_version: u16,
     pub artifact_path: String,
@@ -667,6 +692,37 @@ pub fn build_operator_resolution_diff_report(
             })
             .collect(),
         phases,
+    }
+}
+
+pub fn build_operator_command_projection_resolution_report(
+    artifact_path: impl Into<String>,
+    fixture_path: impl Into<String>,
+    pack: impl Into<String>,
+    phase: impl Into<String>,
+    resolve_seed: u64,
+    projection_rebuild: OperatorProjectionRebuildAuditReport,
+    resolution_diff: OperatorResolutionDiffReport,
+) -> OperatorCommandProjectionResolutionReport {
+    let ok = projection_rebuild.ok
+        && projection_rebuild.drifted_table_count == 0
+        && resolution_diff.ok
+        && resolution_diff.audited_phase_count > 0
+        && resolution_diff.drifted_phase_count == 0
+        && resolution_diff.diff_count == 0;
+    let game_id = projection_rebuild.game_id;
+    OperatorCommandProjectionResolutionReport {
+        artifact_version: COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
+        artifact_path: artifact_path.into(),
+        ok,
+        game_id,
+        fixture_path: fixture_path.into(),
+        pack: pack.into(),
+        phase: phase.into(),
+        resolve_seed,
+        proof_boundary: "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes this artifact under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior.".to_string(),
+        projection_rebuild,
+        resolution_diff,
     }
 }
 
@@ -1523,6 +1579,32 @@ pub fn proof_run_artifact_status(
             diff_count: Some(diff_count as u64),
             trusted_metadata: None,
         },
+        ProofRunArtifactState::CommandProjectionResolutionReportPresent {
+            artifact_version,
+            game_id,
+            table_count: _,
+            phase_count: _,
+            diff_count,
+            freshness,
+        } => OperatorProofRunArtifactStatus {
+            path: path.to_string(),
+            state: OperatorProofRunArtifactStateKind::Trusted,
+            reported_path: None,
+            artifact_version: Some(artifact_version),
+            expected_version: Some(COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION),
+            modified_at_unix_seconds: Some(freshness.modified_at_unix_seconds),
+            age_seconds: Some(freshness.age_seconds),
+            freshness_max_age_seconds: Some(freshness.max_age_seconds),
+            expected_path: None,
+            actual_path: None,
+            reported_expected_path: None,
+            reported_actual_path: None,
+            diff_count: Some(diff_count as u64),
+            trusted_metadata: Some(OperatorProofRunTrustedArtifactMetadata {
+                game_id: Some(game_id),
+                ..OperatorProofRunTrustedArtifactMetadata::default()
+            }),
+        },
         ProofRunArtifactState::TraceInspectionReportPresent {
             artifact_version,
             game_id: _,
@@ -1706,6 +1788,13 @@ pub fn proof_run_artifact_state_for_spec(
                 artifact_freshness_max_age_seconds,
             )
         }
+        ProofRunArtifactKind::CommandProjectionResolutionReport => {
+            proof_run_command_projection_resolution_report_artifact_state(
+                path,
+                expected_manifest_version,
+                artifact_freshness_max_age_seconds,
+            )
+        }
         ProofRunArtifactKind::TraceInspectionReport => {
             proof_run_trace_inspection_report_artifact_state(
                 path,
@@ -1837,6 +1926,19 @@ pub fn proof_run_resolution_diff_report_artifact_state(
     artifact_freshness_max_age_seconds: u64,
 ) -> ProofRunArtifactState {
     proof_run_resolution_diff_report_artifact_state_at(
+        path,
+        expected_manifest_version,
+        artifact_freshness_max_age_seconds,
+        SystemTime::now(),
+    )
+}
+
+pub fn proof_run_command_projection_resolution_report_artifact_state(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+) -> ProofRunArtifactState {
+    proof_run_command_projection_resolution_report_artifact_state_at(
         path,
         expected_manifest_version,
         artifact_freshness_max_age_seconds,
@@ -2196,6 +2298,66 @@ pub fn proof_run_projection_rebuild_audit_report_artifact_state_at(
         game_id: report.game_id,
         table_count: report.table_count,
         diff_count: report.drifted_table_count,
+        freshness,
+    }
+}
+
+pub fn proof_run_command_projection_resolution_report_artifact_state_at(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+    now: SystemTime,
+) -> ProofRunArtifactState {
+    let artifact_path = proof_run_artifact_fs_path(path);
+    if !artifact_path.exists() {
+        return ProofRunArtifactState::Missing;
+    }
+    let Ok(text) = fs::read_to_string(&artifact_path) else {
+        return ProofRunArtifactState::Malformed;
+    };
+    let Ok(report) = serde_json::from_str::<OperatorCommandProjectionResolutionReport>(&text)
+    else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if report.artifact_path != path {
+        return ProofRunArtifactState::PathMismatch {
+            reported_path: report.artifact_path,
+        };
+    }
+    if report.artifact_version != COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION {
+        return ProofRunArtifactState::VersionMismatch {
+            artifact_manifest_version: report.artifact_version,
+            expected_manifest_version: COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
+        };
+    }
+    if expected_manifest_version == 0 {
+        return ProofRunArtifactState::Malformed;
+    }
+    let Ok(freshness) =
+        proof_run_artifact_freshness(&artifact_path, artifact_freshness_max_age_seconds, now)
+    else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if freshness.age_seconds > artifact_freshness_max_age_seconds {
+        return ProofRunArtifactState::Stale { freshness };
+    }
+    let diff_count = report
+        .projection_rebuild
+        .drifted_table_count
+        .saturating_add(report.resolution_diff.diff_count)
+        .saturating_add(report.resolution_diff.drifted_phase_count);
+    if !report.ok || diff_count > 0 {
+        return ProofRunArtifactState::Drifted {
+            diff_count,
+            freshness,
+        };
+    }
+    ProofRunArtifactState::CommandProjectionResolutionReportPresent {
+        artifact_version: report.artifact_version,
+        game_id: report.game_id,
+        table_count: report.projection_rebuild.table_count,
+        phase_count: report.resolution_diff.audited_phase_count,
+        diff_count,
         freshness,
     }
 }
@@ -2890,7 +3052,7 @@ mod tests {
                 "{doc_name} should record current trusted artifact state"
             );
             assert!(
-                doc.contains("production.trusted = 10")
+                doc.contains("production.trusted = 11")
                     && doc.contains("production.non_trusted = 0"),
                 "{doc_name} should record production artifact go/no-go counts"
             );

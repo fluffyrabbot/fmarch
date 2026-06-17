@@ -1,0 +1,204 @@
+{
+  "description": "Mafiascum action investigation: Role Watcher learns visible visitor roles; Role Guard tells the target visible visitor roles; Security Guard tells the target visible visitor identities. Ninja-hidden visitors are excluded.",
+  "input": {
+    "game_id": "game_ms_action_investigation_guards_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["main"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "role_watcher",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "role_guard",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "security_guard",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "friendly_neighbor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "ninja",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "role_watcher_n01",
+        "actor": "slot_1",
+        "template_id": "role_watcher",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "role_guard_n01",
+        "actor": "slot_2",
+        "template_id": "role_guard",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "security_guard_n01",
+        "actor": "slot_3",
+        "template_id": "security_guard",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 3,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "doctor_protect_n01",
+        "actor": "slot_4",
+        "template_id": "doctor_protect",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 4,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "friendly_neighbor_n01",
+        "actor": "slot_6",
+        "template_id": "friendly_neighbor",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 5,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "ninja_kill_n01",
+        "actor": "slot_7",
+        "template_id": "factional_kill",
+        "targets": ["slot_5"],
+        "phase_id": "N01",
+        "submitted_at": 6,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 715001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_5",
+        "sources": ["slot_4"],
+        "reasons": ["protected"]
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "RoleWatcher",
+        "investigator": "slot_1",
+        "target": "slot_5",
+        "result": {
+          "visitor_roles": ["doctor", "friendly_neighbor"]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "RoleGuard",
+        "investigator": "slot_2",
+        "target": "slot_5",
+        "result": {
+          "visitor_roles": ["doctor", "friendly_neighbor"]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "SecurityGuard",
+        "investigator": "slot_3",
+        "target": "slot_5",
+        "result": {
+          "visitors": ["slot_4", "slot_6"]
+        }
+      }
+    },
+    {
+      "index": 4,
+      "kind": "VisitRecorded",
+      "payload": {
+        "actor": "slot_6",
+        "target": "slot_5",
+        "template_id": "friendly_neighbor",
+        "source_action": "friendly_neighbor_n01",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "visible": true
+      }
+    },
+    {
+      "index": 5,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

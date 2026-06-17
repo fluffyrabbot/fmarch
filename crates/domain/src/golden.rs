@@ -1,7 +1,8 @@
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::resolver::{resolve_events, DayPhaseInputs, ResolutionInput};
+use crate::pack::Window;
+use crate::resolver::{resolve_events, resolve_instant, DayPhaseInputs, ResolutionInput};
 use crate::state::{StateSnapshot, Submission};
 use crate::Pack;
 
@@ -49,7 +50,8 @@ pub fn golden_events_from_input_value(
 ) -> Result<Vec<Value>, GoldenFixtureError> {
     let input: GoldenInput = serde_json::from_value(input_json.clone())
         .map_err(|err| GoldenFixtureError::Input(err.to_string()))?;
-    let events = resolve_events(ResolutionInput {
+    let use_instant = has_instant_submission(&pack, &input.submissions);
+    let resolution_input = ResolutionInput {
         game_id: input.game_id,
         phase_id: input.phase_id,
         run_id: run_id.to_string(),
@@ -59,7 +61,20 @@ pub fn golden_events_from_input_value(
         pack,
         seed: input.seed,
         logical_time: 0,
-    });
+    };
+    if use_instant {
+        return resolve_instant(resolution_input)
+            .applied
+            .events
+            .into_iter()
+            .map(|event| {
+                serde_json::to_value(event)
+                    .map_err(|err| GoldenFixtureError::Serialize(err.to_string()))
+            })
+            .collect();
+    }
+
+    let events = resolve_events(resolution_input);
 
     events
         .into_iter()
@@ -74,6 +89,16 @@ pub fn golden_events_from_input_value(
             Ok(value)
         })
         .collect()
+}
+
+fn has_instant_submission(pack: &Pack, submissions: &[Submission]) -> bool {
+    submissions.iter().any(|submission| {
+        pack.roles.values().any(|role| {
+            role.actions.iter().any(|action| {
+                action.id == submission.template_id && action.window == Window::Instant
+            })
+        })
+    })
 }
 
 pub fn golden_pack_json_with_overrides(

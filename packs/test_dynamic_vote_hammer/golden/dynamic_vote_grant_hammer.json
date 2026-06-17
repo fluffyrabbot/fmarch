@@ -3,35 +3,54 @@
   "expected_events": [
     {
       "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "sequence": 1,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "sequence": 2,
+        "target": "slot_1",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [
           "slot_2"
         ],
-        "majority": 2.0,
-        "reason": null,
+        "majority": 2,
         "status": "Hammer",
         "tallies": {
-          "slot_2": 2.0
+          "slot_2": 2
         },
         "thresholds": {
-          "slot_1": 2.0,
-          "slot_2": 2.0
+          "slot_1": 2,
+          "slot_2": 2
         },
         "tiebreak": null,
-        "total_weight": 3.0,
+        "total_weight": 3,
         "votes": {
           "slot_1": "slot_2"
         },
         "weights": {
-          "slot_1": 2.0,
-          "slot_2": 1.0
+          "slot_1": 2,
+          "slot_2": 1
         },
         "winner": "slot_2"
       }
     },
     {
-      "index": 1,
+      "index": 3,
       "kind": "PlayerKilled",
       "payload": {
         "attackers": [],
@@ -41,24 +60,23 @@
       }
     },
     {
-      "index": 2,
+      "index": 4,
       "kind": "PhaseAnnouncement",
       "payload": {
         "deaths": [
           {
-            "slot_id": "slot_2",
-            "cause": "lynch"
+            "cause": "lynch",
+            "slot_id": "slot_2"
           }
         ],
         "phase_id": "D01"
       }
     },
     {
-      "index": 3,
+      "index": 5,
       "kind": "WinReached",
       "payload": {
         "metadata": null,
-        "reason": "faction mafia eliminated (0 alive)",
         "winner": "town"
       }
     }

@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 
 use domain::pack::{
-    ActorRef, Pack, PrecedenceRule, PrecedenceWhen, SuppressionPolicy, SuppressionScope, TargetRef,
-    TriggerEvent, TriggerLoopCapPolicy, TriggerOn,
+    ActionTemplate, ActorRef, Pack, PrecedenceRule, PrecedenceWhen, SuppressionPolicy,
+    SuppressionScope, TargetRef, TriggerEvent, TriggerLoopCapPolicy, TriggerOn,
 };
 use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
@@ -46,6 +46,16 @@ fn load_pack_for_golden(name: &str, golden: &Value) -> Pack {
 
 fn load_pack() -> Pack {
     load_pack_named("mafiascum")
+}
+
+fn role_action<'a>(pack: &'a Pack, role_id: &str, action_id: &str) -> &'a ActionTemplate {
+    pack.roles
+        .get(role_id)
+        .unwrap_or_else(|| panic!("missing role `{role_id}`"))
+        .actions
+        .iter()
+        .find(|action| action.id == action_id)
+        .unwrap_or_else(|| panic!("missing action `{action_id}` on role `{role_id}`"))
 }
 
 fn remove_standard_nar_generated_kill_trigger(pack: &mut Pack, trigger_id: &str) {
@@ -100,6 +110,28 @@ struct GoldenInput {
 fn run(input_json: &Value, pack: Pack) -> Vec<Value> {
     domain::golden_events_from_input_value(input_json, pack, "golden-run")
         .expect("run golden input")
+}
+
+fn run_instant(input_json: &Value, pack: Pack) -> Vec<Value> {
+    let gi: GoldenInput =
+        serde_json::from_value(input_json.clone()).expect("deserialize instant golden input");
+    let output = domain::resolve_instant(ResolutionInput {
+        game_id: gi.game_id,
+        phase_id: gi.phase_id,
+        run_id: "instant-golden-run".to_string(),
+        state: gi.state,
+        submissions: gi.submissions,
+        day_phase_inputs: gi.day_phase_inputs,
+        pack,
+        seed: gi.seed,
+        logical_time: 0,
+    });
+    output
+        .applied
+        .events
+        .into_iter()
+        .map(|indexed| serde_json::to_value(indexed).expect("indexed event serializes"))
+        .collect()
 }
 
 fn run_output(input_json: &Value, pack: Pack, run_id: &str) -> domain::resolver::ResolutionOutput {
@@ -186,19 +218,59 @@ fn expected_events(golden: &Value) -> Vec<Value> {
         .clone()
 }
 
+fn event_kind(event: &Value) -> &str {
+    event["kind"].as_str().expect("golden event kind")
+}
+
+fn first_event_index(events: &[Value], kind: &str) -> usize {
+    events
+        .iter()
+        .position(|event| event_kind(event) == kind)
+        .unwrap_or_else(|| panic!("missing event kind {kind}; events: {events:#?}"))
+}
+
+fn first_event_index_where(
+    events: &[Value],
+    kind: &str,
+    predicate: impl Fn(&Value) -> bool,
+) -> usize {
+    events
+        .iter()
+        .position(|event| event_kind(event) == kind && predicate(event))
+        .unwrap_or_else(|| panic!("missing matching event kind {kind}; events: {events:#?}"))
+}
+
+fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]) {
+    for pair in labels.windows(2) {
+        let (left_label, left_index) = pair[0];
+        let (right_label, right_index) = pair[1];
+        assert!(
+            left_index < right_index,
+            "{scenario}: expected {left_label} at {left_index} before {right_label} at {right_index}; events: {events:#?}"
+        );
+    }
+}
+
 #[test]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 44);
+    assert_eq!(pack.ir_version, 57);
     assert!(pack.roles.contains_key("cop"));
     assert!(pack.roles.contains_key("vanilla_cop"));
     assert!(pack.roles.contains_key("neapolitan"));
     assert!(pack.roles.contains_key("gunsmith"));
+    assert!(pack.roles.contains_key("psychologist"));
+    assert!(pack.roles.contains_key("specialist"));
+    assert!(pack.roles.contains_key("pt_cop"));
     assert!(pack.roles.contains_key("role_cop"));
     assert!(pack.roles.contains_key("comparison_cop"));
     assert!(pack.roles.contains_key("miller"));
     assert!(pack.roles.contains_key("framer"));
+    assert!(pack.roles.contains_key("lawyer"));
+    assert!(pack.roles.contains_key("mailman"));
+    assert!(pack.roles.contains_key("observer"));
+    assert!(pack.roles.contains_key("reporter"));
     assert!(pack.roles.contains_key("bodyguard"));
     assert!(pack.roles.contains_key("faith_healer"));
     assert!(pack.roles.contains_key("martyr"));
@@ -212,6 +284,7 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("cupid"));
     assert!(pack.roles.contains_key("hunter"));
     assert!(pack.roles.contains_key("mafia_janitor"));
+    assert!(pack.roles.contains_key("serial_killer"));
     assert!(pack.roles.contains_key("flipless_townie"));
     assert!(pack.roles.contains_key("alignment_only_townie"));
     assert_eq!(pack.host_prompt_resolution_effects.len(), 2);
@@ -280,6 +353,22 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("death_marker"));
     assert!(pack.roles.contains_key("phase_end_doomed_townie"));
     assert!(pack.roles.contains_key("win_witness_townie"));
+    assert!(role_action(&pack, "vigilante", "night_kill")
+        .source_ids
+        .iter()
+        .any(|source_id| source_id == "kill"));
+    assert!(role_action(&pack, "mafia_goon", "factional_kill")
+        .source_ids
+        .iter()
+        .any(|source_id| source_id == "kill"));
+    assert!(role_action(&pack, "ninja", "factional_kill")
+        .source_ids
+        .iter()
+        .any(|source_id| source_id == "kill"));
+    assert!(role_action(&pack, "serial_killer", "night_kill")
+        .source_ids
+        .iter()
+        .any(|source_id| source_id == "kill"));
     assert!(pack.lover_policy.enabled);
     assert_eq!(pack.lover_policy.link_effect, "lovers_link");
     assert!(pack
@@ -624,6 +713,10 @@ fn pack_deserializes() {
     let v = serde_json::to_value(&pack).expect("serialize pack");
     assert_eq!(
         v["investigation_overrides"]["godfather"]["Parity"],
+        Value::from("town")
+    );
+    assert_eq!(
+        v["investigation_overrides"]["lawyered"]["Parity"],
         Value::from("town")
     );
 }
@@ -1512,7 +1605,8 @@ fn trace_records_pack_derived_night_stage_order() {
             "Kill",
             "Convert",
             "Investigate",
-            "Visit"
+            "Visit",
+            "Info"
         ])
     );
 }
@@ -3608,6 +3702,39 @@ fn golden_role_set_info_negative() {
 }
 
 #[test]
+fn golden_psychologist_detects_killer() {
+    let golden = load_golden("psychologist_detects_killer.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "psychologist_detects_killer",
+    );
+}
+
+#[test]
+fn golden_specialist_detects_specialist() {
+    let golden = load_golden("specialist_detects_specialist.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "specialist_detects_specialist",
+    );
+}
+
+#[test]
+fn golden_pt_cop_reads_private_topic_access() {
+    let golden = load_golden("pt_cop_reads_private_topic_access.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "pt_cop_reads_private_topic_access",
+    );
+}
+
+#[test]
 fn golden_role_scan_reveals_role() {
     let golden = load_golden("role_scan_reveals_role.json");
     let got = run(&golden["input"], load_pack());
@@ -3615,10 +3742,53 @@ fn golden_role_scan_reveals_role() {
 }
 
 #[test]
+fn golden_coroner_inspects_corpse() {
+    let golden = load_golden("coroner_inspects_corpse.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(&got, &expected_events(&golden), "coroner_inspects_corpse");
+}
+
+#[test]
 fn golden_framer_parity_override() {
     let golden = load_golden("framer_parity_override.json");
     let got = run(&golden["input"], load_pack());
     assert_events_eq(&got, &expected_events(&golden), "framer_parity_override");
+}
+
+#[test]
+fn golden_lawyer_parity_override() {
+    let golden = load_golden("lawyer_parity_override.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(&got, &expected_events(&golden), "lawyer_parity_override");
+}
+
+#[test]
+fn golden_info_actions_private_results() {
+    let golden = load_golden("info_actions_private_results.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "info_actions_private_results",
+    );
+}
+
+#[test]
+fn golden_fruit_vendor_sends_fruit() {
+    let golden = load_golden("fruit_vendor_sends_fruit.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(&got, &expected_events(&golden), "fruit_vendor_sends_fruit");
+}
+
+#[test]
+fn golden_action_investigation_guards() {
+    let golden = load_golden("action_investigation_guards.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "action_investigation_guards",
+    );
 }
 
 #[test]
@@ -3701,6 +3871,8 @@ fn resolver_rejects_missing_ninja_visibility_policy_before_night_resolution() {
     let golden = load_golden("ninja_hidden_from_watch_motion.json");
     let mut pack = load_pack();
     pack.visibility.remove(&IrAbility::Investigate);
+    pack.visibility_families
+        .retain(|family| format!("{family:?}") != "PrivateInvestigationResults");
 
     let panic = std::panic::catch_unwind(|| run(&golden["input"], pack))
         .expect_err("missing Ninja visibility policy must not reveal visits");
@@ -3714,7 +3886,7 @@ fn resolver_rejects_missing_ninja_visibility_policy_before_night_resolution() {
         "unexpected panic message: {message}"
     );
     assert!(
-        message.contains("Ninja actions require Investigate visibility policy"),
+        message.contains("visibility families require Investigate visibility policy"),
         "unexpected panic message: {message}"
     );
 }
@@ -3738,6 +3910,39 @@ fn golden_one_shot_vigilante_exhausted() {
         &got,
         &expected_events(&golden),
         "one_shot_vigilante_exhausted",
+    );
+}
+
+#[test]
+fn golden_serial_killer_wins_as_sole_survivor() {
+    let golden = load_golden("serial_killer_wins_as_sole_survivor.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "serial_killer_wins_as_sole_survivor",
+    );
+}
+
+#[test]
+fn golden_serial_killer_blocks_mafia_parity() {
+    let golden = load_golden("serial_killer_blocks_mafia_parity.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "serial_killer_blocks_mafia_parity",
+    );
+}
+
+#[test]
+fn golden_white_wolf_king_night_kill() {
+    let golden = load_golden("white_wolf_king_night_kill.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "white_wolf_king_night_kill",
     );
 }
 
@@ -4286,6 +4491,28 @@ fn golden_deprogram_restores_original() {
 }
 
 #[test]
+fn golden_cult_recruit_converts_to_cultist() {
+    let golden = load_golden("cult_recruit_converts_to_cultist.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "cult_recruit_converts_to_cultist",
+    );
+}
+
+#[test]
+fn golden_disloyal_cult_recruit_requires_cross_alignment() {
+    let golden = load_golden("disloyal_cult_recruit_cross_alignment.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "disloyal_cult_recruit_cross_alignment",
+    );
+}
+
+#[test]
 fn trace_records_deprogram_restore_original() {
     let golden = load_golden("deprogram_restores_original.json");
     let output = run_output(&golden["input"], load_pack(), "deprogram-trace-run");
@@ -4308,6 +4535,48 @@ fn trace_records_deprogram_restore_original() {
     assert_eq!(decision.detail["original_role"], "cultist");
     assert_eq!(decision.detail["original_alignment"], "cult");
     assert_eq!(decision.detail["origin_source"], "slot_5");
+}
+
+#[test]
+fn trace_records_disloyal_action_suppression() {
+    let golden = load_golden("disloyal_cult_recruit_cross_alignment.json");
+    let output = run_output(&golden["input"], load_pack(), "disloyal-trace-run");
+
+    let decision = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "action_suppressed" && decision.detail["reason"] == "disloyal"
+        })
+        .expect("same-alignment disloyal recruit should emit a suppression trace decision");
+    assert_eq!(decision.stage, "night:action_constraints");
+    assert_eq!(decision.source, "action:disloyal_recruit_same_alignment");
+    assert_eq!(
+        decision.detail["action_id"],
+        "disloyal_recruit_same_alignment"
+    );
+    assert_eq!(decision.detail["template_id"], "disloyal_cult_recruit");
+    assert_eq!(decision.detail["actor"], "slot_1");
+    assert_eq!(decision.detail["actor_alignment"], "cult");
+    assert_eq!(decision.detail["targets"], serde_json::json!(["slot_6"]));
+    assert_eq!(
+        decision.detail["target_alignments"],
+        serde_json::json!([{"target": "slot_6", "alignment": "cult"}])
+    );
+
+    let converted = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "conversion_assigned_role"
+                && decision.detail["action_id"] == "disloyal_recruit_cross_alignment"
+        })
+        .expect("cross-alignment disloyal recruit should convert normally");
+    assert_eq!(converted.detail["actor"], "slot_3");
+    assert_eq!(converted.detail["target"], "slot_2");
+    assert_eq!(converted.detail["new_role"], "cultist");
 }
 
 #[test]
@@ -5347,19 +5616,29 @@ fn trace_records_super_saint_lynch_trigger() {
         "super-saint-lynch-trigger-trace-run",
     );
 
-    assert!(output.applied.events.iter().any(|indexed| matches!(
-        &indexed.event,
-        domain::InnerEvent::Trigger {
-            trigger_id,
-            payload,
-        } if trigger_id == "super_saint_retaliates"
-            && payload["on"] == "Lynch"
-            && payload["source_target"] == "slot_1"
-            && payload["source_actor"] == "slot_2"
-            && payload["source_cause"] == "lynch"
-            && payload["produced_actor"] == "slot_1"
-            && payload["produced_target"] == "slot_2"
-    )));
+    let (trigger_event_index, trigger_payload) = output
+        .applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::Trigger {
+                trigger_id,
+                payload,
+            } if trigger_id == "super_saint_retaliates" => Some((indexed.index, payload)),
+            _ => None,
+        })
+        .expect("Super-Saint lynch should emit a typed trigger event");
+    assert_eq!(
+        trigger_payload,
+        &serde_json::json!({
+            "on": "Lynch",
+            "source_target": "slot_1",
+            "source_actor": "slot_2",
+            "source_cause": "lynch",
+            "produced_actor": "slot_1",
+            "produced_target": "slot_2"
+        })
+    );
     assert!(output.applied.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::PlayerKilled {
@@ -5373,13 +5652,25 @@ fn trace_records_super_saint_lynch_trigger() {
             && attackers == &vec!["slot_1".to_string()]
             && !*unstoppable
     )));
+    let trigger_note =
+        format!("trigger super_saint_retaliates emitted at event_index {trigger_event_index}");
     assert!(
-        output
-            .trace
-            .notes
-            .iter()
-            .any(|note| note == "trigger super_saint_retaliates emitted at event_index 2"),
+        output.trace.notes.iter().any(|note| note == &trigger_note),
         "Super-Saint lynch trigger should be visible in persisted trace notes"
+    );
+    assert!(
+        output.trace.generated.iter().any(|generated| {
+            generated.action_id == "super_saint_retaliates"
+                && generated.source == "Trigger"
+                && generated.actor == "slot_1"
+                && generated.targets == vec!["slot_2".to_string()]
+                && generated.detail["on"] == "Lynch"
+                && generated.detail["source_target"] == "slot_1"
+                && generated.detail["source_actor"] == "slot_2"
+                && generated.detail["source_cause"] == "lynch"
+                && generated.detail["event_index"] == serde_json::json!(trigger_event_index)
+        }),
+        "Super-Saint lynch trigger should be represented as a generated trace row"
     );
 }
 
@@ -6600,6 +6891,81 @@ fn golden_gladiator_vote_duel_tied_ballots() {
 }
 
 #[test]
+fn golden_day_self_destruct_trade() {
+    let golden = load_golden("day_self_destruct_trade.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(&got, &expected_events(&golden), "day_self_destruct_trade");
+}
+
+#[test]
+fn golden_day_vigilante_kill_before_vote() {
+    let golden = load_golden("day_vigilante_kill_before_vote.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "day_vigilante_kill_before_vote",
+    );
+}
+
+#[test]
+fn golden_day_action_kill_triggers_post_announcement_win() {
+    let golden = load_golden("day_action_kill_triggers_post_announcement_win.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "day_action_kill_triggers_post_announcement_win",
+    );
+}
+
+#[test]
+fn golden_white_wolf_king_day_self_destruct() {
+    let golden = load_golden("white_wolf_king_day_self_destruct.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "white_wolf_king_day_self_destruct",
+    );
+}
+
+#[test]
+fn golden_twilight_self_destruct_window() {
+    let golden = load_golden_in("test_twilight_window", "twilight_self_destruct.json");
+    let got = run(&golden["input"], load_pack_named("test_twilight_window"));
+    assert!(
+        got.iter()
+            .all(|event| event_kind(event) != "DayVoteOutcome"),
+        "Twilight resolution must not run ordinary day-vote tallying: {got:#?}"
+    );
+    assert_events_eq(&got, &expected_events(&golden), "twilight_self_destruct");
+}
+
+#[test]
+fn golden_instant_self_destruct_window() {
+    let golden = load_golden_in("test_instant_window", "instant_self_destruct.json");
+    let got = run_instant(&golden["input"], load_pack_named("test_instant_window"));
+    assert!(
+        got.iter()
+            .all(|event| event_kind(event) != "DayVoteOutcome"),
+        "Instant resolution must not run ordinary day-vote tallying: {got:#?}"
+    );
+    assert_events_eq(&got, &expected_events(&golden), "instant_self_destruct");
+}
+
+#[test]
+fn golden_governor_veto_cancels_lynch() {
+    let golden = load_golden("governor_veto_cancels_lynch.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "governor_veto_cancels_lynch",
+    );
+}
+
+#[test]
 fn trace_records_no_majority_revote_prompt() {
     let golden = load_golden("day_vote_tiebreak.json");
     let output = run_output(
@@ -6770,7 +7136,7 @@ fn golden_day_vote_hated_threshold() {
 fn epicmafia_pack_deserializes() {
     let pack = load_pack_named("epicmafia");
     assert_eq!(pack.name, "epicmafia");
-    assert_eq!(pack.ir_version, 22);
+    assert_eq!(pack.ir_version, 46);
     assert!(pack.roles.contains_key("bomb"));
     assert!(pack.roles.contains_key("cult_leader"));
     assert!(pack.roles.contains_key("arsonist"));
@@ -6795,7 +7161,7 @@ fn epicmafia_pack_deserializes() {
 fn chinese_structured_pack_deserializes() {
     let pack = load_pack_named("chinese_structured");
     assert_eq!(pack.name, "chinese_structured");
-    assert_eq!(pack.ir_version, 35);
+    assert_eq!(pack.ir_version, 46);
     assert!(pack.roles.contains_key("knight"));
     assert!(pack.roles.contains_key("wolf"));
     assert!(pack.roles.contains_key("wolf_beauty"));
@@ -6819,6 +7185,18 @@ fn chinese_structured_pack_deserializes() {
             .iter()
             .any(|source_id| source_id == "night_kill"),
         "Chinese wolf_night_kill should cover im-human night_kill"
+    );
+    let white_wolf_king_kill = pack.roles["white_wolf_king"]
+        .actions
+        .iter()
+        .find(|action| action.id == "wolf_night_kill")
+        .expect("Chinese White Wolf King exposes canonical wolf_night_kill");
+    assert!(
+        white_wolf_king_kill
+            .source_ids
+            .iter()
+            .any(|source_id| source_id == "night_kill"),
+        "Chinese White Wolf King wolf_night_kill should cover im-human night_kill"
     );
     assert_eq!(pack.investigation_results.parity.town, "good");
     assert_eq!(pack.investigation_results.parity.non_town, "evil");
@@ -6855,7 +7233,7 @@ fn chinese_structured_pack_deserializes() {
 fn mafia_universe_pack_deserializes() {
     let pack = load_pack_named("mafia_universe");
     assert_eq!(pack.name, "mafia_universe");
-    assert_eq!(pack.ir_version, 42);
+    assert_eq!(pack.ir_version, 58);
     assert!(pack.roles.contains_key("town_ita_shooter"));
     assert!(pack.roles.contains_key("town_ita_sharpshooter"));
     assert!(pack.roles.contains_key("town_ita_bad_shot"));
@@ -6987,7 +7365,7 @@ fn mafia_universe_pack_deserializes() {
 fn default_open_pack_deserializes() {
     let pack = load_pack_named("default_open");
     assert_eq!(pack.name, "default_open");
-    assert_eq!(pack.ir_version, 1);
+    assert_eq!(pack.ir_version, 46);
     assert!(pack.roles.contains_key("citizen"));
     assert!(pack.roles.contains_key("guardian"));
     assert!(pack.roles.contains_key("seer"));
@@ -7132,6 +7510,20 @@ fn golden_wolf_faction_vote_tie_blocks_kill() {
         &got,
         &expected_events(&golden),
         "wolf_faction_vote_tie_blocks_kill",
+    );
+}
+
+#[test]
+fn golden_chinese_white_wolf_king_shared_night_kill() {
+    let golden = load_golden_in(
+        "chinese_structured",
+        "white_wolf_king_shared_night_kill.json",
+    );
+    let got = run(&golden["input"], load_pack_named("chinese_structured"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "chinese_structured white_wolf_king_shared_night_kill",
     );
 }
 
@@ -7788,6 +8180,214 @@ fn golden_day_notes_announcement_last_words() {
 }
 
 #[test]
+fn day_substep_goldens_expose_canonical_host_console_ordering() {
+    let day_notes = {
+        let golden = load_golden_in("mafia_universe", "day_notes_announcement_last_words.json");
+        run(&golden["input"], load_pack_named("mafia_universe"))
+    };
+    assert_event_order(
+        "day notes",
+        &day_notes,
+        &[
+            (
+                "announcement",
+                first_event_index(&day_notes, "DayAnnouncement"),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&day_notes, "DayVoteOutcome"),
+            ),
+            (
+                "day_death",
+                first_event_index_where(&day_notes, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vote"
+                }),
+            ),
+            (
+                "last_words",
+                first_event_index(&day_notes, "LastWordsRecorded"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&day_notes, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let reveal = {
+        let golden = load_golden_in("mafia_universe", "reveal_town_day.json");
+        run(&golden["input"], load_pack_named("mafia_universe"))
+    };
+    assert_event_order(
+        "public reveal",
+        &reveal,
+        &[
+            (
+                "public_reveal",
+                first_event_index(&reveal, "AlignmentRevealed"),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&reveal, "DayVoteOutcome"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&reveal, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let ita = {
+        let golden = load_golden_in("mafia_universe", "ita_session_lethal_shot.json");
+        run(&golden["input"], load_pack_named("mafia_universe"))
+    };
+    assert_event_order(
+        "ita session",
+        &ita,
+        &[
+            ("ita_open", first_event_index(&ita, "ItaSessionOpened")),
+            ("ita_queue", first_event_index(&ita, "ItaShotQueued")),
+            ("ita_resolve", first_event_index(&ita, "ItaShotResolved")),
+            (
+                "ita_day_death",
+                first_event_index_where(&ita, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "ita_shot"
+                }),
+            ),
+            ("ita_update", first_event_index(&ita, "ItaSessionUpdated")),
+            ("ita_close", first_event_index(&ita, "ItaSessionClosed")),
+            ("resolve_votes", first_event_index(&ita, "DayVoteOutcome")),
+            (
+                "phase_announcement",
+                first_event_index(&ita, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let knight = {
+        let golden = load_golden_in("chinese_structured", "knight_duel_success.json");
+        run(&golden["input"], load_pack_named("chinese_structured"))
+    };
+    assert_event_order(
+        "knight duel",
+        &knight,
+        &[
+            ("knight_duel", first_event_index(&knight, "DuelResolved")),
+            (
+                "knight_day_death",
+                first_event_index_where(&knight, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "knight_duel"
+                }),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&knight, "DayVoteOutcome"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&knight, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let self_destruct = {
+        let golden = load_golden_in("chinese_structured", "wolf_self_destruct_trade.json");
+        run(&golden["input"], load_pack_named("chinese_structured"))
+    };
+    assert_event_order(
+        "wolf self-destruct",
+        &self_destruct,
+        &[
+            (
+                "wolf_self_destruct",
+                first_event_index(&self_destruct, "WolfSelfDestructed"),
+            ),
+            (
+                "self_destruct_day_death",
+                first_event_index_where(&self_destruct, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "self_destruct"
+                }),
+            ),
+            (
+                "wolf_carry",
+                first_event_index(&self_destruct, "WolfCarryQueued"),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&self_destruct, "DayVoteOutcome"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&self_destruct, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let day_vigilante = {
+        let golden = load_golden_in(
+            "mafia_universe",
+            "day_vigilante_alignment_variants_kill.json",
+        );
+        run(&golden["input"], load_pack_named("mafia_universe"))
+    };
+    assert_event_order(
+        "day vigilante",
+        &day_vigilante,
+        &[
+            (
+                "day_action_death",
+                first_event_index_where(&day_vigilante, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vigilante_kill"
+                }),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&day_vigilante, "DayVoteOutcome"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&day_vigilante, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+
+    let wolf_beauty = {
+        let golden = load_golden_in("chinese_structured", "wolf_beauty_drag_lynch.json");
+        run(&golden["input"], load_pack_named("chinese_structured"))
+    };
+    assert_event_order(
+        "wolf beauty day-death cascade",
+        &wolf_beauty,
+        &[
+            (
+                "resolve_votes",
+                first_event_index(&wolf_beauty, "DayVoteOutcome"),
+            ),
+            (
+                "lynch_death",
+                first_event_index_where(&wolf_beauty, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vote"
+                }),
+            ),
+            (
+                "day_death_cascade",
+                first_event_index(&wolf_beauty, "WolfBeautyDragged"),
+            ),
+            (
+                "dragged_death",
+                first_event_index_where(&wolf_beauty, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "trigger:wolf_beauty_drag"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&wolf_beauty, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+}
+
+#[test]
 fn golden_treestump_status_on_lynch() {
     let golden = load_golden_in("mafia_universe", "treestump_status_on_lynch.json");
     let got = run(&golden["input"], load_pack_named("mafia_universe"));
@@ -8144,6 +8744,20 @@ fn golden_mafia_universe_role_and_full_role_info_mafia_investigations() {
 }
 
 #[test]
+fn golden_mafia_universe_culture_alias_alignment_cops_and_serial_killer() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "culture_alias_alignment_cops_and_serial_killer.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe culture_alias_alignment_cops_and_serial_killer",
+    );
+}
+
+#[test]
 fn golden_mafia_universe_graph_info_town_tracker_watcher_motion() {
     let golden = load_golden_in(
         "mafia_universe",
@@ -8168,6 +8782,106 @@ fn golden_mafia_universe_graph_info_mafia_tracker_watcher_motion() {
         &got,
         &expected_events(&golden),
         "mafia_universe graph_info_mafia_tracker_watcher_motion",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_voyeur_action_investigation() {
+    let golden = load_golden_in("mafia_universe", "voyeur_action_investigation.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe voyeur_action_investigation",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_alignment_oracle_source_death_reveals_target() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "alignment_oracle_source_death_reveals_target.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe alignment_oracle_source_death_reveals_target",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_alignment_oracle_marks_target() {
+    let golden = load_golden_in("mafia_universe", "alignment_oracle_marks_target.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe alignment_oracle_marks_target",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_role_oracle_source_death_reveals_target() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "role_oracle_source_death_reveals_target.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe role_oracle_source_death_reveals_target",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_role_oracle_marks_target() {
+    let golden = load_golden_in("mafia_universe", "role_oracle_marks_target.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe role_oracle_marks_target",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_janitor_alignment_variants_conceal() {
+    let golden = load_golden_in("mafia_universe", "janitor_alignment_variants_conceal.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe janitor_alignment_variants_conceal",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_backup_alignment_variants_designate_sources() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "backup_alignment_variants_designate_sources.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe backup_alignment_variants_designate_sources",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_backup_alignment_variants_inherit_on_source_death() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "backup_alignment_variants_inherit_on_source_death.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe backup_alignment_variants_inherit_on_source_death",
     );
 }
 

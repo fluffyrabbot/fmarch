@@ -40,6 +40,10 @@ SAVED_ARTIFACTS = {
     "operator_status_audit": "target/operator-proof/current-status-audit-report.json",
     "operator_retention": "target/operator-proof/current-artifact-retention-report.json",
     "determinism_fuzz": "target/operator-proof/current-determinism-fuzz-report.json",
+    "primitive_modifier_interactions": "target/operator-proof/current-primitive-modifier-interaction-report.json",
+    "engine_v4_test_family_coverage": "target/operator-proof/current-engine-v4-test-family-coverage-report.json",
+    "unported_im_human_inventory": "target/operator-proof/current-unported-im-human-inventory-report.json",
+    "domain_ci_no_postgres": "target/operator-proof/current-domain-ci-no-postgres-report.json",
     "browser_smoke": "target/operator-browser-smoke/playwright-dom-proof.json",
 }
 REQUIRED_BROWSER_GO_NO_GO_METADATA = [
@@ -272,6 +276,29 @@ def summarize_saved_artifacts(root: Path) -> dict[str, Any]:
             row["seed_count"] = data.get("seed_count")
             row["passed_family_count"] = data.get("passed_family_count")
             row["failed_family_count"] = data.get("failed_family_count")
+        elif name == "primitive_modifier_interactions":
+            row["pack_count"] = data.get("pack_count")
+            row["interaction_count"] = data.get("interaction_count")
+            row["unique_interaction_count"] = data.get("unique_interaction_count")
+            row["uncovered_count"] = data.get("uncovered_count")
+            row["unsupported_parity_count"] = data.get("unsupported_parity_count")
+        elif name == "engine_v4_test_family_coverage":
+            row["family_count"] = data.get("family_count")
+            row["mapped_count"] = data.get("mapped_count")
+            row["covered_count"] = data.get("covered_count")
+            row["explicit_unsupported_count"] = data.get("explicit_unsupported_count")
+            row["failure_count"] = data.get("failure_count")
+        elif name == "unported_im_human_inventory":
+            row["unsupported_count"] = data.get("unsupported_count")
+            row["category_counts"] = data.get("category_counts")
+            row["classification_counts"] = data.get("classification_counts")
+            row["requested_category_counts"] = data.get("requested_category_counts")
+        elif name == "domain_ci_no_postgres":
+            row["lane_count"] = data.get("lane_count")
+            row["passed_count"] = data.get("passed_count")
+            row["failed_count"] = data.get("failed_count")
+            row["failed_lanes"] = data.get("failed_lanes")
+            row["golden_pack_dirs"] = data.get("golden_pack_dirs")
         elif name == "browser_smoke":
             row.update(summarize_browser_smoke(data))
         result[name] = row

@@ -1,0 +1,185 @@
+{
+  "description": "Mafia Universe Universal Backup: town and mafia variants inherit their selected source roles when those sources die in a later resolution.",
+  "input": {
+    "game_id": "game_mu_backup_inherit_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_universal_backup",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_universal_backup",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": ["backup_target"]
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": ["backup_target"]
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "town_vigilante",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_7",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_8",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "backup_targets": [
+        {
+          "backup": "slot_1",
+          "source_target": "slot_3",
+          "source_role": "town_cop",
+          "source_action": "mu_town_backup_n01",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        },
+        {
+          "backup": "slot_2",
+          "source_target": "slot_4",
+          "source_role": "mafia_goon",
+          "source_action": "mu_mafia_backup_n01",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_mafia_kills_town_source_n02",
+        "actor": "slot_5",
+        "template_id": "factional_kill",
+        "targets": ["slot_3"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mu_town_kills_mafia_source_n02",
+        "actor": "slot_6",
+        "template_id": "vigilante_kill",
+        "targets": ["slot_4"],
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 716012
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_3",
+        "cause": "factional_kill",
+        "attackers": ["slot_5"],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_4",
+        "cause": "vigilante_kill",
+        "attackers": ["slot_6"],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_1",
+        "new_role": "town_cop",
+        "new_alignment": "town",
+        "original_role": "town_universal_backup",
+        "original_alignment": "town",
+        "source": "slot_3"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_2",
+        "new_role": "mafia_goon",
+        "new_alignment": "mafia",
+        "original_role": "mafia_universal_backup",
+        "original_alignment": "mafia",
+        "source": "slot_4"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": [
+          {
+            "slot_id": "slot_3",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_4",
+            "cause": "vigilante_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

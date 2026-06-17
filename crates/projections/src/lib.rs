@@ -29,6 +29,8 @@
 //!   `BadgeChanged`, so sheriff vote weight is rebuildable and inspectable.
 //! - `player_notification` — explicit-audience player-facing notices folded
 //!   from `EffectNotification`, one row per recipient slot.
+//! - `player_info_result` — private non-investigative info results folded from
+//!   `InfoResult`, one row per recipient slot.
 //! - `host_prompt` — host/admin intervention prompts folded from
 //!   `HostPromptIssued` / `HostPromptResolved`, such as Beloved Princess
 //!   phase-skip decisions and host-decided PK ties.
@@ -249,6 +251,21 @@ pub struct PlayerInvestigationResultRow {
     pub audience_slot: String,
     pub mode: String,
     pub target_slot: String,
+    pub result: serde_json::Value,
+}
+
+/// A folded private non-investigative info result addressed to one audience slot.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerInfoResultRow {
+    pub game_id: Uuid,
+    pub phase_id: String,
+    pub event_index: i32,
+    pub audience_slot: String,
+    pub kind: String,
+    pub actor_slot: String,
+    pub target_slot: String,
+    pub source_action: String,
+    pub template_id: String,
     pub result: serde_json::Value,
 }
 
@@ -759,6 +776,20 @@ async fn fold_inner(
             .execute(&mut **tx)
             .await?;
         }
+        RoleRevealed {
+            slot_id, role_key, ..
+        } => {
+            ensure_slot(tx, game_id, slot_id).await?;
+            sqlx::query(
+                "UPDATE slot_state SET role_key = $3, role_revealed = TRUE \
+                 WHERE game_id = $1 AND slot_id = $2",
+            )
+            .bind(game_id)
+            .bind(slot_id)
+            .bind(role_key)
+            .execute(&mut **tx)
+            .await?;
+        }
         EffectsMarked {
             effect,
             target,
@@ -884,6 +915,12 @@ async fn fold_inner(
         } => {
             ensure_slot(tx, game_id, investigator).await?;
             ensure_slot(tx, game_id, target).await?;
+            let audience_slot = match mode {
+                domain::InvestigateMode::RoleGuard | domain::InvestigateMode::SecurityGuard => {
+                    target
+                }
+                _ => investigator,
+            };
             sqlx::query(
                 "INSERT INTO player_investigation_result \
                  (game_id, phase_id, event_index, audience_slot, mode, target_slot, result) \
@@ -896,12 +933,53 @@ async fn fold_inner(
             .bind(game_id)
             .bind(phase_id)
             .bind(event_index)
-            .bind(investigator)
+            .bind(audience_slot)
             .bind(format!("{mode:?}"))
             .bind(target)
             .bind(result)
             .execute(&mut **tx)
             .await?;
+        }
+        InfoResult {
+            actor,
+            target,
+            kind,
+            audience,
+            result,
+            source_action,
+            template_id,
+            ..
+        } => {
+            ensure_slot(tx, game_id, actor).await?;
+            ensure_slot(tx, game_id, target).await?;
+            for audience_slot in audience {
+                ensure_slot(tx, game_id, audience_slot).await?;
+                sqlx::query(
+                    "INSERT INTO player_info_result \
+                     (game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
+                      target_slot, source_action, template_id, result) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
+                     ON CONFLICT (game_id, phase_id, event_index, audience_slot) DO UPDATE SET \
+                     kind = EXCLUDED.kind, \
+                     actor_slot = EXCLUDED.actor_slot, \
+                     target_slot = EXCLUDED.target_slot, \
+                     source_action = EXCLUDED.source_action, \
+                     template_id = EXCLUDED.template_id, \
+                     result = EXCLUDED.result",
+                )
+                .bind(game_id)
+                .bind(phase_id)
+                .bind(event_index)
+                .bind(audience_slot)
+                .bind(kind)
+                .bind(actor)
+                .bind(target)
+                .bind(source_action)
+                .bind(template_id)
+                .bind(result)
+                .execute(&mut **tx)
+                .await?;
+            }
         }
         InvestigationMemoryRecorded {
             investigator,
@@ -1273,6 +1351,7 @@ async fn rebuild_in_tx(
         "day_vote_outcome",
         "host_phase_control",
         "host_prompt",
+        "player_info_result",
         "player_investigation_result",
         "player_notification",
         "sheriff_badge",
@@ -1351,6 +1430,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     },
     AuditProjection {
         table: "player_notification",
+        order_by: "phase_id, event_index, audience_slot",
+    },
+    AuditProjection {
+        table: "player_info_result",
         order_by: "phase_id, event_index, audience_slot",
     },
     AuditProjection {
@@ -1940,6 +2023,70 @@ pub async fn player_investigation_results_for_slot(
             audience_slot: r.get("audience_slot"),
             mode: r.get("mode"),
             target_slot: r.get("target_slot"),
+            result: r.get("result"),
+        })
+        .collect())
+}
+
+/// Read folded private info results, ordered deterministically.
+pub async fn player_info_results(
+    pool: &PgPool,
+    game_id: Uuid,
+) -> Result<Vec<PlayerInfoResultRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
+         target_slot, source_action, template_id, result \
+         FROM player_info_result WHERE game_id = $1 \
+         ORDER BY phase_id, event_index, audience_slot",
+    )
+    .bind(game_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| PlayerInfoResultRow {
+            game_id: r.get("game_id"),
+            phase_id: r.get("phase_id"),
+            event_index: r.get("event_index"),
+            audience_slot: r.get("audience_slot"),
+            kind: r.get("kind"),
+            actor_slot: r.get("actor_slot"),
+            target_slot: r.get("target_slot"),
+            source_action: r.get("source_action"),
+            template_id: r.get("template_id"),
+            result: r.get("result"),
+        })
+        .collect())
+}
+
+/// Read folded private info results for one audience slot.
+pub async fn player_info_results_for_slot(
+    pool: &PgPool,
+    game_id: Uuid,
+    audience_slot: &str,
+) -> Result<Vec<PlayerInfoResultRow>, ProjectionError> {
+    let rows = sqlx::query(
+        "SELECT game_id, phase_id, event_index, audience_slot, kind, actor_slot, \
+         target_slot, source_action, template_id, result \
+         FROM player_info_result WHERE game_id = $1 AND audience_slot = $2 \
+         ORDER BY phase_id, event_index, audience_slot",
+    )
+    .bind(game_id)
+    .bind(audience_slot)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| PlayerInfoResultRow {
+            game_id: r.get("game_id"),
+            phase_id: r.get("phase_id"),
+            event_index: r.get("event_index"),
+            audience_slot: r.get("audience_slot"),
+            kind: r.get("kind"),
+            actor_slot: r.get("actor_slot"),
+            target_slot: r.get("target_slot"),
+            source_action: r.get("source_action"),
+            template_id: r.get("template_id"),
             result: r.get("result"),
         })
         .collect())
@@ -2739,6 +2886,17 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                     "Public reveal: {slot_id} revealed alignment {alignment} in {phase_id} ({source_action})."
                 ));
             }
+            domain::InnerEvent::RoleRevealed {
+                slot_id,
+                role_key,
+                source_action,
+                phase_id,
+                ..
+            } => {
+                lines.push(format!(
+                    "Public reveal: {slot_id} revealed role {role_key} in {phase_id} ({source_action})."
+                ));
+            }
             domain::InnerEvent::VoteDuelDeclared {
                 challenger,
                 target,
@@ -2748,6 +2906,17 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
             } => {
                 lines.push(format!(
                     "Vote duel: {challenger} challenged {target} in {phase_id} ({source_action})."
+                ));
+            }
+            domain::InnerEvent::VoteVetoed {
+                governor,
+                target,
+                source_action,
+                phase_id,
+                ..
+            } => {
+                lines.push(format!(
+                    "Vote veto: {governor} vetoed the elimination of {target} in {phase_id} ({source_action})."
                 ));
             }
             domain::InnerEvent::PhaseAnnouncement(announcement) => {

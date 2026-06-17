@@ -1,0 +1,86 @@
+{
+  "name": "test_twilight_window",
+  "version": 1,
+  "ir_version": 48,
+  "roles": {
+    "twilight_self_destructor": {
+      "description": "Test role with a Twilight-only self-destruct action.",
+      "alignment": "mafia",
+      "actions": [
+        {
+          "id": "twilight_self_destruct",
+          "ability": "SelfDestruct",
+          "window": "Twilight",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 95,
+            "x_shots": null
+          },
+          "self_destruct": {
+            "cause": "twilight_self_destruct",
+            "kill_target": true,
+            "sacrifice_actor": true,
+            "unstoppable": true
+          }
+        }
+      ]
+    },
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "effects": {},
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Twilight", "Night"],
+    "subsegments": {
+      "Day": ["main", "eod"],
+      "Twilight": ["resolution"]
+    },
+    "twilight": true
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

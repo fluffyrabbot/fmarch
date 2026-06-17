@@ -14,7 +14,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `chinese_structured:knight_duel` | `knight_duel` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `chinese_structured:link_lovers` | `link_lovers` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `chinese_structured:night_guard` | `night_guard` | 1 | no | yes | yes | yes | yes | guard |
-| action_id | `chinese_structured:night_kill` |  | 1 | yes | no | no | no | no | kill |
+| action_id | `chinese_structured:night_kill` | `wolf_night_kill` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `chinese_structured:night_kill` | `wolf_night_kill` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `chinese_structured:poison_potion` | `poison_potion` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `chinese_structured:sheriff_destroy` | `sheriff_destroy` | 1 | no | yes | yes | yes | yes | info |
@@ -51,11 +51,11 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | ignite; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:inherit_role` |  | 1 | yes | no | no | no | no | convert |
-| action_id | `mafia_universe:inherit_role` |  | 1 | yes | no | no | no | no | convert |
-| action_id | `mafia_universe:investigate` |  | 1 | yes | no | no | no | no | investigate |
-| action_id | `mafia_universe:investigate` |  | 1 | yes | no | no | no | no | investigate |
-| action_id | `mafia_universe:investigate_alignment` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafia_universe:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
+| action_id | `mafia_universe:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
+| action_id | `mafia_universe:investigate` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafia_universe:investigate` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafia_universe:investigate_alignment` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:investigate_alignment` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:investigate_alignment` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:investigate_alignment` | `cop_investigate` | 1 | no | yes | yes | yes | yes | investigate |
@@ -63,20 +63,20 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:investigate_vanilla` | `investigate_vanilla` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafia_universe:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
 | action_id | `mafia_universe:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
-| action_id | `mafia_universe:janitor_kill` |  | 1 | yes | no | no | no | no | kill,conceal |
-| action_id | `mafia_universe:janitor_kill` |  | 1 | yes | no | no | no | no | kill,conceal |
+| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
+| action_id | `mafia_universe:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `mafia_universe:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:kill` |  | 1 | yes | no | no | no | no | kill |
+| action_id | `mafia_universe:kill` | `serial_killer_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `mafia_universe:kill` | `ninja_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:kill` | `vigilante_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:mark_alignment` |  | 1 | yes | no | no | no | no | mark |
-| action_id | `mafia_universe:mark_alignment` |  | 1 | yes | no | no | no | no | mark |
-| action_id | `mafia_universe:mark_role` |  | 1 | yes | no | no | no | no | mark |
-| action_id | `mafia_universe:mark_role` |  | 1 | yes | no | no | no | no | mark |
+| action_id | `mafia_universe:mark_alignment` | `mark_alignment` | 1 | no | yes | yes | yes | yes | mark |
+| action_id | `mafia_universe:mark_alignment` | `mark_alignment` | 1 | no | yes | yes | yes | yes | mark |
+| action_id | `mafia_universe:mark_role` | `mark_role` | 1 | no | yes | yes | yes | yes | mark |
+| action_id | `mafia_universe:mark_role` | `mark_role` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafia_universe:motion_detector` | `motion_detector` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafia_universe:motion_detector` | `motion_detector` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafia_universe:motivate` | `motivate` | 1 | no | yes | yes | yes | yes | schedule |
@@ -91,7 +91,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:poison` | `poison` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafia_universe:power_role_kill` | `power_role_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafia_universe:protect` |  | 1 | yes | no | no | no | no | protect |
+| action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafia_universe:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
@@ -112,8 +112,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
-| action_id | `mafia_universe:voyeur` |  | 1 | yes | no | no | no | no | investigate |
-| action_id | `mafia_universe:voyeur` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafia_universe:voyeur` | `voyeur` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafia_universe:voyeur` | `voyeur` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:watch` | `watch` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafia_universe:watch` | `watch` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:babysit` | `babysit` | 1 | no | yes | yes | yes | yes | protect,trigger |
@@ -122,69 +122,69 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:block` | `roleblocker_block` | 1 | no | yes | yes | yes | yes | block |
 | action_id | `mafiascum:block` | `roleblocker_block` | 1 | no | yes | yes | yes | yes | block |
 | action_id | `mafiascum:bodyguard` | `bodyguard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
-| action_id | `mafiascum:bus_drive` |  | 1 | yes | no | no | no | no | retarget |
+| action_id | `mafiascum:bus_drive` | `bus_driver_swap` | 1 | no | yes | yes | yes | yes | retarget |
 | action_id | `mafiascum:commute` | `commute` | 1 | no | yes | yes | yes | yes | untargetable |
-| action_id | `mafiascum:convert` |  | 1 | yes | no | no | no | no | convert |
+| action_id | `mafiascum:convert` | `disloyal_cult_recruit` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafiascum:cpr_protect` | `cpr_protect` | 1 | no | yes | yes | yes | yes | protect,kill |
 | action_id | `mafiascum:cure_poison` | `cure_poison` | 1 | no | yes | yes | yes | yes | mark |
-| action_id | `mafiascum:day_self_destruct` |  | 1 | yes | no | no | no | no | kill |
+| action_id | `mafiascum:day_self_destruct` | `day_self_destruct` | 1 | no | yes | yes | yes | yes | kill |
 | action_id | `mafiascum:deprogram` | `deprogram` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafiascum:douse` | `douse` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafiascum:duel` | `duel` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:follow` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafiascum:follow` | `track` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:friendly_neighbor` | `friendly_neighbor` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:grant_item` | `grant_item` | 1 | no | yes | yes | yes | yes | schedule |
-| action_id | `mafiascum:guard_retaliate` |  | 1 | yes | no | no | no | no | protect,guard,trigger |
+| action_id | `mafiascum:guard_retaliate` | `bodyguard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
 | action_id | `mafiascum:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:hide` | `hide` | 1 | no | yes | yes | yes | yes | untargetable,trigger,mark |
 | action_id | `mafiascum:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
 | action_id | `mafiascum:inherit_role` | `target_backup` | 1 | no | yes | yes | yes | yes | convert |
-| action_id | `mafiascum:inspect_corpse` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:inspect_corpse` | `inspect_corpse` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:investigate_alignment` | `investigate_alignment` | 1 | no | yes | yes | yes | yes | investigate |
-| action_id | `mafiascum:investigate_killer` |  | 1 | yes | no | no | no | no | info |
-| action_id | `mafiascum:investigate_pt` |  | 1 | yes | no | no | no | no | investigate |
-| action_id | `mafiascum:investigate_specialist` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:investigate_killer` | `investigate_killer` | 1 | no | yes | yes | yes | yes | info |
+| action_id | `mafiascum:investigate_pt` | `investigate_pt` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafiascum:investigate_specialist` | `investigate_specialist` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:investigate_vanilla` | `investigate_vanilla` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:jail` | `jail` | 1 | no | yes | yes | yes | yes | protect,block |
 | action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
 | action_id | `mafiascum:janitor_kill` | `janitor_kill` | 1 | no | yes | yes | yes | yes | kill,conceal; standard-NAR kill cause catalog |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:kill` |  | 1 | yes | no | no | no | no | kill |
-| action_id | `mafiascum:mailman` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:kill` | `day_vigilante_kill` | 1 | no | yes | yes | yes | yes | kill |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:kill` | `factional_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
+| action_id | `mafiascum:mailman` | `mailman` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:motion_detector` | `motion_detector` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:motivate` | `motivate` | 1 | no | yes | yes | yes | yes | schedule |
 | action_id | `mafiascum:neapolitan` | `neapolitan` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:neighborize` | `neighborize` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:night_kill` | `night_kill` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
-| action_id | `mafiascum:observe` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:observe` | `observe` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:poison` | `poison` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafiascum:protect` | `doctor_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafiascum:protect` | `faith_healer_protect` | 1 | no | yes | yes | yes | yes | protect |
 | action_id | `mafiascum:redirect` | `redirect` | 1 | no | yes | yes | yes | yes | retarget |
-| action_id | `mafiascum:report` |  | 1 | yes | no | no | no | no | info |
-| action_id | `mafiascum:result_mod` |  | 1 | yes | no | no | no | no | result_mod,mark |
-| action_id | `mafiascum:result_mod` |  | 1 | yes | no | no | no | no | result_mod,mark |
+| action_id | `mafiascum:report` | `report` | 1 | no | yes | yes | yes | yes | info |
+| action_id | `mafiascum:result_mod` | `frame` | 1 | no | yes | yes | yes | yes | result_mod,mark |
+| action_id | `mafiascum:result_mod` | `lawyer_cover` | 1 | no | yes | yes | yes | yes | result_mod,mark |
 | action_id | `mafiascum:reveal_town` | `reveal_town` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:role_guard` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafiascum:role_guard` | `role_guard` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:role_scan` | `role_scan` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:role_watcher` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafiascum:role_watcher` | `role_watcher` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:rolestop` | `rolestop` | 1 | no | yes | yes | yes | yes | untargetable |
-| action_id | `mafiascum:security_guard` |  | 1 | yes | no | no | no | no | investigate |
-| action_id | `mafiascum:send_fruit` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:security_guard` | `security_guard` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafiascum:send_fruit` | `send_fruit` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:shield` | `shield` | 1 | no | yes | yes | yes | yes | protect,trigger |
 | action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
 | action_id | `mafiascum:strongman_kill` | `strongman_kill` | 1 | no | yes | yes | yes | yes | kill,pierce; standard-NAR kill cause catalog |
 | action_id | `mafiascum:track` | `track` | 1 | no | yes | yes | yes | yes | investigate |
-| action_id | `mafiascum:traffic_analyst` |  | 1 | yes | no | no | no | no | investigate |
+| action_id | `mafiascum:traffic_analyst` | `prior_motion` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:vanillaize` | `vanillaize` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:vanillaize` | `vanillaize` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:veto` |  | 1 | yes | no | no | no | no | info |
+| action_id | `mafiascum:veto` | `veto` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:visit` | `visit` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:watch` | `watch` | 1 | no | yes | yes | yes | yes | investigate |
 | culture_note | `chinese_structured:cupid` | `PlayersLinked` | 1 | no | yes | yes | yes | yes | Link executed during pre-game / Night 0. Lovers inherit linked_death passive plus config-defined knowledge/cascade. |
@@ -225,7 +225,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:action | `compulsive` | `Compulsive` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `cycle_x` |  | 1 | yes | no | no | no | no |  |
 | modifier:action | `disabled_endgame` | `DisabledEndgame` | 1 | no | yes | yes | yes | yes |  |
-| modifier:action | `disloyal` |  | 1 | yes | no | no | no | no |  |
+| modifier:action | `disloyal` | `Disloyal` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `doublevoter` | `vote.weight=2` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `even_cycle` | `cycle_parity:Even` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `even_night` | `EvenNight` | 1 | no | yes | yes | yes | yes |  |
@@ -271,7 +271,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:effect | `ninja` | `Ninja` | 1 | no | yes | yes | yes | yes | im-human effect modifier maps to fmarch Ninja action modifier plus visibility policy |
 | pack:action_window | `day` | `action_window:Day` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
 | pack:action_window | `night_specific` | `action_window:Night` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
-| platform:private_channel | `mason` | `private_channels:Mason` | 1 | yes | no | no | no | no | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
+| platform:private_channel | `mason` | `private_channels:Mason` | 1 | no | no | no | yes | no | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
 | platform:private_channel | `neighbor` | `private_channels:Neighbor` | 1 | no | no | no | yes | no | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
 | policy:death_reveal | `alignment_only_flip` | `death_reveal:AlignmentOnly` | 1 | no | no | yes | yes | yes | im-human effect modifier maps to mafiascum death_reveal policy and PlayerKilled.death_reveal projection fold |
 | policy:death_reveal | `conceal` | `death_reveal:Concealed` | 1 | no | yes | yes | yes | yes | pack `death_reveal` policy owns concealed death flips through cause/effect rules |
@@ -300,7 +300,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `hider` | `Mark+Hider` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `hunter` | `Retaliate+RetaliationArmed` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
 | primitive | `ignite` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
-| primitive | `info` |  | 1 | yes | no | no | no | no |  |
+| primitive | `info` | `InfoResult` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `investigate` | `Investigate` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `kill` | `Kill` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
 | primitive | `lynch_target_win` | `TargetLynchWinTargeted+WinReached` | 1 | no | yes | yes | yes | yes |  |
@@ -315,7 +315,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `protect` | `Protect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `redirect` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `restore_mutation` | `Convert::RestoreOriginal` | 1 | no | yes | yes | yes | yes | `conversion_policy` owns same-resolution dead-target and pending-death conversion blocks |
-| primitive | `result_mod` |  | 1 | yes | no | no | no | no |  |
+| primitive | `result_mod` | `Mark+investigation_overrides` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `retarget` | `Redirect` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `roleblock` | `Block` | 1 | no | yes | yes | yes | yes |  |
 | primitive | `schedule` | `Grant+DelayedDeathQueued` | 1 | no | yes | yes | yes | yes |  |
@@ -326,7 +326,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | primitive | `vengeful` | `TriggerOn::Kill+vengeful_retaliates` | 1 | no | yes | yes | yes | yes | standard-NAR kill causes are catalog-owned through `standard_nar.kill_cause_ids` |
 | primitive | `visitor_kill` | `TriggerOn::Visit+TargetFilteredKill` | 1 | no | no | no | yes | no |  |
 | result_event_kind | `day.vote.outcome` | `DayVoteOutcome` | 2 | no | yes | yes | yes | yes |  |
-| result_event_kind | `day.vote.recorded` | `DayVoteRecorded` | 2 | no | yes | yes | no | yes |  |
+| result_event_kind | `day.vote.recorded` | `DayVoteRecorded` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.cleared` | `EffectsCleared` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.conversion_blocked` | `ConversionBlocked` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.marked` | `EffectsMarked` | 2 | no | yes | yes | yes | yes |  |
@@ -371,22 +371,22 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `chinese_structured:wolf` | `wolf` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `chinese_structured:wolf_beauty` | `wolf_beauty` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `core:jack_of_all_trades` | `jack_of_all_trades` | 1 | no | yes | yes | yes | yes | abstract core base represented by concrete culture-pack JOAT roles |
-| role_id | `mafia_universe:blank_mafia_role` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:blank_town_role` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:blank_mafia_role` | `blank_mafia_role` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:blank_town_role` | `blank_town_role` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:godfather` | `godfather` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:innocent_child` | `innocent_child` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:lover` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:mafia_alignment_cop` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:mafia_alignment_oracle` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_alignment_cop` | `mafia_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:mafia_alignment_oracle` | `mafia_alignment_oracle` | 1 | no | yes | yes | no | yes |  |
 | role_id | `mafia_universe:mafia_arsonist` | `mafia_arsonist` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_bodyguard` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_bodyguard` | `mafia_bodyguard` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_bomber` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafia_universe:mafia_bus_driver` | `mafia_bus_driver` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_commuter` | `mafia_commuter` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_cop` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_cop` | `mafia_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_day_desperado` | `mafia_day_desperado` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_day_vigilante` | `mafia_day_vigilante` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_doctor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_doctor` | `mafia_doctor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_empowerer` | `mafia_empowerer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_firefighter` | `mafia_firefighter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_framer` | `mafia_framer` | 1 | no | yes | yes | yes | yes |  |
@@ -397,8 +397,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:mafia_healer` | `mafia_healer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_inventor` | `mafia_inventor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_jack_of_all_trades` | `mafia_jack_of_all_trades` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_jailkeeper` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:mafia_janitor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_jailkeeper` | `mafia_jailkeeper` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:mafia_janitor` | `mafia_janitor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_motion_detector` | `mafia_motion_detector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_motivator` | `mafia_motivator` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_neapolitan` | `mafia_neapolitan` | 1 | no | yes | yes | yes | yes |  |
@@ -410,23 +410,23 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:mafia_power_role_killer` | `mafia_power_role_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_redirector` | `mafia_redirector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_role_cop` | `mafia_role_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_role_oracle` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_role_oracle` | `mafia_role_oracle` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_roleblocker` | `mafia_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_rolestopper` | `mafia_rolestopper` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_strongman` | `mafia_strongman` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_tracker` | `mafia_tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_treestump` | `mafia_treestump` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_universal_backup` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_universal_backup` | `mafia_universal_backup` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_vanilla_cop` | `mafia_vanilla_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_vigilante` | `mafia_vigilante` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_voyeur` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_voyeur` | `mafia_voyeur` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_watcher` | `mafia_watcher` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mason` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafia_universe:miller` | `miller` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:neighbor` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:serial_killer` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:town_alignment_cop` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafia_universe:town_alignment_oracle` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:serial_killer` | `serial_killer` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:town_alignment_cop` | `town_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:town_alignment_oracle` | `town_alignment_oracle` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_arsonist` | `town_arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_bodyguard` | `town_bodyguard` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_bomber` |  | 1 | yes | no | no | no | no |  |
@@ -447,7 +447,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_inventor` | `town_inventor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_jack_of_all_trades` | `town_jack_of_all_trades` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_jailkeeper` | `town_jailkeeper` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_janitor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_janitor` | `town_janitor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_motion_detector` | `town_motion_detector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_motivator` | `town_motivator` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_neapolitan` | `town_neapolitan` | 1 | no | yes | yes | yes | yes |  |
@@ -459,18 +459,18 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_power_role_killer` | `town_power_role_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_redirector` | `town_redirector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_role_cop` | `town_role_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_role_oracle` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_role_oracle` | `town_role_oracle` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_roleblocker` | `town_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_rolestopper` | `town_rolestopper` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_strongman` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafia_universe:town_tracker` | `town_tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_treestump` | `town_treestump` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_universal_backup` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_universal_backup` | `town_universal_backup` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_vanilla_cop` | `town_vanilla_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_vigilante` | `town_vigilante` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_voyeur` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_voyeur` | `town_voyeur` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_watcher` | `town_watcher` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:vanilla_town` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:vanilla_town` | `vanilla_town` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:arsonist` | `arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:ascetic` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafiascum:babysitter` | `babysitter` | 1 | no | yes | yes | yes | yes |  |
@@ -482,10 +482,10 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:commuter` | `commuter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:condemner` | `condemner` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:cop` | `cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:coroner` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:coroner` | `coroner` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:cpr_doctor` | `cpr_doctor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:cultist` | `cultist` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:day_vigilante` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:day_vigilante` | `day_vigilante` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:deprogrammer` | `deprogrammer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:doctor` | `doctor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:doublevoter` | `doublevoter` | 1 | no | yes | yes | yes | yes |  |
@@ -495,11 +495,11 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:follower` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafiascum:framer` | `framer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:friendly_neighbor` | `friendly_neighbor` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:fruit_vendor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:fruit_vendor` | `fruit_vendor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:gladiator` | `gladiator` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:godfather` | `godfather` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:goon` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:governor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:goon` | `mafia_goon` | 1 | no | yes | yes | yes | yes | source alias |
+| role_id | `mafiascum:governor` | `governor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:hero` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafiascum:hider` | `hider` | 1 | no | yes | yes | yes | yes |  |
@@ -511,19 +511,19 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:jack_of_all_trades` | `jack_of_all_trades` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:jailer` | `jailer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:jailkeeper` | `jailkeeper` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:janitor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:janitor` | `mafia_janitor` | 1 | no | yes | yes | yes | yes | source alias |
 | role_id | `mafiascum:jester` | `jester` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:lawyer` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:lawyer` | `lawyer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:lightning_rod` | `lightning_rod` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:loved` | `loved` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:lover` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafiascum:mafia_goon` | `mafia_goon` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:mafia_janitor` | `mafia_janitor` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:mafia_ninja` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:mafia_ninja` | `ninja` | 1 | no | yes | yes | yes | yes | source alias |
 | role_id | `mafiascum:mafia_roleblocker` | `mafia_roleblocker` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:mafia_strongman` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:mailman` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:mason` | `mason` | 1 | no | yes | yes | no | yes |  |
+| role_id | `mafiascum:mafia_strongman` | `strongman` | 1 | no | yes | yes | yes | yes | source alias |
+| role_id | `mafiascum:mailman` | `mailman` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafiascum:mason` | `mason` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:miller` | `miller` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:motion_detector` | `motion_detector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:motivator` | `motivator` | 1 | no | yes | yes | yes | yes |  |
@@ -531,25 +531,25 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:neighbor` | `neighbor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:neighborizer` | `neighborizer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:ninja` | `ninja` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:observer` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:observer` | `observer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:paranoid_gun_owner` | `paranoid_gun_owner` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:pgo` | `paranoid_gun_owner` | 1 | no | yes | yes | yes | yes | source alias |
 | role_id | `mafiascum:poison_doctor` | `poison_doctor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:poisoner` | `poisoner` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:psychologist` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:pt_cop` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:psychologist` | `psychologist` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafiascum:pt_cop` | `pt_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:redirector` | `redirector` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:reporter` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:reporter` | `reporter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:role_cop` | `role_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:role_guard` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:role_watcher` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:role_guard` | `role_guard` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafiascum:role_watcher` | `role_watcher` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:roleblocker` | `roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:rolestopper` | `rolestopper` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:saulus` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:security_guard` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:serial_killer` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:security_guard` | `security_guard` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafiascum:serial_killer` | `serial_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:shield` | `shield` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:specialist` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:specialist` | `specialist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:strongman` | `strongman` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:super_saint` | `super_saint` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:survivor` |  | 1 | yes | no | no | no | no |  |
@@ -565,37 +565,38 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:virgin` |  | 1 | yes | no | no | no | no |  |
 | role_id | `mafiascum:visitor` | `visitor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:watcher` | `watcher` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:werewolf` |  | 1 | yes | no | no | no | no |  |
-| role_id | `mafiascum:white_wolf_king` |  | 1 | yes | no | no | no | no |  |
-| surface:info | `private_effect_notification` | `EffectNotification` | 1 | no | yes | yes | yes | yes | info-tagged private notification actions only: Mafia Universe Fruit Vendor `send_fruit`; generic info scan/mail/report actions remain separate action-level gaps |
-| surface:info | `public_alignment_reveal` | `AlignmentRevealed` | 2 | no | yes | yes | yes | yes | info-tagged RevealTown day action only: mafiascum and Mafia Universe Innocent Child; generic info scan/mail/report actions remain separate action-level gaps |
+| role_id | `mafiascum:werewolf` | `mafia_goon` | 1 | no | yes | yes | yes | yes | source alias |
+| role_id | `mafiascum:white_wolf_king` | `white_wolf_king` | 1 | no | yes | yes | yes | yes |  |
+| surface:info | `generic_info_result` | `InfoResult` | 3 | no | yes | yes | yes | yes | generic info scan/mail/report actions: Mafiascum Mailman, Observer, and Reporter |
+| surface:info | `private_effect_notification` | `EffectNotification` | 2 | no | yes | yes | yes | yes | info-tagged private notification actions only: Mafiascum and Mafia Universe Fruit Vendor `send_fruit`; generic info scan/mail/report actions are covered by the generic_info_result surface |
+| surface:info | `public_alignment_reveal` | `AlignmentRevealed` | 2 | no | yes | yes | yes | yes | info-tagged RevealTown day action only: mafiascum and Mafia Universe Innocent Child; generic info scan/mail/report actions are covered by the generic_info_result surface |
 | surface:info | `public_vote_duel` | `VoteDuelDeclared+DayVoteOutcome` | 1 | no | yes | yes | yes | yes | info-tagged mafiascum Gladiator duel only: restricts official day vote to challenger and target, and no-ballot/tied duels force seeded random elimination via vote_duel_tie_breaker; lethal Chinese Knight duel remains separate DuelResolved surface |
-| surface:info | `social_visit` | `VisitRecorded` | 3 | no | yes | yes | yes | yes | info-tagged Visit actions only: friendly_neighbor, neighborize, and visit; generic info scan/mail/report actions remain separate action-level gaps |
-| test_family | `action_spec_primitives_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/action_spec_primitives_test.exs |
-| test_family | `action_spec_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/action_spec_test.exs |
-| test_family | `culture_rules_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/culture_rules_test.exs |
-| test_family | `cultures` |  | 1 | yes | no | no | no | no | example test/engine_v4/cultures/mafia_universe_data_test.exs |
-| test_family | `e2e` |  | 1 | yes | no | no | no | no | example test/engine_v4/e2e/simulate_task_test.exs |
-| test_family | `effects` |  | 4 | yes | no | no | no | no | example test/engine_v4/effects/cleanse_test.exs |
-| test_family | `feature_flags_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/feature_flags_test.exs |
-| test_family | `init` |  | 4 | yes | no | no | no | no | example test/engine_v4/init/chat_provisioner_db_test.exs |
-| test_family | `intent` |  | 1 | yes | no | no | no | no | example test/engine_v4/intent/chinese_alias_coverage_test.exs |
-| test_family | `intent_catalog_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/intent_catalog_test.exs |
-| test_family | `ita` |  | 1 | yes | no | no | no | no | example test/engine_v4/ita/runtime_test.exs |
-| test_family | `modifiers/action` |  | 53 | yes | no | no | no | no | example test/engine_v4/modifiers/action/activated_test.exs |
-| test_family | `modifiers/effect` |  | 6 | yes | no | no | no | no | example test/engine_v4/modifiers/effect/alignment_only_flip_test.exs |
-| test_family | `policy/conflict` |  | 2 | yes | no | no | no | no | example test/engine_v4/policy/conflict/cn_langrensha_test.exs |
-| test_family | `policy/win` |  | 1 | yes | no | no | no | no | example test/engine_v4/policy/win/standard_test.exs |
-| test_family | `registry_role_api_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/registry_role_api_test.exs |
-| test_family | `resolve` |  | 34 | yes | no | no | no | no | example test/engine_v4/resolve/commute_ignite_test.exs |
-| test_family | `resolve/culture` |  | 12 | yes | no | no | no | no | example test/engine_v4/resolve/culture/cupid_lovers_cascade_test.exs |
-| test_family | `resolve/culture/chinese` |  | 1 | yes | no | no | no | no | example test/engine_v4/resolve/culture/chinese/full_flow_test.exs |
-| test_family | `resolve/day_steps` |  | 4 | yes | no | no | no | no | example test/engine_v4/resolve/day_steps/announcement_step_test.exs |
-| test_family | `resolve/effects` |  | 1 | yes | no | no | no | no | example test/engine_v4/resolve/effects/ita_shot_test.exs |
-| test_family | `resolve/graph` |  | 3 | yes | no | no | no | no | example test/engine_v4/resolve/graph/builder_order_executor_test.exs |
-| test_family | `resolve/phases` |  | 9 | yes | no | no | no | no | example test/engine_v4/resolve/phases/conflicts_test.exs |
-| test_family | `result` |  | 46 | yes | no | no | no | no | example test/engine_v4/result/result_ascetic_investigation_block_test.exs |
-| test_family | `roles` |  | 1 | yes | no | no | no | no | example test/engine_v4/roles/catalog_loader_test.exs |
-| test_family | `spec_validation_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/spec_validation_test.exs |
-| test_family | `time_test` |  | 1 | yes | no | no | no | no | example test/engine_v4/time_test.exs |
-| test_family | `util` |  | 1 | yes | no | no | no | no | example test/engine_v4/util/validator_test.exs |
+| surface:info | `social_visit` | `VisitRecorded` | 3 | no | yes | yes | yes | yes | info-tagged Visit actions only: friendly_neighbor, neighborize, and visit; generic info scan/mail/report actions are covered by the generic_info_result surface |
+| test_family | `action_spec_primitives_test` | `pack_validation+parity_matrix` | 1 | no | yes | yes | no | no | example test/engine_v4/action_spec_primitives_test.exs; primitive action specs are covered by strict pack validation plus source-derived primitive parity rows |
+| test_family | `action_spec_test` | `pack_validation` | 1 | no | yes | yes | no | no | example test/engine_v4/action_spec_test.exs; action shape/cardinality/window contracts are covered by pack-validation tests |
+| test_family | `culture_rules_test` | `culture_pack_goldens` | 1 | no | yes | yes | yes | yes | example test/engine_v4/culture_rules_test.exs; culture rule coverage is split across culture pack goldens and command/projection verticals |
+| test_family | `cultures` | `mafia_universe_pack` | 1 | no | yes | yes | yes | yes | example test/engine_v4/cultures/mafia_universe_data_test.exs; Mafia Universe data coverage is represented by the shipped pack, goldens, and command verticals |
+| test_family | `e2e` | `operator_replay_proof_artifacts` | 1 | no | yes | yes | no | yes | example test/engine_v4/e2e/simulate_task_test.exs; end-to-end simulation parity maps to stored operator replay, determinism, and projection proof artifacts |
+| test_family | `effects` | `persistent_effect_goldens` | 4 | no | yes | yes | yes | yes | example test/engine_v4/effects/cleanse_test.exs; effect tests map to Mark/Clear, poison, douse, ignite, cleanse, and projection-fold coverage |
+| test_family | `feature_flags_test` | `out_of_scope: im-human feature flags` | 1 | yes | no | no | no | no | example test/engine_v4/feature_flags_test.exs; feature flag plumbing is outside the human game resolution result surface |
+| test_family | `init` | `out_of_scope: im-human init/chat provisioning` | 4 | yes | no | no | no | no | example test/engine_v4/init/chat_provisioner_db_test.exs; im-human init/chat provisioning belongs to platform setup rather than the slot-only resolver |
+| test_family | `intent` | `source_alias_parity_matrix` | 1 | no | yes | yes | yes | yes | example test/engine_v4/intent/chinese_alias_coverage_test.exs; intent aliases map through source-derived action_id rows and pack `source_ids` |
+| test_family | `intent_catalog_test` | `source_alias_parity_matrix` | 1 | no | yes | yes | yes | yes | example test/engine_v4/intent_catalog_test.exs; intent catalog rows are source-derived into the action parity matrix |
+| test_family | `ita` | `ItaSession+ItaShot` | 1 | no | yes | yes | yes | yes | example test/engine_v4/ita/runtime_test.exs; ITA runtime coverage maps to ITA session/shot goldens and command/projection verticals |
+| test_family | `modifiers/action` | `primitive_modifier_interaction_report` | 53 | no | yes | yes | yes | yes | example test/engine_v4/modifiers/action/activated_test.exs; action modifier family coverage is checked by the primitive/modifier interaction report |
+| test_family | `modifiers/effect` | `death_reveal+effect_policy_goldens` | 6 | no | yes | yes | yes | yes | example test/engine_v4/modifiers/effect/alignment_only_flip_test.exs; effect modifiers map to death reveal, persistent effect, and notification result contracts |
+| test_family | `policy/conflict` | `standard_nar_precedence_goldens` | 2 | no | yes | yes | yes | yes | example test/engine_v4/policy/conflict/cn_langrensha_test.exs; conflict policy maps to standard-NAR precedence, protection, suppression, and pack validation |
+| test_family | `policy/win` | `win_policy_goldens` | 1 | no | yes | yes | yes | yes | example test/engine_v4/policy/win/standard_test.exs; win policy coverage maps to WinReached goldens and command/projection verticals |
+| test_family | `registry_role_api_test` | `pack_loader_validation` | 1 | no | yes | yes | yes | no | example test/engine_v4/registry_role_api_test.exs; role registry/API coverage maps to pack loading and shipped-pack validation |
+| test_family | `resolve` | `domain_golden_harness` | 34 | no | yes | yes | yes | yes | example test/engine_v4/resolve/commute_ignite_test.exs; general resolve families map to the domain golden harness plus ResolvePhase verticals |
+| test_family | `resolve/culture` | `culture_pack_goldens` | 12 | no | yes | yes | yes | yes | example test/engine_v4/resolve/culture/cupid_lovers_cascade_test.exs; culture resolve tests map to Chinese and Mafia Universe culture-pack goldens and verticals |
+| test_family | `resolve/culture/chinese` | `chinese_structured_pack` | 1 | no | yes | yes | yes | yes | example test/engine_v4/resolve/culture/chinese/full_flow_test.exs; Chinese full-flow coverage maps to the Chinese structured pack and culture goldens |
+| test_family | `resolve/day_steps` | `day_step_goldens` | 4 | no | yes | yes | yes | yes | example test/engine_v4/resolve/day_steps/announcement_step_test.exs; day-step ordering maps to the day substep golden family |
+| test_family | `resolve/effects` | `ItaShot+effect_resolution_goldens` | 1 | no | yes | yes | yes | yes | example test/engine_v4/resolve/effects/ita_shot_test.exs; resolve/effects currently maps to ITA shot and effect-resolution goldens |
+| test_family | `resolve/graph` | `redirect_graph+determinism_guard` | 3 | no | yes | yes | yes | yes | example test/engine_v4/resolve/graph/builder_order_executor_test.exs; graph coverage maps to redirect graph goldens and seeded determinism/fixpoint tests |
+| test_family | `resolve/phases` | `phase_policy_goldens+commands` | 9 | no | yes | yes | yes | yes | example test/engine_v4/resolve/phases/conflicts_test.exs; phase resolution maps to phase-window goldens and command phase-transition tests |
+| test_family | `result` | `result_contract_tests` | 46 | no | yes | yes | yes | yes | example test/engine_v4/result/result_ascetic_investigation_block_test.exs; result tests map to schema/result-contract tests plus golden result comparison |
+| test_family | `roles` | `pack_role_catalog_validation` | 1 | no | yes | yes | yes | no | example test/engine_v4/roles/catalog_loader_test.exs; role catalog coverage maps to shipped pack validation and source-derived role parity rows |
+| test_family | `spec_validation_test` | `pack_validation` | 1 | no | yes | yes | no | no | example test/engine_v4/spec_validation_test.exs; spec validation maps to strict pack validator tests |
+| test_family | `time_test` | `determinism_guard` | 1 | no | no | yes | no | no | example test/engine_v4/time_test.exs; time behavior maps to deterministic logical_time and ambient wall-clock rejection |
+| test_family | `util` | `schema_validator_tests` | 1 | no | no | yes | no | no | example test/engine_v4/util/validator_test.exs; utility validator coverage maps to result-contract and fixture-import validator tests |

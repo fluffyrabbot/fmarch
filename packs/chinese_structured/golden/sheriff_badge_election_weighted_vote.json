@@ -20,23 +20,42 @@
     },
     {
       "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "sequence": 1,
+        "target": "slot_4",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 2,
+        "target": "slot_4",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [
           "slot_4"
         ],
-        "majority": 3.0,
-        "reason": null,
+        "majority": 3,
         "status": "NoMajority",
         "tallies": {
           "slot_4": 2.5
         },
         "thresholds": {
-          "slot_1": 3.0,
-          "slot_2": 3.0,
-          "slot_3": 3.0,
-          "slot_4": 3.0,
-          "slot_5": 3.0
+          "slot_1": 3,
+          "slot_2": 3,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_5": 3
         },
         "tiebreak": null,
         "total_weight": 5.5,
@@ -45,17 +64,17 @@
           "slot_3": "slot_4"
         },
         "weights": {
-          "slot_1": 1.0,
+          "slot_1": 1,
           "slot_2": 1.5,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
         },
         "winner": null
       }
     },
     {
-      "index": 2,
+      "index": 4,
       "kind": "PhaseAnnouncement",
       "payload": {
         "deaths": [],

@@ -1,0 +1,121 @@
+{
+  "description": "Mafia Universe Role Oracle: a persistent Oracle mark reveals the marked target's role when the Oracle later dies.",
+  "input": {
+    "game_id": "game_mu_role_oracle_reveal_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_role_oracle",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": ["role_oracle_mark"]
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "effect_records": [
+        {
+          "effect": "role_oracle_mark",
+          "target": "slot_3",
+          "source": "slot_1",
+          "source_action": "mu_role_oracle_mark_n01",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "duration": "Persistent",
+          "visibility": "Hidden"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_mafia_kill_role_oracle_n02",
+        "actor": "slot_2",
+        "template_id": "factional_kill",
+        "targets": ["slot_1"],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 712062
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "factional_kill",
+        "attackers": ["slot_2"],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "RoleRevealed",
+      "payload": {
+        "slot_id": "slot_3",
+        "role_key": "town_vanilla",
+        "source_action": "mu_role_oracle_mark_n01",
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": [
+          {
+            "slot_id": "slot_1",
+            "cause": "factional_kill"
+          }
+        ]
+      }
+    }
+  ]
+}

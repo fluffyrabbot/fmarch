@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use domain::events::{InnerEvent, VoteStatus};
+use domain::events::{DayVoteOutcome, InnerEvent, VoteStatus};
 use domain::pack::{DeathRevealMode, GrantKind, Pack, PhaseKind, VoteMethod, VoteTieBreaker};
 use domain::resolver::{check_win, resolve, resolve_events, ResolutionInput};
 use domain::state::{
@@ -70,6 +70,7 @@ fn apply_player_killed_marks_dead() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -145,6 +146,7 @@ fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("slot_1", "white_wolf_king", "wolf", "dead")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -206,6 +208,7 @@ fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
             slot("slot_2", "villager", "town", "alive"),
             slot("slot_3", "villager", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -263,6 +266,7 @@ fn apply_player_saved_is_a_noop() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -299,6 +303,7 @@ fn apply_effects_mark_then_clear() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -377,6 +382,7 @@ fn apply_delayed_death_queue_then_resolve() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -436,6 +442,7 @@ fn apply_visit_recorded_appends_history() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "visitor", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -482,6 +489,7 @@ fn apply_player_converted_changes_role() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -530,6 +538,7 @@ fn apply_player_converted_keeps_first_origin() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "cultist", "cult", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -578,6 +587,7 @@ fn apply_events_is_a_pure_fold() {
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -630,6 +640,7 @@ fn apply_action_recorded_extends_history() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "non_consecutive_cop", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -674,6 +685,7 @@ fn apply_action_granted_extends_grants() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "motivator", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -726,6 +738,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
             slot("a", "motivator", "town", "alive"),
             slot("b", "cop", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -796,6 +809,7 @@ fn apply_action_use_counted_upserts_counter_state() {
         phase_deadline: None,
         phase_policy: load_pack().phases,
         slots: vec![slot("a", "vigilante", "town", "alive")],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -857,6 +871,7 @@ fn apply_players_linked_extends_links() {
             slot("a", "vanilla_townie", "town", "alive"),
             slot("b", "vanilla_townie", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -908,6 +923,7 @@ fn apply_retaliation_armed_upserts_choice() {
             slot("b", "mafia_goon", "mafia", "alive"),
             slot("c", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -961,6 +977,7 @@ fn apply_backup_targeted_upserts_choice() {
             slot("b", "cop", "town", "alive"),
             slot("c", "doctor", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1021,6 +1038,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
             slot("b", "vanilla_townie", "town", "alive"),
             slot("c", "doctor", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1102,6 +1120,7 @@ fn resolve_returns_applied_trace_and_post_state() {
             slot("slot_2", "vanilla_townie", "town", "alive"),
             slot("slot_3", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1167,6 +1186,7 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
             slot("slot_4", "vanilla_townie", "town", "alive"),
             slot("slot_5", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1225,6 +1245,96 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
 }
 
 #[test]
+fn day_vote_ballots_are_last_write_wins_per_actor() {
+    let mut pack = load_pack();
+    pack.vote.method = VoteMethod::Majority;
+
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "vanilla_townie", "town", "alive"),
+            slot("slot_4", "vanilla_townie", "town", "alive"),
+            slot("slot_5", "mafia_goon", "mafia", "alive"),
+        ],
+        private_channels: Vec::new(),
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let output = resolve(ResolutionInput {
+        game_id: "last-write-votes".to_string(),
+        phase_id: "D02".to_string(),
+        run_id: "last-write-votes:D02:1".to_string(),
+        state,
+        submissions: vec![
+            vote("vote_1a", "slot_1", "slot_4", 1),
+            vote("vote_1b", "slot_1", "slot_5", 2),
+            vote("vote_2a", "slot_2", "slot_4", 3),
+            Submission {
+                action_id: "vote_2_withdraw".to_string(),
+                actor: "slot_2".to_string(),
+                template_id: "day_vote".to_string(),
+                targets: Vec::new(),
+                phase_id: "D02".to_string(),
+                submitted_at: 4,
+                withdrawn: true,
+                metadata: Default::default(),
+            },
+            vote("vote_3", "slot_3", "slot_5", 5),
+        ],
+        day_phase_inputs: Default::default(),
+        pack,
+        seed: 12,
+        logical_time: 112,
+    });
+
+    let outcome = output
+        .applied
+        .events
+        .iter()
+        .find_map(|event| match &event.event {
+            InnerEvent::DayVoteOutcome(outcome) => Some(outcome),
+            _ => None,
+        })
+        .expect("resolution should emit a day vote outcome");
+    assert_eq!(
+        outcome.votes.get("slot_1").map(String::as_str),
+        Some("slot_5"),
+        "slot_1's later ballot should replace the earlier slot_4 ballot"
+    );
+    assert!(
+        !outcome.votes.contains_key("slot_2"),
+        "slot_2's withdrawal should remove the earlier active ballot"
+    );
+    assert_eq!(
+        outcome.votes.get("slot_3").map(String::as_str),
+        Some("slot_5")
+    );
+    assert_eq!(outcome.tallies.get("slot_4").copied(), None);
+    assert_eq!(outcome.tallies.get("slot_5").copied(), Some(2.0));
+    assert_eq!(outcome.status, VoteStatus::NoMajority);
+}
+
+#[test]
 fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
     let mut pack = load_pack();
     pack.vote.method = VoteMethod::Majority;
@@ -1241,6 +1351,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
             slot("slot_2", "vanilla_townie", "town", "alive"),
             slot("slot_3", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1298,6 +1409,262 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
     );
 }
 
+#[test]
+fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
+    let base_pack = load_pack();
+    let state_for = |pack: &Pack| StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "mafia_goon", "mafia", "alive"),
+        ],
+        private_channels: Vec::new(),
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+    let resolve_status = |pack: Pack, submissions: Vec<Submission>, label: &str| {
+        let output = resolve(ResolutionInput {
+            game_id: format!("vote-status-{label}"),
+            phase_id: "D02".to_string(),
+            run_id: format!("vote-status:D02:{label}"),
+            state: state_for(&pack),
+            submissions,
+            day_phase_inputs: Default::default(),
+            pack,
+            seed: 33,
+            logical_time: 133,
+        });
+        output
+            .applied
+            .events
+            .iter()
+            .find_map(|event| match &event.event {
+                InnerEvent::DayVoteOutcome(outcome) => Some(outcome.status),
+                _ => None,
+            })
+            .expect("resolution should emit a day vote outcome")
+    };
+
+    let mut no_lynch_pack = base_pack.clone();
+    no_lynch_pack.vote.method = VoteMethod::Majority;
+    no_lynch_pack.vote.no_lynch_allowed = true;
+    assert_eq!(
+        resolve_status(
+            no_lynch_pack,
+            vec![
+                vote("vote_1", "slot_1", "no_lynch", 1),
+                vote("vote_2", "slot_2", "no_lynch", 2),
+            ],
+            "no-lynch",
+        ),
+        VoteStatus::NoLynch
+    );
+
+    let mut no_majority_pack = base_pack.clone();
+    no_majority_pack.vote.method = VoteMethod::Majority;
+    assert_eq!(
+        resolve_status(
+            no_majority_pack,
+            vec![vote("vote_1", "slot_1", "slot_3", 1)],
+            "no-majority",
+        ),
+        VoteStatus::NoMajority
+    );
+
+    let mut tie_pack = base_pack;
+    tie_pack.vote.method = VoteMethod::Plurality;
+    tie_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    assert_eq!(
+        resolve_status(
+            tie_pack,
+            vec![
+                vote("vote_1", "slot_1", "slot_2", 1),
+                vote("vote_2", "slot_2", "slot_3", 2),
+            ],
+            "tie",
+        ),
+        VoteStatus::Tie
+    );
+}
+
+#[test]
+fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
+    let base_pack = load_pack();
+
+    let state_for = |pack: &Pack| StateSnapshot {
+        phase_kind: PhaseKind::Day,
+        phase_number: 2,
+        phase_id: "D02".to_string(),
+        phase_deadline: None,
+        phase_policy: pack.phases.clone(),
+        slots: vec![
+            slot("slot_1", "vanilla_townie", "town", "alive"),
+            slot("slot_2", "vanilla_townie", "town", "alive"),
+            slot("slot_3", "mafia_goon", "mafia", "alive"),
+        ],
+        private_channels: Vec::new(),
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let resolve_outcome =
+        |pack: Pack, submissions: Vec<Submission>, seed: u64, label: &str| -> DayVoteOutcome {
+            let output = resolve(ResolutionInput {
+                game_id: format!("vote-policy-{label}"),
+                phase_id: "D02".to_string(),
+                run_id: format!("vote-policy:D02:{label}"),
+                state: state_for(&pack),
+                submissions,
+                day_phase_inputs: Default::default(),
+                pack,
+                seed,
+                logical_time: 200 + seed,
+            });
+            output
+                .applied
+                .events
+                .iter()
+                .find_map(|event| match &event.event {
+                    InnerEvent::DayVoteOutcome(outcome) => Some(outcome.clone()),
+                    _ => None,
+                })
+                .expect("resolution should emit a day vote outcome")
+        };
+
+    let mut majority_pack = base_pack.clone();
+    majority_pack.vote.method = VoteMethod::Majority;
+    majority_pack.vote.hammer = false;
+    let majority = resolve_outcome(
+        majority_pack,
+        vec![
+            vote("majority_1", "slot_1", "slot_3", 1),
+            vote("majority_2", "slot_2", "slot_3", 2),
+        ],
+        41,
+        "majority",
+    );
+    assert_eq!(majority.status, VoteStatus::Lynch);
+    assert_eq!(majority.winner.as_deref(), Some("slot_3"));
+    assert_eq!(majority.majority, Some(2.0));
+    assert_eq!(majority.tiebreak, None);
+
+    let mut plurality_pack = base_pack.clone();
+    plurality_pack.vote.method = VoteMethod::Plurality;
+    plurality_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    let plurality = resolve_outcome(
+        plurality_pack,
+        vec![vote("plurality_1", "slot_1", "slot_3", 1)],
+        42,
+        "plurality",
+    );
+    assert_eq!(plurality.status, VoteStatus::Lynch);
+    assert_eq!(plurality.winner.as_deref(), Some("slot_3"));
+    assert_eq!(plurality.majority, None);
+
+    let mut supermajority_pack = base_pack.clone();
+    supermajority_pack.vote.method = VoteMethod::Supermajority { num: 2, den: 3 };
+    supermajority_pack.vote.hammer = false;
+    let supermajority = resolve_outcome(
+        supermajority_pack,
+        vec![
+            vote("supermajority_1", "slot_1", "slot_3", 1),
+            vote("supermajority_2", "slot_2", "slot_3", 2),
+        ],
+        43,
+        "supermajority",
+    );
+    assert_eq!(supermajority.status, VoteStatus::Lynch);
+    assert_eq!(supermajority.winner.as_deref(), Some("slot_3"));
+    assert_eq!(supermajority.majority, Some(2.0));
+
+    let mut hammer_pack = base_pack.clone();
+    hammer_pack.vote.method = VoteMethod::Majority;
+    hammer_pack.vote.hammer = true;
+    let hammer = resolve_outcome(
+        hammer_pack,
+        vec![
+            vote("hammer_1", "slot_1", "slot_3", 1),
+            vote("hammer_2", "slot_2", "slot_3", 2),
+        ],
+        44,
+        "hammer",
+    );
+    assert_eq!(hammer.status, VoteStatus::Hammer);
+    assert_eq!(hammer.winner.as_deref(), Some("slot_3"));
+
+    let split_votes = vec![
+        vote("tie_1", "slot_1", "slot_2", 1),
+        vote("tie_2", "slot_2", "slot_3", 2),
+    ];
+
+    let mut no_elimination_pack = base_pack.clone();
+    no_elimination_pack.vote.method = VoteMethod::Plurality;
+    no_elimination_pack.vote.tie_breaker = VoteTieBreaker::NoElimination;
+    let no_elimination = resolve_outcome(
+        no_elimination_pack,
+        split_votes.clone(),
+        45,
+        "no-elimination",
+    );
+    assert_eq!(no_elimination.status, VoteStatus::Tie);
+    assert_eq!(no_elimination.winner, None);
+    assert_eq!(no_elimination.contenders, vec!["slot_2", "slot_3"]);
+    assert_eq!(no_elimination.tiebreak.as_deref(), Some("NoElimination"));
+
+    let mut host_decides_pack = base_pack.clone();
+    host_decides_pack.vote.method = VoteMethod::Plurality;
+    host_decides_pack.vote.tie_breaker = VoteTieBreaker::HostDecides;
+    let host_decides = resolve_outcome(host_decides_pack, split_votes.clone(), 46, "host-decides");
+    assert_eq!(host_decides.status, VoteStatus::Tie);
+    assert_eq!(host_decides.winner, None);
+    assert_eq!(host_decides.contenders, vec!["slot_2", "slot_3"]);
+    assert_eq!(host_decides.tiebreak.as_deref(), Some("HostDecides"));
+
+    let mut random_pack = base_pack;
+    random_pack.vote.method = VoteMethod::Plurality;
+    random_pack.vote.tie_breaker = VoteTieBreaker::Random;
+    let random_first = resolve_outcome(random_pack.clone(), split_votes.clone(), 47, "random-a");
+    let random_again = resolve_outcome(random_pack, split_votes, 47, "random-b");
+    assert_eq!(random_first.status, VoteStatus::Lynch);
+    assert_eq!(random_first.tiebreak.as_deref(), Some("Random"));
+    assert_eq!(random_first, random_again);
+    assert!(matches!(
+        random_first.winner.as_deref(),
+        Some("slot_2") | Some("slot_3")
+    ));
+}
+
 // ───────────────────────── check_win ─────────────────────────
 
 #[test]
@@ -1314,6 +1681,7 @@ fn check_win_town_when_mafia_eliminated() {
             slot("b", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "dead"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1349,6 +1717,7 @@ fn check_win_mafia_at_parity() {
             slot("a", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1385,6 +1754,7 @@ fn check_win_none_when_game_continues() {
             slot("b", "vanilla_townie", "town", "alive"),
             slot("m", "mafia_goon", "mafia", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1422,6 +1792,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
             slot("m", "mafia_goon", "mafia", "dead"),
             slot("c", "cultist", "cult", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1455,6 +1826,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
             slot("m", "mafia_goon", "mafia", "dead"),
             slot("c", "cultist", "cult", "dead"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1491,6 +1863,7 @@ fn epicmafia_cult_wins_at_parity() {
             slot("t", "villager", "town", "alive"),
             slot("c", "cult_leader", "cult", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1534,6 +1907,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             slot("slot_2", "vanilla_townie", "town", "alive"),
             slot("slot_3", "vanilla_townie", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1600,6 +1974,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
             slot("slot_3", "vanilla_townie", "town", "alive"),
             slot("slot_4", "vanilla_townie", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -1719,6 +2094,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
             slot("slot_3", "villager", "town", "alive"),
             slot("slot_4", "villager", "town", "alive"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),

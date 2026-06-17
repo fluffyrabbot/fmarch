@@ -1,0 +1,82 @@
+{
+  "description": "Mafia Universe Alignment Oracle marks a target with a hidden persistent alignment-oracle mark.",
+  "input": {
+    "game_id": "game_mu_alignment_oracle_mark_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["ita_sessions", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "town_alignment_oracle",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "town_vanilla",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_oracle_mark_n01",
+        "actor": "slot_1",
+        "template_id": "mark_alignment",
+        "targets": ["slot_2"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafia_universe",
+    "seed": 712060
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "EffectsMarked",
+      "payload": {
+        "effect": "alignment_oracle_mark",
+        "target": "slot_2",
+        "actor": "slot_1",
+        "source_action": "mu_oracle_mark_n01",
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "duration": "Persistent",
+        "visibility": "Hidden"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

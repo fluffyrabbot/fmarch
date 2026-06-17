@@ -3,27 +3,66 @@
   "expected_events": [
     {
       "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "sequence": 1,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 2,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 3,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_5",
+        "sequence": 4,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 4,
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [
           "slot_2"
         ],
-        "majority": 4.0,
-        "reason": null,
+        "majority": 4,
         "status": "Lynch",
         "tallies": {
-          "slot_2": 4.0
+          "slot_2": 4
         },
         "thresholds": {
-          "slot_1": 4.0,
-          "slot_2": 4.0,
-          "slot_3": 4.0,
-          "slot_4": 4.0,
-          "slot_5": 4.0,
-          "slot_6": 4.0
+          "slot_1": 4,
+          "slot_2": 4,
+          "slot_3": 4,
+          "slot_4": 4,
+          "slot_5": 4,
+          "slot_6": 4
         },
         "tiebreak": null,
-        "total_weight": 6.0,
+        "total_weight": 6,
         "votes": {
           "slot_1": "slot_2",
           "slot_3": "slot_2",
@@ -31,18 +70,18 @@
           "slot_5": "slot_2"
         },
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0,
-          "slot_6": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1,
+          "slot_6": 1
         },
         "winner": "slot_2"
       }
     },
     {
-      "index": 1,
+      "index": 5,
       "kind": "PlayerKilled",
       "payload": {
         "attackers": [],
@@ -52,20 +91,20 @@
       }
     },
     {
-      "index": 2,
+      "index": 6,
       "kind": "PhaseAnnouncement",
       "payload": {
         "deaths": [
           {
-            "slot_id": "slot_2",
-            "cause": "lynch"
+            "cause": "lynch",
+            "slot_id": "slot_2"
           }
         ],
         "phase_id": "D01"
       }
     },
     {
-      "index": 3,
+      "index": 7,
       "kind": "WinReached",
       "payload": {
         "metadata": {
@@ -78,7 +117,6 @@
           "target_phase_kind": "Night",
           "target_phase_number": 1
         },
-        "reason": "executioner slot_1 target slot_2 lynched",
         "winner": "executioner"
       }
     }

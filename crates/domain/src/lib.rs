@@ -35,12 +35,12 @@ pub use pack::{
     SUPPORTED_PACK_VERSION,
 };
 pub use resolver::{
-    check_win, resolve, resolve_events, DayAnnouncementInput, DayPhaseInputs, ResolutionInput,
-    ResolutionOutput, RESULT_VERSION,
+    check_win, resolve, resolve_events, resolve_instant, DayAnnouncementInput, DayPhaseInputs,
+    ResolutionInput, ResolutionOutput, RESULT_VERSION,
 };
 pub use state::{
     apply_events, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,
     ConversionOriginRecord, DelayedDeathRecord, EffectRecord, InvestigationMemoryRecord,
-    LinkRecord, RetaliationRecord, RevealState, SlotLifecycle, SlotState, StateSnapshot,
-    Submission, VisitRecord, WolfBeautyMarkRecord, WolfCarryTokenRecord,
+    LinkRecord, PrivateChannelRecord, RetaliationRecord, RevealState, SlotLifecycle, SlotState,
+    StateSnapshot, Submission, VisitRecord, WolfBeautyMarkRecord, WolfCarryTokenRecord,
 };

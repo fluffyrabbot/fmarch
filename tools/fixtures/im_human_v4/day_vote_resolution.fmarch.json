@@ -1,0 +1,77 @@
+{
+  "phase_id": "D01",
+  "phase_kind": "Day",
+  "phase_number": 1,
+  "run_id": "imhuman:v4:day_vote_resolution",
+  "result_version": 18,
+  "seed": 17,
+  "counts": {
+    "events": 4,
+    "kills": 1,
+    "saves": 0
+  },
+  "events": [
+    {
+      "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "target": "slot_2",
+        "withdrawn": false,
+        "sequence": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "status": "Lynch",
+        "winner": "slot_2",
+        "contenders": [
+          "slot_2"
+        ],
+        "tallies": {
+          "slot_2": 1
+        },
+        "votes": {
+          "slot_1": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1
+        },
+        "majority": 1,
+        "thresholds": {
+          "slot_2": 1
+        },
+        "total_weight": 1,
+        "tiebreak": null,
+        "reason": null
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "day_vote",
+        "attackers": [],
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "D01",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "day_vote"
+          }
+        ]
+      }
+    }
+  ],
+  "started_at": 100,
+  "finished_at": 101
+}

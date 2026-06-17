@@ -1,0 +1,140 @@
+{
+  "description": "PT Cop reads setup-declared private topic access from folded private-channel membership.",
+  "input": {
+    "game_id": "game_mafiascum_pt_cop_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {
+          "Day": ["sod", "main", "eod"]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "pt_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "pt_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mason",
+          "alignment": "town",
+          "status": "alive",
+          "effects": ["mason"]
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mason",
+          "alignment": "town",
+          "status": "alive",
+          "effects": ["mason"]
+        },
+        {
+          "slot_id": "slot_6",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "private_channels": [
+        {
+          "channel_id": "private:mason",
+          "kind": "Mason",
+          "slot_id": "slot_3",
+          "role_key": "mason",
+          "reveals_alignment": "Town",
+          "source": "pack.private_channels.mason"
+        },
+        {
+          "channel_id": "private:mason",
+          "kind": "Mason",
+          "slot_id": "slot_5",
+          "role_key": "mason",
+          "reveals_alignment": "Town",
+          "source": "pack.private_channels.mason"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "pt_cop_positive_001",
+        "actor": "slot_1",
+        "template_id": "investigate_pt",
+        "targets": ["slot_3"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "pt_cop_negative_001",
+        "actor": "slot_2",
+        "template_id": "investigate_pt",
+        "targets": ["slot_4"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 912206
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "PtAccess",
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "result": {
+          "pt_access": ["private:mason"]
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "mode": "PtAccess",
+        "investigator": "slot_2",
+        "target": "slot_4",
+        "result": {
+          "pt_access": []
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

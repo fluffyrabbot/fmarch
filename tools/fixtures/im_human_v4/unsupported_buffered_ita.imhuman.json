@@ -1,0 +1,19 @@
+{
+  "format": "im-human-engine-v4-result",
+  "phase_id": "D01",
+  "phase_kind": "Day",
+  "phase_number": 1,
+  "run_id": "imhuman:v4:unsupported_buffered_ita",
+  "seed": 20,
+  "started_at": 100,
+  "finished_at": 101,
+  "events": [
+    {
+      "kind": "ita.shot.buffered",
+      "payload": {
+        "session_id": "ita_d01",
+        "action_id": "ita_001"
+      }
+    }
+  ]
+}

@@ -1,55 +1,167 @@
 {
   "description": "Gladiator challenges one target during the day. The duel restricts the official vote to the challenger and target; ballots on other slots are ignored and a duel participant is eliminable at one vote.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "VoteDuelDeclared",
+      "payload": {
+        "challenger": "slot_1",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "source_action": "duel_001",
+        "target": "slot_2"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 1,
+        "target": "slot_5",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 2,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_5",
+        "sequence": 3,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 4,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_2"
+        ],
+        "majority": 3,
+        "status": "Lynch",
+        "tallies": {
+          "slot_1": 0,
+          "slot_2": 2
+        },
+        "thresholds": {
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_5": 3
+        },
+        "tiebreak": null,
+        "total_weight": 5,
+        "votes": {
+          "slot_3": "slot_2",
+          "slot_5": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
+        },
+        "winner": "slot_2"
+      }
+    },
+    {
+      "index": 5,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 6,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "cause": "lynch",
+            "slot_id": "slot_2"
+          }
+        ],
+        "phase_id": "D01"
+      }
+    }
+  ],
   "input": {
     "game_id": "game_demo_gladiator_duel_001",
+    "pack": "mafiascum",
     "phase_id": "D01",
+    "seed": 949598,
     "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
       "phase_kind": "Day",
       "phase_number": 1,
-      "phase_id": "D01",
-      "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
       "slots": [
         {
-          "slot_id": "slot_1",
+          "alignment": "town",
+          "effects": [],
           "role_key": "gladiator",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "slot_id": "slot_1",
+          "status": "alive"
         },
         {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
           "slot_id": "slot_2",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "status": "alive"
         },
         {
-          "slot_id": "slot_3",
-          "role_key": "mafia_goon",
           "alignment": "mafia",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_3",
+          "status": "alive"
         },
         {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
           "slot_id": "slot_4",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "status": "alive"
         },
         {
-          "slot_id": "slot_5",
-          "role_key": "vanilla_townie",
           "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
         }
       ]
     },
@@ -57,117 +169,51 @@
       {
         "action_id": "duel_001",
         "actor": "slot_1",
-        "template_id": "duel",
-        "targets": ["slot_2"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "duel",
+        "withdrawn": false
       },
       {
         "action_id": "vote_ignored_001",
         "actor": "slot_4",
-        "template_id": "day_vote",
-        "targets": ["slot_5"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 2,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_5"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       },
       {
         "action_id": "vote_duel_target_001",
         "actor": "slot_3",
-        "template_id": "day_vote",
-        "targets": ["slot_2"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 3,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       },
       {
         "action_id": "vote_duel_target_002",
         "actor": "slot_5",
-        "template_id": "day_vote",
-        "targets": ["slot_2"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 4,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       }
-    ],
-    "pack": "mafiascum",
-    "seed": 949598
-  },
-  "expected_events": [
-    {
-      "index": 0,
-      "kind": "VoteDuelDeclared",
-      "payload": {
-        "challenger": "slot_1",
-        "target": "slot_2",
-        "source_action": "duel_001",
-        "phase_id": "D01",
-        "phase_kind": "Day",
-        "phase_number": 1
-      }
-    },
-    {
-      "index": 1,
-      "kind": "DayVoteOutcome",
-      "payload": {
-        "status": "Lynch",
-        "winner": "slot_2",
-        "contenders": ["slot_2"],
-        "tallies": {
-          "slot_1": 0.0,
-          "slot_2": 2.0
-        },
-        "votes": {
-          "slot_3": "slot_2",
-          "slot_5": "slot_2"
-        },
-        "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
-        },
-        "majority": 3.0,
-        "thresholds": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 3.0,
-          "slot_4": 3.0,
-          "slot_5": 3.0
-        },
-        "total_weight": 5.0,
-        "tiebreak": null,
-        "reason": null
-      }
-    },
-    {
-      "index": 2,
-      "kind": "PlayerKilled",
-      "payload": {
-        "slot_id": "slot_2",
-        "cause": "day_vote",
-        "attackers": [],
-        "unstoppable": true
-      }
-    },
-    {
-      "index": 3,
-      "kind": "PhaseAnnouncement",
-      "payload": {
-        "phase_id": "D01",
-        "deaths": [
-          {
-            "slot_id": "slot_2",
-            "cause": "lynch"
-          }
-        ]
-      }
-    }
-  ]
+    ]
+  }
 }

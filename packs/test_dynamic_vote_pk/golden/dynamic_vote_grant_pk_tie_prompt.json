@@ -3,6 +3,36 @@
   "expected_events": [
     {
       "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "sequence": 1,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "sequence": 2,
+        "target": "slot_3",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 3,
+        "target": "slot_3",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [
@@ -10,31 +40,30 @@
           "slot_3"
         ],
         "majority": null,
-        "reason": null,
         "status": "Tie",
         "tallies": {
-          "slot_2": 2.0,
-          "slot_3": 2.0
+          "slot_2": 2,
+          "slot_3": 2
         },
         "thresholds": {},
         "tiebreak": "HostDecides",
-        "total_weight": 5.0,
+        "total_weight": 5,
         "votes": {
           "slot_1": "slot_2",
           "slot_2": "slot_3",
           "slot_4": "slot_3"
         },
         "weights": {
-          "slot_1": 2.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0
+          "slot_1": 2,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1
         },
         "winner": null
       }
     },
     {
-      "index": 1,
+      "index": 4,
       "kind": "HostPromptIssued",
       "payload": {
         "kind": "pk",
@@ -57,7 +86,7 @@
       }
     },
     {
-      "index": 2,
+      "index": 5,
       "kind": "PhaseAnnouncement",
       "payload": {
         "deaths": [],

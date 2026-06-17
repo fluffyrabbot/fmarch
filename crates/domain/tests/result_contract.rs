@@ -1,3 +1,5 @@
+use std::{fs, path::Path};
+
 use domain::{validate_resolution_json, validate_trace_json, RESULT_VERSION, TRACE_VERSION};
 use serde_json::json;
 
@@ -83,6 +85,26 @@ fn valid_resolution_payload_passes_contract_validation() {
 }
 
 #[test]
+fn imported_im_human_v4_fixture_payload_passes_contract_validation() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("domain crate should live under crates/domain")
+        .join("tools/fixtures/im_human_v4/day_vote_resolution.fmarch.json");
+    let payload: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {}: {err}", path.display())),
+    )
+    .unwrap_or_else(|err| panic!("parse {}: {err}", path.display()));
+
+    let applied = validate_resolution_json(&payload, RESULT_VERSION)
+        .expect("imported im-human V4 fixture should pass fmarch result validation");
+    assert_eq!(applied.phase_id, "D01");
+    assert_eq!(applied.counts.events, 4);
+    assert_eq!(applied.counts.kills, 1);
+    assert_eq!(applied.counts.saves, 0);
+}
+
+#[test]
 fn concealed_death_reveal_payload_passes_contract_validation() {
     let mut payload = valid_resolution();
     payload["events"][0]["payload"]["cause"] = json!("janitor_kill");
@@ -109,6 +131,171 @@ fn concealed_death_reveal_payload_passes_contract_validation() {
     assert!(
         err.to_string().contains("unknown variant `Mystery`"),
         "unexpected validation error: {err}"
+    );
+}
+
+#[test]
+fn info_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:info",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InfoResult",
+                "payload": {
+                    "actor": "slot_1",
+                    "target": "slot_2",
+                    "kind": "mailman",
+                    "audience": ["slot_2"],
+                    "result": {
+                        "kind": "mailman",
+                        "message": "anonymous",
+                        "source_action": "mailman_n01",
+                        "target": "slot_2"
+                    },
+                    "source_action": "mailman_n01",
+                    "template_id": "mailman",
+                    "phase_id": "N01",
+                    "phase_kind": "Night",
+                    "phase_number": 1
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("InfoResult should pass");
+    assert!(matches!(
+        applied.events[0].event,
+        domain::InnerEvent::InfoResult { .. }
+    ));
+}
+
+#[test]
+fn effect_notification_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:effect-notification",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "EffectNotification",
+                "payload": {
+                    "effect": "bulletproof_vest",
+                    "status": "marked",
+                    "audience": ["slot_2"]
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("EffectNotification should pass");
+    assert!(matches!(
+        applied.events[0].event,
+        domain::InnerEvent::EffectNotification { .. }
+    ));
+}
+
+#[test]
+fn effect_notification_missing_audience_fails_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:effect-notification",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "EffectNotification",
+                "payload": {
+                    "effect": "bulletproof_vest",
+                    "status": "marked"
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let err =
+        validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string().contains("missing field `audience`"),
+        "unexpected validation error: {err}"
+    );
+}
+
+#[test]
+fn info_result_missing_audience_fails_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:info",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InfoResult",
+                "payload": {
+                    "actor": "slot_1",
+                    "target": "slot_2",
+                    "kind": "mailman",
+                    "result": {},
+                    "source_action": "mailman_n01",
+                    "template_id": "mailman",
+                    "phase_id": "N01",
+                    "phase_kind": "Night",
+                    "phase_number": 1
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let err =
+        validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string().contains("missing field `audience`"),
+        "unexpected error: {err}"
     );
 }
 
@@ -584,6 +771,89 @@ fn alignment_revealed_payload_passes_contract_validation() {
 }
 
 #[test]
+fn role_revealed_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "run_id": "resolution:test:N02:role_reveal",
+        "result_version": RESULT_VERSION,
+        "seed": 18,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "RoleRevealed",
+                "payload": {
+                    "slot_id": "slot_1",
+                    "role_key": "doctor",
+                    "source_action": "role_oracle_001",
+                    "phase_id": "N02",
+                    "phase_kind": "Night",
+                    "phase_number": 2
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("RoleRevealed should pass");
+    assert_eq!(applied.counts.events, 2);
+}
+
+#[test]
+fn malformed_role_revealed_payload_fails_contract_validation() {
+    let payload = json!({
+        "phase_id": "N02",
+        "phase_kind": "Night",
+        "phase_number": 2,
+        "run_id": "resolution:test:N02:bad_role_reveal",
+        "result_version": RESULT_VERSION,
+        "seed": 19,
+        "counts": {
+            "events": 2,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "RoleRevealed",
+                "payload": {
+                    "slot_id": "slot_1",
+                    "role_key": "doctor",
+                    "phase_id": "N02",
+                    "phase_kind": "Night",
+                    "phase_number": 2
+                }
+            },
+            {
+                "index": 1,
+                "kind": "PhaseAnnouncement",
+                "payload": {
+                    "phase_id": "N02",
+                    "deaths": []
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let err = validate_resolution_json(&payload, RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string().contains("missing field `source_action`"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
 fn vote_duel_declared_payload_passes_contract_validation() {
     let payload = json!({
         "phase_id": "D01",
@@ -617,6 +887,43 @@ fn vote_duel_declared_payload_passes_contract_validation() {
 
     let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
         .expect("VoteDuelDeclared should pass");
+    assert_eq!(applied.counts.events, 2);
+}
+
+#[test]
+fn vote_vetoed_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "run_id": "resolution:test:D01:veto",
+        "result_version": RESULT_VERSION,
+        "seed": 24,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "VoteVetoed",
+                "payload": {
+                    "governor": "slot_1",
+                    "target": "slot_2",
+                    "source_action": "veto_001",
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("VoteVetoed should pass");
     assert_eq!(applied.counts.events, 2);
 }
 
@@ -1493,6 +1800,315 @@ fn full_role_investigation_result_payload_passes_contract_validation() {
     let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
         .expect("canonical FullRole investigation result should pass");
     assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn killer_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:killer-investigation-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "Killer",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "killer": true
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical Killer investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn specialist_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:specialist-investigation-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "Specialist",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "specialist": true
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical Specialist investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn pt_access_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:pt-access-investigation-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "PtAccess",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "pt_access": ["private:mason"]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical PtAccess investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn visitor_role_investigation_result_payload_passes_contract_validation() {
+    for (mode, run_id) in [
+        ("RoleWatcher", "resolution:test:N01:role-watcher-result"),
+        ("RoleGuard", "resolution:test:N01:role-guard-result"),
+    ] {
+        let payload = json!({
+            "phase_id": "N01",
+            "phase_kind": "Night",
+            "phase_number": 1,
+            "run_id": run_id,
+            "result_version": RESULT_VERSION,
+            "seed": 8,
+            "counts": {
+                "events": 1,
+                "kills": 0,
+                "saves": 0
+            },
+            "events": [
+                {
+                    "index": 0,
+                    "kind": "InvestigationResult",
+                    "payload": {
+                        "mode": mode,
+                        "investigator": "slot_1",
+                        "target": "slot_2",
+                        "result": {
+                            "visitor_roles": ["doctor", "mafia_goon"]
+                        }
+                    }
+                }
+            ],
+            "started_at": 12,
+            "finished_at": 12
+        });
+
+        let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+            .unwrap_or_else(|err| panic!("canonical {mode} result should pass: {err}"));
+        assert_eq!(applied.events.len(), 2);
+    }
+}
+
+#[test]
+fn security_guard_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:security-guard-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "SecurityGuard",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "visitors": ["slot_3", "slot_4"]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical SecurityGuard investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn voyeur_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:voyeur-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "Voyeur",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "actions": ["doctor_protect", "factional_kill"]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical Voyeur investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
+fn malformed_visitor_role_investigation_result_payload_fails_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:malformed-role-watcher-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "RoleWatcher",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "visitor_roles": ["doctor", 7]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let err =
+        validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("event 0 mode RoleWatcher result key `visitor_roles` has invalid shape"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn malformed_voyeur_investigation_result_payload_fails_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:malformed-voyeur-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "Voyeur",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "actions": ["doctor_protect", 7]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let err =
+        validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("event 0 mode Voyeur result key `actions` has invalid shape"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]

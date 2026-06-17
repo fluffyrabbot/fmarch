@@ -25,6 +25,8 @@ pub enum IrAbility {
     Visit,
     RevealTown,
     VoteDuel,
+    Veto,
+    Info,
 }
 
 /// Investigate is parameterized by mode rather than split into many primitives.
@@ -34,10 +36,17 @@ pub enum InvestigateMode {
     Vanilla,
     Neapolitan,
     Gunsmith,
+    Killer,
+    Specialist,
+    PtAccess,
     Role,
     FullRole,
     Track,
     Watch,
+    RoleWatcher,
+    RoleGuard,
+    SecurityGuard,
+    Voyeur,
     Motion,
     PriorMotion,
 }
@@ -49,6 +58,7 @@ pub enum Modifier {
     Strongman,
     Ninja,
     Loyal,
+    Disloyal,
     Bodyguard,
     Martyr,
     Cpr,

@@ -21,16 +21,16 @@ use crate::pack::{
     night_ability_order, visibility_required_families, win_required_families, ActionTemplate,
     ActivationGateReason, ActorRef, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
     ConversionPendingDeathPolicy, DeathRetaliationTiming, DeathRevealMode, EffectDuration,
-    EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec, GuardWitchSameTargetPolicy,
-    ItaSessionSpec, ItaVoteConflictPolicy, KillStackingPolicy, Pack, PhaseKind, PhaseParity,
-    RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier, StandardNarConflictFamily,
-    SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy,
-    TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker,
-    WeightPolicy, WinCondition, WinFamily, Window,
+    EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec,
+    GuardWitchSameTargetPolicy, ItaSessionSpec, ItaVoteConflictPolicy, KillStackingPolicy, Pack,
+    PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier,
+    StandardNarConflictFamily, SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent,
+    TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod,
+    VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
 };
 use crate::state::{
-    apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId, Seed,
-    SlotId, SlotState, StateSnapshot, Submission, WolfBeautyMarkRecord,
+    apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
+    RevealState, Seed, SlotId, SlotState, StateSnapshot, Submission, WolfBeautyMarkRecord,
 };
 
 use serde::{Deserialize, Serialize};
@@ -591,6 +591,8 @@ fn trigger_on_label(on: TriggerOn) -> &'static str {
         TriggerOn::Ability(IrAbility::Visit) => "Visit",
         TriggerOn::Ability(IrAbility::RevealTown) => "RevealTown",
         TriggerOn::Ability(IrAbility::VoteDuel) => "VoteDuel",
+        TriggerOn::Ability(IrAbility::Veto) => "Veto",
+        TriggerOn::Ability(IrAbility::Info) => "Info",
         TriggerOn::Event(TriggerEvent::Visit) => "Visit",
         TriggerOn::Event(TriggerEvent::Lynch) => "Lynch",
         TriggerOn::Event(TriggerEvent::Death) => "Death",
@@ -720,6 +722,7 @@ fn apply_win_triggers_before_final(
         input,
         win_observations(&state_before_final, winner),
         &BTreeMap::new(),
+        &BTreeMap::new(),
         &mut killed,
         &mut cpr_saves,
         events,
@@ -741,6 +744,7 @@ fn apply_trigger_fixpoint(
     input: &ResolutionInput,
     mut frontier: Vec<TriggerObservation>,
     protections: &BTreeMap<SlotId, Vec<ProtectionSource>>,
+    transient_effects: &BTreeMap<SlotId, BTreeSet<String>>,
     killed: &mut Vec<SlotId>,
     cpr_saves: &mut BTreeSet<String>,
     events: &mut Vec<InnerEvent>,
@@ -811,6 +815,25 @@ fn apply_trigger_fixpoint(
                 });
                 if trig.produces.ability == IrAbility::Kill {
                     let strongman = standard_nar_generated_kill_bypasses_protect(pack, trig);
+                    let target_tags = target_tags(input, transient_effects, &produced_target);
+                    if let Some(reason) =
+                        target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
+                    {
+                        trace_decisions.push(DecisionTrace {
+                            stage: "kill_resolution".to_string(),
+                            source: format!("cause:{}", trig.id),
+                            outcome: "kill_skipped_by_target_state".to_string(),
+                            detail: serde_json::json!({
+                                "action_id": trig.id,
+                                "template_id": trig.id,
+                                "actor": produced_actor,
+                                "target": produced_target,
+                                "reason": reason,
+                                "target_tags": target_tags,
+                            }),
+                        });
+                        continue;
+                    }
                     resolve_one_kill(
                         pack,
                         &input.phase_id,
@@ -822,7 +845,7 @@ fn apply_trigger_fixpoint(
                         strongman,
                         death_reveal_mode(input, &produced_target, &trig.id),
                         protections,
-                        &target_tags(input, &BTreeMap::new(), &produced_target),
+                        &target_tags,
                         cpr_saves,
                         events,
                         killed,
@@ -1995,7 +2018,7 @@ fn require_standard_nar_guard_dependency_cause_policy(pack: &Pack) {
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && action.has_modifier(Modifier::Babysitter)
         })
@@ -2059,7 +2082,9 @@ fn require_standard_nar_block_action_policy(pack: &Pack) {
         .values()
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Block))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Block)
+        })
     {
         if !declared_blocks.contains(action.id.as_str()) {
             panic!(
@@ -2089,7 +2114,9 @@ fn require_standard_nar_protect_action_policy(pack: &Pack) {
         .values()
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Protect))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Protect)
+        })
     {
         if !declared_protects.contains(action.id.as_str()) {
             panic!(
@@ -2134,7 +2161,9 @@ fn require_standard_nar_specialized_protect_action_policy(pack: &Pack) {
         .values()
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Protect))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Protect)
+        })
     {
         if action.has_modifier(Modifier::Bodyguard) && !bodyguards.contains(action.id.as_str()) {
             panic!(
@@ -2187,7 +2216,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "protect",
         "Protect without Bodyguard/Martyr/Cpr",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && !action.has_modifier(Modifier::Bodyguard)
                 && !action.has_modifier(Modifier::Martyr)
@@ -2201,7 +2230,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "kill",
         "Kill without Strongman/Cpr",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Kill)
                 && !action.has_modifier(Modifier::Strongman)
                 && !action.has_modifier(Modifier::Cpr)
@@ -2214,7 +2243,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "bodyguard",
         "Protect with Bodyguard",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && action.has_modifier(Modifier::Bodyguard)
         },
@@ -2226,7 +2255,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "martyr",
         "Protect with Martyr",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && action.has_modifier(Modifier::Martyr)
         },
@@ -2238,7 +2267,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "CPR",
         "Protect plus Kill with Cpr",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Protect)
                 && action.has_ability(IrAbility::Kill)
                 && action.has_modifier(Modifier::Cpr)
@@ -2251,7 +2280,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "jailkeep",
         "Block plus Protect",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Block)
                 && action.has_ability(IrAbility::Protect)
         },
@@ -2263,7 +2292,7 @@ fn require_standard_nar_action_bucket_shapes(pack: &Pack) {
         "strongman",
         "Kill with Strongman",
         |action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Kill)
                 && action.has_modifier(Modifier::Strongman)
         },
@@ -2289,7 +2318,7 @@ fn require_standard_nar_team_kill_action_policy(pack: &Pack) {
                 "invalid standard_nar team kill action policy: team_kill_action_ids entry `{action_id}` references unknown action"
             );
         };
-        if action.window == Window::Day || !action.has_ability(IrAbility::Kill) {
+        if !action.window.is_night_resolution_window() || !action.has_ability(IrAbility::Kill) {
             panic!(
                 "invalid standard_nar team kill action policy: team_kill_action_ids entry `{action_id}` must be a night/any Kill action"
             );
@@ -2363,7 +2392,7 @@ fn require_standard_nar_action_bucket_shape(
                 "invalid standard_nar {policy_label} action policy: {bucket_name} entry `{action_id}` references unknown action"
             );
         };
-        if action.window == Window::Day || !matches_shape(action) {
+        if !action.window.is_night_resolution_window() || !matches_shape(action) {
             panic!(
                 "invalid standard_nar {policy_label} action policy: {bucket_name} entry `{action_id}` must be a night/any {expected_shape} action"
             );
@@ -2418,7 +2447,9 @@ fn require_standard_nar_kill_action_policy(pack: &Pack) {
         .values()
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Kill))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Kill)
+        })
     {
         if pack
             .standard_nar
@@ -2459,7 +2490,7 @@ fn require_standard_nar_strongman_action_policy(pack: &Pack) {
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Kill)
                 && action.has_modifier(Modifier::Strongman)
         })
@@ -2512,7 +2543,7 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && (action.has_ability(IrAbility::Kill) || action.has_ability(IrAbility::Retaliate))
                 && !pack
                     .standard_nar
@@ -2542,7 +2573,9 @@ fn require_standard_nar_chosen_retaliation_cause_policy(pack: &Pack) {
         .values()
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
-        .filter(|action| action.window != Window::Day && action.has_ability(IrAbility::Retaliate))
+        .filter(|action| {
+            action.window.is_night_resolution_window() && action.has_ability(IrAbility::Retaliate)
+        })
         .map(|action| (action.id.as_str(), action))
         .collect::<BTreeMap<_, _>>();
 
@@ -2961,7 +2994,7 @@ fn standard_nar_night_action_roleblockability(
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
     {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         let record = StandardNarNightAction {
@@ -2990,7 +3023,7 @@ fn standard_nar_night_action_abilities(pack: &Pack) -> BTreeMap<&str, BTreeSet<I
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
     {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         actions
@@ -3093,7 +3126,7 @@ fn standard_nar_generated_trigger_feed_actions(pack: &Pack) -> BTreeMap<&str, BT
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
     {
-        if action.window == Window::Day {
+        if !action.window.is_night_resolution_window() {
             continue;
         }
         for trigger in &generated_triggers {
@@ -3210,7 +3243,7 @@ fn require_standard_nar_hide_dependency_cause_policy(pack: &Pack) {
         .flat_map(|role| role.actions.iter())
         .chain(pack.item_actions.values())
         .filter(|action| {
-            action.window != Window::Day
+            action.window.is_night_resolution_window()
                 && action.has_ability(IrAbility::Mark)
                 && action.has_modifier(Modifier::Hider)
         })
@@ -3703,6 +3736,8 @@ fn phase_window_matches(window: Window, phase_kind: PhaseKind) -> bool {
         Window::Any => true,
         Window::Day => phase_kind == PhaseKind::Day,
         Window::Night => phase_kind == PhaseKind::Night,
+        Window::Twilight => phase_kind == PhaseKind::Twilight,
+        Window::Instant => false,
     }
 }
 
@@ -3714,6 +3749,8 @@ fn phase_window_mismatch_reason(window: Window, phase_kind: PhaseKind) -> Option
         Window::Any => None,
         Window::Day => Some("day_specific"),
         Window::Night => Some("night_specific"),
+        Window::Twilight => Some("twilight_specific"),
+        Window::Instant => Some("instant_specific"),
     }
 }
 
@@ -3805,6 +3842,19 @@ fn target_role_filter_error(input: &ResolutionInput, action: &Action<'_>) -> boo
             crate::pack::TargetRoleFilter::PowerRole => is_vanilla,
             crate::pack::TargetRoleFilter::Vanilla => !is_vanilla,
         }
+    })
+}
+
+fn disloyal_target_error(input: &ResolutionInput, action: &Action<'_>) -> bool {
+    if !action.template.has_modifier(Modifier::Disloyal) {
+        return false;
+    }
+    let Some(actor_alignment) = slot_alignment(input, &action.sub.actor) else {
+        return true;
+    };
+    action.targets.iter().any(|target| {
+        slot_alignment(input, target)
+            .is_none_or(|target_alignment| target_alignment == actor_alignment)
     })
 }
 
@@ -4036,6 +4086,7 @@ fn apply_action_constraints(
     input: &ResolutionInput,
     actions: &mut [Action],
     events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
 ) {
     let audience = alive_slot_ids(input);
     let mut base_role_submissions_seen: BTreeSet<(String, String)> = BTreeSet::new();
@@ -4099,6 +4150,36 @@ fn apply_action_constraints(
             events.push(InnerEvent::ActionInterfered {
                 actor: action.sub.actor.clone(),
                 reason: "invalid_target_role".to_string(),
+            });
+            continue;
+        }
+
+        if disloyal_target_error(input, action) {
+            action.blocked = true;
+            trace_decisions.push(DecisionTrace {
+                stage: "night:action_constraints".to_string(),
+                source: format!("action:{}", action.sub.action_id),
+                outcome: "action_suppressed".to_string(),
+                detail: serde_json::json!({
+                    "action_id": action.sub.action_id.clone(),
+                    "template_id": action.template.id.clone(),
+                    "actor": action.sub.actor.clone(),
+                    "actor_alignment": slot_alignment(input, &action.sub.actor),
+                    "targets": action.targets.clone(),
+                    "target_alignments": action
+                        .targets
+                        .iter()
+                        .map(|target| serde_json::json!({
+                            "target": target,
+                            "alignment": slot_alignment(input, target),
+                        }))
+                        .collect::<Vec<_>>(),
+                    "reason": "disloyal",
+                }),
+            });
+            events.push(InnerEvent::ActionInterfered {
+                actor: action.sub.actor.clone(),
+                reason: "disloyal".to_string(),
             });
             continue;
         }
@@ -4265,7 +4346,31 @@ fn record_history_sensitive_actions(
 
 /// Resolve a window's submissions into the full deterministic resolver output.
 pub fn resolve(input: ResolutionInput) -> ResolutionOutput {
-    let mut inner = resolve_inner(&input);
+    let inner = resolve_inner(&input);
+    finalize_resolution(input, inner)
+}
+
+/// Resolve command-time Instant submissions into the same validated envelope shape
+/// as ordinary phase resolution. Instant actions are not replayed by
+/// `resolve_inner`; callers must pass only the instant submissions being committed.
+pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
+    let mut events = Vec::new();
+    resolve_instant_self_destruct_actions(&input, &mut events);
+    let deaths = deaths_from_events(&events);
+    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
+        phase_id: input.phase_id.clone(),
+        deaths,
+    }));
+    let inner = InnerResolution {
+        events,
+        trace_edges: Vec::new(),
+        trace_decisions: Vec::new(),
+        trace_notes: Vec::new(),
+    };
+    finalize_resolution(input, inner)
+}
+
+fn finalize_resolution(input: ResolutionInput, mut inner: InnerResolution) -> ResolutionOutput {
     let mut events = inner.events;
     apply_treestump_policy(&input, &mut events, &mut inner.trace_decisions);
     let mut post_state = apply_events(&input.state, &events);
@@ -4419,7 +4524,8 @@ fn resolve_inner(input: &ResolutionInput) -> InnerResolution {
     events.append(&mut window_events);
     ingest_decisions.append(&mut window_decisions);
     let mut inner = match input.state.phase_kind {
-        PhaseKind::Day | PhaseKind::Twilight => resolve_day(input),
+        PhaseKind::Day => resolve_day(input),
+        PhaseKind::Twilight => resolve_twilight(input),
         PhaseKind::Night => resolve_night(input),
     };
     ingest_decisions.append(&mut inner.trace_decisions);
@@ -5146,9 +5252,32 @@ fn build_trace(
                 "ita_session_closed"
             }
             InnerEvent::InvestigationResult { .. } => "investigation_result",
+            InnerEvent::InfoResult { .. } => "info_result",
             InnerEvent::InvestigationMemoryRecorded { .. } => "investigation_memory_recorded",
             InnerEvent::AlignmentRevealed { .. } => "alignment_revealed",
+            InnerEvent::RoleRevealed { .. } => "role_revealed",
             InnerEvent::VoteDuelDeclared { .. } => "vote_duel_declared",
+            InnerEvent::VoteVetoed {
+                governor,
+                target,
+                source_action,
+                ..
+            } => {
+                notes.push(format!(
+                    "vote veto by {governor} saved {target} at event_index {}",
+                    indexed.index
+                ));
+                generated.push(GeneratedActionTrace {
+                    action_id: source_action.clone(),
+                    source: "VoteVetoed".to_string(),
+                    actor: governor.clone(),
+                    targets: vec![target.clone()],
+                    detail: serde_json::json!({
+                        "event_index": indexed.index,
+                    }),
+                });
+                "vote_vetoed"
+            }
             InnerEvent::ActionIngestHalted { .. } => "action_ingest_halted",
             InnerEvent::ActionInterfered { .. } => "action_interfered",
             InnerEvent::ActionUseCounted { .. } => "action_use_counted",
@@ -5257,7 +5386,11 @@ pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
                 )
             }
         };
-        if fires {
+        let blocked_by_alive = rule
+            .blocked_by_alive
+            .iter()
+            .any(|alignment| alive_in_faction(state, alignment) > 0);
+        if fires && !blocked_by_alive {
             return Some(InnerEvent::WinReached {
                 winner: rule.winner.clone(),
                 reason,
@@ -5661,7 +5794,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
 
     emit_missing_compulsive_actions(input, &actions, &mut events);
     apply_faction_action_coordination(input, &mut actions, &mut events);
-    apply_action_constraints(input, &mut actions, &mut events);
+    apply_action_constraints(input, &mut actions, &mut events, &mut trace_decisions);
 
     let stage_order = night_ability_order(pack)
         .unwrap_or_else(|err| panic!("invalid pack precedence for night resolution: {err}"));
@@ -6186,6 +6319,48 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     }
                 }
             }
+            IrAbility::Info => {
+                for idx in ability_order(&actions, IrAbility::Info) {
+                    if actions[idx].blocked {
+                        continue;
+                    }
+                    let Some(info) = actions[idx].template.info.as_ref() else {
+                        continue;
+                    };
+                    let actor = actions[idx].sub.actor.clone();
+                    for target in actions[idx].targets.clone() {
+                        let audience = info_audience(info.audience, &actor, &target);
+                        let mut result = serde_json::Map::new();
+                        result.insert(
+                            "kind".to_string(),
+                            serde_json::Value::String(info.kind.clone()),
+                        );
+                        result.insert(
+                            "target".to_string(),
+                            serde_json::Value::String(target.clone()),
+                        );
+                        result.insert(
+                            "source_action".to_string(),
+                            serde_json::Value::String(actions[idx].sub.action_id.clone()),
+                        );
+                        for (key, value) in &info.payload {
+                            result.insert(key.clone(), value.clone());
+                        }
+                        events.push(InnerEvent::InfoResult {
+                            actor: actor.clone(),
+                            target,
+                            kind: info.kind.clone(),
+                            audience,
+                            result: serde_json::Value::Object(result),
+                            source_action: actions[idx].sub.action_id.clone(),
+                            template_id: actions[idx].template.id.clone(),
+                            phase_id: input.phase_id.clone(),
+                            phase_kind: input.state.phase_kind,
+                            phase_number: input.state.phase_number,
+                        });
+                    }
+                }
+            }
             IrAbility::RevealTown => {
                 // RevealTown is a public day-action primitive. Night handling is
                 // intentionally empty; day semantics live in `resolve_day`.
@@ -6193,6 +6368,10 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
             IrAbility::VoteDuel => {
                 // VoteDuel is a public day-action primitive that restricts the
                 // following official vote. Night handling is intentionally empty.
+            }
+            IrAbility::Veto => {
+                // Veto is a public day-action primitive that cancels a resolved
+                // day elimination. Night handling is intentionally empty.
             }
             IrAbility::Badge => {
                 // Badge is a day-action lifecycle primitive. The current night
@@ -6820,6 +6999,44 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     }),
                                 });
                             }
+                            InvestigateMode::Killer => {
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target: target.clone(),
+                                    result: serde_json::json!({
+                                        "killer": role_set_contains(
+                                            &input.pack.investigation_results.role_sets.killer_roles,
+                                            input,
+                                            &target,
+                                        ),
+                                    }),
+                                });
+                            }
+                            InvestigateMode::Specialist => {
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target: target.clone(),
+                                    result: serde_json::json!({
+                                        "specialist": role_set_contains(
+                                            &input.pack.investigation_results.role_sets.specialist_roles,
+                                            input,
+                                            &target,
+                                        ),
+                                    }),
+                                });
+                            }
+                            InvestigateMode::PtAccess => {
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target: target.clone(),
+                                    result: serde_json::json!({
+                                        "pt_access": private_topic_access(input, &target),
+                                    }),
+                                });
+                            }
                             InvestigateMode::Role => {
                                 let role = slot_role(input, &target).unwrap_or("");
                                 events.push(InnerEvent::InvestigationResult {
@@ -6860,6 +7077,44 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     investigator: investigator.clone(),
                                     target,
                                     result: serde_json::json!({ "visitors": visitors }),
+                                });
+                            }
+                            InvestigateMode::RoleWatcher => {
+                                let visitor_roles =
+                                    watched_visitor_roles(input, &actions, idx, &target, pack);
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target,
+                                    result: serde_json::json!({ "visitor_roles": visitor_roles }),
+                                });
+                            }
+                            InvestigateMode::RoleGuard => {
+                                let visitor_roles =
+                                    watched_visitor_roles(input, &actions, idx, &target, pack);
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target,
+                                    result: serde_json::json!({ "visitor_roles": visitor_roles }),
+                                });
+                            }
+                            InvestigateMode::SecurityGuard => {
+                                let visitors = watched_visitors(&actions, idx, &target, pack);
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target,
+                                    result: serde_json::json!({ "visitors": visitors }),
+                                });
+                            }
+                            InvestigateMode::Voyeur => {
+                                let actions_seen = watched_action_ids(&actions, idx, &target, pack);
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target,
+                                    result: serde_json::json!({ "actions": actions_seen }),
                                 });
                             }
                             InvestigateMode::Motion => {
@@ -7002,6 +7257,25 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                 });
                 if trig.produces.ability == IrAbility::Kill {
                     let strongman = standard_nar_generated_kill_bypasses_protect(pack, trig);
+                    let target_tags = target_tags(input, &transient_effects, &produced_target);
+                    if let Some(reason) =
+                        target_state_gate_reason(pack, &target_tags, IrAbility::Kill)
+                    {
+                        trace_decisions.push(DecisionTrace {
+                            stage: "kill_resolution".to_string(),
+                            source: format!("cause:{}", trig.id),
+                            outcome: "kill_skipped_by_target_state".to_string(),
+                            detail: serde_json::json!({
+                                "action_id": trig.id,
+                                "template_id": trig.id,
+                                "actor": produced_actor,
+                                "target": produced_target,
+                                "reason": reason,
+                                "target_tags": target_tags,
+                            }),
+                        });
+                        continue;
+                    }
                     resolve_one_kill(
                         pack,
                         &input.phase_id,
@@ -7013,7 +7287,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         strongman,
                         death_reveal_mode(input, &produced_target, &trig.id),
                         &protections,
-                        &target_tags(input, &BTreeMap::new(), &produced_target),
+                        &target_tags,
                         &mut cpr_saves,
                         &mut events,
                         &mut killed,
@@ -7061,6 +7335,8 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     );
 
     apply_backup_inheritance(input, &killed, &mut events, &mut trace_decisions);
+
+    apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
 
     record_history_sensitive_actions(input, &actions, &mut events);
 
@@ -7374,6 +7650,52 @@ fn watched_visitors(
     visitors
 }
 
+/// Compute the unique role keys of visible visitors to a watched slot. This is
+/// deliberately role-level rather than actor-level so Role Watcher/Role Guard
+/// results do not leak identity or duplicate-count information.
+fn watched_visitor_roles(
+    input: &ResolutionInput,
+    actions: &[Action],
+    observer_idx: usize,
+    watched: &SlotId,
+    pack: &Pack,
+) -> Vec<String> {
+    let mut roles: Vec<String> = Vec::new();
+    for visitor in watched_visitors(actions, observer_idx, watched, pack) {
+        let Some(role) = slot_role(input, &visitor) else {
+            continue;
+        };
+        if !roles.iter().any(|existing| existing == role) {
+            roles.push(role.to_string());
+        }
+    }
+    roles
+}
+
+/// Compute the unique visible action ids aimed at a watched slot. Voyeur
+/// results reveal action categories without actor identity or duplicate counts.
+fn watched_action_ids(
+    actions: &[Action],
+    observer_idx: usize,
+    watched: &SlotId,
+    pack: &Pack,
+) -> Vec<String> {
+    let mut action_ids: Vec<String> = Vec::new();
+    for (idx, action) in actions.iter().enumerate() {
+        if idx == observer_idx || !visible_visit(action, pack) || !action.targets.contains(watched)
+        {
+            continue;
+        }
+        if !action_ids
+            .iter()
+            .any(|existing| existing == &action.template.id)
+        {
+            action_ids.push(action.template.id.clone());
+        }
+    }
+    action_ids
+}
+
 /// Motion detector result: true iff the target either made a visible visit or
 /// received a visible visit. The observer's own info action is excluded, or
 /// every motion check would trivially make its target active.
@@ -7392,6 +7714,18 @@ fn prior_detected_motion(input: &ResolutionInput, target: &SlotId) -> bool {
 
 fn visible_visit(action: &Action, pack: &Pack) -> bool {
     if action.blocked {
+        return false;
+    }
+    if matches!(
+        action.template.mode,
+        Some(
+            InvestigateMode::Watch
+                | InvestigateMode::RoleWatcher
+                | InvestigateMode::RoleGuard
+                | InvestigateMode::SecurityGuard
+                | InvestigateMode::Voyeur
+        )
+    ) {
         return false;
     }
     let ninja_hides = pack
@@ -7450,6 +7784,18 @@ fn parity_result(
 
 fn role_set_contains(role_set: &[String], input: &ResolutionInput, target: &SlotId) -> bool {
     slot_role(input, target).is_some_and(|role| role_set.iter().any(|candidate| candidate == role))
+}
+
+fn private_topic_access(input: &ResolutionInput, target: &SlotId) -> Vec<String> {
+    input
+        .state
+        .private_channels
+        .iter()
+        .filter(|record| &record.slot_id == target)
+        .map(|record| record.channel_id.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 fn delayed_death_cause_for_effect(effect: &str) -> Option<&'static str> {
@@ -7600,7 +7946,7 @@ fn require_standard_nar_action_chance_policy(pack: &Pack) {
             .values()
             .flat_map(|role| role.actions.iter())
             .chain(pack.item_actions.values())
-            .any(|action| action.window != Window::Day && action.id == *action_id)
+            .any(|action| action.window.is_night_resolution_window() && action.id == *action_id)
         {
             panic!(
                 "invalid standard_nar action chance policy: unknown night/any action `{action_id}`"
@@ -8008,6 +8354,24 @@ fn ability_order(actions: &[Action], ability: IrAbility) -> Vec<usize> {
     idxs
 }
 
+fn info_audience(
+    audience: crate::pack::InfoAudience,
+    actor: &SlotId,
+    target: &SlotId,
+) -> Vec<SlotId> {
+    match audience {
+        crate::pack::InfoAudience::Actor => vec![actor.clone()],
+        crate::pack::InfoAudience::Target => vec![target.clone()],
+        crate::pack::InfoAudience::ActorAndTarget => {
+            if actor == target {
+                vec![actor.clone()]
+            } else {
+                vec![actor.clone(), target.clone()]
+            }
+        }
+    }
+}
+
 /// Look up a submitted action template. Role-owned actions are always looked up
 /// from the actor's current role. Generated item actions additionally require a
 /// matching unspent item grant plus `metadata.grant_id`, so a direct resolver
@@ -8103,6 +8467,22 @@ fn submission_has_exhausted_item_grant(input: &ResolutionInput, sub: &Submission
 }
 
 // ───────────────────────────── Day ─────────────────────────────
+
+fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
+    let mut events = Vec::new();
+    resolve_self_destruct_actions(input, &mut events);
+    let deaths = deaths_from_events(&events);
+    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
+        phase_id: input.phase_id.clone(),
+        deaths,
+    }));
+    InnerResolution {
+        events,
+        trace_edges: Vec::new(),
+        trace_decisions: Vec::new(),
+        trace_notes: Vec::new(),
+    }
+}
 
 fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     let pack = &input.pack;
@@ -8324,11 +8704,22 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     // protected against). The trailing `PhaseAnnouncement` carries the semantic
     // `cause: "lynch"` Death.
     events.push(InnerEvent::DayVoteOutcome(outcome.clone()));
+    let vetoed_winner = resolve_vote_veto_action(input, &vote_state, &outcome, &mut events);
     resolve_day_vote_prompts(input, &outcome, &mut events, &mut trace_decisions);
     let mut deaths = pre_vote_deaths;
     let mut trigger_frontier = Vec::new();
     if let Some(w) = &winner {
-        if alive_candidates.contains(w.as_str()) {
+        if vetoed_winner.as_ref() == Some(w) {
+            trace_decisions.push(DecisionTrace {
+                stage: "day:veto".to_string(),
+                source: format!("slot:{w}"),
+                outcome: "lynch_vetoed".to_string(),
+                detail: serde_json::json!({
+                    "phase_id": input.phase_id,
+                    "target": w,
+                }),
+            });
+        } else if alive_candidates.contains(w.as_str()) {
             if idiot_survives_lynch(input, w) {
                 events.push(InnerEvent::PlayerSaved {
                     slot_id: w.clone(),
@@ -8416,6 +8807,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         input,
         trigger_frontier,
         &BTreeMap::new(),
+        &BTreeMap::new(),
         &mut killed,
         &mut cpr_saves,
         &mut events,
@@ -8441,6 +8833,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
             cause: pack.lover_policy.suicide_cause.clone(),
         });
     }
+    apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
     events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         deaths,
@@ -8457,6 +8850,93 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         trace_decisions,
         trace_notes,
     }
+}
+
+fn resolve_vote_veto_action(
+    input: &ResolutionInput,
+    vote_state: &StateSnapshot,
+    outcome: &DayVoteOutcome,
+    events: &mut Vec<InnerEvent>,
+) -> Option<SlotId> {
+    if input.state.phase_kind != PhaseKind::Day {
+        return None;
+    }
+    if !matches!(outcome.status, VoteStatus::Lynch | VoteStatus::Hammer) {
+        return None;
+    }
+    let winner = outcome.winner.as_ref()?;
+
+    let mut submissions: Vec<(&Submission, &ActionTemplate)> = input
+        .submissions
+        .iter()
+        .filter(|submission| !submission.withdrawn)
+        .filter_map(|submission| {
+            let template = lookup_submission_template(input, submission)?;
+            if !phase_window_matches(template.window, input.state.phase_kind) {
+                return None;
+            }
+            template
+                .has_ability(IrAbility::Veto)
+                .then_some((submission, template))
+        })
+        .collect();
+    submissions.sort_by(|(left, left_template), (right, right_template)| {
+        right_template
+            .constraints
+            .priority
+            .cmp(&left_template.constraints.priority)
+            .then(left.submitted_at.cmp(&right.submitted_at))
+            .then(left.action_id.cmp(&right.action_id))
+    });
+
+    for (submission, template) in submissions {
+        let Some(actor) = vote_state
+            .slots
+            .iter()
+            .find(|slot| slot.slot_id == submission.actor && slot.is_alive())
+        else {
+            continue;
+        };
+        let Some(target) = submission.targets.first() else {
+            events.push(InnerEvent::ActionInterfered {
+                actor: submission.actor.clone(),
+                reason: "veto_missing_target".to_string(),
+            });
+            continue;
+        };
+        if target != winner {
+            events.push(InnerEvent::ActionInterfered {
+                actor: submission.actor.clone(),
+                reason: "veto_target_not_vote_winner".to_string(),
+            });
+            continue;
+        }
+        if template.constraints.x_shots == Some(1) {
+            if action_counter_used(input, &submission.actor, &template.id) {
+                events.push(InnerEvent::ActionInterfered {
+                    actor: submission.actor.clone(),
+                    reason: "x_shot_exhausted".to_string(),
+                });
+                continue;
+            }
+            events.push(action_use_counted(
+                input,
+                submission.actor.clone(),
+                template.id.clone(),
+                submission.action_id.clone(),
+            ));
+        }
+        events.push(InnerEvent::VoteVetoed {
+            governor: actor.slot_id.clone(),
+            target: target.clone(),
+            source_action: submission.action_id.clone(),
+            phase_id: input.phase_id.clone(),
+            phase_kind: input.state.phase_kind,
+            phase_number: input.state.phase_number,
+        });
+        return Some(target.clone());
+    }
+    None
 }
 
 fn resolve_reveal_town_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
@@ -8503,6 +8983,149 @@ fn resolve_reveal_town_actions(input: &ResolutionInput, events: &mut Vec<InnerEv
             phase_kind: input.state.phase_kind,
             phase_number: input.state.phase_number,
         });
+    }
+}
+
+fn apply_effect_source_death_reveals(
+    input: &ResolutionInput,
+    killed: &[SlotId],
+    events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
+) {
+    if input.pack.effect_source_death_reveals.is_empty() || killed.is_empty() {
+        return;
+    }
+
+    let killed: BTreeSet<&SlotId> = killed.iter().collect();
+    let policies: BTreeMap<&str, _> = input
+        .pack
+        .effect_source_death_reveals
+        .iter()
+        .map(|policy| (policy.effect.as_str(), policy))
+        .collect();
+    let state_after_deaths = apply_events(&input.state, events);
+    let mut already_revealed: BTreeSet<(SlotId, EffectSourceDeathRevealKind)> = events
+        .iter()
+        .filter_map(|event| match event {
+            InnerEvent::AlignmentRevealed { slot_id, .. } => {
+                Some((slot_id.clone(), EffectSourceDeathRevealKind::Alignment))
+            }
+            InnerEvent::RoleRevealed { slot_id, .. } => {
+                Some((slot_id.clone(), EffectSourceDeathRevealKind::Role))
+            }
+            _ => None,
+        })
+        .collect();
+
+    let mut matches = input
+        .state
+        .effect_records
+        .iter()
+        .filter(|record| killed.contains(&record.source))
+        .filter_map(|record| {
+            let policy = policies.get(record.effect.as_str())?;
+            Some((record, *policy))
+        })
+        .collect::<Vec<_>>();
+    matches.sort_by(|(left, left_policy), (right, right_policy)| {
+        left_policy
+            .id
+            .cmp(&right_policy.id)
+            .then(left.source.cmp(&right.source))
+            .then(left.target.cmp(&right.target))
+            .then(left.effect.cmp(&right.effect))
+            .then(left.source_action.cmp(&right.source_action))
+    });
+
+    for (record, policy) in matches {
+        match policy.reveal {
+            EffectSourceDeathRevealKind::Alignment => {
+                if !already_revealed.insert((
+                    record.target.clone(),
+                    EffectSourceDeathRevealKind::Alignment,
+                )) {
+                    continue;
+                }
+                let Some(target) = state_after_deaths
+                    .slots
+                    .iter()
+                    .find(|slot| slot.slot_id == record.target)
+                else {
+                    continue;
+                };
+                if target.alignment_reveal == RevealState::Public {
+                    continue;
+                }
+                let Some(alignment) = target.alignment.clone() else {
+                    continue;
+                };
+                let source_action = record
+                    .source_action
+                    .clone()
+                    .unwrap_or_else(|| policy.id.clone());
+                trace_decisions.push(DecisionTrace {
+                    stage: "source_death_reveal".to_string(),
+                    source: format!("effect:{}", record.effect),
+                    outcome: "alignment_revealed".to_string(),
+                    detail: serde_json::json!({
+                        "policy": policy.id,
+                        "effect": record.effect,
+                        "source": record.source,
+                        "target": record.target,
+                        "source_action": source_action,
+                    }),
+                });
+                events.push(InnerEvent::AlignmentRevealed {
+                    slot_id: record.target.clone(),
+                    alignment,
+                    source_action,
+                    phase_id: input.phase_id.clone(),
+                    phase_kind: input.state.phase_kind,
+                    phase_number: input.state.phase_number,
+                });
+            }
+            EffectSourceDeathRevealKind::Role => {
+                if !already_revealed
+                    .insert((record.target.clone(), EffectSourceDeathRevealKind::Role))
+                {
+                    continue;
+                }
+                let Some(target) = state_after_deaths
+                    .slots
+                    .iter()
+                    .find(|slot| slot.slot_id == record.target)
+                else {
+                    continue;
+                };
+                if target.role_reveal == RevealState::Public {
+                    continue;
+                }
+                let source_action = record
+                    .source_action
+                    .clone()
+                    .unwrap_or_else(|| policy.id.clone());
+                trace_decisions.push(DecisionTrace {
+                    stage: "source_death_reveal".to_string(),
+                    source: format!("effect:{}", record.effect),
+                    outcome: "role_revealed".to_string(),
+                    detail: serde_json::json!({
+                        "policy": policy.id,
+                        "effect": record.effect,
+                        "source": record.source,
+                        "target": record.target,
+                        "source_action": source_action,
+                    }),
+                });
+                events.push(InnerEvent::RoleRevealed {
+                    slot_id: record.target.clone(),
+                    role_key: target.role_key.clone(),
+                    source_action,
+                    phase_id: input.phase_id.clone(),
+                    phase_kind: input.state.phase_kind,
+                    phase_number: input.state.phase_number,
+                });
+            }
+        }
     }
 }
 
@@ -9565,13 +10188,29 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
 }
 
 fn resolve_self_destruct_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
+    resolve_self_destruct_actions_matching(input, events, |template| {
+        phase_window_matches(template.window, input.state.phase_kind)
+    });
+}
+
+fn resolve_instant_self_destruct_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
+    resolve_self_destruct_actions_matching(input, events, |template| {
+        template.window == Window::Instant
+    });
+}
+
+fn resolve_self_destruct_actions_matching(
+    input: &ResolutionInput,
+    events: &mut Vec<InnerEvent>,
+    matches_window: impl Fn(&ActionTemplate) -> bool,
+) {
     let mut ordered: Vec<(&Submission, &ActionTemplate)> = input
         .submissions
         .iter()
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
-            if !phase_window_matches(template.window, input.state.phase_kind) {
+            if !matches_window(template) {
                 return None;
             }
             template

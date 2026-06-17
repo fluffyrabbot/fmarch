@@ -3,6 +3,46 @@
   "expected_events": [
     {
       "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "sequence": 1,
+        "target": "slot_4",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "sequence": 2,
+        "target": "slot_4",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 3,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_5",
+        "sequence": 4,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 4,
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [
@@ -10,15 +50,14 @@
           "slot_4"
         ],
         "majority": null,
-        "reason": null,
         "status": "Tie",
         "tallies": {
-          "slot_2": 2.0,
-          "slot_4": 2.0
+          "slot_2": 2,
+          "slot_4": 2
         },
         "thresholds": {},
         "tiebreak": "HostDecides",
-        "total_weight": 5.0,
+        "total_weight": 5,
         "votes": {
           "slot_1": "slot_4",
           "slot_2": "slot_4",
@@ -26,17 +65,17 @@
           "slot_5": "slot_2"
         },
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
         },
         "winner": null
       }
     },
     {
-      "index": 1,
+      "index": 5,
       "kind": "HostPromptIssued",
       "payload": {
         "kind": "pk",
@@ -59,7 +98,7 @@
       }
     },
     {
-      "index": 2,
+      "index": 6,
       "kind": "PhaseAnnouncement",
       "payload": {
         "deaths": [],

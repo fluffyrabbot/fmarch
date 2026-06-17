@@ -1,0 +1,152 @@
+{
+  "description": "A pack-declared Twilight self-destruct action resolves during Twilight without running ordinary day vote tallying.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "WolfSelfDestructed",
+      "payload": {
+        "cause": "twilight_self_destruct",
+        "phase_id": "T01",
+        "phase_kind": "Twilight",
+        "phase_number": 1,
+        "source_action": "twilight_self_001",
+        "target_id": "slot_2",
+        "unstoppable": true,
+        "wolf_id": "slot_1"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1"
+        ],
+        "cause": "twilight_self_destruct",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [
+          "slot_1"
+        ],
+        "cause": "twilight_self_destruct",
+        "slot_id": "slot_1",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [
+          {
+            "cause": "twilight_self_destruct",
+            "slot_id": "slot_2"
+          },
+          {
+            "cause": "twilight_self_destruct",
+            "slot_id": "slot_1"
+          }
+        ],
+        "phase_id": "T01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_twilight_self_destruct_001",
+    "pack": "test_twilight_window",
+    "phase_id": "T01",
+    "seed": 930601,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "T01",
+      "phase_kind": "Twilight",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Twilight",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "main",
+            "eod"
+          ],
+          "Twilight": [
+            "resolution"
+          ]
+        },
+        "twilight": true
+      },
+      "slots": [
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "twilight_self_destructor",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "twilight_self_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "T01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "twilight_self_destruct",
+        "withdrawn": false
+      },
+      {
+        "action_id": "ignored_vote_001",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "T01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

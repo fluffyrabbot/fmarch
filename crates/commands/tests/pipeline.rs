@@ -20,8 +20,8 @@ use eventstore::{ActorId, EventInput};
 use projections::{
     action_counters, action_grants, action_history, append_and_project, audit_rebuild,
     day_vote_outcomes, delayed_death_queues, host_prompts, investigation_memory, phase_state,
-    player_notifications, rebuild, sheriff_badges, slot_effects, slot_state, visit_history,
-    votecount,
+    player_info_results, player_notifications, player_notifications_for_slot, rebuild,
+    sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
 use sqlx::{Acquire, PgPool};
 use std::collections::BTreeMap;
@@ -3370,6 +3370,1108 @@ async fn host_resolve_phase_carries_mafia_universe_reveal_town(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal(pool: PgPool) {
+    let host = user("host_mu_alignment_oracle");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_oracle_user_1", "town_alignment_oracle"),
+        ("slot_2", "mu_oracle_user_2", "mafia_goon"),
+        ("slot_3", "mu_oracle_user_3", "town_vanilla"),
+        ("slot_4", "mu_oracle_user_4", "town_vanilla"),
+        ("slot_5", "mu_oracle_user_5", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mu_oracle_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_oracle_mark_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "mark_alignment".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Alignment Oracle submits mark");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_057,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Alignment Oracle mark");
+
+    let mark_payload = resolution_payload(&pool, game, "N01", 712_057).await;
+    let mark_applied = domain::validate_resolution_json(&mark_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Alignment Oracle mark ResolutionApplied validates");
+    assert!(
+        mark_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::EffectsMarked {
+                effect,
+                target,
+                actor,
+                source_action,
+                duration,
+                visibility,
+                ..
+            } if effect == "alignment_oracle_mark"
+                && target == "slot_3"
+                && actor == "slot_1"
+                && source_action.as_deref() == Some("mu_oracle_mark_n01")
+                && *duration == domain::EffectDuration::Persistent
+                && *visibility == domain::EffectVisibility::Hidden
+        )),
+        "N01 mark_alignment should persist the hidden Oracle mark"
+    );
+    let effects = slot_effects(&pool, game).await.unwrap();
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_3"
+                && effect.effect == "alignment_oracle_mark"
+                && effect.source_slot == "slot_1"
+                && effect.source_action.as_deref() == Some("mu_oracle_mark_n01")
+        }),
+        "slot_effect projection should carry the source-aware Oracle mark"
+    );
+    let effects_before = serde_json::to_string(&effects).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("projection rebuild after Oracle mark");
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve source-aware Oracle mark"
+    );
+
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances N01 to D02 after Oracle mark");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_058,
+        },
+    )
+    .await
+    .expect("host resolves no-op D02 before Oracle death");
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances D02 to N02 before Oracle death");
+
+    handle(
+        &pool,
+        &user("mu_oracle_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_kill_oracle_n02".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafia submits kill on Alignment Oracle");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_059,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Alignment Oracle death");
+
+    let reveal_payload = resolution_payload(&pool, game, "N02", 712_059).await;
+    let reveal_applied = domain::validate_resolution_json(&reveal_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Alignment Oracle reveal ResolutionApplied validates");
+    assert!(
+        reveal_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_1" && cause == "factional_kill"
+        )),
+        "N02 should kill the marked-target source Oracle"
+    );
+    assert!(
+        reveal_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::AlignmentRevealed {
+                slot_id,
+                alignment,
+                source_action,
+                phase_id,
+                phase_kind,
+                phase_number,
+            } if slot_id == "slot_3"
+                && alignment == "town"
+                && source_action == "mu_oracle_mark_n01"
+                && phase_id == "N02"
+                && *phase_kind == domain::pack::PhaseKind::Night
+                && *phase_number == 2
+        )),
+        "Oracle source death should publicly reveal the marked target alignment"
+    );
+
+    let projected = slot_state(&pool, game).await.unwrap();
+    let oracle = projected
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("Oracle projection");
+    assert!(!oracle.alive, "Oracle should be dead after N02 kill");
+    let revealed = projected
+        .iter()
+        .find(|slot| slot.slot_id == "slot_3")
+        .expect("marked target projection");
+    assert!(revealed.alive, "marked target remains alive");
+    assert_eq!(revealed.alignment.as_deref(), Some("town"));
+    assert!(revealed.alignment_revealed);
+    assert!(
+        !revealed.role_revealed,
+        "Alignment Oracle reveals alignment only, not role"
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("Mafia Universe Alignment Oracle thread view");
+    assert!(
+        thread.posts.iter().any(|post| post.body.contains(
+            "Public reveal: slot_3 revealed alignment town in N02 (mu_oracle_mark_n01)."
+        )),
+        "public thread should include the Oracle alignment reveal"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe Alignment Oracle resolution audit");
+    assert!(
+        audit.ok,
+        "Mafia Universe Alignment Oracle audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 3);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&projected).unwrap();
+    let effects_before = serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe Alignment Oracle final projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Oracle death and target alignment reveal"
+    );
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve Oracle mark after final replay"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Oracle public alignment reveal"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_role_oracle_reveal(pool: PgPool) {
+    let host = user("host_mu_role_oracle");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_role_oracle_user_1", "town_role_oracle"),
+        ("slot_2", "mu_role_oracle_user_2", "mafia_goon"),
+        ("slot_3", "mu_role_oracle_user_3", "town_vanilla"),
+        ("slot_4", "mu_role_oracle_user_4", "town_vanilla"),
+        ("slot_5", "mu_role_oracle_user_5", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mu_role_oracle_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_role_oracle_mark_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "mark_role".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Role Oracle submits mark");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_061,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Role Oracle mark");
+
+    let mark_payload = resolution_payload(&pool, game, "N01", 712_061).await;
+    let mark_applied = domain::validate_resolution_json(&mark_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Role Oracle mark ResolutionApplied validates");
+    assert!(
+        mark_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::EffectsMarked {
+                effect,
+                target,
+                actor,
+                source_action,
+                duration,
+                visibility,
+                ..
+            } if effect == "role_oracle_mark"
+                && target == "slot_3"
+                && actor == "slot_1"
+                && source_action.as_deref() == Some("mu_role_oracle_mark_n01")
+                && *duration == domain::EffectDuration::Persistent
+                && *visibility == domain::EffectVisibility::Hidden
+        )),
+        "N01 mark_role should persist the hidden Role Oracle mark"
+    );
+    let effects = slot_effects(&pool, game).await.unwrap();
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_3"
+                && effect.effect == "role_oracle_mark"
+                && effect.source_slot == "slot_1"
+                && effect.source_action.as_deref() == Some("mu_role_oracle_mark_n01")
+        }),
+        "slot_effect projection should carry the source-aware Role Oracle mark"
+    );
+    let effects_before = serde_json::to_string(&effects).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("projection rebuild after Role Oracle mark");
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve source-aware Role Oracle mark"
+    );
+
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances N01 to D02 after Role Oracle mark");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_062,
+        },
+    )
+    .await
+    .expect("host resolves no-op D02 before Role Oracle death");
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances D02 to N02 before Role Oracle death");
+
+    handle(
+        &pool,
+        &user("mu_role_oracle_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_kill_role_oracle_n02".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafia submits kill on Role Oracle");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 712_063,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Role Oracle death");
+
+    let reveal_payload = resolution_payload(&pool, game, "N02", 712_063).await;
+    let reveal_applied = domain::validate_resolution_json(&reveal_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Role Oracle reveal ResolutionApplied validates");
+    assert!(
+        reveal_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_1" && cause == "factional_kill"
+        )),
+        "N02 should kill the marked-target source Role Oracle"
+    );
+    assert!(
+        reveal_applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::RoleRevealed {
+                slot_id,
+                role_key,
+                source_action,
+                phase_id,
+                phase_kind,
+                phase_number,
+            } if slot_id == "slot_3"
+                && role_key == "town_vanilla"
+                && source_action == "mu_role_oracle_mark_n01"
+                && phase_id == "N02"
+                && *phase_kind == domain::pack::PhaseKind::Night
+                && *phase_number == 2
+        )),
+        "Role Oracle source death should publicly reveal the marked target role"
+    );
+
+    let projected = slot_state(&pool, game).await.unwrap();
+    let oracle = projected
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("Role Oracle projection");
+    assert!(!oracle.alive, "Role Oracle should be dead after N02 kill");
+    let revealed = projected
+        .iter()
+        .find(|slot| slot.slot_id == "slot_3")
+        .expect("marked target projection");
+    assert!(revealed.alive, "marked target remains alive");
+    assert_eq!(revealed.role_key.as_deref(), Some("town_vanilla"));
+    assert!(revealed.role_revealed);
+    assert!(
+        !revealed.alignment_revealed,
+        "Role Oracle reveals role only, not alignment"
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("Mafia Universe Role Oracle thread view");
+    assert!(
+        thread.posts.iter().any(|post| post.body.contains(
+            "Public reveal: slot_3 revealed role town_vanilla in N02 (mu_role_oracle_mark_n01)."
+        )),
+        "public thread should include the Role Oracle role reveal"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe Role Oracle resolution audit");
+    assert!(
+        audit.ok,
+        "Mafia Universe Role Oracle audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 3);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&projected).unwrap();
+    let effects_before = serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe Role Oracle final projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Role Oracle death and target role reveal"
+    );
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve Role Oracle mark after final replay"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Role Oracle public role reveal"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_janitor_concealment(pool: PgPool) {
+    let host = user("host_mu_janitor");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_janitor_user_1", "town_janitor"),
+        ("slot_2", "mu_janitor_user_2", "mafia_janitor"),
+        ("slot_3", "mu_janitor_user_3", "town_vanilla"),
+        ("slot_4", "mu_janitor_user_4", "mafia_goon"),
+        ("slot_5", "mu_janitor_user_5", "town_vanilla"),
+        ("slot_6", "mu_janitor_user_6", "town_vanilla"),
+        ("slot_7", "mu_janitor_user_7", "town_vanilla"),
+        ("slot_8", "mu_janitor_user_8", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mu_janitor_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_janitor_kill_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "janitor_kill".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Town Janitor submits concealed kill");
+    handle(
+        &pool,
+        &user("mu_janitor_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_mafia_janitor_kill_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "janitor_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Mafia Janitor submits concealed kill");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 716_009,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Janitor concealment");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 716_009).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Janitor ResolutionApplied validates");
+    for (slot_id, attacker) in [("slot_4", "slot_1"), ("slot_3", "slot_2")] {
+        assert!(
+            applied.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id: killed,
+                    cause,
+                    attackers,
+                    death_reveal,
+                    ..
+                } if killed == slot_id
+                    && cause == "janitor_kill"
+                    && attackers == &vec![attacker.to_string()]
+                    && *death_reveal == domain::DeathRevealMode::Concealed
+            )),
+            "Janitor kill should conceal {slot_id}'s death flip"
+        );
+    }
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::WinReached { .. })),
+        "scenario should stay mid-game so Janitor concealment is not overwritten by endgame reveal"
+    );
+
+    let snapshot = load_engine_snapshot(&pool, game, "N01")
+        .await
+        .expect("load post-Janitor snapshot");
+    for slot_id in ["slot_3", "slot_4"] {
+        let killed = snapshot
+            .slots
+            .iter()
+            .find(|slot| slot.slot_id == slot_id)
+            .expect("concealed killed slot");
+        assert_eq!(killed.status, domain::SlotLifecycle::Dead);
+        assert_eq!(killed.role_reveal, domain::RevealState::Private);
+        assert_eq!(killed.alignment_reveal, domain::RevealState::Private);
+    }
+
+    let projected = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_3", "slot_4"] {
+        let killed_projection = projected
+            .iter()
+            .find(|slot| slot.slot_id == slot_id)
+            .expect("concealed killed slot projection");
+        assert!(!killed_projection.alive);
+        assert!(!killed_projection.role_revealed);
+        assert!(!killed_projection.alignment_revealed);
+    }
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe Janitor resolution audit");
+    assert!(audit.ok, "Mafia Universe Janitor audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&projected).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe Janitor projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafia Universe Janitor concealed death reveal"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_backup_inheritance(pool: PgPool) {
+    let host = user("host_mu_backup");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_backup_user_1", "town_universal_backup"),
+        ("slot_2", "mu_backup_user_2", "mafia_universal_backup"),
+        ("slot_3", "mu_backup_user_3", "town_cop"),
+        ("slot_4", "mu_backup_user_4", "mafia_goon"),
+        ("slot_5", "mu_backup_user_5", "mafia_goon"),
+        ("slot_6", "mu_backup_user_6", "town_vigilante"),
+        ("slot_7", "mu_backup_user_7", "town_vanilla"),
+        ("slot_8", "mu_backup_user_8", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mu_backup_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_backup_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "target_backup".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Town Universal Backup targets source role");
+    handle(
+        &pool,
+        &user("mu_backup_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_mafia_backup_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "target_backup".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("MU Mafia Universal Backup targets source role");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 716_011,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe backup source targeting");
+
+    let n01_payload = resolution_payload(&pool, game, "N01", 716_011).await;
+    let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe backup source-targeting ResolutionApplied validates");
+    for (backup, source_target, source_role, source_action) in [
+        ("slot_1", "slot_3", "town_cop", "mu_town_backup_n01"),
+        ("slot_2", "slot_4", "mafia_goon", "mu_mafia_backup_n01"),
+    ] {
+        assert!(
+            n01.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::BackupTargeted {
+                    backup: event_backup,
+                    source_target: event_source,
+                    source_role: event_role,
+                    source_action: event_action,
+                    phase_id,
+                    phase_kind,
+                    phase_number,
+                } if event_backup == backup
+                    && event_source == source_target
+                    && event_role == source_role
+                    && event_action == source_action
+                    && phase_id == "N01"
+                    && *phase_kind == domain::pack::PhaseKind::Night
+                    && *phase_number == 1
+            )),
+            "N01 should record {backup}'s selected backup source"
+        );
+    }
+    let effects = slot_effects(&pool, game).await.unwrap();
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_3"
+                && effect.effect == "backup_target"
+                && effect.source_slot == "slot_1"
+                && effect.source_action.as_deref() == Some("mu_town_backup_n01")
+        }),
+        "slot_effect projection should carry Town Backup source mark"
+    );
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_4"
+                && effect.effect == "backup_target"
+                && effect.source_slot == "slot_2"
+                && effect.source_action.as_deref() == Some("mu_mafia_backup_n01")
+        }),
+        "slot_effect projection should carry Mafia Backup source mark"
+    );
+    let effects_before = serde_json::to_string(&effects).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("projection rebuild after MU backup targeting");
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve MU backup source marks"
+    );
+
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances N01 to D02 after backup targeting");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 716_012,
+        },
+    )
+    .await
+    .expect("host resolves no-op D02 before backup inheritance");
+    handle(&pool, &host, Command::AdvancePhase { game })
+        .await
+        .expect("host advances D02 to N02 before backup inheritance");
+
+    handle(
+        &pool,
+        &user("mu_backup_user_5"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_mafia_kills_town_source_n02".into(),
+            actor_slot: "slot_5".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("mafia kills the Town Backup source");
+    handle(
+        &pool,
+        &user("mu_backup_user_6"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_kills_mafia_source_n02".into(),
+            actor_slot: "slot_6".into(),
+            template_id: "vigilante_kill".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("town kills the Mafia Backup source");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 716_013,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe backup inheritance");
+
+    let n02_payload = resolution_payload(&pool, game, "N02", 716_013).await;
+    let n02 = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe backup inheritance ResolutionApplied validates");
+    for (target, new_role, original_role, source) in [
+        ("slot_1", "town_cop", "town_universal_backup", "slot_3"),
+        ("slot_2", "mafia_goon", "mafia_universal_backup", "slot_4"),
+    ] {
+        assert!(
+            n02.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerConverted {
+                    target: event_target,
+                    new_role: event_new_role,
+                    original_role: event_original_role,
+                    source: event_source,
+                    ..
+                } if event_target == target
+                    && event_new_role == new_role
+                    && event_original_role == original_role
+                    && event_source == source
+            )),
+            "N02 should convert {target} into selected source role {new_role}"
+        );
+    }
+
+    let n02_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let n02_trace = domain::validate_trace_json(&n02_trace_payload, domain::TRACE_VERSION)
+        .expect("valid Mafia Universe backup inheritance trace");
+    assert_decision_trace(
+        &n02_trace,
+        DecisionTraceExpectation {
+            stage: "night:backup",
+            source: "slot:slot_3",
+            outcome: "backup_inherited_role",
+            detail: vec![
+                ("backup", serde_json::json!("slot_1")),
+                ("source_target", serde_json::json!("slot_3")),
+                ("policy", serde_json::json!("targeted")),
+                (
+                    "policy_detail",
+                    serde_json::json!({
+                        "source_action": "mu_town_backup_n01",
+                        "declared_source_role": "town_cop",
+                        "target_phase_id": "N01",
+                        "target_phase_kind": "Night",
+                        "target_phase_number": 1,
+                    }),
+                ),
+                ("new_role", serde_json::json!("town_cop")),
+                ("new_alignment", serde_json::json!("town")),
+                ("original_role", serde_json::json!("town_universal_backup")),
+                ("original_alignment", serde_json::json!("town")),
+            ],
+        },
+    );
+    assert_decision_trace(
+        &n02_trace,
+        DecisionTraceExpectation {
+            stage: "night:backup",
+            source: "slot:slot_4",
+            outcome: "backup_inherited_role",
+            detail: vec![
+                ("backup", serde_json::json!("slot_2")),
+                ("source_target", serde_json::json!("slot_4")),
+                ("policy", serde_json::json!("targeted")),
+                (
+                    "policy_detail",
+                    serde_json::json!({
+                        "source_action": "mu_mafia_backup_n01",
+                        "declared_source_role": "mafia_goon",
+                        "target_phase_id": "N01",
+                        "target_phase_kind": "Night",
+                        "target_phase_number": 1,
+                    }),
+                ),
+                ("new_role", serde_json::json!("mafia_goon")),
+                ("new_alignment", serde_json::json!("mafia")),
+                ("original_role", serde_json::json!("mafia_universal_backup")),
+                ("original_alignment", serde_json::json!("mafia")),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_3", "slot_4"] {
+        assert!(
+            !slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .expect("selected source projection")
+                .alive,
+            "selected backup source {slot_id} should be dead"
+        );
+    }
+    let town_backup = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("Town Backup projection");
+    assert_eq!(town_backup.role_key.as_deref(), Some("town_cop"));
+    assert_eq!(town_backup.alignment.as_deref(), Some("town"));
+    let mafia_backup = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_2")
+        .expect("Mafia Backup projection");
+    assert_eq!(mafia_backup.role_key.as_deref(), Some("mafia_goon"));
+    assert_eq!(mafia_backup.alignment.as_deref(), Some("mafia"));
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe backup inheritance resolution audit");
+    assert!(
+        audit.ok,
+        "Mafia Universe backup inheritance audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 3);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let effects_before = serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe backup inheritance projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafia Universe backup inheritance"
+    );
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effect rebuild must preserve Mafia Universe backup source marks"
+    );
+    let n02_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        n02_trace_payload, n02_trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Mafia Universe backup trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
     let host = user("host_vote_duel");
     let game = Uuid::new_v4();
@@ -3956,6 +5058,1965 @@ async fn host_resolve_phase_applies_gladiator_vote_duel_tied_ballots(pool: PgPoo
         )
         .unwrap(),
         "thread_view rebuild must preserve tied-ballot gladiator vote-duel declaration"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_day_self_destruct_trade(pool: PgPool) {
+    let host = user("host_day_self_destruct");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "self_destruct_user_1", "day_self_destructor"),
+        ("slot_2", "self_destruct_user_2", "vanilla_townie"),
+        ("slot_3", "self_destruct_user_3", "vanilla_townie"),
+        ("slot_4", "self_destruct_user_4", "vanilla_townie"),
+        ("slot_5", "self_destruct_user_5", "vanilla_townie"),
+        ("slot_6", "self_destruct_user_6", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("self_destruct_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "self_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "day_self_destruct".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum Day Self-Destructor submits trade");
+    handle(
+        &pool,
+        &user("self_destruct_user_3"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_3".into(),
+            target: VoteTarget::Slot("slot_6".into()),
+        },
+    )
+    .await
+    .expect("surviving voter submits ordinary ballot");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_101,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum Day Self-Destructor trade");
+
+    let applied_payload = resolution_payload(&pool, game, "D01", 930_101).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WolfSelfDestructed {
+            wolf_id,
+            target_id,
+            cause,
+            unstoppable,
+            source_action,
+            ..
+        } if wolf_id == "slot_1"
+            && target_id == "slot_2"
+            && cause == "self_destruct"
+            && *unstoppable
+            && source_action == "self_001"
+    )));
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            applied.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id: killed,
+                    cause,
+                    attackers,
+                    unstoppable,
+                    ..
+                } if killed == slot_id
+                    && cause == "self_destruct"
+                    && attackers == &vec!["slot_1".to_string()]
+                    && *unstoppable
+            )),
+            "{slot_id} should die from the submitted self-destruct action"
+        );
+    }
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.status == domain::VoteStatus::NoMajority
+                && outcome.winner.is_none()
+                && outcome.votes.get("slot_3").is_some_and(|target| target == "slot_6")
+                && !outcome.weights.contains_key("slot_1")
+                && !outcome.weights.contains_key("slot_2")
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            !slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .unwrap()
+                .alive,
+            "{slot_id} should be dead in slot_state"
+        );
+    }
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes Mafiascum Day Self-Destructor announcement");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains(
+                    "Phase D01 announcement: slot_2 (self_destruct), slot_1 (self_destruct).",
+                )
+        }),
+        "thread projection should publish target death plus self-sacrifice"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum Day Self-Destructor resolution audit");
+    assert!(
+        audit.ok,
+        "Mafiascum Day Self-Destructor audit drifted: {audit:?}"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum Day Self-Destructor projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafiascum Day Self-Destructor deaths"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Mafiascum Day Self-Destructor announcement"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_twilight_self_destruct_window(pool: PgPool) {
+    let host = user("host_twilight_self_destruct");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "test_twilight_window".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "twilight_user_1", "twilight_self_destructor"),
+        ("slot_2", "twilight_user_2", "vanilla_townie"),
+        ("slot_3", "twilight_user_3", "vanilla_townie"),
+        ("slot_4", "twilight_user_4", "mafia_goon"),
+        ("slot_5", "twilight_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "T01".into(),
+        },
+    )
+    .await
+    .expect("test pack declares Twilight cadence");
+
+    let vote_err = handle(
+        &pool,
+        &user("twilight_user_3"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_3".into(),
+            target: VoteTarget::Slot("slot_4".into()),
+        },
+    )
+    .await
+    .expect_err("ordinary votes are not accepted during Twilight");
+    assert_eq!(vote_err, Reject::PhaseLocked);
+
+    handle(
+        &pool,
+        &user("twilight_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "twilight_self_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "twilight_self_destruct".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Twilight self-destruct action is accepted in T01");
+
+    let ack = handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_601,
+        },
+    )
+    .await
+    .expect("host resolves Twilight self-destruct");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "Twilight resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
+    );
+
+    let applied_payload = resolution_payload(&pool, game, "T01", 930_601).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(
+        applied
+            .events
+            .iter()
+            .all(|indexed| !matches!(indexed.event, domain::InnerEvent::DayVoteOutcome(_))),
+        "Twilight resolution must not emit a day vote outcome"
+    );
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WolfSelfDestructed {
+            wolf_id,
+            target_id,
+            cause,
+            source_action,
+            phase_kind,
+            ..
+        } if wolf_id == "slot_1"
+            && target_id == "slot_2"
+            && cause == "twilight_self_destruct"
+            && source_action == "twilight_self_001"
+            && *phase_kind == domain::pack::PhaseKind::Twilight
+    )));
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            applied.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id: killed,
+                    cause,
+                    attackers,
+                    unstoppable,
+                    ..
+                } if killed == slot_id
+                    && cause == "twilight_self_destruct"
+                    && attackers == &vec!["slot_1".to_string()]
+                    && *unstoppable
+            )),
+            "{slot_id} should die from the submitted Twilight self-destruct action"
+        );
+    }
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            !slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .unwrap()
+                .alive,
+            "{slot_id} should be dead in slot_state"
+        );
+    }
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes Twilight announcement");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "T01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains(
+                    "Phase T01 announcement: slot_2 (twilight_self_destruct), slot_1 (twilight_self_destruct).",
+                )
+        }),
+        "thread projection should publish Twilight target death plus self-sacrifice"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Twilight self-destruct resolution audit");
+    assert!(audit.ok, "Twilight self-destruct audit drifted: {audit:?}");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Twilight self-destruct projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Twilight self-destruct deaths"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Twilight self-destruct announcement"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_action_resolves_instant_self_destruct_atomically(pool: PgPool) {
+    let host = user("host_instant_self_destruct");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "test_instant_window".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "instant_user_1", "instant_self_destructor"),
+        ("slot_2", "instant_user_2", "vanilla_townie"),
+        ("slot_3", "instant_user_3", "vanilla_townie"),
+        ("slot_4", "instant_user_4", "mafia_goon"),
+        ("slot_5", "instant_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let ack = handle(
+        &pool,
+        &user("instant_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "instant_self_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "instant_self_destruct".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Instant self-destruct action resolves during SubmitAction");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "instant SubmitAction appends ActionSubmitted, ResolutionApplied, and ResolutionTrace"
+    );
+    assert!(
+        !phase_state(&pool, game).await.unwrap().unwrap().locked,
+        "instant action resolution must not lock the phase"
+    );
+
+    let submitted_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted' \
+         AND payload->>'action_id' = 'instant_self_001'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        submitted_payload["instant_resolved"],
+        serde_json::json!(true)
+    );
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'run_id' LIKE 'instant:%'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(
+        applied
+            .events
+            .iter()
+            .all(|indexed| !matches!(indexed.event, domain::InnerEvent::DayVoteOutcome(_))),
+        "Instant resolution must not emit a day vote outcome"
+    );
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WolfSelfDestructed {
+            wolf_id,
+            target_id,
+            cause,
+            source_action,
+            ..
+        } if wolf_id == "slot_1"
+            && target_id == "slot_2"
+            && cause == "instant_self_destruct"
+            && source_action == "instant_self_001"
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            !slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .unwrap()
+                .alive,
+            "{slot_id} should be dead immediately after instant SubmitAction"
+        );
+    }
+
+    let withdraw_err = handle(
+        &pool,
+        &user("instant_user_1"),
+        Command::WithdrawAction {
+            game,
+            action_id: "instant_self_001".into(),
+            actor_slot: "slot_1".into(),
+        },
+    )
+    .await
+    .expect_err("resolved instant actions are not active withdrawable submissions");
+    assert_eq!(withdraw_err, Reject::SlotNotAlive);
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_603,
+        },
+    )
+    .await
+    .expect("ordinary D01 ResolvePhase skips already-resolved instant submission");
+
+    let applied_payloads = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         ORDER BY stream_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    let instant_kill_events = applied_payloads
+        .iter()
+        .map(|payload| domain::validate_resolution_json(payload, domain::RESULT_VERSION).unwrap())
+        .flat_map(|applied| applied.events.into_iter())
+        .filter(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled { cause, .. } if cause == "instant_self_destruct"
+            )
+        })
+        .count();
+    assert_eq!(
+        instant_kill_events, 2,
+        "ordinary ResolvePhase must not replay the instant submission"
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes instant announcement");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains(
+                    "Phase D01 announcement: slot_2 (instant_self_destruct), slot_1 (instant_self_destruct).",
+                )
+        }),
+        "thread projection should publish instant target death plus self-sacrifice"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("instant self-destruct resolution audit");
+    assert!(audit.ok, "instant self-destruct audit drifted: {audit:?}");
+    assert_eq!(
+        audit.skipped, 1,
+        "instant envelope is command-time, not phase-replayable"
+    );
+    assert_eq!(
+        audit.audited, 1,
+        "ordinary ResolvePhase envelope remains replay-audited"
+    );
+
+    let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("instant self-destruct projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve instant self-destruct deaths"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve instant self-destruct announcement"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
+    let host = user("host_day_vigilante");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "day_vigilante_user_1", "day_vigilante"),
+        ("slot_2", "day_vigilante_user_2", "mafia_goon"),
+        ("slot_3", "day_vigilante_user_3", "vanilla_townie"),
+        ("slot_4", "day_vigilante_user_4", "vanilla_townie"),
+        ("slot_5", "day_vigilante_user_5", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("day_vigilante_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "day_vig_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "day_vigilante_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum Day Vigilante submits day kill");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_201,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum Day Vigilante kill");
+
+    let applied_payload = resolution_payload(&pool, game, "D01", 930_201).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_2"
+            && cause == "day_vigilante_kill"
+            && attackers == &vec!["slot_1".to_string()]
+            && !unstoppable
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.status == domain::VoteStatus::NoLynch
+                && outcome.winner.is_none()
+                && (outcome.total_weight - 4.0).abs() < f64::EPSILON
+                && outcome.weights.len() == 4
+                && !outcome.weights.contains_key("slot_2")
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PhaseAnnouncement(announcement)
+            if announcement.phase_id == "D01"
+                && announcement.deaths
+                    == vec![domain::Death {
+                        slot_id: "slot_2".to_string(),
+                        cause: "day_vigilante_kill".to_string(),
+                    }]
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "Day Vigilante target should be dead"
+    );
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "ordinary Day Vigilante should not self-kill"
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes Mafiascum Day Vigilante announcement");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post
+                    .body
+                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill).")
+        }),
+        "thread projection should publish the day-shot death"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum Day Vigilante resolution audit");
+    assert!(audit.ok, "Mafiascum Day Vigilante audit drifted: {audit:?}");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum Day Vigilante projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafiascum Day Vigilante death"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Mafiascum Day Vigilante announcement"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_serial_killer_win(pool: PgPool) {
+    let host = user("host_serial_killer");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "serial_killer_user_1", "serial_killer"),
+        ("slot_2", "serial_killer_user_2", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("serial_killer_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "serial_killer_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "night_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum Serial Killer submits night kill");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_204,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum Serial Killer win");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 930_204).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_2"
+            && cause == "night_kill"
+            && attackers == &vec!["slot_1".to_string()]
+            && !unstoppable
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WinReached { winner, reason, .. }
+            if winner == "independent"
+                && reason.contains("all factions other than independent eliminated")
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "Serial Killer target should be dead"
+    );
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "Serial Killer should survive its ordinary night kill"
+    );
+    assert_win_revealed_all_slots(&slots, "serial killer independent win");
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum Serial Killer resolution audit");
+    assert!(audit.ok, "Mafiascum Serial Killer audit drifted: {audit:?}");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum Serial Killer projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafiascum Serial Killer death and win reveal"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_serial_killer_blocks_mafia_parity(pool: PgPool) {
+    let host = user("host_serial_killer_blocks_parity");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "sk_block_user_1", "mafia_goon"),
+        ("slot_2", "sk_block_user_2", "serial_killer"),
+        ("slot_3", "sk_block_user_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("sk_block_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mafia_kill_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafia submits kill while Serial Killer lives");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_205,
+        },
+    )
+    .await
+    .expect("host resolves blocked mafia parity");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 930_205).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_3"
+            && cause == "factional_kill"
+            && attackers == &vec!["slot_1".to_string()]
+            && !unstoppable
+    )));
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::WinReached { .. })),
+        "living independent Serial Killer should block mafia parity win"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .unwrap()
+            .alive,
+        "Mafia target should be dead"
+    );
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "Serial Killer blocker should remain alive"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("blocked mafia parity resolution audit");
+    assert!(audit.ok, "blocked mafia parity audit drifted: {audit:?}");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("blocked mafia parity projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve blocked mafia parity state"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool) {
+    let host = user("host_day_action_win");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "day_action_win_user_1", "day_vigilante"),
+        ("slot_2", "day_action_win_user_2", "mafia_goon"),
+        ("slot_3", "day_action_win_user_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("day_action_win_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "day_vig_win_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "day_vigilante_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Day Vigilante submits the terminal day kill");
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_211,
+        },
+    )
+    .await
+    .expect("host resolves terminal day-action kill");
+
+    let applied_payload = resolution_payload(&pool, game, "D01", 930_211).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    let kill_index = applied
+        .events
+        .iter()
+        .position(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id,
+                    cause,
+                    attackers,
+                    unstoppable,
+                    ..
+                } if slot_id == "slot_2"
+                    && cause == "day_vigilante_kill"
+                    && attackers == &vec!["slot_1".to_string()]
+                    && !unstoppable
+            )
+        })
+        .expect("day action kills the only mafia");
+    let vote_index = applied
+        .events
+        .iter()
+        .position(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::DayVoteOutcome(outcome)
+                    if outcome.status == domain::VoteStatus::NoLynch
+                        && outcome.winner.is_none()
+                        && (outcome.total_weight - 2.0).abs() < f64::EPSILON
+                        && outcome.weights.keys().cloned().collect::<Vec<_>>()
+                            == vec!["slot_1".to_string(), "slot_3".to_string()]
+            )
+        })
+        .expect("official vote outcome uses the post-action survivor set");
+    let announcement_index = applied
+        .events
+        .iter()
+        .position(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::PhaseAnnouncement(announcement)
+                    if announcement.phase_id == "D01"
+                        && announcement.deaths == vec![domain::Death {
+                            slot_id: "slot_2".to_string(),
+                            cause: "day_vigilante_kill".to_string(),
+                        }]
+            )
+        })
+        .expect("canonical announcement carries the day-action death");
+    let win_index = applied
+        .events
+        .iter()
+        .position(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::WinReached { winner, .. } if winner == "town"
+            )
+        })
+        .expect("post-announcement win check sees mafia eliminated");
+
+    assert!(
+        kill_index < vote_index && vote_index < announcement_index && announcement_index < win_index,
+        "day action result, official vote, announcement, and final win should be host-consumable in order"
+    );
+    assert_eq!(
+        win_index,
+        applied.events.len() - 1,
+        "WinReached must remain the final event after the canonical announcement"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "terminal day-action target should project dead"
+    );
+    assert_win_revealed_all_slots(&slots, "terminal day-action win");
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid terminal day-action trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "inner_event",
+            source: &format!("event_index:{announcement_index}"),
+            outcome: "phase_announcement",
+            detail: vec![],
+        },
+    );
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "inner_event",
+            source: &format!("event_index:{win_index}"),
+            outcome: "win_reached",
+            detail: vec![],
+        },
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes terminal day-action announcement and win");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post
+                    .body
+                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill).")
+        }),
+        "thread projection should publish the canonical day-action announcement"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("terminal day-action resolution audit");
+    assert!(audit.ok, "terminal day-action audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("terminal day-action projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve terminal day-action win"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve terminal day-action announcement and win"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: PgPool) {
+    let host = user("host_mafiascum_white_wolf_king");
+
+    let day_game = Uuid::new_v4();
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game: day_game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "wwk_day_user_1", "white_wolf_king"),
+        ("slot_2", "wwk_day_user_2", "vanilla_townie"),
+        ("slot_3", "wwk_day_user_3", "vanilla_townie"),
+        ("slot_4", "wwk_day_user_4", "mafia_goon"),
+        ("slot_5", "wwk_day_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game: day_game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game: day_game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game: day_game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game: day_game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("wwk_day_user_1"),
+        Command::SubmitAction {
+            game: day_game,
+            action_id: "wwk_day_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "day_self_destruct".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum White Wolf King submits day self-destruct");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game: day_game,
+            seed: 930_301,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum White Wolf King day self-destruct");
+
+    let day_payload = resolution_payload(&pool, day_game, "D01", 930_301).await;
+    let day_applied =
+        domain::validate_resolution_json(&day_payload, domain::RESULT_VERSION).unwrap();
+    assert!(day_applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WolfSelfDestructed {
+            wolf_id,
+            target_id,
+            source_action,
+            ..
+        } if wolf_id == "slot_1"
+            && target_id == "slot_2"
+            && source_action == "wwk_day_001"
+    )));
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            day_applied.events.iter().any(|indexed| matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id: killed,
+                    cause,
+                    attackers,
+                    unstoppable,
+                    ..
+                } if killed == slot_id
+                    && cause == "self_destruct"
+                    && attackers == &vec!["slot_1".to_string()]
+                    && *unstoppable
+            )),
+            "{slot_id} should die from White Wolf King self-destruct"
+        );
+    }
+    assert!(day_applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.status == domain::VoteStatus::NoLynch
+                && outcome.winner.is_none()
+                && !outcome.weights.contains_key("slot_1")
+                && !outcome.weights.contains_key("slot_2")
+    )));
+    assert!(
+        !day_applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::WinReached { .. })),
+        "day self-destruct fixture should stay mid-game"
+    );
+
+    let day_slots = slot_state(&pool, day_game).await.unwrap();
+    for slot_id in ["slot_1", "slot_2"] {
+        assert!(
+            !day_slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .unwrap()
+                .alive,
+            "{slot_id} should be dead in day slot_state"
+        );
+    }
+    let day_thread = projections::thread_view(&pool, day_game, None, 50)
+        .await
+        .expect("thread view includes White Wolf King day announcement");
+    assert!(
+        day_thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains(
+                    "Phase D01 announcement: slot_2 (self_destruct), slot_1 (self_destruct).",
+                )
+        }),
+        "thread projection should publish White Wolf King self-destruct deaths"
+    );
+    let day_audit = audit_resolution_envelopes(&pool, day_game)
+        .await
+        .expect("White Wolf King day resolution audit");
+    assert!(
+        day_audit.ok,
+        "White Wolf King day audit drifted: {day_audit:?}"
+    );
+    let day_slots_before = serde_json::to_string(&day_slots).unwrap();
+    let day_thread_before = serde_json::to_string(&day_thread).unwrap();
+    rebuild(&pool, day_game)
+        .await
+        .expect("White Wolf King day projection rebuild");
+    assert_eq!(
+        day_slots_before,
+        serde_json::to_string(&slot_state(&pool, day_game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve White Wolf King day deaths"
+    );
+    assert_eq!(
+        day_thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, day_game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve White Wolf King day announcement"
+    );
+
+    let night_game = Uuid::new_v4();
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game: night_game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "wwk_night_user_1", "white_wolf_king"),
+        ("slot_2", "wwk_night_user_2", "vanilla_townie"),
+        ("slot_3", "wwk_night_user_3", "vanilla_townie"),
+        ("slot_4", "wwk_night_user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game: night_game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game: night_game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game: night_game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game: night_game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("wwk_night_user_1"),
+        Command::SubmitAction {
+            game: night_game,
+            action_id: "wwk_night_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "night_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum White Wolf King submits night kill");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game: night_game,
+            seed: 930_302,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum White Wolf King night kill");
+
+    let night_payload = resolution_payload(&pool, night_game, "N01", 930_302).await;
+    let night_applied =
+        domain::validate_resolution_json(&night_payload, domain::RESULT_VERSION).unwrap();
+    assert!(night_applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_2"
+            && cause == "night_kill"
+            && attackers == &vec!["slot_1".to_string()]
+            && !unstoppable
+    )));
+    assert!(
+        !night_applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::ActionUseCounted { .. })),
+        "Mafiascum White Wolf King night_kill is not an x-shot action"
+    );
+    assert!(
+        !night_applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::WinReached { .. })),
+        "night kill fixture should stay mid-game"
+    );
+
+    let night_slots = slot_state(&pool, night_game).await.unwrap();
+    assert!(
+        !night_slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "White Wolf King night target should be dead"
+    );
+    assert!(
+        night_slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "White Wolf King should survive its ordinary night kill"
+    );
+    let night_thread = projections::thread_view(&pool, night_game, None, 50)
+        .await
+        .expect("thread view includes White Wolf King night announcement");
+    assert!(
+        night_thread.posts.iter().any(|post| {
+            post.phase_id == "N01"
+                && post.author_user.as_deref() == Some("system")
+                && post
+                    .body
+                    .contains("Phase N01 announcement: slot_2 (night_kill).")
+        }),
+        "thread projection should publish White Wolf King night kill"
+    );
+    let night_audit = audit_resolution_envelopes(&pool, night_game)
+        .await
+        .expect("White Wolf King night resolution audit");
+    assert!(
+        night_audit.ok,
+        "White Wolf King night audit drifted: {night_audit:?}"
+    );
+    let night_slots_before = serde_json::to_string(&night_slots).unwrap();
+    let night_thread_before = serde_json::to_string(&night_thread).unwrap();
+    rebuild(&pool, night_game)
+        .await
+        .expect("White Wolf King night projection rebuild");
+    assert_eq!(
+        night_slots_before,
+        serde_json::to_string(&slot_state(&pool, night_game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve White Wolf King night death"
+    );
+    assert_eq!(
+        night_thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, night_game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve White Wolf King night announcement"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_governor_veto(pool: PgPool) {
+    let host = user("host_governor_veto");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "governor_veto_user_1", "governor"),
+        ("slot_2", "governor_veto_user_2", "mafia_goon"),
+        ("slot_3", "governor_veto_user_3", "vanilla_townie"),
+        ("slot_4", "governor_veto_user_4", "vanilla_townie"),
+        ("slot_5", "governor_veto_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("governor_veto_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "veto_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "veto".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Governor submits veto");
+    for (user_id, actor_slot) in [
+        ("governor_veto_user_3", "slot_3"),
+        ("governor_veto_user_4", "slot_4"),
+        ("governor_veto_user_5", "slot_5"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot("slot_2".into()),
+            },
+        )
+        .await
+        .expect("submit ballot for vetoed target");
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 930_201,
+        },
+    )
+    .await
+    .expect("host resolves Governor veto day");
+
+    let applied_payload = resolution_payload(&pool, game, "D01", 930_201).await;
+    let applied =
+        domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION).unwrap();
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.status == domain::VoteStatus::Lynch
+                && outcome.winner.as_deref() == Some("slot_2")
+                && outcome.tallies.get("slot_2") == Some(&3.0)
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ActionUseCounted {
+            actor,
+            template_id,
+            consumed_action,
+            remaining,
+            ..
+        } if actor == "slot_1"
+            && template_id == "veto"
+            && consumed_action == "veto_001"
+            && *remaining == 0
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::VoteVetoed {
+            governor,
+            target,
+            source_action,
+            ..
+        } if governor == "slot_1"
+            && target == "slot_2"
+            && source_action == "veto_001"
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_2" && cause == "day_vote"
+        )),
+        "vetoed slot should not receive a lynch death"
+    );
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PhaseAnnouncement(announcement)
+            if announcement.phase_id == "D01" && announcement.deaths.is_empty()
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "vetoed slot should remain alive in slot_state"
+    );
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view includes Governor veto");
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains(
+                    "Vote veto: slot_1 vetoed the elimination of slot_2 in D01 (veto_001).",
+                )
+        }),
+        "thread projection should publish the veto"
+    );
+    assert!(
+        thread.posts.iter().any(|post| {
+            post.phase_id == "D01"
+                && post.author_user.as_deref() == Some("system")
+                && post.body.contains("Phase D01 announcement: no deaths.")
+        }),
+        "thread projection should publish an empty death announcement"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Governor veto resolution audit");
+    assert!(audit.ok, "Governor veto audit drifted: {audit:?}");
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Governor veto projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Governor veto survival"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Governor veto announcement"
     );
 }
 
@@ -5685,6 +8746,10 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
         !outcome.votes.contains_key("slot_4"),
         "withdrawn/stale slot_4 ballots are absent from the official day outcome"
     );
+    assert!(
+        !outcome.votes.contains_key("stale_projection_actor"),
+        "projection-only actors must not enter the official DayVoteOutcome"
+    );
     let official_rows = day_vote_outcomes(&pool, game)
         .await
         .expect("official day vote outcome projection");
@@ -5699,6 +8764,13 @@ async fn engine_phase_input_preserves_submit_withdraw_history_and_current_day_ba
     assert!(
         official_rows[0].votes.get("slot_4").is_none(),
         "host console official row omits withdrawn ballots"
+    );
+    assert!(
+        official_rows[0]
+            .votes
+            .get("stale_projection_actor")
+            .is_none(),
+        "host console official row is folded from ResolutionApplied, not the running projection"
     );
     let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
@@ -7519,6 +10591,7 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
                             "source_death_cause": "factional_kill",
                             "cause": "hunter_retaliate",
                             "unstoppable": false,
+                            "timing": "ImmediateBeforePhaseAnnouncement",
                         }),
                     },
                     &context,
@@ -15407,6 +18480,166 @@ async fn host_resolve_phase_carries_chinese_wolf_faction_vote_policy(pool: PgPoo
     );
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_chinese_white_wolf_king_night_kill(pool: PgPool) {
+    let host = user("host_chinese_wwk_night_kill");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "chinese_structured".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "chinese_wwk_user_1", "white_wolf_king"),
+        ("slot_2", "chinese_wwk_user_2", "wolf"),
+        ("slot_3", "chinese_wwk_user_3", "villager"),
+        ("slot_4", "chinese_wwk_user_4", "villager"),
+        ("slot_5", "chinese_wwk_user_5", "villager"),
+        ("slot_6", "chinese_wwk_user_6", "villager"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("chinese_wwk_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "wwk_night_kill_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "wolf_night_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Chinese White Wolf King submits shared wolf night kill");
+    handle(
+        &pool,
+        &host,
+        Command::ResolvePhase {
+            game,
+            seed: 420_109,
+        },
+    )
+    .await
+    .expect("host resolves Chinese White Wolf King shared night kill");
+
+    let payload = resolution_payload(&pool, game, "N01", 420_109).await;
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("Chinese White Wolf King night kill ResolutionApplied validates");
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_3"
+                && cause == "wolf_night_kill"
+                && attackers == &vec!["slot_1".to_string()]
+                && !*unstoppable
+        )),
+        "White Wolf King should kill through canonical wolf_night_kill"
+    );
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::WinReached { .. })),
+        "scenario should stay mid-game so the night-kill projection proof is isolated"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .expect("killed villager projection")
+            .alive,
+        "White Wolf King night kill should fold into slot_state"
+    );
+    for slot_id in ["slot_1", "slot_2", "slot_4", "slot_5", "slot_6"] {
+        assert!(
+            slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .expect("living projection")
+                .alive,
+            "{slot_id} should remain alive after White Wolf King night kill"
+        );
+    }
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Chinese White Wolf King night kill resolution audit");
+    assert!(
+        audit.ok,
+        "Chinese White Wolf King night kill audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Chinese White Wolf King night kill projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Chinese White Wolf King night kill"
+    );
+}
+
 async fn setup_chinese_wolf_faction_vote_game(
     pool: &PgPool,
     game: Uuid,
@@ -20901,6 +24134,873 @@ async fn host_resolve_phase_carries_mafiascum_role_scan(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_coroner_corpse_inspection(pool: PgPool) {
+    let host = "host_ms_coroner";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ms_coroner_user_1", "coroner"),
+        ("slot_2", "ms_coroner_user_2", "godfather"),
+        ("slot_3", "ms_coroner_user_3", "mafia_goon"),
+        ("slot_4", "ms_coroner_user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let live_target_err = handle(
+        &pool,
+        &user("ms_coroner_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "ms_coroner_live_target_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "inspect_corpse".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect_err("coroner inspect_corpse must reject live targets");
+    assert_eq!(live_target_err, Reject::InvalidTarget);
+
+    handle(
+        &pool,
+        &h,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_2".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect("host marks corpse dead for coroner inspection");
+
+    handle(
+        &pool,
+        &user("ms_coroner_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "ms_coroner_inspect_corpse_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "inspect_corpse".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("coroner submits corpse inspection");
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 912_203,
+        },
+    )
+    .await
+    .expect("host resolves mafiascum coroner corpse inspection");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 912_203).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid mafiascum coroner corpse inspection result");
+    let expected_result = serde_json::json!({ "role": "godfather", "alignment": "mafia" });
+    let investigation_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::InvestigationResult {
+                mode: domain::InvestigateMode::FullRole,
+                investigator,
+                target,
+                result,
+            } if investigator == "slot_1" && target == "slot_2" && result == &expected_result => {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("mafiascum coroner should disclose corpse role and alignment");
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read mafiascum coroner private result");
+    assert_eq!(
+        private_results.len(),
+        1,
+        "coroner should project exactly one private result"
+    );
+    let private_result = private_results.first().unwrap();
+    assert_eq!(private_result.phase_id, "N01");
+    assert_eq!(private_result.event_index, investigation_index as i32);
+    assert_eq!(private_result.audience_slot, "slot_1");
+    assert_eq!(private_result.mode, "FullRole");
+    assert_eq!(private_result.target_slot, "slot_2");
+    assert_eq!(private_result.result, expected_result);
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_2")
+            .await
+            .expect("read investigated corpse private result")
+            .is_empty(),
+        "inspected corpses must not receive private coroner results"
+    );
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_4")
+            .await
+            .expect("read unrelated private result")
+            .is_empty(),
+        "unaddressed slots must not receive coroner private results"
+    );
+
+    let private_results_before = serde_json::to_string(&private_results).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("mafiascum coroner audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "mafiascum coroner projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read mafiascum coroner private result after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve mafiascum coroner result"
+    );
+    assert_eq!(
+        slot_state(&pool, game)
+            .await
+            .expect("read slots after coroner rebuild")
+            .into_iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .expect("corpse slot")
+            .status,
+        "dead",
+        "projection rebuild must preserve the inspected corpse state"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("mafiascum coroner resolution audit");
+    assert!(
+        audit.ok,
+        "mafiascum coroner resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_psychologist_killer_info(pool: PgPool) {
+    let host = "host_ms_psychologist";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ms_psychologist_user_1", "psychologist"),
+        ("slot_2", "ms_psychologist_user_2", "psychologist"),
+        ("slot_3", "ms_psychologist_user_3", "mafia_goon"),
+        ("slot_4", "ms_psychologist_user_4", "vanilla_townie"),
+        ("slot_5", "ms_psychologist_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (principal, actor_slot, action_id, target) in [
+        (
+            "ms_psychologist_user_1",
+            "slot_1",
+            "ms_psychologist_positive_n01",
+            "slot_3",
+        ),
+        (
+            "ms_psychologist_user_2",
+            "slot_2",
+            "ms_psychologist_negative_n01",
+            "slot_4",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(principal),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: "investigate_killer".into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("submit {action_id}: {err:?}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 912_204,
+        },
+    )
+    .await
+    .expect("host resolves mafiascum psychologist killer info");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 912_204).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid mafiascum psychologist killer info result");
+    let expected = [
+        ("slot_1", "slot_3", serde_json::json!({ "killer": true })),
+        ("slot_2", "slot_4", serde_json::json!({ "killer": false })),
+    ];
+    let mut investigation_indexes = BTreeMap::new();
+    for (investigator, target, result) in &expected {
+        let event_index = applied
+            .events
+            .iter()
+            .find_map(|indexed| match &indexed.event {
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::Killer,
+                    investigator: actual_investigator,
+                    target: actual_target,
+                    result: actual_result,
+                } if actual_investigator == investigator
+                    && actual_target == target
+                    && actual_result == result =>
+                {
+                    Some(indexed.index)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!("missing mafiascum psychologist result {investigator}->{target}: {result}")
+            });
+        investigation_indexes.insert((investigator.to_string(), target.to_string()), event_index);
+    }
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read mafiascum psychologist private results");
+    assert_eq!(
+        private_results.len(),
+        2,
+        "each psychologist should receive one private killer result"
+    );
+    for (investigator, target, result) in &expected {
+        assert!(private_results.iter().any(|row| {
+            row.phase_id == "N01"
+                && row.event_index
+                    == *investigation_indexes
+                        .get(&(investigator.to_string(), target.to_string()))
+                        .expect("stored psychologist investigation index")
+                        as i32
+                && row.audience_slot == *investigator
+                && row.mode == "Killer"
+                && row.target_slot == *target
+                && &row.result == result
+        }));
+    }
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_3")
+            .await
+            .expect("read investigated killer private rows")
+            .is_empty(),
+        "investigated killers must not receive private psychologist results"
+    );
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_5")
+            .await
+            .expect("read unrelated private rows")
+            .is_empty(),
+        "unaddressed slots must not receive psychologist private results"
+    );
+
+    let private_results_before = serde_json::to_string(&private_results).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("mafiascum psychologist audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "mafiascum psychologist projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read mafiascum psychologist private results after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve mafiascum psychologist results"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("mafiascum psychologist resolution audit");
+    assert!(
+        audit.ok,
+        "mafiascum psychologist resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_specialist_info(pool: PgPool) {
+    let host = "host_ms_specialist";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ms_specialist_user_1", "specialist"),
+        ("slot_2", "ms_specialist_user_2", "specialist"),
+        ("slot_3", "ms_specialist_user_3", "specialist"),
+        ("slot_4", "ms_specialist_user_4", "vanilla_townie"),
+        ("slot_5", "ms_specialist_user_5", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (principal, actor_slot, action_id, target) in [
+        (
+            "ms_specialist_user_1",
+            "slot_1",
+            "ms_specialist_positive_n01",
+            "slot_3",
+        ),
+        (
+            "ms_specialist_user_2",
+            "slot_2",
+            "ms_specialist_negative_n01",
+            "slot_4",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(principal),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: "investigate_specialist".into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("submit {action_id}: {err:?}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 912_205,
+        },
+    )
+    .await
+    .expect("host resolves mafiascum specialist info");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 912_205).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid mafiascum specialist info result");
+    let expected = [
+        (
+            "slot_1",
+            "slot_3",
+            serde_json::json!({ "specialist": true }),
+        ),
+        (
+            "slot_2",
+            "slot_4",
+            serde_json::json!({ "specialist": false }),
+        ),
+    ];
+    let mut investigation_indexes = BTreeMap::new();
+    for (investigator, target, result) in &expected {
+        let event_index = applied
+            .events
+            .iter()
+            .find_map(|indexed| match &indexed.event {
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::Specialist,
+                    investigator: actual_investigator,
+                    target: actual_target,
+                    result: actual_result,
+                } if actual_investigator == investigator
+                    && actual_target == target
+                    && actual_result == result =>
+                {
+                    Some(indexed.index)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!("missing mafiascum specialist result {investigator}->{target}: {result}")
+            });
+        investigation_indexes.insert((investigator.to_string(), target.to_string()), event_index);
+    }
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read mafiascum specialist private results");
+    assert_eq!(
+        private_results.len(),
+        2,
+        "each specialist should receive one private specialist result"
+    );
+    for (investigator, target, result) in &expected {
+        assert!(private_results.iter().any(|row| {
+            row.phase_id == "N01"
+                && row.event_index
+                    == *investigation_indexes
+                        .get(&(investigator.to_string(), target.to_string()))
+                        .expect("stored specialist investigation index")
+                        as i32
+                && row.audience_slot == *investigator
+                && row.mode == "Specialist"
+                && row.target_slot == *target
+                && &row.result == result
+        }));
+    }
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_3")
+            .await
+            .expect("read investigated specialist private rows")
+            .is_empty(),
+        "investigated specialists must not receive private specialist results"
+    );
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_5")
+            .await
+            .expect("read unrelated private rows")
+            .is_empty(),
+        "unaddressed slots must not receive specialist private results"
+    );
+
+    let private_results_before = serde_json::to_string(&private_results).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("mafiascum specialist audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "mafiascum specialist projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read mafiascum specialist private results after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve mafiascum specialist results"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("mafiascum specialist resolution audit");
+    assert!(
+        audit.ok,
+        "mafiascum specialist resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_pt_cop_access(pool: PgPool) {
+    let host = "host_ms_pt_cop";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ms_pt_cop_user_1", "pt_cop"),
+        ("slot_2", "ms_pt_cop_user_2", "pt_cop"),
+        ("slot_3", "ms_pt_cop_user_3", "mason"),
+        ("slot_4", "ms_pt_cop_user_4", "vanilla_townie"),
+        ("slot_5", "ms_pt_cop_user_5", "mason"),
+        ("slot_6", "ms_pt_cop_user_6", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let channel_members = projections::private_channel_members(&pool, game)
+        .await
+        .expect("read setup private channel members");
+    assert_eq!(
+        channel_members
+            .iter()
+            .map(|member| (
+                member.channel_id.as_str(),
+                member.kind.as_str(),
+                member.slot_id.as_str(),
+                member.role_key.as_str(),
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("private:mason", "Mason", "slot_3", "mason"),
+            ("private:mason", "Mason", "slot_5", "mason"),
+        ],
+        "PT Cop proof should consume setup-declared private channel membership"
+    );
+
+    for (principal, actor_slot, action_id, target) in [
+        (
+            "ms_pt_cop_user_1",
+            "slot_1",
+            "ms_pt_cop_positive_n01",
+            "slot_3",
+        ),
+        (
+            "ms_pt_cop_user_2",
+            "slot_2",
+            "ms_pt_cop_negative_n01",
+            "slot_4",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(principal),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: "investigate_pt".into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("submit {action_id}: {err:?}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 912_206,
+        },
+    )
+    .await
+    .expect("host resolves mafiascum PT Cop access");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 912_206).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid mafiascum PT Cop result");
+    let expected = [
+        (
+            "slot_1",
+            "slot_3",
+            serde_json::json!({ "pt_access": ["private:mason"] }),
+        ),
+        ("slot_2", "slot_4", serde_json::json!({ "pt_access": [] })),
+    ];
+    let mut investigation_indexes = BTreeMap::new();
+    for (investigator, target, result) in &expected {
+        let event_index = applied
+            .events
+            .iter()
+            .find_map(|indexed| match &indexed.event {
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::PtAccess,
+                    investigator: actual_investigator,
+                    target: actual_target,
+                    result: actual_result,
+                } if actual_investigator == investigator
+                    && actual_target == target
+                    && actual_result == result =>
+                {
+                    Some(indexed.index)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!("missing mafiascum PT Cop result {investigator}->{target}: {result}")
+            });
+        investigation_indexes.insert((investigator.to_string(), target.to_string()), event_index);
+    }
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read mafiascum PT Cop private results");
+    assert_eq!(
+        private_results.len(),
+        2,
+        "each PT Cop should receive one private access result"
+    );
+    for (investigator, target, result) in &expected {
+        assert!(private_results.iter().any(|row| {
+            row.phase_id == "N01"
+                && row.event_index
+                    == *investigation_indexes
+                        .get(&(investigator.to_string(), target.to_string()))
+                        .expect("stored PT Cop investigation index") as i32
+                && row.audience_slot == *investigator
+                && row.mode == "PtAccess"
+                && row.target_slot == *target
+                && &row.result == result
+        }));
+    }
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_3")
+            .await
+            .expect("read investigated mason private rows")
+            .is_empty(),
+        "investigated private-channel members must not receive PT Cop results"
+    );
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_6")
+            .await
+            .expect("read unrelated private rows")
+            .is_empty(),
+        "unaddressed slots must not receive PT Cop private results"
+    );
+
+    let private_results_before = serde_json::to_string(&private_results).unwrap();
+    let channel_members_before = serde_json::to_string(&channel_members).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("mafiascum PT Cop audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "mafiascum PT Cop projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        channel_members_before,
+        serde_json::to_string(
+            &projections::private_channel_members(&pool, game)
+                .await
+                .expect("read setup private channel members after rebuild")
+        )
+        .unwrap(),
+        "private channel membership rebuild must preserve PT access source"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read mafiascum PT Cop private results after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve mafiascum PT Cop results"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("mafiascum PT Cop resolution audit");
+    assert!(
+        audit.ok,
+        "mafiascum PT Cop resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_role_set_info(pool: PgPool) {
     let host = "host_ms_role_set_info";
     let game = Uuid::new_v4();
@@ -21714,6 +25814,252 @@ async fn host_resolve_phase_carries_mafia_universe_role_and_full_role_info(pool:
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_culture_aliases(pool: PgPool) {
+    let host = "host_mu_culture_aliases";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_alias_user_1", "town_alignment_cop"),
+        ("slot_2", "mu_alias_user_2", "mafia_alignment_cop"),
+        ("slot_3", "mu_alias_user_3", "mafia_cop"),
+        ("slot_4", "mu_alias_user_4", "mafia_doctor"),
+        ("slot_5", "mu_alias_user_5", "serial_killer"),
+        ("slot_6", "mu_alias_user_6", "blank_town_role"),
+        ("slot_7", "mu_alias_user_7", "blank_mafia_role"),
+        ("slot_8", "mu_alias_user_8", "vanilla_town"),
+        ("slot_9", "mu_alias_user_9", "mafia_bodyguard"),
+        ("slot_10", "mu_alias_user_10", "mafia_jailkeeper"),
+        ("slot_11", "mu_alias_user_11", "vanilla_town"),
+        ("slot_12", "mu_alias_user_12", "blank_town_role"),
+        ("slot_13", "mu_alias_user_13", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (principal, actor_slot, template_id, action_id, target) in [
+        (
+            "mu_alias_user_1",
+            "slot_1",
+            "cop_investigate",
+            "mu_town_alignment_cop_n01",
+            "slot_7",
+        ),
+        (
+            "mu_alias_user_2",
+            "slot_2",
+            "cop_investigate",
+            "mu_mafia_alignment_cop_n01",
+            "slot_6",
+        ),
+        (
+            "mu_alias_user_3",
+            "slot_3",
+            "cop_investigate",
+            "mu_mafia_cop_n01",
+            "slot_8",
+        ),
+        (
+            "mu_alias_user_4",
+            "slot_4",
+            "doctor_protect",
+            "mu_mafia_doctor_n01",
+            "slot_7",
+        ),
+        (
+            "mu_alias_user_5",
+            "slot_5",
+            "serial_killer_kill",
+            "mu_serial_killer_n01",
+            "slot_7",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(principal),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: template_id.into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("submit {action_id}: {err:?}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 712_055,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe culture aliases");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 712_055).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Mafia Universe culture alias result");
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerSaved { slot_id, sources, .. }
+                if slot_id == "slot_7" && sources == &vec!["slot_4".to_string()]
+        )),
+        "Mafia Doctor should save the Serial Killer target"
+    );
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_7" && cause == "serial_killer_kill"
+        )),
+        "saved target must not die to Serial Killer kill"
+    );
+
+    let expected = [
+        ("slot_1", "slot_7", serde_json::json!("scum")),
+        ("slot_2", "slot_6", serde_json::json!("town")),
+        ("slot_3", "slot_8", serde_json::json!("town")),
+    ];
+    let mut investigation_indexes = BTreeMap::new();
+    for (investigator, target, result) in &expected {
+        let event_index = applied
+            .events
+            .iter()
+            .find_map(|indexed| match &indexed.event {
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::Parity,
+                    investigator: actual_investigator,
+                    target: actual_target,
+                    result: actual_result,
+                } if actual_investigator == investigator
+                    && actual_target == target
+                    && actual_result == result =>
+                {
+                    Some(indexed.index)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                panic!("missing MU alias parity result {investigator}->{target}: {result}")
+            });
+        investigation_indexes.insert((investigator.to_string(), target.to_string()), event_index);
+    }
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read MU alias private results");
+    assert_eq!(
+        private_results.len(),
+        3,
+        "each MU alias parity investigator should receive one private result"
+    );
+    for (investigator, target, result) in &expected {
+        assert!(private_results.iter().any(|row| {
+            row.phase_id == "N01"
+                && row.event_index
+                    == *investigation_indexes
+                        .get(&(investigator.to_string(), target.to_string()))
+                        .expect("stored investigation index") as i32
+                && row.audience_slot == *investigator
+                && row.mode == "Parity"
+                && row.target_slot == *target
+                && &row.result == result
+        }));
+    }
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_7")
+            .await
+            .expect("read investigated target private rows")
+            .is_empty(),
+        "investigated target must not receive private parity results"
+    );
+
+    let private_results_before = serde_json::to_string(&private_results).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe alias audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "Mafia Universe alias projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read MU alias private results after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve MU alias results"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe alias resolution audit");
+    assert!(
+        audit.ok,
+        "Mafia Universe alias resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafia_universe_parity_scan_memory(pool: PgPool) {
     let host = "host_mu_parity_scan";
     let game = Uuid::new_v4();
@@ -22334,6 +26680,292 @@ async fn host_resolve_phase_carries_mafia_universe_graph_info(pool: PgPool) {
     assert!(
         audit.ok,
         "Mafia Universe graph-info resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_voyeur_action_info(pool: PgPool) {
+    let host = "host_mu_voyeur_action_info";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_voyeur_user_1", "town_voyeur"),
+        ("slot_2", "mu_voyeur_user_2", "mafia_voyeur"),
+        ("slot_3", "mu_voyeur_user_3", "mafia_doctor"),
+        ("slot_4", "mu_voyeur_user_4", "serial_killer"),
+        ("slot_5", "mu_voyeur_user_5", "mafia_ninja"),
+        ("slot_6", "mu_voyeur_user_6", "mafia_watcher"),
+        ("slot_7", "mu_voyeur_user_7", "vanilla_town"),
+        ("slot_8", "mu_voyeur_user_8", "blank_town_role"),
+        ("slot_9", "mu_voyeur_user_9", "town_vanilla"),
+        ("slot_10", "mu_voyeur_user_10", "town_vanilla"),
+        ("slot_11", "mu_voyeur_user_11", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (user_id, action_id, actor_slot, template_id) in [
+        ("mu_voyeur_user_1", "mu_town_voyeur_n01", "slot_1", "voyeur"),
+        (
+            "mu_voyeur_user_2",
+            "mu_mafia_voyeur_n01",
+            "slot_2",
+            "voyeur",
+        ),
+        (
+            "mu_voyeur_user_3",
+            "mu_mafia_doctor_voyeur_n01",
+            "slot_3",
+            "doctor_protect",
+        ),
+        (
+            "mu_voyeur_user_4",
+            "mu_serial_killer_voyeur_n01",
+            "slot_4",
+            "serial_killer_kill",
+        ),
+        (
+            "mu_voyeur_user_5",
+            "mu_ninja_hidden_from_voyeur_n01",
+            "slot_5",
+            "ninja_kill",
+        ),
+        (
+            "mu_voyeur_user_6",
+            "mu_watcher_excluded_from_voyeur_n01",
+            "slot_6",
+            "watch",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: template_id.into(),
+                targets: vec!["slot_7".into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("{action_id} should validate through commands: {err}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 712_056,
+        },
+    )
+    .await
+    .expect("host resolves Mafia Universe Voyeur action-info scenario");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 712_056).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Mafia Universe Voyeur result");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerSaved { slot_id, sources, .. }
+            if slot_id == "slot_7" && sources == &vec!["slot_3".to_string()]
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, .. } if slot_id == "slot_7"
+        )),
+        "MU protected target must not die while Voyeurs inspect action ids"
+    );
+
+    let expected_result = serde_json::json!({
+        "actions": ["doctor_protect", "serial_killer_kill"]
+    });
+    let mut investigation_indexes = BTreeMap::new();
+    for investigator in ["slot_1", "slot_2"] {
+        let event_index = applied
+            .events
+            .iter()
+            .find_map(|indexed| match &indexed.event {
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::Voyeur,
+                    investigator: actual_investigator,
+                    target,
+                    result,
+                } if actual_investigator == investigator
+                    && target == "slot_7"
+                    && result == &expected_result =>
+                {
+                    Some(indexed.index)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("missing MU Voyeur result for {investigator}"));
+        investigation_indexes.insert(investigator.to_string(), event_index);
+    }
+    let watch_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::InvestigationResult {
+                mode: domain::InvestigateMode::Watch,
+                investigator,
+                target,
+                result,
+            } if investigator == "slot_6"
+                && target == "slot_7"
+                && result == &serde_json::json!({ "visitors": ["slot_3", "slot_4"] }) =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("MU Watcher should still receive its own private result");
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read MU Voyeur private results");
+    assert_eq!(
+        private_results.len(),
+        3,
+        "town/mafia Voyeurs plus the control Watcher should each receive one private result"
+    );
+    for investigator in ["slot_1", "slot_2"] {
+        assert!(private_results.iter().any(|row| {
+            row.phase_id == "N01"
+                && row.event_index
+                    == *investigation_indexes
+                        .get(investigator)
+                        .expect("stored Voyeur investigation index") as i32
+                && row.audience_slot == investigator
+                && row.mode == "Voyeur"
+                && row.target_slot == "slot_7"
+                && row.result == expected_result
+        }));
+    }
+    assert!(private_results.iter().any(|row| {
+        row.phase_id == "N01"
+            && row.event_index == watch_index as i32
+            && row.audience_slot == "slot_6"
+            && row.mode == "Watch"
+            && row.target_slot == "slot_7"
+            && row.result == serde_json::json!({ "visitors": ["slot_3", "slot_4"] })
+    }));
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_7")
+            .await
+            .expect("read MU Voyeur target private rows")
+            .is_empty(),
+        "observed MU Voyeur target must not receive private result rows"
+    );
+
+    let thread_before = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("read MU Voyeur thread view before rebuild");
+    assert!(
+        thread_before
+            .posts
+            .iter()
+            .all(|post| !post.body.contains("serial_killer_kill")
+                && !post.body.contains("doctor_protect")
+                && !post.body.contains("ninja_kill")),
+        "MU Voyeur private result payloads must not leak into thread_view: {:?}",
+        thread_before.posts
+    );
+
+    let private_results_before =
+        serde_json::to_string(&private_results).expect("serialize MU Voyeur results");
+    let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("Mafia Universe Voyeur audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "Mafia Universe Voyeur projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve MU Voyeur outcome"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read MU Voyeur private results after rebuild")
+        )
+        .unwrap(),
+        "player_investigation_result rebuild must preserve MU Voyeur results"
+    );
+    assert_eq!(
+        thread_before,
+        projections::thread_view(&pool, game, None, 50)
+            .await
+            .expect("read MU Voyeur thread view after rebuild"),
+        "thread_view rebuild must preserve MU Voyeur private result non-leakage"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe Voyeur resolution audit");
+    assert!(
+        audit.ok,
+        "Mafia Universe Voyeur resolution audit drifted: {audit:?}"
     );
 }
 
@@ -24096,6 +28728,11 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         "MU healer aliases must consume both delayed death queues"
     );
     let notices = player_notifications(&pool, game).await.unwrap();
+    assert_eq!(
+        notices.len(),
+        2,
+        "MU Inventor grants should project exactly one private grant notice per target"
+    );
     assert!(
         notices.iter().any(|notice| {
             notice.audience_slot == "slot_3"
@@ -25622,6 +30259,23 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         }),
         "MU Mafia Inventor item grant should project a private target notification"
     );
+    assert!(
+        player_notifications_for_slot(&pool, game, "slot_5")
+            .await
+            .unwrap()
+            .is_empty(),
+        "unaddressed slots must not receive MU Inventor grant notices"
+    );
+    let grant_thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("Mafia Universe Inventor grant thread view");
+    assert!(
+        grant_thread.posts.iter().all(|post| {
+            !post.body.contains("parity_scanner_item")
+                && !post.body.contains("bulletproof_vest_item")
+        }),
+        "private MU Inventor grant ids must not leak into the public thread"
+    );
 
     handle(
         &pool,
@@ -25891,13 +30545,40 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
     assert!(effects
         .iter()
         .any(|effect| { effect.slot_id == "slot_4" && effect.effect == "bulletproof_vest" }));
+    let spent_notices = player_notifications(&pool, game).await.unwrap();
+    assert!(
+        spent_notices.iter().any(|notice| {
+            notice.phase_id == "N02"
+                && notice.audience_slot == "slot_4"
+                && notice.effect == "bulletproof_vest"
+                && notice.status == "marked"
+        }),
+        "MU Inventor vest item spend should privately notify only the vested target"
+    );
+    assert!(
+        player_notifications_for_slot(&pool, game, "slot_5")
+            .await
+            .unwrap()
+            .is_empty(),
+        "unaddressed slots must not receive MU Inventor item-spend notices"
+    );
+    let spend_thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("Mafia Universe Inventor spend thread view");
+    assert!(
+        spend_thread.posts.iter().all(|post| {
+            !post.body.contains("parity_scanner_item")
+                && !post.body.contains("bulletproof_vest_item")
+                && !post.body.contains("bulletproof_vest")
+        }),
+        "private MU Inventor item and vest notices must not leak into the public thread"
+    );
 
     let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
     let grants_before = serde_json::to_string(&spent_grants).unwrap();
     let counters_before = serde_json::to_string(&counters).unwrap();
     let effects_before = serde_json::to_string(&effects).unwrap();
-    let notifications_before =
-        serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap();
+    let notifications_before = serde_json::to_string(&spent_notices).unwrap();
     rebuild(&pool, game)
         .await
         .expect("Mafia Universe inventor item projection rebuild");
@@ -28973,6 +33654,771 @@ async fn host_resolve_phase_applies_godfather_investigation_override(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_applies_lawyer_result_mod_override(pool: PgPool) {
+    let host = "host_lawyer_result_mod";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "lawyer_user_1", "lawyer"),
+        ("slot_2", "lawyer_user_2", "cop"),
+        ("slot_3", "lawyer_user_3", "mafia_goon"),
+        ("slot_4", "lawyer_user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("lawyer_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "lawyer_cover_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "lawyer_cover".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("lawyer covers the mafia target");
+    handle(
+        &pool,
+        &user("lawyer_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "check_lawyered_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "cop_investigate".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("cop checks lawyered mafia target");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 9933 })
+        .await
+        .expect("host resolves lawyer result_mod override");
+
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("lawyer result_mod ResolutionApplied validates");
+    assert!(
+        applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::EffectsMarked {
+                    actor,
+                    target,
+                    effect,
+                    ..
+                } if actor == "slot_1" && target == "slot_3" && effect == "lawyered"
+            )
+        }),
+        "lawyer action should mark the target as lawyered: {applied:?}"
+    );
+    assert!(
+        applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::InvestigationResult {
+                    investigator,
+                    target,
+                    result,
+                    ..
+                } if investigator == "slot_2" && target == "slot_3" && result == "town"
+            )
+        }),
+        "lawyered effect should override mafia parity read to town: {applied:?}"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("lawyer result_mod resolution audit");
+    assert!(
+        audit.ok,
+        "lawyer result_mod resolution audit drifted: {audit:?}"
+    );
+    rebuild(&pool, game)
+        .await
+        .expect("lawyer result_mod projection rebuild");
+    let rebuilt_audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("rebuilt lawyer result_mod resolution audit");
+    assert!(
+        rebuilt_audit.ok,
+        "rebuilt lawyer result_mod resolution audit drifted: {rebuilt_audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_mafiascum_info_results(pool: PgPool) {
+    let host = "host_mafiascum_info";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "info_user_1", "mailman"),
+        ("slot_2", "info_user_2", "observer"),
+        ("slot_3", "info_user_3", "reporter"),
+        ("slot_4", "info_user_4", "mafia_goon"),
+        ("slot_5", "info_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (user_id, action_id, actor_slot, template_id) in [
+        ("info_user_1", "mailman_n01", "slot_1", "mailman"),
+        ("info_user_2", "observe_n01", "slot_2", "observe"),
+        ("info_user_3", "report_n01", "slot_3", "report"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: template_id.into(),
+                targets: vec!["slot_4".into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("{template_id} submits: {err:?}"));
+    }
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 9934 })
+        .await
+        .expect("host resolves Mafiascum info actions");
+
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("Mafiascum info ResolutionApplied validates");
+    let info_events: Vec<_> = applied
+        .events
+        .iter()
+        .filter_map(|indexed| match &indexed.event {
+            domain::InnerEvent::InfoResult {
+                actor,
+                target,
+                kind,
+                audience,
+                result,
+                template_id,
+                ..
+            } => Some((actor, target, kind, audience, result, template_id)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        info_events.len(),
+        3,
+        "expected three info results: {applied:?}"
+    );
+    assert!(info_events
+        .iter()
+        .any(|(actor, target, kind, audience, result, template_id)| {
+            actor.as_str() == "slot_1"
+                && target.as_str() == "slot_4"
+                && kind.as_str() == "mailman"
+                && template_id.as_str() == "mailman"
+                && audience.as_slice() == ["slot_4".to_string()]
+                && result["message"] == serde_json::json!("anonymous")
+        }));
+    assert!(info_events
+        .iter()
+        .any(|(actor, target, kind, audience, _result, template_id)| {
+            actor.as_str() == "slot_2"
+                && target.as_str() == "slot_4"
+                && kind.as_str() == "observe"
+                && template_id.as_str() == "observe"
+                && audience.as_slice() == ["slot_2".to_string()]
+        }));
+    assert!(info_events
+        .iter()
+        .any(|(actor, target, kind, audience, _result, template_id)| {
+            actor.as_str() == "slot_3"
+                && target.as_str() == "slot_4"
+                && kind.as_str() == "report"
+                && template_id.as_str() == "report"
+                && audience.as_slice() == ["slot_3".to_string()]
+        }));
+
+    let info_rows = player_info_results(&pool, game)
+        .await
+        .expect("player_info_result projection");
+    assert_eq!(info_rows.len(), 3, "projected info rows: {info_rows:?}");
+    assert!(info_rows.iter().any(|row| {
+        row.audience_slot == "slot_4"
+            && row.actor_slot == "slot_1"
+            && row.kind == "mailman"
+            && row.result["message"] == serde_json::json!("anonymous")
+    }));
+    assert!(info_rows.iter().any(|row| {
+        row.audience_slot == "slot_2" && row.actor_slot == "slot_2" && row.kind == "observe"
+    }));
+    assert!(info_rows.iter().any(|row| {
+        row.audience_slot == "slot_3" && row.actor_slot == "slot_3" && row.kind == "report"
+    }));
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view after info resolution");
+    assert!(
+        thread.posts.iter().all(|row| {
+            !row.body.contains("mailman")
+                && !row.body.contains("observe")
+                && !row.body.contains("report")
+        }),
+        "private info results should not leak to public thread: {thread:?}"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum info resolution audit");
+    assert!(
+        audit.ok,
+        "Mafiascum info resolution audit drifted: {audit:?}"
+    );
+    let before_rebuild = serde_json::to_string(&info_rows).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum info projection rebuild");
+    assert_eq!(
+        before_rebuild,
+        serde_json::to_string(&player_info_results(&pool, game).await.unwrap()).unwrap(),
+        "player_info_result rebuild should be stable"
+    );
+    let rebuilt_audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("rebuilt Mafiascum info resolution audit");
+    assert!(
+        rebuilt_audit.ok,
+        "rebuilt Mafiascum info resolution audit drifted: {rebuilt_audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_fruit_vendor_notification(pool: PgPool) {
+    let host = "host_mafiascum_fruit_vendor";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "fruit_vendor_user_1", "fruit_vendor"),
+        ("slot_2", "fruit_vendor_user_2", "mafia_goon"),
+        ("slot_3", "fruit_vendor_user_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("fruit_vendor_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mafiascum_send_fruit_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "send_fruit".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Mafiascum Fruit Vendor submits send_fruit");
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 714_101,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum Fruit Vendor notification");
+
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("Mafiascum Fruit Vendor ResolutionApplied validates");
+    assert!(
+        applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::EffectNotification {
+                    effect,
+                    status,
+                    audience,
+                } if effect == "fruit_received"
+                    && status == "marked"
+                    && audience == &vec!["slot_2".to_string()]
+            )
+        }),
+        "Mafiascum Fruit Vendor fruit should notify only the target: {applied:?}"
+    );
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(indexed.event, domain::InnerEvent::EffectsMarked { .. })),
+        "resolution-scoped Mafiascum fruit should not persist EffectsMarked"
+    );
+    assert_eq!(applied.counts.kills, 0);
+
+    let notifications = player_notifications(&pool, game).await.unwrap();
+    assert_eq!(notifications.len(), 1);
+    assert!(notifications.iter().any(|notice| {
+        notice.audience_slot == "slot_2"
+            && notice.effect == "fruit_received"
+            && notice.status == "marked"
+    }));
+    assert!(
+        slot_effects(&pool, game).await.unwrap().is_empty(),
+        "resolution-scoped Mafiascum fruit should not fold into persistent slot_effects"
+    );
+
+    let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
+    let notifications_before = serde_json::to_string(&notifications).unwrap();
+    let effects_before = serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum Fruit Vendor projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafiascum fruit vendor no-op state"
+    );
+    assert_eq!(
+        notifications_before,
+        serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
+        "player_notification rebuild must preserve Mafiascum fruit notice"
+    );
+    assert_eq!(
+        effects_before,
+        serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
+        "slot_effects rebuild must preserve Mafiascum fruit non-persistence"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum Fruit Vendor resolution audit");
+    assert!(
+        audit.ok,
+        "Mafiascum Fruit Vendor resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_mafiascum_action_investigation_guards(pool: PgPool) {
+    let host = "host_mafiascum_action_investigation";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "action_info_user_1", "role_watcher"),
+        ("slot_2", "action_info_user_2", "role_guard"),
+        ("slot_3", "action_info_user_3", "security_guard"),
+        ("slot_4", "action_info_user_4", "doctor"),
+        ("slot_5", "action_info_user_5", "vanilla_townie"),
+        ("slot_6", "action_info_user_6", "friendly_neighbor"),
+        ("slot_7", "action_info_user_7", "ninja"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    for (user_id, action_id, actor_slot, template_id) in [
+        (
+            "action_info_user_1",
+            "role_watcher_n01",
+            "slot_1",
+            "role_watcher",
+        ),
+        (
+            "action_info_user_2",
+            "role_guard_n01",
+            "slot_2",
+            "role_guard",
+        ),
+        (
+            "action_info_user_3",
+            "security_guard_n01",
+            "slot_3",
+            "security_guard",
+        ),
+        (
+            "action_info_user_4",
+            "doctor_protect_n01",
+            "slot_4",
+            "doctor_protect",
+        ),
+        (
+            "action_info_user_6",
+            "friendly_neighbor_n01",
+            "slot_6",
+            "friendly_neighbor",
+        ),
+        (
+            "action_info_user_7",
+            "ninja_kill_n01",
+            "slot_7",
+            "factional_kill",
+        ),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: template_id.into(),
+                targets: vec!["slot_5".into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("{template_id} submits: {err:?}"));
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 715_101,
+        },
+    )
+    .await
+    .expect("host resolves Mafiascum action-investigation guards");
+
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("Mafiascum action-investigation ResolutionApplied validates");
+    assert!(
+        applied
+            .events
+            .iter()
+            .any(|indexed| matches!(indexed.event, domain::InnerEvent::PlayerSaved { .. })),
+        "doctor should save the watched target from the Ninja kill: {applied:?}"
+    );
+    assert!(
+        applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::RoleWatcher,
+                    investigator,
+                    target,
+                    result,
+                } if investigator == "slot_1"
+                    && target == "slot_5"
+                    && result["visitor_roles"] == serde_json::json!(["doctor", "friendly_neighbor"])
+            )
+        }),
+        "Role Watcher should learn visible visitor roles and exclude Ninja: {applied:?}"
+    );
+    assert!(
+        applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::InvestigationResult {
+                    mode: domain::InvestigateMode::SecurityGuard,
+                    investigator,
+                    target,
+                    result,
+                } if investigator == "slot_3"
+                    && target == "slot_5"
+                    && result["visitors"] == serde_json::json!(["slot_4", "slot_6"])
+            )
+        }),
+        "Security Guard should learn visible visitor identities and exclude Ninja: {applied:?}"
+    );
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("player_investigation_result projection");
+    assert_eq!(private_results.len(), 3, "{private_results:?}");
+    assert!(private_results.iter().any(|row| {
+        row.audience_slot == "slot_1"
+            && row.mode == "RoleWatcher"
+            && row.target_slot == "slot_5"
+            && row.result["visitor_roles"] == serde_json::json!(["doctor", "friendly_neighbor"])
+    }));
+    assert!(private_results.iter().any(|row| {
+        row.audience_slot == "slot_5"
+            && row.mode == "RoleGuard"
+            && row.target_slot == "slot_5"
+            && row.result["visitor_roles"] == serde_json::json!(["doctor", "friendly_neighbor"])
+    }));
+    assert!(private_results.iter().any(|row| {
+        row.audience_slot == "slot_5"
+            && row.mode == "SecurityGuard"
+            && row.target_slot == "slot_5"
+            && row.result["visitors"] == serde_json::json!(["slot_4", "slot_6"])
+    }));
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_7")
+            .await
+            .unwrap()
+            .is_empty(),
+        "the Ninja visitor must not receive or appear as a private action-investigation audience"
+    );
+
+    let before_rebuild = serde_json::to_string(&private_results).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Mafiascum action-investigation projection rebuild");
+    assert_eq!(
+        before_rebuild,
+        serde_json::to_string(&projections::player_investigation_results(&pool, game).await.unwrap())
+            .unwrap(),
+        "player_investigation_result rebuild should preserve target-directed action-investigation results"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafiascum action-investigation resolution audit");
+    assert!(
+        audit.ok,
+        "Mafiascum action-investigation resolution audit drifted: {audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_preserves_prior_investigation_memory(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();
@@ -29888,6 +35334,23 @@ async fn inventor_vest_item_marks_and_consumes_bulletproof_vest(pool: PgPool) {
     );
     let before_json = serde_json::to_string(&before_rebuild).unwrap();
     let before_counter_json = serde_json::to_string(&before_counter_rebuild).unwrap();
+    let before_notifications = player_notifications(&pool, game).await.unwrap();
+    assert!(
+        before_notifications.iter().all(|notice| {
+            notice.phase_id != "N03"
+                || notice.effect != "bulletproof_vest"
+                || notice.status != "cleared"
+        }),
+        "automatic vest save must consume the vest without emitting a private clear notice"
+    );
+    assert!(
+        player_notifications_for_slot(&pool, game, "slot_3")
+            .await
+            .unwrap()
+            .iter()
+            .all(|notice| notice.effect != "bulletproof_vest"),
+        "the attacker must not receive the target's private vest notices"
+    );
     rebuild(&pool, game).await.unwrap();
     assert_eq!(
         before_json,
@@ -31776,6 +37239,222 @@ async fn host_resolve_phase_persists_loyal_conversion_block_trace(pool: PgPool) 
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted loyal conversion trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_persists_disloyal_modifier_trace_and_projection(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "disloyal_cult_leader"),
+        ("slot_2", "user_2", "cop"),
+        ("slot_3", "user_3", "disloyal_cult_leader"),
+        ("slot_4", "user_4", "vanilla_townie"),
+        ("slot_5", "user_5", "mafia_goon"),
+        ("slot_6", "user_6", "cultist"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "disloyal_recruit_same_alignment".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "disloyal_cult_recruit".into(),
+            targets: vec!["slot_6".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("same-alignment disloyal action submits before resolver suppression");
+    handle(
+        &pool,
+        &user("user_3"),
+        Command::SubmitAction {
+            game,
+            action_id: "disloyal_recruit_cross_alignment".into(),
+            actor_slot: "slot_3".into(),
+            template_id: "disloyal_cult_recruit".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("cross-alignment disloyal action submits");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 5153 })
+        .await
+        .expect("host resolves disloyal conversion modifier");
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid disloyal modifier trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "night:action_constraints",
+            source: "action:disloyal_recruit_same_alignment",
+            outcome: "action_suppressed",
+            detail: vec![
+                (
+                    "action_id",
+                    serde_json::json!("disloyal_recruit_same_alignment"),
+                ),
+                ("template_id", serde_json::json!("disloyal_cult_recruit")),
+                ("actor", serde_json::json!("slot_1")),
+                ("actor_alignment", serde_json::json!("cult")),
+                ("targets", serde_json::json!(["slot_6"])),
+                (
+                    "target_alignments",
+                    serde_json::json!([{"target": "slot_6", "alignment": "cult"}]),
+                ),
+                ("reason", serde_json::json!("disloyal")),
+            ],
+        },
+    );
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "night:conversion",
+            source: "action:disloyal_recruit_cross_alignment",
+            outcome: "conversion_assigned_role",
+            detail: vec![
+                (
+                    "action_id",
+                    serde_json::json!("disloyal_recruit_cross_alignment"),
+                ),
+                ("template_id", serde_json::json!("disloyal_cult_recruit")),
+                ("actor", serde_json::json!("slot_3")),
+                ("target", serde_json::json!("slot_2")),
+                ("mode", serde_json::json!("AssignRole")),
+                ("new_role", serde_json::json!("cultist")),
+                ("new_alignment", serde_json::json!("cult")),
+                ("original_role", serde_json::json!("cop")),
+                ("original_alignment", serde_json::json!("town")),
+            ],
+        },
+    );
+
+    let payload = domain::validate_resolution_json(
+        &resolution_payload(&pool, game, "N01", 5153).await,
+        domain::RESULT_VERSION,
+    )
+    .expect("valid disloyal modifier result");
+    assert!(payload.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ActionInterfered { actor, reason }
+            if actor == "slot_1" && reason == "disloyal"
+    )));
+    assert!(payload.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerConverted { target, source, .. }
+            if target == "slot_2" && source == "slot_3"
+    )));
+    assert!(
+        !payload
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::PlayerConverted { target, .. } if target == "slot_6")),
+        "same-alignment disloyal target must not convert"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let cross_target = slots.iter().find(|slot| slot.slot_id == "slot_2").unwrap();
+    assert_eq!(cross_target.role_key.as_deref(), Some("cultist"));
+    assert_eq!(cross_target.alignment.as_deref(), Some("cult"));
+    let same_target = slots.iter().find(|slot| slot.slot_id == "slot_6").unwrap();
+    assert_eq!(same_target.role_key.as_deref(), Some("cultist"));
+    assert_eq!(same_target.alignment.as_deref(), Some("cult"));
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("disloyal resolution audit");
+    assert!(audit.ok, "disloyal resolution audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve disloyal suppression plus cross-alignment conversion"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted disloyal trace envelope"
     );
 }
 
@@ -34966,6 +40645,209 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite protected generated PGO trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_generated_pgo_kill_obeys_transient_target_state(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "roleblocker"),
+        ("slot_2", "paranoid_gun_owner"),
+        ("slot_3", "rolestopper"),
+        ("slot_4", "vanilla_townie"),
+        ("slot_5", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    projections::append_and_project(
+        &pool,
+        game,
+        &[
+            eventstore::EventInput::new(
+                "ActionSubmitted",
+                1,
+                serde_json::json!({
+                    "action_id": "block_pgo_n01",
+                    "template_id": "roleblocker_block",
+                    "actor": "slot_1",
+                    "targets": ["slot_2"],
+                    "phase_id": "N01"
+                }),
+                eventstore::ActorId::Slot("slot_1".into()),
+                0,
+            ),
+            eventstore::EventInput::new(
+                "ActionSubmitted",
+                1,
+                serde_json::json!({
+                    "action_id": "rolestop_visitor_n01",
+                    "template_id": "rolestop",
+                    "actor": "slot_3",
+                    "targets": ["slot_1"],
+                    "phase_id": "N01"
+                }),
+                eventstore::ActorId::Slot("slot_3".into()),
+                1,
+            ),
+        ],
+    )
+    .await
+    .unwrap();
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 7312 })
+        .await
+        .expect("host resolves target-state-gated generated PGO trigger");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid target-state-gated PGO trigger result");
+    let (pgo_trigger_event_index, pgo_trigger_payload) = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::Trigger {
+                trigger_id,
+                payload,
+            } if trigger_id == "pgo_shoots_visitor" => Some((indexed.index, payload)),
+            _ => None,
+        })
+        .expect("PGO trigger should be emitted before target-state gate skips its produced kill");
+    assert_eq!(
+        pgo_trigger_payload,
+        &serde_json::json!({
+            "on": "Visit",
+            "source_target": "slot_2",
+            "source_actor": "slot_1",
+            "source_cause": "roleblocker_block",
+            "produced_actor": "slot_2",
+            "produced_target": "slot_1"
+        })
+    );
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_1" && cause == "pgo_shoots_visitor"
+        )),
+        "same-resolution rolestop must keep the generated PGO kill from killing the visitor"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid target-state-gated PGO trigger trace");
+    assert_trigger_generated_trace(
+        &trace,
+        TriggerGeneratedTraceExpectation {
+            action_id: "pgo_shoots_visitor",
+            on: "Visit",
+            source_target: "slot_2",
+            source_actor: "slot_1",
+            source_cause: "roleblocker_block",
+            produced_actor: "slot_2",
+            produced_target: "slot_1",
+            actor_filter: None,
+            event_index: pgo_trigger_event_index as i64,
+        },
+    );
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "kill_resolution",
+            source: "cause:pgo_shoots_visitor",
+            outcome: "kill_skipped_by_target_state",
+            detail: vec![
+                ("action_id", serde_json::json!("pgo_shoots_visitor")),
+                ("template_id", serde_json::json!("pgo_shoots_visitor")),
+                ("actor", serde_json::json!("slot_2")),
+                ("target", serde_json::json!("slot_1")),
+                ("reason", serde_json::json!("untargetable")),
+                ("target_tags", serde_json::json!(["untargetable"])),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        slots.iter().all(|slot| slot.alive),
+        "target-state-gated generated PGO kill should leave every slot alive"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve target-state-gated generated PGO outcome"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite target-state-gated generated PGO trace envelope"
     );
 }
 
@@ -42208,6 +48090,10 @@ async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
                 ("source_death_cause", serde_json::json!("factional_kill")),
                 ("cause", serde_json::json!("hunter_retaliate")),
                 ("unstoppable", serde_json::json!(false)),
+                (
+                    "timing",
+                    serde_json::json!("ImmediateBeforePhaseAnnouncement"),
+                ),
             ],
         },
     );

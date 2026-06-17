@@ -5,8 +5,8 @@
   "execution": "local-only command copy",
   "summary": {
     "production": {
-      "total_artifact_rows": 10,
-      "trusted": 10,
+      "total_artifact_rows": 11,
+      "trusted": 11,
       "stale": 0,
       "missing": 0,
       "malformed": 0,
@@ -210,8 +210,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781383182,
-            "age_seconds": 2221,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
@@ -230,8 +230,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781383182,
-            "age_seconds": 2221,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
@@ -263,8 +263,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384398,
-            "age_seconds": 1005,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
@@ -284,8 +284,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384398,
-            "age_seconds": 1004,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -303,8 +303,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384398,
-            "age_seconds": 1004,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -322,8 +322,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384399,
-            "age_seconds": 1004,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -341,8 +341,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384399,
-            "age_seconds": 1003,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -360,8 +360,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384400,
-            "age_seconds": 1003,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -379,8 +379,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781384400,
-            "age_seconds": 1002,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -406,8 +406,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781385393,
-            "age_seconds": 10,
+            "modified_at_unix_seconds": 1781652976,
+            "age_seconds": 15,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -419,6 +419,28 @@
             }
           },
           "proof_boundary": "Runs the known seeded command-pipeline replay/projection/trace scenario families as local Postgres integration tests, writes a versioned report with exact expected family/seed manifest coverage and first failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is deterministic generator coverage, not exhaustive state-space verification."
+        },
+        {
+          "id": "operator-proof-command-projection-resolution",
+          "row_id": "proof-run-operator-proof-command-projection-resolution",
+          "family": "Operator proof command/projection resolution",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin prove_command_projection_resolution -- --output target/operator-proof/current-command-projection-resolution-report.json crates/commands/fixtures/night-passing.json",
+          "artifact": {
+            "path": "target/operator-proof/current-command-projection-resolution-report.json",
+            "state": "trusted",
+            "artifact_version": 1,
+            "expected_version": 1,
+            "modified_at_unix_seconds": 1781652895,
+            "age_seconds": 96,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 0,
+            "trusted_metadata": {
+              "game_id": "7acd5820-9ba5-43d5-8cf9-674744547069"
+            }
+          },
+          "proof_boundary": "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes the saved report under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior."
         }
       ]
     },
@@ -462,8 +484,8 @@
           "artifact": {
             "path": "target/operator-proof/stale-artifact-provenance-guard.json",
             "state": "stale",
-            "modified_at_unix_seconds": 946684800,
-            "age_seconds": 834700603,
+            "modified_at_unix_seconds": 946713600,
+            "age_seconds": 834939391,
             "freshness_max_age_seconds": 86400
           },
           "proof_boundary": "Fixture-only row proving valid but old local artifacts remain display-only."

@@ -1,7 +1,7 @@
 {
   "name": "test_dynamic_vote_prompt",
   "version": 1,
-  "ir_version": 22,
+  "ir_version": 46,
   "roles": {
     "vanilla_townie": {
       "description": "Town-aligned test role with no actions.",
@@ -43,6 +43,9 @@
   },
   "precedence": [],
   "visibility": {},
+  "visibility_families": [
+    "GrantAudiences"
+  ],
   "redirects": {
     "order": [],
     "loop_cap": 8,
@@ -103,5 +106,9 @@
         "when": { "FactionReachesParity": "mafia" }
       }
     ]
-  }
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ]
 }

@@ -42,8 +42,10 @@ PRIMITIVE_MAP = {
     "motion": "Investigate",
     "convert": "Convert",
     "vanillaize": "Convert::AssignRole",
+    "veto": "Veto",
     "restore_mutation": "Convert::RestoreOriginal",
     "mark": "Mark",
+    "info": "InfoResult",
     "beauty_mark": "Mark",
     "douse": "Mark",
     "clear": "Clear",
@@ -82,7 +84,14 @@ INFO_PUBLIC_ALIGNMENT_REVEAL_ACTIONS = {
 }
 
 INFO_PRIVATE_EFFECT_NOTIFICATION_ACTIONS = {
+    "mafiascum:send_fruit": "host_resolve_phase_carries_mafiascum_fruit_vendor_notification",
     "mafia_universe:send_fruit": "host_resolve_phase_carries_mafia_universe_fruit_vendor_notifications",
+}
+
+INFO_GENERIC_RESULT_ACTIONS = {
+    "mafiascum:mailman": "host_resolve_phase_projects_mafiascum_info_results",
+    "mafiascum:observe": "host_resolve_phase_projects_mafiascum_info_results",
+    "mafiascum:report": "host_resolve_phase_projects_mafiascum_info_results",
 }
 
 INFO_PUBLIC_VOTE_DUEL_ACTIONS = {
@@ -113,6 +122,7 @@ MODIFIER_MAP = {
     "stealthy": "Ninja",
     "ninja": "Ninja",
     "loyal": "Loyal",
+    "disloyal": "Disloyal",
     "self_targetable": "Reflexive",
     "reflexive": "Reflexive",
     "blocked": "Roleblockable",
@@ -204,8 +214,410 @@ CULTURE_NOTE_MAP = {
     "chinese_structured:lovers_helper": "lover_policy",
 }
 
+TEST_FAMILY_COVERAGE = {
+    "action_spec_primitives_test": {
+        "canonical": "pack_validation+parity_matrix",
+        "modeled": True,
+        "implemented": True,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "shipped_packs_validate",
+            },
+            {
+                "path": "docs/arch/im-human-engine-parity-matrix.md",
+                "needle": "| primitive |",
+            },
+        ],
+        "notes": "primitive action specs are covered by strict pack validation plus source-derived primitive parity rows",
+    },
+    "action_spec_test": {
+        "canonical": "pack_validation",
+        "modeled": True,
+        "implemented": True,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "shipped_packs_validate",
+            }
+        ],
+        "notes": "action shape/cardinality/window contracts are covered by pack-validation tests",
+    },
+    "culture_rules_test": {
+        "canonical": "culture_pack_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/golden.rs",
+                "needle": "day_substep_goldens_expose_canonical_host_console_ordering",
+            },
+            {
+                "path": "crates/commands/tests/pipeline.rs",
+                "needle": "chinese",
+            },
+        ],
+        "notes": "culture rule coverage is split across culture pack goldens and command/projection verticals",
+    },
+    "cultures": {
+        "canonical": "mafia_universe_pack",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "packs/mafia_universe/pack.json", "needle": "town_cop"},
+            {
+                "path": "crates/commands/tests/pipeline.rs",
+                "needle": "mafia_universe",
+            },
+        ],
+        "notes": "Mafia Universe data coverage is represented by the shipped pack, goldens, and command verticals",
+    },
+    "e2e": {
+        "canonical": "operator_replay_proof_artifacts",
+        "modeled": True,
+        "implemented": True,
+        "golden": False,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "target/operator-proof/current-determinism-fuzz-report.json",
+                "needle": "\"ok\": true",
+            },
+            {
+                "path": "target/operator-proof/current-projection-rebuild-report.json",
+                "needle": "\"ok\": true",
+            },
+        ],
+        "notes": "end-to-end simulation parity maps to stored operator replay, determinism, and projection proof artifacts",
+    },
+    "effects": {
+        "canonical": "persistent_effect_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/golden.rs",
+                "needle": "golden_cleanse_preempts_ignite",
+            },
+            {
+                "path": "crates/commands/tests/pipeline.rs",
+                "needle": "poison",
+            },
+        ],
+        "notes": "effect tests map to Mark/Clear, poison, douse, ignite, cleanse, and projection-fold coverage",
+    },
+    "feature_flags_test": {
+        "canonical": "out_of_scope: im-human feature flags",
+        "modeled": False,
+        "implemented": False,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "docs/arch/11-engine-port-checklist.md",
+                "needle": "Anything im-human carried for AI players",
+            }
+        ],
+        "notes": "feature flag plumbing is outside the human game resolution result surface",
+    },
+    "init": {
+        "canonical": "out_of_scope: im-human init/chat provisioning",
+        "modeled": False,
+        "implemented": False,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "docs/arch/11-engine-port-checklist.md",
+                "needle": "platform layer: users, slots, replacements",
+            }
+        ],
+        "notes": "im-human init/chat provisioning belongs to platform setup rather than the slot-only resolver",
+    },
+    "intent": {
+        "canonical": "source_alias_parity_matrix",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "docs/arch/im-human-engine-parity-matrix.md", "needle": "| action_id |"},
+            {
+                "path": "tools/im_human_engine_inventory.py",
+                "needle": "source_ids",
+            },
+        ],
+        "notes": "intent aliases map through source-derived action_id rows and pack `source_ids`",
+    },
+    "intent_catalog_test": {
+        "canonical": "source_alias_parity_matrix",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "docs/arch/im-human-engine-parity-matrix.md", "needle": "| action_id |"},
+            {
+                "path": "tools/im_human_engine_inventory.py",
+                "needle": "ACTION_COVERAGE_OVERRIDES",
+            },
+        ],
+        "notes": "intent catalog rows are source-derived into the action parity matrix",
+    },
+    "ita": {
+        "canonical": "ItaSession+ItaShot",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_ita_session"},
+            {"path": "crates/commands/tests/pipeline.rs", "needle": "ita"},
+        ],
+        "notes": "ITA runtime coverage maps to ITA session/shot goldens and command/projection verticals",
+    },
+    "modifiers/action": {
+        "canonical": "primitive_modifier_interaction_report",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "target/operator-proof/current-primitive-modifier-interaction-report.json",
+                "needle": "\"uncovered_count\": 0",
+            }
+        ],
+        "notes": "action modifier family coverage is checked by the primitive/modifier interaction report",
+    },
+    "modifiers/effect": {
+        "canonical": "death_reveal+effect_policy_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_death_reveal_policy"},
+            {"path": "crates/domain/tests/result_contract.rs", "needle": "EffectNotification"},
+        ],
+        "notes": "effect modifiers map to death reveal, persistent effect, and notification result contracts",
+    },
+    "policy/conflict": {
+        "canonical": "standard_nar_precedence_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_kill_vs_doctor_base"},
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "standard_nar",
+            },
+        ],
+        "notes": "conflict policy maps to standard-NAR precedence, protection, suppression, and pack validation",
+    },
+    "policy/win": {
+        "canonical": "win_policy_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "WinReached"},
+            {"path": "crates/commands/tests/pipeline.rs", "needle": "win"},
+        ],
+        "notes": "win policy coverage maps to WinReached goldens and command/projection verticals",
+    },
+    "registry_role_api_test": {
+        "canonical": "pack_loader_validation",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "shipped_packs_validate",
+            },
+            {"path": "crates/domain/tests/golden.rs", "needle": "pack_deserializes"},
+        ],
+        "notes": "role registry/API coverage maps to pack loading and shipped-pack validation",
+    },
+    "resolve": {
+        "canonical": "domain_golden_harness",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_"},
+            {"path": "crates/commands/tests/pipeline.rs", "needle": "ResolvePhase"},
+        ],
+        "notes": "general resolve families map to the domain golden harness plus ResolvePhase verticals",
+    },
+    "resolve/culture": {
+        "canonical": "culture_pack_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_chinese"},
+            {"path": "crates/commands/tests/pipeline.rs", "needle": "chinese"},
+        ],
+        "notes": "culture resolve tests map to Chinese and Mafia Universe culture-pack goldens and verticals",
+    },
+    "resolve/culture/chinese": {
+        "canonical": "chinese_structured_pack",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "packs/chinese_structured/pack.json", "needle": "white_wolf_king"},
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_chinese"},
+        ],
+        "notes": "Chinese full-flow coverage maps to the Chinese structured pack and culture goldens",
+    },
+    "resolve/day_steps": {
+        "canonical": "day_step_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/golden.rs",
+                "needle": "day_substep_goldens_expose_canonical_host_console_ordering",
+            }
+        ],
+        "notes": "day-step ordering maps to the day substep golden family",
+    },
+    "resolve/effects": {
+        "canonical": "ItaShot+effect_resolution_goldens",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_ita_session_lethal_shot"}
+        ],
+        "notes": "resolve/effects currently maps to ITA shot and effect-resolution goldens",
+    },
+    "resolve/graph": {
+        "canonical": "redirect_graph+determinism_guard",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/determinism_guard.rs",
+                "needle": "seeded_property_family_replays_ordering_and_fixpoints_deterministically",
+            },
+            {"path": "crates/domain/tests/golden.rs", "needle": "golden_redirect_cycle_stable"},
+        ],
+        "notes": "graph coverage maps to redirect graph goldens and seeded determinism/fixpoint tests",
+    },
+    "resolve/phases": {
+        "canonical": "phase_policy_goldens+commands",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/golden.rs", "needle": "phase_window"},
+            {"path": "crates/commands/tests/pipeline.rs", "needle": "AdvancePhase"},
+        ],
+        "notes": "phase resolution maps to phase-window goldens and command phase-transition tests",
+    },
+    "result": {
+        "canonical": "result_contract_tests",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": True,
+        "evidence": [
+            {"path": "crates/domain/tests/result_contract.rs", "needle": "unknown"},
+            {"path": "crates/domain/tests/golden.rs", "needle": "expected_events"},
+        ],
+        "notes": "result tests map to schema/result-contract tests plus golden result comparison",
+    },
+    "roles": {
+        "canonical": "pack_role_catalog_validation",
+        "modeled": True,
+        "implemented": True,
+        "golden": True,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "shipped_packs_validate",
+            },
+            {"path": "docs/arch/im-human-engine-parity-matrix.md", "needle": "| role_id |"},
+        ],
+        "notes": "role catalog coverage maps to shipped pack validation and source-derived role parity rows",
+    },
+    "spec_validation_test": {
+        "canonical": "pack_validation",
+        "modeled": True,
+        "implemented": True,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/pack_validation.rs",
+                "needle": "invalid",
+            }
+        ],
+        "notes": "spec validation maps to strict pack validator tests",
+    },
+    "time_test": {
+        "canonical": "determinism_guard",
+        "modeled": False,
+        "implemented": True,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {
+                "path": "crates/domain/tests/determinism_guard.rs",
+                "needle": "domain_source_rejects_ambient_rng_and_wall_clock",
+            }
+        ],
+        "notes": "time behavior maps to deterministic logical_time and ambient wall-clock rejection",
+    },
+    "util": {
+        "canonical": "schema_validator_tests",
+        "modeled": False,
+        "implemented": True,
+        "golden": False,
+        "integrated": False,
+        "evidence": [
+            {"path": "crates/domain/tests/result_contract.rs", "needle": "malformed"},
+            {"path": "tools/tests/test_import_im_human_v4_fixture.py", "needle": "malformed"},
+        ],
+        "notes": "utility validator coverage maps to result-contract and fixture-import validator tests",
+    },
+}
+
 ROLE_ID_MAP = {
+    "mafiascum:goon": "mafia_goon",
+    "mafiascum:janitor": "mafia_janitor",
+    "mafiascum:mafia_ninja": "ninja",
+    "mafiascum:mafia_strongman": "strongman",
     "mafiascum:pgo": "paranoid_gun_owner",
+    "mafiascum:werewolf": "mafia_goon",
 }
 
 
@@ -912,10 +1324,28 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and '"if_target_has": ["vengeful"]' in fmarch["pack_text"]
             )
             implemented = modeled and "TriggerOn::Ability(IrAbility::Kill)" in resolver
+        elif name == "result_mod":
+            canonical = "Mark+investigation_overrides"
+            modeled = (
+                "Mark" in fmarch["pack_abilities"]
+                and '"investigation_overrides"' in fmarch["pack_text"]
+                and '"result_mod"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "IrAbility::Mark" in resolver
+                and "investigation_overrides" in resolver
+                and "transient_effects" in resolver
+            )
         elif name == "info":
-            canonical = ""
-            modeled = False
-            implemented = False
+            canonical = "InfoResult"
+            modeled = "Info" in fmarch["pack_abilities"]
+            implemented = (
+                modeled
+                and "IrAbility::Info" in resolver
+                and "InnerEvent::InfoResult" in resolver
+                and "player_info_result" in projections
+            )
         else:
             canonical = PRIMITIVE_MAP.get(name, "")
             modeled = canonical in fmarch["ir"] or canonical in fmarch["pack_abilities"]
@@ -1057,9 +1487,26 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         elif name == "vengeful":
             golden = "vengeful_retaliates" in goldens and "trigger" in goldens
             integrated = implemented and "host_resolve_phase_persists_trigger_loop_cap_trace_note" in command_tests
+        elif name == "result_mod":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
+            golden = (
+                "framer_parity_override" in mafiascum_golden_names
+                and "lawyer_parity_override" in mafiascum_golden_names
+                and "investigationresult" in goldens
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_preserves_prior_investigation_memory" in command_tests
+                and "host_resolve_phase_applies_lawyer_result_mod_override"
+                in command_tests
+            )
         elif name == "info":
-            golden = False
-            integrated = False
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
+            golden = "info_actions_private_results" in mafiascum_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_projects_mafiascum_info_results" in command_tests
+            )
         else:
             golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
             integrated = "ActionSubmitted" in commands if implemented else False
@@ -1116,7 +1563,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             (
                 "info-tagged Visit actions only: friendly_neighbor, "
                 "neighborize, and visit; generic info scan/mail/report "
-                "actions remain separate action-level gaps"
+                "actions are covered by the generic_info_result surface"
             ),
         )
     )
@@ -1153,7 +1600,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             (
                 "info-tagged RevealTown day action only: mafiascum and "
                 "Mafia Universe Innocent Child; generic info scan/mail/report "
-                "actions remain separate action-level gaps"
+                "actions are covered by the generic_info_result surface"
             ),
         )
     )
@@ -1193,10 +1640,40 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             private_effect_notification_golden,
             private_effect_notification_integrated,
             (
-                "info-tagged private notification actions only: Mafia Universe "
-                "Fruit Vendor `send_fruit`; generic info scan/mail/report actions "
-                "remain separate action-level gaps"
+                "info-tagged private notification actions only: Mafiascum and "
+                "Mafia Universe Fruit Vendor `send_fruit`; generic info scan/mail/report actions "
+                "are covered by the generic_info_result surface"
             ),
+        )
+    )
+    generic_info_modeled = all(
+        action in fmarch["pack_actions"] for action in INFO_GENERIC_RESULT_ACTIONS
+    )
+    generic_info_implemented = (
+        generic_info_modeled
+        and "IrAbility::Info" in resolver
+        and "InnerEvent::InfoResult" in resolver
+        and "player_info_result" in projections
+    )
+    generic_info_golden = (
+        generic_info_modeled
+        and "info_actions_private_results"
+        in fmarch["golden_names_by_pack"].get("mafiascum", set())
+    )
+    generic_info_integrated = generic_info_implemented and all(
+        selector in command_tests for selector in INFO_GENERIC_RESULT_ACTIONS.values()
+    )
+    rows.append(
+        row(
+            "surface:info",
+            "generic_info_result",
+            "InfoResult",
+            len(INFO_GENERIC_RESULT_ACTIONS),
+            generic_info_modeled,
+            generic_info_implemented,
+            generic_info_golden,
+            generic_info_integrated,
+            "generic info scan/mail/report actions: Mafiascum Mailman, Observer, and Reporter",
         )
     )
     public_vote_duel_modeled = all(
@@ -1555,6 +2032,23 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "host_resolve_phase_persists_loyal_conversion_block_trace"
                 in command_tests
             )
+        elif name == "disloyal":
+            modeled = "Disloyal" in fmarch["pack_modifiers"]
+            implemented = (
+                "Modifier::Disloyal" in resolver
+                and '"disloyal"' in resolver
+                and "disloyal_target_error" in resolver
+            )
+            golden = (
+                "disloyal_cult_recruit_cross_alignment" in goldens
+                and "actioninterfered" in goldens
+                and "playerconverted" in goldens
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_persists_disloyal_modifier_trace_and_projection"
+                in command_tests
+            )
         elif name == "stealthy":
             implemented = implemented and "visibility_policy" in resolver
             integrated = (
@@ -1843,7 +2337,9 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
     for item in inventory["actions"]:
         name = item["name"]
         scoped_name = f"{item['culture']}:{name}"
-        role_scoped_name = f"{item['culture']}:{item.get('role', '')}:{name}"
+        source_role = item.get("role", "")
+        canonical_role = ROLE_ID_MAP.get(f"{item['culture']}:{source_role}", source_role)
+        role_scoped_name = f"{item['culture']}:{canonical_role}:{name}"
         source_is_ambiguous = action_source_counts[scoped_name] > 1
         canonical = (
             name
@@ -1880,17 +2376,21 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         )
 
     for item in inventory["test_families"]:
+        coverage = TEST_FAMILY_COVERAGE.get(item["name"], {})
         rows.append(
             row(
                 "test_family",
                 item["name"],
-                "",
+                coverage.get("canonical", ""),
                 item["test_count"],
-                False,
-                False,
-                False,
-                False,
-                f"example {item['example']}",
+                coverage.get("modeled", False),
+                coverage.get("implemented", False),
+                coverage.get("golden", False),
+                coverage.get("integrated", False),
+                append_note(
+                    f"example {item['example']}",
+                    coverage.get("notes", "missing fmarch test-family coverage mapping"),
+                ),
             )
         )
 

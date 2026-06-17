@@ -1,0 +1,223 @@
+{
+  "description": "Governor vetoes the official day elimination target. The vote outcome remains authoritative, the veto is emitted as a public typed event, no lynch death is produced, and the phase announcement has no deaths.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 1,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 2,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_5",
+        "sequence": 3,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_2"
+        ],
+        "majority": 3.0,
+        "reason": null,
+        "status": "Lynch",
+        "tallies": {
+          "slot_2": 3.0
+        },
+        "thresholds": {
+          "slot_1": 3.0,
+          "slot_2": 3.0,
+          "slot_3": 3.0,
+          "slot_4": 3.0,
+          "slot_5": 3.0
+        },
+        "tiebreak": null,
+        "total_weight": 5.0,
+        "votes": {
+          "slot_3": "slot_2",
+          "slot_4": "slot_2",
+          "slot_5": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0,
+          "slot_4": 1.0,
+          "slot_5": 1.0
+        },
+        "winner": "slot_2"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "actor": "slot_1",
+        "cadence_policy": "x_shot",
+        "consumed_action": "veto_001",
+        "counter_id": "x_shot:veto",
+        "limit": 1,
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "phase_scope": "game",
+        "remaining": 0,
+        "template_id": "veto",
+        "used": 1
+      }
+    },
+    {
+      "index": 5,
+      "kind": "VoteVetoed",
+      "payload": {
+        "governor": "slot_1",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "source_action": "veto_001",
+        "target": "slot_2"
+      }
+    },
+    {
+      "index": 6,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "game_demo_governor_veto_001",
+    "pack": "mafiascum",
+    "phase_id": "D01",
+    "seed": 930201,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "governor",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_5",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "veto_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "veto",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_001",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      },
+      {
+        "action_id": "vote_003",
+        "actor": "slot_5",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
+      }
+    ]
+  }
+}

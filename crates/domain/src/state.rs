@@ -27,6 +27,11 @@ pub struct StateSnapshot {
     pub phase_deadline: Option<i64>,
     pub phase_policy: PhasePolicy,
     pub slots: Vec<SlotState>,
+    /// Setup-time private channel membership/access folded from platform
+    /// `PrivateChannelDeclared` events. Role changes after setup do not
+    /// implicitly rewrite this surface.
+    #[serde(default)]
+    pub private_channels: Vec<PrivateChannelRecord>,
     /// Canonical active persistent effects with provenance and visibility
     /// metadata. `SlotState.effects` remains a derived tag index for hot
     /// resolver predicates; this surface preserves the source/expiry contract.
@@ -108,6 +113,17 @@ pub struct ActionUseRecord {
     pub phase_kind: PhaseKind,
     pub phase_number: u32,
     pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PrivateChannelRecord {
+    pub channel_id: String,
+    pub kind: String,
+    pub slot_id: SlotId,
+    pub role_key: RoleKey,
+    pub reveals_alignment: String,
+    pub source: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -372,7 +388,10 @@ impl SlotState {
 ///   merely a role swap; the win-check reads alignment) and records the first
 ///   conversion-origin fact for that target.
 /// - `AlignmentRevealed`   → exposes a slot's alignment without exposing role.
+/// - `RoleRevealed`        → exposes a slot's role without exposing alignment.
 /// - `VoteDuelDeclared`    → resolution-scoped day vote restriction; no
+///   cross-phase state is folded.
+/// - `VoteVetoed`          → cancels a same-resolution day vote death; no
 ///   cross-phase state is folded.
 /// - `ActionRecorded`      → appends a cross-phase action-use record.
 /// - `ActionUseCounted`    → upserts a typed limited-use/counter fact.
@@ -428,6 +447,14 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == slot_id) {
                     slot.alignment = Some(alignment.clone());
                     slot.alignment_reveal = RevealState::Public;
+                }
+            }
+            InnerEvent::RoleRevealed {
+                slot_id, role_key, ..
+            } => {
+                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == slot_id) {
+                    slot.role_key = role_key.clone();
+                    slot.role_reveal = RevealState::Public;
                 }
             }
             InnerEvent::EffectsMarked {

@@ -691,9 +691,30 @@ The only identity that crosses into the engine is `SlotId`.
   and Postgres test `engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots`
   proves command-produced submit/overwrite/withdraw history persists inside `ResolutionApplied`
   while the official `DayVoteOutcome` still excludes withdrawn and projection-only stale ballots.]
-- [ ] Compute official `DayVoteOutcome` from pack policy, not from the running projection.
-- [ ] Support last-write-wins ballots per actor/phase.
-- [ ] Support `NoLynch` distinctly from no majority and tie.
+- [x] Compute official `DayVoteOutcome` from pack policy, not from the running projection.
+  [proven: `day_vote_outcome` projection rows fold only from `ResolutionApplied`
+  `DayVoteOutcome` inner events; Postgres test
+  `engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots` injects a
+  projection-only `vote_ballot` actor, proves that actor is absent from the persisted
+  `DayVoteOutcome` and the official host-console `day_vote_outcome` row, proves the stale running
+  `votecount` row remains projection-local until rebuild, and then proves rebuild preserves the
+  official engine result while discarding the stale running ballot.]
+- [x] Support last-write-wins ballots per actor/phase. [proven: pure resolver test
+  `day_vote_ballots_are_last_write_wins_per_actor` proves later ballots overwrite earlier ballots
+  for the same actor and withdrawal removes that actor from the official vote map/tally; Postgres
+  test `engine_phase_input_preserves_submit_withdraw_history_and_current_day_ballots` proves the
+  same command-submitted submit/overwrite/withdraw history reaches `ResolvePhase`, persists
+  `DayVoteRecorded`, folds to the official host-console `day_vote_outcome`, and rebuilds the
+  running `votecount` projection back to the log-derived current ballots.]
+- [x] Support `NoLynch` distinctly from no majority and tie. [proven: pure resolver test
+  `day_vote_statuses_distinguish_no_lynch_no_majority_and_tie` proves the same day-vote resolver
+  emits distinct `VoteStatus::NoLynch`, `VoteStatus::NoMajority`, and `VoteStatus::Tie` outcomes;
+  `no_lynch_votes_produce_no_lynch_outcome_without_death` proves `NoLynch` is an official
+  pack-governed vote target with no day-vote death; Postgres tests
+  `no_lynch_votes_resolve_to_official_engine_outcome`,
+  `host_resolve_phase_uses_loved_hated_threshold_adjustments`, and
+  `host_resolve_phase_projects_epicmafia_pk_tie_prompt` prove the three statuses persist through
+  `ResolutionApplied`, host prompts where configured, `day_vote_outcome`, and projection rebuild.]
 - [x] Support pack-declared role vote weights for doublevoter, triplevoter, x-voter, and voteless. [mafiascum
   `WeightPolicy::PerRole`; weighted day golden and command/projection integration covered;
   Chinese v15 `idiot_policy` also removes vote weight from slots carrying the persistent
@@ -723,40 +744,48 @@ The only identity that crosses into the engine is `SlotId`.
   `host_resolve_phase_uses_dynamic_vote_weight_for_pk_tie_prompt` prove the same folded
   state can turn a simple plurality into a `HostDecides` tie, emit a PK prompt, and carry
   the host-selected kill through validated envelopes and rebuild.]
-- [ ] Support majority, plurality, supermajority, hammer, no-elimination ties,
+- [x] Support majority, plurality, supermajority, hammer, no-elimination ties,
   random/stable/host-decided tie policies, and PK/revote loops.
-  [partly proven: pack-declared hammer emits official `VoteStatus::Hammer` and locks
-  live voting at threshold; mafiascum v21 `day_vote_prompt_policies` emits a `revote`
-  `HostPromptIssued` for official `NoMajority` outcomes; epicmafia v21 plurality
-  uses `HostDecides` to emit a `pk` `HostPromptIssued` for official `Tie` outcomes;
-  dynamic vote weights now drive a `NoMajority` revote prompt when a folded `VoteWeight`
-  grant raises the majority threshold above the ordinary ballot tally, and drive a PK prompt
-  when the grant turns a simple plurality into a weighted tie;
-  v22 `host_prompt_resolution_effects` declares the host decision/effect rows consumed by
+  [proven: pure resolver test `day_vote_policy_matrix_covers_methods_and_tie_breakers`
+  covers Majority, Plurality, Supermajority, Hammer, NoElimination, HostDecides, and
+  seeded deterministic Random outcomes; command tests
+  `submit_vote_hammer_locks_phase_when_threshold_is_reached` and
+  `host_resolve_phase_emits_hammer_vote_outcome` prove live hammer locking plus validated
+  `ResolutionApplied`/projection/rebuild behavior; mafiascum v21
+  `day_vote_prompt_policies` emits a rebuild-stable `revote` `HostPromptIssued` for
+  official `NoMajority` outcomes as proven by
+  `host_resolve_phase_uses_loved_hated_threshold_adjustments`; epicmafia v21 plurality
+  uses `HostDecides` to emit a rebuild-stable `pk` `HostPromptIssued` for official `Tie`
+  outcomes as proven by `host_resolve_phase_projects_epicmafia_pk_tie_prompt`; v22
+  `host_prompt_resolution_effects` declares the host decision/effect rows consumed by
   command-side prompt resolution]
 - [x] Emit a lynch as `PlayerKilled` plus `PhaseAnnouncement` so state fold is uniform.
   [`host_resolve_phase_loads_votes_applies_resolution_and_projects` proves the command path
   stores the lynched slot as `PlayerKilled`, projects the death, and carries the public lynch
   death in the single trailer `PhaseAnnouncement`; target-lynch win goldens prove optional
   `WinReached` remains after the announcement]
-- [ ] Support day action substeps from im-human where in scope: announcement,
+- [x] Support day action substeps from im-human where in scope: announcement,
   knight duel, ITA session, last words, wolf self-destruct, day deaths, and public reveal
-  timing. [partly proven: sheriff badge and Knight duel day steps run before official vote;
-  Knight duel and lethal ITA pre-vote deaths are folded before `DayVoteOutcome`;
-  base ITA session/shot lifecycle events are emitted; day announcements and lynch last words
-  are typed day-note events before the trailing `PhaseAnnouncement`; Chinese structured
-  wolf self-destruct trades kill before official vote and queues a carry token; Wolf Beauty
-  lynch and Witch-poison drag emit a typed note plus dragged death before the trailing
-  announcement; mafiascum and Mafia Universe `reveal_town` emit alignment-only public reveal
-  state before vote outcome and survive projection/thread rebuild]
-- [ ] Port/catalog day action ids observed in V4 role drafts: `day_desperado`,
-  `day_self_destruct`, `duel`, `kill`, `knight_duel`, `reveal_town`,
-  and `veto`. [sheriff_destroy/sheriff_election/sheriff_pass are modeled in
+  timing. [proven: golden proof `day_substep_goldens_expose_canonical_host_console_ordering`
+  runs real Mafia Universe and Chinese structured scenarios and asserts host-consumable
+  event order for `DayAnnouncement`, `AlignmentRevealed`, `ItaSessionOpened` /
+  `ItaShotQueued` / `ItaShotResolved` / `ItaSessionUpdated` / `ItaSessionClosed`,
+  `DuelResolved`, `WolfSelfDestructed`, `WolfCarryQueued`, day-action
+  `PlayerKilled`, `DayVoteOutcome`, `LastWordsRecorded`, `WolfBeautyDragged`, and
+  the trailing `PhaseAnnouncement`. Existing command/projection tests prove the same
+  typed events for reveal-town, Knight duel, ITA, day vigilante/desperado,
+  wolf self-destruct, day notes/last words, PK, and revote survive validated
+  `ResolutionApplied`, thread/slot/host-prompt projections, and rebuild. Twilight
+  and instant-action support are proven in the dedicated action-window row below.]
+- [x] Finish port/catalog coverage for day action ids observed in V4 role drafts:
+  `day_desperado`, `day_self_destruct`, `duel`, `kill`, `knight_duel`,
+  `reveal_town`, and `veto`. [sheriff_destroy/sheriff_election/sheriff_pass are modeled in
   `packs/chinese_structured` and covered by goldens; `knight_duel` is modeled in
   `packs/chinese_structured` and covered by success/failure goldens; Chinese
   `day_self_destruct` is modeled as `SelfDestruct` on `white_wolf_king`; Chinese
-  source `night_kill` is covered by canonical fmarch `wolf_night_kill` via
-  `ActionTemplate.source_ids` and modeled as the faction kill that can consume White Wolf carry;
+  source `night_kill` is covered for both `wolf` and `white_wolf_king` by canonical fmarch
+  `wolf_night_kill` via `ActionTemplate.source_ids` and modeled as the faction kill that can
+  consume White Wolf carry, with pure and Postgres White Wolf King night-kill proof;
   `beauty_mark` is modeled as a persistent Mark action for Wolf Beauty; Chinese
   `heal_potion`/`poison_potion` are modeled as Witch Protect/Kill actions; Chinese
   `night_guard` is modeled as Guard Protect with poison-blocking policy; Mafia Universe
@@ -764,11 +793,17 @@ The only identity that crosses into the engine is `SlotId`.
   source `kill` is modeled for `town_day_vigilante` and `mafia_day_vigilante` as canonical
   `day_vigilante_kill` before the day vote outcome; Mafia Universe source `day_desperado`
   is modeled as canonical `day_desperado` with declarative `alignment_failback` before the
-  day vote outcome]
-- [ ] Cover day-only or day-capable roles observed in V4 drafts: `day_vigilante`,
-  `gladiator`, `governor`, `innocent_child`, `knight`, `mafia_day_desperado`,
-  `mafia_day_vigilante`, `sheriff_badge_helper`, `town_day_desperado`,
-  `town_day_vigilante`, and dual-window `white_wolf_king`. [partly proven: `knight` is
+  day vote outcome; Mafiascum `day_self_destruct` is modeled as canonical `SelfDestruct`
+  through `day_self_destructor`, covered by `day_self_destruct_trade`, and integrated through
+  `host_resolve_phase_carries_mafiascum_day_self_destruct_trade`; Mafiascum `veto` is modeled
+  as canonical `Veto` through `governor`, covered by `governor_veto_cancels_lynch`, and
+  integrated through `host_resolve_phase_carries_mafiascum_governor_veto`, proving the typed
+  `VoteVetoed` event cancels the lynch death while preserving the official `DayVoteOutcome`]
+- [x] Cover the remaining day-only or day-capable role observed in V4 drafts:
+  dual-window Mafiascum `white_wolf_king`; covered role ids in this row include
+  `day_vigilante`, `gladiator`, `governor`, `innocent_child`, `knight`,
+  `mafia_day_desperado`, `mafia_day_vigilante`, `sheriff_badge_helper`,
+  `town_day_desperado`, and `town_day_vigilante`. [`knight` is
   modeled in `packs/chinese_structured` and integrated through command/projection;
   `white_wolf_king` is modeled for the Chinese self-destruct and carry-token verticals;
   `wolf_beauty` is modeled for charm plus lynch/Witch-poison drag and direct-death race
@@ -781,14 +816,50 @@ The only identity that crosses into the engine is `SlotId`.
   `town_day_vigilante` and `mafia_day_vigilante` are modeled with pure day-kill golden
   coverage and a Postgres D01 submit/resolve/thread/rebuild vertical; Mafia Universe
   `town_day_desperado` and `mafia_day_desperado` are modeled with pure success/failback
-  golden coverage and a Postgres D01 trace/thread/rebuild vertical]
-- [ ] Support day-targeting action windows distinct from ordinary votes. [partly proven:
+  golden coverage and a Postgres D01 trace/thread/rebuild vertical; Mafiascum `governor` is
+  modeled with pure veto golden coverage and a Postgres D01 veto/thread/rebuild vertical;
+  Mafiascum `day_vigilante` is modeled as canonical Day-window `day_vigilante_kill`
+  with source alias `kill`, covered by `day_vigilante_kill_before_vote`, and integrated
+  through `host_resolve_phase_carries_mafiascum_day_vigilante_kill`; Mafiascum
+  `white_wolf_king` is modeled as a dual-window role with Day `SelfDestruct` and Night
+  `Kill`, covered by `white_wolf_king_day_self_destruct` and
+  `white_wolf_king_night_kill`, and integrated through
+  `host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window`]
+- [x] Support day-targeting action windows distinct from ordinary votes. [proven:
   Mafia Universe `day_vigilante_kill` now resolves submitted Day `Kill` actions before ITA,
   duel, and official vote outcome; Mafia Universe `day_desperado` uses the same pre-vote
-  lane plus pack-owned `alignment_failback`; command validation rejects them outside Day via
-  the existing action window contract]
-- [ ] Support instant actions and twilight actions if a pack declares them.
-- [ ] Support day win checks after phase results and after canonical announcements.
+  lane plus pack-owned `alignment_failback`; Mafiascum `day_vigilante_kill` now uses the
+  same submitted Day `Kill` lane before the vote outcome; Mafiascum `white_wolf_king`
+  now proves a role can carry both Day `SelfDestruct` and Night `Kill` actions while
+  resolving the day action before voting; `Window::Twilight` now proves pack-declared
+  non-vote actions resolve outside ordinary Day voting, `golden_twilight_self_destruct_window`
+  proves no `DayVoteOutcome` is emitted in Twilight, and
+  `host_resolve_phase_carries_twilight_self_destruct_window` proves Postgres command/projection
+  integration rejects ordinary votes in `T01` while carrying the Twilight action through
+  `ResolutionApplied`, slot deaths, thread announcement, audit, and rebuild]
+- [x] Support instant actions and twilight actions if a pack declares them. [proven:
+  Twilight is modeled as `Window::Twilight` requiring `ir_version >= 48`, strictly validated
+  against phase cadence and `active_from`, resolved by the pure Twilight resolver for
+  `SelfDestruct`, and integrated through the command/projection seam via
+  `golden_twilight_self_destruct_window` and
+  `host_resolve_phase_carries_twilight_self_destruct_window`. Instant is modeled as
+  `Window::Instant` requiring `ir_version >= 49`; `instant_action_window_is_strict_and_versioned`
+  proves strict pack validation, `golden_instant_self_destruct_window` proves the pure instant
+  resolver emits no ordinary `DayVoteOutcome`, and
+  `submit_action_resolves_instant_self_destruct_atomically` proves `SubmitAction` appends
+  `ActionSubmitted`, `ResolutionApplied`, and `ResolutionTrace` atomically, folds deaths and
+  thread announcements through projections, marks the submission resolved, skips replay during
+  ordinary `ResolvePhase`, audits the unsupported instant envelope boundary, and rebuilds
+  projections identically.]
+- [x] Support day win checks after phase results and after canonical announcements.
+  [proven: `finalize_resolution` folds all day result events, preserves the single canonical
+  `PhaseAnnouncement`, then runs ordinary `check_win` on the post-result state and leaves any
+  faction `WinReached` as the final event; `golden_day_action_kill_triggers_post_announcement_win`
+  proves a Day `Kill` can eliminate the last mafia before the official vote outcome while
+  emitting `PlayerKilled`, `DayVoteOutcome`, `PhaseAnnouncement`, then `WinReached`; Postgres test
+  `host_resolve_phase_day_action_win_runs_after_announcement` proves the same ordering through
+  `ResolvePhase`, `ResolutionApplied`/`ResolutionTrace` validation, slot projection, thread
+  announcement, resolution audit, and projection rebuild.]
 
 ### D. Night and general action primitives
 
@@ -998,7 +1069,7 @@ The only identity that crosses into the engine is `SlotId`.
   an eligible role whose folded `WolfCarryQueued` token is consumed by the command/projection
   seam, and `wolf_beauty` has mark, lynch drag, Witch-poison drag, and direct-death stacking
   goldens plus Postgres rebuild proof]
-- [ ] Port/catalog night action ids observed in V4 role drafts: `babysit`,
+- [x] Port/catalog night action ids observed in V4 role drafts: `babysit`,
   `beauty_mark`, `block`, `bodyguard`, `bus_drive`, `commute`, `convert`,
   `cpr_protect`, `cure_poison`, `deprogram`, `douse`, `empower`, `extinguish`,
   `follow`, `friendly_neighbor`, `full_role_scan`, `grant_item`, `guard_retaliate`,
@@ -1011,11 +1082,21 @@ The only identity that crosses into the engine is `SlotId`.
   `power_role_kill`, `protect`, `redirect`, `report`, `result_mod`, `role_guard`,
   `role_scan`, `role_watcher`, `rolestop`, `security_guard`, `send_fruit`,
   `shield`, `strongman_kill`, `track`, `traffic_analyst`, `vanillaize`, `visit`,
-  `voyeur`, and `watch`. [partly proven: Chinese `investigate_alignment` is modeled as
+  `voyeur`, and `watch`. [proven: the generated im-human parity matrix now has no
+  unsupported `action_id` rows for this catalog; each row is modeled in pack, implemented in
+  resolver, covered by golden, and integrated through command/projection. Chinese
+  `investigate_alignment` is modeled as
   `Investigate` + `Parity` on Prophet with pack-owned good/evil result labels; Chinese source
   `night_kill` rows are now parity-mapped to canonical `wolf_night_kill` through pack
-  `source_ids`; Mafia Universe `send_fruit` is modeled as a resolution-scoped target-visible
-  `Mark` that emits private `EffectNotification` without persistent `EffectsMarked` state;
+  `source_ids` for both `wolf` and `white_wolf_king`, with pure and Postgres White Wolf King
+  night-kill proof; Mafia Universe `send_fruit` and Mafiascum Fruit Vendor `send_fruit` are modeled
+  as resolution-scoped target-visible `Mark` actions that emit private `EffectNotification`
+  without persistent `EffectsMarked` state;
+  Mafiascum `role_watcher`, `role_guard`, and `security_guard` are modeled as v55
+  action-investigation modes over the resolved visible visit graph: Role Watcher receives
+  actor-private unique visitor roles, Role Guard sends unique visitor roles to the watched
+  target, and Security Guard sends visible visitor identities to the watched target, with
+  Ninja-hidden visits excluded by pure golden and Postgres projection/rebuild proof;
   Mafia Universe `night_desperado` is modeled as a non-factional standard-NAR `Kill` for
   `town_night_desperado` and `mafia_night_desperado`, with pack-owned
   `alignment_failback` self-death on same-alignment targets, standard-NAR protection,
@@ -1030,14 +1111,85 @@ The only identity that crosses into the engine is `SlotId`.
   vertical; Mafia Universe `town_ninja` and `mafia_ninja` map their shared source `kill`
   action to canonical `ninja_kill` as ordinary non-factional standard-NAR night kills hidden
   from graph-derived visit results by `Modifier::Ninja`, with pure Watch/Motion golden
-  coverage and a Postgres private-result/rebuild vertical; Mafia Universe `town_day_vigilante`
+  coverage and a Postgres private-result/rebuild vertical; Mafia Universe `mark_alignment`
+  is modeled for `town_alignment_oracle` and `mafia_alignment_oracle` as a hidden persistent
+  `alignment_oracle_mark`; v57 `effect_source_death_reveals` emits canonical
+  `AlignmentRevealed` for the marked target when the Oracle source dies, with pure
+  mark/source-death goldens and a Postgres N01 mark -> rebuild -> N02 source-death public
+  reveal/thread/rebuild vertical; Mafia Universe `mark_role` is modeled for
+  `town_role_oracle` and `mafia_role_oracle` as a hidden persistent `role_oracle_mark`;
+  v58 `effect_source_death_reveals.Role` emits canonical `RoleRevealed` for the marked
+  target when the Oracle source dies, with pure town/mafia mark plus source-death goldens and a
+  Postgres N01 mark -> rebuild -> N02 source-death public role-reveal/thread/rebuild vertical;
+  Mafia Universe `janitor_kill` is modeled for `town_janitor` and `mafia_janitor` as an
+  ordinary non-factional standard-NAR night kill cause with pack-owned
+  `death_reveal.by_cause = Concealed`, pure town/mafia concealed-death golden coverage, shipped
+  pack validation, and a Postgres kill/concealed-slot-state/rebuild vertical;
+  Mafia Universe `inherit_role` maps to canonical `target_backup` for
+  `town_universal_backup` and `mafia_universal_backup`, emits foldable `BackupTargeted`
+  source choices through the pack `backup_policy`, inherits selected source roles as
+  `PlayerConverted` when those sources die, and has pure designation/inheritance goldens plus a
+  Postgres N01 source-choice -> rebuild -> N02 source-death inheritance trace/rebuild vertical;
+  Mafia Universe `town_day_vigilante`
   and `mafia_day_vigilante` map their shared source `kill` action to canonical
   `day_vigilante_kill` as ordinary day kills that resolve before official vote outcome, with
   pure alignment-variant golden coverage and a Postgres D01 kill/thread/rebuild vertical;
   Mafia Universe `town_day_desperado` and `mafia_day_desperado` map source `day_desperado`
   to canonical `day_desperado` as pre-vote Day kills with declarative `alignment_failback`
   self-death on non-hostile targets, strict v41 pack validation, pure success/failback golden
-  coverage, and a Postgres D01 trace/thread/rebuild vertical]
+  coverage, and a Postgres D01 trace/thread/rebuild vertical; Mafiascum `bus_drive` now maps
+  through pack `source_ids` to canonical `bus_driver_swap` as a Night `Redirect`/`Swap` action,
+  with `golden_busdriver_redirect` and `trace_records_redirect_edge_for_busdriver` covering pure
+  resolver output and trace edges, plus `host_resolve_phase_persists_redirect_trace_edge` proving
+  Postgres command/projection fold and rebuild; Mafiascum `follow` now maps through pack
+  `source_ids` to canonical `track` as a Night `Investigate`/`Track` action, with
+  `golden_tracker_tracks_visit` covering pure resolver output and
+  `host_resolve_phase_projects_tracker_private_visit_result` proving private result projection,
+  non-leakage, resolution audit, and rebuild; Mafiascum `guard_retaliate` now maps through pack
+  `source_ids` to canonical `bodyguard` as a Night `Protect` action with `Bodyguard`
+  interception, with `golden_bodyguard_intercept` covering pure resolver output and
+  `host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill` proving intercept death,
+  trace attribution, projection fold, and rebuild; Mafiascum `inspect_corpse` is modeled on
+  `coroner` as a dead-target Night `Investigate`/`FullRole` action, with
+  `golden_coroner_inspects_corpse` proving corpse role/alignment output and
+  `host_resolve_phase_carries_mafiascum_coroner_corpse_inspection` proving live-target rejection,
+  private result projection, resolution audit, and rebuild; Mafiascum `investigate_killer` is
+  modeled on `psychologist` as the v50 `Investigate`/`Killer` role-set mode backed by
+  pack-owned `killer_roles`, with `golden_psychologist_detects_killer` proving positive and
+  negative resolver output and `host_resolve_phase_carries_mafiascum_psychologist_killer_info`
+  proving private result projection, non-leakage, resolution audit, and rebuild; Mafiascum
+  `investigate_pt` is modeled on `pt_cop` as the v52 `Investigate`/`PtAccess` mode that reads
+  folded `PrivateChannelDeclared` membership from `StateSnapshot.private_channels`, with
+  `golden_pt_cop_reads_private_topic_access` proving positive and negative resolver output,
+  `pt_access_investigation_result_payload_passes_contract_validation` proving the list-shaped
+  result-schema contract, and `host_resolve_phase_carries_mafiascum_pt_cop_access` proving
+  `StartGame` private-channel declaration, private result projection, non-leakage, resolution
+  audit, and rebuild; Mafiascum
+  `investigate_specialist` is modeled on `specialist` as the v51 `Investigate`/`Specialist`
+  role-set mode backed by pack-owned `specialist_roles`, with
+  `golden_specialist_detects_specialist` proving positive and negative resolver output,
+  `specialist_investigation_result_payload_passes_contract_validation` proving the result-schema
+  contract, and `host_resolve_phase_carries_mafiascum_specialist_info` proving private result
+  projection, non-leakage, resolution audit, and rebuild; Mafiascum
+  `traffic_analyst` now maps through pack `source_ids` to canonical `prior_motion` as a Night
+  `Investigate`/`PriorMotion` action, with `golden_prior_motion_reads_visit_history` proving the
+  folded-visit read and `host_resolve_phase_records_visit_history_for_prior_motion` proving
+  visit-history projection, private result projection, resolution audit, and rebuild; Mafiascum
+  `convert` now maps through pack `source_ids` to canonical `cult_recruit` as a Night
+  `Convert`/`AssignRole` action, with `golden_cult_recruit_converts_to_cultist` proving cult
+  assignment and `host_resolve_phase_deprograms_from_conversion_origin` proving conversion-origin
+  fold, deprogramming, resolution trace validation, projection rebuild, and persisted trace
+  stability; Mafiascum `result_mod` now maps through role-scoped pack `source_ids` to canonical
+  Framer `frame` and Lawyer `lawyer_cover` as Night `Mark` actions whose hidden `framed` and
+  `lawyered` tags drive pack-owned `investigation_overrides`, with `golden_framer_parity_override`
+  and `golden_lawyer_parity_override` covering same-night Parity result flips plus
+  `host_resolve_phase_applies_lawyer_result_mod_override` proving command submission,
+  result-schema validation, resolution audit, and rebuild; Mafiascum `mailman`, `observe`, and
+  `report` now map to canonical v54 `Info` actions that emit typed private `InfoResult` rows, with
+  `golden_info_actions_private_results` covering actor/target audience routing,
+  `info_result_payload_passes_contract_validation` covering the result-schema contract, and
+  `host_resolve_phase_projects_mafiascum_info_results` proving command submission,
+  `player_info_result` projection, public-thread non-leakage, resolution audit, and rebuild]
 
 ### E. Modifiers and constraints
 
@@ -1055,7 +1207,14 @@ The only identity that crosses into the engine is `SlotId`.
   structured `DecisionTrace` block reason; Postgres command/projection vertical helper-enforces
   actor/template/mode/reason trace detail, proves no conversion projection mutation, and
   rebuild-preserves the trace envelope]
-- [ ] Disloyal.
+- [x] Disloyal. [mafiascum `disloyal_cult_recruit` declares `Modifier::Disloyal`;
+  pure golden `disloyal_cult_recruit_cross_alignment` proves same-alignment targets emit
+  `ActionInterfered { reason: "disloyal" }` while cross-alignment targets convert normally, trace
+  coverage proves the generic action-constraint suppression detail, pack validation gates the
+  modifier at IR 57 and rejects no-target disloyal actions, and Postgres test
+  `host_resolve_phase_persists_disloyal_modifier_trace_and_projection` proves command-submitted
+  actions, persisted `ResolutionApplied`/`ResolutionTrace`, envelope audit, and rebuild-stable
+  slot projections.]
 - [x] Macho. [mafiascum role-effect tag blocks ordinary protection; covered by golden plus
   `host_resolve_phase_macho_target_ignores_doctor_protection`, which proves `Command::ResolvePhase`
   kills a Doctor-protected Macho target and rebuild preserves slot state]
@@ -1196,10 +1355,12 @@ The only identity that crosses into the engine is `SlotId`.
   `backup_target` source selection into canonical Rust `BackupTargeted` and
   `PlayerConverted` inner events. Mafiascum declares `backup_cop`,
   `universal_backup`, `inherit_role`, and `backup_target`; validation requires
-  IR v17 plus declared passive/targeted effects and role refs. Pure goldens prove
-  passive inheritance, targeted designation, and targeted inheritance; command
-  tests prove `ResolvePhase` appends/folds Backup through Postgres projections and
-  rebuilds slot state identically.]
+  IR v17 plus declared passive/targeted effects and role refs. Mafia Universe now declares
+  `town_universal_backup`, `mafia_universal_backup`, `inherit_role`, and `backup_target` through
+  the same targeted backup policy. Pure goldens prove passive inheritance, targeted designation,
+  targeted inheritance, and MU town/mafia designation/inheritance variants; command tests prove
+  `ResolvePhase` appends/folds Backup through Postgres projections and rebuilds slot state
+  identically.]
 - [x] Vengeful. [im-human's action modifier metadata maps to fmarch's
   pack-declared `TriggerOn::Kill+vengeful_retaliates` trigger table. Mafiascum
   now uses the canonical `vengeful` role id with the `vengeful` effect;
@@ -1277,10 +1438,10 @@ The only identity that crosses into the engine is `SlotId`.
   preserving the persisted trace envelope]
 - [x] Stable handling of redirect cycles and strongly connected components.
 - [x] V1 night ability stage ordering from pack precedence/priority, not hardcoded Rust match arms.
-- [ ] Conflict rules for block vs action, protect vs kill, strongman vs protect,
+- [x] Conflict rules for block vs action, protect vs kill, strongman vs protect,
   commute vs same-night kill, cleanse vs poison, conversion vs pending death,
   kill stacking, guard/witch/babysitter interactions, and multi-kill attribution.
-  [partly proven: block vs action, block vs protect, protect vs kill, strongman vs
+  [proven: block vs action, block vs protect, protect vs kill, strongman vs
   protect, bodyguard intercept, babysitter dependency death, commute vs kill/investigate, untargetable vs
   kill/investigate, bulletproof saves, vest consumption, and Strongman vs
   bulletproof have mafiascum goldens; roleblock suppression, protect saves, and strongman
@@ -1380,24 +1541,23 @@ The only identity that crosses into the engine is `SlotId`.
   `random_day_vote_tiebreak_is_seeded_and_deterministic` sets the mafiascum pack vote policy to
   `Plurality` + `Random`, proves the same stored seed resolves the tie to the same contender, and
   proves a different stored seed can select a different tied contender]
-- [ ] Trace every target rewrite, suppression, conflict, generated action, and loop-cap hit.
-  [partly proven: trigger fixpoint loop-cap hits now flow into deterministic
-  `ResolutionTrace.notes`; one command/projection rebuild audit now proves a single persisted
-  trace can carry a helper-enforced redirect edge, roleblock suppression decision,
-  protect-vs-kill conflict decision, Trigger inner-event decision, generated-trigger row, and
-  generated-trigger note together; a separate
-  command/projection rebuild audit proves shipped mafiascum redirect loop-cap truncation persists
-  in `ResolutionTrace.notes` while retained redirect edges helper-enforce the applied rewrite; a
-  mass-redirect command/projection audit proves one ordered Rotate action persists three
-  deterministic redirect edges and rebuild-preserves the trace envelope;
-  focused low-cap test pack command/projection audit proves trigger fixpoint truncation persists
-  in `ResolutionTrace.notes`, helper-enforces the generated-trigger note, row, and typed inner-event
-  trace decision, folds standalone `EffectsMarked` into resolver/projection state, and rebuild-preserves
-  the killed slots, slot effects, and trace envelope; the suppression/conflict command proof now
-  helper-enforces exact stage/source/detail for roleblock suppression, table-declared Strongman
-  protection bypasses plus no Strongman Bodyguard save/intercept decision, and stacked-kill merge
-  attribution;
-  broader rewrite/suppression/conflict/generated-action/loop-cap family coverage remains pending]
+- [x] Trace every target rewrite, suppression, conflict, generated action, and loop-cap hit.
+  [proven: `cargo test -p domain --test golden trace_records` now passes all 66 pure trace-family
+  goldens, including target rewrites, suppression, conflict decisions, generated trigger rows,
+  target-state gates, stage-order diagnostics, and redirect/trigger loop-cap diagnostics; the
+  Super-Saint generated-trigger assertion derives the event index from the emitted `Trigger` and
+  verifies the matching `ResolutionTrace.generated` row; `host_resolve_phase_persists_combined_trace_audit_branches`
+  proves one persisted Postgres trace can carry a helper-enforced redirect edge, roleblock
+  suppression decision, protect-vs-kill conflict decision, Trigger inner-event decision,
+  generated-trigger row, and generated-trigger note through projection rebuild;
+  `host_resolve_phase_persists_mass_redirect_rotate_trace_edges` proves one ordered Rotate action
+  persists three deterministic redirect edges; `host_resolve_phase_persists_redirect_loop_cap_trace_note`
+  proves shipped mafiascum redirect loop-cap truncation persists in `ResolutionTrace.notes` while
+  retained redirect edges helper-enforce the applied rewrite; and
+  `host_resolve_phase_persists_trigger_loop_cap_trace_note` proves the current validator-clean
+  low-cap fixture persists trigger fixpoint truncation, helper-enforced generated-trigger note,
+  row, and typed inner-event trace decision, standalone `EffectsMarked` resolver/projection state,
+  killed slots, slot effects, and the trace envelope through rebuild]
 
 ### G. Triggers, generated actions, and fixpoints
 
@@ -1418,8 +1578,8 @@ The only identity that crosses into the engine is `SlotId`.
   mafiascum `win_witness_townie` / `win_witness_observes` pure golden/trace coverage plus a
   Postgres `ResolvePhase` projection-rebuild proof while preserving exactly one final
   `WinReached` as the result-contract event]
-- [ ] Generated actions re-enter normal resolution with source/cause attribution.
-  [partly proven: motivator/inventor grants emit schema-required `ActionGranted.source_action`
+- [x] Generated actions re-enter normal resolution with source/cause attribution.
+  [proven: motivator/inventor grants emit schema-required `ActionGranted.source_action`
   facts that carry through folded state, trace `generated` rows, action-grant projections, and
   rebuild; extra-action and item spends emit schema-required `ActionGrantConsumed.source_action`
   facts that decrement the explicitly sourced generated grant in folded state/projections and
@@ -1447,7 +1607,12 @@ The only identity that crosses into the engine is `SlotId`.
   kill resolution; ordinary `vengeful_retaliates` generated kills now have a pure golden/trace
   proof and a Postgres `ResolvePhase` rebuild proof showing the trigger payload preserves
   `source_target`/`source_actor`/`source_cause`, the produced kill enters normal Doctor protection,
-  and the protection trace is helper-enforced as sourced to `cause:vengeful_retaliates`]
+  and the protection trace is helper-enforced as sourced to `cause:vengeful_retaliates`; generated
+  trigger kills now also re-enter target-state gates with same-resolution transient effects, proven
+  by `host_resolve_phase_generated_pgo_kill_obeys_transient_target_state`, where a PGO-generated
+  kill preserves `source_target`/`source_actor`/`source_cause`, emits a `ResolutionTrace.generated`
+  row, is skipped by an ordinary `kill_skipped_by_target_state` decision sourced to
+  `cause:pgo_shoots_visitor`, and rebuild-preserves the trace envelope and all-alive slot state]
 - [x] Generated kills still pass through protect/strongman policy unless explicitly
   unstoppable. [proven for trigger-produced kills: a mafiascum PGO generated kill is stopped by
   ordinary Doctor protection, another PGO generated kill is intercepted by a Bodyguard that dies
@@ -1479,17 +1644,17 @@ The only identity that crosses into the engine is `SlotId`.
   Super-Saint, Executioner, Condemner, PGO, selective visitor-kill, Beloved Princess, Babysitter,
   Hider, and lover-suicide; Bomb/Vengeful/Hunter/PGO/visitor-kill are reflected in the
   source-derived parity matrix with strict pack-linter contracts where applicable]
-- [ ] Fixpoint termination is deterministic and emits trace diagnostics.
-  [partly proven: resolver carries trigger loop-cap diagnostics into
-  `ResolutionTrace.notes`, with a cyclic retaliation fixture and persisted trigger-trace
-  command/rebuild proof; standard-NAR generated-kill triggers must now declare
-  `standard_nar.trigger_fixpoint_policy` with produced-kill re-entry, `RedirectLoopCap`, and
-  trace participation, and missing, malformed, or unknown-source policy fails closed before the
-  trigger fixpoint; seeded
-  command-pipeline fuzz now covers PGO trigger diagnostics plus
-  Babysitter and Hider generated-death dependency graphs, and a separate persistent-trigger lane
-  covers two-phase Hunter retaliation plus Cupid/Lovers folded state through replay, trace
-  inspection, and projection rebuild audits]
+- [x] Fixpoint termination is deterministic and emits trace diagnostics.
+  [proven: `cargo test -p domain --test golden loop_cap` covers redirect loop-cap and trigger
+  loop-cap trace notes; Postgres tests
+  `host_resolve_phase_persists_redirect_loop_cap_trace_note` and
+  `host_resolve_phase_persists_trigger_loop_cap_trace_note` prove those diagnostics persist and
+  survive rebuild; `standard_nar_trigger_fixpoint_policy_classifies_every_generated_kill_trigger`
+  plus the `trigger_fixpoint_policy` resolver goldens prove generated-kill trigger policy fails
+  closed before the fixpoint when missing, malformed, or unknown-source; seeded command-pipeline
+  replay audits cover PGO trigger diagnostics, Babysitter/Hider generated-death dependency graphs,
+  two-phase Hunter retaliation, and Cupid/Lovers folded state through trace inspection and
+  projection rebuild]
 
 ### H. Visibility, notifications, and private results
 
@@ -1509,16 +1674,19 @@ The only identity that crosses into the engine is `SlotId`.
   role+alignment disclosure]
 - [x] Roleblock/interference emits `ActionInterfered`, not a fake info result.
   [proven with mafiascum roleblock goldens plus structured suppression trace detail]
-- [ ] Mark/Clear, motivator grants, granted items, vest consumption, and private notices
-  emit `EffectNotification`/notification events with explicit audience. [partly proven for
-  non-hidden Mark/Clear effects, including actor/target douse notices, hidden Mark effects
-  filtered from player notices, Epicmafia ActorAndTarget douse notices with unrelated-slot and
-  public-thread non-leak proof, motivator/inventor grants, granted vest item mark notices, vest
-  consumption, loud/announcing action notices, Cupid lover-knowledge notices, and Mafia
-  Universe Fruit Vendor private fruit notices with no persistent slot effect;
-  `player_notification` rebuild proof covers per-recipient and hidden-filtered projection, and
-  `GET /games/{game}/notifications` exposes capability-filtered wire `PlayerNotification`
-  rows for hosts/cohosts and addressed slot occupants]
+- [x] Mark/Clear, motivator grants, granted items, vest consumption, and private notices
+  emit `EffectNotification`/notification events with explicit audience. [proven for non-hidden
+  Mark/Clear effects, including actor/target douse notices, hidden Mark effects filtered from
+  player notices, Epicmafia ActorAndTarget douse notices with unrelated-slot and public-thread
+  non-leak proof, motivator/inventor grants, granted vest item mark notices, vest consumption,
+  loud/announcing action notices, Cupid lover-knowledge notices, and Mafia Universe Fruit Vendor
+  private fruit notices with no persistent slot effect; `EffectNotification` now has explicit
+  result-contract coverage for required `audience`; `player_notification` rebuild proof covers
+  per-recipient and hidden-filtered projection; the Mafia Universe Inventor command vertical now
+  proves grant/item/vest notices are addressed only to intended targets, absent for unrelated
+  slots, absent from the public thread, and rebuild/audit-stable through item spend and vest
+  marking, while the vest-save vertical proves automatic vest consumption clears state without
+  leaking a clear notice to the attacker]
 - [x] Public phase announcements are a canonical event, not UI prose.
 - [x] Death reveal, role reveal, janitor, flipless, alignment-only flip, and endgame reveal are
   projection rules backed by events. [`PlayerKilled.death_reveal` now carries pack-derived `Full`,
@@ -1616,15 +1784,55 @@ The only identity that crosses into the engine is `SlotId`.
 - [x] Trace validator.
 - [x] Golden scenario harness by pack. [Rust golden tests and `check_goldens --check` both resolve
   fixtures with their declared pack, including `pack_overrides` for intentional pack-policy variants]
-- [ ] Cross-language fixture import from im-human V4 outputs.
-- [ ] Property tests for determinism, ordering, replay, and graph fixpoint termination.
-- [ ] Small-scope scenario tests for every primitive/modifier interaction.
-- [ ] Regression matrix mapping each im-human Engine V4 test family to fmarch coverage.
-- [ ] Inventory script that reports unported primitives, modifiers, event kinds, and
-  culture notes from im-human.
-- [ ] CI command that runs all domain goldens and schema validators without Postgres.
-- [ ] Integration command that runs command/projection resolution against Postgres. [partly
-  proven by Postgres command tests and API verticals; no standalone operator command yet]
+- [x] Cross-language fixture import from im-human V4 outputs. [proven:
+  `tools/import_im_human_v4_fixture.py` imports frozen im-human Engine V4 result JSON into
+  canonical `ResolutionApplied` JSON using the source-derived im-human result-kind map and
+  explicit per-event payload-shape validators; `python3 -m unittest
+  tools/tests/test_import_im_human_v4_fixture.py` proves checked fixture import, unknown event
+  rejection, known-unsupported event rejection, and malformed payload rejection; Rust result-contract
+  test `imported_im_human_v4_fixture_payload_passes_contract_validation` proves the checked imported
+  artifact passes fmarch schema validation before it can count as parity coverage]
+- [x] Property tests for determinism, ordering, replay, and graph fixpoint termination. [proven:
+  `seeded_property_family_replays_ordering_and_fixpoints_deterministically` runs a seeded
+  pure-domain scenario family across replay and three submission-order permutations, covering
+  same-ability ordering, redirect graph stability, redirect loop-cap termination diagnostics, and
+  trigger fixpoint loop-cap termination diagnostics]
+- [x] Small-scope scenario tests for every primitive/modifier interaction. [proven:
+  `tools/check_primitive_modifier_interactions.py --check` derives product-pack interactions from
+  action abilities plus explicit modifiers/modifier-like constraints, reports 68 covered
+  interactions across 42 unique primitive/modifier pairs with zero uncovered rows, lists the five
+  explicit unsupported primitive/modifier parity rows separately, and the targeted
+  `check_goldens --check` lane reruns all 145 referenced interaction fixtures]
+- [x] Regression matrix mapping each im-human Engine V4 test family to fmarch coverage. [proven:
+  `tools/check_engine_v4_test_family_coverage.py --check` reads the source-derived
+  `test_families` inventory, verifies all 28 Engine V4 families have a coverage mapping, checks
+  every mapped evidence path/needle, and confirms the regenerated parity matrix agrees; the current
+  report maps 26 families to fmarch proof surfaces and leaves only `feature_flags_test` plus
+  `init` as explicit out-of-scope/non-resolution rows]
+- [x] Inventory script that reports unported primitives, modifiers, event kinds, and
+  culture notes from im-human. [proven:
+  `tools/report_unported_im_human_inventory.py --check` reads the generated parity matrix and
+  emits a focused unsupported-inventory report with exact matrix line numbers, categories,
+  classifications, and rationales; the current report lists 28 unsupported rows total, including
+  requested-category counts of 1 primitive, 4 action modifiers, 0 effect modifiers, 4 result event
+  kinds, and 0 culture notes, with 26 not-yet-ported rows and 2 explicit out-of-scope rows]
+- [x] CI command that runs all domain goldens and schema validators without Postgres.
+  [proven: `python3 tools/run_domain_ci_no_postgres.py --check --output
+  target/operator-proof/current-domain-ci-no-postgres-report.json` runs four no-Postgres lanes:
+  `cargo test -p domain --test golden` (430 tests), `check_goldens --check` over all 12
+  golden-owning pack directories (281 fixtures), `cargo test -p domain --test result_contract`
+  (63 tests), and `cargo test -p domain --test pack_validation` (138 tests). The saved report
+  records `ok: true`, 4 passed lanes, zero failed lanes, and explicitly excludes Postgres
+  command/projection integration.]
+- [x] Integration command that runs command/projection resolution against Postgres. [proven:
+  `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/<scratch-db> cargo run -q -p commands
+  --bin prove_command_projection_resolution -- --output
+  target/operator-proof/current-command-projection-resolution-report.json
+  crates/commands/fixtures/night-passing.json` seeds the checked fixture through
+  `commands::handle`, runs `Command::ResolvePhase`, writes the saved report under
+  `target/operator-proof`, and compares both audit surfaces; the checked run reported
+  `ok: true`, 20 matched projection-rebuild tables, one matched resolution envelope, zero
+  drifted tables, zero drifted phases, and zero diffs. This is local-Postgres-only proof.]
 
 ## Build order
 
@@ -1751,10 +1959,11 @@ round-trip state folds.
    now use a hidden resolution-scoped `empowered` Mark plus `standard_nar.empower_effects`
    to bypass same-night block and redirect for the empowered actor, with strict pack validation,
    pure town/mafia goldens, and a Postgres trace/rebuild vertical; Mafia Universe
-   `town_fruit_vendor`, `mafia_fruit_vendor`, and `send_fruit` now use a target-visible
-   resolution-scoped `fruit_received` Mark to emit private fruit notifications without
-   persistent `EffectsMarked`/`slot_effects`, with pure town/mafia goldens and a Postgres
-   notification/rebuild vertical; richer source/phase/expiry projection metadata is still pending]
+   `town_fruit_vendor`, `mafia_fruit_vendor`, Mafia Universe `send_fruit`, and Mafiascum
+   `fruit_vendor`/`send_fruit` now use a target-visible resolution-scoped `fruit_received`
+   Mark to emit private fruit notifications without persistent `EffectsMarked`/`slot_effects`,
+   with pure culture-pack goldens and Postgres notification/rebuild verticals; richer
+   source/phase/expiry projection metadata is still pending]
 3. Motivator/grant item/extra action and private notifications. [done for pack-declared
    `Grant` actions, `ActionGranted` state/projection facts, durable `ActionGrantConsumed`
    remaining-use folds, typed `inventory:<grant_id>` counters for item spends, trace generated
@@ -1825,7 +2034,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
 
 ### Phase 5 - Port rich day systems
 
-1. Weighted voting modifiers and thresholds. [partly done: pack-declared hammer now
+1. Weighted voting modifiers and thresholds. [done: pack-declared hammer now
    freezes the official vote snapshot at the threshold-reaching ballot, emits
    `VoteStatus::Hammer`, and is proven through pure golden plus command/projection
    rebuild proof; x-voter is proven through pack-declared `WeightPolicy::PerRole`;
@@ -1833,7 +2042,9 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    `EffectsMarked`; explicit `ActionGranted`-style vote-weight grants are proven through
    legal Grant-created folded `VoteWeight` grants, command/projection rebuild proof, and
    live hammer-lock, NoMajority revote-prompt, and HostDecides PK-prompt simulation through
-   the same folded state]
+   the same folded state; `day_vote_policy_matrix_covers_methods_and_tie_breakers` covers
+   Majority, Plurality, Supermajority, Hammer, NoElimination, HostDecides, and seeded
+   deterministic Random vote outcomes]
 2. Sheriff badge/pass.
 3. Knight duel / public day duels. [v8 `Duel` IR and `DuelResolved`; Chinese structured
    success/failure goldens; command/projection death/rebuild proof. v34 `VoteDuel` now models
@@ -1912,15 +2123,19 @@ without recomputing rules client-side.
    bypass, jail block-plus-protect, bodyguard intercept,
    martyr intercept, CPR save, and CPR harm plus Postgres command/projection/rebuild
    verticals for roleblock-opens-kill and CPR harm; the common investigative set now covers
-   `town_cop`, `godfather`, `miller`, `mafia_framer`, and `town_framer`, mapping MU
-   `investigate`/`investigate_alignment` to `cop_investigate` and `result_mod` to `frame`,
-   with pure goldens for ordinary parity, Godfather, Miller, and same-night Mafia/Town
-   Framer overrides plus Postgres private-result/effect/rebuild verticals for both framed
-   investigation paths; the
+   `town_cop`, `mafia_cop`, `town_alignment_cop`, `mafia_alignment_cop`, `godfather`,
+   `miller`, `mafia_framer`, and `town_framer`, mapping MU `investigate` /
+   `investigate_alignment` to `cop_investigate` and `result_mod` to `frame`, with pure goldens
+   for ordinary parity, Godfather, Miller, same-night Mafia/Town Framer overrides, and the
+   alignment-cop culture aliases plus Postgres private-result/effect/rebuild verticals for framed
+   and alias investigation paths; the
    MU graph-info set now covers `town_tracker`, `town_watcher`, `town_motion_detector`,
-   `mafia_tracker`, `mafia_watcher`, and `mafia_motion_detector`, mapping `track`, `watch`,
-   and `motion_detector` directly to canonical pack action ids with pure town/mafia variant
-   goldens plus a Postgres private-result/non-leakage/rebuild vertical; the MU role-set info
+   `town_voyeur`, `mafia_tracker`, `mafia_watcher`, `mafia_motion_detector`, and
+   `mafia_voyeur`, mapping `track`, `watch`, `motion_detector`, and `voyeur` directly to
+   canonical pack action ids with pure town/mafia variant goldens plus Postgres
+   private-result/non-leakage/rebuild verticals; Voyeur is v56 `InvestigateMode::Voyeur` and
+   reports visible action ids on the watched target while excluding Ninja-hidden visits and
+   watch-style observation actions; the MU role-set info
    set now covers `town_vanilla_cop`, `mafia_vanilla_cop`, `town_neapolitan`,
    `mafia_neapolitan`, `town_gunsmith`, `mafia_gunsmith`, `investigate_vanilla`,
    `neapolitan`, and `gunsmith` through v36 pack-owned vanilla/gun-bearing role sets,
@@ -1933,7 +2148,23 @@ without recomputing rules client-side.
    memory, pure same/different golden coverage, and a Postgres private-result/memory/rebuild
    vertical; the MU public-reveal set now covers `innocent_child` and `reveal_town` through
    canonical v33 `RevealTown`, pure golden coverage, and a Postgres alignment-only
-   projection/thread/rebuild vertical; the MU redirect set
+   projection/thread/rebuild vertical; the MU Alignment Oracle set now covers
+   `town_alignment_oracle`, `mafia_alignment_oracle`, and `mark_alignment` through v57
+   `effect_source_death_reveals`, a hidden persistent `alignment_oracle_mark`, pure mark and
+   source-death reveal goldens, and a Postgres N01 mark -> rebuild -> N02 Oracle death public
+   alignment-reveal/thread/rebuild vertical; the MU Role Oracle set now covers
+   `town_role_oracle`, `mafia_role_oracle`, and `mark_role` through v58
+   `effect_source_death_reveals.Role`, a hidden persistent `role_oracle_mark`, pure mark and
+   source-death reveal goldens, and a Postgres N01 mark -> rebuild -> N02 Oracle death public
+   role-reveal/thread/rebuild vertical; the MU Janitor set now covers `town_janitor`,
+   `mafia_janitor`, and `janitor_kill` through a standard-NAR kill cause plus pack-owned
+   `death_reveal.by_cause = Concealed`, pure town/mafia concealed-death golden coverage, shipped
+   pack validation, and a Postgres kill/concealed-slot-state/rebuild vertical; the MU Backup set
+   now covers `town_universal_backup`, `mafia_universal_backup`, and `inherit_role` through
+   canonical `target_backup`, hidden persistent `backup_target`, `BackupTargeted` source-choice
+   facts, `PlayerConverted` targeted inheritance, pure designation/inheritance goldens, and a
+   Postgres N01 source-choice -> rebuild -> N02 source-death inheritance trace/rebuild vertical;
+   the MU redirect set
    now covers `town_bus_driver`, `mafia_bus_driver`, `town_redirector`, and
    `mafia_redirector`, mapping `bus_drive` to `bus_driver_swap` and `redirect` directly to
    canonical pack actions with pure swap/cycle goldens plus a Postgres composed
@@ -1962,10 +2193,11 @@ without recomputing rules client-side.
    `grant_options` for `parity_scanner_item` and `bulletproof_vest_item`, explicit
    `SubmitAction.grant_id` selection, pure grant/spend/exhaustion/vest-mark goldens, and a Postgres
    missing/unknown-selection/private-notification/inventory-counter/effect/trace/rebuild vertical; MU
-   `town_fruit_vendor`, `mafia_fruit_vendor`, and
-   `send_fruit` are now modeled as a target-visible resolution-scoped `fruit_received` Mark
-   that emits private `EffectNotification`/`player_notification` rows and no persistent
-   `slot_effects`, with pure town/mafia goldens and a Postgres notification/rebuild vertical;
+   `town_fruit_vendor`, `mafia_fruit_vendor`, Mafia Universe `send_fruit`, and Mafiascum
+   `fruit_vendor`/`send_fruit` are now modeled as target-visible resolution-scoped
+   `fruit_received` Mark actions that emit private `EffectNotification`/`player_notification`
+   rows and no persistent `slot_effects`, with pure culture-pack goldens and Postgres
+   notification/rebuild verticals;
    MU `town_night_desperado`, `mafia_night_desperado`, and `night_desperado` are now modeled
    as non-factional standard-NAR kills with pack-owned `alignment_failback` self-death on
    same-alignment targets, pure success/failback golden coverage, and a Postgres
@@ -2278,7 +2510,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    version, and diff count; the shared classifier distinguishes missing, malformed, stale,
    path-mismatched, input-mismatched, drifted, and trusted saved reports. The same API vertical proves the v1 contract for
    all five trusted artifact rows and all five untrusted fixture rows, plus the artifact-less
-   status export row, non-host rejection, and summary counts (`production.trusted = 10`,
+   status export row, non-host rejection, and summary counts (`production.trusted = 11`,
    `production.non_trusted = 0`, `fixtures.non_trusted = 5`), and compares the host/cohost HTTP
    status JSON with the no-server shared model after normalizing the current game id and
    wall-clock-derived artifact age/mtime fields. The host/cohost-only
@@ -2401,6 +2633,19 @@ coverage, and a playable vertical scenario through the command pipeline.
    deterministic generator coverage, not exhaustive state-space verification.` This command was
    rerun locally and emitted `ok: true`, `family_count: 11`, `seed_count: 55`,
    `expected_family_count: 11`, `expected_seed_count: 55`, and `family_manifest_matched: true`.
+   `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
+   path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
+   prove_command_projection_resolution -- --output
+   target/operator-proof/current-command-projection-resolution-report.json
+   crates/commands/fixtures/night-passing.json`, and proof boundary `Local-Postgres-only proof:
+   seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local
+   DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that
+   generated game, writes the saved report under target/operator-proof, and does not prove hosted,
+   multi-node, production, browser, or exhaustive state-space behavior.` This command was run
+   against a scratch database on the local Postgres service and emitted `ok: true`, 20 matched
+   projection tables, one matched resolution envelope, zero drifted tables, zero drifted phases, and
+   zero diffs.
    The API manifest unit test now mechanically checks those artifact doc-truth rows in both the
    engine note and this checklist: every manifest row with an `artifact_path` must have its artifact
    path, rendered command, exact proof boundary, current `trusted` artifact state, and production
@@ -2412,25 +2657,53 @@ coverage, and a playable vertical scenario through the command pipeline.
    .`. Read-only consumers can use `python3 tools/engine_port_completion_audit.py --check --output
    target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
    artifact, and fails if the saved audit is missing, stale versus any declared input, or different
-   from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-   14 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 168 checked
-   rows, 24 unchecked rows, one row marked `partly proven`, 592 parity-matrix rows, and 143
-   unsupported parity rows. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-   browser-fetched JSON surface, all 10 required go/no-go metadata needles present, and trusted
-   metadata rows for both large-action and determinism proof rows. This report is a completion
-   blocker, not a completion proof; it confirms the local proof-run artifacts and browser metadata
-   evidence are healthy while preserving the broader checklist and parity gaps.
-   Broader culture-pack generation, production benchmark coverage, and true property-test
-   shrinking remain future work]
+   from the generated report. The current artifact reports `ok: true`, `freshness.status: fresh`,
+   18 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+   rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, and 28
+   unsupported parity rows. Mafia Universe now models `vanilla_town`, `blank_town_role`,
+   `blank_mafia_role`, `mafia_doctor`, `mafia_bodyguard`, `mafia_jailkeeper`,
+   `town_alignment_cop`, `mafia_alignment_cop`, `mafia_cop`, `town_voyeur`, `mafia_voyeur`,
+   `town_alignment_oracle`, `mafia_alignment_oracle`, `town_role_oracle`,
+   `mafia_role_oracle`, `town_janitor`, `mafia_janitor`, `town_universal_backup`,
+   `mafia_universal_backup`, and `serial_killer`; its
+   `serial_killer_kill` is a standard-NAR protectable/blockable kill cause, with pure golden and
+   Postgres private-result/rebuild proof covering the alias roles. Mafiascum `mailman`, `observe`, and `report` now map to v54
+   `InfoResult` through canonical `Info` actions and the new `player_info_result` projection,
+   covering the generic info scan/mail/report surface; Mafiascum source `result_mod` is now mapped for canonical Framer
+   `frame` and Lawyer `lawyer_cover`, and the `result_mod` primitive is covered as
+   `Mark+investigation_overrides`; Mafiascum source `kill` aliases are now mapped for the canonical
+   day-vigilante, vigilante, mafia-goon, ninja, and serial-killer kill templates, source role
+   aliases now map `goon`, `janitor`, `mafia_ninja`, `mafia_strongman`, and vanilla-mafia
+   `werewolf` to their canonical pack roles, and `serial_killer` is now a real independent role with
+   pure goldens plus Postgres `ResolvePhase` verticals for both the sole-survivor win and the living
+   independent blocking mafia parity through v53 `win.rules[].blocked_by_alive`. The primitive/modifier interaction proof artifact records
+   68 covered product-pack interactions across 42 unique primitive/modifier pairs, zero uncovered
+   interactions, and five explicit unsupported primitive/modifier parity rows. The Engine V4
+   test-family coverage artifact maps all 28 source-derived test-family buckets, with 26 mapped to
+   fmarch proof surfaces and two explicit out-of-scope/non-resolution buckets. The unported
+   im-human inventory artifact reports all 28 remaining unsupported parity rows by category and
+   line number, including zero unsupported culture-note rows. The no-Postgres domain CI artifact
+   reports `ok: true`, four passed lanes, zero failed lanes, 12 golden-owning pack directories, 281
+   checked golden fixtures, and Rust validator totals of 430 golden-harness tests, 63
+   result-contract tests, and 138 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
+   browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
+   present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
+   trusted command/projection proof row that has not yet been promoted into the browser-smoke
+   required needle set. The local-Postgres
+   command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
+   envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
+   diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
+   culture-pack generation, production benchmark coverage, hosted/operator production capture, and
+   true property-test shrinking remain future work]
 
 Exit proof: a stored game can be replayed from event zero and produce semantically identical
 resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Section C with the next open row: compute official `DayVoteOutcome` from pack policy, not
-from the running projection. Start by splitting the already-proven stale-projection command test
-into an explicit official-outcome assertion row if the current proof is sufficient, or add the
-narrowest missing command/projection assertion that proves every host-facing official vote result
-is sourced from `ResolutionApplied`/pack policy while `votecount` remains a rebuildable running
-ballot projection.
+Promote the proof-run status/go-no-go surface to include
+`operator-proof-command-projection-resolution` in the browser smoke required rows. Start by adding
+the new artifact path and row id to `tools/operator_browser_smoke.mjs`, regenerate the operator
+status export and go/no-go artifacts, then run the browser smoke so the HTML operator surface proves
+the new local-Postgres command is visible alongside the older projection, resolution, trace,
+large-action, and determinism rows.

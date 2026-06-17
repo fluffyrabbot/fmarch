@@ -3,74 +3,104 @@
   "expected_events": [
     {
       "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "sequence": 1,
+        "target": "slot_1",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 2,
+        "target": "slot_1",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_4",
+        "sequence": 3,
+        "target": "slot_1",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 3,
       "kind": "DayVoteOutcome",
       "payload": {
+        "contenders": [
+          "slot_1"
+        ],
+        "majority": 3,
         "status": "Lynch",
-        "winner": "slot_1",
-        "contenders": ["slot_1"],
         "tallies": {
-          "slot_1": 3.0
+          "slot_1": 3
         },
+        "thresholds": {
+          "slot_1": 3,
+          "slot_2": 3,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_5": 3
+        },
+        "tiebreak": null,
+        "total_weight": 5,
         "votes": {
           "slot_2": "slot_1",
           "slot_3": "slot_1",
           "slot_4": "slot_1"
         },
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_4": 1.0,
-          "slot_5": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_5": 1
         },
-        "majority": 3.0,
-        "thresholds": {
-          "slot_1": 3.0,
-          "slot_2": 3.0,
-          "slot_3": 3.0,
-          "slot_4": 3.0,
-          "slot_5": 3.0
-        },
-        "total_weight": 5.0,
-        "tiebreak": null,
-        "reason": null
+        "winner": "slot_1"
       }
     },
     {
-      "index": 1,
+      "index": 4,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_1",
-        "cause": "day_vote",
         "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_1",
         "unstoppable": true
       }
     },
     {
-      "index": 2,
+      "index": 5,
       "kind": "PhaseAnnouncement",
       "payload": {
-        "phase_id": "D01",
         "deaths": [
           {
-            "slot_id": "slot_1",
-            "cause": "lynch"
+            "cause": "lynch",
+            "slot_id": "slot_1"
           }
-        ]
+        ],
+        "phase_id": "D01"
       }
     },
     {
-      "index": 3,
+      "index": 6,
       "kind": "WinReached",
       "payload": {
-        "winner": "jester",
-        "reason": "jester slot_1 lynched",
         "metadata": {
           "policy": "jester",
-          "target": "slot_1",
           "role": "jester",
-          "source_event": "win.jester"
-        }
+          "source_event": "win.jester",
+          "target": "slot_1"
+        },
+        "winner": "jester"
       }
     }
   ],
@@ -80,85 +110,98 @@
     "phase_id": "D01",
     "seed": 45,
     "state": {
+      "phase_deadline": null,
       "phase_id": "D01",
       "phase_kind": "Day",
       "phase_number": 1,
-      "phase_deadline": null,
       "phase_policy": {
-        "cadence": ["Day", "Night"],
+        "cadence": [
+          "Day",
+          "Night"
+        ],
         "subsegments": {
-          "Day": ["sod", "main", "eod"]
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
         },
         "twilight": false
       },
       "slots": [
         {
-          "slot_id": "slot_1",
-          "role_key": "jester",
           "alignment": "jester",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "jester",
+          "slot_id": "slot_1",
+          "status": "alive"
         },
         {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
           "slot_id": "slot_2",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "status": "alive"
         },
         {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
           "slot_id": "slot_3",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "status": "alive"
         },
         {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
           "slot_id": "slot_4",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
+          "status": "alive"
         },
         {
-          "slot_id": "slot_5",
-          "role_key": "mafia_goon",
           "alignment": "mafia",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
         }
       ]
     },
     "submissions": [
       {
         "action_id": "vote_001",
-        "template_id": "day_vote",
         "actor": "slot_2",
-        "targets": ["slot_1"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       },
       {
         "action_id": "vote_002",
-        "template_id": "day_vote",
         "actor": "slot_3",
-        "targets": ["slot_1"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 2,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       },
       {
         "action_id": "vote_003",
-        "template_id": "day_vote",
         "actor": "slot_4",
-        "targets": ["slot_1"],
+        "metadata": {},
         "phase_id": "D01",
         "submitted_at": 3,
-        "withdrawn": false,
-        "metadata": {}
+        "targets": [
+          "slot_1"
+        ],
+        "template_id": "day_vote",
+        "withdrawn": false
       }
     ]
   }

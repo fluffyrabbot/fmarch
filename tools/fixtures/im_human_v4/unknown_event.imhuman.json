@@ -1,0 +1,18 @@
+{
+  "format": "im-human-engine-v4-result",
+  "phase_id": "N01",
+  "phase_kind": "Night",
+  "phase_number": 1,
+  "run_id": "imhuman:v4:unknown_event",
+  "seed": 18,
+  "started_at": 100,
+  "finished_at": 101,
+  "events": [
+    {
+      "kind": "player.evaporated",
+      "payload": {
+        "slot_id": "slot_2"
+      }
+    }
+  ]
+}
