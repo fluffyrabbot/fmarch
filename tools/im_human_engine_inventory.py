@@ -168,6 +168,7 @@ RESULT_KIND_MAP = {
     "note.day.announcement": "DayAnnouncement",
     "note.day.last_words": "LastWordsRecorded",
     "phase.announcement": "PhaseAnnouncement",
+    "ingest.halt": "ActionIngestHalted",
     "player.killed": "PlayerKilled",
     "player.saved": "PlayerSaved",
     "player.converted": "PlayerConverted",
@@ -826,6 +827,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
     commands_text = read_text(fmarch_root / "crates/commands/src/lib.rs")
     command_tests_text = read_text(fmarch_root / "crates/commands/tests/pipeline.rs")
     projections_text = read_text(fmarch_root / "crates/projections/src/lib.rs")
+    docs_text = "\n".join(
+        read_text(p) for p in sorted((fmarch_root / "docs/arch").glob("*.md"))
+    )
     domain_tests_text = "\n".join(
         read_text(p) for p in sorted((fmarch_root / "crates/domain/tests").glob("*.rs"))
     )
@@ -1009,6 +1013,7 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         "commands_text": commands_text,
         "command_tests_text": command_tests_text,
         "projections_text": projections_text,
+        "docs_text": docs_text,
         "domain_tests_text": domain_tests_text,
         "pack_text": pack_text,
         "golden_text": golden_text,
@@ -2370,10 +2375,39 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
     for item in inventory["result_event_kinds"]:
         name = item["name"]
         canonical = RESULT_KIND_MAP.get(name, "")
-        modeled = canonical in fmarch["events"]
-        implemented = bool(canonical and f"InnerEvent::{canonical}" in resolver)
-        golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
-        integrated = bool(canonical and (canonical in projections or canonical in command_tests))
+        notes = ""
+        if name == "ingest.halt":
+            modeled = (
+                canonical in fmarch["events"]
+                and "`ingest.halt` | `ActionIngestHalted`" in fmarch["docs_text"]
+            )
+            implemented = (
+                modeled
+                and "InnerEvent::ActionIngestHalted" in resolver
+                and "invalid_submission_ingest_halts" in resolver
+                and "submission_template_rejected" in resolver
+                and "action_ingest_halted_payload_passes_contract_validation"
+                in fmarch["domain_tests_text"]
+            )
+            golden = implemented and "ActionIngestHalted should pass" in fmarch["domain_tests_text"]
+            integrated = (
+                implemented
+                and "action_submission_rejects_and_traces_invalid_template_ids"
+                in command_tests
+                and "historical invalid template id should emit ActionIngestHalted"
+                in command_tests
+                and "submission_template_rejected" in command_tests
+            )
+            notes = (
+                "im-human `ingest.halt` maps to fmarch `ActionIngestHalted` for "
+                "historical/replay submissions halted inside resolver ingest; "
+                "front-door command validation still rejects illegal live submissions before append"
+            )
+        else:
+            modeled = canonical in fmarch["events"]
+            implemented = bool(canonical and f"InnerEvent::{canonical}" in resolver)
+            golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
+            integrated = bool(canonical and (canonical in projections or canonical in command_tests))
         rows.append(
             row(
                 "result_event_kind",
@@ -2384,6 +2418,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 implemented,
                 golden,
                 integrated,
+                notes,
             )
         )
 

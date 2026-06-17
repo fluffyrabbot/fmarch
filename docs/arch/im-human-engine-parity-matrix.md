@@ -330,7 +330,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | result_event_kind | `effects.cleared` | `EffectsCleared` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.conversion_blocked` | `ConversionBlocked` | 2 | no | yes | yes | yes | yes |  |
 | result_event_kind | `effects.marked` | `EffectsMarked` | 2 | no | yes | yes | yes | yes |  |
-| result_event_kind | `ingest.halt` |  | 2 | yes | no | no | no | no |  |
+| result_event_kind | `ingest.halt` | `ActionIngestHalted` | 2 | no | yes | yes | yes | yes | im-human `ingest.halt` maps to fmarch `ActionIngestHalted` for historical/replay submissions halted inside resolver ingest; front-door command validation still rejects illegal live submissions before append |
 | result_event_kind | `investigation.result` | `InvestigationResult` | 10 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.closed` | `ItaSessionClosed` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.opened` | `ItaSessionOpened` | 1 | no | yes | yes | yes | yes |  |
