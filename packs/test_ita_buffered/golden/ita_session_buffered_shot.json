@@ -1,0 +1,154 @@
+{
+  "description": "A buffered ITA session records a pending shot with release timing and does not queue, resolve, kill, or auto-close the session in the same resolution pass.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ItaSessionOpened",
+      "payload": {
+        "day": 1,
+        "label": "Day 1 Buffered ITA",
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "session_id": "d1",
+        "status": "open",
+        "window": "ita_sessions"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ItaShotBuffered",
+      "payload": {
+        "action_id": "ita_buffered_001",
+        "actor_id": "slot_1",
+        "delay_ms": 1000,
+        "release_at": 1010,
+        "session_id": "d1",
+        "submitted_at": 10,
+        "targets": [
+          "slot_3"
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "kind": "ItaSessionUpdated",
+      "payload": {
+        "counters": {
+          "global_shots_fired": 0,
+          "hits_landed": 0,
+          "per_shooter": {},
+          "per_target": {},
+          "shots_missed": 0,
+          "shots_resolved": 0
+        },
+        "global_shots_fired": 0,
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "queue_delta": 0,
+        "queue_length": 0,
+        "session_id": "d1",
+        "shots_resolved": 0
+      }
+    },
+    {
+      "index": 3,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [],
+        "majority": 2.0,
+        "reason": null,
+        "status": "NoLynch",
+        "tallies": {},
+        "thresholds": {
+          "slot_1": 2.0,
+          "slot_2": 2.0,
+          "slot_3": 2.0
+        },
+        "tiebreak": null,
+        "total_weight": 3.0,
+        "votes": {},
+        "weights": {
+          "slot_1": 1.0,
+          "slot_2": 1.0,
+          "slot_3": 1.0
+        },
+        "winner": null
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D01"
+      }
+    }
+  ],
+  "input": {
+    "game_id": "test_ita_buffered_001",
+    "pack": "test_ita_buffered",
+    "phase_id": "D01",
+    "seed": 910001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "ita_shooter",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "ita_buffered_001",
+        "actor": "slot_1",
+        "metadata": {
+          "ita_session_id": "d1"
+        },
+        "phase_id": "D01",
+        "submitted_at": 10,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "ita_shot",
+        "withdrawn": false
+      }
+    ]
+  }
+}

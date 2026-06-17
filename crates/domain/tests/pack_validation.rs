@@ -192,6 +192,11 @@ fn shipped_packs_validate() {
 }
 
 #[test]
+fn test_ita_buffered_pack_validates() {
+    validate_pack(&load_pack_named("test_ita_buffered")).unwrap();
+}
+
+#[test]
 fn death_reveal_policy_requires_v26_known_causes_and_effects() {
     let mut value = valid_pack_value();
     value["death_reveal"] = json!({
@@ -3041,7 +3046,7 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
     value["ita"] = json!({
         "default_hit_chance": 1.5,
         "sessions": [
-            { "session_id": "", "day": 0, "hit_chance": -0.1, "shot_limit": 0 },
+            { "session_id": "", "day": 0, "hit_chance": -0.1, "shot_limit": 0, "buffer_delay_ms": 0 },
             { "session_id": "d1" },
             { "session_id": "d1" }
         ]
@@ -3058,6 +3063,7 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
     assert_issue(&err, "ita.sessions[0].day", "greater than zero");
     assert_issue(&err, "ita.sessions[0].hit_chance", "between 0.0 and 1.0");
     assert_issue(&err, "ita.sessions[0].shot_limit", "greater than zero");
+    assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
     assert_issue(&err, "ita.sessions[2].session_id", "duplicate ITA session");
     assert_issue(
         &err,
@@ -3083,6 +3089,28 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
     action["ability"] = json!("ItaShot");
     action["mode"] = Value::Null;
     action["window"] = json!("Day");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn ita_session_buffer_delay_requires_v59_and_positive_delay() {
+    let mut value = serde_json::to_value(load_pack_named("test_ita_buffered")).unwrap();
+    value["ir_version"] = json!(58);
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 59",
+    );
+    assert_issue(&err, "ir_version", "ita.session.buffer_delay_ms");
+
+    value["ir_version"] = json!(59);
+    value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(0);
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
+
+    value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(1000);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 

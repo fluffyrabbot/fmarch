@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 58;
+pub const SUPPORTED_IR_VERSION: u16 = 59;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -1135,6 +1135,8 @@ pub struct ItaSessionSpec {
     pub shot_limit: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hit_chance: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub buffer_delay_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -3050,6 +3052,13 @@ fn validate_ita_policy(
                 issues,
                 format!("{session_path}.shot_limit"),
                 "ITA session shot_limit must be greater than zero",
+            );
+        }
+        if matches!(session.buffer_delay_ms, Some(0)) {
+            issue(
+                issues,
+                format!("{session_path}.buffer_delay_ms"),
+                "ITA session buffer_delay_ms must be greater than zero",
             );
         }
     }
@@ -8695,6 +8704,19 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if !pack.ita.modifier_components.is_empty() || !pack.ita.role_modifier_refs.is_empty() {
         require_ir(&mut required, &mut reasons, 32, "ita.modifier_components");
+    }
+    if pack
+        .ita
+        .sessions
+        .iter()
+        .any(|session| session.buffer_delay_ms.is_some())
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            59,
+            "ita.session.buffer_delay_ms",
+        );
     }
     if pack.wolf_beauty.enabled {
         require_ir(&mut required, &mut reasons, 12, "wolf_beauty");

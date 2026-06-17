@@ -239,7 +239,7 @@ unknown Rust events.
 | `ita.session.updated` | `ItaSessionUpdated` | implemented for resolved-shot counter snapshots |
 | `ita.session.closed` | `ItaSessionClosed` | implemented for auto-closing pack sessions |
 | `ita.shot.queued` | `ItaShotQueued` | implemented for accepted ITA shots |
-| `ita.shot.buffered` | `ItaShotBuffered` | canonical contract/import schema frozen; resolver buffering policy still pending |
+| `ita.shot.buffered` | `ItaShotBuffered` | implemented for pack-declared ITA session `buffer_delay_ms`; newly buffered shots defer same-pass queue/resolve/kill |
 | `ita.shot.invalidated` | `ItaShotInvalidated` | canonical contract/import schema frozen; resolver queue invalidation policy still pending |
 | `ita.shot.refunded` | `ItaShotRefunded` | canonical contract/import schema frozen; resolver refund policy still pending |
 | `ita.shot.resolved` | `ItaShotResolved` | implemented for deterministic hit/miss plus paired `PlayerKilled` on hit |

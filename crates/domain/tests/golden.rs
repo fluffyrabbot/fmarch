@@ -8159,6 +8159,21 @@ fn golden_ita_session_shot_limit_exhausted() {
 }
 
 #[test]
+fn golden_ita_session_buffered_shot() {
+    let golden = load_golden_in("test_ita_buffered", "ita_session_buffered_shot.json");
+    let got = run(&golden["input"], load_pack_named("test_ita_buffered"));
+    assert_events_eq(&got, &expected_events(&golden), "ita_session_buffered_shot");
+    assert!(
+        !got.iter().any(|event| event["kind"] == "ItaShotQueued"),
+        "newly buffered ITA shots must not enter the queue in the same pass"
+    );
+    assert!(
+        !got.iter().any(|event| event["kind"] == "ItaShotResolved"),
+        "newly buffered ITA shots must not resolve in the same pass"
+    );
+}
+
+#[test]
 fn golden_ita_chance_and_shields() {
     let golden = load_golden_in("mafia_universe", "ita_chance_and_shields.json");
     let got = run(

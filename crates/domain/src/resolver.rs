@@ -10065,6 +10065,7 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
     let mut counters_by_session: BTreeMap<String, ItaCounters> = BTreeMap::new();
     let mut opened = BTreeSet::new();
     let mut resolved_by_session: BTreeMap<String, u32> = BTreeMap::new();
+    let mut buffered_by_session: BTreeMap<String, u32> = BTreeMap::new();
 
     for (sub, template) in ordered {
         let Some(session) = ita_session_for_submission(input, sub) else {
@@ -10124,6 +10125,22 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
                 actor: sub.actor.clone(),
                 reason: "ita_target_dead".to_string(),
             });
+            continue;
+        }
+
+        if let Some(delay_ms) = session.buffer_delay_ms {
+            events.push(InnerEvent::ItaShotBuffered {
+                session_id: session.session_id.clone(),
+                action_id: sub.action_id.clone(),
+                actor_id: sub.actor.clone(),
+                targets: sub.targets.clone(),
+                submitted_at: sub.submitted_at,
+                release_at: sub.submitted_at.saturating_add(delay_ms),
+                delay_ms,
+            });
+            *buffered_by_session
+                .entry(session.session_id.clone())
+                .or_insert(0) += 1;
             continue;
         }
 
@@ -10252,21 +10269,27 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             .get(&session.session_id)
             .cloned()
             .unwrap_or_default();
+        let buffered = buffered_by_session
+            .get(&session.session_id)
+            .copied()
+            .unwrap_or(0);
+        let resolved = resolved_by_session
+            .get(&session.session_id)
+            .copied()
+            .unwrap_or(0);
+        let queue_length = counters.global_shots_fired.saturating_sub(resolved);
         events.push(InnerEvent::ItaSessionUpdated {
             session_id: session.session_id.clone(),
-            queue_length: 0,
-            queue_delta: -(counters.global_shots_fired as i32),
-            shots_resolved: resolved_by_session
-                .get(&session.session_id)
-                .copied()
-                .unwrap_or(0),
+            queue_length,
+            queue_delta: queue_length as i32 - counters.global_shots_fired as i32,
+            shots_resolved: resolved,
             global_shots_fired: counters.global_shots_fired,
             counters: counters.clone(),
             phase_id: input.phase_id.clone(),
             phase_kind: input.state.phase_kind,
             phase_number: input.state.phase_number,
         });
-        if input.pack.ita.auto_close {
+        if input.pack.ita.auto_close && buffered == 0 {
             events.push(InnerEvent::ItaSessionClosed {
                 session_id: session.session_id.clone(),
                 last_status: "open".to_string(),

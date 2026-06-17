@@ -2058,7 +2058,9 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    rebuilds; `vote_conflict: ResolveShotsBeforeVote` now makes ITA-before-vote policy pack-owned;
    v32 ITA modifier components/role refs add better/worse hit chance, target evade,
    one-shot shield blocking, and one composed evade+shield target with pure golden and
-   command/projection proof]
+   command/projection proof; v59 `ItaSessionSpec.buffer_delay_ms` emits `ItaShotBuffered` and
+   defers same-pass queue/resolve/kill with pure golden plus command/projection rebuild proof;
+   release-time replay, invalidation, and refund remain pending]
 5. Last words and day announcements. [partly done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; `mafia_universe` golden plus Postgres command/projection rebuild proof]

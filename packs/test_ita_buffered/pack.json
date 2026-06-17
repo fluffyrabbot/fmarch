@@ -1,0 +1,94 @@
+{
+  "name": "test_ita_buffered",
+  "version": 1,
+  "ir_version": 59,
+  "roles": {
+    "ita_shooter": {
+      "description": "Test ITA participant whose session buffers shots before release.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "ita_shot",
+          "ability": "ItaShot",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 80,
+            "x_shots": null
+          }
+        }
+      ]
+    },
+    "vanilla_townie": {
+      "description": "Town-aligned test role with no actions.",
+      "alignment": "town",
+      "actions": []
+    },
+    "mafia_goon": {
+      "description": "Mafia-aligned test role with no actions.",
+      "alignment": "mafia",
+      "actions": []
+    }
+  },
+  "precedence": [],
+  "visibility": {},
+  "redirects": {
+    "order": [],
+    "loop_cap": 8,
+    "tie_breaker": "Stable"
+  },
+  "triggers": [],
+  "vote": {
+    "method": "Majority",
+    "no_lynch_allowed": true,
+    "self_vote_allowed": false,
+    "hammer": false,
+    "weights": "Equal",
+    "threshold_adjustments": {},
+    "tie_breaker": "NoElimination"
+  },
+  "phases": {
+    "cadence": ["Day", "Night"],
+    "subsegments": {
+      "Day": ["ita_sessions", "main", "eod"]
+    },
+    "twilight": false
+  },
+  "ita": {
+    "default_hit_chance": 1.0,
+    "auto_close": true,
+    "vote_conflict": "ResolveShotsBeforeVote",
+    "sessions": [
+      {
+        "session_id": "d1",
+        "label": "Day 1 Buffered ITA",
+        "day": 1,
+        "window": "ita_sessions",
+        "shot_limit": 1,
+        "hit_chance": 1.0,
+        "buffer_delay_ms": 1000
+      }
+    ]
+  },
+  "win_families": [
+    "FactionElimination",
+    "FactionParity"
+  ],
+  "win": {
+    "rules": [
+      {
+        "winner": "town",
+        "when": { "FactionEliminated": "mafia" }
+      },
+      {
+        "winner": "mafia",
+        "when": { "FactionReachesParity": "mafia" }
+      }
+    ]
+  }
+}

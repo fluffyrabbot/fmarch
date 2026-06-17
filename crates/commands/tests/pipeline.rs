@@ -21056,6 +21056,229 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: PgPool) {
+    let host = "host_ita_buffered";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "test_ita_buffered".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "ita_shooter"),
+        ("slot_2", "user_2", "vanilla_townie"),
+        ("slot_3", "user_3", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "ita_buffered_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "ita_shot".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("submit buffered ITA action");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 910001 })
+        .await
+        .expect("host resolves buffered ITA day");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("buffered ITA ResolutionApplied validates");
+    let buffered = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::ItaShotBuffered {
+                session_id,
+                action_id,
+                actor_id,
+                targets,
+                submitted_at,
+                release_at,
+                delay_ms,
+            } => Some((
+                indexed.index,
+                session_id.as_str(),
+                action_id.as_str(),
+                actor_id.as_str(),
+                targets.clone(),
+                *submitted_at,
+                *release_at,
+                *delay_ms,
+            )),
+            _ => None,
+        })
+        .expect("buffered ITA event emitted");
+    assert_eq!(buffered.1, "d1");
+    assert_eq!(buffered.2, "ita_buffered_001");
+    assert_eq!(buffered.3, "slot_1");
+    assert_eq!(buffered.4, vec!["slot_3".to_string()]);
+    assert_eq!(buffered.7, 1000);
+    assert_eq!(buffered.6.saturating_sub(buffered.5), 1000);
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::ItaShotQueued { .. })),
+        "newly buffered ITA shot must not queue in the same pass"
+    );
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::ItaShotResolved { .. })),
+        "newly buffered ITA shot must not resolve in the same pass"
+    );
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::PlayerKilled { .. })),
+        "newly buffered ITA shot must not kill in the same pass"
+    );
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaSessionUpdated {
+            session_id,
+            shots_resolved,
+            global_shots_fired,
+            ..
+        } if session_id == "d1" && *shots_resolved == 0 && *global_shots_fired == 0
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::ItaSessionClosed { session_id, .. } if session_id == "d1"
+        )),
+        "buffered session must remain open for a later release pass"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
+    let buffered_trace = trace
+        .generated
+        .iter()
+        .find(|generated| {
+            generated.source == "ItaShotBuffered"
+                && generated.action_id == "ita_buffered_001"
+                && generated.actor == "slot_1"
+        })
+        .expect("trace records buffered ITA shot");
+    assert_eq!(buffered_trace.targets, vec!["slot_3".to_string()]);
+    assert_eq!(buffered_trace.detail["delay_ms"], serde_json::json!(1000));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .unwrap()
+            .alive,
+        "buffered ITA target remains alive until a later release pass"
+    );
+    assert!(
+        action_counters(&pool, game)
+            .await
+            .unwrap()
+            .iter()
+            .all(|counter| counter.consumed_action != "ita_buffered_001"),
+        "buffered ITA shot is not counted as a consumed session shot before release"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve buffered ITA non-kill state"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted buffered ITA trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_ita_chance_overrides_and_shields(pool: PgPool) {
     let host = "host_ita_modifiers";
     let game = Uuid::new_v4();

@@ -199,7 +199,6 @@ RESULT_KIND_MAP = {
 }
 
 ITA_DEFERRED_SHOT_RESULT_KINDS = {
-    "ita.shot.buffered",
     "ita.shot.invalidated",
     "ita.shot.refunded",
 }
@@ -2417,7 +2416,35 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             implemented = bool(canonical and f"InnerEvent::{canonical}" in resolver)
             golden = name.lower() in goldens or (canonical and canonical.lower() in goldens)
             integrated = bool(canonical and (canonical in projections or canonical in command_tests))
-        if name in ITA_DEFERRED_SHOT_RESULT_KINDS:
+        if name == "ita.shot.buffered":
+            modeled = (
+                canonical in fmarch["events"]
+                and "buffer_delay_ms" in fmarch["pack_text"]
+                and "test_ita_buffered" in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "InnerEvent::ItaShotBuffered" in resolver
+                and "buffer_delay_ms" in resolver
+                and "ItaShotBuffered" in fmarch["domain_tests_text"]
+            )
+            golden = (
+                implemented
+                and "ita_session_buffered_shot"
+                in fmarch["golden_names_by_pack"].get("test_ita_buffered", set())
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_buffers_ita_shot_without_same_pass_resolution"
+                in command_tests
+                and "ItaShotBuffered" in command_tests
+            )
+            notes = (
+                "pack-declared ITA session buffer delay emits canonical `ItaShotBuffered` "
+                "and defers same-pass queue/resolve/kill; later release, invalidation, "
+                "and refund mechanics remain pending"
+            )
+        elif name in ITA_DEFERRED_SHOT_RESULT_KINDS:
             modeled = False
             implemented = False
             golden = False

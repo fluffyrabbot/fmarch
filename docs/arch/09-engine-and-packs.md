@@ -428,15 +428,17 @@ cadence_policy: "day_session", phase_scope: "session" }` before `ItaShotQueued`;
 `StateSnapshot.use_counters` and the rebuildable `action_counter` projection reject later
 same-session shots before they can queue. During `resolve_day`, accepted shots emit
 `ItaSessionOpened`, `ItaShotQueued`, `ItaShotResolved`, `ItaSessionUpdated`, and (when
-`auto_close`) `ItaSessionClosed`. A hit also emits ordinary
+`auto_close`) `ItaSessionClosed`. Sessions may also declare `buffer_delay_ms`; newly buffered
+shots emit `ItaShotBuffered { session_id, action_id, actor_id, targets, submitted_at, release_at,
+delay_ms }` and defer same-pass queue/resolve/kill output until a later release slice. A hit also emits ordinary
 `PlayerKilled { cause: "ita_shot" }`, so lethal ITA hits fold through the same state/projection
 path as lynches, night kills, and Knight duel deaths. `ResolveShotsBeforeVote` is the first
 Mafia Universe day-conflict policy: ITA deaths are folded before `DayVoteOutcome`, and an
 unvalidated ITA pack missing that declaration is rejected at the resolver seam rather than using
 implicit Rust ordering. The first vertical uses a tiny
 `mafia_universe` pack with a deterministic 50 percent D1 session and one shot per shooter;
-buffering, refund/invalidated shot policy, HP/shields, and vulnerability modifiers remain future
-ITA slices.
+refund/invalidated shot policy and release-time replay remain future ITA slices. HP/shields and
+vulnerability modifiers are covered by pack-owned ITA modifier components and role refs.
 
 `IrAbility::SelfDestruct` is the first v10 Chinese structured day-death addition. A
 `SelfDestruct` action carries `SelfDestructSpec { cause, kill_target, sacrifice_actor,
