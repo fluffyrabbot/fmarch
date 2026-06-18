@@ -15411,7 +15411,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
             if prompt.prompt_id == "D01:skip_next_day:slot_1"
                 && prompt.kind == "skip_next_day"
                 && prompt.subject.as_deref() == Some("slot_1")
-                && prompt.reason == "beloved_princess_lynched"
+                && prompt.reason == "beloved_princess_death"
                 && prompt.metadata["policy"] == "beloved_princess"
     )));
     assert!(matches!(
@@ -15432,7 +15432,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     assert_decision_trace(
         &trace,
         DecisionTraceExpectation {
-            stage: "day:lynch_trigger",
+            stage: "death:trigger",
             source: "slot:slot_1",
             outcome: "host_prompt_issued",
             detail: vec![
@@ -15440,7 +15440,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
                 ("prompt_id", serde_json::json!("D01:skip_next_day:slot_1")),
                 ("kind", serde_json::json!("skip_next_day")),
                 ("subject", serde_json::json!("slot_1")),
-                ("reason", serde_json::json!("beloved_princess_lynched")),
+                ("reason", serde_json::json!("beloved_princess_death")),
                 ("death_cause", serde_json::json!("lynch")),
                 ("role", serde_json::json!("beloved_princess")),
             ],
@@ -15452,7 +15452,7 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     assert_eq!(prompts[0].prompt_id, "D01:skip_next_day:slot_1");
     assert_eq!(prompts[0].kind, "skip_next_day");
     assert_eq!(prompts[0].subject_slot.as_deref(), Some("slot_1"));
-    assert_eq!(prompts[0].reason, "beloved_princess_lynched");
+    assert_eq!(prompts[0].reason, "beloved_princess_death");
     assert_eq!(prompts[0].metadata["policy"], "beloved_princess");
     let official = day_vote_outcomes(&pool, game)
         .await
@@ -15592,6 +15592,224 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite Beloved Princess trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_virgin_night_death_skip_prompt(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "mafia_goon"),
+        ("slot_2", "user_2", "virgin"),
+        ("slot_3", "user_3", "vanilla_townie"),
+        ("slot_4", "user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mafia_kills_virgin_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("mafia submits kill against Virgin");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 650001 })
+        .await
+        .expect("host resolves Virgin night-death prompt");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Virgin night-death result");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+            if slot_id == "slot_2" && cause == "factional_kill"
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::HostPromptIssued(prompt)
+            if prompt.prompt_id == "N01:skip_next_day:slot_2"
+                && prompt.kind == "skip_next_day"
+                && prompt.subject.as_deref() == Some("slot_2")
+                && prompt.reason == "beloved_princess_death"
+                && prompt.metadata["policy"] == "beloved_princess"
+                && prompt.metadata["death_cause"] == "factional_kill"
+                && prompt.metadata["role"] == "virgin"
+    )));
+    assert!(matches!(
+        applied.events.last().map(|indexed| &indexed.event),
+        Some(domain::InnerEvent::PhaseAnnouncement(_))
+    ));
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Virgin night-death trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "death:trigger",
+            source: "slot:slot_2",
+            outcome: "host_prompt_issued",
+            detail: vec![
+                ("policy", serde_json::json!("beloved_princess")),
+                ("prompt_id", serde_json::json!("N01:skip_next_day:slot_2")),
+                ("kind", serde_json::json!("skip_next_day")),
+                ("subject", serde_json::json!("slot_2")),
+                ("reason", serde_json::json!("beloved_princess_death")),
+                ("death_cause", serde_json::json!("factional_kill")),
+                ("role", serde_json::json!("virgin")),
+            ],
+        },
+    );
+
+    let prompts = host_prompts(&pool, game).await.unwrap();
+    assert_eq!(prompts.len(), 1);
+    assert_eq!(prompts[0].prompt_id, "N01:skip_next_day:slot_2");
+    assert_eq!(prompts[0].kind, "skip_next_day");
+    assert_eq!(prompts[0].subject_slot.as_deref(), Some("slot_2"));
+    assert_eq!(prompts[0].reason, "beloved_princess_death");
+    assert_eq!(prompts[0].metadata["role"], "virgin");
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let virgin = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_2")
+        .expect("Virgin projection");
+    assert!(!virgin.alive, "killed Virgin should be dead");
+    assert_eq!(virgin.role_key.as_deref(), Some("virgin"));
+
+    handle(
+        &pool,
+        &h,
+        Command::ResolveHostPrompt {
+            game,
+            prompt_id: "N01:skip_next_day:slot_2".into(),
+            decision: HostPromptDecision::Acknowledge {
+                metadata: serde_json::json!({
+                    "operator_note": "night death skips the following day"
+                }),
+            },
+        },
+    )
+    .await
+    .expect("host resolves Virgin skip-next-day prompt");
+
+    let phase = phase_state(&pool, game)
+        .await
+        .unwrap()
+        .expect("skip-next-day prompt should advance phase");
+    assert_eq!(phase.phase_id, "N02");
+    assert!(!phase.locked);
+
+    let phase_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
+         AND payload->>'source_prompt_id' = 'N01:skip_next_day:slot_2'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(phase_payload["phase_id"], "N02");
+    assert_eq!(phase_payload["source_phase_id"], "N01");
+    assert_eq!(phase_payload["skipped_phase_id"], "D02");
+    assert_eq!(phase_payload["reason"], "skip_next_day");
+
+    let prompts_before = serde_json::to_string(&host_prompts(&pool, game).await.unwrap()).unwrap();
+    let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
+    let phase_before = serde_json::to_string(&phase_state(&pool, game).await.unwrap()).unwrap();
+    rebuild(&pool, game)
+        .await
+        .expect("Virgin prompt projection rebuild");
+    assert_eq!(
+        prompts_before,
+        serde_json::to_string(&host_prompts(&pool, game).await.unwrap()).unwrap(),
+        "host_prompt rebuild must preserve Virgin prompt"
+    );
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Virgin death"
+    );
+    assert_eq!(
+        phase_before,
+        serde_json::to_string(&phase_state(&pool, game).await.unwrap()).unwrap(),
+        "phase_state rebuild must preserve Virgin skip-next-day transition"
     );
 }
 

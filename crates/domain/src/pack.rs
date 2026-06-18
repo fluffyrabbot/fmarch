@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 64;
+pub const SUPPORTED_IR_VERSION: u16 = 65;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -986,6 +986,8 @@ pub struct BelovedPrincessPolicy {
     pub enabled: bool,
     #[serde(default)]
     pub eligible_roles: Vec<RoleKey>,
+    #[serde(default)]
+    pub all_death_causes: bool,
     #[serde(default = "default_beloved_princess_prompt_kind")]
     pub prompt_kind: String,
     #[serde(default = "default_beloved_princess_prompt_reason")]
@@ -999,6 +1001,7 @@ impl Default for BelovedPrincessPolicy {
         Self {
             enabled: false,
             eligible_roles: Vec::new(),
+            all_death_causes: false,
             prompt_kind: default_beloved_princess_prompt_kind(),
             prompt_reason: default_beloved_princess_prompt_reason(),
             death_causes: default_beloved_princess_death_causes(),
@@ -7614,6 +7617,13 @@ fn validate_beloved_princess_policy(
             "enabled beloved princess policy requires ir_version >= 20",
         );
     }
+    if policy.all_death_causes && ir_version < 65 {
+        issue(
+            issues,
+            format!("{path}.all_death_causes"),
+            "beloved princess all-death trigger matching requires ir_version >= 65",
+        );
+    }
     if policy.eligible_roles.is_empty() {
         issue(
             issues,
@@ -7649,7 +7659,7 @@ fn validate_beloved_princess_policy(
             "beloved princess prompt_reason must not be empty",
         );
     }
-    if policy.death_causes.is_empty() {
+    if !policy.all_death_causes && policy.death_causes.is_empty() {
         issue(
             issues,
             format!("{path}.death_causes"),
@@ -9267,6 +9277,14 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if pack.beloved_princess_policy.enabled {
         require_ir(&mut required, &mut reasons, 20, "beloved_princess_policy");
     }
+    if pack.beloved_princess_policy.all_death_causes {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            65,
+            "beloved_princess_policy.all_death_causes",
+        );
+    }
     if !pack.day_vote_prompt_policies.is_empty() {
         require_ir(&mut required, &mut reasons, 21, "day_vote_prompt_policies");
     }
@@ -9915,6 +9933,17 @@ mod tests {
         let mut value = test_pack_value();
         value["beloved_princess_policy"] = json!({ "enabled": true });
         assert_versioned_pack_feature(value, 20, "beloved_princess_policy");
+
+        let mut value = test_pack_value();
+        value["beloved_princess_policy"] = json!({
+            "enabled": true,
+            "eligible_roles": ["townie"],
+            "all_death_causes": true,
+            "prompt_kind": "skip_next_day",
+            "prompt_reason": "beloved_princess_death",
+            "death_causes": []
+        });
+        assert_versioned_pack_feature(value, 65, "beloved_princess_policy.all_death_causes");
 
         let mut value = test_pack_value();
         value["day_vote_prompt_policies"] = json!([{

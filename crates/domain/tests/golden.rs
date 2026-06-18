@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 64);
+    assert_eq!(pack.ir_version, 65);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -304,6 +304,10 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("jailkeeper"));
     assert!(pack.roles.contains_key("catastrophic_roleblocker"));
     assert!(pack.roles.contains_key("beloved_princess"));
+    let virgin = pack.roles.get("virgin").expect("Mafiascum Virgin role");
+    assert_eq!(virgin.alignment.as_deref(), Some("town"));
+    assert!(virgin.actions.is_empty());
+    assert!(virgin.effects.is_empty());
     assert!(pack.roles.contains_key("executioner"));
     assert!(pack.roles.contains_key("condemner"));
     assert!(pack.roles.contains_key("cupid"));
@@ -318,7 +322,13 @@ fn pack_deserializes() {
         .iter()
         .any(|policy| policy.id == "beloved_princess_skip_next_day"
             && policy.prompt_kind == "skip_next_day"
-            && policy.prompt_reason == "beloved_princess_lynched"));
+            && policy.prompt_reason == "beloved_princess_death"));
+    assert!(pack.beloved_princess_policy.enabled);
+    assert!(pack.beloved_princess_policy.all_death_causes);
+    assert_eq!(
+        pack.beloved_princess_policy.eligible_roles,
+        vec!["beloved_princess".to_string(), "virgin".to_string()]
+    );
     assert!(pack
         .host_prompt_resolution_effects
         .iter()
@@ -5297,7 +5307,7 @@ fn trace_records_saulus_alignment_flip() {
         .iter()
         .find(|decision| decision.outcome == "saulus_alignment_flipped")
         .expect("Saulus lynch should emit an alignment-flip trace decision");
-    assert_eq!(decision.stage, "day:lynch_trigger");
+    assert_eq!(decision.stage, "death:trigger");
     assert_eq!(decision.source, "slot:slot_1");
     assert_eq!(decision.detail["target"], "slot_1");
     assert_eq!(decision.detail["role"], "saulus");
@@ -5314,6 +5324,17 @@ fn golden_beloved_princess_lynch_prompts_skip_day() {
         &got,
         &expected_events(&golden),
         "beloved_princess_lynch_prompts_skip_day",
+    );
+}
+
+#[test]
+fn golden_virgin_night_death_prompts_skip_day() {
+    let golden = load_golden("virgin_night_death_prompts_skip_day.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "virgin_night_death_prompts_skip_day",
     );
 }
 
@@ -5338,7 +5359,7 @@ fn trace_records_beloved_princess_host_prompt() {
     assert_eq!(decision.detail["prompt_id"], "D01:skip_next_day:slot_1");
     assert_eq!(decision.detail["kind"], "skip_next_day");
     assert_eq!(decision.detail["subject"], "slot_1");
-    assert_eq!(decision.detail["reason"], "beloved_princess_lynched");
+    assert_eq!(decision.detail["reason"], "beloved_princess_death");
     assert_eq!(decision.detail["death_cause"], "lynch");
     assert_eq!(decision.detail["role"], "beloved_princess");
 }

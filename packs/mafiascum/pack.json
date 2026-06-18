@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 64,
+  "ir_version": 65,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -2632,7 +2632,13 @@
       ]
     },
     "beloved_princess": {
-      "description": "Beloved Princess. If lynched, prompts the host to skip the next day.",
+      "description": "Beloved Princess. When killed, prompts the host to skip the next day.",
+      "alignment": "town",
+      "actions": [],
+      "effects": []
+    },
+    "virgin": {
+      "description": "Virgin. Alias of Beloved Princess; when killed, prompts the host to skip the next day.",
       "alignment": "town",
       "actions": [],
       "effects": []
@@ -4096,13 +4102,13 @@
   "beloved_princess_policy": {
     "enabled": true,
     "eligible_roles": [
-      "beloved_princess"
+      "beloved_princess",
+      "virgin"
     ],
+    "all_death_causes": true,
     "prompt_kind": "skip_next_day",
-    "prompt_reason": "beloved_princess_lynched",
-    "death_causes": [
-      "lynch"
-    ]
+    "prompt_reason": "beloved_princess_death",
+    "death_causes": []
   },
   "day_vote_prompt_policies": [
     {
@@ -4118,7 +4124,7 @@
     {
       "id": "beloved_princess_skip_next_day",
       "prompt_kind": "skip_next_day",
-      "prompt_reason": "beloved_princess_lynched",
+      "prompt_reason": "beloved_princess_death",
       "decision": "Acknowledge",
       "effect": "SkipNextDay"
     },

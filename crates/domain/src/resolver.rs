@@ -4538,7 +4538,9 @@ pub fn resolve(input: ResolutionInput) -> ResolutionOutput {
 /// `resolve_inner`; callers must pass only the instant submissions being committed.
 pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
     let mut events = Vec::new();
+    let mut trace_decisions = Vec::new();
     resolve_instant_self_destruct_actions(&input, &mut events);
+    resolve_beloved_princess_prompts(&input, &mut events, &mut trace_decisions);
     let deaths = deaths_from_events(&events);
     events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
@@ -4547,7 +4549,7 @@ pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
     let inner = InnerResolution {
         events,
         trace_edges: Vec::new(),
-        trace_decisions: Vec::new(),
+        trace_decisions,
         trace_notes: Vec::new(),
     };
     finalize_resolution(input, inner)
@@ -7741,6 +7743,8 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
 
     record_history_sensitive_actions(input, &actions, &mut events);
 
+    resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
+
     // ── Trailing PhaseAnnouncement ── every resolution ends with exactly one
     // PhaseAnnouncement listing the deaths it produced (empty if none); it is the
     // single canonical death-reveal signal (doc 10).
@@ -8927,7 +8931,9 @@ fn submission_has_exhausted_item_grant(input: &ResolutionInput, sub: &Submission
 
 fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
     let mut events = Vec::new();
+    let mut trace_decisions = Vec::new();
     resolve_self_destruct_actions(input, &mut events);
+    resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
     let deaths = deaths_from_events(&events);
     events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
@@ -8936,7 +8942,7 @@ fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
     InnerResolution {
         events,
         trace_edges: Vec::new(),
-        trace_decisions: Vec::new(),
+        trace_decisions,
         trace_notes: Vec::new(),
     }
 }
@@ -9276,13 +9282,6 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
                     cause: "lynch".to_string(),
                 });
                 resolve_last_words(input, &outcome, w, &mut events);
-                resolve_beloved_princess_prompt(
-                    input,
-                    w,
-                    "lynch",
-                    &mut events,
-                    &mut trace_decisions,
-                );
                 resolve_wolf_beauty_drag(
                     input,
                     w,
@@ -9336,6 +9335,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         });
     }
     apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
+    resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
     events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         deaths,
@@ -9942,12 +9942,7 @@ fn resolve_beloved_princess_prompt(
     trace_decisions: &mut Vec<DecisionTrace>,
 ) {
     let policy = &input.pack.beloved_princess_policy;
-    if !policy.enabled
-        || !policy
-            .death_causes
-            .iter()
-            .any(|candidate| candidate == cause)
-    {
+    if !policy.enabled || !beloved_princess_policy_matches_cause(policy, cause) {
         return;
     }
     let Some(slot) = input
@@ -9968,7 +9963,7 @@ fn resolve_beloved_princess_prompt(
 
     let prompt_id = format!("{}:{}:{}", input.phase_id, policy.prompt_kind, slot_id);
     trace_decisions.push(DecisionTrace {
-        stage: "day:lynch_trigger".to_string(),
+        stage: "death:trigger".to_string(),
         source: format!("slot:{slot_id}"),
         outcome: "host_prompt_issued".to_string(),
         detail: serde_json::json!({
@@ -9995,6 +9990,52 @@ fn resolve_beloved_princess_prompt(
             "role": slot.role_key,
         }),
     }));
+}
+
+fn resolve_beloved_princess_prompts(
+    input: &ResolutionInput,
+    events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
+) {
+    let policy = &input.pack.beloved_princess_policy;
+    if !policy.enabled {
+        return;
+    }
+    let mut seen_slots = BTreeSet::new();
+    let deaths = events
+        .iter()
+        .filter_map(|event| {
+            let InnerEvent::PlayerKilled { slot_id, cause, .. } = event else {
+                return None;
+            };
+            let canonical_cause = beloved_princess_death_cause(input, cause);
+            Some((slot_id.clone(), canonical_cause))
+        })
+        .filter(|(slot_id, _)| seen_slots.insert(slot_id.clone()))
+        .collect::<Vec<_>>();
+
+    for (slot_id, cause) in deaths {
+        resolve_beloved_princess_prompt(input, &slot_id, &cause, events, trace_decisions);
+    }
+}
+
+fn beloved_princess_death_cause(input: &ResolutionInput, cause: &str) -> String {
+    if input.state.phase_kind == PhaseKind::Day && cause == "day_vote" {
+        "lynch".to_string()
+    } else {
+        cause.to_string()
+    }
+}
+
+fn beloved_princess_policy_matches_cause(
+    policy: &crate::pack::BelovedPrincessPolicy,
+    cause: &str,
+) -> bool {
+    policy.all_death_causes
+        || policy
+            .death_causes
+            .iter()
+            .any(|candidate| candidate == cause)
 }
 
 fn resolve_day_vote_prompts(

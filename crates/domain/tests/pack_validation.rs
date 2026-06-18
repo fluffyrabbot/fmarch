@@ -1347,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 65");
+    assert_issue(&err, "ir_version", "unsupported IR version 66");
 }
 
 #[test]
@@ -1360,7 +1360,12 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 64",
+        "pack declares features requiring ir_version >= 65",
+    );
+    assert_issue(
+        &err,
+        "ir_version",
+        "beloved_princess_policy.all_death_causes",
     );
     assert_issue(&err, "ir_version", "private_channels");
     assert_issue(&err, "ir_version", "private_channels.excluded_roles");
@@ -5931,6 +5936,7 @@ fn beloved_princess_policy_requires_v20_roles_prompt_and_causes() {
     value["beloved_princess_policy"] = json!({
         "enabled": true,
         "eligible_roles": ["missing_role"],
+        "all_death_causes": true,
         "prompt_kind": "",
         "prompt_reason": "",
         "death_causes": ["lynch", "lynch", ""]
@@ -5938,6 +5944,11 @@ fn beloved_princess_policy_requires_v20_roles_prompt_and_causes() {
 
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(&err, "beloved_princess_policy", "requires ir_version >= 20");
+    assert_issue(
+        &err,
+        "beloved_princess_policy.all_death_causes",
+        "requires ir_version >= 65",
+    );
     assert_issue(
         &err,
         "beloved_princess_policy.eligible_roles",
@@ -5960,7 +5971,7 @@ fn beloved_princess_policy_requires_v20_roles_prompt_and_causes() {
         "must not be empty",
     );
 
-    value["ir_version"] = json!(20);
+    value["ir_version"] = json!(65);
     value["phases"]["cadence"] = json!(["Day", "Night"]);
     value["roles"]["beloved_princess"] = json!({
         "description": "Beloved Princess.",
@@ -5970,10 +5981,20 @@ fn beloved_princess_policy_requires_v20_roles_prompt_and_causes() {
     value["beloved_princess_policy"] = json!({
         "enabled": true,
         "eligible_roles": ["beloved_princess"],
+        "all_death_causes": true,
         "prompt_kind": "skip_next_day",
-        "prompt_reason": "beloved_princess_lynched",
-        "death_causes": ["lynch"]
+        "prompt_reason": "beloved_princess_death",
+        "death_causes": []
     });
+    value["host_prompt_resolution_effects"] = json!([{
+        "id": "beloved_princess_skip_next_day",
+        "prompt_kind": "skip_next_day",
+        "prompt_reason": "beloved_princess_death",
+        "decision": "Acknowledge",
+        "effect": "SkipNextDay"
+    }]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 
@@ -6107,8 +6128,10 @@ fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_prompt
 #[test]
 fn host_prompt_resolution_effects_must_cover_declared_prompt_producers() {
     let mut value = valid_pack_value();
-    value["ir_version"] = json!(22);
+    value["ir_version"] = json!(65);
     value["phases"]["cadence"] = json!(["Day", "Night"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     value["roles"]["beloved_princess"] = json!({
         "description": "Beloved Princess.",
         "alignment": "town",
@@ -6117,9 +6140,10 @@ fn host_prompt_resolution_effects_must_cover_declared_prompt_producers() {
     value["beloved_princess_policy"] = json!({
         "enabled": true,
         "eligible_roles": ["beloved_princess"],
+        "all_death_causes": true,
         "prompt_kind": "skip_next_day",
-        "prompt_reason": "beloved_princess_lynched",
-        "death_causes": ["lynch"]
+        "prompt_reason": "beloved_princess_death",
+        "death_causes": []
     });
     value["day_vote_prompt_policies"] = json!([
         {
@@ -6143,14 +6167,14 @@ fn host_prompt_resolution_effects_must_cover_declared_prompt_producers() {
     assert_issue(
         &err,
         "host_prompt_resolution_effects",
-        "missing resolution effect for prompt skip_next_day:beloved_princess_lynched",
+        "missing resolution effect for prompt skip_next_day:beloved_princess_death",
     );
 
     value["host_prompt_resolution_effects"] = json!([
         {
             "id": "beloved_princess_skip_next_day",
             "prompt_kind": "skip_next_day",
-            "prompt_reason": "beloved_princess_lynched",
+            "prompt_reason": "beloved_princess_death",
             "decision": "Acknowledge",
             "effect": "SkipNextDay"
         },

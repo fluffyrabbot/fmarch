@@ -949,7 +949,7 @@ fn host_prompt_payload_passes_contract_validation() {
                     "prompt_id": "D01:skip_next_day:slot_1",
                     "kind": "skip_next_day",
                     "subject": "slot_1",
-                    "reason": "beloved_princess_lynched",
+                    "reason": "beloved_princess_death",
                     "phase_id": "D01",
                     "phase_kind": "Day",
                     "phase_number": 1,

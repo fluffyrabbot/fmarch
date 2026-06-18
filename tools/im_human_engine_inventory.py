@@ -1198,7 +1198,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         elif name == "beloved_princess":
             canonical = "HostPromptIssued"
             modeled = "mafiascum:beloved_princess_policy" in fmarch["pack_policies"]
-            implemented = modeled and "resolve_beloved_princess_prompt" in resolver
+            implemented = modeled and "resolve_beloved_princess_prompts" in resolver
         elif name == "vanillaize":
             canonical = "Convert::AssignRole"
             modeled = "mafiascum:vanillaize" in fmarch["pack_actions"]
@@ -1228,7 +1228,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             )
             implemented = (
                 modeled
-                and "resolve_beloved_princess_prompt" in resolver
+                and "resolve_beloved_princess_prompts" in resolver
                 and "ResolveHostPrompt" in commands
                 and "PhaseAdvanced" in commands
                 and "host_phase_control" in projections
@@ -1440,7 +1440,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             )
         elif name == "phase_skip":
             golden = (
-                "beloved_princess_lynched" in goldens
+                "beloved_princess_death" in goldens
                 and "hostpromptissued" in goldens
                 and "skip_next_day" in goldens
             )
@@ -2727,6 +2727,41 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "as a mafia-aligned passive role with no actions, counts it "
                 "through ordinary faction parity, and excludes it from "
                 "FactionDayChat via private_channels.excluded_roles."
+            )
+        elif scoped_name == "mafiascum:virgin":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum", set()
+            )
+            canonical = "beloved_princess_policy"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafiascum:beloved_princess_policy" in fmarch["pack_policies"]
+                and '"eligible_roles": [' in fmarch["pack_text"]
+                and '"virgin"' in fmarch["pack_text"]
+                and '"all_death_causes": true' in fmarch["pack_text"]
+                and '"prompt_reason": "beloved_princess_death"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "resolve_beloved_princess_prompts" in resolver
+                and "beloved_princess_policy_matches_cause" in resolver
+                and "all_death_causes" in resolver
+                and "death:trigger" in resolver
+            )
+            golden = (
+                implemented
+                and "virgin_night_death_prompts_skip_day" in mafiascum_golden_names
+            )
+            integrated = (
+                golden
+                and "host_resolve_phase_projects_virgin_night_death_skip_prompt"
+                in command_tests
+            )
+            notes = (
+                "im-human Virgin is an alias of Beloved Princess with public "
+                "phase_skip_trigger on death; fmarch models it as a town "
+                "passive role included in beloved_princess_policy with "
+                "all_death_causes and host prompt/projection coverage."
             )
         elif scoped_name == "mafiascum:encryptor":
             canonical = "private_channels:FactionDayChat"
