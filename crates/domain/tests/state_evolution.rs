@@ -774,6 +774,7 @@ fn apply_action_granted_extends_grants() {
         &state,
         &[InnerEvent::ActionGranted {
             grant_id: "extra_action".to_string(),
+            grant_option: None,
             kind: GrantKind::ExtraAction,
             actor: "a".to_string(),
             target: "b".to_string(),
@@ -815,6 +816,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
         action_grants: vec![
             domain::state::ActionGrantRecord {
                 grant_id: "extra_action".to_string(),
+                grant_option: None,
                 kind: GrantKind::ExtraAction,
                 actor: "a".to_string(),
                 target: "b".to_string(),
@@ -827,6 +829,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
             },
             domain::state::ActionGrantRecord {
                 grant_id: "extra_action".to_string(),
+                grant_option: None,
                 kind: GrantKind::ExtraAction,
                 actor: "a".to_string(),
                 target: "b".to_string(),

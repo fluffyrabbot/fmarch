@@ -105,6 +105,8 @@ pub enum InnerEvent {
     },
     ActionGranted {
         grant_id: Tag,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        grant_option: Option<Tag>,
         kind: GrantKind,
         actor: SlotId,
         target: SlotId,

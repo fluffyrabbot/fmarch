@@ -955,7 +955,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
         result_version: domain::RESULT_VERSION,
         seed: 100,
         counts: ResolutionCounts {
-            events: 3,
+            events: 4,
             kills: 0,
             saves: 0,
         },
@@ -964,6 +964,7 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                 index: 0,
                 event: InnerEvent::ActionGranted {
                     grant_id: "extra_action".into(),
+                    grant_option: None,
                     kind: GrantKind::ExtraAction,
                     actor: "slot_1".into(),
                     target: "slot_2".into(),
@@ -988,7 +989,23 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
                     remaining_uses: 0,
                 },
             },
-            empty_phase_announcement(2, "N01"),
+            IndexedEvent {
+                index: 2,
+                event: InnerEvent::ActionGranted {
+                    grant_id: "parity_scanner_item".into(),
+                    grant_option: Some("parity_scanner_item".into()),
+                    kind: GrantKind::Item,
+                    actor: "slot_3".into(),
+                    target: "slot_4".into(),
+                    source_action: "grant_item_n01".into(),
+                    uses: 1,
+                    vote_weight: None,
+                    phase_id: "N01".into(),
+                    phase_kind: PhaseKind::Night,
+                    phase_number: 1,
+                },
+            },
+            empty_phase_announcement(3, "N01"),
         ],
         started_at: 10,
         finished_at: 11,
@@ -1009,13 +1026,24 @@ async fn action_grant_projection_records_and_rebuilds(pool: sqlx::PgPool) {
     .unwrap();
 
     let before = action_grants(&pool, game).await.unwrap();
-    assert_eq!(before.len(), 1);
+    assert_eq!(before.len(), 2);
     assert_eq!(before[0].slot_id, "slot_2");
     assert_eq!(before[0].grant_id, "extra_action");
+    assert_eq!(before[0].grant_option, None);
     assert_eq!(before[0].kind, "ExtraAction");
     assert_eq!(before[0].source_slot, "slot_1");
     assert_eq!(before[0].source_action, "motivate_n01");
     assert_eq!(before[0].uses, 0);
+    assert_eq!(before[1].slot_id, "slot_4");
+    assert_eq!(before[1].grant_id, "parity_scanner_item");
+    assert_eq!(
+        before[1].grant_option.as_deref(),
+        Some("parity_scanner_item")
+    );
+    assert_eq!(before[1].kind, "Item");
+    assert_eq!(before[1].source_slot, "slot_3");
+    assert_eq!(before[1].source_action, "grant_item_n01");
+    assert_eq!(before[1].uses, 1);
 
     let before_json = serde_json::to_string(&before).unwrap();
     rebuild(&pool, game).await.unwrap();

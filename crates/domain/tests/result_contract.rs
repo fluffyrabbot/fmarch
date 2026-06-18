@@ -1569,12 +1569,13 @@ fn action_granted_payload_passes_contract_validation() {
                 "index": 0,
                 "kind": "ActionGranted",
                 "payload": {
-                    "grant_id": "extra_action",
-                    "kind": "ExtraAction",
+                    "grant_id": "parity_scanner_item",
+                    "grant_option": "parity_scanner_item",
+                    "kind": "Item",
                     "actor": "slot_1",
                     "target": "slot_2",
                     "uses": 1,
-                    "source_action": "motivate_n01",
+                    "source_action": "grant_item_n01",
                     "phase_id": "N01",
                     "phase_kind": "Night",
                     "phase_number": 1

@@ -40497,6 +40497,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
     assert!(grants.iter().any(|grant| {
         grant.slot_id == "slot_3"
             && grant.grant_id == "parity_scanner_item"
+            && grant.grant_option.as_deref() == Some("parity_scanner_item")
             && grant.kind == "Item"
             && grant.source_slot == "slot_1"
             && grant.source_action == "mu_town_grant_item_n01"
@@ -40505,6 +40506,7 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
     assert!(grants.iter().any(|grant| {
         grant.slot_id == "slot_4"
             && grant.grant_id == "bulletproof_vest_item"
+            && grant.grant_option.as_deref() == Some("bulletproof_vest_item")
             && grant.kind == "Item"
             && grant.source_slot == "slot_2"
             && grant.source_action == "mu_mafia_grant_item_n01"
@@ -40790,6 +40792,16 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         spent_grants.iter().all(|grant| grant.uses == 0),
         "ActionGrantConsumed should decrement both MU inventor item grants"
     );
+    assert!(spent_grants.iter().any(|grant| {
+        grant.slot_id == "slot_3"
+            && grant.grant_id == "parity_scanner_item"
+            && grant.grant_option.as_deref() == Some("parity_scanner_item")
+    }));
+    assert!(spent_grants.iter().any(|grant| {
+        grant.slot_id == "slot_4"
+            && grant.grant_id == "bulletproof_vest_item"
+            && grant.grant_option.as_deref() == Some("bulletproof_vest_item")
+    }));
     let counters = action_counters(&pool, game).await.unwrap();
     assert!(counters.iter().any(|counter| {
         counter.slot_id == "slot_3"
@@ -40875,6 +40887,47 @@ async fn host_resolve_phase_carries_mafia_universe_inventor_item_grants_and_spen
         serde_json::to_string(&player_notifications(&pool, game).await.unwrap()).unwrap(),
         "player_notification rebuild must preserve MU inventor private notices"
     );
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "N03".into(),
+        },
+    )
+    .await
+    .expect("open post-rebuild phase for stale item validation");
+    let err = handle(
+        &pool,
+        &user("mu_inventor_user_3"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_item_stale_after_rebuild_n03".into(),
+            actor_slot: "slot_3".into(),
+            template_id: "parity_scanner_item".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: Some("parity_scanner_item".into()),
+        },
+    )
+    .await
+    .expect_err("spent MU item grant must reject after projection rebuild");
+    assert_eq!(err, Reject::InvalidTarget);
+    let err = handle(
+        &pool,
+        &user("mu_inventor_user_3"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_item_mismatched_after_rebuild_n03".into(),
+            actor_slot: "slot_3".into(),
+            template_id: "parity_scanner_item".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: Some("bulletproof_vest_item".into()),
+        },
+    )
+    .await
+    .expect_err("mismatched MU item grant selection must reject after projection rebuild");
+    assert_eq!(err, Reject::InvalidTarget);
 
     let audit = audit_resolution_envelopes(&pool, game)
         .await

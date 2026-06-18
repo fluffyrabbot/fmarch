@@ -343,11 +343,12 @@ folded visit ledger and returns `{ "prior_motion": bool }`, true when the target
 or received a prior visible visit. Ordinary `Motion` remains a same-resolution graph query.
 
 `IrAbility::Grant` is the first v2 IR addition. A `Grant` action carries `GrantSpec {
-grant_id, kind, uses, visibility }`, where `kind` is `ExtraAction` or `Item`. The resolver
-emits state-bearing `ActionGranted` plus a private/player-facing `EffectNotification` when
-the grant visibility is non-hidden. The grant is folded into `StateSnapshot.action_grants`
-and the rebuildable `action_grant` projection. `SubmitAction.grant_id` spends generated
-extra actions and generated items explicitly; `ActionGrantConsumed` decrements
+grant_id, kind, uses, visibility }`, where `kind` is `ExtraAction` or `Item`; selectable grants
+declare pack-owned `grant_options`. The resolver emits state-bearing `ActionGranted` plus a
+private/player-facing `EffectNotification` when the grant visibility is non-hidden. For selectable
+grants, `ActionGranted.grant_option` records the chosen option, and that fact is folded into
+`StateSnapshot.action_grants` and the rebuildable `action_grant` projection. `SubmitAction.grant_id`
+spends generated extra actions and generated items explicitly; `ActionGrantConsumed` decrements
 folded/projected remaining uses. Item spends also emit
 `ActionUseCounted { counter_id: "inventory:<grant_id>", cadence_policy: "inventory",
 phase_scope: "grant" }`, so generated inventories share the typed `action_counter` surface with
@@ -1863,9 +1864,11 @@ struct ActionCounterRecord {
 
 struct ActionGrantRecord {
     grant_id: Tag,
+    grant_option: Option<Tag>,
     kind: GrantKind,                // ExtraAction | Item
     actor: SlotId,                  // source slot that created the grant
     target: SlotId,                 // slot receiving the generated capability/item
+    source_action: ActionId,
     uses: u16,
     phase_id: PhaseId,
     phase_kind: PhaseKind,

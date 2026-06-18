@@ -162,8 +162,8 @@ enum InnerEvent {
     // ── Persistent effects (Mark/Clear) ──
     EffectsMarked,          // { effect, target, actor }
     EffectsCleared,         // { effect, targets, actor }
-    ActionGranted,          // { grant_id, kind, actor, target, uses, phase_id, phase_kind, phase_number }
-    ActionGrantConsumed,    // { grant_id, actor, action_id, phase_id, phase_kind, phase_number, remaining_uses }
+    ActionGranted,          // { grant_id, grant_option?, kind, actor, target, source_action, uses, phase_id, phase_kind, phase_number }
+    ActionGrantConsumed,    // { grant_id, actor, action_id, source_action, phase_id, phase_kind, phase_number, remaining_uses }
     BadgeChanged,           // { badge_id, owner, previous_owner, vote_weight, actor, source_action, reason, destroyed, phase_id, phase_kind, phase_number }
     DuelResolved,           // { knight, target, result, killed, source_action, phase_id, phase_kind, phase_number }
     WolfSelfDestructed,     // { wolf_id, target_id, cause, unstoppable, source_action, phase_id, phase_kind, phase_number }

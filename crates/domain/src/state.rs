@@ -207,6 +207,8 @@ pub struct VisitRecord {
 #[serde(deny_unknown_fields)]
 pub struct ActionGrantRecord {
     pub grant_id: Tag,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grant_option: Option<Tag>,
     pub kind: GrantKind,
     pub actor: SlotId,
     pub target: SlotId,
@@ -687,6 +689,7 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
             }
             InnerEvent::ActionGranted {
                 grant_id,
+                grant_option,
                 kind,
                 actor,
                 target,
@@ -699,6 +702,7 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
             } => {
                 next.action_grants.push(ActionGrantRecord {
                     grant_id: grant_id.clone(),
+                    grant_option: grant_option.clone(),
                     kind: *kind,
                     actor: actor.clone(),
                     target: target.clone(),

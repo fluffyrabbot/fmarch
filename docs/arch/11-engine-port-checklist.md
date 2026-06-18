@@ -2000,9 +2000,10 @@ round-trip state folds.
    `mafia_inventor`, and `grant_item` now use one canonical Grant action with v42 pack-owned
    `grant_options` for `parity_scanner_item` and `bulletproof_vest_item`; command submission
    rejects missing/unknown selections, selected options produce alignment-specific pure grant
-   goldens, parity scanner spend/exhaustion goldens, a vest mark golden, and a Postgres
-   private-notification/spend/inventory-counter/effect/trace/rebuild vertical; richer item UX
-   remains pending]
+   goldens, selected `grant_option` persists through `ActionGranted`, `StateSnapshot.action_grants`,
+   the `action_grant` projection, and projection rebuild, parity scanner spend/exhaustion goldens,
+   a vest mark golden, and a Postgres private-notification/spend/inventory-counter/effect/trace/
+   rebuild vertical that rejects stale and mismatched item selections after rebuild]
 4. Conversion/deprogramming/backup inheritance. [done for conversion origin memory,
    vanillaize as `Convert::AssignRole`, helper-enforced command trace decisions for hand-built
    cult conversion, dead-target/pending-death/loyal conversion blocks, vanillaize assignment, and
@@ -2254,7 +2255,8 @@ without recomputing rules client-side.
    `grant_item` are now modeled through one canonical Grant action with v42 pack-owned
    `grant_options` for `parity_scanner_item` and `bulletproof_vest_item`, explicit
    `SubmitAction.grant_id` selection, pure grant/spend/exhaustion/vest-mark goldens, and a Postgres
-   missing/unknown-selection/private-notification/inventory-counter/effect/trace/rebuild vertical; MU
+   missing/unknown-selection/private-notification/inventory-counter/effect/trace/rebuild vertical
+   with selected `grant_option` projection and post-rebuild stale/mismatched-selection rejection; MU
    `town_fruit_vendor`, `mafia_fruit_vendor`, Mafia Universe `send_fruit`, and Mafiascum
    `fruit_vendor`/`send_fruit` are now modeled as target-visible resolution-scoped
    `fruit_received` Mark actions that emit private `EffectNotification`/`player_notification`
@@ -2278,7 +2280,7 @@ without recomputing rules client-side.
    `town_day_desperado`, `mafia_day_desperado`, `day_desperado`, and v41
    `alignment_failback` are now modeled as pre-vote Day kills that kill hostile targets or
    self-kill on non-hostile targets, with pure success/failback coverage and a Postgres D01
-   trace/thread/rebuild vertical. Richer MU item-selection UX remains pending.]
+   trace/thread/rebuild vertical.]
 2. Chinese structured werewolf. [partly done: Prophet `investigate_alignment` now has
    linter coverage, good/evil goldens, parity-matrix coverage, result-schema coverage via
    `InvestigationResult`, and a command/projection rebuild vertical; Cupid `link_lovers`
@@ -2925,9 +2927,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by closing the remaining generated-capability UX gap for richer item selection.
-Make item-grant selection a first-class command/projection surface instead of only resolver
-metadata: persist the selected `grant_option`, expose enough host/player projection state to inspect
-which item was granted without replaying the trace, reject stale or mismatched selections after
-rebuild, and prove the Mafia Universe inventor path through private notification, inventory counter,
-effect fold, trace inspection, and projection rebuild before updating this checklist again.
+Continue Phase 4 by shrinking the remaining trigger-fixpoint partial row with one bounded generated
+death chain: model one unresolved linked/hostile dependency such as lovers, babysitter, or hider in
+pack data, add the pure golden that exercises the generated observation, and prove the command/
+projection replay path rebuilds the resulting deaths and trace without broadening into every
+remaining trigger family at once.

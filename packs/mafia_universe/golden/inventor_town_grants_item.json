@@ -62,6 +62,7 @@
       "kind": "ActionGranted",
       "payload": {
         "grant_id": "parity_scanner_item",
+        "grant_option": "parity_scanner_item",
         "kind": "Item",
         "actor": "slot_1",
         "target": "slot_2",

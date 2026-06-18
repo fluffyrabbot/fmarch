@@ -205,6 +205,7 @@ pub struct ActionGrantRow {
     pub game_id: Uuid,
     pub slot_id: String,
     pub grant_id: String,
+    pub grant_option: Option<String>,
     pub kind: String,
     pub source_slot: String,
     pub source_action: String,
@@ -1124,6 +1125,7 @@ async fn fold_inner(
         }
         ActionGranted {
             grant_id,
+            grant_option,
             kind,
             actor,
             target,
@@ -1137,9 +1139,10 @@ async fn fold_inner(
             ensure_slot(tx, game_id, target).await?;
             sqlx::query(
                 "INSERT INTO action_grant \
-                 (game_id, slot_id, grant_id, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+                 (game_id, slot_id, grant_id, grant_option, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) \
                  ON CONFLICT (game_id, slot_id, grant_id, source_slot, source_action, phase_id) DO UPDATE SET \
+                 grant_option = EXCLUDED.grant_option, \
                  kind = EXCLUDED.kind, \
                  phase_kind = EXCLUDED.phase_kind, \
                  phase_number = EXCLUDED.phase_number, \
@@ -1149,6 +1152,7 @@ async fn fold_inner(
             .bind(game_id)
             .bind(target)
             .bind(grant_id)
+            .bind(grant_option)
             .bind(format!("{kind:?}"))
             .bind(actor)
             .bind(source_action)
@@ -1869,7 +1873,7 @@ pub async fn action_grants(
     game_id: Uuid,
 ) -> Result<Vec<ActionGrantRow>, ProjectionError> {
     let rows = sqlx::query(
-        "SELECT game_id, slot_id, grant_id, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight \
+        "SELECT game_id, slot_id, grant_id, grant_option, kind, source_slot, source_action, phase_id, phase_kind, phase_number, uses, vote_weight \
          FROM action_grant WHERE game_id = $1 \
          ORDER BY phase_number, phase_id, slot_id, grant_id, source_action, source_slot",
     )
@@ -1882,6 +1886,7 @@ pub async fn action_grants(
             game_id: r.get("game_id"),
             slot_id: r.get("slot_id"),
             grant_id: r.get("grant_id"),
+            grant_option: r.get("grant_option"),
             kind: r.get("kind"),
             source_slot: r.get("source_slot"),
             source_action: r.get("source_action"),

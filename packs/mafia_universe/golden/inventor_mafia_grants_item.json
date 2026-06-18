@@ -76,6 +76,7 @@
       "kind": "ActionGranted",
       "payload": {
         "grant_id": "bulletproof_vest_item",
+        "grant_option": "bulletproof_vest_item",
         "kind": "Item",
         "actor": "slot_1",
         "target": "slot_2",

@@ -5087,6 +5087,7 @@ fn build_trace(
             }
             InnerEvent::ActionGranted {
                 grant_id,
+                grant_option,
                 kind,
                 actor,
                 target,
@@ -5104,6 +5105,7 @@ fn build_trace(
                     targets: vec![target.clone()],
                     detail: serde_json::json!({
                         "kind": kind,
+                        "grant_option": grant_option,
                         "source_action": source_action,
                         "uses": uses,
                         "vote_weight": vote_weight,
@@ -6692,9 +6694,8 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     if actions[idx].blocked {
                         continue;
                     }
-                    let Some(grant) =
+                    let Some((grant, grant_option)) =
                         selected_grant_for_submission(actions[idx].template, actions[idx].sub)
-                            .cloned()
                     else {
                         continue;
                     };
@@ -6702,6 +6703,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     for target in actions[idx].targets.clone() {
                         events.push(InnerEvent::ActionGranted {
                             grant_id: grant.grant_id.clone(),
+                            grant_option: grant_option.clone(),
                             kind: grant.kind,
                             actor: actor.clone(),
                             target: target.clone(),
@@ -8985,18 +8987,20 @@ fn lookup_item_template<'a>(
     (template.id == sub.template_id).then_some(template)
 }
 
-fn selected_grant_for_submission<'a>(
-    template: &'a ActionTemplate,
+fn selected_grant_for_submission(
+    template: &ActionTemplate,
     sub: &Submission,
-) -> Option<&'a GrantSpec> {
+) -> Option<(GrantSpec, Option<String>)> {
     if template.grant_options.is_empty() {
-        return template.grant.as_ref();
+        return template.grant.clone().map(|grant| (grant, None));
     }
     let grant_id = sub.metadata.get("grant_id")?.as_str()?;
     template
         .grant_options
         .iter()
         .find(|grant| grant.grant_id == grant_id)
+        .cloned()
+        .map(|grant| (grant, Some(grant_id.to_string())))
 }
 
 fn submission_item_grant_id(input: &ResolutionInput, sub: &Submission) -> Option<String> {
