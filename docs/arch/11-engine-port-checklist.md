@@ -2446,8 +2446,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    Setup and legal action submission failures in those N01 replay lanes use the same shrink-backed
    wrapper. The Chinese Structured D01 generated replay lane now uses the same saved artifact/minimizer
    report path for setup, action/vote submission, resolve, result validation, event extraction, audit,
-   trace-count, anchored generated-row, and projection-rebuild failures; later culture-pack generated
-   replay lanes have not yet adopted it. This is a reusable
+   trace-count, anchored generated-row, and projection-rebuild failures. The Mafia Universe ITA
+   generated replay lane now uses the same shrink-backed path for setup, action submission, resolve,
+   result validation, event extraction, audit, trace-count, anchored generated-row, and projection-rebuild
+   failures. The Epicmafia D01 PK loop now emits minimizer-ready vote plus host-prompt fixtures, and
+   routes setup, vote submission, day resolve, prompt resolve, prompt payload validation, audit,
+   trace-count, anchored trace-decision, and projection-rebuild failures through saved shrink reports.
+   The Epicmafia N01 Bomb/Cult half of that generated test and `default_open` generated replay lanes
+   have not yet adopted it. This is a reusable
    artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
@@ -2466,14 +2472,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    legal command submissions, four queued shots, mixed deterministic hit/miss outcomes under the
    pack's 50 percent ITA policy, exact anchored hit/miss generated rows in `inspect_trace`, and
    the same audit trio. This Mafia Universe ITA lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its six fixed generated seeds. A fourth
    non-mafiascum lane now generates three Epicmafia D01 PK prompt cases and three
    Epicmafia N01 Bomb/Cult cases from fixed seeds, proving the same audit trio across host-prompt
    resolution and night action graphs; PK prompt issue/resolution, Bomb trigger note/generated
    rows, Bomb/Cult/Loyal inner-event rows, and Cult/Loyal conversion decisions now have exact
    anchored `inspect_trace` detail in that lane. This Epicmafia lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its six fixed generated seeds. A fifth
    non-mafiascum lane now generates three
    `default_open` N01 Guardian/Seer/Agent cases and three `default_open` D01
@@ -2766,6 +2772,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 persistent and generated-action systems by reusing the shrink-backed generated
-command/trace wrapper in the remaining generated culture-pack lanes. Start with the Epicmafia D01
-PK and Mafia Universe ITA generated replay lanes, then carry the same saved artifact/minimizer
-report path into `default_open` N01/D01 before adding new generated-action semantics.
+command/trace wrapper in the remaining generated culture-pack lanes. Start with the Epicmafia N01
+Bomb/Cult loop in `generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically`,
+then carry the same saved artifact/minimizer report path into `default_open` N01/D01 before adding
+new generated-action semantics.

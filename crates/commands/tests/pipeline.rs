@@ -12874,6 +12874,31 @@ async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: PgPool) {
+    let case = generated_epicmafia_pk_case(95_777);
+    let fixture_json = generated_epicmafia_pk_case_fixture_json(&case, case.seed + 47_000);
+    let fixture: serde_json::Value =
+        serde_json::from_str(&fixture_json).expect("Epicmafia PK fixture JSON parses");
+    assert_eq!(fixture["votes"].as_array().map_or(0, Vec::len), 4);
+    assert_eq!(
+        fixture["host_prompt_decision"]["prompt_id"],
+        serde_json::json!("D01:pk:Tie")
+    );
+
+    let artifacts = GeneratedShrinkArtifacts::new("generated-epicmafia-pk-d01-minimizer-ready");
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], true);
+    assert_eq!(report["original"]["resolution_audited"], 2);
+    assert_eq!(report["original"]["trace_count"], 2);
+    assert_eq!(report["original"]["projection_audit_ok"], true);
+    assert_eq!(report["reduction"]["replay_success"], true);
+    assert_eq!(report["write_reduced"]["promoted_success_fixture"], false);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -13797,33 +13822,40 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
         let case = generated_mafia_universe_ita_case(seed);
         let resolver_seed = seed + 46_000;
         let summary = generated_pack_case_summary(&case, "mafia_universe", "D01", resolver_seed);
+        let fixture_json =
+            generated_case_fixture_json(&case, "mafia_universe", "D01", resolver_seed);
+        let shrink_stem = format!("generated-mafia-universe-ita-d01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "mafia_universe".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create Mafia Universe generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| {
-            panic!("{summary}\ncreate Mafia Universe generated game failed: {err}")
-        });
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -13831,10 +13863,13 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                     slot: slot.clone(),
                     user: format!("mafia_universe_ita_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -13842,23 +13877,29 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "D01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start Mafia Universe D01 failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart Mafia Universe D01 failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "mafia_universe_ita_seed_{seed}_user_{}",
@@ -13872,17 +13913,18 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -13891,28 +13933,91 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Mafia Universe ITA graph failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\nMafia Universe ITA generated resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Mafia Universe ITA graph failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Mafia Universe ITA generated resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "D01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        assert!(
-            applied.events.len() < 200,
-            "{summary}\nMafia Universe ITA generated graph event count should stay bounded: {}",
-            applied.events.len()
-        );
-        assert!(
-            applied.events.iter().any(|indexed| matches!(
-                &indexed.event,
-                domain::InnerEvent::ItaSessionOpened { session_id, .. } if session_id == "d1"
-            )),
-            "{summary}\nMafia Universe ITA generated graph should open d1"
-        );
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if applied.events.len() >= 200 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Mafia Universe ITA generated graph event count should stay bounded: {}",
+                        applied.events.len()
+                    ),
+                )
+                .await
+            );
+        }
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                    &indexed.event,
+                    domain::InnerEvent::ItaSessionOpened { session_id, .. } if session_id == "d1"
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Mafia Universe ITA generated graph should open d1".to_string(),
+                )
+                .await
+            );
+        }
         let resolved: Vec<_> = applied
             .events
             .iter()
@@ -13941,76 +14046,196 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            resolved.len(),
-            case.actions.len(),
-            "{summary}\nevery generated ITA shot should resolve"
-        );
-        assert!(
-            resolved.iter().any(|(_, _, _, _, _, outcome, _, _, kill)| {
-                matches!(outcome, domain::ItaShotOutcome::Hit) && *kill
-            }),
-            "{summary}\ngenerated ITA case should include a hit"
-        );
-        assert!(
-            resolved.iter().any(|(_, _, _, _, _, outcome, _, _, kill)| {
-                matches!(outcome, domain::ItaShotOutcome::Miss) && !*kill
-            }),
-            "{summary}\ngenerated ITA case should include a miss"
-        );
-        assert!(
-            applied.events.iter().any(|indexed| matches!(
-                &indexed.event,
-                domain::InnerEvent::ItaSessionUpdated {
-                    session_id,
-                    shots_resolved,
-                    global_shots_fired,
-                    ..
-                } if session_id == "d1"
-                    && *shots_resolved == case.actions.len() as u32
-                    && *global_shots_fired == case.actions.len() as u32
-            )),
-            "{summary}\nMafia Universe ITA generated graph should update d1 counters"
-        );
-        assert!(
-            applied.events.iter().any(|indexed| matches!(
-                &indexed.event,
-                domain::InnerEvent::ItaSessionClosed { session_id, .. } if session_id == "d1"
-            )),
-            "{summary}\nMafia Universe ITA generated graph should close d1"
-        );
+        if resolved.len() != case.actions.len() {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "every generated ITA shot should resolve: expected {}, got {}",
+                        case.actions.len(),
+                        resolved.len()
+                    ),
+                )
+                .await
+            );
+        }
+        if !resolved.iter().any(|(_, _, _, _, _, outcome, _, _, kill)| {
+            matches!(outcome, domain::ItaShotOutcome::Hit) && *kill
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "generated ITA case should include a hit".to_string(),
+                )
+                .await
+            );
+        }
+        if !resolved.iter().any(|(_, _, _, _, _, outcome, _, _, kill)| {
+            matches!(outcome, domain::ItaShotOutcome::Miss) && !*kill
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "generated ITA case should include a miss".to_string(),
+                )
+                .await
+            );
+        }
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                    &indexed.event,
+                    domain::InnerEvent::ItaSessionUpdated {
+                        session_id,
+                        shots_resolved,
+                        global_shots_fired,
+                        ..
+                    } if session_id == "d1"
+                        && *shots_resolved == case.actions.len() as u32
+                        && *global_shots_fired == case.actions.len() as u32
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Mafia Universe ITA generated graph should update d1 counters".to_string(),
+                )
+                .await
+            );
+        }
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                    &indexed.event,
+                    domain::InnerEvent::ItaSessionClosed { session_id, .. } if session_id == "d1"
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Mafia Universe ITA generated graph should close d1".to_string(),
+                )
+                .await
+            );
+        }
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\nMafia Universe ITA generated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none Mafia Universe ITA generated phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped Mafia Universe ITA generated envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("Mafia Universe ITA generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited Mafia Universe ITA generated phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none Mafia Universe ITA generated trace"
-        );
-        let hit = resolved
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one Mafia Universe ITA generated trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
+        let hit = match resolved
             .iter()
             .find(|(_, _, _, _, _, outcome, _, _, kill)| {
                 matches!(outcome, domain::ItaShotOutcome::Hit) && *kill
-            })
-            .expect("generated ITA hit row");
-        assert_anchored_inspection_generated(
+            }) {
+            Some(hit) => hit,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "generated ITA hit row".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "D01",
@@ -14027,15 +14252,40 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                     "event_index": hit.0,
                 }),
             },
-            &summary,
-        );
-        let miss = resolved
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
+        let miss = match resolved
             .iter()
             .find(|(_, _, _, _, _, outcome, _, _, kill)| {
                 matches!(outcome, domain::ItaShotOutcome::Miss) && !*kill
-            })
-            .expect("generated ITA miss row");
-        assert_anchored_inspection_generated(
+            }) {
+            Some(miss) => miss,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "generated ITA miss row".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "D01",
@@ -14052,16 +14302,51 @@ async fn generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_determin
                     "event_index": miss.0,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\nMafia Universe ITA generated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Mafia Universe ITA generated projection rebuild audit drifted: {projection_audit:?}"
+                    ),
+                )
+                .await
+            );
+        }
     }
 }
 
@@ -14071,31 +14356,39 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
         let case = generated_epicmafia_pk_case(seed);
         let resolver_seed = seed + 47_000;
         let summary = generated_epicmafia_pk_case_summary(&case, resolver_seed);
+        let fixture_json = generated_epicmafia_pk_case_fixture_json(&case, resolver_seed);
+        let shrink_stem = format!("generated-epicmafia-pk-d01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "epicmafia".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create Epicmafia PK game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate Epicmafia PK game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -14103,10 +14396,13 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     slot: slot.clone(),
                     user: format!("epicmafia_pk_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -14114,23 +14410,29 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "D01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start Epicmafia PK day failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart Epicmafia PK day failed: {err}"));
+        .await;
 
         for vote in &case.votes {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "epicmafia_pk_seed_{seed}_user_{}",
@@ -14141,17 +14443,18 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     actor_slot: vote.actor_slot.clone(),
                     target: VoteTarget::Slot(vote.target_slot.clone()),
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit vote {} -> {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit vote {} -> {} failed",
                     vote.actor_slot, vote.target_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -14160,32 +14463,101 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Epicmafia PK day failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\nEpicmafia PK generated day resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Epicmafia PK day failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Epicmafia PK generated day resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "D01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        assert!(applied.events.iter().any(|indexed| matches!(
-            &indexed.event,
-            domain::InnerEvent::DayVoteOutcome(outcome)
-                if outcome.status == domain::VoteStatus::Tie
-                    && outcome.contenders == case.contenders
-                    && outcome.tiebreak.as_deref() == Some("HostDecides")
-        )));
-        assert!(applied.events.iter().any(|indexed| matches!(
-            &indexed.event,
-            domain::InnerEvent::HostPromptIssued(prompt)
-                if prompt.prompt_id == "D01:pk:Tie"
-                    && prompt.kind == "pk"
-                    && prompt.reason == "host_decides_tie"
-        )));
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::DayVoteOutcome(outcome)
+                    if outcome.status == domain::VoteStatus::Tie
+                        && outcome.contenders == case.contenders
+                        && outcome.tiebreak.as_deref() == Some("HostDecides")
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Epicmafia PK generated day should emit HostDecides tie outcome".to_string(),
+                )
+                .await
+            );
+        }
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::HostPromptIssued(prompt)
+                    if prompt.prompt_id == "D01:pk:Tie"
+                        && prompt.kind == "pk"
+                        && prompt.reason == "host_decides_tie"
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Epicmafia PK generated day should issue PK host prompt".to_string(),
+                )
+                .await
+            );
+        }
 
-        let prompt_ack = handle(
+        let prompt_ack = match handle(
             &pool,
             &host,
             Command::ResolveHostPrompt {
@@ -14197,14 +14569,40 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Epicmafia PK prompt failed: {err}"));
-        assert_eq!(
-            prompt_ack.stream_seqs.len(),
-            3,
-            "{summary}\nEpicmafia PK prompt resolution envelope triple"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Epicmafia PK prompt failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if prompt_ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Epicmafia PK prompt resolution envelope triple expected 3 stream seqs, got {}",
+                        prompt_ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
-        let prompt_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        let prompt_payload = match sqlx::query_scalar::<_, serde_json::Value>(
             "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
              AND payload->>'run_id' LIKE 'host-prompt:%' \
              ORDER BY stream_seq DESC LIMIT 1",
@@ -14212,47 +14610,143 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
         .bind(game)
         .fetch_one(&pool)
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nfetch PK prompt ResolutionApplied failed: {err}"));
+        {
+            Ok(payload) => payload,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("fetch PK prompt ResolutionApplied failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
         let prompt_applied =
-            domain::validate_resolution_json(&prompt_payload, domain::RESULT_VERSION)
-                .unwrap_or_else(|err| {
-                    panic!("{summary}\nPK prompt ResolutionApplied invalid: {err}")
-                });
-        assert!(prompt_applied.events.iter().any(|indexed| matches!(
-            &indexed.event,
-            domain::InnerEvent::PlayerKilled {
-                slot_id,
-                cause,
-                attackers,
-                unstoppable,
-            ..
-        } if slot_id == &case.selected_slot
-                && cause == "host_prompt:pk"
-                && attackers.is_empty()
-                && *unstoppable
-        )));
+            match domain::validate_resolution_json(&prompt_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("PK prompt ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if !prompt_applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id,
+                    cause,
+                    attackers,
+                    unstoppable,
+                ..
+            } if slot_id == &case.selected_slot
+                    && cause == "host_prompt:pk"
+                    && attackers.is_empty()
+                    && *unstoppable
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "Epicmafia PK prompt should kill selected slot".to_string(),
+                )
+                .await
+            );
+        }
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\nEpicmafia PK generated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 2,
-            "{summary}\nordinary day plus PK prompt audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped Epicmafia PK envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("Epicmafia PK generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 2 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected ordinary day plus PK prompt audited and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(trace_report.traces.len(), 2, "{summary}\ntwo PK traces");
-        assert_anchored_inspection_decision(
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 2 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("expected two PK traces, got {}", trace_report.traces.len()),
+                )
+                .await
+            );
+        }
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "D01",
@@ -14271,9 +14765,20 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "outcome_reason": null,
                 }),
             },
-            &summary,
-        );
-        assert_anchored_inspection_decision(
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "D01",
@@ -14293,16 +14798,51 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "resolved_by": "host_h",
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\nEpicmafia PK generated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Epicmafia PK generated projection rebuild audit drifted: {projection_audit:?}"
+                    ),
+                )
+                .await
+            );
+        }
     }
 
     for seed in [96_001_u64, 96_113, 96_227] {
@@ -15907,6 +16447,17 @@ fn generated_epicmafia_pk_case_summary(
     case: &GeneratedEpicmafiaPkCase,
     resolver_seed: u64,
 ) -> String {
+    let json = generated_epicmafia_pk_case_fixture_json(case, resolver_seed);
+    format!(
+        "generated D01 PK case generator_seed={}\nminimize_night_fixture JSON:\n{}",
+        case.seed, json
+    )
+}
+
+fn generated_epicmafia_pk_case_fixture_json(
+    case: &GeneratedEpicmafiaPkCase,
+    resolver_seed: u64,
+) -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "seed": resolver_seed,
         "pack": "epicmafia",
@@ -15923,16 +16474,15 @@ fn generated_epicmafia_pk_case_summary(
                 "target_slot": vote.target_slot,
             })
         }).collect::<Vec<_>>(),
+        "actions": [],
         "contenders": case.contenders,
         "selected_slot": case.selected_slot,
+        "host_prompt_decision": {
+            "prompt_id": "D01:pk:Tie",
+            "selected_slot": case.selected_slot,
+        },
     }))
-    .map(|json| {
-        format!(
-            "generated D01 PK case generator_seed={}\n{}",
-            case.seed, json
-        )
-    })
-    .expect("generated Epicmafia PK summary serializes")
+    .expect("generated Epicmafia PK fixture serializes")
 }
 
 fn generated_default_open_day_case_summary(

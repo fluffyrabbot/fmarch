@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, env, fs, path::Path};
 
 use caps::Principal;
-use commands::{audit_resolution_envelopes, handle, inspect_resolution_traces, Command};
+use commands::{
+    audit_resolution_envelopes, handle, inspect_resolution_traces, Command, HostPromptDecision,
+    VoteTarget,
+};
 use projections::audit_rebuild;
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -15,7 +18,11 @@ struct NightFixture {
     #[serde(default = "default_phase")]
     phase: String,
     roster: Vec<FixtureSlot>,
+    #[serde(default)]
+    votes: Vec<FixtureVote>,
     actions: Vec<FixtureAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host_prompt_decision: Option<FixtureHostPromptDecision>,
     #[serde(default)]
     expectations: FixtureExpectations,
 }
@@ -32,6 +39,18 @@ struct FixtureAction {
     template_id: String,
     action_id: String,
     targets: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FixtureVote {
+    actor_slot: String,
+    target_slot: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FixtureHostPromptDecision {
+    prompt_id: String,
+    selected_slot: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,6 +308,25 @@ async fn minimize_fixture(
     let mut changed = true;
     while changed {
         changed = false;
+        for index in 0..fixture.votes.len() {
+            let mut candidate = fixture.clone();
+            let removed = candidate.votes.remove(index);
+            let report = run_fixture(pool, &candidate).await;
+            if target.is_preserved_by(&report) {
+                fixture = candidate;
+                steps.push(ReductionStep {
+                    kind: "vote",
+                    removed: format!("{}->{}", removed.actor_slot, removed.target_slot),
+                    roster_len: fixture.roster.len(),
+                    action_len: fixture.actions.len(),
+                });
+                changed = true;
+                break;
+            }
+        }
+        if changed {
+            continue;
+        }
         for index in 0..fixture.actions.len() {
             let mut candidate = fixture.clone();
             let removed = candidate.actions.remove(index);
@@ -313,6 +351,11 @@ async fn minimize_fixture(
         for index in 0..fixture.roster.len() {
             let mut candidate = fixture.clone();
             let removed = candidate.roster.remove(index);
+            candidate.votes = candidate
+                .votes
+                .into_iter()
+                .filter(|vote| vote.actor_slot != removed.slot && vote.target_slot != removed.slot)
+                .collect();
             candidate.actions = candidate
                 .actions
                 .into_iter()
@@ -526,6 +569,32 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         }
     }
 
+    for vote in &fixture.votes {
+        if let Err(err) = handle(
+            pool,
+            &Principal::user(format!(
+                "fixture_user_{}",
+                slot_number(&vote.actor_slot).unwrap_or(0)
+            )),
+            Command::SubmitVote {
+                game,
+                actor_slot: vote.actor_slot.clone(),
+                target: VoteTarget::Slot(vote.target_slot.clone()),
+            },
+        )
+        .await
+        {
+            return failed(
+                FailureClass::Command,
+                format!(
+                    "submit vote {} -> {} failed: {err}",
+                    vote.actor_slot, vote.target_slot
+                ),
+                game,
+            );
+        }
+    }
+
     if let Err(err) = handle(
         pool,
         &host,
@@ -541,6 +610,31 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
             format!("resolve failed: {err}"),
             game,
         );
+    }
+
+    if let Some(decision) = &fixture.host_prompt_decision {
+        if let Err(err) = handle(
+            pool,
+            &host,
+            Command::ResolveHostPrompt {
+                game,
+                prompt_id: decision.prompt_id.clone(),
+                decision: HostPromptDecision::SelectSlot {
+                    slot: decision.selected_slot.clone(),
+                },
+            },
+        )
+        .await
+        {
+            return failed(
+                FailureClass::Resolve,
+                format!(
+                    "resolve host prompt {} selecting {} failed: {err}",
+                    decision.prompt_id, decision.selected_slot
+                ),
+                game,
+            );
+        }
     }
 
     let resolution_audit = match audit_resolution_envelopes(pool, game).await {
@@ -576,7 +670,12 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
             )
         }
     };
-    if trace_report.traces.len() != 1
+    let expected_trace_count = if fixture.host_prompt_decision.is_some() {
+        2
+    } else {
+        1
+    };
+    if trace_report.traces.len() != expected_trace_count
         || !trace_report.traces.iter().any(|trace| {
             trace.applied_stream_seq.is_some()
                 && trace
@@ -588,7 +687,10 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         return RunReport {
             ok: false,
             failure_class: Some(FailureClass::TraceInspection),
-            reason: Some("trace inspection missing anchored N01 trace".to_string()),
+            reason: Some(format!(
+                "trace inspection missing anchored trace set: expected {expected_trace_count}, got {}",
+                trace_report.traces.len()
+            )),
             game_id: Some(game),
             resolution_audited: Some(resolution_audit.audited),
             trace_count: Some(trace_report.traces.len()),
@@ -872,6 +974,7 @@ mod tests {
                     role: "mafia_goon".to_string(),
                 },
             ],
+            votes: Vec::new(),
             actions: vec![
                 FixtureAction {
                     actor_slot: "slot_1".to_string(),
@@ -886,6 +989,7 @@ mod tests {
                     targets: vec!["slot_1".to_string()],
                 },
             ],
+            host_prompt_decision: None,
             expectations: FixtureExpectations::default(),
         };
         let removed = FixtureSlot {
@@ -978,7 +1082,9 @@ mod tests {
             pack: default_pack(),
             phase: default_phase(),
             roster: Vec::new(),
+            votes: Vec::new(),
             actions: Vec::new(),
+            host_prompt_decision: None,
             expectations: FixtureExpectations {
                 inner_events: vec![ExpectedInnerEvent {
                     kind: "Trigger".to_string(),

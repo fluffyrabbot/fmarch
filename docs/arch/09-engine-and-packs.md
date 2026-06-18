@@ -1341,8 +1341,14 @@ reduced fixture path, preservation booleans, and reduction step count. Setup and
 submission failures in those N01 replay lanes use the same shrink-backed wrapper. The Chinese
 Structured D01 generated replay lane now uses the same saved artifact/minimizer report path for
 setup, action/vote submission, resolve, result validation, event extraction, audit, trace-count,
-anchored generated-row, and projection-rebuild failures. Later culture-pack generated replay lanes
-have not yet adopted this wrapper. A non-mafiascum generated
+anchored generated-row, and projection-rebuild failures. The Mafia Universe ITA generated replay
+lane now uses the same shrink-backed path for setup, action submission, resolve, result validation,
+event extraction, audit, trace-count, anchored generated-row, and projection-rebuild failures. The
+Epicmafia D01 PK loop now emits minimizer-ready vote plus host-prompt fixtures, and routes setup,
+vote submission, day resolve, prompt resolve, prompt payload validation, audit, trace-count,
+anchored trace-decision, and projection-rebuild failures through saved shrink reports. The
+Epicmafia N01 Bomb/Cult half of that generated test and `default_open` generated replay lanes have
+not yet adopted this wrapper. A non-mafiascum generated
 replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
@@ -1358,14 +1364,14 @@ which passed one filtered pipeline test across its six fixed generated seeds. A 
 generated lane now covers six fixed-seed D01 ITA sessions with legal command submissions, several
 queued shots, mixed deterministic hit/miss outcomes under the pack's 50 percent session policy,
 and the same audit trio. This manifest-listed Mafia Universe ITA lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its six fixed generated seeds. An Epicmafia
 generated lane now covers three fixed-seed D01 plurality ties that emit PK prompts and
 host-selected kills, plus three fixed-seed N01 Bomb/Cult graphs that
 submit Bomb-triggering mafia kills and plain/loyal cult recruits through legal commands, again
 requiring replay audit, trace inspection, and projection rebuild. This manifest-listed Epicmafia
 lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its six fixed generated seeds. `default_open` is the
 first copyright-free default candidate: a deliberately small Citizen/Guardian/Seer/Agent pack with a
 guardian-save plus seer-check N01 golden, majority-elimination D01 golden, command/projection
