@@ -260,6 +260,22 @@ fn pack_deserializes() {
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
     assert_eq!(bomb.effects, vec!["bomb".to_string()]);
+    let hero = pack.roles.get("hero").expect("Mafiascum Hero role");
+    assert_eq!(hero.alignment.as_deref(), Some("town"));
+    assert!(hero.actions.is_empty());
+    assert_eq!(hero.effects, vec!["hero".to_string()]);
+    let hero_trigger = pack
+        .triggers
+        .iter()
+        .find(|trigger| trigger.id == "hero_instigator_kill")
+        .expect("Hero VoteDuel trigger");
+    assert_eq!(hero_trigger.on, TriggerOn::Ability(IrAbility::VoteDuel));
+    assert_eq!(hero_trigger.produces.actor, ActorRef::Target);
+    assert_eq!(hero_trigger.produces.target, TargetRef::Actor);
+    assert!(hero_trigger
+        .produces
+        .modifiers
+        .contains(&domain::Modifier::Strongman));
     assert!(pack.roles.contains_key("cop"));
     assert!(pack.roles.contains_key("vanilla_cop"));
     assert!(pack.roles.contains_key("neapolitan"));
@@ -418,6 +434,7 @@ fn pack_deserializes() {
             "death_curse_retaliates",
             "death_mark_detonates",
             "factional_kill",
+            "hero_instigator_kill",
             "hunter_retaliate",
             "ignite",
             "janitor_kill",
@@ -7064,6 +7081,17 @@ fn golden_gladiator_vote_duel() {
     let golden = load_golden("gladiator_vote_duel.json");
     let got = run(&golden["input"], load_pack());
     assert_events_eq(&got, &expected_events(&golden), "gladiator_vote_duel");
+}
+
+#[test]
+fn golden_hero_instigator_kill_on_vote_duel() {
+    let golden = load_golden("hero_instigator_kill_on_vote_duel.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "hero_instigator_kill_on_vote_duel",
+    );
 }
 
 #[test]

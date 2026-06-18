@@ -8738,7 +8738,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     resolve_day_kill_actions(input, &mut events, &mut trace_decisions);
     require_ita_vote_conflict_policy(pack);
     resolve_ita_actions(input, &mut events);
-    resolve_duel_actions(input, &mut events);
+    resolve_duel_actions(input, &mut events, &mut trace_decisions, &mut trace_notes);
     let vote_state = apply_events(&input.state, &events);
     let pre_vote_deaths = deaths_from_events(&events);
     let vote_duel = resolve_vote_duel_action(input, &vote_state, &mut events);
@@ -9010,6 +9010,20 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
                     target_tags: Vec::new(),
                     actor_tags: Vec::new(),
                 });
+                if duel_forced_elimination {
+                    if let Some((challenger, source_action)) =
+                        vote_duel_instigator_for_target(&events, w)
+                    {
+                        trigger_frontier.push(TriggerObservation {
+                            on: TriggerOn::Ability(IrAbility::VoteDuel),
+                            target: w.clone(),
+                            actor: challenger,
+                            cause: source_action,
+                            target_tags: Vec::new(),
+                            actor_tags: Vec::new(),
+                        });
+                    }
+                }
                 deaths.push(Death {
                     slot_id: w.clone(),
                     cause: "lynch".to_string(),
@@ -9567,6 +9581,26 @@ fn resolve_vote_duel_action(
     }
 
     None
+}
+
+fn vote_duel_instigator_for_target(
+    events: &[InnerEvent],
+    killed: &SlotId,
+) -> Option<(SlotId, String)> {
+    events.iter().rev().find_map(|event| {
+        if let InnerEvent::VoteDuelDeclared {
+            challenger,
+            target,
+            source_action,
+            ..
+        } = event
+        {
+            if challenger == killed || target == killed {
+                return Some((challenger.clone(), source_action.clone()));
+            }
+        }
+        None
+    })
 }
 
 fn resolve_target_lynch_wins(
@@ -10721,7 +10755,12 @@ fn ita_session_active(input: &ResolutionInput, session: &ItaSessionSpec) -> bool
     }
 }
 
-fn resolve_duel_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
+fn resolve_duel_actions(
+    input: &ResolutionInput,
+    events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
+    trace_notes: &mut Vec<String>,
+) {
     let mut ordered: Vec<(&Submission, &ActionTemplate)> = input
         .submissions
         .iter()
@@ -10814,6 +10853,41 @@ fn resolve_duel_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             unstoppable: true,
             death_reveal: death_reveal_mode(input, &killed, &template.id),
         });
+        let mut killed_slots = vec![killed.clone()];
+        let mut cpr_saves = BTreeSet::new();
+        let generated_kills = apply_trigger_fixpoint(
+            input,
+            vec![TriggerObservation {
+                on: TriggerOn::Ability(IrAbility::Duel),
+                target: killed.clone(),
+                actor: sub.actor.clone(),
+                cause: template.id.clone(),
+                target_tags: Vec::new(),
+                actor_tags: Vec::new(),
+            }],
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &mut killed_slots,
+            &mut cpr_saves,
+            &mut duel_events,
+            trace_decisions,
+            trace_notes,
+        );
+        for record in generated_kills {
+            trace_decisions.push(DecisionTrace {
+                stage: "duel_resolution".to_string(),
+                source: format!("trigger:{}", record.cause),
+                outcome: "generated_kill_after_duel".to_string(),
+                detail: serde_json::json!({
+                    "source_action": sub.action_id.clone(),
+                    "template_id": template.id.clone(),
+                    "duel_killed": killed.clone(),
+                    "generated_target": record.target,
+                    "generated_attacker": record.attacker,
+                    "generated_cause": record.cause,
+                }),
+            });
+        }
         events.extend(duel_events.iter().cloned());
         day_state = apply_events(&day_state, &duel_events);
     }

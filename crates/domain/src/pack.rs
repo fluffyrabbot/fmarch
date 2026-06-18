@@ -5026,6 +5026,7 @@ fn trigger_on_is_lynch(on: TriggerOn) -> bool {
 
 fn validate_kill_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: &Pack) {
     let mut has_bomb_effect = false;
+    let mut has_hero_effect = false;
     let mut has_vengeful_effect = false;
     let mut has_unstoppable_vengeful_effect = false;
 
@@ -5033,6 +5034,7 @@ fn validate_kill_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: 
         for effect in &role.effects {
             match effect.as_str() {
                 "bomb" => has_bomb_effect = true,
+                "hero" => has_hero_effect = true,
                 "vengeful" => has_vengeful_effect = true,
                 "unstoppable_vengeful" => has_unstoppable_vengeful_effect = true,
                 _ => {}
@@ -5042,6 +5044,9 @@ fn validate_kill_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: 
 
     if pack.effects.contains_key("bomb") {
         has_bomb_effect = true;
+    }
+    if pack.effects.contains_key("hero") {
+        has_hero_effect = true;
     }
     if pack.effects.contains_key("vengeful") {
         has_vengeful_effect = true;
@@ -5077,6 +5082,22 @@ fn validate_kill_trigger_contracts(issues: &mut Vec<PackValidationIssue>, pack: 
             "unstoppable_vengeful effects require a Kill trigger that produces Strongman Kill from Target to Actor",
         );
     }
+
+    if has_hero_effect
+        && !has_ability_retaliation_trigger(
+            pack,
+            "hero",
+            IrAbility::VoteDuel,
+            TargetRef::Actor,
+            true,
+        )
+    {
+        issue(
+            issues,
+            "triggers",
+            "hero effects require a VoteDuel trigger that produces Strongman Kill from Target to Actor",
+        );
+    }
 }
 
 fn has_kill_retaliation_trigger(
@@ -5087,6 +5108,23 @@ fn has_kill_retaliation_trigger(
 ) -> bool {
     pack.triggers.iter().any(|trigger| {
         trigger_on_is_kill(trigger.on)
+            && trigger.if_target_has.iter().any(|tag| tag == effect)
+            && trigger.produces.ability == IrAbility::Kill
+            && trigger.produces.actor == ActorRef::Target
+            && trigger.produces.target == target
+            && (!requires_strongman || trigger.produces.modifiers.contains(&Modifier::Strongman))
+    })
+}
+
+fn has_ability_retaliation_trigger(
+    pack: &Pack,
+    effect: &str,
+    on_ability: IrAbility,
+    target: TargetRef,
+    requires_strongman: bool,
+) -> bool {
+    pack.triggers.iter().any(|trigger| {
+        trigger.on == TriggerOn::Ability(on_ability)
             && trigger.if_target_has.iter().any(|tag| tag == effect)
             && trigger.produces.ability == IrAbility::Kill
             && trigger.produces.actor == ActorRef::Target

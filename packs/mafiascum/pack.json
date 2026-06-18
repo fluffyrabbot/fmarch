@@ -119,6 +119,14 @@
         }
       ]
     },
+    "hero": {
+      "description": "Hero. If eliminated by a special duel-style day mechanic, passively kills the instigator.",
+      "alignment": "town",
+      "actions": [],
+      "effects": [
+        "hero"
+      ]
+    },
     "day_self_destructor": {
       "description": "Day Self-Destructor. May publicly self-destruct during the day, sacrificing self to kill one chosen target before the official vote resolves.",
       "alignment": "mafia",
@@ -2867,6 +2875,7 @@
       "death_curse_retaliates",
       "death_mark_detonates",
       "factional_kill",
+      "hero_instigator_kill",
       "hunter_retaliate",
       "ignite",
       "janitor_kill",
@@ -2925,6 +2934,12 @@
         "target": "Target",
         "strongman_bypasses_protect": false
       },
+      "hero_instigator_kill": {
+        "on": "VoteDuel",
+        "actor": "Target",
+        "target": "Actor",
+        "strongman_bypasses_protect": true
+      },
       "phase_end_doom_claims": {
         "on": "PhaseEnd",
         "actor": "Target",
@@ -2977,6 +2992,12 @@
       },
       "death_mark_detonates": {
         "on": "EffectMarked",
+        "produced_kill_reenters": true,
+        "loop_cap": "RedirectLoopCap",
+        "trace": true
+      },
+      "hero_instigator_kill": {
+        "on": "VoteDuel",
         "produced_kill_reenters": true,
         "loop_cap": "RedirectLoopCap",
         "trace": true
@@ -3036,6 +3057,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3057,6 +3079,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3078,6 +3101,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3099,6 +3123,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3120,6 +3145,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3141,6 +3167,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3162,6 +3189,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3185,6 +3213,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3206,6 +3235,7 @@
           "visitor_kill_marked_visitor"
         ],
         "bypasses": [
+          "hero_instigator_kill",
           "strongman_kill",
           "unstoppable_vengeful_retaliates"
         ]
@@ -3670,6 +3700,21 @@
       }
     },
     {
+      "id": "hero_instigator_kill",
+      "on": "VoteDuel",
+      "if_target_has": [
+        "hero"
+      ],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Actor",
+        "modifiers": [
+          "Strongman"
+        ]
+      }
+    },
+    {
       "id": "pgo_shoots_visitor",
       "on": "Visit",
       "if_target_has": [
@@ -3780,6 +3825,7 @@
         "day_vigilante",
         "simultaneous_vigilante",
         "cpr_doctor",
+        "hero",
         "hunter",
         "vengeful",
         "unstoppable_vengeful_townie",
@@ -3799,6 +3845,10 @@
       "visibility": "Public"
     },
     "bomb": {
+      "duration": "Persistent",
+      "visibility": "Hidden"
+    },
+    "hero": {
       "duration": "Persistent",
       "visibility": "Hidden"
     },

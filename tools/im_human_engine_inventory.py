@@ -2705,6 +2705,36 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "fmarch models it as InvestigateMode::ActionType returning "
                 "visible action-type categories such as killing."
             )
+        elif scoped_name == "mafiascum:hero":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum",
+                set(),
+            )
+            canonical = "hero"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "hero" in fmarch["pack_modifiers"]
+                and '"id": "hero_instigator_kill"' in fmarch["pack_text"]
+                and '"on": "VoteDuel"' in fmarch["pack_text"]
+                and '"target": "Actor"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "vote_duel_instigator_for_target" in resolver
+                and "TriggerOn::Ability(IrAbility::VoteDuel)" in resolver
+                and "apply_trigger_fixpoint" in resolver
+            )
+            golden = modeled and "hero_instigator_kill_on_vote_duel" in mafiascum_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_projects_hero_instigator_kill_on_vote_duel"
+                in command_tests
+            )
+            notes = (
+                "Passive special-elimination trigger from the Mafiascum catalog; "
+                "fmarch models Hero as a hidden VoteDuel trigger that kills the "
+                "instigating challenger with an unstoppable generated kill."
+            )
         elif scoped_name in {
             "mafia_universe:mafia_bomber",
             "mafia_universe:town_bomber",

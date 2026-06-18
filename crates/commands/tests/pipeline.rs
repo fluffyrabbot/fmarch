@@ -5218,6 +5218,221 @@ async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgPool) {
+    let host = user("host_hero_vote_duel");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "hero_duel_user_1", "gladiator"),
+        ("slot_2", "hero_duel_user_2", "hero"),
+        ("slot_3", "hero_duel_user_3", "mafia_goon"),
+        ("slot_4", "hero_duel_user_4", "vanilla_townie"),
+        ("slot_5", "hero_duel_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("hero_duel_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "gladiator_duel_d01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "duel".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("gladiator submits vote duel against Hero");
+    handle(
+        &pool,
+        &user("hero_duel_user_4"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_4".into(),
+            target: VoteTarget::Slot("slot_5".into()),
+        },
+    )
+    .await
+    .expect("non-duel target ballot appends before resolve");
+    for (user_id, actor_slot) in [
+        ("hero_duel_user_3", "slot_3"),
+        ("hero_duel_user_5", "slot_5"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot("slot_2".into()),
+            },
+        )
+        .await
+        .expect("duel target ballot appends before resolve");
+    }
+
+    let ack = handle(&pool, &host, Command::ResolvePhase { game, seed: 7310 })
+        .await
+        .expect("host resolves Hero vote duel");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "Hero vote-duel resolution appends ResolutionApplied, ResolutionTrace, and ThreadLocked"
+    );
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Hero vote-duel ResolutionApplied validates");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::Trigger { trigger_id, payload }
+            if trigger_id == "hero_instigator_kill"
+                && payload["on"] == "VoteDuel"
+                && payload["source_target"] == "slot_2"
+                && payload["source_actor"] == "slot_1"
+                && payload["produced_actor"] == "slot_2"
+                && payload["produced_target"] == "slot_1"
+    )));
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_2"
+                && cause == "day_vote"
+                && attackers.is_empty()
+                && *unstoppable
+        )),
+        "Hero should be eliminated by the forced vote duel"
+    );
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_1"
+                && cause == "hero_instigator_kill"
+                && attackers == &vec!["slot_2".to_string()]
+                && *unstoppable
+        )),
+        "Hero trigger should kill the instigating challenger"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for slot_id in ["slot_1", "slot_2"] {
+        let slot = slots
+            .iter()
+            .find(|slot| slot.slot_id == slot_id)
+            .expect("Hero vote duel projection slot");
+        assert!(!slot.alive, "{slot_id} death folds into slot_state");
+    }
+
+    let thread = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("thread view");
+    assert!(
+        thread.posts.iter().any(|post| post
+            .body
+            .contains("Vote duel: slot_1 challenged slot_2 in D01 (gladiator_duel_d01).")),
+        "public thread should include the vote-duel declaration"
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Hero vote-duel resolution audit");
+    assert!(audit.ok, "Hero vote-duel audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Hero vote-duel deaths"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 50)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve Hero vote-duel declaration"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_applies_gladiator_vote_duel_no_ballots(pool: PgPool) {
     let host = user("host_vote_duel_no_ballots");
     let game = Uuid::new_v4();

@@ -501,7 +501,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:goon` | `mafia_goon` | 1 | no | yes | yes | yes | yes | source alias |
 | role_id | `mafiascum:governor` | `governor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:hero` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:hero` | `hero` | 1 | no | yes | yes | yes | yes | Passive special-elimination trigger from the Mafiascum catalog; fmarch models Hero as a hidden VoteDuel trigger that kills the instigating challenger with an unstoppable generated kill. |
 | role_id | `mafiascum:hider` | `hider` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:hooker` | `hooker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:hunter` | `hunter` | 1 | no | yes | yes | yes | yes |  |

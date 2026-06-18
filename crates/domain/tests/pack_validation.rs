@@ -2286,6 +2286,38 @@ fn lynch_retaliation_trigger_contracts_are_strict() {
 }
 
 #[test]
+fn hero_vote_duel_trigger_contract_is_strict() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    validate_pack(&pack_from_value(value.clone())).unwrap();
+
+    value["triggers"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|trigger| trigger["id"] != "hero_instigator_kill");
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "triggers",
+        "hero effects require a VoteDuel trigger that produces Strongman Kill from Target to Actor",
+    );
+
+    value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    let trigger = value["triggers"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|trigger| trigger["id"] == "hero_instigator_kill")
+        .unwrap();
+    trigger["produces"]["modifiers"] = json!([]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "triggers",
+        "hero effects require a VoteDuel trigger that produces Strongman Kill from Target to Actor",
+    );
+}
+
+#[test]
 fn visitor_kill_requires_target_filtered_policy() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(24);
