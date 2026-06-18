@@ -701,16 +701,28 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
 
     let semantic_expectations_checked = fixture.expectations.count();
     if semantic_expectations_checked > 0 {
-        let applied_payload = match sqlx::query_scalar::<_, serde_json::Value>(
+        let applied_payloads = match sqlx::query_scalar::<_, serde_json::Value>(
             "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
-             AND payload->>'phase_id' = $2",
+             AND payload->>'phase_id' = $2 ORDER BY stream_seq",
         )
         .bind(game)
         .bind(&fixture.phase)
-        .fetch_one(pool)
+        .fetch_all(pool)
         .await
         {
-            Ok(payload) => payload,
+            Ok(payloads) if !payloads.is_empty() => payloads,
+            Ok(_) => {
+                return RunReport {
+                    ok: false,
+                    failure_class: Some(FailureClass::SemanticExpectation),
+                    reason: Some("fetch ResolutionApplied returned no phase payloads".to_string()),
+                    game_id: Some(game),
+                    resolution_audited: Some(resolution_audit.audited),
+                    trace_count: Some(trace_report.traces.len()),
+                    projection_audit_ok: None,
+                    semantic_expectations_checked: 0,
+                }
+            }
             Err(err) => {
                 return RunReport {
                     ok: false,
@@ -724,9 +736,10 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
                 }
             }
         };
-        let applied =
+        let mut applied = Vec::new();
+        for applied_payload in applied_payloads {
             match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
-                Ok(applied) => applied,
+                Ok(payload) => applied.push(payload),
                 Err(err) => {
                     return RunReport {
                         ok: false,
@@ -740,6 +753,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
                     }
                 }
             };
+        }
         if let Err(reason) =
             validate_semantic_expectations(&fixture.expectations, &applied, &trace_report)
         {
@@ -787,19 +801,21 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
 
 fn validate_semantic_expectations(
     expectations: &FixtureExpectations,
-    applied: &domain::ResolutionApplied,
+    applied: &[domain::ResolutionApplied],
     trace_report: &commands::ResolutionTraceInspectionReport,
 ) -> Result<(), String> {
     for expected in &expectations.inner_events {
-        let found = applied.events.iter().any(|event| {
-            let event_json = serde_json::to_value(&event.event)
-                .expect("validated inner event should serialize for fixture matching");
-            event_json["kind"].as_str() == Some(expected.kind.as_str())
-                && expected.payload.iter().all(|(key, expected_value)| {
-                    event_json["payload"].get(key).is_some_and(|actual_value| {
-                        matches_expected_value(actual_value, expected_value)
+        let found = applied.iter().any(|applied| {
+            applied.events.iter().any(|event| {
+                let event_json = serde_json::to_value(&event.event)
+                    .expect("validated inner event should serialize for fixture matching");
+                event_json["kind"].as_str() == Some(expected.kind.as_str())
+                    && expected.payload.iter().all(|(key, expected_value)| {
+                        event_json["payload"].get(key).is_some_and(|actual_value| {
+                            matches_expected_value(actual_value, expected_value)
+                        })
                     })
-                })
+            })
         });
         if !found {
             return Err(format!(

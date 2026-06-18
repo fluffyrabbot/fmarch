@@ -1355,7 +1355,12 @@ the Bomb trigger, trigger-generated action row, trigger note, plain Cult convers
 conversion block, and conversion trace decisions. This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer --test pipeline -- --nocapture`,
 which passed one filtered pipeline test and checked all eight expectations through
-`minimize_night_fixture`. The `default_open` N01/D01 generated replay lanes now use that same artifact-backed
+`minimize_night_fixture`. The D01 PK minimizer fixture now also preserves the HostDecides tie
+outcome, PK prompt issue, host-selected kill, and anchored prompt issue/resolution trace decisions
+across the ordinary day and host-prompt resolution envelopes. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_fixture_replays_prompt_through_minimizer --test pipeline -- --nocapture`,
+which passed one filtered pipeline test, checked five PK expectations, and promoted the reduced
+success fixture. The `default_open` N01/D01 generated replay lanes now use that same artifact-backed
 minimizer path for setup, action/vote submission, resolve, result validation, event extraction,
 audit, trace-count, exact anchored trace decisions, and projection-rebuild failures. Their
 minimizer fixtures now also preserve lane-specific semantic expectations: N01 requires the

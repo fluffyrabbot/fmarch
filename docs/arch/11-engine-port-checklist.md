@@ -2460,7 +2460,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    conversion block, and conversion trace decisions. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
    and passed one filtered pipeline test, checking all eight expectations through
-   `minimize_night_fixture`. The `default_open` N01/D01 generated replay lanes now use the same saved
+   `minimize_night_fixture`. The D01 PK minimizer fixture now also preserves the HostDecides tie
+   outcome, PK prompt issue, host-selected kill, and anchored prompt issue/resolution trace
+   decisions across the ordinary day and host-prompt resolution envelopes. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_fixture_replays_prompt_through_minimizer --test pipeline -- --nocapture`
+   and passed one filtered pipeline test, checking five PK expectations and promoting the reduced
+   success fixture. The `default_open` N01/D01 generated replay lanes now use the same saved
    artifact/minimizer report path for setup, action/vote submission, resolve, result validation,
    event extraction, audit, trace-count, exact anchored trace decisions, and projection-rebuild
    failures. Their minimizer fixtures now also preserve lane-specific semantic expectations: N01
@@ -2787,6 +2792,6 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 persistent and generated-action systems by extending semantic minimizer
-expectations into the Epicmafia D01 PK prompt fixture. Preserve the HostDecides tie outcome, PK
-prompt issue, host-selected kill, and anchored prompt issue/resolution trace decisions inside the
-fixture-driven minimizer path.
+expectations into the Chinese Structured N01 generated fixture family. Start with Prophet
+investigation, Guard/Witch protection and poison, Cupid link, Hunter retaliation, and Wolf Beauty
+mark/drag rows so minimized fixtures preserve the lane-specific semantics, not only replay success.

@@ -12895,6 +12895,11 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
         fixture["host_prompt_decision"]["prompt_id"],
         serde_json::json!("D01:pk:Tie")
     );
+    assert_eq!(
+        generated_expectation_count(&fixture["expectations"]),
+        5,
+        "Epicmafia D01 PK fixture should preserve tie, prompt, selected kill, and trace expectations"
+    );
 
     let artifacts = GeneratedShrinkArtifacts::new("generated-epicmafia-pk-d01-minimizer-ready");
     artifacts.remove_existing();
@@ -12905,8 +12910,12 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
     assert_eq!(report["original"]["resolution_audited"], 2);
     assert_eq!(report["original"]["trace_count"], 2);
     assert_eq!(report["original"]["projection_audit_ok"], true);
+    assert_eq!(
+        report["original"]["semantic_expectations_checked"],
+        serde_json::json!(5)
+    );
     assert_eq!(report["reduction"]["replay_success"], true);
-    assert_eq!(report["write_reduced"]["promoted_success_fixture"], false);
+    assert_eq!(report["write_reduced"]["promoted_success_fixture"], true);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -17212,7 +17221,7 @@ fn generated_epicmafia_pk_case_fixture_json(
     case: &GeneratedEpicmafiaPkCase,
     resolver_seed: u64,
 ) -> String {
-    serde_json::to_string_pretty(&serde_json::json!({
+    let mut fixture = serde_json::json!({
         "seed": resolver_seed,
         "pack": "epicmafia",
         "phase": "D01",
@@ -17235,8 +17244,9 @@ fn generated_epicmafia_pk_case_fixture_json(
             "prompt_id": "D01:pk:Tie",
             "selected_slot": case.selected_slot,
         },
-    }))
-    .expect("generated Epicmafia PK fixture serializes")
+    });
+    fixture["expectations"] = generated_epicmafia_pk_expectations_json(case);
+    serde_json::to_string_pretty(&fixture).expect("generated Epicmafia PK fixture serializes")
 }
 
 fn generated_default_open_day_case_summary(
@@ -17738,6 +17748,75 @@ fn generated_epicmafia_night_expectations_json(
             }
         ]
     }))
+}
+
+fn generated_epicmafia_pk_expectations_json(case: &GeneratedEpicmafiaPkCase) -> serde_json::Value {
+    serde_json::json!({
+        "inner_events": [
+            {
+                "kind": "DayVoteOutcome",
+                "payload": {
+                    "status": "Tie",
+                    "contenders": case.contenders,
+                    "tiebreak": "HostDecides",
+                }
+            },
+            {
+                "kind": "HostPromptIssued",
+                "payload": {
+                    "prompt_id": "D01:pk:Tie",
+                    "kind": "pk",
+                    "subject": null,
+                    "reason": "host_decides_tie",
+                    "phase_id": "D01",
+                }
+            },
+            {
+                "kind": "PlayerKilled",
+                "payload": {
+                    "slot_id": case.selected_slot,
+                    "cause": "host_prompt:pk",
+                    "attackers": [],
+                    "unstoppable": true,
+                }
+            }
+        ],
+        "trace_decisions": [
+            {
+                "stage": "day:vote_prompt",
+                "source": "day_vote",
+                "outcome": "host_prompt_issued",
+                "detail": {
+                    "policy": "pk_host_decides_tie",
+                    "prompt_id": "D01:pk:Tie",
+                    "kind": "pk",
+                    "subject": null,
+                    "reason": "host_decides_tie",
+                    "status": "Tie",
+                    "contenders": case.contenders,
+                    "tiebreak": "HostDecides",
+                    "outcome_reason": null,
+                },
+            },
+            {
+                "stage": "host_prompt:resolve",
+                "source": "D01:pk:Tie",
+                "outcome": "pk_selected",
+                "detail": {
+                    "prompt_id": "D01:pk:Tie",
+                    "kind": "pk",
+                    "reason": "host_decides_tie",
+                    "selected_slot": case.selected_slot,
+                    "contenders": case.contenders,
+                    "decision": {
+                        "kind": "select_slot",
+                        "slot": case.selected_slot,
+                    },
+                    "resolved_by": "fixture_host",
+                },
+            }
+        ]
+    })
 }
 
 fn generated_default_open_night_expectations_json(
