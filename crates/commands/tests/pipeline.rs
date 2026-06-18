@@ -13144,6 +13144,13 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
             1,
             6,
         ),
+        (
+            "dynamic-vote-no-majority-revote-semantic-expectations",
+            dynamic_vote_no_majority_revote_prompt_fixture_json(),
+            2,
+            2,
+            6,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(&fixture_json).expect("Phase 5 fixture JSON parses");
@@ -19149,6 +19156,129 @@ fn mafiascum_virgin_night_skip_next_day_fixture_json() -> String {
         }
     }))
     .expect("Mafiascum Virgin night skip-next-day fixture JSON serializes")
+}
+
+fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 960_002,
+        "pack": "test_dynamic_vote_prompt",
+        "phase": "D02",
+        "roster": [
+            { "slot": "slot_1", "role": "vanilla_townie" },
+            { "slot": "slot_2", "role": "mafia_goon" },
+            { "slot": "slot_3", "role": "vote_granter" }
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 960_001,
+            "actions": [{
+                "actor_slot": "slot_3",
+                "template_id": "grant_vote_power",
+                "action_id": "grant_vote_power_n01",
+                "targets": ["slot_1"]
+            }]
+        }],
+        "votes": [
+            { "actor_slot": "slot_2", "target_slot": "slot_1" },
+            { "actor_slot": "slot_3", "target_slot": "slot_1" }
+        ],
+        "actions": [],
+        "host_prompt_decision": {
+            "prompt_id": "D02:revote:NoMajority",
+            "decision": {
+                "kind": "acknowledge",
+                "metadata": { "operator_note": "minimizer dynamic revote" }
+            }
+        },
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "NoMajority",
+                        "winner": null,
+                        "contenders": ["slot_1"],
+                        "majority": 3.0,
+                        "total_weight": 4.0,
+                        "tallies": { "slot_1": 2.0 },
+                        "weights": { "slot_1": 2.0 }
+                    }
+                },
+                {
+                    "kind": "HostPromptIssued",
+                    "payload": {
+                        "prompt_id": "D02:revote:NoMajority",
+                        "kind": "revote",
+                        "subject": null,
+                        "reason": "no_majority",
+                        "phase_id": "D02",
+                        "phase_kind": "Day",
+                        "phase_number": 2,
+                        "metadata": {
+                            "policy": "no_majority_revote",
+                            "status": "NoMajority",
+                            "contenders": ["slot_1"],
+                            "tiebreak": null,
+                            "outcome_reason": null
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D02",
+                        "deaths": []
+                    }
+                }
+            ],
+            "stream_events": [
+                {
+                    "kind": "HostPromptResolved",
+                    "payload": {
+                        "prompt_id": "D02:revote:NoMajority",
+                        "phase_id": "D02",
+                        "kind": "revote",
+                        "reason": "no_majority",
+                        "decision": {
+                            "kind": "acknowledge",
+                            "metadata": {
+                                "operator_note": "minimizer dynamic revote"
+                            }
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                },
+                {
+                    "kind": "PhaseAdvanced",
+                    "payload": {
+                        "phase_id": "D02R1",
+                        "source_prompt_id": "D02:revote:NoMajority",
+                        "source_phase_id": "D02",
+                        "reason": "revote"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "day:vote_prompt",
+                    "source": "day_vote",
+                    "outcome": "host_prompt_issued",
+                    "detail": {
+                        "policy": "no_majority_revote",
+                        "prompt_id": "D02:revote:NoMajority",
+                        "kind": "revote",
+                        "subject": null,
+                        "reason": "no_majority",
+                        "status": "NoMajority",
+                        "contenders": ["slot_1"],
+                        "tiebreak": null,
+                        "outcome_reason": null
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Dynamic vote NoMajority revote fixture JSON serializes")
 }
 
 #[derive(Debug)]

@@ -2524,12 +2524,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    acknowledges the skip-next-day prompt and checks `HostPromptResolved` plus prompt-driven
    `PhaseAdvanced { phase_id: "N02", skipped_phase_id: "D02", reason: "skip_next_day" }`; the
    Virgin night-death alias now has the same minimized prompt-resolution proof for
-   `N01:skip_next_day:slot_2`. This was rerun locally with
+   `N01:skip_next_day:slot_2`; the dynamic vote-weight prompt fixture now uses a legal N01
+   `VoteWeight` grant setup phase and proves the folded grant drives a D02 NoMajority revote
+   prompt plus `HostPromptResolved` / `PhaseAdvanced { phase_id: "D02R1", reason: "revote" }`.
+   This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across the command-resolved setup-plus-day announcement
    fixture, no-majority revote prompt-resolution fixture, Beloved Princess skip-next-day
-   prompt-resolution fixture, and Virgin night-death skip-next-day fixture, checking every emitted
-   semantic expectation through
+   prompt-resolution fixture, Virgin night-death skip-next-day fixture, and dynamic vote-weight
+   NoMajority revote fixture, checking every emitted semantic expectation through
    `minimize_night_fixture`. A fourth
    non-mafiascum lane now generates three Epicmafia D01 PK prompt cases and three
    Epicmafia N01 Bomb/Cult cases from fixed seeds, proving the same audit trio across host-prompt
@@ -2829,8 +2832,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 5 rich day systems by widening semantic minimizer coverage across remaining
-host-decision breadth: dynamic vote-weight PK/revote variants and any PK prompt variants not
-already covered by the Epicmafia generated lane. Start with the smallest existing dynamic
-vote-weight fixed vertical that is not yet represented as a minimizer fixture, then require prompt
-issue, prompt resolution effects, projection rebuild, and minimized success promotion before
-updating the checklist again.
+host-decision breadth: dynamic vote-weight PK variants and any PK prompt variants not already
+covered by the Epicmafia generated lane. Start with the existing dynamic vote-weight PK fixed
+vertical, then require prompt issue, host-selected kill resolution effects, projection rebuild, and
+minimized success promotion before updating the checklist again.
