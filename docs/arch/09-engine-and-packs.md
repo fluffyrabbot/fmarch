@@ -1335,10 +1335,12 @@ fixture as a success. This proves a reusable artifact-backed promotion path for 
 and Chinese Structured failure fixtures plus hand-minimized trigger/dependency replays, not
 automatic property-test shrinking across every generated failure path. The Mafiascum and Chinese
 Structured N01 generated replay lanes now route their resolve, result validation, event-count,
-representative-event, audit, trace-count, and projection-rebuild failures through the shrink helper
-before panicking; the panic message includes the saved report path, reduced fixture path,
-preservation booleans, and reduction step count. Setup/submit failures and shared trace assertion
-helper panics remain direct failures. A non-mafiascum generated replay lane now covers six
+representative-event, audit, trace-count, anchored trace-decision, and projection-rebuild failures
+through the shrink helper before panicking; the panic message includes the saved report path,
+reduced fixture path, preservation booleans, and reduction step count. Setup and legal action
+submission failures in those N01 replay lanes use the same shrink-backed wrapper. D01 and later
+culture-pack generated replay lanes have not yet adopted this wrapper. A non-mafiascum generated
+replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with

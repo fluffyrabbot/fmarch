@@ -271,7 +271,15 @@ fn assert_anchored_inspection_decision(
     expected: InspectionDecisionExpectation<'_>,
     context: &str,
 ) {
-    let decision = report
+    check_anchored_inspection_decision(report, expected)
+        .unwrap_or_else(|reason| panic!("{context}\n{reason}"));
+}
+
+fn check_anchored_inspection_decision(
+    report: &commands::ResolutionTraceInspectionReport,
+    expected: InspectionDecisionExpectation<'_>,
+) -> Result<(), String> {
+    let decision = match report
         .traces
         .iter()
         .filter(|trace| trace.phase_id == expected.phase_id && trace.applied_stream_seq.is_some())
@@ -281,18 +289,22 @@ fn assert_anchored_inspection_decision(
                 && decision.stage == expected.stage
                 && decision.source == expected.source
                 && decision.outcome == expected.outcome
-        })
-        .unwrap_or_else(|| {
-            panic!(
-                "{context}\ntrace inspection should expose anchored decision {} from {} at {}",
+        }) {
+        Some(decision) => decision,
+        None => {
+            return Err(format!(
+                "trace inspection should expose anchored decision {} from {} at {}",
                 expected.outcome, expected.source, expected.stage
-            )
-        });
-    assert_eq!(
-        decision.detail, expected.detail,
-        "{context}\ninspected decision {} detail",
-        expected.outcome
-    );
+            ));
+        }
+    };
+    if decision.detail != expected.detail {
+        return Err(format!(
+            "inspected decision {} detail expected {} got {}",
+            expected.outcome, expected.detail, decision.detail
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -12324,28 +12336,34 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "mafiascum".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate generated game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -12353,10 +12371,13 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                     slot: slot.clone(),
                     user: format!("generated_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -12364,23 +12385,29 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "N01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart generated game failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "generated_seed_{seed}_user_{}",
@@ -12394,14 +12421,15 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
         let ack = match handle(
@@ -12593,7 +12621,7 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
         let result_contract_source =
             format!("domain::resolve/result_version:{}", applied.result_version);
         let result_contract_outcome = format!("{} inner events validated", applied.counts.events);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -12605,10 +12633,21 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                     "saves": applied.counts.saves,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let representative_source = format!("event_index:{}", representative_event.0);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -12617,8 +12656,19 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
                 outcome: representative_event.1,
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
         let projection_audit = match audit_rebuild(&pool, game).await {
             Ok(report) => report,
@@ -12825,28 +12875,34 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create Chinese generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate Chinese generated game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -12854,10 +12910,13 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                     slot: slot.clone(),
                     user: format!("chinese_generated_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -12865,23 +12924,29 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "N01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start Chinese generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart Chinese generated game failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "chinese_generated_seed_{seed}_user_{}",
@@ -12895,14 +12960,15 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
         let ack = match handle(
@@ -13091,7 +13157,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
         let result_contract_source =
             format!("domain::resolve/result_version:{}", applied.result_version);
         let result_contract_outcome = format!("{} inner events validated", applied.counts.events);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -13103,10 +13169,21 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                     "saves": applied.counts.saves,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let representative_source = format!("event_index:{}", representative_event.0);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -13115,8 +13192,19 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
                 outcome: representative_event.1,
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
         let projection_audit = match audit_rebuild(&pool, game).await {
             Ok(report) => report,
@@ -15772,6 +15860,33 @@ async fn generated_shrink_failure_message(
             "{summary}\n{reason}\ngenerated shrink report failed for fixture {}: {err}",
             artifacts.fixture_path.display()
         ),
+    }
+}
+
+async fn generated_handle_or_shrink(
+    pool: &PgPool,
+    principal: &Principal,
+    command: Command,
+    stem: &str,
+    fixture_json: &str,
+    summary: &str,
+    reason: impl Into<String>,
+) -> Ack {
+    match handle(pool, principal, command).await {
+        Ok(ack) => ack,
+        Err(err) => {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    pool,
+                    stem,
+                    fixture_json,
+                    summary,
+                    format!("{}: {err}", reason.into()),
+                )
+                .await
+            )
+        }
     }
 }
 

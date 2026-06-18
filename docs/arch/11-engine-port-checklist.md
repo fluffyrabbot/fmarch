@@ -2440,10 +2440,11 @@ coverage, and a playable vertical scenario through the command pipeline.
    and verify the saved report preserves `semantic_expectation` failure class without promoting the
    fixture as a success.
    The Mafiascum and Chinese Structured N01 generated replay lanes now route their resolve,
-   result validation, event-count, representative-event, audit, trace-count, and projection-rebuild
-   failures through the shrink helper before panicking; the panic message includes the saved report
-   path, reduced fixture path, preservation booleans, and reduction step count. Setup/submit
-   failures and shared trace assertion helper panics remain direct failures. This is a reusable
+   result validation, event-count, representative-event, audit, trace-count, anchored trace-decision,
+   and projection-rebuild failures through the shrink helper before panicking; the panic message
+   includes the saved report path, reduced fixture path, preservation booleans, and reduction step count.
+   Setup and legal action submission failures in those N01 replay lanes use the same shrink-backed
+   wrapper; D01 and later culture-pack generated replay lanes have not yet adopted it. This is a reusable
    artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
@@ -2761,7 +2762,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by finishing generated panic-path shrink
-coverage for the N01 replay lanes. Start by routing setup/submit failures and shared trace
-assertion helper failures through the same saved artifact/minimizer report path, then reuse that
-wrapper for the Chinese Structured D01 and later culture-pack generated replay lanes.
+Continue Phase 4 persistent and generated-action systems by reusing the shrink-backed generated
+command/trace wrapper outside the N01 night lanes. Start with the Chinese Structured D01 generated
+day replay lane, then carry the same saved artifact/minimizer report path into the Epicmafia and
+default_open generated replay lanes before adding new generated-action semantics.
