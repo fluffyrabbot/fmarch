@@ -462,7 +462,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_role_oracle` | `town_role_oracle` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_roleblocker` | `town_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_rolestopper` | `town_rolestopper` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_strongman` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_strongman` | `town_strongman` | 1 | no | yes | yes | yes | yes | Mafia Universe Town Strongman is a town-aligned strongman_kill role with kill,pierce semantics; fmarch maps it to the existing Strongman kill modifier and standard-NAR protection bypass policy. |
 | role_id | `mafia_universe:town_tracker` | `town_tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_treestump` | `town_treestump` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_universal_backup` | `town_universal_backup` | 1 | no | yes | yes | yes | yes |  |

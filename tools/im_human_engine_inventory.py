@@ -2682,6 +2682,34 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "Resolver golden output is not applicable, so command/projection "
                 "coverage is the proof surface."
             )
+        elif scoped_name == "mafia_universe:town_strongman":
+            mu_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafia_universe",
+                set(),
+            )
+            canonical = "town_strongman"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and '"id": "strongman_kill"' in fmarch["pack_text"]
+                and '"modifiers": ["Strongman"]' in fmarch["pack_text"]
+                and '"alignment": "town"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "strongman_bypasses_protect" in resolver
+                and "standard_nar_strongman_bypasses" in resolver
+            )
+            golden = modeled and "town_strongman_pierces_doctor" in mu_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_carries_mafia_universe_town_strongman_pierce"
+                in command_tests
+            )
+            notes = (
+                "Mafia Universe Town Strongman is a town-aligned strongman_kill "
+                "role with kill,pierce semantics; fmarch maps it to the existing "
+                "Strongman kill modifier and standard-NAR protection bypass policy."
+            )
         elif scoped_name == "core:jack_of_all_trades":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
             mafia_universe_golden_names = fmarch["golden_names_by_pack"].get(

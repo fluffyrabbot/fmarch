@@ -1525,6 +1525,27 @@
         }
       ]
     },
+    "town_strongman": {
+      "description": "Town Strongman. Carries a night kill that bypasses ordinary protection.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "strongman_kill",
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": ["Strongman"],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": null
+          }
+        }
+      ]
+    },
     "mafia_strongman": {
       "description": "Mafia Strongman. Carries a factional kill that bypasses ordinary protection.",
       "alignment": "mafia",

@@ -739,6 +739,169 @@ async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_town_strongman_pierce(pool: PgPool) {
+    let host = user("host_mu_town_strongman");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mu_town_strongman_user", "town_strongman"),
+        ("slot_2", "mu_town_doctor_user", "town_doctor"),
+        ("slot_3", "mu_town_vanilla_user", "town_vanilla"),
+        ("slot_4", "mu_mafia_goon_user", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("mu_town_strongman_user"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_town_strongman_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "strongman_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Town Strongman can submit strongman_kill from Mafia Universe pack");
+    handle(
+        &pool,
+        &user("mu_town_doctor_user"),
+        Command::SubmitAction {
+            game,
+            action_id: "mu_doctor_001".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "doctor_protect".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let ack = handle(&pool, &host, Command::ResolvePhase { game, seed: 971004 })
+        .await
+        .expect("host resolves Mafia Universe Town Strongman pierce");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "ResolvePhase should append applied results, trace, and phase lock atomically"
+    );
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 971004).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Town Strongman ResolutionApplied validates");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_3"
+            && cause == "strongman_kill"
+            && attackers == &vec!["slot_1".to_string()]
+            && *unstoppable
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerSaved { slot_id, .. } if slot_id == "slot_3"
+        )),
+        "doctor protection must be bypassed by Town Strongman pierce"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .unwrap()
+            .alive,
+        "Town Strongman target should be dead in projections"
+    );
+    for slot_id in ["slot_1", "slot_2", "slot_4"] {
+        assert!(
+            slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .unwrap()
+                .alive,
+            "{slot_id} should remain alive after Town Strongman pierce"
+        );
+    }
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Mafia Universe Town Strongman audit_resolution");
+    assert!(
+        audit.ok,
+        "Mafia Universe Town Strongman resolution audit drifted: {audit:?}"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafia Universe Town Strongman pierce"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();

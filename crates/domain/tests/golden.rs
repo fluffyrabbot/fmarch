@@ -7346,6 +7346,20 @@ fn mafia_universe_pack_deserializes() {
     assert!(pack.roles.contains_key("town_motivator"));
     assert!(pack.roles.contains_key("town_inventor"));
     assert!(pack.roles.contains_key("innocent_child"));
+    let town_strongman = pack
+        .roles
+        .get("town_strongman")
+        .expect("Mafia Universe Town Strongman role");
+    assert_eq!(town_strongman.alignment.as_deref(), Some("town"));
+    let town_strongman_kill = town_strongman
+        .actions
+        .iter()
+        .find(|action| action.id == "strongman_kill")
+        .expect("Town Strongman exposes strongman_kill");
+    assert_eq!(town_strongman_kill.ability, domain::IrAbility::Kill);
+    assert!(town_strongman_kill
+        .modifiers
+        .contains(&domain::Modifier::Strongman));
     assert!(pack.roles.contains_key("mafia_strongman"));
     assert!(pack.roles.contains_key("godfather"));
     assert!(pack.roles.contains_key("mafia_parity_cop"));
@@ -8628,6 +8642,17 @@ fn golden_mafia_universe_basic_nar_strongman_pierces_doctor() {
         &got,
         &expected_events(&golden),
         "mafia_universe basic_nar_strongman_pierces_doctor",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_town_strongman_pierces_doctor() {
+    let golden = load_golden_in("mafia_universe", "town_strongman_pierces_doctor.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe town_strongman_pierces_doctor",
     );
 }
 
