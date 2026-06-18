@@ -20,8 +20,8 @@ pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 25;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 50;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 26;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 52;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2220,6 +2220,7 @@ pub fn generated_shrink_matrix_expected_families() -> BTreeMap<String, usize> {
         ("hider", 2),
         ("hider_projection_state", 2),
         ("hunter", 2),
+        ("hunter_projection_state", 2),
         ("ignite", 2),
         ("item_grant", 2),
         ("lovers", 2),

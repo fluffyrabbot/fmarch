@@ -12059,6 +12059,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
 
     for (family, seeds) in [
         ("hunter", [97_021_u64, 97_022]),
+        ("hunter_projection_state", [97_231, 97_232]),
         ("vengeful_fixpoint", [97_151, 97_152]),
         ("strongman_vengeful_fixpoint", [97_161, 97_162]),
         ("bodyguard_strongman_vengeful_fixpoint", [97_171, 97_172]),
@@ -12192,8 +12193,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 25,
-        "expected_case_count": 50,
+        "expected_family_count": 26,
+        "expected_case_count": 52,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
@@ -12208,6 +12209,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("hider".to_string(), 2),
             ("hider_projection_state".to_string(), 2),
             ("hunter".to_string(), 2),
+            ("hunter_projection_state".to_string(), 2),
             ("ignite".to_string(), 2),
             ("item_grant".to_string(), 2),
             ("lovers".to_string(), 2),
@@ -12224,8 +12226,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(25));
-    assert_eq!(report["case_count"], serde_json::json!(50));
+    assert_eq!(report["family_count"], serde_json::json!(26));
+    assert_eq!(report["case_count"], serde_json::json!(52));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -20239,9 +20241,39 @@ fn generated_mafiascum_lovers_projection_state_fixture_json(seed: u64) -> String
         .expect("generated Mafiascum Lovers projection-state fixture serializes")
 }
 
+fn generated_mafiascum_hunter_projection_state_fixture_json(seed: u64) -> String {
+    let mut fixture: serde_json::Value = serde_json::from_str(
+        &generated_mafiascum_persistent_trigger_fixture_json("hunter", seed),
+    )
+    .expect("generated Mafiascum Hunter fixture serializes");
+    fixture["expectations"]["slot_states"] = serde_json::json!([
+        {
+            "payload": {
+                "slot_id": "slot_1",
+                "alive": false
+            }
+        },
+        {
+            "payload": {
+                "slot_id": "slot_2",
+                "alive": false
+            }
+        },
+        {
+            "payload": {
+                "slot_id": "slot_5",
+                "alive": true
+            }
+        }
+    ]);
+    serde_json::to_string_pretty(&fixture)
+        .expect("generated Mafiascum Hunter projection-state fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
+        "hunter_projection_state" => generated_mafiascum_hunter_projection_state_fixture_json(seed),
         "vengeful_fixpoint" => generated_mafiascum_vengeful_fixpoint_fixture_json(seed),
         "strongman_vengeful_fixpoint" => {
             generated_mafiascum_strongman_vengeful_fixpoint_fixture_json(seed)
@@ -20288,6 +20320,9 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "hunter" => {
             fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
                 serde_json::json!("hunter_retaliate_wrong");
+        }
+        "hunter_projection_state" => {
+            fixture["expectations"]["slot_states"][1]["payload"]["alive"] = serde_json::json!(true);
         }
         "vengeful_fixpoint" => {
             fixture["expectations"]["generated_actions"][0]["action_id"] =
