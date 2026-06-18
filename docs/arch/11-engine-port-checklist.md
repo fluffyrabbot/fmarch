@@ -2669,9 +2669,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    artifact, and fails if the saved audit is missing, stale versus any declared input, or different
    from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
    19 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
-   rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, and 2
-   unsupported parity rows, both explicit out-of-scope test-family rows (`feature_flags_test` and
-   `init`). Mafia Universe now models `vanilla_town`, `blank_town_role`,
+   rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2
+   unsupported parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family
+   rows (`feature_flags_test` and `init`). Mafia Universe now models `vanilla_town`, `blank_town_role`,
    `blank_mafia_role`, `mafia_doctor`, `mafia_bodyguard`, `mafia_jailkeeper`,
    `town_alignment_cop`, `mafia_alignment_cop`, `mafia_cop`, `town_voyeur`, `mafia_voyeur`,
    `town_alignment_oracle`, `mafia_alignment_oracle`, `town_role_oracle`,
@@ -2693,7 +2693,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    test-family coverage artifact maps all 28 source-derived test-family buckets, with 26 mapped to
    fmarch proof surfaces and two explicit out-of-scope/non-resolution buckets. The unported
    im-human inventory artifact reports only those 2 explicit out-of-scope unsupported parity rows,
-   including zero unsupported primitive, modifier, result-event, and culture-note rows. The no-Postgres domain CI artifact
+   including zero unsupported primitive, modifier, result-event, and culture-note rows; the
+   completion audit treats those explicit out-of-scope rows as visible but non-actionable and
+   blocks completion on the five partial build-order phases instead. The no-Postgres domain CI artifact
    reports `ok: true`, four passed lanes, zero failed lanes, 12 golden-owning pack directories, 281
    checked golden fixtures, and Rust validator totals of 430 golden-harness tests, 63
    result-contract tests, and 138 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
@@ -2712,9 +2714,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Promote the proof-run status/go-no-go surface to include
-`operator-proof-command-projection-resolution` in the browser smoke required rows. Start by adding
-the new artifact path and row id to `tools/operator_browser_smoke.mjs`, regenerate the operator
-status export and go/no-go artifacts, then run the browser smoke so the HTML operator surface proves
-the new local-Postgres command is visible alongside the older projection, resolution, trace,
-large-action, and determinism rows.
+Continue Phase 3 common mafiascum night parity by finishing the remaining modifier breadth in row
+6: multi-shot count semantics and broader cycle-cooldown proof beyond the already-covered strict
+one-shot, odd/even, target-repeat non-consecutive, Indecisive, Roaming, Uncooperative, Lazy, Weak,
+Macho, Personal, and loud/announcing surfaces. Start with a pack-owned multi-shot modifier model
+and a focused mafiascum golden that proves a role with more than one shot can spend each charge,
+persists spent count through `ResolvePhase`, and rejects only after the declared count is exhausted.

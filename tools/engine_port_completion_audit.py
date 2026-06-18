@@ -4,7 +4,8 @@
 This is intentionally report-only by default: it makes incomplete checklist
 claims explicit without pretending that local artifact health proves the whole
 port is done. Pass --require-complete when a release gate should fail on any
-remaining unchecked or partly-proven checklist row.
+remaining unchecked or partly-proven checklist row, actionable unsupported
+parity row, partial build-order phase, or missing proof surface.
 """
 
 from __future__ import annotations
@@ -199,32 +200,68 @@ def parse_parity_matrix(path: Path) -> dict[str, Any]:
                 "line": line_no,
                 "category": cells[0],
                 "item": cells[1].strip("`"),
+                "canonical_fmarch": cells[2].strip("`"),
                 "unsupported": cells[4],
                 "modeled_in_pack": cells[5],
                 "implemented_in_resolver": cells[6],
                 "covered_by_golden": cells[7],
                 "integrated_command_projection": cells[8],
+                "notes": cells[9],
             }
         )
 
     def count(field: str, value: str) -> int:
         return sum(1 for row in rows if row[field] == value)
 
-    unsupported_examples = [
-        {"line": row["line"], "category": row["category"], "item": row["item"]}
-        for row in rows
-        if row["unsupported"] == "yes"
-    ][:20]
+    unsupported_rows = [row for row in rows if row["unsupported"] == "yes"]
+    for row in unsupported_rows:
+        row["classification"] = classify_parity_row(row)
+    actionable_unsupported = [
+        row
+        for row in unsupported_rows
+        if row["classification"] != "explicit_out_of_scope"
+    ]
+    explicit_out_of_scope = [
+        row
+        for row in unsupported_rows
+        if row["classification"] == "explicit_out_of_scope"
+    ]
+    unsupported_examples = parity_examples(unsupported_rows)
+    actionable_examples = parity_examples(actionable_unsupported)
+    out_of_scope_examples = parity_examples(explicit_out_of_scope)
     return {
         "path": path.as_posix(),
         "rows": len(rows),
         "unsupported": count("unsupported", "yes"),
+        "actionable_unsupported": len(actionable_unsupported),
+        "explicit_out_of_scope_unsupported": len(explicit_out_of_scope),
         "modeled_in_pack": count("modeled_in_pack", "yes"),
         "implemented_in_resolver": count("implemented_in_resolver", "yes"),
         "covered_by_golden": count("covered_by_golden", "yes"),
         "integrated_command_projection": count("integrated_command_projection", "yes"),
         "unsupported_examples": unsupported_examples,
+        "actionable_unsupported_examples": actionable_examples,
+        "explicit_out_of_scope_examples": out_of_scope_examples,
     }
+
+
+def classify_parity_row(row: dict[str, Any]) -> str:
+    text = f"{row.get('canonical_fmarch', '')} {row.get('notes', '')}".lower()
+    if "out_of_scope" in text or "outside" in text or "non-resolution" in text:
+        return "explicit_out_of_scope"
+    return "not_yet_ported"
+
+
+def parity_examples(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "line": row["line"],
+            "category": row["category"],
+            "item": row["item"],
+            "classification": row.get("classification"),
+        }
+        for row in rows
+    ][:20]
 
 
 def parse_proof_manifest(path: Path) -> dict[str, Any]:
@@ -388,7 +425,11 @@ def find_named_row(rows: list[Any], name: str) -> dict[str, Any] | None:
     return None
 
 
-def recommended_next(checklist: dict[str, Any], parity: dict[str, Any]) -> str:
+def recommended_next(
+    checklist: dict[str, Any],
+    parity: dict[str, Any],
+    phases: list[dict[str, Any]],
+) -> str:
     if checklist["unchecked"] > 0:
         for section in checklist["sections"]:
             if section["unchecked"] > 0:
@@ -397,12 +438,26 @@ def recommended_next(checklist: dict[str, Any], parity: dict[str, Any]) -> str:
                     f"Start with checklist section {section['id']} ({section['title']}): "
                     f"convert an unchecked row into code plus proof, beginning with `{example}`."
                 )
-    if parity["unsupported"] > 0:
-        example = parity["unsupported_examples"][0]
+    if checklist["partly_proven"] > 0:
+        for section in checklist["sections"]:
+            if section["partly_proven"] > 0:
+                example = section["partly_examples"][0]["text"] if section["partly_examples"] else section["title"]
+                return (
+                    f"Finish the partly-proven row in checklist section {section['id']} "
+                    f"({section['title']}), beginning with `{example}`."
+                )
+    if parity["actionable_unsupported"] > 0:
+        example = parity["actionable_unsupported_examples"][0]
         return (
             "Promote the next unsupported parity-matrix row into a scoped implementation slice: "
             f"{example['category']} `{example['item']}`."
         )
+    for phase in phases:
+        if phase["status"] != "complete":
+            return (
+                f"Continue Phase {phase['phase']} ({phase['title']}): convert the next pending "
+                "or partly-proven phase marker into code plus proof."
+            )
     return "Run --require-complete and then mark the goal complete only if the audit remains ok."
 
 
@@ -523,13 +578,23 @@ def build_report(root: Path, artifact_path: str, *, artifact_is_current: bool) -
         and production.get("non_trusted") == 0
     )
     browser_smoke_complete = browser_smoke.get("ok") is True
+    partial_phases = [phase for phase in phases if phase["status"] != "complete"]
     incomplete_reasons = []
     if checklist["unchecked"]:
         incomplete_reasons.append(f"{checklist['unchecked']} unchecked exhaustive-checklist rows remain")
     if checklist["partly_proven"]:
         incomplete_reasons.append(f"{checklist['partly_proven']} checklist rows still say partly proven")
-    if parity["unsupported"]:
-        incomplete_reasons.append(f"{parity['unsupported']} parity-matrix rows are still unsupported")
+    if parity["actionable_unsupported"]:
+        incomplete_reasons.append(
+            f"{parity['actionable_unsupported']} actionable parity-matrix rows are still unsupported"
+        )
+    if partial_phases:
+        phase_labels = ", ".join(
+            f"{phase['phase']} ({phase['title']})" for phase in partial_phases
+        )
+        incomplete_reasons.append(
+            f"{len(partial_phases)} build-order phases are still partial: {phase_labels}"
+        )
     if not go_no_go_complete:
         incomplete_reasons.append("operator artifact go/no-go is not fully trusted")
     if not browser_smoke_complete:
@@ -556,7 +621,7 @@ def build_report(root: Path, artifact_path: str, *, artifact_is_current: bool) -
         "proof_manifest": manifest,
         "saved_artifacts": saved_artifacts,
         "incomplete_reasons": incomplete_reasons,
-        "recommended_next_slice": recommended_next(checklist, parity),
+        "recommended_next_slice": recommended_next(checklist, parity, phases),
     }
 
 
