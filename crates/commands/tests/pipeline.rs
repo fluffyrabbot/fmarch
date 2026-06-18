@@ -12032,6 +12032,163 @@ async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifac
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
+    let mut cases = Vec::new();
+    let trigger_fixtures = generated_trigger_dependency_search_fixture_matrix(2);
+    for family in ["babysitter", "hider", "pgo"] {
+        let fixtures = trigger_fixtures
+            .get(family)
+            .unwrap_or_else(|| panic!("matrix should find generated {family} fixtures"));
+        assert_eq!(
+            fixtures.len(),
+            2,
+            "matrix should collect two generated {family} fixtures"
+        );
+        for generated in fixtures {
+            cases.push((
+                family.to_string(),
+                generated.seed,
+                generated.fixture_json.clone(),
+                generated_trigger_dependency_bad_expectation_fixture_json(
+                    family,
+                    &generated.fixture_json,
+                ),
+            ));
+        }
+    }
+
+    for (family, seeds) in [
+        ("hunter", [97_021_u64, 97_022]),
+        ("lovers", [97_031, 97_032]),
+        ("bomb", [96_777, 96_778]),
+    ] {
+        for seed in seeds {
+            cases.push((
+                family.to_string(),
+                seed,
+                generated_persistent_trigger_success_fixture_json(family, seed),
+                generated_persistent_trigger_bad_expectation_fixture_json(family, seed),
+            ));
+        }
+    }
+
+    let mut entries = Vec::new();
+    for (family, seed, success_fixture_json, bad_fixture_json) in cases {
+        let success_fixture: serde_json::Value =
+            serde_json::from_str(&success_fixture_json).expect("matrix success fixture parses");
+        let expectation_count = generated_expectation_count(&success_fixture["expectations"]);
+        assert!(
+            expectation_count > 0,
+            "{family} seed {seed} should carry semantic expectations"
+        );
+
+        let success_artifacts =
+            GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-ok"));
+        success_artifacts.remove_existing();
+        success_artifacts.write_fixture(&success_fixture_json);
+        let success_report = success_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            success_report["original"]["ok"], true,
+            "{family} seed {seed} success original"
+        );
+        assert_eq!(
+            success_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{family} seed {seed} success expectation count"
+        );
+        assert_eq!(
+            success_report["reduction"]["success_invariant_preserved"],
+            serde_json::json!(true),
+            "{family} seed {seed} success invariant"
+        );
+        assert_eq!(
+            success_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "{family} seed {seed} success promotion"
+        );
+
+        let bad_artifacts =
+            GeneratedShrinkArtifacts::new(&format!("generated-shrink-matrix-{family}-{seed}-bad"));
+        bad_artifacts.remove_existing();
+        bad_artifacts.write_fixture(&bad_fixture_json);
+        let bad_report = bad_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            bad_report["original"]["ok"], false,
+            "{family} seed {seed} bad original"
+        );
+        assert_eq!(
+            bad_report["original"]["failure_class"], "semantic_expectation",
+            "{family} seed {seed} bad failure class"
+        );
+        assert_eq!(
+            bad_report["reduction"]["failure_class_preserved"],
+            serde_json::json!(true),
+            "{family} seed {seed} bad failure preservation"
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(false),
+            "{family} seed {seed} bad non-promotion"
+        );
+
+        entries.push(serde_json::json!({
+            "family": family,
+            "seed": seed,
+            "expectation_count": expectation_count,
+            "success": {
+                "ok": success_report["original"]["ok"],
+                "success_invariant_preserved": success_report["reduction"]["success_invariant_preserved"],
+                "promoted_success_fixture": success_report["write_reduced"]["promoted_success_fixture"],
+                "reduction_steps": success_report["reduction_steps"].as_array().map_or(0, Vec::len),
+                "report_path": success_artifacts.report_path.display().to_string(),
+                "reduced_path": success_artifacts.reduced_path.display().to_string(),
+            },
+            "bad_expectation": {
+                "ok": bad_report["original"]["ok"],
+                "failure_class": bad_report["original"]["failure_class"],
+                "failure_class_preserved": bad_report["reduction"]["failure_class_preserved"],
+                "promoted_success_fixture": bad_report["write_reduced"]["promoted_success_fixture"],
+                "reduction_steps": bad_report["reduction_steps"].as_array().map_or(0, Vec::len),
+                "report_path": bad_artifacts.report_path.display().to_string(),
+                "reduced_path": bad_artifacts.reduced_path.display().to_string(),
+            }
+        }));
+    }
+
+    let mut family_counts: BTreeMap<String, usize> = BTreeMap::new();
+    for entry in &entries {
+        let family = entry["family"]
+            .as_str()
+            .expect("matrix entry carries family")
+            .to_string();
+        *family_counts.entry(family).or_default() += 1;
+    }
+    let report = serde_json::json!({
+        "artifact_version": 1,
+        "ok": true,
+        "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
+        "family_count": family_counts.len(),
+        "case_count": entries.len(),
+        "families": family_counts,
+        "entries": entries,
+    });
+    assert_eq!(report["family_count"], serde_json::json!(6));
+    assert_eq!(report["case_count"], serde_json::json!(12));
+
+    let report_path =
+        generated_shrink_artifact_root().join("current-generated-shrink-matrix-report.tmp.json");
+    write_generated_shrink_artifact(
+        &report_path,
+        &serde_json::to_string_pretty(&report).expect("matrix report serializes"),
+    );
+    let saved_report: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(&report_path).expect("saved matrix report should be readable"),
+    )
+    .expect("saved matrix report should parse");
+    assert_eq!(saved_report, report);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),
@@ -22159,8 +22316,17 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
 
 fn generated_trigger_dependency_search_fixtures(
 ) -> BTreeMap<&'static str, GeneratedTriggerDependencyFixture> {
-    let mut found = BTreeMap::new();
-    for seed in 91_001_u64..=92_600 {
+    generated_trigger_dependency_search_fixture_matrix(1)
+        .into_iter()
+        .filter_map(|(family, mut fixtures)| fixtures.pop().map(|fixture| (family, fixture)))
+        .collect()
+}
+
+fn generated_trigger_dependency_search_fixture_matrix(
+    per_family: usize,
+) -> BTreeMap<&'static str, Vec<GeneratedTriggerDependencyFixture>> {
+    let mut found: BTreeMap<&'static str, Vec<GeneratedTriggerDependencyFixture>> = BTreeMap::new();
+    for seed in 91_001_u64..=104_000 {
         let case = generated_night_case(seed);
         let fixture_json = generated_night_case_fixture_json(&case, "mafiascum", seed + 43_000);
         let fixture: serde_json::Value =
@@ -22171,20 +22337,22 @@ fn generated_trigger_dependency_search_fixtures(
         }
 
         for family in generated_mafiascum_trigger_dependency_families(&fixture) {
-            found
-                .entry(family)
-                .or_insert_with(|| GeneratedTriggerDependencyFixture {
+            let fixtures = found.entry(family).or_default();
+            if fixtures.len() < per_family {
+                fixtures.push(GeneratedTriggerDependencyFixture {
                     seed,
                     case: case.clone(),
                     fixture_json: fixture_json.clone(),
                     expectation_count,
                 });
+            }
         }
 
-        if ["babysitter", "hider", "pgo"]
-            .into_iter()
-            .all(|family| found.contains_key(family))
-        {
+        if ["babysitter", "hider", "pgo"].into_iter().all(|family| {
+            found
+                .get(family)
+                .is_some_and(|fixtures| fixtures.len() >= per_family)
+        }) {
             break;
         }
     }

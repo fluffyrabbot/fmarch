@@ -2505,6 +2505,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    `semantic_expectation` failure class, writes a reduced failing artifact with
    `promoted_success_fixture: false`, and then replays the original generated success fixture so the
    negative lane cannot hide resolver drift.
+   `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
+   in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
+   generated seeds plus two deterministic Hunter, Lovers, and Bomb persistent/generated-action
+   seeds, runs each of the 12 cases through success and bad-expectation reductions, asserts success
+   invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
+   report artifacts under `target/operator-proof`, and saves
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, six
+   families, 12 cases, and the proof boundary that it is bounded local-Postgres coverage rather
+   than exhaustive randomized coverage.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
    `promoted_success_fixture: false`. `--write-report <path>` now persists the minimizer JSON
@@ -2944,10 +2953,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
-   required needle set. The bounded generated trigger/dependency shrink lanes cover representative
-   PGO/Babysitter/Hider successes plus representative persistent Hunter/Lovers/Bomb success and
-   failure cases, and they now cover representative generated PGO/Babysitter/Hider failure cases;
-   broader randomized shrink breadth remains future work. The local-Postgres
+   required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
+   matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
+   `ok: true`, six families, 12 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Lovers/Bomb
+   family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
+   and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
+   breadth and first-class proof-run promotion remain future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
@@ -2959,8 +2970,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by turning the representative generated shrink lanes into a deterministic
-multi-seed shrink matrix. Start with PGO/Babysitter/Hider/Hunter/Lovers/Bomb: collect more than one
-generated seed per family where possible, run success and bad-expectation shrink checks for each,
-and emit a compact saved report under `target/operator-proof` so breadth is visible without
-claiming exhaustive randomized coverage.
+Continue Phase 4 by promoting the deterministic generated shrink matrix from a `.tmp` local report
+into a first-class proof surface. Start by adding an operator-proof manifest/status row for
+`current-generated-shrink-matrix-report.tmp.json`, include it in the completion-audit freshness
+inputs, and add the smallest browser/status-smoke needle so generated shrink breadth cannot drift
+silently while still preserving its local-Postgres-only, non-exhaustive proof boundary.
