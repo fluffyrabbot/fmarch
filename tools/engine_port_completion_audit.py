@@ -49,6 +49,27 @@ SAVED_ARTIFACTS = {
     "generated_shrink_gap_audit": "target/operator-proof/current-generated-shrink-gap-audit-report.json",
     "browser_smoke": "target/operator-browser-smoke/playwright-dom-proof.json",
 }
+PHASE_PENDING_MARKER_RE = re.compile(
+    r"\bpending\b(?!-)|\bremain(?:s|ing)?\b|\bfuture work\b",
+    flags=re.IGNORECASE,
+)
+PHASE_BOUNDARY_CAVEAT_RE = re.compile(
+    r"\b("
+    r"proof boundary|does not prove|not prove|without claiming|"
+    r"outside .* proof|local-only|local postgres|scratch database|"
+    r"hosted|production|exhaustive|future work"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+PHASE_DESCRIPTIVE_MARKER_RE = re.compile(
+    r"\b(?:"
+    r"remain(?:s|ing)? covered|remain(?:s|ing)? local|remain(?:s|ing)? inert|"
+    r"remain(?:s|ing)? promotable|remain(?:s|ing)? green|remain(?:s|ing)? alive|"
+    r"remain(?:s|ing)? `semantic_expectation`|remain(?:s|ing)? partial build-order phases|"
+    r"remaining trigger-note side|zero actionable pending markers"
+    r")",
+    flags=re.IGNORECASE,
+)
 REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "resolve_elapsed_ms: 321",
     "threshold_ms: 20000",
@@ -180,10 +201,20 @@ def parse_phase_status(path: Path) -> list[dict[str, Any]]:
     for index, match in enumerate(matches):
         start = match.end()
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        if next_section := re.search(r"^## ", text[start:end], flags=re.MULTILINE):
+            end = start + next_section.start()
         body = text[start:end]
         done_count = len(re.findall(r"\[done\b", body, flags=re.IGNORECASE))
         partly_count = len(re.findall(r"\[partly\b", body, flags=re.IGNORECASE))
-        pending_count = len(re.findall(r"\bpending\b|\bremain(?:s|ing)?\b|\bfuture work\b", body, flags=re.IGNORECASE))
+        phase_markers = classify_phase_pending_markers(body)
+        raw_pending_count = len(phase_markers)
+        pending_count = sum(1 for marker in phase_markers if marker["classification"] == "actionable")
+        boundary_caveat_count = sum(
+            1 for marker in phase_markers if marker["classification"] == "boundary_caveat"
+        )
+        descriptive_marker_count = sum(
+            1 for marker in phase_markers if marker["classification"] == "descriptive"
+        )
         exit_proof = ""
         if exit_match := re.search(r"Exit proof:(.+?)(?:\n\n|$)", body, flags=re.DOTALL):
             exit_proof = compact(exit_match.group(1))
@@ -196,10 +227,54 @@ def parse_phase_status(path: Path) -> list[dict[str, Any]]:
                 "done_markers": done_count,
                 "partly_markers": partly_count,
                 "pending_markers": pending_count,
+                "raw_pending_markers": raw_pending_count,
+                "boundary_caveat_markers": boundary_caveat_count,
+                "descriptive_markers": descriptive_marker_count,
+                "pending_examples": [
+                    marker for marker in phase_markers if marker["classification"] == "actionable"
+                ][:5],
+                "boundary_caveat_examples": [
+                    marker
+                    for marker in phase_markers
+                    if marker["classification"] == "boundary_caveat"
+                ][:5],
                 "exit_proof": exit_proof,
             }
         )
     return phases
+
+
+def classify_phase_pending_markers(body: str) -> list[dict[str, Any]]:
+    markers: list[dict[str, Any]] = []
+    for line_number, line in enumerate(body.splitlines(), start=1):
+        for match in PHASE_PENDING_MARKER_RE.finditer(line):
+            context = phase_marker_context(line, match.start(), match.end())
+            markers.append(
+                {
+                    "line": line_number,
+                    "marker": match.group(0),
+                    "classification": classify_phase_pending_marker(context),
+                    "context": compact(context, 180),
+                }
+            )
+    return markers
+
+
+def phase_marker_context(line: str, start: int, end: int) -> str:
+    bounds = [0]
+    bounds.extend(match.end() for match in re.finditer(r"(?<=[.;\]])\s+", line))
+    bounds.append(len(line))
+    context_start = max(bound for bound in bounds if bound <= start)
+    context_end = min(bound for bound in bounds if bound >= end)
+    return line[context_start:context_end].strip()
+
+
+def classify_phase_pending_marker(context: str) -> str:
+    if PHASE_DESCRIPTIVE_MARKER_RE.search(context):
+        return "descriptive"
+    if PHASE_BOUNDARY_CAVEAT_RE.search(context):
+        return "boundary_caveat"
+    return "actionable"
 
 
 def parse_parity_matrix(path: Path) -> dict[str, Any]:

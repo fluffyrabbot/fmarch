@@ -225,6 +225,10 @@ class EnginePortCompletionAuditTests(unittest.TestCase):
             )
             report = audit.build_report(root, "target/audit.json", artifact_is_current=True)
             self.assertFalse(report["ok"])
+            phase = report["build_order_phases"][3]
+            self.assertEqual(phase["pending_markers"], 2)
+            self.assertEqual(phase["boundary_caveat_markers"], 0)
+            self.assertEqual(phase["descriptive_markers"], 0)
             self.assertEqual(
                 report["incomplete_reasons"],
                 [
@@ -236,6 +240,35 @@ class EnginePortCompletionAuditTests(unittest.TestCase):
                 report["recommended_next_slice"],
                 "Continue Phase 3 (Reach common mafiascum night parity): convert the next "
                 "pending or partly-proven phase marker into code plus proof.",
+            )
+
+    def test_phase_boundary_caveats_do_not_block_completion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.write_fixture(
+                root,
+                matrix_row=(
+                    "| test_family | `init` | `out_of_scope: im-human init/chat provisioning` | "
+                    "4 | yes | no | no | no | no | outside slot-only resolver |"
+                ),
+                phase_3_body=(
+                    "[done] Existing proof. The checked negative fixture remains promotable. "
+                    "This proof boundary does not prove hosted, production, or exhaustive "
+                    "state-space behavior; broader production capture remains future work."
+                ),
+            )
+            report = audit.build_report(root, "target/audit.json", artifact_is_current=True)
+            phase = report["build_order_phases"][3]
+            self.assertTrue(report["ok"])
+            self.assertEqual(phase["status"], "complete")
+            self.assertEqual(phase["raw_pending_markers"], 3)
+            self.assertEqual(phase["pending_markers"], 0)
+            self.assertEqual(phase["descriptive_markers"], 1)
+            self.assertEqual(phase["boundary_caveat_markers"], 2)
+            self.assertEqual(report["incomplete_reasons"], [])
+            self.assertEqual(
+                report["recommended_next_slice"],
+                "Run --require-complete and then mark the goal complete only if the audit remains ok.",
             )
 
     def test_actionable_unsupported_rows_remain_completion_blockers(self):

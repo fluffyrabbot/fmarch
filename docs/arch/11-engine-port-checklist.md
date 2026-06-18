@@ -3242,8 +3242,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    .`. Read-only consumers can use `python3 tools/engine_port_completion_audit.py --check --output
    target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
 	   artifact, and fails if the saved audit is missing, stale versus any declared input, or different
-	   from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-	   21 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+	   from the generated report. The current artifact reports `ok: true`, `completion_claim: true`,
+	   `freshness.status: fresh`, 21 tracked inputs, eight parsed build-order phases, eight complete
+	   build-order phases, 192 exhaustive checklist rows, 192 checked
    rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2
    unsupported parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family
    rows (`feature_flags_test` and `init`). Mafia Universe now models `vanilla_town`, `blank_town_role`,
@@ -3267,10 +3268,11 @@ coverage, and a playable vertical scenario through the command pipeline.
    interactions, and five explicit unsupported primitive/modifier parity rows. The Engine V4
    test-family coverage artifact maps all 28 source-derived test-family buckets, with 26 mapped to
    fmarch proof surfaces and two explicit out-of-scope/non-resolution buckets. The unported
-   im-human inventory artifact reports only those 2 explicit out-of-scope unsupported parity rows,
-   including zero unsupported primitive, modifier, result-event, and culture-note rows; the
-   completion audit treats those explicit out-of-scope rows as visible but non-actionable and
-   blocks completion on the remaining partial build-order phases instead. The no-Postgres domain CI artifact
+	   im-human inventory artifact reports only those 2 explicit out-of-scope unsupported parity rows,
+	   including zero unsupported primitive, modifier, result-event, and culture-note rows; the
+	   completion audit treats those explicit out-of-scope rows as visible but non-actionable. Phase 7
+	   still exposes 32 raw textual marker hits, but classifies them as 28 descriptive markers and
+	   4 proof-boundary caveat markers, with zero actionable pending markers. The no-Postgres domain CI artifact
 	   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
 	   checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
 	   result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one

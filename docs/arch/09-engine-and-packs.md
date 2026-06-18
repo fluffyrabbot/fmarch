@@ -1279,7 +1279,9 @@ DATABASE_URL Postgres service, compares resolution replay and projection rebuild
 generated game, writes the saved report under target/operator-proof, and does not prove hosted,
 multi-node, production, browser, or exhaustive state-space behavior.` This command was run against a
 scratch database on the local Postgres service and emitted `ok: true`, 20 matched projection tables,
-one matched resolution envelope, zero drifted tables, zero drifted phases, and zero diffs.
+one matched resolution envelope, zero drifted tables, zero drifted phases, and zero diffs. The shared
+status/go-no-go/browser-smoke surfaces now require this trusted row and carry exact trusted metadata
+for `projection_table_count: 20` and `resolution_phase_count: 1`.
 The API manifest unit test now mechanically checks those artifact doc-truth rows in both this
 engine note and the checklist: every manifest row with an `artifact_path` must have its artifact
 path, rendered command, exact proof boundary, current `trusted` artifact state, and production
@@ -1290,17 +1292,17 @@ inventory/parity matrix with `python3 tools/im_human_engine_inventory.py --fmarc
 Read-only consumers can use `python3 tools/engine_port_completion_audit.py --check --output
 target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
 artifact, and fails if the saved audit is missing, stale versus any declared input, or different
-from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-21 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+from the generated report. The current artifact reports `ok: true`, `completion_claim: true`,
+`freshness.status: fresh`, 21 tracked inputs, eight parsed build-order phases, eight complete
+build-order phases, 192 exhaustive checklist rows, 192 checked
 rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2 unsupported
 parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family rows
 (`feature_flags_test` and `init`). It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-browser-fetched JSON surface, all 21 browser-smoke-required go/no-go metadata needles present,
-trusted metadata rows for large-action, determinism, generated shrink matrix, and generated shrink
-gap-audit proof rows, and a manifest/status trusted command/projection proof row that has not yet
-been promoted into the browser-smoke required needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
-and blocks completion on the four partial build-order phases: Phase 4 persistent/generated-action
-systems, Phase 5 rich day systems, Phase 6 culture packs, and Phase 7 operational hardening.
+browser-fetched JSON surface, all 23 browser-smoke-required go/no-go metadata needles present,
+trusted metadata rows for large-action, determinism, generated shrink matrix, generated shrink
+gap-audit, and command/projection proof rows. The audit treats explicit out-of-scope parity rows as
+visible but non-actionable. Phase 7 still exposes 32 raw textual marker hits, but classifies them as
+28 descriptive markers and 4 proof-boundary caveat markers, with zero actionable pending markers.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,
 operator proof-run index, projection rebuild view, resolution replay view, resolution trace view,
 host phase-control view, artifact go/no-go view, artifact retention JSON/view, projection rebuild
