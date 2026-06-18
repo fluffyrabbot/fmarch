@@ -443,8 +443,9 @@ implicit Rust ordering. The first vertical uses a tiny
 `mafia_universe` pack with a deterministic 50 percent D1 session and one shot per shooter;
 release-time success, invalidation, and `REFUND_SHOT` replay now have command/projection rebuild,
 trace, result-schema, and semantic minimizer proof. HP/shields and vulnerability modifiers are
-covered by pack-owned ITA modifier components and role refs; HP/hybrid protection breadth remains
-a future ITA slice.
+covered by pack-owned ITA modifier components and role refs; v61 `hit_points` components now
+feed `ItaCounters.hp_remaining` / `hp_damage` and `ItaShotResolved.hp_before` / `hp_after`, with
+hybrid shield-plus-HP targets consuming shields before damaging HP.
 
 `IrAbility::SelfDestruct` is the first v10 Chinese structured day-death addition. A
 `SelfDestruct` action carries `SelfDestructSpec { cause, kill_target, sacrifice_actor,
@@ -1414,12 +1415,13 @@ preserve election, pass, and destroy `BadgeChanged` events, badge-weighted `DayV
 rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
 promotion. The ITA buffered-release fixtures now prove a setup-phase `ItaShotBuffered` folds into
 `StateSnapshot.buffered_ita_shots`, then later command-resolved releases cover success,
-same-release target-dead invalidation, and `REFUND_SHOT` refund after an intervening target death;
+same-release target-dead invalidation, `REFUND_SHOT` refund after an intervening target death, and
+HP/hybrid protection where buffered shots either consume HP or preserve HP behind a spent shield;
 the command tests audit/rebuild projections and the fixture lane promotes reduced success,
-invalidated, and refunded semantic fixtures. This was rerun locally with
+invalidated, refunded, and HP/hybrid semantic fixtures. This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`,
-which passed one filtered pipeline test across the ITA buffered success, invalidation, and refund
-release fixtures. The sheriff fixture proof was rerun locally with
+which passed one filtered pipeline test across the ITA buffered success, invalidation, refund, and
+HP/hybrid release fixtures. The sheriff fixture proof was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
 announcement/prompt fixtures now also prove that minimization preserves Mafia Universe prior-night

@@ -8733,6 +8733,65 @@ fn golden_ita_chance_and_shields() {
 }
 
 #[test]
+fn golden_ita_hp_and_hybrid_protection() {
+    let golden = load_golden_in("mafia_universe", "ita_hp_and_hybrid_protection.json");
+    let got = run(
+        &golden["input"],
+        load_pack_for_golden("mafia_universe", &golden),
+    );
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "ita_hp_and_hybrid_protection",
+    );
+    let hp_damage = got
+        .iter()
+        .find(|event| {
+            event["kind"] == "ItaShotResolved"
+                && event["payload"]["action_id"] == "ita_hp_damage_001"
+        })
+        .expect("first armored ITA hit resolves");
+    assert_eq!(hp_damage["payload"]["outcome"], "Hit");
+    assert_eq!(hp_damage["payload"]["hp_before"], 2);
+    assert_eq!(hp_damage["payload"]["hp_after"], 1);
+    assert_eq!(hp_damage["payload"]["kill"], false);
+
+    let hp_kill = got
+        .iter()
+        .find(|event| {
+            event["kind"] == "ItaShotResolved" && event["payload"]["action_id"] == "ita_hp_kill_002"
+        })
+        .expect("second armored ITA hit resolves");
+    assert_eq!(hp_kill["payload"]["hp_before"], 1);
+    assert_eq!(hp_kill["payload"]["hp_after"], 0);
+    assert_eq!(hp_kill["payload"]["kill"], true);
+
+    let hybrid_shield = got
+        .iter()
+        .find(|event| {
+            event["kind"] == "ItaShotResolved"
+                && event["payload"]["action_id"] == "ita_hybrid_shield_003"
+        })
+        .expect("hybrid shield ITA hit resolves");
+    assert_eq!(hybrid_shield["payload"]["outcome"], "Blocked");
+    assert_eq!(hybrid_shield["payload"]["shield_spent"], true);
+    assert_eq!(hybrid_shield["payload"]["hp_before"], 2);
+    assert_eq!(hybrid_shield["payload"]["hp_after"], 2);
+
+    let hybrid_hp = got
+        .iter()
+        .find(|event| {
+            event["kind"] == "ItaShotResolved"
+                && event["payload"]["action_id"] == "ita_hybrid_hp_004"
+        })
+        .expect("hybrid HP ITA hit resolves");
+    assert_eq!(hybrid_hp["payload"]["outcome"], "Hit");
+    assert_eq!(hybrid_hp["payload"]["hp_before"], 2);
+    assert_eq!(hybrid_hp["payload"]["hp_after"], 1);
+    assert_eq!(hybrid_hp["payload"]["kill"], false);
+}
+
+#[test]
 fn golden_day_notes_announcement_last_words() {
     let golden = load_golden_in("mafia_universe", "day_notes_announcement_last_words.json");
     let got = run(&golden["input"], load_pack_named("mafia_universe"));

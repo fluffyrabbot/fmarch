@@ -13397,6 +13397,13 @@ async fn phase5_ita_buffered_release_fixture_replays_semantic_expectations_throu
             2,
             2,
         ),
+        (
+            "ita-buffered-release-hp-hybrid-semantic-expectations",
+            ita_buffered_release_hp_hybrid_fixture_json(),
+            11,
+            2,
+            2,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(&fixture_json).expect("Buffered ITA release fixture JSON parses");
@@ -19755,6 +19762,227 @@ fn ita_buffered_release_refunded_fixture_json() -> String {
         }
     }))
     .expect("Buffered ITA refunded release fixture JSON serializes")
+}
+
+fn ita_buffered_release_hp_hybrid_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 910_042,
+        "pack": "test_ita_buffered",
+        "phase": "D01R1",
+        "roster": [
+            { "slot": "slot_1", "role": "ita_shooter" },
+            { "slot": "slot_2", "role": "ita_shooter" },
+            { "slot": "slot_3", "role": "ita_shooter" },
+            { "slot": "slot_4", "role": "ita_shooter" },
+            { "slot": "slot_5", "role": "armored_mafia" },
+            { "slot": "slot_6", "role": "hybrid_mafia" },
+            { "slot": "slot_7", "role": "mafia_goon" }
+        ],
+        "setup_phases": [{
+            "phase": "D01",
+            "seed": 910_041,
+            "actions": [
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "ita_shot",
+                    "action_id": "ita_buffer_hp_damage_001",
+                    "targets": ["slot_5"]
+                },
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "ita_shot",
+                    "action_id": "ita_buffer_hp_kill_002",
+                    "targets": ["slot_5"]
+                },
+                {
+                    "actor_slot": "slot_3",
+                    "template_id": "ita_shot",
+                    "action_id": "ita_buffer_hybrid_shield_003",
+                    "targets": ["slot_6"]
+                },
+                {
+                    "actor_slot": "slot_4",
+                    "template_id": "ita_shot",
+                    "action_id": "ita_buffer_hybrid_hp_004",
+                    "targets": ["slot_6"]
+                }
+            ]
+        }],
+        "actions": [],
+        "votes": [],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "ItaShotResolved",
+                    "payload": {
+                        "session_id": "d1",
+                        "action_id": "ita_buffer_hp_damage_001",
+                        "actor": "slot_1",
+                        "target": "slot_5",
+                        "outcome": "Hit",
+                        "hit_chance": 1.0,
+                        "kill": false,
+                        "hp_before": 2,
+                        "hp_after": 1,
+                        "protection_path": "hp"
+                    }
+                },
+                {
+                    "kind": "ItaShotResolved",
+                    "payload": {
+                        "session_id": "d1",
+                        "action_id": "ita_buffer_hp_kill_002",
+                        "actor": "slot_2",
+                        "target": "slot_5",
+                        "outcome": "Hit",
+                        "hit_chance": 1.0,
+                        "kill": true,
+                        "hp_before": 1,
+                        "hp_after": 0,
+                        "protection_path": "hp"
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_5",
+                        "cause": "ita_shot",
+                        "attackers": ["slot_2"],
+                        "unstoppable": true
+                    }
+                },
+                {
+                    "kind": "ItaShotResolved",
+                    "payload": {
+                        "session_id": "d1",
+                        "action_id": "ita_buffer_hybrid_shield_003",
+                        "actor": "slot_3",
+                        "target": "slot_6",
+                        "outcome": "Blocked",
+                        "kill": false,
+                        "shield_before": 1,
+                        "shield_after": 0,
+                        "shield_spent": true,
+                        "hp_before": 2,
+                        "hp_after": 2,
+                        "protection_path": "shield"
+                    }
+                },
+                {
+                    "kind": "ItaShotResolved",
+                    "payload": {
+                        "session_id": "d1",
+                        "action_id": "ita_buffer_hybrid_hp_004",
+                        "actor": "slot_4",
+                        "target": "slot_6",
+                        "outcome": "Hit",
+                        "hit_chance": 1.0,
+                        "kill": false,
+                        "hp_before": 2,
+                        "hp_after": 1,
+                        "protection_path": "hp"
+                    }
+                },
+                {
+                    "kind": "ItaSessionUpdated",
+                    "payload": {
+                        "session_id": "d1",
+                        "queue_length": 0,
+                        "shots_resolved": 4,
+                        "global_shots_fired": 4,
+                        "counters": {
+                            "hits_landed": 3,
+                            "shots_blocked": 1,
+                            "hp_remaining": {
+                                "slot_5": 0,
+                                "slot_6": 1
+                            },
+                            "hp_damage": {
+                                "slot_5": 2,
+                                "slot_6": 1
+                            },
+                            "shields_remaining": {
+                                "slot_6": 0
+                            },
+                            "shields_spent": {
+                                "slot_6": 1
+                            }
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D01R1",
+                        "deaths": [{
+                            "slot_id": "slot_5",
+                            "cause": "ita_shot"
+                        }]
+                    }
+                }
+            ],
+            "generated_actions": [
+                {
+                    "action_id": "ita_buffer_hp_damage_001",
+                    "source": "ItaShotResolved",
+                    "actor": "slot_1",
+                    "targets": ["slot_5"],
+                    "detail": {
+                        "session_id": "d1",
+                        "outcome": "Hit",
+                        "kill": false,
+                        "hp_before": 2,
+                        "hp_after": 1,
+                        "protection_path": "hp"
+                    }
+                },
+                {
+                    "action_id": "ita_buffer_hp_kill_002",
+                    "source": "ItaShotResolved",
+                    "actor": "slot_2",
+                    "targets": ["slot_5"],
+                    "detail": {
+                        "session_id": "d1",
+                        "outcome": "Hit",
+                        "kill": true,
+                        "hp_before": 1,
+                        "hp_after": 0,
+                        "protection_path": "hp"
+                    }
+                },
+                {
+                    "action_id": "ita_buffer_hybrid_shield_003",
+                    "source": "ItaShotResolved",
+                    "actor": "slot_3",
+                    "targets": ["slot_6"],
+                    "detail": {
+                        "session_id": "d1",
+                        "outcome": "Blocked",
+                        "kill": false,
+                        "shield_spent": true,
+                        "hp_before": 2,
+                        "hp_after": 2,
+                        "protection_path": "shield"
+                    }
+                },
+                {
+                    "action_id": "ita_buffer_hybrid_hp_004",
+                    "source": "ItaShotResolved",
+                    "actor": "slot_4",
+                    "targets": ["slot_6"],
+                    "detail": {
+                        "session_id": "d1",
+                        "outcome": "Hit",
+                        "kill": false,
+                        "hp_before": 2,
+                        "hp_after": 1,
+                        "protection_path": "hp"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Buffered ITA HP/hybrid release fixture JSON serializes")
 }
 
 fn mafia_universe_day_notes_fixture_json() -> String {
@@ -29808,6 +30036,311 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered-refund trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_releases_buffered_ita_hp_and_hybrid_protection(pool: PgPool) {
+    let host = "host_ita_buffer_hp_hybrid";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "test_ita_buffered".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "ita_shooter"),
+        ("slot_2", "user_2", "ita_shooter"),
+        ("slot_3", "user_3", "ita_shooter"),
+        ("slot_4", "user_4", "ita_shooter"),
+        ("slot_5", "user_5", "armored_mafia"),
+        ("slot_6", "user_6", "hybrid_mafia"),
+        ("slot_7", "user_7", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (user_id, actor, action_id, target) in [
+        ("user_1", "slot_1", "ita_buffer_hp_damage_001", "slot_5"),
+        ("user_2", "slot_2", "ita_buffer_hp_kill_002", "slot_5"),
+        ("user_3", "slot_3", "ita_buffer_hybrid_shield_003", "slot_6"),
+        ("user_4", "slot_4", "ita_buffer_hybrid_hp_004", "slot_6"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor.into(),
+                template_id: "ita_shot".into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .expect("submit buffered ITA HP/hybrid action");
+    }
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 910041 })
+        .await
+        .expect("host buffers HP/hybrid ITA shots on D01");
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "D01R1".into(),
+        },
+    )
+    .await
+    .expect("host opens HP/hybrid release pass");
+
+    let release_snapshot = load_engine_snapshot(&pool, game, "D01R1")
+        .await
+        .expect("load HP/hybrid release snapshot");
+    assert_eq!(release_snapshot.buffered_ita_shots.len(), 4);
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 910042 })
+        .await
+        .expect("host releases buffered HP/hybrid ITA shots on D01R1");
+
+    let release_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01R1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let release = domain::validate_resolution_json(&release_payload, domain::RESULT_VERSION)
+        .expect("released HP/hybrid ResolutionApplied validates");
+    assert!(
+        !release
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::ItaShotBuffered { .. })),
+        "release pass must not re-buffer HP/hybrid shots"
+    );
+
+    let resolved = release
+        .events
+        .iter()
+        .filter_map(|indexed| match &indexed.event {
+            domain::InnerEvent::ItaShotResolved {
+                action_id,
+                outcome,
+                kill,
+                shield_before,
+                shield_after,
+                shield_spent,
+                hp_before,
+                hp_after,
+                protection_path,
+                counters,
+                ..
+            } => Some((
+                action_id.as_str(),
+                *outcome,
+                *kill,
+                *shield_before,
+                *shield_after,
+                *shield_spent,
+                *hp_before,
+                *hp_after,
+                protection_path.as_deref(),
+                counters.clone(),
+            )),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(resolved.len(), 4);
+
+    let hp_damage = resolved
+        .iter()
+        .find(|(action_id, ..)| *action_id == "ita_buffer_hp_damage_001")
+        .expect("first released HP shot resolves");
+    assert!(matches!(hp_damage.1, domain::ItaShotOutcome::Hit));
+    assert!(!hp_damage.2);
+    assert_eq!(hp_damage.6, Some(2));
+    assert_eq!(hp_damage.7, Some(1));
+    assert_eq!(hp_damage.8, Some("hp"));
+
+    let hp_kill = resolved
+        .iter()
+        .find(|(action_id, ..)| *action_id == "ita_buffer_hp_kill_002")
+        .expect("second released HP shot resolves");
+    assert!(matches!(hp_kill.1, domain::ItaShotOutcome::Hit));
+    assert!(hp_kill.2);
+    assert_eq!(hp_kill.6, Some(1));
+    assert_eq!(hp_kill.7, Some(0));
+    assert_eq!(hp_kill.9.hp_remaining.get("slot_5"), Some(&0));
+    assert_eq!(hp_kill.9.hp_damage.get("slot_5"), Some(&2));
+
+    let hybrid_shield = resolved
+        .iter()
+        .find(|(action_id, ..)| *action_id == "ita_buffer_hybrid_shield_003")
+        .expect("released hybrid shield shot resolves");
+    assert!(matches!(hybrid_shield.1, domain::ItaShotOutcome::Blocked));
+    assert!(!hybrid_shield.2);
+    assert_eq!(hybrid_shield.3, Some(1));
+    assert_eq!(hybrid_shield.4, Some(0));
+    assert!(hybrid_shield.5);
+    assert_eq!(hybrid_shield.6, Some(2));
+    assert_eq!(hybrid_shield.7, Some(2));
+    assert_eq!(hybrid_shield.8, Some("shield"));
+
+    let hybrid_hp = resolved
+        .iter()
+        .find(|(action_id, ..)| *action_id == "ita_buffer_hybrid_hp_004")
+        .expect("released hybrid HP shot resolves");
+    assert!(matches!(hybrid_hp.1, domain::ItaShotOutcome::Hit));
+    assert!(!hybrid_hp.2);
+    assert_eq!(hybrid_hp.6, Some(2));
+    assert_eq!(hybrid_hp.7, Some(1));
+    assert_eq!(hybrid_hp.8, Some("hp"));
+    assert_eq!(hybrid_hp.9.shields_remaining.get("slot_6"), Some(&0));
+    assert_eq!(hybrid_hp.9.shields_spent.get("slot_6"), Some(&1));
+    assert_eq!(hybrid_hp.9.hp_remaining.get("slot_6"), Some(&1));
+    assert_eq!(hybrid_hp.9.hp_damage.get("slot_6"), Some(&1));
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01R1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
+    assert!(trace.generated.iter().any(|generated| {
+        generated.source == "ItaShotResolved"
+            && generated.action_id == "ita_buffer_hybrid_shield_003"
+            && generated.detail["shield_spent"] == serde_json::json!(true)
+            && generated.detail["hp_before"] == serde_json::json!(2)
+            && generated.detail["hp_after"] == serde_json::json!(2)
+    }));
+    assert!(trace.generated.iter().any(|generated| {
+        generated.source == "ItaShotResolved"
+            && generated.action_id == "ita_buffer_hybrid_hp_004"
+            && generated.detail["hp_before"] == serde_json::json!(2)
+            && generated.detail["hp_after"] == serde_json::json!(1)
+            && generated.detail["protection_path"] == serde_json::json!("hp")
+    }));
+
+    let post_release_snapshot = load_engine_snapshot(&pool, game, "D01R1")
+        .await
+        .expect("load post HP/hybrid release snapshot");
+    assert!(post_release_snapshot.buffered_ita_shots.is_empty());
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_5")
+            .unwrap()
+            .alive,
+        "second HP hit kills armored target through projections"
+    );
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_6")
+            .unwrap()
+            .alive,
+        "hybrid target survives shield plus one HP damage"
+    );
+    let counters = action_counters(&pool, game).await.unwrap();
+    for (slot, action_id) in [
+        ("slot_1", "ita_buffer_hp_damage_001"),
+        ("slot_2", "ita_buffer_hp_kill_002"),
+        ("slot_3", "ita_buffer_hybrid_shield_003"),
+        ("slot_4", "ita_buffer_hybrid_hp_004"),
+    ] {
+        assert!(counters.iter().any(|counter| {
+            counter.slot_id == slot
+                && counter.counter_id == "day_session:d1:ita_shot"
+                && counter.template_id == "ita_shot"
+                && counter.consumed_action == action_id
+                && counter.remaining == 0
+        }));
+    }
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("buffer HP/hybrid resolution audit");
+    assert!(audit.ok, "buffer HP/hybrid envelopes should audit cleanly");
+    assert_eq!(audit.audited, 2);
+    assert_eq!(audit.skipped, 0);
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let counters_before = serde_json::to_string(&counters).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve released HP/hybrid outcomes"
+    );
+    assert_eq!(
+        counters_before,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter rebuild must preserve released HP/hybrid shot use"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01R1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted buffered HP/hybrid trace envelope"
     );
 }
 

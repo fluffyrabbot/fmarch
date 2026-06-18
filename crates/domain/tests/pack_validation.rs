@@ -3202,20 +3202,21 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
 }
 
 #[test]
-fn ita_session_buffer_delay_with_resolution_policy_requires_v60_and_positive_delay() {
+fn ita_session_buffer_delay_with_resolution_policy_and_hp_requires_v61_and_positive_delay() {
     let mut value = serde_json::to_value(load_pack_named("test_ita_buffered")).unwrap();
-    value["ir_version"] = json!(59);
+    value["ir_version"] = json!(60);
 
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 60",
+        "pack declares features requiring ir_version >= 61",
     );
     assert_issue(&err, "ir_version", "ita.session.buffer_delay_ms");
     assert_issue(&err, "ir_version", "ita.resolution_policy");
+    assert_issue(&err, "ir_version", "ita.hit_points");
 
-    value["ir_version"] = json!(60);
+    value["ir_version"] = json!(61);
     value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(0);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
@@ -3357,6 +3358,42 @@ fn ita_modifier_components_require_v32_and_fold_strictly() {
     action["ability"] = json!("ItaShot");
     action["mode"] = Value::Null;
     action["window"] = json!("Day");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn ita_hit_points_require_v61_and_fold_through_modifier_components() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(60);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["ita"] = json!({
+        "default_hit_chance": 1.0,
+        "vote_conflict": "ResolveShotsBeforeVote",
+        "sessions": [{ "session_id": "d1", "day": 1 }],
+        "modifier_components": {
+            "hp": { "hit_points": 2 },
+            "shield": { "shields": 1 }
+        },
+        "role_modifier_refs": {
+            "townie": ["hp", "shield"]
+        }
+    });
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("ItaShot");
+    action["mode"] = Value::Null;
+    action["window"] = json!("Day");
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 61",
+    );
+    assert_issue(&err, "ir_version", "ita.hit_points");
+
+    value["ir_version"] = json!(61);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 

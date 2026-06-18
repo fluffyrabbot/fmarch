@@ -1331,6 +1331,9 @@ fn ita_session_payloads_pass_contract_validation() {
                     "hit_chance": 1.0,
                     "roll": 0.42,
                     "kill": true,
+                    "hp_before": 1,
+                    "hp_after": 0,
+                    "protection_path": "hp",
                     "submitted_at": 10,
                     "timestamp": 10,
                     "counters": {
@@ -1338,6 +1341,8 @@ fn ita_session_payloads_pass_contract_validation() {
                         "shots_resolved": 1,
                         "hits_landed": 1,
                         "shots_missed": 0,
+                        "hp_remaining": { "slot_4": 0 },
+                        "hp_damage": { "slot_4": 1 },
                         "per_shooter": { "slot_1": 1 },
                         "per_target": { "slot_4": 1 }
                     }

@@ -1227,6 +1227,8 @@ pub struct ItaRoleOverride {
     pub target_evade: f64,
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub shields: u16,
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub hit_points: u16,
 }
 
 impl ItaRoleOverride {
@@ -1235,6 +1237,7 @@ impl ItaRoleOverride {
             && is_zero_f64(&self.hit_penalty)
             && is_zero_f64(&self.target_evade)
             && self.shields == 0
+            && self.hit_points == 0
     }
 
     pub fn add_component(&mut self, component: &ItaRoleOverride) {
@@ -1242,6 +1245,7 @@ impl ItaRoleOverride {
         self.hit_penalty += component.hit_penalty;
         self.target_evade += component.target_evade;
         self.shields = self.shields.saturating_add(component.shields);
+        self.hit_points = self.hit_points.saturating_add(component.hit_points);
     }
 }
 
@@ -9202,6 +9206,19 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if !pack.ita.modifier_components.is_empty() || !pack.ita.role_modifier_refs.is_empty() {
         require_ir(&mut required, &mut reasons, 32, "ita.modifier_components");
+    }
+    if pack
+        .ita
+        .modifier_components
+        .values()
+        .any(|component| component.hit_points > 0)
+        || pack
+            .ita
+            .role_overrides
+            .values()
+            .any(|override_policy| override_policy.hit_points > 0)
+    {
+        require_ir(&mut required, &mut reasons, 61, "ita.hit_points");
     }
     if pack.ita.resolution_policy != ItaResolutionPolicy::default() {
         require_ir(&mut required, &mut reasons, 60, "ita.resolution_policy");

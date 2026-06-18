@@ -1,7 +1,7 @@
 {
   "name": "test_ita_buffered",
   "version": 1,
-  "ir_version": 60,
+  "ir_version": 61,
   "roles": {
     "ita_shooter": {
       "description": "Test ITA participant whose session buffers shots before release.",
@@ -54,6 +54,16 @@
       "description": "Mafia-aligned test role with no actions.",
       "alignment": "mafia",
       "actions": []
+    },
+    "armored_mafia": {
+      "description": "Mafia-aligned test target with ITA hit points.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "hybrid_mafia": {
+      "description": "Mafia-aligned test target with one ITA shield and ITA hit points.",
+      "alignment": "mafia",
+      "actions": []
     }
   },
   "precedence": [],
@@ -83,6 +93,14 @@
   "ita": {
     "default_hit_chance": 1.0,
     "auto_close": true,
+    "modifier_components": {
+      "one_ita_shield": { "shields": 1 },
+      "two_ita_hp": { "hit_points": 2 }
+    },
+    "role_modifier_refs": {
+      "armored_mafia": ["two_ita_hp"],
+      "hybrid_mafia": ["one_ita_shield", "two_ita_hp"]
+    },
     "vote_conflict": "ResolveShotsBeforeVote",
     "resolution_policy": {
       "on_target_already_dead": "REFUND_SHOT"

@@ -5450,6 +5450,8 @@ fn build_trace(
                 shield_before,
                 shield_after,
                 shield_spent,
+                hp_before,
+                hp_after,
                 protection_path,
                 ..
             } => {
@@ -5465,6 +5467,11 @@ fn build_trace(
                     detail["shield_before"] = serde_json::json!(shield_before);
                     detail["shield_after"] = serde_json::json!(shield_after);
                     detail["shield_spent"] = serde_json::json!(shield_spent);
+                    detail["protection_path"] = serde_json::json!(protection_path);
+                }
+                if hp_before.is_some() || hp_after.is_some() {
+                    detail["hp_before"] = serde_json::json!(hp_before);
+                    detail["hp_after"] = serde_json::json!(hp_after);
                     detail["protection_path"] = serde_json::json!(protection_path);
                 }
                 generated.push(GeneratedActionTrace {
@@ -10879,6 +10886,19 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         if shield_spent {
             *counters.shields_spent.entry(target.clone()).or_insert(0) += 1;
         }
+        let hp_before = ita_hp_before(input, counters, target_slot);
+        let hp_damaged = should_hit && !shield_spent && hp_before > 0;
+        let hp_after = if hp_damaged {
+            hp_before.saturating_sub(1)
+        } else {
+            hp_before
+        };
+        if hp_before > 0 || hp_damaged {
+            counters.hp_remaining.insert(target.clone(), hp_after);
+        }
+        if hp_damaged {
+            *counters.hp_damage.entry(target.clone()).or_insert(0) += 1;
+        }
         let outcome = if !should_hit {
             ItaShotOutcome::Miss
         } else if shield_spent {
@@ -10886,7 +10906,7 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         } else {
             ItaShotOutcome::Hit
         };
-        let hit = matches!(outcome, ItaShotOutcome::Hit);
+        let hit = matches!(outcome, ItaShotOutcome::Hit) && (hp_before == 0 || hp_after == 0);
         counters.shots_resolved += 1;
         match outcome {
             ItaShotOutcome::Hit => counters.hits_landed += 1,
@@ -10909,7 +10929,15 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             shield_before: (shield_before > 0 || shield_spent).then_some(shield_before),
             shield_after: (shield_before > 0 || shield_spent).then_some(shield_after),
             shield_spent,
-            protection_path: (shield_before > 0 || shield_spent).then_some("shield".to_string()),
+            hp_before: (hp_before > 0 || hp_damaged).then_some(hp_before),
+            hp_after: (hp_before > 0 || hp_damaged).then_some(hp_after),
+            protection_path: if shield_before > 0 || shield_spent {
+                Some("shield".to_string())
+            } else if hp_before > 0 || hp_damaged {
+                Some("hp".to_string())
+            } else {
+                None
+            },
             submitted_at: sub.submitted_at,
             timestamp: sub.submitted_at,
             counters: counters.clone(),
@@ -11328,6 +11356,24 @@ fn ita_shields_before(
     if initial > 0 {
         counters
             .shields_remaining
+            .insert(target.slot_id.clone(), initial);
+    }
+    initial
+}
+
+fn ita_hp_before(input: &ResolutionInput, counters: &mut ItaCounters, target: &SlotState) -> u32 {
+    if let Some(existing) = counters.hp_remaining.get(&target.slot_id) {
+        return *existing;
+    }
+    let initial = input
+        .pack
+        .ita
+        .effective_role_override(&target.role_key)
+        .hit_points;
+    let initial = u32::from(initial);
+    if initial > 0 {
+        counters
+            .hp_remaining
             .insert(target.slot_id.clone(), initial);
     }
     initial

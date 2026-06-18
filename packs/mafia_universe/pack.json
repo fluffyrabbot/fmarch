@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 60,
+  "ir_version": 61,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2382,6 +2382,16 @@
       "description": "Mafia-aligned target that composes percent ITA vulnerability with one ITA shield.",
       "alignment": "mafia",
       "actions": []
+    },
+    "mafia_ita_armored": {
+      "description": "Mafia-aligned target with ITA hit points.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "mafia_ita_hybrid_protected": {
+      "description": "Mafia-aligned target that composes one ITA shield with ITA hit points.",
+      "alignment": "mafia",
+      "actions": []
     }
   },
   "precedence": [
@@ -2686,14 +2696,17 @@
       "better_ita_chance": { "hit_bonus": 0.25 },
       "worse_ita_chance": { "hit_penalty": 0.25 },
       "percent_ita_vulnerability": { "target_evade": 0.25 },
-      "one_ita_shield": { "shields": 1 }
+      "one_ita_shield": { "shields": 1 },
+      "two_ita_hp": { "hit_points": 2 }
     },
     "role_modifier_refs": {
       "town_ita_sharpshooter": ["better_ita_chance"],
       "town_ita_bad_shot": ["worse_ita_chance"],
       "mafia_ita_evasive": ["percent_ita_vulnerability"],
       "mafia_ita_shielded": ["one_ita_shield"],
-      "mafia_ita_evasive_shielded": ["percent_ita_vulnerability", "one_ita_shield"]
+      "mafia_ita_evasive_shielded": ["percent_ita_vulnerability", "one_ita_shield"],
+      "mafia_ita_armored": ["two_ita_hp"],
+      "mafia_ita_hybrid_protected": ["one_ita_shield", "two_ita_hp"]
     },
     "vote_conflict": "ResolveShotsBeforeVote",
     "resolution_policy": {

@@ -1418,15 +1418,19 @@ The only identity that crosses into the engine is `SlotId`.
   pack policy for named shooter `hit_bonus` / `hit_penalty`, target `target_evade`,
   and one-shot `shields` components.
   `ItaShotOutcome::Blocked` records shielded would-be hits without killing, and
-  `ItaCounters` carries `shots_blocked`, `shields_remaining`, and `shields_spent`.
+  `ItaCounters` carries `shots_blocked`, `shields_remaining`, `shields_spent`,
+  `hp_remaining`, and `hp_damage`.
   Pack validation rejects packs below IR v32, unknown component refs, duplicate refs,
-  empty components/effective modifiers, and out-of-range probability modifiers. Pure
+  empty components/effective modifiers, and out-of-range probability modifiers; v61
+  `hit_points` components reject packs below IR v61 and fold through modifier refs. Pure
   golden `ita_chance_and_shields`
   proves better chance, worse chance, target evade, and shield blocking in one
-  deterministic D01 session; Postgres command/projection proof covers ResolvePhase,
-  trace inspection, action-counter projection, audit, and rebuild. Buffering and
-  release-time refunds/invalidations now have command/projection and minimizer proof;
-  HP/hybrid ITA protection remains a future ITA slice.]
+  deterministic D01 session, while pure golden `ita_hp_and_hybrid_protection` proves
+  HP damage, HP lethal depletion, hybrid shield blocking that preserves HP, and later
+  HP damage on the hybrid target. Postgres command/projection proof covers ResolvePhase,
+  trace inspection, action-counter projection, audit, and rebuild. Buffering,
+  release-time refunds/invalidations, and HP/hybrid buffered release now have
+  command/projection and minimizer proof.]
 - [x] Combined/complex modifiers through composition, not bespoke branches.
   [Mafia Universe v32 declares named ITA modifier components and per-role refs,
   while resolver code folds them through `effective_role_override` before hit chance
@@ -2086,7 +2090,11 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    phase, queues/resolves/kills/closes from event-folded state, audits/rebuilds projections, and
    promotes semantic minimizer fixtures; v60 buffered-release invalidation/refund proof covers
    same-release target-dead invalidation, `REFUND_SHOT` quota-neutral refund after target death
-   before release, generated trace rows, result-schema validation, and command audit/rebuild]
+   before release, generated trace rows, result-schema validation, and command audit/rebuild;
+   v61 ITA `hit_points` components add HP and hybrid shield-plus-HP targets, expose
+   `ItaShotResolved.hp_before` / `hp_after` and `ItaCounters.hp_remaining` / `hp_damage`,
+   and prove shield-first preservation versus HP consumption through pure golden,
+   command/projection, audit/rebuild, and minimizer fixtures.]
 5. Last words and day announcements. [partly done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; `mafia_universe` golden plus Postgres command/projection rebuild proof]
@@ -2530,12 +2538,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
    promotion. The ITA buffered-release fixtures now prove a setup-phase `ItaShotBuffered` folds
    into `StateSnapshot.buffered_ita_shots`, then later command-resolved releases cover success,
-   same-release target-dead invalidation, and `REFUND_SHOT` refund after an intervening target
-   death; the command tests audit/rebuild projections and the fixture lane promotes reduced
-   success, invalidated, and refunded semantic fixtures. This was rerun locally with
+   same-release target-dead invalidation, `REFUND_SHOT` refund after an intervening target death,
+   and HP/hybrid protection where buffered shots either consume HP or preserve HP behind a spent
+   shield; the command tests audit/rebuild projections and the fixture lane promotes reduced
+   success, invalidated, refunded, and HP/hybrid semantic fixtures. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`
-   and passed one filtered pipeline test across the ITA buffered success, invalidation, and refund
-   release fixtures. The sheriff fixture proof was rerun locally with
+   and passed one filtered pipeline test across the ITA buffered success, invalidation, refund, and
+   HP/hybrid release fixtures. The sheriff fixture proof was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
@@ -2863,8 +2872,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by tackling the remaining ITA HP/hybrid protection breadth.
-Model a pack-owned ITA HP target component plus a hybrid shield/HP target, prove blocked versus
-damaging hits with pure goldens, then add command/projection cases where buffered release consumes
-or preserves HP/shield state correctly across audit/rebuild and semantic minimizer reduction before
-updating the checklist again.
+Continue Phase 5 rich day systems by finishing ITA session lifecycle policy breadth. Model
+pack-declared host/admin session lifecycle controls for manual open, pause/cancel, update, and
+close transitions; emit host-visible announcements and trace rows for cancelled or paused sessions;
+then prove pure goldens plus command/projection audit/rebuild and semantic minimizer coverage
+before updating the checklist again.

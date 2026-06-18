@@ -266,6 +266,10 @@ pub enum InnerEvent {
         #[serde(default, skip_serializing_if = "is_false")]
         shield_spent: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        hp_before: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hp_after: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         protection_path: Option<String>,
         submitted_at: u64,
         timestamp: u64,
@@ -602,6 +606,10 @@ pub struct ItaCounters {
     pub shields_remaining: BTreeMap<SlotId, u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub shields_spent: BTreeMap<SlotId, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub hp_remaining: BTreeMap<SlotId, u32>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub hp_damage: BTreeMap<SlotId, u32>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub refunded_by_reason: BTreeMap<String, u32>,
 }
