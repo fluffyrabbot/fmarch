@@ -12059,6 +12059,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
 
     for (family, seeds) in [
         ("hunter", [97_021_u64, 97_022]),
+        ("vengeful_fixpoint", [97_151, 97_152]),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("backup_inheritance", [97_071, 97_072]),
@@ -12184,8 +12185,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 17,
-        "expected_case_count": 34,
+        "expected_family_count": 18,
+        "expected_case_count": 36,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
@@ -12204,12 +12205,13 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("poison_cure".to_string(), 2),
             ("pgo".to_string(), 2),
             ("private_notification".to_string(), 2),
+            ("vengeful_fixpoint".to_string(), 2),
         ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(17));
-    assert_eq!(report["case_count"], serde_json::json!(34));
+    assert_eq!(report["family_count"], serde_json::json!(18));
+    assert_eq!(report["case_count"], serde_json::json!(36));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19395,9 +19397,118 @@ fn generated_mafiascum_persistent_trigger_fixture_json(family: &str, seed: u64) 
     .expect("generated Mafiascum persistent trigger fixture serializes")
 }
 
+fn generated_mafiascum_vengeful_fixpoint_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 37_000,
+        "pack": "mafiascum",
+        "phase": "N01",
+        "roster": [
+            { "slot": "slot_1", "role": "mafia_goon" },
+            { "slot": "slot_2", "role": "vengeful" },
+            { "slot": "slot_3", "role": "mafia_goon" },
+            { "slot": "slot_4", "role": "vanilla_townie" },
+            { "slot": "slot_5", "role": "vanilla_townie" }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_1",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_kill_vengeful"),
+                "targets": ["slot_2"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_1"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "Trigger",
+                    "payload": {
+                        "trigger_id": "vengeful_retaliates",
+                        "payload": {
+                            "on": "Kill",
+                            "source_target": "slot_2",
+                            "source_actor": "slot_1",
+                            "source_cause": "factional_kill",
+                            "produced_actor": "slot_2",
+                            "produced_target": "slot_1"
+                        }
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "vengeful_retaliates",
+                        "attackers": ["slot_2"],
+                        "unstoppable": false
+                    }
+                }
+            ],
+            "trace_notes": [
+                "trigger vengeful_retaliates emitted at event_index 1"
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:1",
+                    "outcome": "trigger",
+                    "detail": null
+                }
+            ],
+            "generated_actions": [
+                {
+                    "action_id": "vengeful_retaliates",
+                    "source": "Trigger",
+                    "actor": "slot_2",
+                    "targets": ["slot_1"],
+                    "detail": {
+                        "on": "Kill",
+                        "source_target": "slot_2",
+                        "source_actor": "slot_1",
+                        "source_cause": "factional_kill",
+                        "produced_actor": "slot_2",
+                        "produced_target": "slot_1"
+                    }
+                }
+            ],
+            "generated_action_counts": [
+                {
+                    "action_id": "vengeful_retaliates",
+                    "source": "Trigger",
+                    "count": 1
+                }
+            ],
+            "slot_states": [
+                {
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "alive": false
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum vengeful fixpoint fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
+        "vengeful_fixpoint" => generated_mafiascum_vengeful_fixpoint_fixture_json(seed),
         "bomb" => generated_night_case_fixture_json(
             &generated_epicmafia_night_case(seed),
             "epicmafia",
@@ -19430,6 +19541,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "hunter" => {
             fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
                 serde_json::json!("hunter_retaliate_wrong");
+        }
+        "vengeful_fixpoint" => {
+            fixture["expectations"]["generated_actions"][0]["action_id"] =
+                serde_json::json!("vengeful_retaliates_wrong");
         }
         "lovers" => {
             fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
@@ -23368,6 +23483,7 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
         "trace_decisions",
         "trace_notes",
         "generated_actions",
+        "generated_action_counts",
         "delayed_death_queues",
         "absent_delayed_death_queues",
         "slot_effects",

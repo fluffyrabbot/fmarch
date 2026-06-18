@@ -55,14 +55,14 @@ REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "phase_trace_anchored: true",
     "decision_trace_anchored: true",
     "family_count: 12",
-    "family_count: 17",
+    "family_count: 18",
     "seed_count: 57",
     "expected_family_count: 12",
-    "expected_family_count: 17",
+    "expected_family_count: 18",
     "expected_seed_count: 57",
     "family_manifest_matched: true",
-    "case_count: 34",
-    "expected_case_count: 34",
+    "case_count: 36",
+    "expected_case_count: 36",
 ]
 REQUIRED_BROWSER_STATUS_METADATA_ROWS = [
     "proof-run-operator-proof-large-action-graph-performance",

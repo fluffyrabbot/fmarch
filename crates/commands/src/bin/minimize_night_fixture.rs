@@ -97,6 +97,8 @@ struct FixtureExpectations {
     #[serde(default)]
     generated_actions: Vec<ExpectedGeneratedAction>,
     #[serde(default)]
+    generated_action_counts: Vec<ExpectedGeneratedActionCount>,
+    #[serde(default)]
     delayed_death_queues: Vec<ExpectedProjectionRow>,
     #[serde(default)]
     absent_delayed_death_queues: Vec<ExpectedProjectionRow>,
@@ -119,6 +121,7 @@ impl FixtureExpectations {
             + self.trace_decisions.len()
             + self.trace_notes.len()
             + self.generated_actions.len()
+            + self.generated_action_counts.len()
             + self.delayed_death_queues.len()
             + self.absent_delayed_death_queues.len()
             + self.slot_effects.len()
@@ -163,6 +166,14 @@ struct ExpectedGeneratedAction {
     targets: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     detail: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ExpectedGeneratedActionCount {
+    action_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
+    count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1132,6 +1143,27 @@ async fn validate_semantic_expectations(
         }
     }
 
+    for expected in &expectations.generated_action_counts {
+        let count = trace_report
+            .traces
+            .iter()
+            .flat_map(|trace| trace.generated.iter())
+            .filter(|generated| {
+                generated.action_id == expected.action_id
+                    && expected
+                        .source
+                        .as_ref()
+                        .is_none_or(|source| generated.source == *source)
+            })
+            .count();
+        if count != expected.count {
+            return Err(format!(
+                "expected generated action action_id={} count={} but found {}",
+                expected.action_id, expected.count, count
+            ));
+        }
+    }
+
     if !expectations.sheriff_badges.is_empty() {
         let rows = sheriff_badges(pool, game)
             .await
@@ -1597,6 +1629,7 @@ mod tests {
                 trace_decisions: Vec::new(),
                 trace_notes: Vec::new(),
                 generated_actions: Vec::new(),
+                generated_action_counts: Vec::new(),
                 delayed_death_queues: Vec::new(),
                 absent_delayed_death_queues: Vec::new(),
                 slot_effects: Vec::new(),
