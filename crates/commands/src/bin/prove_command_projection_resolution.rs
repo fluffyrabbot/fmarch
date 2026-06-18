@@ -8,7 +8,7 @@ use std::{
 
 use caps::Principal;
 use commands::{
-    audit_resolution_envelopes, handle,
+    audit_resolution_envelopes, handle, load_engine_phase_input,
     operator_proof::{
         build_operator_command_projection_resolution_report,
         build_operator_projection_rebuild_audit_report, build_operator_resolution_diff_report,
@@ -225,6 +225,23 @@ async fn seed_and_resolve_fixture_game(
             },
         )
         .await?;
+    }
+
+    let phase_input = load_engine_phase_input(pool, game, &fixture.phase).await?;
+    if phase_input.pack_name != fixture.pack {
+        return Err(format!(
+            "engine input builder loaded pack `{}` for fixture pack `{}`",
+            phase_input.pack_name, fixture.pack
+        )
+        .into());
+    }
+    if phase_input.submissions.len() != fixture.actions.len() {
+        return Err(format!(
+            "engine input builder loaded {} submissions for {} fixture actions",
+            phase_input.submissions.len(),
+            fixture.actions.len()
+        )
+        .into());
     }
 
     handle(

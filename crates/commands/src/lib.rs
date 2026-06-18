@@ -63,6 +63,134 @@ pub struct EnginePhaseInputAudit {
     pub day_phase_inputs: domain::DayPhaseInputs,
 }
 
+/// Command-layer builder for reducing a stored game stream into resolver input.
+///
+/// The domain resolver stays pure and storage-blind. This seam owns the command
+/// boundary chores: pack loading, phase parsing, snapshot/submission/day-input
+/// reduction, and deterministic run metadata derived from the stream cursor.
+pub struct EngineInputBuilder<'a> {
+    game: Uuid,
+    stream: &'a [eventstore::StoredEvent],
+    phase_id: &'a str,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnginePhaseInput {
+    pub game: Uuid,
+    pub pack_name: String,
+    pub pack: domain::Pack,
+    pub phase_id: String,
+    pub phase_kind: domain::pack::PhaseKind,
+    pub phase_number: u32,
+    pub state: domain::StateSnapshot,
+    pub submissions: Vec<domain::Submission>,
+    pub day_phase_inputs: domain::DayPhaseInputs,
+    pub next_stream_seq: i64,
+}
+
+#[derive(Debug, Clone)]
+pub enum EngineRunKind<'a> {
+    ResolvePhase {
+        seed: u64,
+    },
+    HammerPreview,
+    Instant {
+        action_id: &'a str,
+    },
+    Replay {
+        run_id: &'a str,
+        seed: u64,
+        logical_time: u64,
+    },
+}
+
+impl<'a> EngineInputBuilder<'a> {
+    pub fn new(game: Uuid, stream: &'a [eventstore::StoredEvent], phase_id: &'a str) -> Self {
+        Self {
+            game,
+            stream,
+            phase_id,
+        }
+    }
+
+    pub fn build(self) -> Result<EnginePhaseInput, Reject> {
+        let pack_name = pack_name_from_stream(self.stream)?;
+        let pack = load_pack(&pack_name)?;
+        let phase_kind = phase_kind(self.phase_id)?;
+        let phase_number = phase_number(self.phase_id)?;
+        let state = current_snapshot(self.stream, &pack, self.phase_id, phase_kind, phase_number)?;
+        let submissions = current_submissions(self.stream, self.phase_id);
+        let day_phase_inputs =
+            current_day_phase_inputs(self.stream, &state, phase_kind, phase_number)?;
+        let next_stream_seq = self.stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
+
+        Ok(EnginePhaseInput {
+            game: self.game,
+            pack_name,
+            pack,
+            phase_id: self.phase_id.to_string(),
+            phase_kind,
+            phase_number,
+            state,
+            submissions,
+            day_phase_inputs,
+            next_stream_seq,
+        })
+    }
+}
+
+impl EnginePhaseInput {
+    pub fn logical_time(&self) -> u64 {
+        self.next_stream_seq as u64
+    }
+
+    pub fn resolve_input(&self, run: EngineRunKind<'_>) -> domain::ResolutionInput {
+        let (run_id, seed, logical_time) = match run {
+            EngineRunKind::ResolvePhase { seed } => (
+                format!(
+                    "resolution:{}:{}:{seed}:{}",
+                    self.game, self.phase_id, self.next_stream_seq
+                ),
+                seed,
+                self.logical_time(),
+            ),
+            EngineRunKind::HammerPreview => (
+                format!(
+                    "hammer:{}:{}:{}",
+                    self.game, self.phase_id, self.next_stream_seq
+                ),
+                self.logical_time(),
+                self.logical_time(),
+            ),
+            EngineRunKind::Instant { action_id } => (
+                format!(
+                    "instant:{}:{}:{action_id}:{}",
+                    self.game, self.phase_id, self.next_stream_seq
+                ),
+                self.logical_time(),
+                self.logical_time(),
+            ),
+            EngineRunKind::Replay {
+                run_id,
+                seed,
+                logical_time,
+            } => (run_id.to_string(), seed, logical_time),
+        };
+
+        domain::ResolutionInput {
+            game_id: self.game.to_string(),
+            phase_id: self.phase_id.clone(),
+            run_id,
+            state: self.state.clone(),
+            submissions: self.submissions.clone(),
+            day_phase_inputs: self.day_phase_inputs.clone(),
+            pack: self.pack.clone(),
+            seed,
+            logical_time,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ReceiptClaim {
     principal_user_id: String,
@@ -871,13 +999,9 @@ async fn submit_vote(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let phase_kind = phase_kind(&phase)?;
-    let phase_number = phase_number(&phase)?;
-    let state = current_snapshot(&stream, &pack, &phase, phase_kind, phase_number)?;
-    validate_vote_actor_policy(&pack, &state, &actor_slot)?;
-    validate_vote_policy_target(&pack.vote, &actor_slot, &target)?;
+    let phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
+    validate_vote_actor_policy(&phase_input.pack, &phase_input.state, &actor_slot)?;
+    validate_vote_policy_target(&phase_input.pack.vote, &actor_slot, &target)?;
     let target_str = validate_target(pool, game, &target).await?;
 
     // 3. produce events.
@@ -889,9 +1013,7 @@ async fn submit_vote(
         0,
     );
     let mut events = vec![ev];
-    if let Some(lock_ev) =
-        hammer_lock_event(&stream, game, &phase, &pack, &actor_slot, &target_str)?
-    {
+    if let Some(lock_ev) = hammer_lock_event(&phase_input, &actor_slot, &target_str)? {
         events.push(lock_ev);
     }
 
@@ -988,32 +1110,22 @@ async fn submit_action(
     );
     let mut events = vec![ev];
     if action_window == Window::Instant {
-        let next_seq = stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
-        let phase_kind = phase_kind(&phase)?;
-        let phase_number = phase_number(&phase)?;
-        let state = current_snapshot(&stream, &pack, &phase, phase_kind, phase_number)?;
+        let mut phase_input = EngineInputBuilder::new(game, &stream, &phase).build()?;
         let submission = domain::Submission {
             action_id: action_id.clone(),
             actor: actor_slot.clone(),
             template_id: template_id.clone(),
             targets: targets.clone(),
             phase_id: phase.clone(),
-            submitted_at: next_seq as u64,
+            submitted_at: phase_input.logical_time(),
             withdrawn: false,
             metadata: metadata_from_payload(&payload),
         };
-        let run_id = format!("instant:{game}:{phase}:{action_id}:{next_seq}");
-        let output = domain::resolve_instant(domain::ResolutionInput {
-            game_id: game.to_string(),
-            phase_id: phase.clone(),
-            run_id,
-            state,
-            submissions: vec![submission],
-            day_phase_inputs: domain::DayPhaseInputs::default(),
-            pack,
-            seed: next_seq as u64,
-            logical_time: next_seq as u64,
-        });
+        phase_input.submissions = vec![submission];
+        phase_input.day_phase_inputs = domain::DayPhaseInputs::default();
+        let output = domain::resolve_instant(phase_input.resolve_input(EngineRunKind::Instant {
+            action_id: &action_id,
+        }));
         domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
             .map_err(|e| Reject::Internal(format!("invalid instant resolution result: {e}")))?;
         domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
@@ -1023,14 +1135,14 @@ async fn submit_action(
             1,
             serde_json::to_value(output.applied).map_err(|e| Reject::Internal(e.to_string()))?,
             ActorId::System,
-            next_seq + 1,
+            phase_input.next_stream_seq + 1,
         ));
         events.push(EventInput::new(
             "ResolutionTrace",
             1,
             serde_json::to_value(output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
             ActorId::System,
-            next_seq + 2,
+            phase_input.next_stream_seq + 2,
         ));
     }
     persist(pool, game, &events, receipt).await
@@ -1201,27 +1313,8 @@ async fn resolve_phase(
         return Err(Reject::InvalidTarget);
     }
 
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let phase_kind = phase_kind(&phase.phase_id)?;
-    let phase_number = phase_number(&phase.phase_id)?;
-    let state = current_snapshot(&stream, &pack, &phase.phase_id, phase_kind, phase_number)?;
-    let submissions = current_submissions(&stream, &phase.phase_id);
-    let day_phase_inputs = current_day_phase_inputs(&stream, &state, phase_kind, phase_number)?;
-    let next_seq = stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
-    let run_id = format!("resolution:{game}:{}:{seed}:{next_seq}", phase.phase_id);
-
-    let output = domain::resolve(domain::ResolutionInput {
-        game_id: game.to_string(),
-        phase_id: phase.phase_id.clone(),
-        run_id,
-        state,
-        submissions,
-        day_phase_inputs,
-        pack: pack.clone(),
-        seed,
-        logical_time: next_seq as u64,
-    });
+    let phase_input = EngineInputBuilder::new(game, &stream, &phase.phase_id).build()?;
+    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::ResolvePhase { seed }));
     domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid resolution result: {e}")))?;
     domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
@@ -1231,14 +1324,14 @@ async fn resolve_phase(
         1,
         serde_json::to_value(output.applied).map_err(|e| Reject::Internal(e.to_string()))?,
         ActorId::System,
-        next_seq,
+        phase_input.next_stream_seq,
     );
     let trace_ev = EventInput::new(
         "ResolutionTrace",
         1,
         serde_json::to_value(output.trace).map_err(|e| Reject::Internal(e.to_string()))?,
         ActorId::System,
-        next_seq,
+        phase_input.next_stream_seq,
     );
     let lock_ev = EventInput::new(
         "ThreadLocked",
@@ -1250,10 +1343,13 @@ async fn resolve_phase(
             "source": "resolve_phase",
         }),
         ActorId::System,
-        next_seq,
+        phase_input.next_stream_seq,
     );
     let mut events = vec![applied_ev, trace_ev];
-    events.extend(private_channel_revocations(&pack, &output.post_state));
+    events.extend(private_channel_revocations(
+        &phase_input.pack,
+        &output.post_state,
+    ));
     events.push(lock_ev);
     persist(pool, game, &events, receipt).await
 }
@@ -2162,29 +2258,12 @@ fn rerun_stored_phase(
     prefix: &[eventstore::StoredEvent],
     stored: &domain::ResolutionApplied,
 ) -> Result<RebuiltResolutionEnvelope, Reject> {
-    let pack = load_pack(&pack_name_from_stream(prefix)?)?;
-    let state = current_snapshot(
-        prefix,
-        &pack,
-        &stored.phase_id,
-        stored.phase_kind,
-        stored.phase_number,
-    )?;
-    let submissions = current_submissions(prefix, &stored.phase_id);
-    let day_phase_inputs =
-        current_day_phase_inputs(prefix, &state, stored.phase_kind, stored.phase_number)?;
-
-    let output = domain::resolve(domain::ResolutionInput {
-        game_id: game.to_string(),
-        phase_id: stored.phase_id.clone(),
-        run_id: stored.run_id.clone(),
-        state,
-        submissions,
-        day_phase_inputs,
-        pack,
+    let phase_input = EngineInputBuilder::new(game, prefix, &stored.phase_id).build()?;
+    let output = domain::resolve(phase_input.resolve_input(EngineRunKind::Replay {
+        run_id: &stored.run_id,
         seed: stored.seed,
         logical_time: stored.started_at,
-    });
+    }));
     domain::validate_resolution_applied(&output.applied, domain::RESULT_VERSION)
         .map_err(|e| Reject::Internal(format!("invalid rebuilt resolution result: {e}")))?;
     domain::validate_resolution_trace(&output.trace, domain::TRACE_VERSION)
@@ -2827,11 +2906,9 @@ pub async fn load_engine_snapshot(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
-    current_snapshot(&stream, &pack, phase_id, phase_kind, phase_number)
+    Ok(EngineInputBuilder::new(game, &stream, phase_id)
+        .build()?
+        .state)
 }
 
 /// Load the complete reducer output that feeds one resolver run. This is the
@@ -2846,22 +2923,16 @@ pub async fn load_engine_phase_input(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
-    let state = current_snapshot(&stream, &pack, phase_id, phase_kind, phase_number)?;
-    let submissions = current_submissions(&stream, phase_id);
-    let day_phase_inputs = current_day_phase_inputs(&stream, &state, phase_kind, phase_number)?;
+    let phase_input = EngineInputBuilder::new(game, &stream, phase_id).build()?;
 
     Ok(EnginePhaseInputAudit {
-        phase_id: phase_id.to_string(),
-        phase_kind,
-        phase_number,
-        pack_name,
-        state,
-        submissions,
-        day_phase_inputs,
+        phase_id: phase_input.phase_id,
+        phase_kind: phase_input.phase_kind,
+        phase_number: phase_input.phase_number,
+        pack_name: phase_input.pack_name,
+        state: phase_input.state,
+        submissions: phase_input.submissions,
+        day_phase_inputs: phase_input.day_phase_inputs,
     })
 }
 
@@ -2878,11 +2949,9 @@ pub async fn audit_engine_snapshot_identity_boundary(
     let stream = eventstore::load_stream(pool, game)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
-    let pack_name = pack_name_from_stream(&stream)?;
-    let pack = load_pack(&pack_name)?;
-    let phase_kind = phase_kind(phase_id)?;
-    let phase_number = phase_number(phase_id)?;
-    let snapshot = current_snapshot(&stream, &pack, phase_id, phase_kind, phase_number)?;
+    let snapshot = EngineInputBuilder::new(game, &stream, phase_id)
+        .build()?
+        .state;
     let snapshot_json = serde_json::to_string(&snapshot)
         .map_err(|e| Reject::Internal(format!("serialize engine snapshot: {e}")))?;
     let stream_user_ids = stream_platform_user_ids(&stream);
@@ -4350,47 +4419,29 @@ fn validate_vote_policy_target(
 }
 
 fn hammer_lock_event(
-    stream: &[eventstore::StoredEvent],
-    game: Uuid,
-    phase_id: &str,
-    pack: &domain::Pack,
+    phase_input: &EnginePhaseInput,
     actor_slot: &str,
     target: &str,
 ) -> Result<Option<EventInput>, Reject> {
-    if !pack.vote.hammer {
+    if !phase_input.pack.vote.hammer {
         return Ok(None);
     }
 
-    let phase_kind = phase_kind(phase_id)?;
-    if phase_kind != domain::pack::PhaseKind::Day {
+    if phase_input.phase_kind != domain::pack::PhaseKind::Day {
         return Ok(None);
     }
-    let phase_number = phase_number(phase_id)?;
-    let state = current_snapshot(stream, pack, phase_id, phase_kind, phase_number)?;
-    let mut submissions = current_submissions(stream, phase_id);
-    let next_seq = stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1);
-    submissions.push(domain::Submission {
-        action_id: format!("vote:{next_seq}:{actor_slot}"),
+    let mut preview_input = phase_input.clone();
+    preview_input.submissions.push(domain::Submission {
+        action_id: format!("vote:{}:{actor_slot}", preview_input.next_stream_seq),
         actor: actor_slot.to_string(),
         template_id: "day_vote".to_string(),
         targets: vec![target.to_string()],
-        phase_id: phase_id.to_string(),
-        submitted_at: next_seq as u64,
+        phase_id: preview_input.phase_id.clone(),
+        submitted_at: preview_input.logical_time(),
         withdrawn: false,
         metadata: BTreeMap::new(),
     });
-    let day_phase_inputs = current_day_phase_inputs(stream, &state, phase_kind, phase_number)?;
-    let output = domain::resolve(domain::ResolutionInput {
-        game_id: game.to_string(),
-        phase_id: phase_id.to_string(),
-        run_id: format!("hammer:{game}:{phase_id}:{next_seq}"),
-        state,
-        submissions,
-        day_phase_inputs,
-        pack: pack.clone(),
-        seed: next_seq as u64,
-        logical_time: next_seq as u64,
-    });
+    let output = domain::resolve(preview_input.resolve_input(EngineRunKind::HammerPreview));
     let hammers = output.applied.events.iter().any(|event| {
         matches!(
             &event.event,
@@ -4410,14 +4461,14 @@ fn hammer_lock_event(
             1,
             serde_json::json!({
                 "channel_id": "main",
-                "phase_id": phase_id,
+                "phase_id": phase_input.phase_id,
                 "reason": "hammer",
                 "source": "vote_hammer",
                 "actor": actor_slot,
                 "target": target
             }),
             ActorId::System,
-            next_seq,
+            phase_input.next_stream_seq,
         )
     }))
 }
