@@ -1548,6 +1548,20 @@ by `checked_in_hunter_projection_state_generated_fixtures_replay_semantic_expect
 proves the success fixture remains promotable while the reduced negative fixture preserves
 `semantic_expectation` failure class without success promotion.
 
+`crates/commands/fixtures/night-vengeful-projection-state-generated-minimized.json` now promotes the
+VengefulProjectionState row into a checked-in Mafiascum N01 trigger replay with three slots, one
+night action, one audited resolution envelope, and one anchored trace. It checks ten semantic
+expectations: the initial factional `PlayerKilled` inner event for the vengeful slot, the `Trigger`
+inner event for `vengeful_retaliates`, the generated retaliatory
+`PlayerKilled(cause = vengeful_retaliates)` inner event for the attacker, one trigger trace
+decision, one trigger trace note, one generated action, one generated-action count, and three
+rebuilt `slot_state` rows proving the vengeful slot and attacker die while the unrelated slot
+survives. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-vengeful-projection-state-generated-bad-expectation.json`, is
+covered by `checked_in_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
+which proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
 The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
