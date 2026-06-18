@@ -31,6 +31,33 @@ shrunk down.
   irreversible acts.
 - **No hover-dependent affordances** — everything reachable by tap; hover is enhancement.
 
+## Tablet UX acceptance checklist
+
+Frontend slices that affect core gameplay or host workflows should be judged against this
+checklist before they are called done:
+
+- **Viewport proof** — exercise the changed surface at 1024x768, 1180x820, 1280x900, and
+  one desktop width. The tablet widths are the design baseline; desktop is the scale-up case.
+- **Touch target floor** — primary controls, destructive actions, channel switches, vote
+  controls, and host console actions have at least a 44x44 CSS pixel hit area with visible
+  spacing between neighboring actions.
+- **Thumb-zone placement** — frequent player actions (vote/post/channel switch) and frequent
+  host actions (deadline, votecount, replacement, phase, slot lifecycle) are reachable without
+  stretching to a remote corner in the tablet layout.
+- **Hover independence** — every action, menu, status detail, and affordance needed to play
+  or host is available by tap, focus, or visible control state. Hover may add polish, never
+  capability.
+- **Confirmation shape** — irreversible host actions require an explicit confirmation that
+  names the affected game object and intended outcome; gestures can open the confirmation but
+  cannot complete the action alone.
+- **Stable live layout** — votecount deltas, deadline changes, post edits, channel updates,
+  and command acks/rejects do not move primary controls out from under a user's finger.
+- **Media variant fit** — thread images request the viewport-appropriate media variant
+  ([07](07-images.md)); tablet thread views should not fetch originals or desktop-only full
+  variants.
+- **Keyboard parity** — focus order follows the visual workflow, and keyboard operation can
+  reach the same controls as touch for accessibility and desktop scale-up.
+
 ## App structure
 
 ```
