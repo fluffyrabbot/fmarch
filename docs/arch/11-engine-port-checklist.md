@@ -2091,7 +2091,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    mafiascum Gladiator separately as `VoteDuelDeclared` plus a restricted official
    `DayVoteOutcome`; the pack-declared `vote_duel_tie_breaker: Random` forces seeded
    elimination for no-ballot/tied duels, with golden and command/projection rebuild proof.]
-4. ITA session mechanics. [partly done: v9 `ItaShot`, pack-level `ItaPolicy`, first
+4. ITA session mechanics. [done: v9 `ItaShot`, pack-level `ItaPolicy`, first
    `mafia_universe` vertical emits `ItaSessionOpened`/`ActionUseCounted`/`ItaShotQueued`/
    `ItaShotResolved`/`ItaSessionUpdated`/`ItaSessionClosed`, `shot_limit` suppresses exhausted
    session shots through folded counters, and command/projection proves lethal hit plus counter
@@ -3252,7 +3252,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 by auditing the rich day-system build-order rows against their focused proof
-surfaces. Start with the completion-audit markers in the Phase 5 body, separate domain terms from
-true open work, and only promote a row or phase claim after the relevant golden, command/projection,
-and audit evidence is current.
+Continue Phase 5 by auditing the Last words and day announcements row against its focused proof
+surfaces. Separate stale `[partly done]` wording from true open day-note/day-death work, check the
+Mafia Universe, EpicMafia, Chinese structured, and Mafiascum metadata claims against goldens plus
+command/projection/minimizer evidence, and refresh only the checklist/parity truth surfaces that
+those tests actually prove.
