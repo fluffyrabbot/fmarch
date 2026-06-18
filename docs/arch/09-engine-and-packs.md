@@ -1225,15 +1225,17 @@ Read-only consumers can use `python3 tools/engine_port_completion_audit.py --che
 target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
 artifact, and fails if the saved audit is missing, stale versus any declared input, or different
 from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-14 tracked inputs, eight parsed build-order phases, 190 exhaustive checklist rows, 159 checked
-rows, 31 unchecked rows, 0 rows marked `partly proven`, 587 parity-matrix rows, and 326
-unsupported parity rows. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
+19 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, and 2
+unsupported parity rows, both explicit out-of-scope test-family rows (`feature_flags_test` and
+`init`). It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
 browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
 present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
 trusted command/projection proof row that has not yet been promoted into the browser-smoke required
-needle set. This is a completion blocker and
-an honest proof boundary: the local operator artifacts and browser metadata evidence are healthy,
-but the full im-human parity port is not done.
+needle set. This remains an honest completion blocker: local operator artifacts and browser
+metadata evidence are healthy, and the extracted im-human parity rows are covered except for the
+two explicit out-of-scope test families, but later build-order operational and breadth phases are
+still partial.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,
 operator proof-run index, projection rebuild view, resolution replay view, resolution trace view,
 host phase-control view, artifact go/no-go view, artifact retention JSON/view, projection rebuild

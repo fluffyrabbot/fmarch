@@ -70,11 +70,14 @@ Already present:
 
 Known gaps:
 
-- Golden fixture regeneration tooling and full graph/fixpoint precedence policy are still pending;
-  pack JSON now has an explicit v1 identity upcast/load boundary.
-- No graph/fixpoint executor for complex redirect cycles and dependency ordering.
-- Watch, motion, many im-human primitives, day substeps, culture notes, ITA, and the full
-  modifier catalog are not ported.
+- Golden fixture regeneration tooling exists for the current fixture shape, but a broader
+  authoring/regeneration workflow for future pack migrations is still pending.
+- The source-derived im-human parity matrix now has no unsupported primitive, modifier,
+  result-event, action-id, role-id, or culture-note rows; the only unsupported rows are the
+  explicit out-of-scope Engine V4 test families `feature_flags_test` and `init`.
+- Later build-order phases remain partial even though the extracted inventory rows are covered:
+  release-time ITA replay/refund breadth, richer persistent-effect/source/expiry state, richer
+  item UX, and operational UI/tooling hardening are still tracked below.
 - Persistent effects now have a rebuildable `slot_effect` projection, and explicit-audience
   notices have a rebuildable `player_notification` projection, but the effect projection stores
   only the v1 effect tag. Source, expiry, visibility, counters, inventories, and other richer
@@ -1813,9 +1816,10 @@ The only identity that crosses into the engine is `SlotId`.
   culture notes from im-human. [proven:
   `tools/report_unported_im_human_inventory.py --check` reads the generated parity matrix and
   emits a focused unsupported-inventory report with exact matrix line numbers, categories,
-  classifications, and rationales; the current report lists 28 unsupported rows total, including
-  requested-category counts of 1 primitive, 4 action modifiers, 0 effect modifiers, 4 result event
-  kinds, and 0 culture notes, with 26 not-yet-ported rows and 2 explicit out-of-scope rows]
+  classifications, and rationales; the current report lists 2 unsupported rows total, both
+  classified as explicit out-of-scope `test_family` rows (`feature_flags_test` and `init`), with
+  requested-category counts of 0 primitives, 0 action modifiers, 0 effect modifiers, 0 result
+  event kinds, and 0 culture notes]
 - [x] CI command that runs all domain goldens and schema validators without Postgres.
   [proven: `python3 tools/run_domain_ci_no_postgres.py --check --output
   target/operator-proof/current-domain-ci-no-postgres-report.json` runs four no-Postgres lanes:
@@ -1847,7 +1851,11 @@ Do this before adding more mechanics.
 3. Decide the canonical Rust event names and mapping from im-human event strings.
 4. Add result-schema validation for fmarch inner events.
 
-Exit proof: adding an unknown inner event or malformed payload fails a domain test.
+Exit proof: adding an unknown inner event or malformed payload fails a domain test. The refreshed
+`target/operator-proof/current-engine-port-completion-audit.json` currently marks Phase 0 complete:
+the generated parity matrix has 593 rows, and the unsupported-inventory report has zero unsupported
+rows in the requested primitive/modifier/result/culture categories, leaving only the two explicit
+out-of-scope test-family rows.
 
 ### Phase 1 - Wire the resolution seam end to end
 
@@ -2659,10 +2667,11 @@ coverage, and a playable vertical scenario through the command pipeline.
    .`. Read-only consumers can use `python3 tools/engine_port_completion_audit.py --check --output
    target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
    artifact, and fails if the saved audit is missing, stale versus any declared input, or different
-   from the generated report. The current artifact reports `ok: true`, `freshness.status: fresh`,
-   18 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
-   rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, and 28
-   unsupported parity rows. Mafia Universe now models `vanilla_town`, `blank_town_role`,
+   from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
+   19 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+   rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, and 2
+   unsupported parity rows, both explicit out-of-scope test-family rows (`feature_flags_test` and
+   `init`). Mafia Universe now models `vanilla_town`, `blank_town_role`,
    `blank_mafia_role`, `mafia_doctor`, `mafia_bodyguard`, `mafia_jailkeeper`,
    `town_alignment_cop`, `mafia_alignment_cop`, `mafia_cop`, `town_voyeur`, `mafia_voyeur`,
    `town_alignment_oracle`, `mafia_alignment_oracle`, `town_role_oracle`,
@@ -2683,8 +2692,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    interactions, and five explicit unsupported primitive/modifier parity rows. The Engine V4
    test-family coverage artifact maps all 28 source-derived test-family buckets, with 26 mapped to
    fmarch proof surfaces and two explicit out-of-scope/non-resolution buckets. The unported
-   im-human inventory artifact reports all 28 remaining unsupported parity rows by category and
-   line number, including zero unsupported culture-note rows. The no-Postgres domain CI artifact
+   im-human inventory artifact reports only those 2 explicit out-of-scope unsupported parity rows,
+   including zero unsupported primitive, modifier, result-event, and culture-note rows. The no-Postgres domain CI artifact
    reports `ok: true`, four passed lanes, zero failed lanes, 12 golden-owning pack directories, 281
    checked golden fixtures, and Rust validator totals of 430 golden-harness tests, 63
    result-contract tests, and 138 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
