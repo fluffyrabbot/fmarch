@@ -2032,8 +2032,9 @@ round-trip state folds.
    `IrAbility::Retaliate`, folded `RetaliationArmed`,
    `standard_nar.chosen_retaliation_cause_policy`, goldens,
    resolver fail-closed proof, and helper-enforced command/projection trace/rebuild proof; Chinese Hunter adds v14 cause-gated
-   `death_retaliation` so `wolf_night_kill` fires the chosen shot and `poison_potion`
-   suppresses it with structured trace attribution, with goldens plus command/projection rebuild proof; Babysitter uses
+   `death_retaliation` so `wolf_night_kill` and day-vote deaths fire the chosen shot while
+   `poison_potion` suppresses it with structured trace attribution, with goldens plus
+   command/projection rebuild proof for the wolf-kill, day-vote, and poison branches; Babysitter uses
    `Protect` + `Modifier::Babysitter` with a golden, structured dependency-death trace
    attribution, and command/projection rebuild proof; Hider uses `Mark` +
    `Modifier::Hider` with pack-owned `standard_nar.hide_dependency_cause_policy` cause
@@ -2137,7 +2138,8 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    same-target variant through an override golden plus minimal command/projection fixture;
    v14 `death_retaliation` models Chinese
    Hunter trigger availability for ordinary wolf kill, lynch/day-vote death, and Witch poison
-   suppression plus the immediate before-announcement no-host-prompt timing contract; v15
+   suppression plus the immediate before-announcement no-host-prompt timing contract, with
+   command/projection rebuild proof for the day-vote branch; v15
    `idiot_policy` maps Chinese Idiot first lynch survival to `PlayerSaved` plus
    `idiot_vote_loss`; command-side vote submission rejects later vote-lost Idiot ballots
    with `Reject::VoteNotAllowed` before append, and official later vote tallies give that
@@ -2599,7 +2601,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    `day_notes_hidden_role_multiple_deaths` covers the hidden-role payload path, and the canonical
    day-substep golden assertion covers lynch, day-action kill, ITA kill, Knight duel, White Wolf
    self-destruct, Wolf Beauty drag, Chinese lover suicide, and Chinese Hunter lynch retaliation
-   ordering through the day-death trailer/per-cause metadata path. Mafiascum now adds shipped-pack
+   ordering through the day-death trailer/per-cause metadata path; the Chinese Hunter day-vote
+   retaliation path now also has a Postgres command/projection trace/rebuild vertical. Mafiascum now adds shipped-pack
    per-cause templates, regenerated goldens, pure ordering assertions, and Postgres
    command/projection assertions for day-vigilante kills, day self-destruct trades, Hero/VoteDuel
    deaths, and Super-Saint lynch retaliation deaths.
@@ -2927,8 +2930,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by shrinking the remaining trigger-fixpoint partial row with one bounded generated
-death chain: model one unresolved linked/hostile dependency such as lovers, babysitter, or hider in
-pack data, add the pure golden that exercises the generated observation, and prove the command/
-projection replay path rebuilds the resulting deaths and trace without broadening into every
-remaining trigger family at once.
+Continue Phase 4 by turning the trigger/dependency seeded proof lane from fixed-seed replay into
+real shrinkable evidence for one family. Start with the existing PGO/Babysitter/Hider generated
+night cases: make the shrinker persist the minimized failing or representative case with the same
+semantic expectations used by `minimized_trigger_dependency_fixtures_replay_semantic_expectations`,
+rerun the command/projection replay audit from that minimized artifact, and only then update the
+trigger-row wording about the remaining true-shrinking gap.

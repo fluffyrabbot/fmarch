@@ -61060,6 +61060,300 @@ async fn host_resolve_phase_carries_chinese_hunter_poison_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_chinese_hunter_day_vote_retaliation(pool: PgPool) {
+    let host = "host_h";
+    let h = user(host);
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "chinese_structured".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "hunter"),
+        ("slot_2", "user_2", "wolf"),
+        ("slot_3", "user_3", "villager"),
+        ("slot_4", "user_4", "villager"),
+        ("slot_5", "user_5", "villager"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": "hunt_day_001",
+                "template_id": "hunter_retaliate",
+                "actor": "slot_1",
+                "targets": ["slot_2"],
+                "phase_id": "N01"
+            }),
+            eventstore::ActorId::Slot("slot_1".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 930_309,
+        },
+    )
+    .await
+    .expect("host resolves Chinese Hunter day-vote target choice");
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (user_id, actor_slot) in [
+        ("user_2", "slot_2"),
+        ("user_3", "slot_3"),
+        ("user_4", "slot_4"),
+    ] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot("slot_1".into()),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 930_310,
+        },
+    )
+    .await
+    .expect("host resolves Chinese Hunter day-vote retaliation");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Chinese Hunter day-vote retaliation result");
+    let day_vote_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::DayVoteOutcome(outcome)
+                if outcome.winner.as_deref() == Some("slot_1")
+                    && outcome.tallies.get("slot_1").copied() == Some(3.0) =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("D01 should emit a day-vote lynch outcome for the Hunter");
+    let lynch_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_1"
+                && cause == "day_vote"
+                && attackers.is_empty()
+                && *unstoppable =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("Hunter should die to the official day vote");
+    let retaliation_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_2"
+                && cause == "hunter_retaliate"
+                && attackers == &vec!["slot_1".to_string()]
+                && !*unstoppable =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("Chinese Hunter day-vote death should trigger the chosen retaliation");
+    let announcement_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PhaseAnnouncement(_) => Some(indexed.index),
+            _ => None,
+        })
+        .expect("D01 should end with a phase announcement");
+    assert!(
+        day_vote_index < lynch_index
+            && lynch_index < retaliation_index
+            && retaliation_index < announcement_index,
+        "Chinese Hunter day-vote retaliation should resolve before the trailing announcement"
+    );
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(indexed.event, domain::InnerEvent::HostPromptIssued(_))),
+        "Chinese Hunter day-vote retaliation must not emit a pending host prompt"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Chinese Hunter day-vote-retaliation trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "death:cascade",
+            source: "retaliation:hunt_day_001",
+            outcome: "chosen_retaliation",
+            detail: vec![
+                ("retaliation_id", serde_json::json!("hunt_day_001")),
+                ("actor", serde_json::json!("slot_1")),
+                ("target", serde_json::json!("slot_2")),
+                ("source_action", serde_json::json!("hunter_retaliate")),
+                ("source_death_cause", serde_json::json!("day_vote")),
+                ("cause", serde_json::json!("hunter_retaliate")),
+                ("unstoppable", serde_json::json!(false)),
+                (
+                    "timing",
+                    serde_json::json!("ImmediateBeforePhaseAnnouncement"),
+                ),
+            ],
+        },
+    );
+    assert!(
+        host_prompts(&pool, game).await.unwrap().is_empty(),
+        "Chinese Hunter day-vote retaliation should not project a pending host prompt"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "Hunter should die to the day vote"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "chosen target should die to the Chinese Hunter day-vote retaliation"
+    );
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Chinese Hunter day-vote retaliation"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Chinese Hunter day-vote trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_idiot_survival_policy(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
