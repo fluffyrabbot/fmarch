@@ -545,7 +545,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:role_watcher` | `role_watcher` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:roleblocker` | `roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:rolestopper` | `rolestopper` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:saulus` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:saulus` | `saulus_policy` | 1 | no | yes | yes | yes | yes | im-human Saulus uses hidden alignment_flip_on_lynch; fmarch models it as saulus_policy that saves the lynch and emits PlayerConverted from mafia to town. |
 | role_id | `mafiascum:security_guard` | `security_guard` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:serial_killer` | `serial_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:shield` | `shield` | 1 | no | yes | yes | yes | yes |  |

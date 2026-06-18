@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 61,
+  "ir_version": 62,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -2719,6 +2719,11 @@
       "description": "Lover. Passive role bound to another lover by setup state; if either dies by any means, the linked partner dies too.",
       "actions": []
     },
+    "saulus": {
+      "description": "Saulus. Starts Mafia-aligned; when first lynched, survives by flipping alignment to Town.",
+      "alignment": "mafia",
+      "actions": []
+    },
     "hunter": {
       "description": "Hunter. Chooses a target; if the Hunter dies in a later resolution, that target is killed by the armed retaliation.",
       "alignment": "town",
@@ -4038,6 +4043,14 @@
   "conversion_policy": {
     "on_dead_target": "Block",
     "on_pending_death": "Block"
+  },
+  "saulus_policy": {
+    "enabled": true,
+    "eligible_roles": [
+      "saulus"
+    ],
+    "target_alignment": "town",
+    "survival_reason": "saulus_conversion"
   },
   "target_lynch_win_policies": [
     {

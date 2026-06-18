@@ -1,0 +1,173 @@
+{
+  "description": "Saulus is lynched by day vote, survives the lynch by converting from Mafia alignment to Town, and then Town wins because no non-town factions remain alive.",
+  "input": {
+    "game_id": "game_demo_saulus_001",
+    "phase_id": "D01",
+    "state": {
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_id": "D01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "saulus",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "vote_001",
+        "actor": "slot_2",
+        "template_id": "day_vote",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "vote_002",
+        "actor": "slot_3",
+        "template_id": "day_vote",
+        "targets": [
+          "slot_1"
+        ],
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 620001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_2",
+        "target": "slot_1",
+        "withdrawn": false,
+        "sequence": 1
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "target": "slot_1",
+        "withdrawn": false,
+        "sequence": 2
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "status": "Lynch",
+        "winner": "slot_1",
+        "contenders": [
+          "slot_1"
+        ],
+        "tallies": {
+          "slot_1": 2
+        },
+        "votes": {
+          "slot_2": "slot_1",
+          "slot_3": "slot_1"
+        },
+        "weights": {
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1
+        },
+        "majority": 2,
+        "thresholds": {
+          "slot_1": 2,
+          "slot_2": 2,
+          "slot_3": 2
+        },
+        "total_weight": 3,
+        "tiebreak": null
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_1",
+        "reasons": [
+          "saulus_conversion"
+        ],
+        "sources": [
+          "slot_1"
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_1",
+        "new_role": "saulus",
+        "new_alignment": "town",
+        "original_role": "saulus",
+        "original_alignment": "mafia",
+        "source": "slot_1"
+      }
+    },
+    {
+      "index": 5,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "D01",
+        "deaths": []
+      }
+    },
+    {
+      "index": 6,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "town",
+        "reason": "all factions other than town eliminated (3 alive)",
+        "metadata": null
+      }
+    }
+  ]
+}

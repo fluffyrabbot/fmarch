@@ -1261,10 +1261,17 @@ fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
 fn invalid_versions_are_rejected() {
     let mut value = valid_pack_value();
     value["version"] = json!(2);
-    value["ir_version"] = json!(61);
+    value["ir_version"] = json!(domain::SUPPORTED_IR_VERSION + 1);
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 61");
+    assert_issue(
+        &err,
+        "ir_version",
+        &format!(
+            "unsupported IR version {}",
+            domain::SUPPORTED_IR_VERSION + 1
+        ),
+    );
 }
 
 #[test]
@@ -1272,7 +1279,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 61");
+    assert_issue(&err, "ir_version", "unsupported IR version 63");
 }
 
 #[test]
@@ -5260,6 +5267,54 @@ fn idiot_policy_requires_v15_role_effect_and_day_cadence() {
         "eligible_roles": ["idiot"],
         "vote_loss_effect": "idiot_vote_loss",
         "survival_reason": "idiot_survival"
+    });
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn saulus_policy_requires_v62_role_alignment_and_day_cadence() {
+    let mut value = valid_pack_value();
+    value["phases"]["cadence"] = json!(["Night"]);
+    value["saulus_policy"] = json!({
+        "enabled": true,
+        "eligible_roles": ["missing_saulus", ""],
+        "target_alignment": "missing_alignment",
+        "survival_reason": ""
+    });
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(&err, "saulus_policy", "requires ir_version >= 62");
+    assert_issue(
+        &err,
+        "saulus_policy.eligible_roles",
+        "unknown eligible role `missing_saulus`",
+    );
+    assert_issue(
+        &err,
+        "saulus_policy.target_alignment",
+        "unknown alignment `missing_alignment`",
+    );
+    assert_issue(
+        &err,
+        "saulus_policy.survival_reason",
+        "survival_reason must not be empty",
+    );
+    assert_issue(&err, "saulus_policy", "requires Day in phases.cadence");
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(62);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["roles"]["saulus"] = json!({
+        "description": "Saulus.",
+        "alignment": "mafia",
+        "actions": []
+    });
+    value["saulus_policy"] = json!({
+        "enabled": true,
+        "eligible_roles": ["saulus"],
+        "target_alignment": "town",
+        "survival_reason": "saulus_conversion"
     });
     validate_pack(&pack_from_value(value)).unwrap();
 }

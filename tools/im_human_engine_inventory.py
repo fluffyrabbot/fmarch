@@ -909,6 +909,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
             source_helper_role = lover_policy.get("source_helper_role")
             if isinstance(source_helper_role, str) and source_helper_role:
                 pack_policies.add(f"{pack_name}:{source_helper_role}")
+        saulus_policy = pack.get("saulus_policy")
+        if isinstance(saulus_policy, dict) and saulus_policy.get("enabled") is True:
+            pack_policies.add(f"{pack_name}:saulus_policy")
         backup_policy = pack.get("backup_policy")
         if isinstance(backup_policy, dict) and backup_policy.get("enabled") is True:
             pack_policies.add(f"{pack_name}:backup_policy")
@@ -2628,6 +2631,37 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 f"Passive Lover role from the {pack_label} catalog; fmarch keeps "
                 "the setup pair as folded PlayersLinked state and uses lover_policy "
                 "for the linked-death cascade."
+            )
+        elif scoped_name == "mafiascum:saulus":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum", set()
+            )
+            canonical = "saulus_policy"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafiascum:saulus_policy" in fmarch["pack_policies"]
+                and '"target_alignment": "town"' in fmarch["pack_text"]
+                and '"survival_reason": "saulus_conversion"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "saulus_conversion_on_lynch" in resolver
+                and "saulus_alignment_flipped" in resolver
+                and "InnerEvent::PlayerConverted" in resolver
+            )
+            golden = (
+                implemented
+                and "saulus_flips_alignment_on_lynch" in mafiascum_golden_names
+            )
+            integrated = (
+                golden
+                and "host_resolve_phase_carries_saulus_alignment_flip_on_lynch"
+                in command_tests
+            )
+            notes = (
+                "im-human Saulus uses hidden alignment_flip_on_lynch; fmarch "
+                "models it as saulus_policy that saves the lynch and emits "
+                "PlayerConverted from mafia to town."
             )
         elif scoped_name == "mafiascum:encryptor":
             canonical = "private_channels:FactionDayChat"

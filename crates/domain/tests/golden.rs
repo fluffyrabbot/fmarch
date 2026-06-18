@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 61);
+    assert_eq!(pack.ir_version, 62);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -398,6 +398,16 @@ fn pack_deserializes() {
     assert_eq!(lover.alignment.as_deref(), None);
     assert!(lover.actions.is_empty());
     assert!(lover.effects.is_empty());
+    let saulus = pack.roles.get("saulus").expect("Mafiascum Saulus role");
+    assert_eq!(saulus.alignment.as_deref(), Some("mafia"));
+    assert!(saulus.actions.is_empty());
+    assert!(saulus.effects.is_empty());
+    assert!(pack.saulus_policy.enabled);
+    assert_eq!(
+        pack.saulus_policy.eligible_roles,
+        vec!["saulus".to_string()]
+    );
+    assert_eq!(pack.saulus_policy.target_alignment, "town");
     assert!(role_action(&pack, "vigilante", "night_kill")
         .source_ids
         .iter()
@@ -5120,6 +5130,17 @@ fn golden_jester_wins_on_self_lynch() {
 }
 
 #[test]
+fn golden_saulus_flips_alignment_on_lynch() {
+    let golden = load_golden("saulus_flips_alignment_on_lynch.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "saulus_flips_alignment_on_lynch",
+    );
+}
+
+#[test]
 fn trace_records_executioner_target_lynch_win() {
     let golden = load_golden("executioner_wins_on_target_lynch.json");
     let output = run_output(
@@ -5195,6 +5216,30 @@ fn trace_records_jester_self_lynch_win() {
     assert_eq!(decision.detail["role"], "jester");
     assert_eq!(decision.detail["winner"], "jester");
     assert_eq!(decision.detail["source_event"], "win.jester");
+}
+
+#[test]
+fn trace_records_saulus_alignment_flip() {
+    let golden = load_golden("saulus_flips_alignment_on_lynch.json");
+    let output = run_output(
+        &golden["input"],
+        load_pack(),
+        "saulus-alignment-flip-trace-run",
+    );
+
+    let decision = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "saulus_alignment_flipped")
+        .expect("Saulus lynch should emit an alignment-flip trace decision");
+    assert_eq!(decision.stage, "day:lynch_trigger");
+    assert_eq!(decision.source, "slot:slot_1");
+    assert_eq!(decision.detail["target"], "slot_1");
+    assert_eq!(decision.detail["role"], "saulus");
+    assert_eq!(decision.detail["original_alignment"], "mafia");
+    assert_eq!(decision.detail["new_alignment"], "town");
+    assert_eq!(decision.detail["reason"], "saulus_conversion");
 }
 
 #[test]

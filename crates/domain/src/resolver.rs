@@ -9127,6 +9127,34 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
                     "day_vote".to_string(),
                     EffectDuration::Persistent,
                 ));
+            } else if let Some((role_key, original_alignment, target_alignment, survival_reason)) =
+                saulus_conversion_on_lynch(input, &vote_state, w)
+            {
+                trace_decisions.push(DecisionTrace {
+                    stage: "day:lynch_trigger".to_string(),
+                    source: format!("slot:{w}"),
+                    outcome: "saulus_alignment_flipped".to_string(),
+                    detail: serde_json::json!({
+                        "target": w,
+                        "role": role_key,
+                        "original_alignment": original_alignment,
+                        "new_alignment": target_alignment,
+                        "reason": survival_reason,
+                    }),
+                });
+                events.push(InnerEvent::PlayerSaved {
+                    slot_id: w.clone(),
+                    reasons: vec![survival_reason],
+                    sources: vec![w.clone()],
+                });
+                events.push(InnerEvent::PlayerConverted {
+                    target: w.clone(),
+                    new_role: role_key.clone(),
+                    new_alignment: Some(target_alignment),
+                    original_role: role_key,
+                    original_alignment,
+                    source: w.clone(),
+                });
             } else {
                 events.push(InnerEvent::PlayerKilled {
                     slot_id: w.clone(),
@@ -10033,6 +10061,37 @@ fn idiot_survives_lynch(input: &ResolutionInput, slot_id: &SlotId) -> bool {
             .effects
             .iter()
             .any(|effect| effect == &policy.vote_loss_effect)
+}
+
+fn saulus_conversion_on_lynch(
+    input: &ResolutionInput,
+    vote_state: &StateSnapshot,
+    slot_id: &SlotId,
+) -> Option<(String, Option<String>, String, String)> {
+    let policy = &input.pack.saulus_policy;
+    if !policy.enabled {
+        return None;
+    }
+    let slot = vote_state
+        .slots
+        .iter()
+        .find(|slot| &slot.slot_id == slot_id)?;
+    if !policy
+        .eligible_roles
+        .iter()
+        .any(|role| role == &slot.role_key)
+    {
+        return None;
+    }
+    if slot.alignment.as_deref() == Some(policy.target_alignment.as_str()) {
+        return None;
+    }
+    Some((
+        slot.role_key.clone(),
+        slot.alignment.clone(),
+        policy.target_alignment.clone(),
+        policy.survival_reason.clone(),
+    ))
 }
 
 fn resolve_day_announcements(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {

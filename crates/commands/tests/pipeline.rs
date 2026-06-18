@@ -41510,6 +41510,204 @@ async fn host_resolve_phase_carries_jester_self_lynch_win(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "saulus"),
+        ("slot_2", "user_2", "vanilla_townie"),
+        ("slot_3", "user_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (user_id, actor_slot) in [("user_2", "slot_2"), ("user_3", "slot_3")] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot("slot_1".into()),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 7432 })
+        .await
+        .expect("host resolves Saulus alignment flip");
+
+    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.winner.as_deref() == Some("slot_1")
+                && outcome.tallies.get("slot_1").copied() == Some(2.0)
+    )));
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerSaved { slot_id, reasons, sources }
+            if slot_id == "slot_1"
+                && reasons == &vec!["saulus_conversion".to_string()]
+                && sources == &vec!["slot_1".to_string()]
+    )));
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerConverted {
+            target,
+            new_role,
+            new_alignment,
+            original_role,
+            original_alignment,
+            source,
+        } if target == "slot_1"
+            && new_role == "saulus"
+            && new_alignment.as_deref() == Some("town")
+            && original_role == "saulus"
+            && original_alignment.as_deref() == Some("mafia")
+            && source == "slot_1"
+    )));
+    assert!(
+        !d01.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, .. } if slot_id == "slot_1"
+        )),
+        "Saulus lynch conversion should not also kill Saulus"
+    );
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::WinReached { winner, .. } if winner == "town"
+    )));
+
+    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
+        .expect("valid Saulus alignment-flip trace");
+    assert_decision_trace(
+        &d01_trace,
+        DecisionTraceExpectation {
+            stage: "day:lynch_trigger",
+            source: "slot:slot_1",
+            outcome: "saulus_alignment_flipped",
+            detail: vec![
+                ("target", serde_json::json!("slot_1")),
+                ("role", serde_json::json!("saulus")),
+                ("original_alignment", serde_json::json!("mafia")),
+                ("new_alignment", serde_json::json!("town")),
+                ("reason", serde_json::json!("saulus_conversion")),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let saulus = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("Saulus projection slot");
+    assert!(
+        saulus.alive,
+        "Saulus should remain alive after alignment flip"
+    );
+    assert_eq!(saulus.role_key.as_deref(), Some("saulus"));
+    assert_eq!(saulus.alignment.as_deref(), Some("town"));
+    assert_win_revealed_all_slots(&slots, "Saulus alignment flip town win");
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Saulus alignment-flip audit");
+    assert!(audit.ok, "Saulus resolution audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Saulus alignment flip"
+    );
+    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        d01_trace_payload, d01_trace_after_rebuild,
+        "projection rebuild must not rewrite Saulus trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

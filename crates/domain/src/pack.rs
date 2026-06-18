@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 61;
+pub const SUPPORTED_IR_VERSION: u16 = 62;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -103,6 +103,10 @@ pub struct Pack {
     /// land normally once that effect is present.
     #[serde(default)]
     pub idiot_policy: IdiotPolicy,
+    /// Optional Saulus policy. Eligible roles survive their first lynch by
+    /// flipping to a configured alignment instead of dying.
+    #[serde(default)]
+    pub saulus_policy: SaulusPolicy,
     /// Optional backup inheritance policy. Passive backups use an effect prefix
     /// such as `backup:`; targeted backups are ordinary Mark actions whose
     /// effect is promoted into a durable source-target designation.
@@ -827,6 +831,37 @@ impl Default for IdiotPolicy {
             survival_reason: default_idiot_survival_reason(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaulusPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub eligible_roles: Vec<RoleKey>,
+    #[serde(default = "default_saulus_target_alignment")]
+    pub target_alignment: AlignmentKey,
+    #[serde(default = "default_saulus_survival_reason")]
+    pub survival_reason: String,
+}
+
+impl Default for SaulusPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            eligible_roles: Vec::new(),
+            target_alignment: default_saulus_target_alignment(),
+            survival_reason: default_saulus_survival_reason(),
+        }
+    }
+}
+
+fn default_saulus_target_alignment() -> String {
+    "town".to_string()
+}
+
+fn default_saulus_survival_reason() -> String {
+    "saulus_conversion".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2096,6 +2131,15 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
         pack.ir_version,
         &role_keys,
         &effect_tags,
+        &cadence,
+    );
+    validate_saulus_policy(
+        &mut issues,
+        "saulus_policy",
+        &pack.saulus_policy,
+        pack.ir_version,
+        &role_keys,
+        &alignments,
         &cadence,
     );
     validate_backup_policy(
@@ -6853,6 +6897,68 @@ fn validate_idiot_policy(
     }
 }
 
+fn validate_saulus_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    policy: &SaulusPolicy,
+    ir_version: u16,
+    role_keys: &BTreeSet<&str>,
+    alignments: &BTreeSet<&str>,
+    cadence: &BTreeSet<PhaseKind>,
+) {
+    if !policy.enabled {
+        return;
+    }
+    if ir_version < 62 {
+        issue(
+            issues,
+            path,
+            "enabled saulus policy requires ir_version >= 62",
+        );
+    }
+    if policy.eligible_roles.is_empty() {
+        issue(
+            issues,
+            format!("{path}.eligible_roles"),
+            "enabled saulus policy must declare eligible_roles",
+        );
+    }
+    validate_unique_strings(
+        issues,
+        format!("{path}.eligible_roles"),
+        &policy.eligible_roles,
+    );
+    for role_key in &policy.eligible_roles {
+        if !role_keys.contains(role_key.as_str()) {
+            issue(
+                issues,
+                format!("{path}.eligible_roles"),
+                format!("unknown eligible role `{role_key}`"),
+            );
+        }
+    }
+    validate_alignment_ref(
+        issues,
+        format!("{path}.target_alignment"),
+        &policy.target_alignment,
+        alignments,
+    );
+    if policy.survival_reason.trim().is_empty() {
+        issue(
+            issues,
+            format!("{path}.survival_reason"),
+            "saulus survival_reason must not be empty",
+        );
+    }
+    if !cadence.contains(&PhaseKind::Day) {
+        issue(
+            issues,
+            path,
+            "enabled saulus policy requires Day in phases.cadence",
+        );
+    }
+}
+
 fn validate_backup_policy(
     issues: &mut Vec<PackValidationIssue>,
     path: &str,
@@ -8996,6 +9102,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if pack.idiot_policy.enabled {
         require_ir(&mut required, &mut reasons, 15, "idiot_policy");
     }
+    if pack.saulus_policy.enabled {
+        require_ir(&mut required, &mut reasons, 62, "saulus_policy");
+    }
     if pack.lover_policy.enabled {
         require_ir(&mut required, &mut reasons, 16, "lover_policy");
     }
@@ -9594,6 +9703,10 @@ mod tests {
         let mut value = test_pack_value();
         value["idiot_policy"] = json!({ "enabled": true });
         assert_versioned_pack_feature(value, 15, "idiot_policy");
+
+        let mut value = test_pack_value();
+        value["saulus_policy"] = json!({ "enabled": true });
+        assert_versioned_pack_feature(value, 62, "saulus_policy");
 
         let mut value = test_pack_value();
         value["lover_policy"] = json!({ "enabled": true });
