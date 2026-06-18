@@ -11314,6 +11314,15 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
             2,
             5,
         ),
+        (
+            "night-item-grant-generated-minimized",
+            include_str!("../fixtures/night-item-grant-generated-minimized.json"),
+            2,
+            1,
+            2,
+            2,
+            5,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(fixture_json).expect("minimized fixture should parse");
@@ -11382,85 +11391,96 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
 async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure(
     pool: PgPool,
 ) {
-    let stem = "night-extra-action-generated-bad-expectation";
-    let bad_fixture_json =
-        include_str!("../fixtures/night-extra-action-generated-bad-expectation.json");
-    let bad_fixture: serde_json::Value =
-        serde_json::from_str(bad_fixture_json).expect("bad extra-action fixture should parse");
-    assert_eq!(
-        generated_expectation_count(&bad_fixture["expectations"]),
-        5,
-        "{stem} should keep semantic expectation metadata"
-    );
+    for (family, bad_stem, bad_fixture_json, success_fixture_json) in [
+        (
+            "extra-action",
+            "night-extra-action-generated-bad-expectation",
+            include_str!("../fixtures/night-extra-action-generated-bad-expectation.json"),
+            include_str!("../fixtures/night-extra-action-generated-minimized.json"),
+        ),
+        (
+            "item-grant",
+            "night-item-grant-generated-bad-expectation",
+            include_str!("../fixtures/night-item-grant-generated-bad-expectation.json"),
+            include_str!("../fixtures/night-item-grant-generated-minimized.json"),
+        ),
+    ] {
+        let bad_fixture: serde_json::Value =
+            serde_json::from_str(bad_fixture_json).expect("bad generated-action fixture parses");
+        assert_eq!(
+            generated_expectation_count(&bad_fixture["expectations"]),
+            5,
+            "{bad_stem} should keep semantic expectation metadata"
+        );
 
-    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-semantic-replay"));
-    bad_artifacts.remove_existing();
-    bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
+        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
+        bad_artifacts.remove_existing();
+        bad_artifacts.write_fixture(bad_fixture_json);
+        let bad_report = bad_artifacts.run_minimizer(&pool).await;
 
-    assert_eq!(
-        bad_report["original"]["ok"], false,
-        "{stem} bad original should fail"
-    );
-    assert_eq!(
-        bad_report["original"]["failure_class"], "semantic_expectation",
-        "{stem} bad original failure class"
-    );
-    assert_eq!(
-        bad_report["minimized"]["ok"], false,
-        "{stem} bad minimized should fail"
-    );
-    assert_eq!(
-        bad_report["minimized"]["failure_class"], "semantic_expectation",
-        "{stem} bad minimized failure class"
-    );
-    assert_eq!(
-        bad_report["reduction"]["replay_success"],
-        serde_json::json!(false),
-        "{stem} bad reduction should remain failing"
-    );
-    assert_eq!(
-        bad_report["reduction"]["failure_class_preserved"],
-        serde_json::json!(true),
-        "{stem} bad reduction should preserve semantic failure"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["wrote"],
-        serde_json::json!(true),
-        "{stem} bad reduced artifact should be written"
-    );
-    assert_eq!(
-        bad_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(false),
-        "{stem} bad reduced artifact should not be promoted"
-    );
+        assert_eq!(
+            bad_report["original"]["ok"], false,
+            "{bad_stem} bad original should fail"
+        );
+        assert_eq!(
+            bad_report["original"]["failure_class"], "semantic_expectation",
+            "{bad_stem} bad original failure class"
+        );
+        assert_eq!(
+            bad_report["minimized"]["ok"], false,
+            "{bad_stem} bad minimized should fail"
+        );
+        assert_eq!(
+            bad_report["minimized"]["failure_class"], "semantic_expectation",
+            "{bad_stem} bad minimized failure class"
+        );
+        assert_eq!(
+            bad_report["reduction"]["replay_success"],
+            serde_json::json!(false),
+            "{bad_stem} bad reduction should remain failing"
+        );
+        assert_eq!(
+            bad_report["reduction"]["failure_class_preserved"],
+            serde_json::json!(true),
+            "{bad_stem} bad reduction should preserve semantic failure"
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["wrote"],
+            serde_json::json!(true),
+            "{bad_stem} bad reduced artifact should be written"
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(false),
+            "{bad_stem} bad reduced artifact should not be promoted"
+        );
 
-    let success_fixture_json =
-        include_str!("../fixtures/night-extra-action-generated-minimized.json");
-    let success_artifacts =
-        GeneratedShrinkArtifacts::new("night-extra-action-generated-success-after-bad-expectation");
-    success_artifacts.remove_existing();
-    success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
-    assert_eq!(
-        success_report["original"]["ok"], true,
-        "extra-action success fixture should replay after bad expectation"
-    );
-    assert_eq!(
-        success_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(5),
-        "extra-action success fixture expectation count"
-    );
-    assert_eq!(
-        success_report["original"]["projection_audit_ok"],
-        serde_json::json!(true),
-        "extra-action success fixture projection audit"
-    );
-    assert_eq!(
-        success_report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true),
-        "extra-action success fixture remains promotable"
-    );
+        let success_artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "night-{family}-generated-success-after-bad-expectation"
+        ));
+        success_artifacts.remove_existing();
+        success_artifacts.write_fixture(success_fixture_json);
+        let success_report = success_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            success_report["original"]["ok"], true,
+            "{family} success fixture should replay after bad expectation"
+        );
+        assert_eq!(
+            success_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(5),
+            "{family} success fixture expectation count"
+        );
+        assert_eq!(
+            success_report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{family} success fixture projection audit"
+        );
+        assert_eq!(
+            success_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "{family} success fixture remains promotable"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

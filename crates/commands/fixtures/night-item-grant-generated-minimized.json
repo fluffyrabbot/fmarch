@@ -1,0 +1,127 @@
+{
+  "seed": 131061,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "inventor"
+    },
+    {
+      "slot": "slot_2",
+      "role": "vanilla_townie"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_2",
+      "template_id": "bulletproof_vest_item",
+      "action_id": "generated_seed_97061_use_vest_item",
+      "targets": [
+        "slot_2"
+      ],
+      "grant_id": "bulletproof_vest_item"
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 130061,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "grant_vest_item",
+          "action_id": "generated_seed_97061_grant_vest_item",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "ActionGrantConsumed",
+        "payload": {
+          "action_id": "generated_seed_97061_use_vest_item",
+          "actor": "slot_2",
+          "grant_id": "bulletproof_vest_item",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "remaining_uses": 0,
+          "source_action": "generated_seed_97061_grant_vest_item"
+        }
+      },
+      {
+        "kind": "ActionUseCounted",
+        "payload": {
+          "actor": "slot_2",
+          "cadence_policy": "inventory",
+          "consumed_action": "generated_seed_97061_use_vest_item",
+          "counter_id": "inventory:bulletproof_vest_item",
+          "phase_scope": "grant",
+          "remaining": 0,
+          "template_id": "bulletproof_vest_item"
+        }
+      },
+      {
+        "kind": "EffectsMarked",
+        "payload": {
+          "actor": "slot_2",
+          "effect": "bulletproof_vest",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "source_action": "generated_seed_97061_use_vest_item",
+          "target": "slot_2"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [],
+    "trace_notes": [],
+    "generated_actions": [
+      {
+        "action_id": "bulletproof_vest_item",
+        "source": "ActionGranted",
+        "actor": "slot_1",
+        "targets": [
+          "slot_2"
+        ],
+        "detail": {
+          "kind": "Item",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "source_action": "generated_seed_97061_grant_vest_item",
+          "uses": 1
+        }
+      },
+      {
+        "action_id": "generated_seed_97061_use_vest_item",
+        "source": "ActionGrantConsumed",
+        "actor": "slot_2",
+        "targets": [],
+        "detail": {
+          "grant_id": "bulletproof_vest_item",
+          "remaining_uses": 0,
+          "source_action": "generated_seed_97061_grant_vest_item"
+        }
+      }
+    ],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}
