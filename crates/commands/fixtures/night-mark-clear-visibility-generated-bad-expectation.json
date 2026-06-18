@@ -1,0 +1,89 @@
+{
+  "seed": 130091,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 129091,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": []
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "EffectNotification",
+        "payload": {
+          "audience": [
+            "slot_2",
+            "slot_3"
+          ],
+          "effect": "doused",
+          "status": "cleared"
+        }
+      },
+      {
+        "kind": "EffectsCleared",
+        "payload": {
+          "actor": "slot_2",
+          "effect": "doused",
+          "targets": [
+            "slot_3"
+          ]
+        }
+      },
+      {
+        "kind": "EffectsMarked",
+        "payload": {
+          "actor": "slot_1",
+          "duration": "Persistent",
+          "effect": "doused",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "source_action": "generated_seed_97091_fresh_visible_douse",
+          "target": "slot_4",
+          "visibility": "Hidden"
+        }
+      },
+      {
+        "kind": "PhaseAnnouncement",
+        "payload": {
+          "deaths": [],
+          "phase_id": "N02"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:read_effect",
+        "source": "action:generated_seed_97091_ignite_after_cleanse",
+        "outcome": "read_effect_target_preempted_by_clear",
+        "detail": {
+          "action_id": "generated_seed_97091_ignite_after_cleanse",
+          "actor": "slot_1",
+          "reads_effect": "doused",
+          "target": "slot_3",
+          "template_id": "ignite"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}

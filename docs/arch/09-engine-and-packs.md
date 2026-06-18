@@ -1432,7 +1432,17 @@ artifacts,
 `crates/commands/fixtures/night-conversion-projection-state-generated-bad-expectation.json`, are
 covered by `checked_in_conversion_generated_fixtures_replay_semantic_expectations`, which proves
 both success fixtures remain promotable while both reduced negative fixtures preserve
-`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+`semantic_expectation` failure class without success promotion.
+`crates/commands/fixtures/night-mark-clear-visibility-generated-minimized.json` now promotes the
+MarkClearVisibility row into a checked-in Mafiascum N02 mark/clear replay with four slots, three
+actions, one setup phase, two audited resolution envelopes, and two anchored traces. It checks five
+semantic expectations: four inner events for visible `doused` notification, clear, fresh visible
+mark, and the empty phase announcement, plus the read-effect preemption trace proving same-resolution
+clear blocks the later `ignite`. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-mark-clear-visibility-generated-bad-expectation.json`, is covered by
+`checked_in_mark_clear_generated_fixtures_replay_semantic_expectations`, which proves the success
+fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
+failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.

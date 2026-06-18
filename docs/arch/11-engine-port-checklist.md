@@ -2525,6 +2525,16 @@ coverage, and a playable vertical scenario through the command pipeline.
    covered by `checked_in_conversion_generated_fixtures_replay_semantic_expectations`, which proves
    both success fixtures remain promotable while both reduced negative fixtures preserve
    `semantic_expectation` failure class without success promotion.
+   `crates/commands/fixtures/night-mark-clear-visibility-generated-minimized.json` now promotes the
+   MarkClearVisibility row into a checked-in Mafiascum N02 mark/clear replay with four slots, three
+   actions, one setup phase, two audited resolution envelopes, and two anchored traces. It checks
+   five semantic expectations: four inner events for visible `doused` notification, clear, fresh
+   visible mark, and the empty phase announcement, plus the read-effect preemption trace proving
+   same-resolution clear blocks the later `ignite`. Its matching checked-in negative artifact,
+   `crates/commands/fixtures/night-mark-clear-visibility-generated-bad-expectation.json`, is covered
+   by `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations`, which proves the
+   success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3047,7 +3057,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the next persistent Mark/Clear
-row: promote `mark_clear_visibility`, commit its reduced
+row: promote `mark_clear_expiry`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures
