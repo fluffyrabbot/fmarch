@@ -2455,7 +2455,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    The Epicmafia N01 Bomb/Cult loop now routes setup, action submission, resolve, result validation,
    Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace note, anchored
    generated-row, anchored trace-decision, and projection-rebuild failures through the same saved
-   shrink report path. The `default_open` N01/D01 generated replay lanes now use the same saved
+   shrink report path. Its minimizer fixture now preserves eight N01 semantic expectations for the
+   Bomb trigger, trigger-generated action row, trigger note, plain Cult conversion, Loyal
+   conversion block, and conversion trace decisions. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
+   and passed one filtered pipeline test, checking all eight expectations through
+   `minimize_night_fixture`. The `default_open` N01/D01 generated replay lanes now use the same saved
    artifact/minimizer report path for setup, action/vote submission, resolve, result validation,
    event extraction, audit, trace-count, exact anchored trace decisions, and projection-rebuild
    failures. Their minimizer fixtures now also preserve lane-specific semantic expectations: N01
@@ -2782,6 +2787,6 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 persistent and generated-action systems by extending semantic minimizer
-expectations into the richer shrink-routable Epicmafia generated fixtures. Start with the N01
-Bomb/Cult fixture so the minimizer preserves Bomb trigger extraction, Cult/Loyal conversion rows,
-and anchored trace notes/decisions before moving to the D01 PK prompt fixture.
+expectations into the Epicmafia D01 PK prompt fixture. Preserve the HostDecides tie outcome, PK
+prompt issue, host-selected kill, and anchored prompt issue/resolution trace decisions inside the
+fixture-driven minimizer path.

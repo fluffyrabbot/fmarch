@@ -12910,6 +12910,33 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    let case = generated_epicmafia_night_case(96_777);
+    let fixture_json = generated_night_case_fixture_json(&case, "epicmafia", case.seed + 48_000);
+    let fixture: serde_json::Value =
+        serde_json::from_str(&fixture_json).expect("generated Epicmafia N01 fixture JSON parses");
+    assert_eq!(
+        generated_expectation_count(&fixture["expectations"]),
+        8,
+        "Epicmafia N01 fixture should preserve Bomb, Cult, Loyal, generated-row, note, and trace expectations"
+    );
+
+    let artifacts = GeneratedShrinkArtifacts::new("generated-epicmafia-n01-semantic-expectations");
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], true);
+    assert_eq!(
+        report["original"]["semantic_expectations_checked"],
+        serde_json::json!(8)
+    );
+    assert_eq!(report["reduction"]["replay_success"], true);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -17461,6 +17488,7 @@ fn generated_case_expectations_json(
 ) -> Option<serde_json::Value> {
     match (pack, phase) {
         ("mafiascum", "N01") => generated_mafiascum_night_expectations_json(case),
+        ("epicmafia", "N01") => generated_epicmafia_night_expectations_json(case),
         ("default_open", "N01") => generated_default_open_night_expectations_json(case),
         _ => None,
     }
@@ -17607,6 +17635,111 @@ fn generated_mafiascum_night_expectations_json(
     }
 }
 
+fn generated_epicmafia_night_expectations_json(
+    case: &GeneratedNightCase,
+) -> Option<serde_json::Value> {
+    let bomb_kill = generated_action_by_template_target(case, "factional_kill", "slot_3")?;
+    let plain_recruit = generated_action_by_template_target(case, "cult_recruit", "slot_4")?;
+    let loyal_recruit = generated_action_by_template_target(case, "cult_recruit", "slot_5")?;
+
+    Some(serde_json::json!({
+        "inner_events": [
+            {
+                "kind": "Trigger",
+                "payload": {
+                    "trigger_id": "bomb_retaliates",
+                    "payload": {
+                        "on": "Kill",
+                        "source_target": "slot_3",
+                        "source_actor": bomb_kill.actor_slot,
+                        "source_cause": "factional_kill",
+                        "produced_actor": "slot_3",
+                        "produced_target": bomb_kill.actor_slot,
+                    }
+                }
+            },
+            {
+                "kind": "PlayerConverted",
+                "payload": {
+                    "target": "slot_4",
+                    "new_role": "cultist",
+                    "new_alignment": "cult",
+                    "original_role": "villager",
+                    "original_alignment": "town",
+                    "source": "slot_1",
+                }
+            },
+            {
+                "kind": "ConversionBlocked",
+                "payload": {
+                    "target": "slot_5",
+                    "status": "blocked",
+                    "reason": "loyal",
+                }
+            }
+        ],
+        "trace_decisions": [
+            {
+                "stage": "inner_event",
+                "source": "event_index:3",
+                "outcome": "trigger",
+                "detail": serde_json::Value::Null,
+            },
+            {
+                "stage": "night:conversion",
+                "source": format!("action:{}", plain_recruit.action_id),
+                "outcome": "conversion_assigned_role",
+                "detail": {
+                    "action_id": plain_recruit.action_id,
+                    "template_id": "cult_recruit",
+                    "actor": "slot_1",
+                    "target": "slot_4",
+                    "mode": "AssignRole",
+                    "new_role": "cultist",
+                    "new_alignment": "cult",
+                    "original_role": "villager",
+                    "original_alignment": "town",
+                    "origin_source": null,
+                },
+            },
+            {
+                "stage": "night:conversion",
+                "source": format!("action:{}", loyal_recruit.action_id),
+                "outcome": "conversion_blocked",
+                "detail": {
+                    "action_id": loyal_recruit.action_id,
+                    "template_id": "cult_recruit",
+                    "actor": "slot_7",
+                    "target": "slot_5",
+                    "target_role": "loyal_villager",
+                    "target_alignment": "town",
+                    "mode": "AssignRole",
+                    "reason": "loyal",
+                },
+            }
+        ],
+        "trace_notes": [
+            "trigger bomb_retaliates emitted at event_index 3"
+        ],
+        "generated_actions": [
+            {
+                "action_id": "bomb_retaliates",
+                "source": "Trigger",
+                "actor": "slot_3",
+                "targets": [bomb_kill.actor_slot],
+                "detail": {
+                    "on": "Kill",
+                    "source_target": "slot_3",
+                    "source_actor": bomb_kill.actor_slot,
+                    "source_cause": "factional_kill",
+                    "produced_actor": "slot_3",
+                    "produced_target": bomb_kill.actor_slot,
+                }
+            }
+        ]
+    }))
+}
+
 fn generated_default_open_night_expectations_json(
     case: &GeneratedNightCase,
 ) -> Option<serde_json::Value> {
@@ -17702,6 +17835,16 @@ fn generated_action_by_template<'a>(
     case.actions
         .iter()
         .find(|action| action.template_id == template_id)
+}
+
+fn generated_action_by_template_target<'a>(
+    case: &'a GeneratedNightCase,
+    template_id: &str,
+    target: &str,
+) -> Option<&'a GeneratedNightAction> {
+    case.actions
+        .iter()
+        .find(|action| action.template_id == template_id && action.targets == vec![target])
 }
 
 fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
