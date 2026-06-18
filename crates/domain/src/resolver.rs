@@ -7303,6 +7303,16 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     result: serde_json::json!({ "actions": actions_seen }),
                                 });
                             }
+                            InvestigateMode::ActionType => {
+                                let action_types =
+                                    followed_action_types(&actions, idx, &target, pack);
+                                events.push(InnerEvent::InvestigationResult {
+                                    mode,
+                                    investigator: investigator.clone(),
+                                    target,
+                                    result: serde_json::json!({ "action_types": action_types }),
+                                });
+                            }
                             InvestigateMode::Motion => {
                                 let active = detected_motion(&actions, idx, &target, pack);
                                 events.push(InnerEvent::InvestigationResult {
@@ -7882,6 +7892,47 @@ fn watched_action_ids(
     action_ids
 }
 
+/// Follower-style result: the visible action categories performed by the
+/// followed actor, without revealing targets or duplicate-count information.
+fn followed_action_types(
+    actions: &[Action],
+    observer_idx: usize,
+    followed: &SlotId,
+    pack: &Pack,
+) -> Vec<String> {
+    let mut action_types: Vec<String> = Vec::new();
+    for (idx, action) in actions.iter().enumerate() {
+        if idx == observer_idx || &action.sub.actor != followed || !visible_visit(action, pack) {
+            continue;
+        }
+        let action_type = action_type_category(&action.template);
+        if !action_types.iter().any(|existing| existing == action_type) {
+            action_types.push(action_type.to_string());
+        }
+    }
+    action_types.sort();
+    action_types
+}
+
+fn action_type_category(template: &ActionTemplate) -> &'static str {
+    if template.has_ability(IrAbility::Kill) {
+        "killing"
+    } else if template.has_ability(IrAbility::Protect) {
+        "protection"
+    } else if template.has_ability(IrAbility::Investigate) {
+        "investigation"
+    } else if template.has_ability(IrAbility::Block)
+        || template.has_ability(IrAbility::Redirect)
+        || template.has_ability(IrAbility::Mark)
+        || template.has_ability(IrAbility::Clear)
+        || template.has_ability(IrAbility::Convert)
+    {
+        "manipulation"
+    } else {
+        "utility"
+    }
+}
+
 /// Motion detector result: true iff the target either made a visible visit or
 /// received a visible visit. The observer's own info action is excluded, or
 /// every motion check would trivially make its target active.
@@ -7910,6 +7961,7 @@ fn visible_visit(action: &Action, pack: &Pack) -> bool {
                 | InvestigateMode::RoleGuard
                 | InvestigateMode::SecurityGuard
                 | InvestigateMode::Voyeur
+                | InvestigateMode::ActionType
         )
     ) {
         return false;

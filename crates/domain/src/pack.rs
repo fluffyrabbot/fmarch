@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 60;
+pub const SUPPORTED_IR_VERSION: u16 = 61;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -7916,6 +7916,13 @@ fn validate_action(
                 "voyeur action investigation mode requires ir_version >= 56",
             );
         }
+        if ir_version < 61 && matches!(action.mode, Some(InvestigateMode::ActionType)) {
+            issue(
+                issues,
+                format!("{path}.mode"),
+                "action-type follow investigation mode requires ir_version >= 61",
+            );
+        }
     } else if action.mode.is_some() {
         issue(
             issues,
@@ -9084,6 +9091,14 @@ fn record_action_required_ir_version(
     if matches!(action.mode, Some(InvestigateMode::Voyeur)) {
         require_ir(required, reasons, 56, "voyeur action investigation mode");
     }
+    if matches!(action.mode, Some(InvestigateMode::ActionType)) {
+        require_ir(
+            required,
+            reasons,
+            61,
+            "action-type follow investigation mode",
+        );
+    }
     if matches!(action.redirect, Some(RedirectKind::Rotate)) {
         require_ir(required, reasons, 25, "Rotate");
     }
@@ -9412,6 +9427,14 @@ mod tests {
         let mut voyeur_mode = test_action("Investigate");
         voyeur_mode["mode"] = json!("Voyeur");
         assert_versioned_action(voyeur_mode, 56, "voyeur action investigation mode");
+
+        let mut action_type_mode = test_action("Investigate");
+        action_type_mode["mode"] = json!("ActionType");
+        assert_versioned_action(
+            action_type_mode,
+            61,
+            "action-type follow investigation mode",
+        );
 
         let mut rotate = test_action("Redirect");
         rotate["targets"] = json!("Many");

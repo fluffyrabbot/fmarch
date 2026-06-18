@@ -48062,6 +48062,209 @@ async fn host_resolve_phase_projects_tracker_private_visit_result(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_follower_action_type_result(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "follower_user_1", "mafia_goon"),
+        ("slot_2", "follower_user_2", "follower"),
+        ("slot_3", "follower_user_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("follower_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "follower_goon_kills_target_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Goon submits kill through command validation");
+    handle(
+        &pool,
+        &user("follower_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "follower_follows_goon_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "follow".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Follower submits follow through command validation");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 772101 })
+        .await
+        .expect("host resolves Follower action-type scenario");
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 772101).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Follower ResolutionApplied validates");
+    let follower_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::InvestigationResult {
+                mode: domain::InvestigateMode::ActionType,
+                investigator,
+                target,
+                result,
+            } if investigator == "slot_2"
+                && target == "slot_1"
+                && result == &serde_json::json!({ "action_types": ["killing"] }) =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("Follower should see the visible killing action type");
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, .. }
+                if slot_id == "slot_3"
+                    && cause == "factional_kill"
+                    && attackers == &vec!["slot_1".to_string()]
+        )),
+        "followed kill should still kill the target"
+    );
+
+    let private_results = projections::player_investigation_results(&pool, game)
+        .await
+        .expect("read Follower private result");
+    assert_eq!(
+        private_results.len(),
+        1,
+        "Follower should receive exactly one private result"
+    );
+    let private_result = &private_results[0];
+    assert_eq!(private_result.phase_id, "N01");
+    assert_eq!(private_result.event_index, follower_index as i32);
+    assert_eq!(private_result.audience_slot, "slot_2");
+    assert_eq!(private_result.mode, "ActionType");
+    assert_eq!(private_result.target_slot, "slot_1");
+    assert_eq!(
+        private_result.result,
+        serde_json::json!({ "action_types": ["killing"] })
+    );
+    assert!(
+        projections::player_investigation_results_for_slot(&pool, game, "slot_1")
+            .await
+            .expect("read followed actor private rows")
+            .is_empty(),
+        "the followed actor must not receive the Follower result"
+    );
+    let thread_before = projections::thread_view(&pool, game, None, 50)
+        .await
+        .expect("read thread view before rebuild");
+    assert!(
+        thread_before.posts.iter().all(|post| {
+            !post.body.contains("action_types")
+                && !post.body.contains("killing")
+                && !post.body.contains("Follower")
+        }),
+        "Follower private result payload must not leak into thread_view: {:?}",
+        thread_before.posts
+    );
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Follower resolution audit");
+    assert!(audit.ok, "Follower resolution audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let private_results_before =
+        serde_json::to_string(&private_results).expect("serialize Follower result before rebuild");
+    let slots_before = serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Follower outcome"
+    );
+    assert_eq!(
+        private_results_before,
+        serde_json::to_string(
+            &projections::player_investigation_results(&pool, game)
+                .await
+                .expect("read Follower private result after rebuild")
+        )
+        .expect("serialize Follower result after rebuild"),
+        "player_investigation_result rebuild must preserve Follower private result"
+    );
+    assert_eq!(
+        thread_before,
+        projections::thread_view(&pool, game, None, 50)
+            .await
+            .expect("read thread view after rebuild"),
+        "thread_view rebuild must preserve Follower private result non-leakage"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_rolestop_and_shield_target_state(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

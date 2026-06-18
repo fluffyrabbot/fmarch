@@ -47,6 +47,7 @@ pub enum InvestigateMode {
     RoleGuard,
     SecurityGuard,
     Voyeur,
+    ActionType,
     Motion,
     PriorMotion,
 }

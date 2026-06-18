@@ -131,7 +131,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:deprogram` | `deprogram` | 1 | no | yes | yes | yes | yes | convert |
 | action_id | `mafiascum:douse` | `douse` | 1 | no | yes | yes | yes | yes | mark |
 | action_id | `mafiascum:duel` | `duel` | 1 | no | yes | yes | yes | yes | info |
-| action_id | `mafiascum:follow` | `track` | 1 | no | yes | yes | yes | yes | investigate |
+| action_id | `mafiascum:follow` | `follow` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:friendly_neighbor` | `friendly_neighbor` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:grant_item` | `grant_item` | 1 | no | yes | yes | yes | yes | schedule |
 | action_id | `mafiascum:guard_retaliate` | `bodyguard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
@@ -492,7 +492,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:encryptor` | `private_channels:FactionDayChat` | 1 | no | yes | yes | yes | yes | Passive faction_day_chat role from the Mafiascum catalog; fmarch models it as source-alive-gated FactionDayChat private-channel metadata with command/projection declaration and revocation. |
 | role_id | `mafiascum:executioner` | `executioner` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:faith_healer` | `faith_healer` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:follower` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:follower` | `follower` | 1 | no | yes | yes | yes | yes | Mafiascum Follower uses im-human action_type investigation; fmarch models it as InvestigateMode::ActionType returning visible action-type categories such as killing. |
 | role_id | `mafiascum:framer` | `framer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:friendly_neighbor` | `friendly_neighbor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:fruit_vendor` | `fruit_vendor` | 1 | no | yes | yes | yes | yes |  |

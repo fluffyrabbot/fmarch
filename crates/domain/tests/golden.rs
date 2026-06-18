@@ -13,7 +13,7 @@ use domain::pack::{
 };
 use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
-use domain::IrAbility;
+use domain::{InvestigateMode, IrAbility};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 58);
+    assert_eq!(pack.ir_version, 61);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -339,6 +339,15 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("disabled_endgame_cop"));
     assert!(pack.roles.contains_key("lost_mafia_goon"));
     assert!(pack.roles.contains_key("recluse_mafia_goon"));
+    let follower = pack.roles.get("follower").expect("Mafiascum Follower role");
+    assert_eq!(follower.alignment.as_deref(), Some("town"));
+    let follow = follower
+        .actions
+        .iter()
+        .find(|action| action.id == "follow")
+        .expect("Follower follow action");
+    assert_eq!(follow.ability, IrAbility::Investigate);
+    assert_eq!(follow.mode, Some(InvestigateMode::ActionType));
     let encryptor = pack
         .roles
         .get("encryptor")
@@ -3904,6 +3913,17 @@ fn golden_tracker_tracks_visit() {
     let golden = load_golden("tracker_tracks_visit.json");
     let got = run(&golden["input"], load_pack());
     assert_events_eq(&got, &expected_events(&golden), "tracker_tracks_visit");
+}
+
+#[test]
+fn golden_follower_reads_action_type() {
+    let golden = load_golden("follower_reads_action_type.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "follower_reads_action_type",
+    );
 }
 
 #[test]

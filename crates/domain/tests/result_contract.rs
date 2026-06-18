@@ -2111,6 +2111,43 @@ fn voyeur_investigation_result_payload_passes_contract_validation() {
 }
 
 #[test]
+fn action_type_investigation_result_payload_passes_contract_validation() {
+    let payload = json!({
+        "phase_id": "N01",
+        "phase_kind": "Night",
+        "phase_number": 1,
+        "run_id": "resolution:test:N01:action-type-result",
+        "result_version": RESULT_VERSION,
+        "seed": 8,
+        "counts": {
+            "events": 1,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "ActionType",
+                    "investigator": "slot_1",
+                    "target": "slot_2",
+                    "result": {
+                        "action_types": ["killing", "protection"]
+                    }
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("canonical ActionType investigation result should pass");
+    assert_eq!(applied.events.len(), 2);
+}
+
+#[test]
 fn malformed_visitor_role_investigation_result_payload_fails_contract_validation() {
     let payload = json!({
         "phase_id": "N01",

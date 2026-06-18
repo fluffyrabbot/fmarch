@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 58,
+  "ir_version": 61,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -989,6 +989,28 @@
             "x_shots": null
           },
           "mode": "Track"
+        }
+      ]
+    },
+    "follower": {
+      "description": "Follower. Each night, follows one slot and learns the visible action type that slot performed.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "follow",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 10,
+            "x_shots": null
+          },
+          "mode": "ActionType"
         }
       ]
     },
@@ -3235,6 +3257,7 @@
           "executioner_target",
           "faith_healer_protect",
           "factional_kill",
+          "follow",
           "frame",
           "lawyer_cover",
           "friendly_neighbor",
@@ -3311,6 +3334,7 @@
           "executioner_target",
           "faith_healer_protect",
           "factional_kill",
+          "follow",
           "frame",
           "lawyer_cover",
           "friendly_neighbor",
@@ -3388,6 +3412,7 @@
           "executioner_target",
           "faith_healer_protect",
           "factional_kill",
+          "follow",
           "frame",
           "lawyer_cover",
           "friendly_neighbor",

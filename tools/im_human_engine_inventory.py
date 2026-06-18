@@ -1018,6 +1018,7 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         "modes": rust_enum_variants(ir_text, "InvestigateMode"),
         "modifiers": rust_enum_variants(ir_text, "Modifier"),
         "events": rust_enum_variants(events_text, "InnerEvent"),
+        "events_text": events_text,
         "ir_text": ir_text,
         "pack_src_text": pack_src_text,
         "resolver_text": resolver_text,
@@ -2674,6 +2675,36 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "fmarch folds it as a hidden bomb role effect consumed by the "
                 "bomb_retaliates Kill trigger."
             )
+        elif scoped_name == "mafiascum:follower":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum",
+                set(),
+            )
+            canonical = "follower"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafiascum:follow" in fmarch["pack_actions"]
+                and '"id": "follow"' in fmarch["pack_text"]
+                and '"mode": "ActionType"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "InvestigateMode::ActionType" in resolver
+                and "followed_action_types" in resolver
+                and "action_type_category" in resolver
+                and '"action_types"' in fmarch["events_text"]
+            )
+            golden = modeled and "follower_reads_action_type" in mafiascum_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_projects_follower_action_type_result"
+                in command_tests
+            )
+            notes = (
+                "Mafiascum Follower uses im-human action_type investigation; "
+                "fmarch models it as InvestigateMode::ActionType returning "
+                "visible action-type categories such as killing."
+            )
         elif scoped_name in {
             "mafia_universe:mafia_bomber",
             "mafia_universe:town_bomber",
@@ -2860,7 +2891,10 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         role_scoped_name = f"{item['culture']}:{canonical_role}:{name}"
         source_is_ambiguous = action_source_counts[scoped_name] > 1
         canonical = (
-            name
+            "follow"
+            if role_scoped_name == "mafiascum:follower:follow"
+            and "mafiascum:follow" in fmarch["pack_actions"]
+            else name
             if scoped_name in fmarch["pack_actions"]
             else fmarch["pack_action_source_ids"].get(
                 role_scoped_name,

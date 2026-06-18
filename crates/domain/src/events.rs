@@ -929,6 +929,7 @@ fn validate_investigation_result_invariant(
             }
             crate::ir::InvestigateMode::SecurityGuard => &["visitors"],
             crate::ir::InvestigateMode::Voyeur => &["actions"],
+            crate::ir::InvestigateMode::ActionType => &["action_types"],
             crate::ir::InvestigateMode::Motion => &["motion"],
             crate::ir::InvestigateMode::PriorMotion => &["prior_motion"],
             crate::ir::InvestigateMode::Parity => unreachable!("Parity handled above"),
@@ -962,9 +963,11 @@ fn validate_investigation_result_object(
             "previous" => value.is_null() || value.as_str().is_some(),
             "changed" | "vanilla" | "vanilla_town" | "has_gun" | "killer" | "specialist"
             | "motion" | "prior_motion" => value.as_bool().is_some(),
-            "actions" | "pt_access" | "visited" | "visitors" | "visitor_roles" => value
-                .as_array()
-                .is_some_and(|items| items.iter().all(|item| item.as_str().is_some())),
+            "action_types" | "actions" | "pt_access" | "visited" | "visitors" | "visitor_roles" => {
+                value
+                    .as_array()
+                    .is_some_and(|items| items.iter().all(|item| item.as_str().is_some()))
+            }
             _ => false,
         };
         if !valid {
