@@ -2507,12 +2507,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    negative lane cannot hide resolver drift.
    `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
    in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
-   generated seeds plus two deterministic Hunter, Ignite, ExtraAction, Lovers, and Bomb persistent/generated-action
-   seeds, runs each of the 16 cases through success and bad-expectation reductions, asserts success
+   generated seeds plus two deterministic Hunter, Ignite, ExtraAction, ItemGrant, Lovers, and Bomb persistent/generated-action
+   seeds, runs each of the 18 cases through success and bad-expectation reductions, asserts success
    invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
    report artifacts under `target/operator-proof`, and saves
-   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, eight
-   families, 16 cases, and the proof boundary that it is bounded local-Postgres coverage rather
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, nine
+   families, 18 cases, and the proof boundary that it is bounded local-Postgres coverage rather
    than exhaustive randomized coverage.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
@@ -2900,10 +2900,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter,
-   Ignite, ExtraAction, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
+   Ignite, ExtraAction, ItemGrant, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
    plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive
    randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
-   `family_count: 8`, `case_count: 16`, `expected_family_count: 8`, `expected_case_count: 16`,
+   `family_count: 9`, `case_count: 18`, `expected_family_count: 9`, `expected_case_count: 18`,
    and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
@@ -2966,7 +2966,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    a manifest/status trusted command/projection proof row that has not yet been promoted into the
    browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
-   `ok: true`, eight families, 16 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Ignite/ExtraAction/Lovers/Bomb
+   `ok: true`, nine families, 18 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Ignite/ExtraAction/ItemGrant/Lovers/Bomb
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
    breadth remains future work. The local-Postgres
@@ -2981,9 +2981,10 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by extending the generated shrink matrix to a generated item family, preferably
-inventor/grant-item. Build a two-phase fixture where an inventor grants a pack-owned single-use
-item, the target spends that item with an explicit `grant_id`, and the reduced replay preserves
-both `ActionGranted` and `ActionGrantConsumed` plus the item effect. Add a bad-expectation variant
-that mutates the consumed item grant/source action, prove the minimizer preserves
-`semantic_expectation`, and only then raise the matrix manifest from 8/16 to 9/18.
+Continue Phase 4 by extending the generated shrink matrix to conversion/deprogramming or backup
+inheritance. Build a multi-phase fixture where a conversion or inheritance event generates a new
+role/action capability, the recipient uses that generated capability in a later phase, and the
+reduced replay preserves the source transition, generated action, and downstream effect/result.
+Add a bad-expectation variant that mutates the source transition or generated capability id, prove
+the minimizer preserves `semantic_expectation`, and only then raise the matrix manifest from 9/18
+to 10/20.
