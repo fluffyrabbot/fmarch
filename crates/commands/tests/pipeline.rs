@@ -13037,6 +13037,81 @@ async fn chinese_folded_state_cascade_fixtures_replay_semantic_expectations_thro
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    for seed in [93_001_u64, 93_113, 93_227, 93_331, 93_447, 93_559] {
+        let case = generated_chinese_day_case(seed);
+        let fixture_json =
+            generated_case_fixture_json(&case, "chinese_structured", "D01", case.seed + 45_000);
+        let fixture: serde_json::Value = serde_json::from_str(&fixture_json)
+            .expect("generated Chinese Structured D01 fixture JSON parses");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= 9,
+            "Chinese Structured D01 fixture seed {seed} should preserve rich day expectations"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "generated-chinese-d01-seed-{seed}-semantic-expectations"
+        ));
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "seed {seed} should replay");
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "seed {seed} should check every generated Chinese D01 expectation"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"], true,
+            "seed {seed} should remain minimizer-replayable"
+        );
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"], true,
+            "seed {seed} should promote the reduced success fixture"
+        );
+    }
+
+    for seed in [94_001_u64, 94_113, 94_227, 94_331, 94_447, 94_559] {
+        let case = generated_mafia_universe_ita_case(seed);
+        let fixture_json =
+            generated_case_fixture_json(&case, "mafia_universe", "D01", case.seed + 46_000);
+        let fixture: serde_json::Value = serde_json::from_str(&fixture_json)
+            .expect("generated Mafia Universe ITA D01 fixture JSON parses");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= 21,
+            "Mafia Universe ITA D01 fixture seed {seed} should preserve session and shot expectations"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "generated-mafia-universe-ita-d01-seed-{seed}-semantic-expectations"
+        ));
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "seed {seed} should replay");
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "seed {seed} should check every generated Mafia Universe ITA expectation"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"], true,
+            "seed {seed} should remain minimizer-replayable"
+        );
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"], true,
+            "seed {seed} should promote the reduced success fixture"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -17880,6 +17955,8 @@ fn generated_case_expectations_json(
     match (pack, phase) {
         ("mafiascum", "N01") => generated_mafiascum_night_expectations_json(case),
         ("chinese_structured", "N01") => generated_chinese_night_expectations_json(case),
+        ("chinese_structured", "D01") => generated_chinese_day_expectations_json(case),
+        ("mafia_universe", "D01") => generated_mafia_universe_ita_expectations_json(case),
         ("epicmafia", "N01") => generated_epicmafia_night_expectations_json(case),
         ("default_open", "N01") => generated_default_open_night_expectations_json(case),
         _ => None,
@@ -18293,6 +18370,264 @@ fn generated_chinese_night_expectations_json(
             "trace_decisions": trace_decisions,
         }))
     }
+}
+
+fn generated_chinese_day_expectations_json(case: &GeneratedNightCase) -> Option<serde_json::Value> {
+    let sheriff = generated_action_by_template(case, "sheriff_election")?;
+    let duel = generated_action_by_template(case, "knight_duel")?;
+    let self_destruct = generated_action_by_template(case, "day_self_destruct")?;
+    let sheriff_target = sheriff.targets.first()?;
+    let duel_target = duel.targets.first()?;
+    let self_destruct_target = self_destruct.targets.first()?;
+    let duel_hits_wolf = matches!(
+        generated_role_for(case, duel_target),
+        Some("wolf" | "white_wolf_king")
+    );
+    let (duel_result, duel_killed) = if duel_hits_wolf {
+        ("Success", duel_target.as_str())
+    } else {
+        ("Failure", duel.actor_slot.as_str())
+    };
+
+    Some(serde_json::json!({
+        "inner_events": [
+            {
+                "kind": "BadgeChanged",
+                "payload": {
+                    "badge_id": "sheriff_badge",
+                    "owner": sheriff_target,
+                    "previous_owner": null,
+                    "vote_weight": 1.5,
+                    "actor": sheriff.actor_slot,
+                    "source_action": sheriff.action_id,
+                    "reason": "elected",
+                    "destroyed": false,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            },
+            {
+                "kind": "ActionUseCounted",
+                "payload": {
+                    "actor": duel.actor_slot,
+                    "template_id": "knight_duel",
+                    "consumed_action": duel.action_id,
+                    "counter_id": "x_shot:knight_duel",
+                    "cadence_policy": "x_shot",
+                    "phase_scope": "game",
+                    "limit": 1,
+                    "used": 1,
+                    "remaining": 0,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            },
+            {
+                "kind": "DuelResolved",
+                "payload": {
+                    "knight": duel.actor_slot,
+                    "target": duel_target,
+                    "result": duel_result,
+                    "killed": duel_killed,
+                    "source_action": duel.action_id,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            },
+            {
+                "kind": "PlayerKilled",
+                "payload": {
+                    "slot_id": duel_killed,
+                    "cause": "knight_duel",
+                    "attackers": [duel.actor_slot],
+                    "unstoppable": true,
+                }
+            },
+            {
+                "kind": "WolfSelfDestructed",
+                "payload": {
+                    "wolf_id": self_destruct.actor_slot,
+                    "target_id": self_destruct_target,
+                    "cause": "self_destruct",
+                    "unstoppable": true,
+                    "source_action": self_destruct.action_id,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            },
+            {
+                "kind": "PlayerKilled",
+                "payload": {
+                    "slot_id": self_destruct.actor_slot,
+                    "cause": "self_destruct",
+                    "attackers": [self_destruct.actor_slot],
+                    "unstoppable": true,
+                }
+            },
+        ],
+        "generated_actions": [
+            {
+                "action_id": sheriff.action_id,
+                "source": "BadgeChanged",
+                "actor": sheriff.actor_slot,
+                "targets": [sheriff_target],
+                "detail": {
+                    "badge_id": "sheriff_badge",
+                    "previous_owner": null,
+                    "vote_weight": 1.5,
+                    "reason": "elected",
+                    "destroyed": false,
+                }
+            },
+            {
+                "action_id": duel.action_id,
+                "source": "DuelResolved",
+                "actor": duel.actor_slot,
+                "targets": [duel_target],
+                "detail": {
+                    "result": duel_result,
+                    "killed": duel_killed,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            },
+            {
+                "action_id": self_destruct.action_id,
+                "source": "WolfSelfDestructed",
+                "actor": self_destruct.actor_slot,
+                "targets": [self_destruct_target],
+                "detail": {
+                    "cause": "self_destruct",
+                    "unstoppable": true,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1,
+                }
+            }
+        ]
+    }))
+}
+
+fn generated_mafia_universe_ita_expectations_json(
+    case: &GeneratedNightCase,
+) -> Option<serde_json::Value> {
+    let mut inner_events = vec![serde_json::json!({
+        "kind": "ItaSessionOpened",
+        "payload": {
+            "session_id": "d1",
+            "label": "Day 1 ITA",
+            "day": 1,
+            "window": "ita_sessions",
+            "status": "open",
+            "phase_id": "D01",
+            "phase_kind": "Day",
+            "phase_number": 1,
+        }
+    })];
+    let mut generated_actions = Vec::new();
+
+    for action in &case.actions {
+        if action.template_id != "ita_shot" {
+            continue;
+        }
+        let target = action.targets.first()?;
+        inner_events.push(serde_json::json!({
+            "kind": "ActionUseCounted",
+            "payload": {
+                "counter_id": "day_session:d1:ita_shot",
+                "actor": action.actor_slot,
+                "template_id": "ita_shot",
+                "consumed_action": action.action_id,
+                "cadence_policy": "day_session",
+                "phase_scope": "session",
+                "limit": 1,
+                "used": 1,
+                "remaining": 0,
+                "phase_id": "D01",
+                "phase_kind": "Day",
+                "phase_number": 1,
+            }
+        }));
+        inner_events.push(serde_json::json!({
+            "kind": "ItaShotQueued",
+            "payload": {
+                "session_id": "d1",
+                "action_id": action.action_id,
+                "actor": action.actor_slot,
+                "targets": action.targets,
+            }
+        }));
+        inner_events.push(serde_json::json!({
+            "kind": "ItaShotResolved",
+            "payload": {
+                "session_id": "d1",
+                "action_id": action.action_id,
+                "actor": action.actor_slot,
+                "target": target,
+                "hit_chance": 0.5,
+            }
+        }));
+        generated_actions.push(serde_json::json!({
+            "action_id": action.action_id,
+            "source": "ItaShotResolved",
+            "actor": action.actor_slot,
+            "targets": [target],
+            "detail": {
+                "session_id": "d1",
+                "hit_chance": 0.5,
+            }
+        }));
+    }
+
+    inner_events.push(serde_json::json!({
+        "kind": "ItaShotResolved",
+        "payload": {
+            "session_id": "d1",
+            "outcome": "Hit",
+            "kill": true,
+        }
+    }));
+    inner_events.push(serde_json::json!({
+        "kind": "ItaShotResolved",
+        "payload": {
+            "session_id": "d1",
+            "outcome": "Miss",
+            "kill": false,
+        }
+    }));
+    inner_events.push(serde_json::json!({
+        "kind": "ItaSessionUpdated",
+        "payload": {
+            "session_id": "d1",
+            "queue_length": 0,
+            "queue_delta": -(case.actions.len() as i64),
+            "shots_resolved": case.actions.len() as u64,
+            "global_shots_fired": case.actions.len() as u64,
+            "phase_id": "D01",
+            "phase_kind": "Day",
+            "phase_number": 1,
+        }
+    }));
+    inner_events.push(serde_json::json!({
+        "kind": "ItaSessionClosed",
+        "payload": {
+            "session_id": "d1",
+            "last_status": "open",
+            "phase_id": "D01",
+            "phase_kind": "Day",
+            "phase_number": 1,
+        }
+    }));
+
+    Some(serde_json::json!({
+        "inner_events": inner_events,
+        "generated_actions": generated_actions,
+    }))
 }
 
 #[derive(Debug)]

@@ -2506,7 +2506,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    pack's 50 percent ITA policy, exact anchored hit/miss generated rows in `inspect_trace`, and
    the same audit trio. This Mafia Universe ITA lane was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
-   and passed one filtered pipeline test across its six fixed generated seeds. A fourth
+   and passed one filtered pipeline test across its six fixed generated seeds. The generated Chinese
+   Structured D01 and Mafia Universe ITA fixtures now also carry artifact-backed semantic minimizer
+   expectations for sheriff badge election, Knight duel x-shot/death semantics, White Wolf
+   self-destruct generated rows, ITA session open/update/close rows, every queued/resolved ITA shot,
+   and generic ITA hit/miss outcomes. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
+   and passed one filtered pipeline test across all twelve fixed D01 seeds, checking every emitted
+   Phase 5 day semantic expectation through `minimize_night_fixture`. A fourth
    non-mafiascum lane now generates three Epicmafia D01 PK prompt cases and three
    Epicmafia N01 Bomb/Cult cases from fixed seeds, proving the same audit trio across host-prompt
    resolution and night action graphs; PK prompt issue/resolution, Bomb trigger note/generated
@@ -2804,7 +2811,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by extending semantic minimizer expectations into the Chinese
-Structured D01 and Mafia Universe ITA generated fixture lanes. Start with Chinese sheriff badge,
-Knight duel, White Wolf self-destruct, and Mafia Universe ITA queued shot/hit/miss rows so minimized
-day fixtures preserve rich day semantics, not only replay/audit success.
+Continue Phase 5 rich day systems by adding semantic minimizer coverage for the remaining day
+announcement and host-prompt mechanics: last words, day announcements, no-majority/revote prompts,
+and any PK prompt variants not already covered by the Epicmafia generated lane. Start with one
+fixture family that proves the emitted announcement/prompt inner events, trace decisions, and
+projection rebuild survive minimization before widening to more culture-pack variants.

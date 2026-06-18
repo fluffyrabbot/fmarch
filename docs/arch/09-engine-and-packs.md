@@ -1398,7 +1398,14 @@ generated lane now covers six fixed-seed D01 ITA sessions with legal command sub
 queued shots, mixed deterministic hit/miss outcomes under the pack's 50 percent session policy,
 and the same audit trio. This manifest-listed Mafia Universe ITA lane was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
-which passed one filtered pipeline test across its six fixed generated seeds. An Epicmafia
+which passed one filtered pipeline test across its six fixed generated seeds. The generated Chinese
+Structured D01 and Mafia Universe ITA fixtures now also carry artifact-backed semantic minimizer
+expectations for sheriff badge election, Knight duel x-shot/death semantics, White Wolf
+self-destruct generated rows, ITA session open/update/close rows, every queued/resolved ITA shot,
+and generic ITA hit/miss outcomes. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
+which passed one filtered pipeline test across all twelve fixed D01 seeds and checked every emitted
+Phase 5 day semantic expectation through `minimize_night_fixture`. An Epicmafia
 generated lane now covers three fixed-seed D01 plurality ties that emit PK prompts and
 host-selected kills, plus three fixed-seed N01 Bomb/Cult graphs that
 submit Bomb-triggering mafia kills and plain/loyal cult recruits through legal commands, again
