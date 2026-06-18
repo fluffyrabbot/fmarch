@@ -44,7 +44,7 @@
           "id": "seeded-day-vote-replay",
           "family": "Seeded day-vote replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Fixed day-vote seeds through command resolution and the audit trio."
         },
@@ -52,7 +52,7 @@
           "id": "seeded-mafiascum-night-graph-replay",
           "family": "Seeded Mafiascum night graph replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands seeded_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline seeded_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "seeded_night_action_graphs_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Fixed night-action seeds across protect, roleblock, tracking, watching, redirect, and kill families."
         },
@@ -60,7 +60,7 @@
           "id": "seeded-trigger-dependency-replay",
           "family": "Seeded trigger/dependency replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Fixed PGO, Babysitter, and Hider trigger/dependency seeds under replay, trace, and rebuild audits."
         },
@@ -68,15 +68,23 @@
           "id": "seeded-persistent-trigger-replay",
           "family": "Seeded persistent trigger replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Two-phase Hunter retaliation and Cupid/Lovers folded state consumed by later resolution."
+        },
+        {
+          "id": "seeded-day-trigger-policy-replay",
+          "family": "Seeded day-trigger policy replay",
+          "scope": "Local-only",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "test_selector": "seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically",
+          "proof_boundary": "Super-Saint lynch and Hero/VoteDuel day triggers under replay, trace, and rebuild audits."
         },
         {
           "id": "generated-mafiascum-night-replay",
           "family": "Generated Mafiascum night replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_night_action_graphs_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Bounded generated N01 cases with seed/roster/action failure output."
         },
@@ -84,7 +92,7 @@
           "id": "generated-chinese-structured-night-replay",
           "family": "Generated Chinese Structured night replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Chinese Structured N01 fixed seeds across wolf, witch, guard, prophet, cupid, hunter, and passive roles."
         },
@@ -92,7 +100,7 @@
           "id": "generated-chinese-structured-day-replay",
           "family": "Generated Chinese Structured day replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Chinese Structured D01 fixed seeds for sheriff election, Knight duel, self-destruct, and votes."
         },
@@ -100,7 +108,7 @@
           "id": "generated-mafia-universe-ita-replay",
           "family": "Generated Mafia Universe ITA replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Mafia Universe D01 ITA fixed seeds with deterministic hit/miss outcomes and audit trio."
         },
@@ -108,7 +116,7 @@
           "id": "generated-epicmafia-prompt-night-replay",
           "family": "Generated Epicmafia prompt/night replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Epicmafia PK prompt and Bomb/Cult night fixed seeds under replay, trace, and rebuild audits."
         },
@@ -116,7 +124,7 @@
           "id": "generated-default-open-night-replay",
           "family": "Generated default_open night replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_default_open_night_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_default_open_night_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Copyright-free default_open N01 seeds under the same audit trio."
         },
@@ -124,7 +132,7 @@
           "id": "generated-default-open-day-replay",
           "family": "Generated default_open day replay",
           "scope": "Local-only",
-          "command_template": "DATABASE_URL={database_url} cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture",
           "test_selector": "generated_default_open_day_replay_audit_and_rebuild_deterministically",
           "proof_boundary": "Copyright-free default_open D01 vote seeds under the same audit trio."
         },

@@ -977,6 +977,13 @@ pub fn determinism_fuzz_family_specs() -> Vec<OperatorDeterminismFuzzFamilySpec>
             seeds: &[8101, 8202, 8303, 8404],
         },
         OperatorDeterminismFuzzFamilySpec {
+            id: "seeded-day-trigger-policy",
+            selector: "seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically",
+            pack: "mafiascum",
+            phase_scope: "D01",
+            seeds: &[8501, 8602],
+        },
+        OperatorDeterminismFuzzFamilySpec {
             id: "generated-mafiascum-night",
             selector: "generated_night_action_graphs_replay_audit_and_rebuild_deterministically",
             pack: "mafiascum",
@@ -3582,10 +3589,10 @@ mod tests {
             "target/determinism.json",
             ProofRunArtifactState::DeterminismFuzzReportPresent {
                 artifact_version: DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION,
-                family_count: 11,
-                seed_count: 55,
-                expected_family_count: 11,
-                expected_seed_count: 55,
+                family_count: 12,
+                seed_count: 57,
+                expected_family_count: 12,
+                expected_seed_count: 57,
                 family_manifest_matched: true,
                 freshness: ProofRunArtifactFreshness {
                     modified_at_unix_seconds: 22,
@@ -3596,10 +3603,10 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(determinism["state"], "trusted");
-        assert_eq!(determinism["trusted_metadata"]["family_count"], 11);
-        assert_eq!(determinism["trusted_metadata"]["seed_count"], 55);
-        assert_eq!(determinism["trusted_metadata"]["expected_family_count"], 11);
-        assert_eq!(determinism["trusted_metadata"]["expected_seed_count"], 55);
+        assert_eq!(determinism["trusted_metadata"]["family_count"], 12);
+        assert_eq!(determinism["trusted_metadata"]["seed_count"], 57);
+        assert_eq!(determinism["trusted_metadata"]["expected_family_count"], 12);
+        assert_eq!(determinism["trusted_metadata"]["expected_seed_count"], 57);
         assert_eq!(
             determinism["trusted_metadata"]["family_manifest_matched"],
             true
@@ -3740,10 +3747,10 @@ mod tests {
                 "target/determinism.json",
                 ProofRunArtifactState::DeterminismFuzzReportPresent {
                     artifact_version: DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION,
-                    family_count: 11,
-                    seed_count: 55,
-                    expected_family_count: 11,
-                    expected_seed_count: 55,
+                    family_count: 12,
+                    seed_count: 57,
+                    expected_family_count: 12,
+                    expected_seed_count: 57,
                     family_manifest_matched: true,
                     freshness: ProofRunArtifactFreshness {
                         modified_at_unix_seconds: 1,
@@ -3776,10 +3783,10 @@ mod tests {
             .trusted_metadata
             .as_ref()
             .expect("trusted metadata carried into go/no-go row");
-        assert_eq!(metadata.family_count, Some(11));
-        assert_eq!(metadata.seed_count, Some(55));
-        assert_eq!(metadata.expected_family_count, Some(11));
-        assert_eq!(metadata.expected_seed_count, Some(55));
+        assert_eq!(metadata.family_count, Some(12));
+        assert_eq!(metadata.seed_count, Some(57));
+        assert_eq!(metadata.expected_family_count, Some(12));
+        assert_eq!(metadata.expected_seed_count, Some(57));
         assert_eq!(metadata.family_manifest_matched, Some(true));
     }
 
@@ -4192,7 +4199,7 @@ mod tests {
             .join("\n");
         let report = build_operator_determinism_fuzz_report(
             "target/determinism-fuzz.json",
-            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands replay_audit_and_rebuild_deterministically -- --nocapture",
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline replay_audit_and_rebuild_deterministically -- --nocapture",
             "replay_audit_and_rebuild_deterministically",
             1234,
             true,
@@ -4200,12 +4207,12 @@ mod tests {
         );
 
         assert!(report.ok);
-        assert_eq!(report.family_count, 11);
-        assert_eq!(report.passed_family_count, 11);
+        assert_eq!(report.family_count, 12);
+        assert_eq!(report.passed_family_count, 12);
         assert_eq!(report.failed_family_count, 0);
-        assert_eq!(report.seed_count, 55);
-        assert_eq!(report.expected_family_count, 11);
-        assert_eq!(report.expected_seed_count, 55);
+        assert_eq!(report.seed_count, 57);
+        assert_eq!(report.expected_family_count, 12);
+        assert_eq!(report.expected_seed_count, 57);
         assert!(report.family_manifest_matched);
         assert!(report.first_failing_seed.is_none());
         assert_eq!(report.families[0].id, "seeded-day-vote");
@@ -4236,10 +4243,10 @@ mod tests {
                 freshness,
             } => {
                 assert_eq!(artifact_version, DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION);
-                assert_eq!(family_count, 11);
-                assert_eq!(seed_count, 55);
-                assert_eq!(expected_family_count, 11);
-                assert_eq!(expected_seed_count, 55);
+                assert_eq!(family_count, 12);
+                assert_eq!(seed_count, 57);
+                assert_eq!(expected_family_count, 12);
+                assert_eq!(expected_seed_count, 57);
                 assert!(family_manifest_matched);
                 assert_eq!(freshness.max_age_seconds, 86_400);
             }

@@ -1235,8 +1235,8 @@ seeded command-pipeline replay/projection/trace scenario families as local Postg
 tests, writes a versioned report with exact expected family/seed manifest coverage and first
 failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is
 deterministic generator coverage, not exhaustive state-space verification.` This command was rerun
-locally and emitted `ok: true`, `family_count: 11`, `seed_count: 55`, `expected_family_count: 11`,
-`expected_seed_count: 55`, and `family_manifest_matched: true`.
+locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`, `expected_family_count: 12`,
+`expected_seed_count: 57`, and `family_manifest_matched: true`.
 `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
 path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -1293,7 +1293,7 @@ There is also an initial seeded determinism fuzz lane in the command pipeline: g
 day-vote scenarios append legal vote changes/withdrawals, resolve with stored seeds, and then
 require `audit_resolution`, `inspect_trace`, and `audit_rebuild` to agree. The manifest-listed
 day-vote proof lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture`,
 which passed one filtered pipeline test across its five deterministic seeds. A companion night lane
 generates legal N01 action graphs across Doctor, Roleblocker, Tracker, Watcher, Bus Driver,
 Mafia Goon, and Strongman before running the same audit trio. The manifest-listed night lane was
@@ -1310,7 +1310,13 @@ lane now generates legal two-phase Hunter retaliation and Cupid/Lovers games, pr
 state is consumed by N02 resolution under the same audit trio. The manifest-listed persistent
 trigger-state lane was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically`,
-which passed one filtered pipeline test across its four deterministic seeds. A large-action-graph
+which passed one filtered pipeline test across its four deterministic seeds. A day-trigger policy
+lane now generates two fixed Mafiascum D01 games for Super-Saint lynch
+retaliation and Hero/VoteDuel retaliation, proving legal votes/actions, `ResolvePhase`,
+`audit_resolution`, anchored `inspect_trace` notes/generated rows, and `audit_rebuild`. The
+manifest-listed day-trigger lane was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically -- --nocapture`,
+which passed one filtered pipeline test across its two deterministic seeds. A large-action-graph
 lane now resolves one deterministic 40-slot / 29-action Mafiascum N01 graph across redirect,
 protect, investigation, kill, and
 trigger/dependency families, then requires replay audit, trace inspection, projection rebuild,

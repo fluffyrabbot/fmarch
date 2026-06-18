@@ -86,7 +86,7 @@
           "family": "Seeded day-vote replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Fixed day-vote seeds through command resolution and the audit trio."
         },
@@ -96,7 +96,7 @@
           "family": "Seeded Mafiascum night graph replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Fixed night-action seeds across protect, roleblock, tracking, watching, redirect, and kill families."
         },
@@ -106,7 +106,7 @@
           "family": "Seeded trigger/dependency replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Fixed PGO, Babysitter, and Hider trigger/dependency seeds under replay, trace, and rebuild audits."
         },
@@ -116,9 +116,19 @@
           "family": "Seeded persistent trigger replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Two-phase Hunter retaliation and Cupid/Lovers folded state consumed by later resolution."
+        },
+        {
+          "id": "seeded-day-trigger-policy-replay",
+          "row_id": "proof-run-seeded-day-trigger-policy-replay",
+          "family": "Seeded day-trigger policy replay",
+          "scope": "Local-only",
+          "fixture": false,
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "artifact": null,
+          "proof_boundary": "Super-Saint lynch and Hero/VoteDuel day triggers under replay, trace, and rebuild audits."
         },
         {
           "id": "generated-mafiascum-night-replay",
@@ -126,7 +136,7 @@
           "family": "Generated Mafiascum night replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_night_action_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Bounded generated N01 cases with seed/roster/action failure output."
         },
@@ -136,7 +146,7 @@
           "family": "Generated Chinese Structured night replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Chinese Structured N01 fixed seeds across wolf, witch, guard, prophet, cupid, hunter, and passive roles."
         },
@@ -146,7 +156,7 @@
           "family": "Generated Chinese Structured day replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Chinese Structured D01 fixed seeds for sheriff election, Knight duel, self-destruct, and votes."
         },
@@ -156,7 +166,7 @@
           "family": "Generated Mafia Universe ITA replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_mafia_universe_ita_sessions_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Mafia Universe D01 ITA fixed seeds with deterministic hit/miss outcomes and audit trio."
         },
@@ -166,7 +176,7 @@
           "family": "Generated Epicmafia prompt/night replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Epicmafia PK prompt and Bomb/Cult night fixed seeds under replay, trace, and rebuild audits."
         },
@@ -176,7 +186,7 @@
           "family": "Generated default_open night replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_default_open_night_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Copyright-free default_open N01 seeds under the same audit trio."
         },
@@ -186,7 +196,7 @@
           "family": "Generated default_open day replay",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture",
           "artifact": null,
           "proof_boundary": "Copyright-free default_open D01 vote seeds under the same audit trio."
         },
@@ -210,8 +220,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
@@ -230,8 +240,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
@@ -263,8 +273,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
@@ -284,8 +294,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -303,8 +313,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -322,8 +332,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -341,8 +351,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -360,8 +370,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -379,8 +389,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771128,
+            "age_seconds": 173,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -406,15 +416,15 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652976,
-            "age_seconds": 15,
+            "modified_at_unix_seconds": 1781771230,
+            "age_seconds": 71,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
-              "family_count": 11,
-              "seed_count": 55,
-              "expected_family_count": 11,
-              "expected_seed_count": 55,
+              "family_count": 12,
+              "seed_count": 57,
+              "expected_family_count": 12,
+              "expected_seed_count": 57,
               "family_manifest_matched": true
             }
           },
@@ -432,12 +442,12 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781652895,
-            "age_seconds": 96,
+            "modified_at_unix_seconds": 1781771292,
+            "age_seconds": 8,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
-              "game_id": "7acd5820-9ba5-43d5-8cf9-674744547069"
+              "game_id": "300fb41f-2a97-43ab-9192-f9f7bf179511"
             }
           },
           "proof_boundary": "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes the saved report under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior."
@@ -485,7 +495,7 @@
             "path": "target/operator-proof/stale-artifact-provenance-guard.json",
             "state": "stale",
             "modified_at_unix_seconds": 946713600,
-            "age_seconds": 834939391,
+            "age_seconds": 835057701,
             "freshness_max_age_seconds": 86400
           },
           "proof_boundary": "Fixture-only row proving valid but old local artifacts remain display-only."

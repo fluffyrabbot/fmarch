@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_default();
     let database_url = env::var("DATABASE_URL")?;
     let command_text = format!(
-        "DATABASE_URL={} cargo test -p commands {} -- --nocapture",
+        "DATABASE_URL={} cargo test -p commands --test pipeline {} -- --nocapture",
         database_url, args.test_filter
     );
     let started = Instant::now();
@@ -30,6 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "test",
             "-p",
             "commands",
+            "--test",
+            "pipeline",
             args.test_filter.as_str(),
             "--",
             "--nocapture",

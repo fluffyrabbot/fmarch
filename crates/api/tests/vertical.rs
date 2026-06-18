@@ -454,8 +454,8 @@ fn ensure_operator_proof_artifacts() {
         .join("target/operator-proof/current-status-audit-check.json");
     fs::create_dir_all(status_path.parent().unwrap()).unwrap();
     let mut trusted_production = OperatorProofRunArtifactCounts::default();
-    trusted_production.total_artifact_rows = 10;
-    trusted_production.trusted = 10;
+    trusted_production.total_artifact_rows = 11;
+    trusted_production.trusted = 11;
     trusted_production.non_trusted = 0;
 
     let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1582,7 +1582,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(proof_html.contains("Game-Specific Audits"));
     assert!(proof_html.contains("server page does not execute background jobs"));
     assert!(proof_html.contains("Production Artifacts"));
-    assert!(proof_html.contains("trusted 10 / 10; non_trusted 0"));
+    assert!(proof_html.contains("trusted 11 / 11; non_trusted 0"));
     assert!(proof_html.contains("Fixture Artifacts"));
     assert!(proof_html.contains("trusted 0 / 0; non_trusted 0"));
     assert!(proof_html.contains("id=\"proof-run-large-action-graph-regression\""));
@@ -1604,7 +1604,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         "cargo test -p commands large_action_graph_resolves_and_audits_within_regression_ceiling -- --nocapture"
     ));
     assert!(proof_html.contains(
-        "cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture"
+        "cargo test -p commands --test pipeline generated_default_open_day_replay_audit_and_rebuild_deterministically -- --nocapture"
     ));
     assert!(proof_html
         .contains("target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json"));
@@ -1658,7 +1658,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let fixture_html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(fixture_html.contains("trusted 10 / 10; non_trusted 0"));
+    assert!(fixture_html.contains("trusted 11 / 11; non_trusted 0"));
     assert!(fixture_html.contains("trusted 0 / 5; non_trusted 5"));
     let missing_row = table_row_for(&fixture_html, "proof-run-missing-artifact-provenance-guard");
     assert!(missing_row.contains("target/operator-proof/missing-artifact-provenance-guard.json"));
@@ -1741,8 +1741,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(status["game"], game.to_string());
     assert_eq!(status["manifest_version"], 1);
     assert_eq!(status["execution"], "local-only command copy");
-    assert_eq!(status["summary"]["production"]["total_artifact_rows"], 10);
-    assert_eq!(status["summary"]["production"]["trusted"], 10);
+    assert_eq!(status["summary"]["production"]["total_artifact_rows"], 11);
+    assert_eq!(status["summary"]["production"]["trusted"], 11);
     assert_eq!(status["summary"]["production"]["non_trusted"], 0);
     assert_eq!(status["summary"]["production"]["input_mismatch"], 0);
     assert_eq!(status["summary"]["production"]["drifted"], 0);
@@ -2029,19 +2029,19 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(determinism_status_row["artifact"]["diff_count"], 0);
     assert_eq!(
         determinism_status_row["artifact"]["trusted_metadata"]["family_count"],
-        11
+        12
     );
     assert_eq!(
         determinism_status_row["artifact"]["trusted_metadata"]["seed_count"],
-        55
+        57
     );
     assert_eq!(
         determinism_status_row["artifact"]["trusted_metadata"]["expected_family_count"],
-        11
+        12
     );
     assert_eq!(
         determinism_status_row["artifact"]["trusted_metadata"]["expected_seed_count"],
-        55
+        57
     );
     assert_eq!(
         determinism_status_row["artifact"]["trusted_metadata"]["family_manifest_matched"],
@@ -2229,7 +2229,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         go_no_go["artifact_path"],
         "target/operator-proof/current-artifact-go-no-go-report.json"
     );
-    assert_eq!(go_no_go["production"]["trusted"], 10);
+    assert_eq!(go_no_go["production"]["trusted"], 11);
     assert_eq!(go_no_go["production"]["non_trusted"], 0);
     assert!(go_no_go["rows"].as_array().unwrap().iter().any(|row| {
         row["row_id"] == "proof-run-operator-proof-artifact-go-no-go"
@@ -2319,19 +2319,19 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         proof_go_no_go_row(&go_no_go, "proof-run-operator-proof-determinism-fuzz");
     assert_eq!(
         go_no_go_determinism_row["trusted_metadata"]["family_count"],
-        11
+        12
     );
     assert_eq!(
         go_no_go_determinism_row["trusted_metadata"]["seed_count"],
-        55
+        57
     );
     assert_eq!(
         go_no_go_determinism_row["trusted_metadata"]["expected_family_count"],
-        11
+        12
     );
     assert_eq!(
         go_no_go_determinism_row["trusted_metadata"]["expected_seed_count"],
-        55
+        57
     );
     assert_eq!(
         go_no_go_determinism_row["trusted_metadata"]["family_manifest_matched"],
@@ -2356,7 +2356,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let go_no_go_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(go_no_go_html.contains("Operator Proof Artifact Go/No-Go"));
     assert!(go_no_go_html.contains("go"));
-    assert!(go_no_go_html.contains("trusted 10 / 10; non_trusted 0"));
+    assert!(go_no_go_html.contains("trusted 11 / 11; non_trusted 0"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-artifact-go-no-go"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-artifact-retention"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-projection-rebuild"));
@@ -2376,10 +2376,10 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(performance_go_no_go_html.contains("decision_trace_anchored: true"));
     let determinism_go_no_go_html =
         table_row_for(&go_no_go_html, "proof-run-operator-proof-determinism-fuzz");
-    assert!(determinism_go_no_go_html.contains("family_count: 11"));
-    assert!(determinism_go_no_go_html.contains("seed_count: 55"));
-    assert!(determinism_go_no_go_html.contains("expected_family_count: 11"));
-    assert!(determinism_go_no_go_html.contains("expected_seed_count: 55"));
+    assert!(determinism_go_no_go_html.contains("family_count: 12"));
+    assert!(determinism_go_no_go_html.contains("seed_count: 57"));
+    assert!(determinism_go_no_go_html.contains("expected_family_count: 12"));
+    assert!(determinism_go_no_go_html.contains("expected_seed_count: 57"));
     assert!(determinism_go_no_go_html.contains("family_manifest_matched: true"));
 
     let response = app
@@ -2890,8 +2890,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         determinism["artifact_path"],
         "target/operator-proof/current-determinism-fuzz-report.json"
     );
-    assert_eq!(determinism["family_count"], 11);
-    assert_eq!(determinism["seed_count"], 55);
+    assert_eq!(determinism["family_count"], 12);
+    assert_eq!(determinism["seed_count"], 57);
     assert_eq!(
         determinism["families"][0]["selector"],
         "seeded_day_vote_scenarios_replay_audit_and_rebuild_deterministically"
@@ -4859,7 +4859,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "Operator Proof-Run Index",
                 "Local-Only Regression Lanes",
                 "Production Artifacts",
-                "trusted 10 / 10; non_trusted 0",
+                "trusted 11 / 11; non_trusted 0",
                 "large_action_graph_resolves_and_audits_within_regression_ceiling",
                 "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
                 "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
@@ -4892,7 +4892,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "Operator Proof-Run Index",
                 "Operator Proof Fixtures",
-                "trusted 10 / 10; non_trusted 0",
+                "trusted 11 / 11; non_trusted 0",
                 "trusted 0 / 5; non_trusted 5",
                 "target/operator-proof/missing-artifact-provenance-guard.json",
                 "artifact not present locally",
@@ -5024,7 +5024,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "\"ok\":true",
                 "\"artifact_path\":\"target/operator-proof/current-artifact-go-no-go-report.json\"",
-                "\"production\":{\"total_artifact_rows\":10,\"trusted\":10",
+                "\"production\":{\"total_artifact_rows\":11,\"trusted\":11",
                 "\"row_id\":\"proof-run-operator-proof-artifact-go-no-go\"",
                 "\"row_id\":\"proof-run-operator-proof-artifact-retention\"",
                 "\"row_id\":\"proof-run-operator-proof-projection-rebuild\"",
@@ -5037,10 +5037,10 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"trace_row_count\":74",
                 "\"phase_trace_anchored\":true",
                 "\"decision_trace_anchored\":true",
-                "\"family_count\":11",
-                "\"seed_count\":55",
-                "\"expected_family_count\":11",
-                "\"expected_seed_count\":55",
+                "\"family_count\":12",
+                "\"seed_count\":57",
+                "\"expected_family_count\":12",
+                "\"expected_seed_count\":57",
                 "\"family_manifest_matched\":true",
                 "\"state\":\"trusted\"",
                 "audit_operator_proof_artifacts",
@@ -5057,7 +5057,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "Operator Proof Artifact Go/No-Go",
                 "go",
-                "trusted 10 / 10; non_trusted 0",
+                "trusted 11 / 11; non_trusted 0",
                 "proof-run-operator-proof-artifact-go-no-go",
                 "proof-run-operator-proof-artifact-retention",
                 "proof-run-operator-proof-projection-rebuild",
@@ -5070,10 +5070,10 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "trace_row_count: 74",
                 "phase_trace_anchored: true",
                 "decision_trace_anchored: true",
-                "family_count: 11",
-                "seed_count: 55",
-                "expected_family_count: 11",
-                "expected_seed_count: 55",
+                "family_count: 12",
+                "seed_count: 57",
+                "expected_family_count: 12",
+                "expected_seed_count: 57",
                 "family_manifest_matched: true",
                 "audit_operator_proof_artifacts",
             ],
@@ -5257,8 +5257,8 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"ok\":true",
                 "\"artifact_state\":\"trusted\"",
                 "\"artifact_path\":\"target/operator-proof/current-determinism-fuzz-report.json\"",
-                "\"family_count\":11",
-                "\"seed_count\":55",
+                "\"family_count\":12",
+                "\"seed_count\":57",
             ],
         ),
         (

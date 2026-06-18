@@ -11835,6 +11835,282 @@ async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministica
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically(pool: PgPool) {
+    for (seed, case_name) in [(8501_u64, "super_saint"), (8602, "hero_vote_duel")] {
+        let game = Uuid::new_v4();
+        let host = user("host_h");
+
+        handle(
+            &pool,
+            &host,
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("seed {seed}: create day-trigger game failed: {err}"));
+
+        let roster: Vec<(&str, &str)> = match case_name {
+            "super_saint" => vec![
+                ("slot_1", "super_saint"),
+                ("slot_2", "vanilla_townie"),
+                ("slot_3", "vanilla_townie"),
+                ("slot_4", "vanilla_townie"),
+                ("slot_5", "mafia_goon"),
+                ("slot_6", "vanilla_townie"),
+                ("slot_7", "mafia_goon"),
+            ],
+            "hero_vote_duel" => vec![
+                ("slot_1", "gladiator"),
+                ("slot_2", "hero"),
+                ("slot_3", "mafia_goon"),
+                ("slot_4", "vanilla_townie"),
+                ("slot_5", "vanilla_townie"),
+            ],
+            _ => unreachable!("unknown day-trigger case"),
+        };
+        for (slot, role) in roster {
+            handle(
+                &pool,
+                &host,
+                Command::AddSlot {
+                    game,
+                    slot: slot.into(),
+                },
+            )
+            .await
+            .unwrap_or_else(|err| panic!("seed {seed}: add {slot} failed: {err}"));
+            handle(
+                &pool,
+                &host,
+                Command::AssignSlot {
+                    game,
+                    slot: slot.into(),
+                    user: format!("day_trigger_seed_{seed}_user_{}", slot_number(slot)),
+                },
+            )
+            .await
+            .unwrap_or_else(|err| panic!("seed {seed}: assign {slot} failed: {err}"));
+            handle(
+                &pool,
+                &host,
+                Command::AssignRole {
+                    game,
+                    slot: slot.into(),
+                    role_key: role.into(),
+                },
+            )
+            .await
+            .unwrap_or_else(|err| panic!("seed {seed}: role {slot} failed: {err}"));
+        }
+        handle(
+            &pool,
+            &host,
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("seed {seed}: start day-trigger game failed: {err}"));
+
+        match case_name {
+            "super_saint" => {
+                for actor_slot in ["slot_3", "slot_4", "slot_5", "slot_2"] {
+                    handle(
+                        &pool,
+                        &Principal::user(format!(
+                            "day_trigger_seed_{seed}_user_{}",
+                            slot_number(actor_slot)
+                        )),
+                        Command::SubmitVote {
+                            game,
+                            actor_slot: actor_slot.into(),
+                            target: VoteTarget::Slot("slot_1".into()),
+                        },
+                    )
+                    .await
+                    .unwrap_or_else(|err| {
+                        panic!(
+                            "seed {seed}: submit Super-Saint vote from {actor_slot} failed: {err}"
+                        )
+                    });
+                }
+            }
+            "hero_vote_duel" => {
+                handle(
+                    &pool,
+                    &Principal::user(format!("day_trigger_seed_{seed}_user_1")),
+                    Command::SubmitAction {
+                        game,
+                        action_id: format!("seed_{seed}_gladiator_duel"),
+                        actor_slot: "slot_1".into(),
+                        template_id: "duel".into(),
+                        targets: vec!["slot_2".into()],
+                        grant_id: None,
+                    },
+                )
+                .await
+                .unwrap_or_else(|err| panic!("seed {seed}: submit Gladiator duel failed: {err}"));
+                handle(
+                    &pool,
+                    &Principal::user(format!("day_trigger_seed_{seed}_user_4")),
+                    Command::SubmitVote {
+                        game,
+                        actor_slot: "slot_4".into(),
+                        target: VoteTarget::Slot("slot_5".into()),
+                    },
+                )
+                .await
+                .unwrap_or_else(|err| panic!("seed {seed}: submit non-duel vote failed: {err}"));
+                for actor_slot in ["slot_3", "slot_5"] {
+                    handle(
+                        &pool,
+                        &Principal::user(format!(
+                            "day_trigger_seed_{seed}_user_{}",
+                            slot_number(actor_slot)
+                        )),
+                        Command::SubmitVote {
+                            game,
+                            actor_slot: actor_slot.into(),
+                            target: VoteTarget::Slot("slot_2".into()),
+                        },
+                    )
+                    .await
+                    .unwrap_or_else(|err| {
+                        panic!("seed {seed}: submit Hero duel vote from {actor_slot} failed: {err}")
+                    });
+                }
+            }
+            _ => unreachable!("unknown day-trigger case"),
+        }
+
+        let ack = handle(
+            &pool,
+            &host,
+            Command::ResolvePhase {
+                game,
+                seed: seed + 33_000,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("seed {seed}: resolve day-trigger graph failed: {err}"));
+        assert_eq!(
+            ack.stream_seqs.len(),
+            3,
+            "seed {seed}: day-trigger resolve events plus phase lock"
+        );
+
+        let applied_payload = resolution_payload(&pool, game, "D01", seed).await;
+        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+            .unwrap_or_else(|err| panic!("seed {seed}: D01 ResolutionApplied invalid: {err}"));
+        let (trigger_id, produced_actor, produced_target, expected_death_cause, expected_attacker) =
+            match case_name {
+                "super_saint" => (
+                    "super_saint_retaliates",
+                    "slot_1",
+                    "slot_2",
+                    "super_saint_retaliates",
+                    "slot_1",
+                ),
+                "hero_vote_duel" => (
+                    "hero_instigator_kill",
+                    "slot_2",
+                    "slot_1",
+                    "hero_instigator_kill",
+                    "slot_2",
+                ),
+                _ => unreachable!("unknown day-trigger case"),
+            };
+        let trigger_event = applied
+            .events
+            .iter()
+            .find_map(|event| match &event.event {
+                domain::InnerEvent::Trigger {
+                    trigger_id: id,
+                    payload,
+                } if id == trigger_id => Some((event.index, payload.clone())),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("seed {seed}: {trigger_id} trigger event missing"));
+        assert_eq!(trigger_event.1["produced_actor"], produced_actor);
+        assert_eq!(trigger_event.1["produced_target"], produced_target);
+        assert!(
+            applied.events.iter().any(|event| matches!(
+                &event.event,
+                domain::InnerEvent::PlayerKilled {
+                    slot_id,
+                    cause,
+                    attackers,
+                    ..
+                } if slot_id == produced_target
+                    && cause == expected_death_cause
+                    && attackers == &vec![expected_attacker.to_string()]
+            )),
+            "seed {seed}: day trigger should kill {produced_target}"
+        );
+
+        let audit = audit_resolution_envelopes(&pool, game)
+            .await
+            .unwrap_or_else(|err| {
+                panic!("seed {seed}: day-trigger audit_resolution failed: {err}")
+            });
+        assert!(
+            audit.ok,
+            "seed {seed}: day-trigger resolution audit drifted: {audit:?}"
+        );
+        assert_eq!(audit.audited, 1, "seed {seed}: one D01 envelope audited");
+        assert_eq!(audit.skipped, 0, "seed {seed}: no skipped D01 envelopes");
+
+        let trace_report = inspect_resolution_traces(&pool, game, None)
+            .await
+            .unwrap_or_else(|err| panic!("seed {seed}: day-trigger inspect_trace failed: {err}"));
+        assert_eq!(
+            trace_report.traces.len(),
+            1,
+            "seed {seed}: one day-trigger trace"
+        );
+        let context = format!("seed {seed}");
+        let note = format!(
+            "trigger {trigger_id} emitted at event_index {}",
+            trigger_event.0
+        );
+        assert_anchored_inspection_note(&trace_report, "D01", &note, &context);
+        if let Err(reason) = check_anchored_inspection_generated(
+            &trace_report,
+            InspectionGeneratedExpectation {
+                phase_id: "D01",
+                action_id: trigger_id,
+                source: "Trigger",
+                actor: produced_actor,
+                targets: vec![produced_target.to_string()],
+                detail: serde_json::json!({
+                    "on": trigger_event.1.get("on").cloned().unwrap_or(serde_json::Value::Null),
+                    "source_target": trigger_event.1.get("source_target").cloned().unwrap_or(serde_json::Value::Null),
+                    "source_actor": trigger_event.1.get("source_actor").cloned().unwrap_or(serde_json::Value::Null),
+                    "source_cause": trigger_event.1.get("source_cause").cloned().unwrap_or(serde_json::Value::Null),
+                    "produced_actor": trigger_event.1.get("produced_actor").cloned().unwrap_or(serde_json::Value::Null),
+                    "produced_target": trigger_event.1.get("produced_target").cloned().unwrap_or(serde_json::Value::Null),
+                    "actor_filter": trigger_event.1.get("actor_filter").cloned().unwrap_or(serde_json::Value::Null),
+                    "event_index": trigger_event.0,
+                }),
+            },
+        ) {
+            panic!("{context}\n{reason}");
+        }
+
+        let projection_audit = audit_rebuild(&pool, game)
+            .await
+            .unwrap_or_else(|err| panic!("seed {seed}: day-trigger audit_rebuild failed: {err}"));
+        assert!(
+            projection_audit.ok,
+            "seed {seed}: day-trigger projection rebuild audit drifted: {projection_audit:?}"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn large_action_graph_resolves_and_audits_within_regression_ceiling(pool: PgPool) {
     let seed = 90_001_u64;
     let game = Uuid::new_v4();

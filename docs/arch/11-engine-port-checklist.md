@@ -2049,8 +2049,10 @@ round-trip state folds.
    command/rebuild proof. Seeded command-pipeline fuzz now drives PGO, Babysitter, and Hider
    trigger/dependency graphs through legal `SubmitAction` commands, `ResolvePhase`,
    `audit_resolution`, `inspect_trace`, and `audit_rebuild`; another seeded lane drives two-phase
-   Hunter retaliation and Cupid/Lovers folded state through the same audit trio. Remaining fuzz
-   gaps are broader culture-specific policy variants and shrinking]
+   Hunter retaliation and Cupid/Lovers folded state through the same audit trio; the day-trigger
+   policy lane now drives Super-Saint lynch retaliation and Hero/VoteDuel retaliation through legal
+   D01 votes/actions, anchored trace inspection, and rebuild proof. Remaining fuzz gaps are true
+   shrinking plus broader multi-phase culture-specific variants.]
 
 Exit proof: multi-phase goldens show effects carrying forward only through state folds.
 
@@ -2842,8 +2844,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    tests, writes a versioned report with exact expected family/seed manifest coverage and first
    failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is
    deterministic generator coverage, not exhaustive state-space verification.` This command was
-   rerun locally and emitted `ok: true`, `family_count: 11`, `seed_count: 55`,
-   `expected_family_count: 11`, `expected_seed_count: 55`, and `family_manifest_matched: true`.
+   rerun locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`,
+   `expected_family_count: 12`, `expected_seed_count: 57`, and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -2915,8 +2917,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Begin Phase 6 culture-pack policy breadth by promoting one non-Mafiascum culture pack from
-feature coverage to a playable vertical. Inventory the chosen shipped pack's parity matrix rows
-against its linter, result-schema coverage, goldens, command/projection integration, and one
-end-to-end scenario; fill the smallest missing vertical gap first, then update this checklist only
-after the scenario runs through replay/rebuild without projection drift.
+Continue Phase 4 trigger-fixpoint hardening by replacing the remaining report-only fuzz gap with a
+real shrinking/minimizer proof. Promote one failing or hand-reduced trigger/dependency scenario
+into a checked minimized fixture, then prove that the minimizer preserves its semantic
+expectations and that command replay, trace inspection, and projection rebuild stay drift-free
+before updating this checklist again.
