@@ -5389,6 +5389,7 @@ fn build_trace(
             InnerEvent::ItaShotBuffered {
                 session_id,
                 action_id,
+                template_id,
                 actor_id,
                 targets,
                 submitted_at,
@@ -5402,6 +5403,7 @@ fn build_trace(
                     targets: targets.clone(),
                     detail: serde_json::json!({
                         "session_id": session_id,
+                        "template_id": template_id,
                         "submitted_at": submitted_at,
                         "release_at": release_at,
                         "delay_ms": delay_ms,
@@ -10575,9 +10577,43 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         return;
     }
 
+    let released_submissions = input
+        .state
+        .buffered_ita_shots
+        .iter()
+        .filter(|record| record.release_at <= input.logical_time)
+        .filter(|record| {
+            input.pack.ita.sessions.iter().any(|session| {
+                session.session_id == record.session_id && ita_session_active(input, session)
+            })
+        })
+        .map(|record| {
+            let mut metadata = BTreeMap::new();
+            metadata.insert(
+                "ita_session_id".to_string(),
+                serde_json::Value::String(record.session_id.clone()),
+            );
+            metadata.insert(
+                "ita_buffer_release".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            Submission {
+                action_id: record.action_id.clone(),
+                actor: record.actor.clone(),
+                template_id: record.template_id.clone(),
+                targets: record.targets.clone(),
+                phase_id: input.phase_id.clone(),
+                submitted_at: record.submitted_at,
+                withdrawn: false,
+                metadata,
+            }
+        })
+        .collect::<Vec<_>>();
+
     let mut ordered: Vec<(&Submission, &ActionTemplate)> = input
         .submissions
         .iter()
+        .chain(released_submissions.iter())
         .filter(|sub| !sub.withdrawn)
         .filter_map(|sub| {
             let template = lookup_submission_template(input, sub)?;
@@ -10684,10 +10720,16 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             }
         }
 
-        if let Some(delay_ms) = session.buffer_delay_ms {
+        let released_from_buffer = sub
+            .metadata
+            .get("ita_buffer_release")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        if let Some(delay_ms) = session.buffer_delay_ms.filter(|_| !released_from_buffer) {
             events.push(InnerEvent::ItaShotBuffered {
                 session_id: session.session_id.clone(),
                 action_id: sub.action_id.clone(),
+                template_id: template.id.clone(),
                 actor_id: sub.actor.clone(),
                 targets: sub.targets.clone(),
                 submitted_at: sub.submitted_at,

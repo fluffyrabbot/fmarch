@@ -71,7 +71,7 @@
         "window": "ita_sessions",
         "shot_limit": 1,
         "hit_chance": 1.0,
-        "buffer_delay_ms": 1000
+        "buffer_delay_ms": 1
       }
     ]
   },

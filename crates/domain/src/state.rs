@@ -100,6 +100,10 @@ pub struct StateSnapshot {
     /// vote weight reads this state during later day vote resolutions.
     #[serde(default)]
     pub badges: Vec<BadgeRecord>,
+    /// Pending ITA shots folded from `ItaShotBuffered` and consumed once a
+    /// later release pass queues/resolves/refunds/invalidates the shot.
+    #[serde(default)]
+    pub buffered_ita_shots: Vec<BufferedItaShotRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,6 +145,19 @@ pub struct ActionCounterRecord {
     pub phase_id: PhaseId,
     pub phase_kind: PhaseKind,
     pub phase_number: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BufferedItaShotRecord {
+    pub session_id: String,
+    pub action_id: String,
+    pub template_id: String,
+    pub actor: SlotId,
+    pub targets: Vec<SlotId>,
+    pub submitted_at: LogicalTime,
+    pub release_at: LogicalTime,
+    pub delay_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -867,6 +884,36 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                     phase_kind: *phase_kind,
                     phase_number: *phase_number,
                 });
+            }
+            InnerEvent::ItaShotBuffered {
+                session_id,
+                action_id,
+                template_id,
+                actor_id,
+                targets,
+                submitted_at,
+                release_at,
+                delay_ms,
+            } => {
+                next.buffered_ita_shots
+                    .retain(|record| record.action_id != *action_id);
+                next.buffered_ita_shots.push(BufferedItaShotRecord {
+                    session_id: session_id.clone(),
+                    action_id: action_id.clone(),
+                    template_id: template_id.clone(),
+                    actor: actor_id.clone(),
+                    targets: targets.clone(),
+                    submitted_at: *submitted_at,
+                    release_at: *release_at,
+                    delay_ms: *delay_ms,
+                });
+            }
+            InnerEvent::ItaShotQueued { action_id, .. }
+            | InnerEvent::ItaShotResolved { action_id, .. }
+            | InnerEvent::ItaShotRefunded { action_id, .. }
+            | InnerEvent::ItaShotInvalidated { action_id, .. } => {
+                next.buffered_ita_shots
+                    .retain(|record| record.action_id != *action_id);
             }
             // All other inner events leave state unchanged.
             _ => {}

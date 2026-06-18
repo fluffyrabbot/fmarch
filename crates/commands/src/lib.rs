@@ -2935,6 +2935,7 @@ fn current_snapshot(
     let mut wolf_carry_tokens = Vec::new();
     let mut wolf_beauty_marks = Vec::new();
     let mut badges = Vec::new();
+    let mut buffered_ita_shots = Vec::new();
     let mut visit_history = Vec::new();
 
     for ev in stream {
@@ -3019,6 +3020,7 @@ fn current_snapshot(
                     wolf_carry_tokens: wolf_carry_tokens.clone(),
                     wolf_beauty_marks: wolf_beauty_marks.clone(),
                     badges: badges.clone(),
+                    buffered_ita_shots: buffered_ita_shots.clone(),
                 };
                 let folded = domain::apply_events(
                     &snapshot,
@@ -3043,6 +3045,7 @@ fn current_snapshot(
                 wolf_carry_tokens = folded.wolf_carry_tokens;
                 wolf_beauty_marks = folded.wolf_beauty_marks;
                 badges = folded.badges;
+                buffered_ita_shots = folded.buffered_ita_shots;
                 slots = folded
                     .slots
                     .into_iter()
@@ -3239,6 +3242,7 @@ fn current_snapshot(
         wolf_carry_tokens,
         wolf_beauty_marks,
         badges,
+        buffered_ita_shots,
     })
 }
 

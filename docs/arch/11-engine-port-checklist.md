@@ -2081,7 +2081,9 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    one-shot shield blocking, and one composed evade+shield target with pure golden and
    command/projection proof; v59 `ItaSessionSpec.buffer_delay_ms` emits `ItaShotBuffered` and
    defers same-pass queue/resolve/kill with pure golden plus command/projection rebuild proof;
-   release-time replay, invalidation, and refund remain pending]
+   folded `StateSnapshot.buffered_ita_shots` now releases due shots in a later command-resolved
+   phase, queues/resolves/kills/closes from event-folded state, audits/rebuilds projections, and
+   promotes a semantic minimizer fixture; release-time invalidation/refund variants remain pending]
 5. Last words and day announcements. [partly done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; `mafia_universe` golden plus Postgres command/projection rebuild proof]
@@ -2523,7 +2525,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    can now assert folded `sheriff_badge` projection rows, and dedicated Chinese sheriff fixtures
    preserve election, pass, and destroy `BadgeChanged` events, badge-weighted `DayVoteOutcome`
    rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
-   promotion. This was rerun locally with
+   promotion. The ITA buffered-release fixture now proves a setup-phase `ItaShotBuffered` folds
+   into `StateSnapshot.buffered_ita_shots`, then a later command-resolved D01R1 release queues,
+   resolves, kills, closes the session, audits two envelopes/traces, rebuilds slot and counter
+   projections, and promotes a reduced success fixture. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`
+   and passed one filtered pipeline test across the two-phase ITA buffered release fixture. The
+   sheriff fixture proof was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
@@ -2851,8 +2859,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by tackling the remaining ITA release-time replay/refund
-breadth. Start with the buffered ITA shot release path, require a second command-resolved phase
-that releases queued shots, preserves refund/invalidation policy as explicit events or trace
-decisions, audits/rebuilds the projections, and promotes a reduced semantic minimizer fixture
-before updating the checklist again.
+Continue Phase 5 rich day systems by tackling the remaining ITA release-time invalidation/refund
+breadth. Add one buffered-release case where an earlier released shot kills a shared target and a
+later buffered shot is invalidated at release time, plus one case where the target is already dead
+at release time and `REFUND_SHOT` emits an explicit `ItaShotRefunded` with quota behavior preserved.
+Require result-schema coverage, generated trace rows, command audit/rebuild proof, and promoted
+semantic minimizer fixtures before updating the checklist again.

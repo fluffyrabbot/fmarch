@@ -21,10 +21,11 @@
       "payload": {
         "action_id": "ita_buffered_001",
         "actor_id": "slot_1",
-        "delay_ms": 1000,
-        "release_at": 1010,
+        "delay_ms": 1,
+        "release_at": 11,
         "session_id": "d1",
         "submitted_at": 10,
+        "template_id": "ita_shot",
         "targets": [
           "slot_3"
         ]

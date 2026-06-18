@@ -232,6 +232,7 @@ pub enum InnerEvent {
     ItaShotBuffered {
         session_id: String,
         action_id: String,
+        template_id: String,
         actor_id: SlotId,
         targets: Vec<SlotId>,
         submitted_at: u64,

@@ -40,7 +40,8 @@ pub use resolver::{
 };
 pub use state::{
     apply_events, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,
-    ConversionOriginRecord, DelayedDeathRecord, EffectRecord, InvestigationMemoryRecord,
-    LinkRecord, PrivateChannelRecord, RetaliationRecord, RevealState, SlotLifecycle, SlotState,
-    StateSnapshot, Submission, VisitRecord, WolfBeautyMarkRecord, WolfCarryTokenRecord,
+    BufferedItaShotRecord, ConversionOriginRecord, DelayedDeathRecord, EffectRecord,
+    InvestigationMemoryRecord, LinkRecord, PrivateChannelRecord, RetaliationRecord, RevealState,
+    SlotLifecycle, SlotState, StateSnapshot, Submission, VisitRecord, WolfBeautyMarkRecord,
+    WolfCarryTokenRecord,
 };

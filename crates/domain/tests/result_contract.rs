@@ -1407,6 +1407,7 @@ fn ita_buffered_invalidated_and_refunded_payloads_pass_contract_validation() {
                 "payload": {
                     "session_id": "d1",
                     "action_id": "ita_buffered_001",
+                    "template_id": "ita_shot",
                     "actor_id": "slot_1",
                     "targets": ["slot_4"],
                     "submitted_at": 10,

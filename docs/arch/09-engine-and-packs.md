@@ -432,16 +432,18 @@ cadence_policy: "day_session", phase_scope: "session" }` before `ItaShotQueued`;
 same-session shots before they can queue. During `resolve_day`, accepted shots emit
 `ItaSessionOpened`, `ItaShotQueued`, `ItaShotResolved`, `ItaSessionUpdated`, and (when
 `auto_close`) `ItaSessionClosed`. Sessions may also declare `buffer_delay_ms`; newly buffered
-shots emit `ItaShotBuffered { session_id, action_id, actor_id, targets, submitted_at, release_at,
-delay_ms }` and defer same-pass queue/resolve/kill output until a later release slice. A hit also emits ordinary
+shots emit `ItaShotBuffered { session_id, action_id, template_id, actor_id, targets, submitted_at,
+release_at, delay_ms }`, fold into `StateSnapshot.buffered_ita_shots`, and release from folded
+state in a later command-resolved phase once `release_at <= logical_time`. A hit also emits ordinary
 `PlayerKilled { cause: "ita_shot" }`, so lethal ITA hits fold through the same state/projection
 path as lynches, night kills, and Knight duel deaths. `ResolveShotsBeforeVote` is the first
 Mafia Universe day-conflict policy: ITA deaths are folded before `DayVoteOutcome`, and an
 unvalidated ITA pack missing that declaration is rejected at the resolver seam rather than using
 implicit Rust ordering. The first vertical uses a tiny
 `mafia_universe` pack with a deterministic 50 percent D1 session and one shot per shooter;
-refund/invalidated shot policy and release-time replay remain future ITA slices. HP/shields and
-vulnerability modifiers are covered by pack-owned ITA modifier components and role refs.
+release-time success replay now has command/projection rebuild and semantic minimizer proof, while
+release-time refund/invalidated variants remain future ITA slices. HP/shields and vulnerability
+modifiers are covered by pack-owned ITA modifier components and role refs.
 
 `IrAbility::SelfDestruct` is the first v10 Chinese structured day-death addition. A
 `SelfDestruct` action carries `SelfDestructSpec { cause, kill_target, sacrifice_actor,
@@ -1409,7 +1411,13 @@ Phase 5 day semantic expectation through `minimize_night_fixture`. `minimize_nig
 can now assert folded `sheriff_badge` projection rows, and dedicated Chinese sheriff fixtures
 preserve election, pass, and destroy `BadgeChanged` events, badge-weighted `DayVoteOutcome`
 rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
-promotion. This was rerun locally with
+promotion. The ITA buffered-release fixture now proves a setup-phase `ItaShotBuffered` folds into
+`StateSnapshot.buffered_ita_shots`, then a later command-resolved D01R1 release queues, resolves,
+kills, closes the session, audits two envelopes/traces, rebuilds slot and counter projections, and
+promotes a reduced success fixture. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`,
+which passed one filtered pipeline test across the two-phase ITA buffered release fixture. The
+sheriff fixture proof was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
 announcement/prompt fixtures now also prove that minimization preserves Mafia Universe prior-night
