@@ -1453,7 +1453,19 @@ matching checked-in negative artifact,
 `crates/commands/fixtures/night-mark-clear-expiry-generated-bad-expectation.json`, is covered by the
 same `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations` selector, which proves
 the success fixture remains promotable while the reduced negative fixture preserves
-`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+`semantic_expectation` failure class without success promotion.
+`crates/commands/fixtures/night-poison-cure-generated-minimized.json` now promotes the PoisonCure
+row into a checked-in Mafiascum N02 pending-poison cure replay with four slots, two actions, one
+setup phase, two audited resolution envelopes, and two anchored traces. It checks ten semantic
+expectations: four inner events for the cleared poison notification, `EffectsCleared`,
+`DelayedDeathResolved(preempted_by_clear)`, and empty phase announcement; one pending-effect trace
+decision; one player notification; one carried fresh poison delayed-death queue; one absent cured
+delayed-death queue; one carried fresh poisoned slot effect; and one absent cured poisoned slot
+effect. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-poison-cure-generated-bad-expectation.json`, is covered by
+`checked_in_poison_cure_generated_fixtures_replay_semantic_expectations`, which proves the success
+fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
+failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.

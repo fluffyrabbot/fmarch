@@ -1,0 +1,183 @@
+{
+  "seed": 130111,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "poisoner"
+    },
+    {
+      "slot": "slot_2",
+      "role": "poison_doctor"
+    },
+    {
+      "slot": "slot_3",
+      "role": "vanilla_townie"
+    },
+    {
+      "slot": "slot_5",
+      "role": "vanilla_townie"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_2",
+      "template_id": "cure_poison",
+      "action_id": "generated_seed_97111_cure_pending_poison",
+      "targets": [
+        "slot_3"
+      ]
+    },
+    {
+      "actor_slot": "slot_1",
+      "template_id": "poison",
+      "action_id": "generated_seed_97111_fresh_poison_noise",
+      "targets": [
+        "slot_5"
+      ]
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 129111,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "poison",
+          "action_id": "generated_seed_97111_poison_for_cure",
+          "targets": [
+            "slot_3"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "EffectNotification",
+        "payload": {
+          "audience": [
+            "slot_3"
+          ],
+          "effect": "poisoned",
+          "status": "cleared"
+        }
+      },
+      {
+        "kind": "EffectsCleared",
+        "payload": {
+          "actor": "slot_2",
+          "effect": "poisoned",
+          "targets": [
+            "slot_3"
+          ]
+        }
+      },
+      {
+        "kind": "DelayedDeathResolved",
+        "payload": {
+          "cause": "poison",
+          "effect": "poisoned",
+          "outcome": "preempted_by_clear",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "queue_id": "poisoned:slot_3:generated_seed_97111_poison_for_cure",
+          "target": "slot_3"
+        }
+      },
+      {
+        "kind": "PhaseAnnouncement",
+        "payload": {
+          "deaths": [],
+          "phase_id": "N02"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:pending_effect",
+        "source": "delayed_death:poisoned:slot_3:generated_seed_97111_poison_for_cure",
+        "outcome": "pending_poison_preempted_by_clear",
+        "detail": {
+          "cause": "poison",
+          "effect": "poisoned",
+          "source": "slot_1",
+          "source_action": "generated_seed_97111_poison_for_cure",
+          "target": "slot_3"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [
+      {
+        "payload": {
+          "cause": "poison",
+          "effect": "poisoned",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "queue_id": "poisoned:slot_5:generated_seed_97111_fresh_poison_noise",
+          "source_action": "generated_seed_97111_fresh_poison_noise",
+          "source_slot": "slot_1",
+          "target_slot": "slot_5"
+        }
+      }
+    ],
+    "absent_delayed_death_queues": [
+      {
+        "payload": {
+          "queue_id": "poisoned:slot_3:generated_seed_97111_poison_for_cure",
+          "source_action": "generated_seed_97111_poison_for_cure",
+          "target_slot": "slot_3"
+        }
+      }
+    ],
+    "slot_effects": [
+      {
+        "payload": {
+          "duration": "Persistent",
+          "effect": "poisoned",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "slot_id": "slot_5",
+          "source_action": "generated_seed_97111_fresh_poison_noise",
+          "source_slot": "slot_1",
+          "visibility": "Target"
+        }
+      }
+    ],
+    "absent_slot_effects": [
+      {
+        "payload": {
+          "effect": "poisoned",
+          "slot_id": "slot_3",
+          "source_action": "generated_seed_97111_poison_for_cure"
+        }
+      }
+    ],
+    "player_notifications": [
+      {
+        "payload": {
+          "audience_slot": "slot_3",
+          "effect": "poisoned",
+          "phase_id": "N02",
+          "status": "cleared"
+        }
+      }
+    ],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}
