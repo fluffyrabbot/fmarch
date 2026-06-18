@@ -13448,6 +13448,53 @@ async fn phase5_ita_buffered_release_fixture_replays_semantic_expectations_throu
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn phase5_ita_lifecycle_fixture_replays_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    let stem = "ita-lifecycle-controls-semantic-expectations";
+    let fixture_json = ita_lifecycle_controls_fixture_json();
+    let fixture: serde_json::Value =
+        serde_json::from_str(&fixture_json).expect("ITA lifecycle fixture JSON parses");
+    let expectation_count = generated_expectation_count(&fixture["expectations"]);
+    assert!(
+        expectation_count >= 6,
+        "ITA lifecycle fixture should preserve control semantics"
+    );
+
+    let artifacts = GeneratedShrinkArtifacts::new(stem);
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], true, "{stem} original replay");
+    assert_eq!(
+        report["original"]["resolution_audited"],
+        serde_json::json!(1),
+        "{stem} audited envelope count"
+    );
+    assert_eq!(
+        report["original"]["trace_count"],
+        serde_json::json!(1),
+        "{stem} trace count"
+    );
+    assert_eq!(
+        report["original"]["projection_audit_ok"],
+        serde_json::json!(true),
+        "{stem} projection audit"
+    );
+    assert_eq!(
+        report["original"]["semantic_expectations_checked"],
+        serde_json::json!(expectation_count),
+        "{stem} semantic expectation count"
+    );
+    assert_eq!(report["reduction"]["replay_success"], true, "{stem} replay");
+    assert_eq!(
+        report["write_reduced"]["promoted_success_fixture"], true,
+        "{stem} promotion"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -19983,6 +20030,99 @@ fn ita_buffered_release_hp_hybrid_fixture_json() -> String {
         }
     }))
     .expect("Buffered ITA HP/hybrid release fixture JSON serializes")
+}
+
+fn ita_lifecycle_controls_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 910_101,
+        "pack": "test_ita_buffered",
+        "phase": "D01",
+        "roster": [
+            { "slot": "slot_1", "role": "ita_shooter" },
+            { "slot": "slot_2", "role": "mafia_goon" }
+        ],
+        "ita_session_controls": [{
+            "session_id": "d1",
+            "control": "Pause",
+            "message": "Pause for votecount correction"
+        }],
+        "actions": [{
+            "actor_slot": "slot_1",
+            "template_id": "ita_shot",
+            "action_id": "ita_lifecycle_paused_001",
+            "targets": ["slot_2"]
+        }],
+        "votes": [],
+        "expectations": {
+            "stream_events": [{
+                "kind": "ItaSessionControlRecorded",
+                "payload": {
+                    "phase_id": "D01",
+                    "session_id": "d1",
+                    "control": "Pause",
+                    "message": "Pause for votecount correction"
+                }
+            }],
+            "inner_events": [
+                {
+                    "kind": "ItaSessionLifecycleChanged",
+                    "payload": {
+                        "session_id": "d1",
+                        "control": "Pause",
+                        "from_status": "scheduled",
+                        "to_status": "paused",
+                        "message": "Pause for votecount correction"
+                    }
+                },
+                {
+                    "kind": "ItaSessionAnnouncement",
+                    "payload": {
+                        "session_id": "d1",
+                        "status": "paused",
+                        "message": "Pause for votecount correction"
+                    }
+                },
+                {
+                    "kind": "ActionInterfered",
+                    "payload": {
+                        "actor": "slot_1",
+                        "reason": "ita_session_paused"
+                    }
+                }
+            ],
+            "trace_decisions": [{
+                "stage": "ita_session_lifecycle",
+                "source": "d1",
+                "outcome": "paused",
+                "detail": {
+                    "control": "Pause",
+                    "from_status": "scheduled",
+                    "message": "Pause for votecount correction"
+                }
+            }],
+            "generated_actions": [
+                {
+                    "action_id": "d1",
+                    "source": "ItaSessionLifecycleChanged",
+                    "detail": {
+                        "control": "Pause",
+                        "from_status": "scheduled",
+                        "to_status": "paused",
+                        "message": "Pause for votecount correction"
+                    }
+                },
+                {
+                    "action_id": "d1",
+                    "source": "ItaSessionAnnouncement",
+                    "detail": {
+                        "status": "paused",
+                        "message": "Pause for votecount correction"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("ITA lifecycle fixture JSON serializes")
 }
 
 fn mafia_universe_day_notes_fixture_json() -> String {
@@ -30036,6 +30176,170 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
     assert_eq!(
         trace_payload, trace_after_rebuild,
         "projection rebuild must not rewrite persisted buffered-refund trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_applies_ita_lifecycle_pause_control(pool: PgPool) {
+    let host = "host_ita_lifecycle";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "test_ita_buffered".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ita_lifecycle_user_1", "ita_shooter"),
+        ("slot_2", "ita_lifecycle_user_2", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &h,
+        Command::ControlItaSession {
+            game,
+            session_id: "d1".into(),
+            control: domain::ItaSessionControlKind::Pause,
+            message: Some("Pause for votecount correction".into()),
+        },
+    )
+    .await
+    .expect("host records ITA pause control");
+    handle(
+        &pool,
+        &user("ita_lifecycle_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "ita_lifecycle_paused_001".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "ita_shot".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("player can submit ITA shot before resolver applies lifecycle control");
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 910101 })
+        .await
+        .expect("host resolves paused ITA session");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("paused ITA lifecycle ResolutionApplied validates");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaSessionLifecycleChanged {
+            session_id,
+            control: domain::ItaSessionControlKind::Pause,
+            to_status,
+            ..
+        } if session_id == "d1" && to_status == "paused"
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaSessionAnnouncement {
+            session_id,
+            status,
+            ..
+        } if session_id == "d1" && status == "paused"
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ActionInterfered { actor, reason }
+            if actor == "slot_1" && reason == "ita_session_paused"
+    )));
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::ItaShotQueued { .. })),
+        "paused ITA session must not queue shots"
+    );
+
+    let trace_report = inspect_resolution_traces(&pool, game, None)
+        .await
+        .expect("inspect paused ITA trace");
+    assert!(trace_report.traces.iter().any(|trace| {
+        trace.decisions.iter().any(|decision| {
+            decision.stage == "ita_session_lifecycle"
+                && decision.source == "d1"
+                && decision.outcome == "paused"
+        })
+    }));
+    assert!(trace_report.traces.iter().any(|trace| {
+        trace.generated.iter().any(|generated| {
+            generated.source == "ItaSessionAnnouncement"
+                && generated.action_id == "d1"
+                && generated.detail["status"] == serde_json::json!("paused")
+        })
+    }));
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("paused ITA lifecycle resolution audit");
+    assert!(audit.ok, "paused ITA lifecycle audit drifted: {audit:?}");
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("paused ITA lifecycle projection audit");
+    assert!(
+        projection_audit.ok,
+        "paused ITA lifecycle projection rebuild drifted: {projection_audit:?}"
     );
 }
 

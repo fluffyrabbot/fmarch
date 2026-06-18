@@ -20,6 +20,8 @@ struct NightFixture {
     roster: Vec<FixtureSlot>,
     #[serde(default)]
     votes: Vec<FixtureVote>,
+    #[serde(default)]
+    ita_session_controls: Vec<FixtureItaSessionControl>,
     actions: Vec<FixtureAction>,
     #[serde(default)]
     setup_phases: Vec<FixturePhase>,
@@ -35,6 +37,8 @@ struct FixturePhase {
     seed: u64,
     #[serde(default)]
     votes: Vec<FixtureVote>,
+    #[serde(default)]
+    ita_session_controls: Vec<FixtureItaSessionControl>,
     #[serde(default)]
     actions: Vec<FixtureAction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -59,6 +63,14 @@ struct FixtureAction {
 struct FixtureVote {
     actor_slot: String,
     target_slot: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FixtureItaSessionControl {
+    session_id: String,
+    control: domain::ItaSessionControlKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -639,6 +651,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         phase: fixture.phase.clone(),
         seed: fixture.seed,
         votes: fixture.votes.clone(),
+        ita_session_controls: fixture.ita_session_controls.clone(),
         actions: fixture.actions.clone(),
         host_prompt_decision: fixture.host_prompt_decision.clone(),
     };
@@ -683,6 +696,7 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         phase: fixture.phase.clone(),
         seed: fixture.seed,
         votes: fixture.votes.clone(),
+        ita_session_controls: fixture.ita_session_controls.clone(),
         actions: fixture.actions.clone(),
         host_prompt_decision: fixture.host_prompt_decision.clone(),
     };
@@ -843,6 +857,30 @@ async fn run_fixture_phase(
             format!("start {} failed: {err}", phase.phase),
             game,
         ));
+    }
+
+    for control in &phase.ita_session_controls {
+        if let Err(err) = handle(
+            pool,
+            host,
+            Command::ControlItaSession {
+                game,
+                session_id: control.session_id.clone(),
+                control: control.control,
+                message: control.message.clone(),
+            },
+        )
+        .await
+        {
+            return Err(failed(
+                FailureClass::Command,
+                format!(
+                    "control ITA session {} in {} failed: {err}",
+                    control.session_id, phase.phase
+                ),
+                game,
+            ));
+        }
     }
 
     for action in &phase.actions {

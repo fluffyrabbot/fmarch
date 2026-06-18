@@ -3202,7 +3202,8 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
 }
 
 #[test]
-fn ita_session_buffer_delay_with_resolution_policy_and_hp_requires_v61_and_positive_delay() {
+fn ita_session_buffer_delay_with_resolution_policy_hp_and_lifecycle_requires_v62_and_positive_delay(
+) {
     let mut value = serde_json::to_value(load_pack_named("test_ita_buffered")).unwrap();
     value["ir_version"] = json!(60);
 
@@ -3210,13 +3211,14 @@ fn ita_session_buffer_delay_with_resolution_policy_and_hp_requires_v61_and_posit
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 61",
+        "pack declares features requiring ir_version >= 62",
     );
     assert_issue(&err, "ir_version", "ita.session.buffer_delay_ms");
     assert_issue(&err, "ir_version", "ita.resolution_policy");
     assert_issue(&err, "ir_version", "ita.hit_points");
+    assert_issue(&err, "ir_version", "ita.lifecycle");
 
-    value["ir_version"] = json!(61);
+    value["ir_version"] = json!(62);
     value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(0);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
@@ -3227,8 +3229,23 @@ fn ita_session_buffer_delay_with_resolution_policy_and_hp_requires_v61_and_posit
 
 #[test]
 fn ita_resolution_policy_requires_v60() {
-    let mut value = serde_json::to_value(load_pack_named("mafia_universe")).unwrap();
+    let mut value = valid_pack_value();
     value["ir_version"] = json!(59);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["ita"] = json!({
+        "default_hit_chance": 1.0,
+        "vote_conflict": "ResolveShotsBeforeVote",
+        "sessions": [{ "session_id": "d1", "day": 1 }],
+        "resolution_policy": {
+            "on_target_already_dead": "REFUND_SHOT"
+        }
+    });
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("ItaShot");
+    action["mode"] = Value::Null;
+    action["window"] = json!("Day");
 
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
@@ -3394,6 +3411,43 @@ fn ita_hit_points_require_v61_and_fold_through_modifier_components() {
     assert_issue(&err, "ir_version", "ita.hit_points");
 
     value["ir_version"] = json!(61);
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn ita_lifecycle_controls_require_v62_and_sessions() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(61);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["ita"] = json!({
+        "default_hit_chance": 1.0,
+        "vote_conflict": "ResolveShotsBeforeVote",
+        "lifecycle": {
+            "manual_open": true,
+            "pause": true,
+            "cancel": true,
+            "update": true,
+            "manual_close": true
+        }
+    });
+    let action = &mut value["roles"]["cop"]["actions"][0];
+    action["ability"] = json!("ItaShot");
+    action["mode"] = Value::Null;
+    action["window"] = json!("Day");
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 62",
+    );
+    assert_issue(&err, "ir_version", "ita.lifecycle");
+    assert_issue(&err, "ita", "require at least one ITA session");
+
+    value["ir_version"] = json!(62);
+    value["ita"]["sessions"] = json!([{ "session_id": "d1", "day": 1 }]);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 

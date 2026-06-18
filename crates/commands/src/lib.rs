@@ -25,8 +25,8 @@ use caps::{Capability, CapabilitySet, Principal};
 use domain::{
     pack::{
         ActionTemplate, ActivationGateReason, GrantKind, GrantSpec, HostPromptDecisionKind,
-        HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, PhaseParity,
-        TargetRoleFilter, TargetSpec, TargetState, Window,
+        HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, ItaSessionControlKind,
+        PhaseParity, TargetRoleFilter, TargetSpec, TargetState, Window,
     },
     IrAbility, Modifier, RoleModifier,
 };
@@ -467,6 +467,14 @@ async fn handle_inner(
             prompt_id,
             decision,
         } => resolve_host_prompt(pool, principal, game, prompt_id, decision, receipt).await,
+        Command::ControlItaSession {
+            game,
+            session_id,
+            control,
+            message,
+        } => {
+            control_ita_session(pool, principal, game, session_id, control, message, receipt).await
+        }
 
         // ── slice commands ──
         Command::SubmitVote {
@@ -1248,6 +1256,66 @@ async fn resolve_phase(
     events.extend(private_channel_revocations(&pack, &output.post_state));
     events.push(lock_ev);
     persist(pool, game, &events, receipt).await
+}
+
+async fn control_ita_session(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    session_id: String,
+    control: ItaSessionControlKind,
+    message: Option<String>,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    if session_id.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    if message.as_deref().is_some_and(|msg| msg.trim().is_empty()) {
+        return Err(Reject::InvalidTarget);
+    }
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    let phase = require_open_day_phase(pool, game).await?;
+    let phase_number = phase_number(&phase)?;
+
+    let pack = load_pack(&current_pack_name(pool, game).await?)?;
+    if !pack.ita.lifecycle.allows(control) {
+        return Err(Reject::InvalidTarget);
+    }
+    let Some(session) = pack
+        .ita
+        .sessions
+        .iter()
+        .find(|session| session.session_id == session_id)
+    else {
+        return Err(Reject::InvalidTarget);
+    };
+    if session.day.is_some_and(|day| day != phase_number) {
+        return Err(Reject::InvalidTarget);
+    }
+
+    let mut payload = serde_json::json!({
+        "phase_id": phase,
+        "session_id": session_id,
+        "control": control,
+    });
+    if let Some(message) = message {
+        payload["message"] = serde_json::Value::String(message);
+    }
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "ItaSessionControlRecorded",
+            1,
+            payload,
+            ActorId::Host,
+            0,
+        )],
+        receipt,
+    )
+    .await
 }
 
 /// Re-run ordinary `ResolvePhase` envelopes from the stored event stream and
@@ -3407,7 +3475,23 @@ fn current_day_phase_inputs(
     }
 
     let mut night_victims = Vec::new();
+    let mut ita_session_controls = Vec::new();
     for ev in stream {
+        if ev.kind == "ItaSessionControlRecorded"
+            && ev.payload["phase_id"].as_str() == Some(&state.phase_id)
+        {
+            let control = serde_json::from_value::<domain::ItaSessionControlKind>(
+                ev.payload["control"].clone(),
+            )
+            .map_err(|e| Reject::Internal(format!("malformed ITA session control: {e}")))?;
+            ita_session_controls.push(domain::ItaSessionControlInput {
+                session_id: str_payload(ev, "session_id")?,
+                control,
+                message: optional_str_payload(ev, "message"),
+                recorded_at: ev.stream_seq as u64,
+            });
+            continue;
+        }
         if ev.kind != "ResolutionApplied" {
             continue;
         }
@@ -3447,7 +3531,10 @@ fn current_day_phase_inputs(
         }
     }
 
-    Ok(domain::DayPhaseInputs { night_victims })
+    Ok(domain::DayPhaseInputs {
+        night_victims,
+        ita_session_controls,
+    })
 }
 
 fn str_payload(ev: &eventstore::StoredEvent, key: &str) -> Result<String, Reject> {

@@ -28,15 +28,15 @@ pub use pack::{
     BelovedPrincessPolicy, DayAnnouncementPolicy, DayNotePolicy, DayVotePromptPolicy,
     DeathRetaliationPolicy, DeathRevealMode, DeathRevealPolicy, EffectDuration, EffectVisibility,
     GrantKind, GrantSpec, HostPromptDecisionKind, HostPromptResolutionEffect,
-    HostPromptResolutionEffectPolicy, IdiotPolicy, InvestigationResultPolicy, LastWordsPolicy,
-    Pack, PackLoadError, PackMigrationError, PackValidationError, PackValidationIssue,
-    ParityResultPolicy, RoleModifier, SelfDestructSpec, WinCondition, WinPolicy, WinRule,
-    WolfBeautyPolicy, WolfCarryPolicy, MIN_SUPPORTED_IR_VERSION, SUPPORTED_IR_VERSION,
-    SUPPORTED_PACK_VERSION,
+    HostPromptResolutionEffectPolicy, IdiotPolicy, InvestigationResultPolicy, ItaLifecyclePolicy,
+    ItaSessionControlKind, LastWordsPolicy, Pack, PackLoadError, PackMigrationError,
+    PackValidationError, PackValidationIssue, ParityResultPolicy, RoleModifier, SelfDestructSpec,
+    WinCondition, WinPolicy, WinRule, WolfBeautyPolicy, WolfCarryPolicy, MIN_SUPPORTED_IR_VERSION,
+    SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
 };
 pub use resolver::{
     check_win, resolve, resolve_events, resolve_instant, DayAnnouncementInput, DayPhaseInputs,
-    ResolutionInput, ResolutionOutput, RESULT_VERSION,
+    ItaSessionControlInput, ResolutionInput, ResolutionOutput, RESULT_VERSION,
 };
 pub use state::{
     apply_events, ActionCounterRecord, ActionGrantRecord, BackupTargetRecord,

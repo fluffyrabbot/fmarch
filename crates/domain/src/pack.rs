@@ -1118,6 +1118,8 @@ pub struct ItaPolicy {
     pub role_overrides: BTreeMap<RoleKey, ItaRoleOverride>,
     #[serde(default = "default_ita_auto_close")]
     pub auto_close: bool,
+    #[serde(default, skip_serializing_if = "ItaLifecyclePolicy::is_empty")]
+    pub lifecycle: ItaLifecyclePolicy,
     #[serde(default, skip_serializing_if = "is_default_ita_resolution_policy")]
     pub resolution_policy: ItaResolutionPolicy,
 }
@@ -1132,6 +1134,7 @@ impl Default for ItaPolicy {
             role_modifier_refs: BTreeMap::new(),
             role_overrides: BTreeMap::new(),
             auto_close: default_ita_auto_close(),
+            lifecycle: ItaLifecyclePolicy::default(),
             resolution_policy: ItaResolutionPolicy::default(),
         }
     }
@@ -1171,6 +1174,10 @@ fn is_zero_u16(value: &u16) -> bool {
     *value == 0
 }
 
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ItaVoteConflictPolicy {
     ResolveShotsBeforeVote,
@@ -1198,6 +1205,45 @@ pub struct ItaResolutionPolicy {
 
 fn is_default_ita_resolution_policy(policy: &ItaResolutionPolicy) -> bool {
     *policy == ItaResolutionPolicy::default()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ItaLifecyclePolicy {
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub manual_open: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub pause: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cancel: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub update: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub manual_close: bool,
+}
+
+impl ItaLifecyclePolicy {
+    pub fn is_empty(&self) -> bool {
+        !self.manual_open && !self.pause && !self.cancel && !self.update && !self.manual_close
+    }
+
+    pub fn allows(&self, control: ItaSessionControlKind) -> bool {
+        match control {
+            ItaSessionControlKind::Open => self.manual_open,
+            ItaSessionControlKind::Pause => self.pause,
+            ItaSessionControlKind::Cancel => self.cancel,
+            ItaSessionControlKind::Update => self.update,
+            ItaSessionControlKind::Close => self.manual_close,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ItaSessionControlKind {
+    Open,
+    Pause,
+    Cancel,
+    Update,
+    Close,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3127,6 +3173,13 @@ fn validate_ita_policy(
             issues,
             path,
             "ITA modifiers require at least one ITA session",
+        );
+    }
+    if !ita.lifecycle.is_empty() && ita.sessions.is_empty() {
+        issue(
+            issues,
+            path,
+            "ITA lifecycle controls require at least one ITA session",
         );
     }
 
@@ -9222,6 +9275,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if pack.ita.resolution_policy != ItaResolutionPolicy::default() {
         require_ir(&mut required, &mut reasons, 60, "ita.resolution_policy");
+    }
+    if !pack.ita.lifecycle.is_empty() {
+        require_ir(&mut required, &mut reasons, 62, "ita.lifecycle");
     }
     if pack
         .ita

@@ -8723,6 +8723,35 @@ fn golden_ita_session_buffered_shot() {
 }
 
 #[test]
+fn golden_ita_session_lifecycle_controls() {
+    let golden = load_golden_in("test_ita_buffered", "ita_session_lifecycle_controls.json");
+    let got = run(&golden["input"], load_pack_named("test_ita_buffered"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "ita_session_lifecycle_controls",
+    );
+    assert!(got.iter().any(|event| {
+        event["kind"] == "ItaSessionLifecycleChanged"
+            && event["payload"]["control"] == "Pause"
+            && event["payload"]["to_status"] == "paused"
+    }));
+    assert!(got.iter().any(|event| {
+        event["kind"] == "ItaSessionLifecycleChanged"
+            && event["payload"]["control"] == "Cancel"
+            && event["payload"]["to_status"] == "cancelled"
+    }));
+    assert!(got.iter().any(|event| {
+        event["kind"] == "ActionInterfered"
+            && event["payload"]["actor"] == "slot_1"
+            && event["payload"]["reason"] == "ita_session_closed"
+    }));
+    assert!(!got
+        .iter()
+        .any(|event| { event["kind"] == "ItaShotQueued" || event["kind"] == "ItaShotResolved" }));
+}
+
+#[test]
 fn golden_ita_chance_and_shields() {
     let golden = load_golden_in("mafia_universe", "ita_chance_and_shields.json");
     let got = run(

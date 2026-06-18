@@ -446,6 +446,11 @@ trace, result-schema, and semantic minimizer proof. HP/shields and vulnerability
 covered by pack-owned ITA modifier components and role refs; v61 `hit_points` components now
 feed `ItaCounters.hp_remaining` / `hp_damage` and `ItaShotResolved.hp_before` / `hp_after`, with
 hybrid shield-plus-HP targets consuming shields before damaging HP.
+v62 `ItaPolicy.lifecycle` lets packs opt into host/admin `ControlItaSession` operations for
+manual open, pause, cancel, update, and manual close. Current-phase `ItaSessionControlRecorded`
+stream events feed `DayPhaseInputs.ita_session_controls`; `resolve_day` emits
+`ItaSessionLifecycleChanged` plus `ItaSessionAnnouncement`, records lifecycle trace decisions and
+generated rows, and prevents paused/cancelled/closed sessions from queuing ITA shots.
 
 `IrAbility::SelfDestruct` is the first v10 Chinese structured day-death addition. A
 `SelfDestruct` action carries `SelfDestructSpec { cause, kill_target, sacrifice_actor,
@@ -1421,7 +1426,17 @@ the command tests audit/rebuild projections and the fixture lane promotes reduce
 invalidated, refunded, and HP/hybrid semantic fixtures. This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across the ITA buffered success, invalidation, refund, and
-HP/hybrid release fixtures. The sheriff fixture proof was rerun locally with
+HP/hybrid release fixtures. ITA lifecycle controls now have pure golden coverage for manual
+open/update/pause/resume/cancel/close, result-schema coverage for lifecycle payloads, and
+command/projection plus minimizer proof for a host-recorded pause control. The command proof was
+rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline host_resolve_phase_applies_ita_lifecycle_pause_control -- --nocapture`,
+which passed one filtered pipeline test and proved a paused session emits lifecycle/announcement
+events, rejects a submitted ITA shot, surfaces trace rows, audits resolution envelopes, and
+rebuilds projections. The minimizer proof was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_lifecycle_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`,
+which passed one filtered pipeline test for the lifecycle semantic fixture. The sheriff fixture
+proof was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
 announcement/prompt fixtures now also prove that minimization preserves Mafia Universe prior-night

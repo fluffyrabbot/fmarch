@@ -2094,7 +2094,13 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    v61 ITA `hit_points` components add HP and hybrid shield-plus-HP targets, expose
    `ItaShotResolved.hp_before` / `hp_after` and `ItaCounters.hp_remaining` / `hp_damage`,
    and prove shield-first preservation versus HP consumption through pure golden,
-   command/projection, audit/rebuild, and minimizer fixtures.]
+   command/projection, audit/rebuild, and minimizer fixtures; v62 `ItaPolicy.lifecycle`
+   adds pack-declared host/admin `ControlItaSession` support for manual open, pause, cancel,
+   update, and manual close, with `ItaSessionLifecycleChanged`, `ItaSessionAnnouncement`,
+   lifecycle trace decisions/generated rows, paused-session shot interference, pure golden
+   coverage for open/update/pause/resume/cancel/close, result-schema coverage for lifecycle
+   payloads, and command/projection, audit/rebuild, and minimizer proof for a host-recorded
+   pause control.]
 5. Last words and day announcements. [partly done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; `mafia_universe` golden plus Postgres command/projection rebuild proof]
@@ -2544,7 +2550,17 @@ coverage, and a playable vertical scenario through the command pipeline.
    success, invalidated, refunded, and HP/hybrid semantic fixtures. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_buffered_release_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across the ITA buffered success, invalidation, refund, and
-   HP/hybrid release fixtures. The sheriff fixture proof was rerun locally with
+   HP/hybrid release fixtures. ITA lifecycle controls now have pure golden coverage for manual
+   open/update/pause/resume/cancel/close, result-schema coverage for lifecycle payloads, and
+   command/projection plus minimizer proof for a host-recorded pause control. The command proof was
+   rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline host_resolve_phase_applies_ita_lifecycle_pause_control -- --nocapture`
+   and passed one filtered pipeline test, proving a paused session emits lifecycle/announcement
+   events, rejects a submitted ITA shot, surfaces trace rows, audits resolution envelopes, and
+   rebuilds projections. The minimizer proof was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_ita_lifecycle_fixture_replays_semantic_expectations_through_minimizer -- --nocapture`
+   and passed one filtered pipeline test for the lifecycle semantic fixture. The sheriff fixture
+   proof was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
@@ -2872,8 +2888,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by finishing ITA session lifecycle policy breadth. Model
-pack-declared host/admin session lifecycle controls for manual open, pause/cancel, update, and
-close transitions; emit host-visible announcements and trace rows for cancelled or paused sessions;
-then prove pure goldens plus command/projection audit/rebuild and semantic minimizer coverage
+Continue Phase 5 rich day systems by closing the remaining last-words and day-announcement breadth.
+Model pack-declared announcement templates/audiences for night-victim announcements, day-death
+announcements, and last-words windows; prove multiple-death ordering plus hidden/revealed role
+payloads through pure goldens, command/projection audit/rebuild, and semantic minimizer fixtures
 before updating the checklist again.

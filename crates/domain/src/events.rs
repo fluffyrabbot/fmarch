@@ -218,6 +218,28 @@ pub enum InnerEvent {
         phase_kind: crate::pack::PhaseKind,
         phase_number: u32,
     },
+    ItaSessionLifecycleChanged {
+        session_id: String,
+        control: crate::pack::ItaSessionControlKind,
+        from_status: String,
+        to_status: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+        recorded_at: crate::state::LogicalTime,
+        phase_id: PhaseId,
+        phase_kind: crate::pack::PhaseKind,
+        phase_number: u32,
+    },
+    ItaSessionAnnouncement {
+        session_id: String,
+        status: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+        recorded_at: crate::state::LogicalTime,
+        phase_id: PhaseId,
+        phase_kind: crate::pack::PhaseKind,
+        phase_number: u32,
+    },
     ItaShotQueued {
         session_id: String,
         action_id: String,

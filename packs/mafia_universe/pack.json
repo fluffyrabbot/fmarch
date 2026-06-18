@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 61,
+  "ir_version": 62,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2692,6 +2692,13 @@
   "ita": {
     "default_hit_chance": 0.5,
     "auto_close": true,
+    "lifecycle": {
+      "manual_open": true,
+      "pause": true,
+      "cancel": true,
+      "update": true,
+      "manual_close": true
+    },
     "modifier_components": {
       "better_ita_chance": { "hit_bonus": 0.25 },
       "worse_ita_chance": { "hit_penalty": 0.25 },

@@ -22,12 +22,12 @@ use crate::pack::{
     ActivationGateReason, ActorRef, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
     ConversionPendingDeathPolicy, DeathRetaliationTiming, DeathRevealMode, EffectDuration,
     EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec,
-    GuardWitchSameTargetPolicy, ItaSessionSpec, ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy,
-    KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput,
-    ResultMemoryScope, RoleModifier, StandardNarConflictFamily, SuppressionScope, TargetRef,
-    TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule,
-    VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition,
-    WinFamily, Window,
+    GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
+    ItaVoteConflictPolicy, KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind,
+    ResultMemoryOutput, ResultMemoryScope, RoleModifier, StandardNarConflictFamily,
+    SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy,
+    TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker,
+    WeightPolicy, WinCondition, WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -43,6 +43,7 @@ pub const RESULT_VERSION: u16 = 19;
 #[serde(default, deny_unknown_fields)]
 pub struct DayPhaseInputs {
     pub night_victims: Vec<DayAnnouncementInput>,
+    pub ita_session_controls: Vec<ItaSessionControlInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,6 +61,16 @@ pub struct DayAnnouncementInput {
     pub role_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recorded_at: Option<LogicalTime>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ItaSessionControlInput {
+    pub session_id: String,
+    pub control: ItaSessionControlKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    pub recorded_at: LogicalTime,
 }
 
 pub struct ResolutionInput {
@@ -5363,6 +5374,60 @@ fn build_trace(
                 });
                 "ita_session_opened"
             }
+            InnerEvent::ItaSessionLifecycleChanged {
+                session_id,
+                control,
+                from_status,
+                to_status,
+                message,
+                recorded_at,
+                ..
+            } => {
+                notes.push(format!(
+                    "ITA session {session_id} lifecycle {from_status}->{to_status} at event_index {}",
+                    indexed.index
+                ));
+                generated.push(GeneratedActionTrace {
+                    action_id: session_id.clone(),
+                    source: "ItaSessionLifecycleChanged".to_string(),
+                    actor: session_id.clone(),
+                    targets: Vec::new(),
+                    detail: serde_json::json!({
+                        "control": control,
+                        "from_status": from_status,
+                        "to_status": to_status,
+                        "message": message,
+                        "recorded_at": recorded_at,
+                        "event_index": indexed.index,
+                    }),
+                });
+                "ita_session_lifecycle_changed"
+            }
+            InnerEvent::ItaSessionAnnouncement {
+                session_id,
+                status,
+                message,
+                recorded_at,
+                ..
+            } => {
+                notes.push(format!(
+                    "ITA session {session_id} announcement {status} at event_index {}",
+                    indexed.index
+                ));
+                generated.push(GeneratedActionTrace {
+                    action_id: session_id.clone(),
+                    source: "ItaSessionAnnouncement".to_string(),
+                    actor: session_id.clone(),
+                    targets: Vec::new(),
+                    detail: serde_json::json!({
+                        "status": status,
+                        "message": message,
+                        "recorded_at": recorded_at,
+                        "event_index": indexed.index,
+                    }),
+                });
+                "ita_session_announcement"
+            }
             InnerEvent::ItaShotQueued {
                 session_id,
                 action_id,
@@ -9005,7 +9070,7 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     resolve_self_destruct_actions(input, &mut events);
     resolve_day_kill_actions(input, &mut events, &mut trace_decisions);
     require_ita_vote_conflict_policy(pack);
-    resolve_ita_actions(input, &mut events);
+    resolve_ita_actions(input, &mut events, &mut trace_decisions);
     resolve_duel_actions(input, &mut events, &mut trace_decisions, &mut trace_notes);
     let vote_state = apply_events(&input.state, &events);
     let pre_vote_deaths = deaths_from_events(&events);
@@ -10579,10 +10644,21 @@ fn require_ita_vote_conflict_policy(pack: &Pack) {
     }
 }
 
-fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
+#[derive(Debug, Default)]
+struct ItaLifecycleResolution {
+    opened: BTreeSet<String>,
+    blocked_statuses: BTreeMap<String, String>,
+}
+
+fn resolve_ita_actions(
+    input: &ResolutionInput,
+    events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
+) {
     if input.pack.ita.sessions.is_empty() {
         return;
     }
+    let lifecycle = resolve_ita_lifecycle_controls(input, events, trace_decisions);
 
     let released_submissions = input
         .state
@@ -10633,7 +10709,9 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         })
         .collect();
     if ordered.is_empty() {
-        return;
+        if lifecycle.opened.is_empty() {
+            return;
+        }
     }
     ordered.sort_by(|(a, a_template), (b, b_template)| {
         b_template
@@ -10647,7 +10725,10 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
     let mut rng = DetRng::new(input.seed ^ 0x4954_415f_5348_4f54);
     let mut day_state = apply_events(&input.state, events);
     let mut counters_by_session: BTreeMap<String, ItaCounters> = BTreeMap::new();
-    let mut opened = BTreeSet::new();
+    let ItaLifecycleResolution {
+        mut opened,
+        blocked_statuses,
+    } = lifecycle;
     let mut resolved_by_session: BTreeMap<String, u32> = BTreeMap::new();
     let mut invalidated_by_session: BTreeMap<String, u32> = BTreeMap::new();
     let mut buffered_by_session: BTreeMap<String, u32> = BTreeMap::new();
@@ -10661,6 +10742,13 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             });
             continue;
         };
+        if let Some(status) = blocked_statuses.get(&session.session_id) {
+            events.push(InnerEvent::ActionInterfered {
+                actor: sub.actor.clone(),
+                reason: format!("ita_session_{status}"),
+            });
+            continue;
+        }
         if opened.insert(session.session_id.clone()) {
             events.push(InnerEvent::ItaSessionOpened {
                 session_id: session.session_id.clone(),
@@ -10960,6 +11048,9 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         if !opened.contains(&session.session_id) {
             continue;
         }
+        if blocked_statuses.contains_key(&session.session_id) {
+            continue;
+        }
         let counters = counters_by_session
             .get(&session.session_id)
             .cloned()
@@ -11000,6 +11091,148 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             });
         }
     }
+}
+
+fn resolve_ita_lifecycle_controls(
+    input: &ResolutionInput,
+    events: &mut Vec<InnerEvent>,
+    trace_decisions: &mut Vec<DecisionTrace>,
+) -> ItaLifecycleResolution {
+    let mut resolution = ItaLifecycleResolution::default();
+    if input.day_phase_inputs.ita_session_controls.is_empty() {
+        return resolution;
+    }
+
+    let sessions = input
+        .pack
+        .ita
+        .sessions
+        .iter()
+        .map(|session| (session.session_id.as_str(), session))
+        .collect::<BTreeMap<_, _>>();
+    let mut statuses = BTreeMap::<String, String>::new();
+    let mut controls = input
+        .day_phase_inputs
+        .ita_session_controls
+        .iter()
+        .collect::<Vec<_>>();
+    controls.sort_by(|a, b| {
+        a.recorded_at
+            .cmp(&b.recorded_at)
+            .then(a.session_id.cmp(&b.session_id))
+            .then(format!("{:?}", a.control).cmp(&format!("{:?}", b.control)))
+    });
+
+    for control in controls {
+        let Some(session) = sessions.get(control.session_id.as_str()) else {
+            trace_decisions.push(DecisionTrace {
+                stage: "ita_session_lifecycle".to_string(),
+                source: control.session_id.clone(),
+                outcome: "ignored_unknown_session".to_string(),
+                detail: serde_json::json!({
+                    "control": control.control,
+                    "recorded_at": control.recorded_at,
+                }),
+            });
+            continue;
+        };
+        if !input.pack.ita.lifecycle.allows(control.control) {
+            trace_decisions.push(DecisionTrace {
+                stage: "ita_session_lifecycle".to_string(),
+                source: control.session_id.clone(),
+                outcome: "ignored_pack_policy".to_string(),
+                detail: serde_json::json!({
+                    "control": control.control,
+                    "recorded_at": control.recorded_at,
+                }),
+            });
+            continue;
+        }
+
+        let from_status = statuses
+            .get(&control.session_id)
+            .cloned()
+            .unwrap_or_else(|| "scheduled".to_string());
+        let to_status = match control.control {
+            ItaSessionControlKind::Open => "open",
+            ItaSessionControlKind::Pause => "paused",
+            ItaSessionControlKind::Cancel => "cancelled",
+            ItaSessionControlKind::Update => from_status.as_str(),
+            ItaSessionControlKind::Close => "closed",
+        }
+        .to_string();
+
+        if matches!(control.control, ItaSessionControlKind::Open) {
+            resolution.opened.insert(control.session_id.clone());
+            events.push(InnerEvent::ItaSessionOpened {
+                session_id: control.session_id.clone(),
+                label: session.label.clone(),
+                day: session.day,
+                window: session.window.clone(),
+                status: to_status.clone(),
+                phase_id: input.phase_id.clone(),
+                phase_kind: input.state.phase_kind,
+                phase_number: input.state.phase_number,
+            });
+        }
+
+        events.push(InnerEvent::ItaSessionLifecycleChanged {
+            session_id: control.session_id.clone(),
+            control: control.control,
+            from_status: from_status.clone(),
+            to_status: to_status.clone(),
+            message: control.message.clone(),
+            recorded_at: control.recorded_at,
+            phase_id: input.phase_id.clone(),
+            phase_kind: input.state.phase_kind,
+            phase_number: input.state.phase_number,
+        });
+        events.push(InnerEvent::ItaSessionAnnouncement {
+            session_id: control.session_id.clone(),
+            status: to_status.clone(),
+            message: control.message.clone(),
+            recorded_at: control.recorded_at,
+            phase_id: input.phase_id.clone(),
+            phase_kind: input.state.phase_kind,
+            phase_number: input.state.phase_number,
+        });
+        if matches!(control.control, ItaSessionControlKind::Close) {
+            events.push(InnerEvent::ItaSessionClosed {
+                session_id: control.session_id.clone(),
+                last_status: from_status.clone(),
+                phase_id: input.phase_id.clone(),
+                phase_kind: input.state.phase_kind,
+                phase_number: input.state.phase_number,
+            });
+        }
+
+        if matches!(
+            control.control,
+            ItaSessionControlKind::Pause
+                | ItaSessionControlKind::Cancel
+                | ItaSessionControlKind::Close
+        ) {
+            resolution
+                .blocked_statuses
+                .insert(control.session_id.clone(), to_status.clone());
+        } else if matches!(control.control, ItaSessionControlKind::Open) {
+            resolution.blocked_statuses.remove(&control.session_id);
+        }
+        statuses.insert(control.session_id.clone(), to_status.clone());
+        trace_decisions.push(DecisionTrace {
+            stage: "ita_session_lifecycle".to_string(),
+            source: control.session_id.clone(),
+            outcome: to_status,
+            detail: serde_json::json!({
+                "control": control.control,
+                "from_status": from_status,
+                "message": control.message.clone(),
+                "recorded_at": control.recorded_at,
+            }),
+        });
+    }
+
+    resolution
 }
 
 fn decrement_ita_counter(counters: &mut BTreeMap<SlotId, u32>, key: &SlotId) {

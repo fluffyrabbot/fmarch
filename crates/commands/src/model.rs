@@ -97,6 +97,14 @@ pub enum Command {
         prompt_id: String,
         decision: HostPromptDecision,
     },
+    /// Record a host/admin ITA session lifecycle control for the current Day phase. Host-gated.
+    ControlItaSession {
+        game: Uuid,
+        session_id: String,
+        control: domain::ItaSessionControlKind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
 
     // ── slice commands ──
     /// Cast/overwrite a vote as `actor_slot`. Requires `SlotOccupant(actor_slot)`.

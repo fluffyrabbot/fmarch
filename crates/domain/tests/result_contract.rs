@@ -1392,6 +1392,70 @@ fn ita_session_payloads_pass_contract_validation() {
 }
 
 #[test]
+fn ita_session_lifecycle_payloads_pass_contract_validation() {
+    let payload = json!({
+        "phase_id": "D01",
+        "phase_kind": "Day",
+        "phase_number": 1,
+        "run_id": "resolution:test:D01:ita_lifecycle",
+        "result_version": RESULT_VERSION,
+        "seed": 16,
+        "counts": {
+            "events": 3,
+            "kills": 0,
+            "saves": 0
+        },
+        "events": [
+            {
+                "index": 0,
+                "kind": "ItaSessionLifecycleChanged",
+                "payload": {
+                    "session_id": "d1",
+                    "control": "Pause",
+                    "from_status": "open",
+                    "to_status": "paused",
+                    "message": "Pause for votecount correction",
+                    "recorded_at": 42,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1
+                }
+            },
+            {
+                "index": 1,
+                "kind": "ItaSessionAnnouncement",
+                "payload": {
+                    "session_id": "d1",
+                    "status": "paused",
+                    "message": "Pause for votecount correction",
+                    "recorded_at": 42,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1
+                }
+            },
+            {
+                "index": 2,
+                "kind": "ItaSessionClosed",
+                "payload": {
+                    "session_id": "d1",
+                    "last_status": "paused",
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1
+                }
+            }
+        ],
+        "started_at": 12,
+        "finished_at": 12
+    });
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("ITA lifecycle payloads should pass");
+    assert_eq!(applied.counts.events, 4);
+}
+
+#[test]
 fn ita_buffered_invalidated_and_refunded_payloads_pass_contract_validation() {
     let payload = json!({
         "phase_id": "D01",

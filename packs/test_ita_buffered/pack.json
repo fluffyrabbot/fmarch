@@ -1,7 +1,7 @@
 {
   "name": "test_ita_buffered",
   "version": 1,
-  "ir_version": 61,
+  "ir_version": 62,
   "roles": {
     "ita_shooter": {
       "description": "Test ITA participant whose session buffers shots before release.",
@@ -93,6 +93,13 @@
   "ita": {
     "default_hit_chance": 1.0,
     "auto_close": true,
+    "lifecycle": {
+      "manual_open": true,
+      "pause": true,
+      "cancel": true,
+      "update": true,
+      "manual_close": true
+    },
     "modifier_components": {
       "one_ita_shield": { "shields": 1 },
       "two_ita_hp": { "hit_points": 2 }
