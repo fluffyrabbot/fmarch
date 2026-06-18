@@ -1,0 +1,92 @@
+{
+  "seed": 140211,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerSaved",
+        "payload": {
+          "slot_id": "slot_3",
+          "sources": [
+            "slot_2"
+          ]
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_4"
+          ],
+          "cause": "factional_kill",
+          "slot_id": "slot_2",
+          "unstoppable": false
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_2"
+          ],
+          "cause": "babysit",
+          "slot_id": "slot_3",
+          "unstoppable": true
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:dependency_death",
+        "source": "action:generated_seed_97211_babysitter_guards_ward",
+        "outcome": "babysitter_dependency_death",
+        "detail": {
+          "action_id": "generated_seed_97211_babysitter_guards_ward",
+          "attackers": [
+            "slot_2"
+          ],
+          "cause": "babysit",
+          "protector": "slot_2",
+          "template_id": "babysit",
+          "ward": "slot_3"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_3"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_4"
+        }
+      }
+    ]
+  }
+}

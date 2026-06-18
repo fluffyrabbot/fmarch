@@ -1499,6 +1499,18 @@ by `checked_in_hider_projection_state_generated_fixtures_replay_semantic_expecta
 the success fixture remains promotable while the reduced negative fixture preserves
 `semantic_expectation` failure class without success promotion.
 
+`crates/commands/fixtures/night-babysitter-projection-state-generated-minimized.json` now promotes
+the BabysitterProjectionState row into a checked-in Mafiascum N01 dependency-death replay with four
+slots, three actions, one audited resolution envelope, and one anchored trace. It checks seven
+semantic expectations: the `PlayerSaved` inner event for the ward, the factional `PlayerKilled`
+inner event for the babysitter, the dependent ward `PlayerKilled(cause = babysit)` inner event, one
+`night:dependency_death` trace decision, and three rebuilt `slot_state` rows proving the babysitter
+and ward die while the surviving attacker remains alive. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-babysitter-projection-state-generated-bad-expectation.json`, is
+covered by `checked_in_babysitter_projection_state_generated_fixtures_replay_semantic_expectations`,
+which proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
 The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
