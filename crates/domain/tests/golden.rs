@@ -8148,6 +8148,31 @@ fn golden_ita_session_invalidates_later_dead_target() {
 }
 
 #[test]
+fn golden_ita_session_refunds_already_dead_target() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "ita_session_refunds_already_dead_target.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "ita_session_refunds_already_dead_target",
+    );
+    assert!(got.iter().any(|event| {
+        event["kind"] == "ItaShotRefunded"
+            && event["payload"]["action_id"] == "ita_refunded_001"
+            && event["payload"]["reason"] == "target_dead"
+            && event["payload"]["policy"] == "REFUND_SHOT"
+            && event["payload"]["counters"]["shots_refunded"] == 1
+            && event["payload"]["counters"]["refunded_by_reason"]["target_dead"] == 1
+    }));
+    assert!(!got.iter().any(|event| {
+        event["kind"] == "ItaShotResolved" && event["payload"]["action_id"] == "ita_refunded_001"
+    }));
+}
+
+#[test]
 fn resolver_rejects_missing_ita_vote_conflict_before_day_resolution() {
     let golden = load_golden_in("mafia_universe", "ita_session_lethal_shot.json");
     let mut pack = load_pack_named("mafia_universe");

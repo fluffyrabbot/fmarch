@@ -1261,10 +1261,10 @@ fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
 fn invalid_versions_are_rejected() {
     let mut value = valid_pack_value();
     value["version"] = json!(2);
-    value["ir_version"] = json!(59);
+    value["ir_version"] = json!(61);
     let err = validate_pack(&pack_from_value(value)).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 59");
+    assert_issue(&err, "ir_version", "unsupported IR version 61");
 }
 
 #[test]
@@ -1272,7 +1272,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 59");
+    assert_issue(&err, "ir_version", "unsupported IR version 61");
 }
 
 #[test]
@@ -3111,6 +3111,23 @@ fn ita_session_buffer_delay_requires_v59_and_positive_delay() {
     assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
 
     value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(1000);
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn ita_resolution_policy_requires_v60() {
+    let mut value = serde_json::to_value(load_pack_named("mafia_universe")).unwrap();
+    value["ir_version"] = json!(59);
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 60",
+    );
+    assert_issue(&err, "ir_version", "ita.resolution_policy");
+
+    value["ir_version"] = json!(60);
     validate_pack(&pack_from_value(value)).unwrap();
 }
 

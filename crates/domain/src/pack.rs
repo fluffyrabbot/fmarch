@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 59;
+pub const SUPPORTED_IR_VERSION: u16 = 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -1067,6 +1067,8 @@ pub struct ItaPolicy {
     pub role_overrides: BTreeMap<RoleKey, ItaRoleOverride>,
     #[serde(default = "default_ita_auto_close")]
     pub auto_close: bool,
+    #[serde(default, skip_serializing_if = "is_default_ita_resolution_policy")]
+    pub resolution_policy: ItaResolutionPolicy,
 }
 
 impl Default for ItaPolicy {
@@ -1079,6 +1081,7 @@ impl Default for ItaPolicy {
             role_modifier_refs: BTreeMap::new(),
             role_overrides: BTreeMap::new(),
             auto_close: default_ita_auto_close(),
+            resolution_policy: ItaResolutionPolicy::default(),
         }
     }
 }
@@ -1120,6 +1123,30 @@ fn is_zero_u16(value: &u16) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ItaVoteConflictPolicy {
     ResolveShotsBeforeVote,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ItaTargetAlreadyDeadPolicy {
+    ConsumeShot,
+    RefundShot,
+    SkipWithWarning,
+}
+
+impl Default for ItaTargetAlreadyDeadPolicy {
+    fn default() -> Self {
+        Self::ConsumeShot
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct ItaResolutionPolicy {
+    #[serde(default)]
+    pub on_target_already_dead: ItaTargetAlreadyDeadPolicy,
+}
+
+fn is_default_ita_resolution_policy(policy: &ItaResolutionPolicy) -> bool {
+    *policy == ItaResolutionPolicy::default()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8704,6 +8731,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if !pack.ita.modifier_components.is_empty() || !pack.ita.role_modifier_refs.is_empty() {
         require_ir(&mut required, &mut reasons, 32, "ita.modifier_components");
+    }
+    if pack.ita.resolution_policy != ItaResolutionPolicy::default() {
+        require_ir(&mut required, &mut reasons, 60, "ita.resolution_policy");
     }
     if pack
         .ita

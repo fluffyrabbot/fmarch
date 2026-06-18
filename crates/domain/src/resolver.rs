@@ -22,11 +22,12 @@ use crate::pack::{
     ActivationGateReason, ActorRef, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
     ConversionPendingDeathPolicy, DeathRetaliationTiming, DeathRevealMode, EffectDuration,
     EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec,
-    GuardWitchSameTargetPolicy, ItaSessionSpec, ItaVoteConflictPolicy, KillStackingPolicy, Pack,
-    PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier,
-    StandardNarConflictFamily, SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent,
-    TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod,
-    VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
+    GuardWitchSameTargetPolicy, ItaSessionSpec, ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy,
+    KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput,
+    ResultMemoryScope, RoleModifier, StandardNarConflictFamily, SuppressionScope, TargetRef,
+    TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule,
+    VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition,
+    WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -10127,8 +10128,14 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
         } else {
             ita_kills_by_target.get(&target).cloned()
         };
+        let should_refund_dead_target = !target_slot.is_alive()
+            && invalidated_by.is_none()
+            && matches!(
+                input.pack.ita.resolution_policy.on_target_already_dead,
+                ItaTargetAlreadyDeadPolicy::RefundShot
+            );
         if !target_slot.is_alive() {
-            if invalidated_by.is_none() {
+            if invalidated_by.is_none() && !should_refund_dead_target {
                 events.push(InnerEvent::ActionInterfered {
                     actor: sub.actor.clone(),
                     reason: "ita_target_dead".to_string(),
@@ -10150,6 +10157,57 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             *buffered_by_session
                 .entry(session.session_id.clone())
                 .or_insert(0) += 1;
+            continue;
+        }
+
+        if should_refund_dead_target {
+            let counters = counters_by_session
+                .entry(session.session_id.clone())
+                .or_default();
+            let previous_queue_length = counters.global_shots_fired;
+            counters.global_shots_fired += 1;
+            *counters.per_shooter.entry(sub.actor.clone()).or_insert(0) += 1;
+            *counters.per_target.entry(target.clone()).or_insert(0) += 1;
+            let queue_position = previous_queue_length + 1;
+            let queue_length = counters.global_shots_fired;
+
+            events.push(InnerEvent::ItaShotQueued {
+                session_id: session.session_id.clone(),
+                action_id: sub.action_id.clone(),
+                actor: sub.actor.clone(),
+                targets: sub.targets.clone(),
+                submitted_at: sub.submitted_at,
+                queue_position,
+                queue_length,
+                previous_queue_length,
+                counters: counters.clone(),
+            });
+
+            counters.global_shots_fired = counters.global_shots_fired.saturating_sub(1);
+            decrement_ita_counter(&mut counters.per_shooter, &sub.actor);
+            decrement_ita_counter(&mut counters.per_target, &target);
+            counters.shots_refunded = counters.shots_refunded.saturating_add(1);
+            *counters
+                .refunded_by_reason
+                .entry("target_dead".to_string())
+                .or_insert(0) += 1;
+
+            events.push(InnerEvent::ItaShotRefunded {
+                session_id: session.session_id.clone(),
+                action_id: sub.action_id.clone(),
+                actor_id: sub.actor.clone(),
+                target_id: target.clone(),
+                reason: "target_dead".to_string(),
+                policy: Some("REFUND_SHOT".to_string()),
+                hit_chance: Some(ita_hit_chance(input, session, actor_slot, target_slot)),
+                roll: Some(rng.next_f64()),
+                hp_before: Some(0),
+                hp_after: Some(0),
+                protection_path: Some("hp".to_string()),
+                submitted_at: sub.submitted_at,
+                timestamp: sub.submitted_at,
+                counters: counters.clone(),
+            });
             continue;
         }
 
@@ -10331,6 +10389,16 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
                 phase_number: input.state.phase_number,
             });
         }
+    }
+}
+
+fn decrement_ita_counter(counters: &mut BTreeMap<SlotId, u32>, key: &SlotId) {
+    let Some(value) = counters.get_mut(key) else {
+        return;
+    };
+    *value = value.saturating_sub(1);
+    if *value == 0 {
+        counters.remove(key);
     }
 }
 

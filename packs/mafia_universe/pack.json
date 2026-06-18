@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 58,
+  "ir_version": 60,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2622,6 +2622,9 @@
       "mafia_ita_evasive_shielded": ["percent_ita_vulnerability", "one_ita_shield"]
     },
     "vote_conflict": "ResolveShotsBeforeVote",
+    "resolution_policy": {
+      "on_target_already_dead": "REFUND_SHOT"
+    },
     "sessions": [
       {
         "session_id": "d1",

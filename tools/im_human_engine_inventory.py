@@ -2441,8 +2441,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             )
             notes = (
                 "pack-declared ITA session buffer delay emits canonical `ItaShotBuffered` "
-                "and defers same-pass queue/resolve/kill; later release, invalidation, "
-                "and refund mechanics remain pending"
+                "and defers same-pass queue/resolve/kill; later release mechanics remain pending"
             )
         elif name == "ita.shot.invalidated":
             modeled = (
@@ -2471,8 +2470,39 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             notes = (
                 "queued ITA shots at a target killed earlier in the same session emit "
                 "canonical `ItaShotInvalidated` with `reason=target_dead` and "
-                "`invalidated_by` pointing at the killing action; buffered release-time "
-                "refund policy remains pending"
+                "`invalidated_by` pointing at the killing action; buffered release mechanics "
+                "remain pending"
+            )
+        elif name == "ita.shot.refunded":
+            modeled = (
+                canonical in fmarch["events"]
+                and "resolution_policy" in fmarch["pack_text"]
+                and "on_target_already_dead" in fmarch["pack_text"]
+                and "REFUND_SHOT" in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "InnerEvent::ItaShotRefunded" in resolver
+                and "should_refund_dead_target" in resolver
+                and "refunded_by_reason" in resolver
+            )
+            golden = (
+                implemented
+                and "ita_session_refunds_already_dead_target"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
+                and "ItaShotRefunded" in fmarch["domain_tests_text"]
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_refunds_ita_shot_at_already_dead_target"
+                in command_tests
+                and "ItaShotRefunded" in command_tests
+            )
+            notes = (
+                "pack-declared `resolution_policy.on_target_already_dead=REFUND_SHOT` emits "
+                "canonical `ItaShotRefunded` with `reason=target_dead`, HP metadata, "
+                "and quota-neutral refund counters when a queued ITA shot executes into an "
+                "already-dead target"
             )
         elif name in ITA_DEFERRED_SHOT_RESULT_KINDS:
             modeled = False
