@@ -472,6 +472,8 @@ fn resolve_one_kill(
                 cause.to_string(),
                 "shield".to_string(),
                 "effect".to_string(),
+                1,
+                1,
             ));
             events.push(InnerEvent::EffectsCleared {
                 effect: "bulletproof_vest".to_string(),
@@ -3612,10 +3614,33 @@ fn inventory_counter_id(grant_id: &str) -> String {
     format!("inventory:{grant_id}")
 }
 
-fn action_counter_used(input: &ResolutionInput, actor: &str, template_id: &str) -> bool {
+fn action_counter_used_count(input: &ResolutionInput, actor: &str, template_id: &str) -> u16 {
+    let counter_id = action_counter_id(template_id);
+    input
+        .state
+        .use_counters
+        .iter()
+        .find(|counter| counter.actor == actor && counter.counter_id == counter_id)
+        .map(|counter| {
+            counter
+                .used
+                .max(counter.limit.saturating_sub(counter.remaining))
+        })
+        .unwrap_or(0)
+}
+
+fn action_counter_exhausted(
+    input: &ResolutionInput,
+    actor: &str,
+    template_id: &str,
+    limit: u16,
+) -> bool {
     let counter_id = action_counter_id(template_id);
     input.state.use_counters.iter().any(|counter| {
-        counter.actor == actor && counter.counter_id == counter_id && counter.remaining == 0
+        counter.actor == actor
+            && counter.counter_id == counter_id
+            && (counter.remaining == 0
+                || action_counter_used_count(input, actor, template_id) >= limit)
     })
 }
 
@@ -3665,7 +3690,11 @@ fn action_use_counted(
     actor: SlotId,
     template_id: String,
     action_id: String,
+    limit: u16,
 ) -> InnerEvent {
+    let used = action_counter_used_count(input, &actor, &template_id)
+        .saturating_add(1)
+        .min(limit);
     counter_use_counted(
         &input.phase_id,
         input.state.phase_kind,
@@ -3676,6 +3705,8 @@ fn action_use_counted(
         action_id,
         "x_shot".to_string(),
         "game".to_string(),
+        limit,
+        used,
     )
 }
 
@@ -3762,6 +3793,8 @@ fn counter_use_counted(
     consumed_action: String,
     cadence_policy: String,
     phase_scope: String,
+    limit: u16,
+    used: u16,
 ) -> InnerEvent {
     InnerEvent::ActionUseCounted {
         counter_id,
@@ -3770,9 +3803,9 @@ fn counter_use_counted(
         consumed_action,
         cadence_policy,
         phase_scope,
-        limit: 1,
-        used: 1,
-        remaining: 0,
+        limit,
+        used,
+        remaining: limit.saturating_sub(used),
         phase_id: phase_id.clone(),
         phase_kind,
         phase_number,
@@ -4444,8 +4477,8 @@ fn apply_action_constraints(
             continue;
         }
 
-        if action.template.constraints.x_shots == Some(1) {
-            if action_counter_used(input, &action.sub.actor, &action.template.id) {
+        if let Some(limit) = action.template.constraints.x_shots {
+            if action_counter_exhausted(input, &action.sub.actor, &action.template.id, limit) {
                 action.blocked = true;
                 events.push(InnerEvent::ActionInterfered {
                     actor: action.sub.actor.clone(),
@@ -4458,6 +4491,7 @@ fn apply_action_constraints(
                 action.sub.actor.clone(),
                 action.template.id.clone(),
                 action.sub.action_id.clone(),
+                limit,
             ));
         }
 
@@ -9413,8 +9447,8 @@ fn resolve_vote_veto_action(
             });
             continue;
         }
-        if template.constraints.x_shots == Some(1) {
-            if action_counter_used(input, &submission.actor, &template.id) {
+        if let Some(limit) = template.constraints.x_shots {
+            if action_counter_exhausted(input, &submission.actor, &template.id, limit) {
                 events.push(InnerEvent::ActionInterfered {
                     actor: submission.actor.clone(),
                     reason: "x_shot_exhausted".to_string(),
@@ -9426,6 +9460,7 @@ fn resolve_vote_veto_action(
                 submission.actor.clone(),
                 template.id.clone(),
                 submission.action_id.clone(),
+                limit,
             ));
         }
         events.push(InnerEvent::VoteVetoed {
@@ -9706,12 +9741,14 @@ fn resolve_day_kill_actions(
             });
             continue;
         }
-        if action_counter_used(input, &sub.actor, &template.id) {
-            events.push(InnerEvent::ActionInterfered {
-                actor: sub.actor.clone(),
-                reason: "x_shot_exhausted".to_string(),
-            });
-            continue;
+        if let Some(limit) = template.constraints.x_shots {
+            if action_counter_exhausted(input, &sub.actor, &template.id, limit) {
+                events.push(InnerEvent::ActionInterfered {
+                    actor: sub.actor.clone(),
+                    reason: "x_shot_exhausted".to_string(),
+                });
+                continue;
+            }
         }
 
         let (victim, failback_self_kill) = alignment_failback_victim(
@@ -9747,12 +9784,13 @@ fn resolve_day_kill_actions(
         }
 
         let mut kill_events = Vec::new();
-        if template.constraints.x_shots == Some(1) {
+        if let Some(limit) = template.constraints.x_shots {
             kill_events.push(action_use_counted(
                 input,
                 sub.actor.clone(),
                 template.id.clone(),
                 sub.action_id.clone(),
+                limit,
             ));
         }
         let unstoppable = template.has_modifier(Modifier::Strongman);
@@ -11128,8 +11166,8 @@ fn resolve_duel_actions(
             continue;
         }
         let mut duel_events = Vec::new();
-        if template.constraints.x_shots == Some(1) {
-            if action_counter_used(input, &sub.actor, &template.id) {
+        if let Some(limit) = template.constraints.x_shots {
+            if action_counter_exhausted(input, &sub.actor, &template.id, limit) {
                 events.push(InnerEvent::ActionInterfered {
                     actor: sub.actor.clone(),
                     reason: "x_shot_exhausted".to_string(),
@@ -11141,6 +11179,7 @@ fn resolve_duel_actions(
                 sub.actor.clone(),
                 template.id.clone(),
                 sub.action_id.clone(),
+                limit,
             ));
         }
 

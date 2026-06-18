@@ -3769,7 +3769,7 @@ async fn validate_action_submission(
     if target_role_filter_rejected(pack, template, targets, &slots) {
         return Err(Reject::InvalidTarget);
     }
-    if template.constraints.x_shots == Some(1) {
+    if template.constraints.x_shots.is_some() {
         let counter_id = action_counter_id(&template.id);
         let exhausted = projections::action_counters(pool, game)
             .await?

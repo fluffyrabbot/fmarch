@@ -9112,12 +9112,6 @@ fn validate_action(
                 format!("{path}.constraints.x_shots"),
                 "x_shots must be greater than zero when present",
             );
-        } else if shots != 1 {
-            issue(
-                issues,
-                format!("{path}.constraints.x_shots"),
-                "only one-shot x_shots=1 is supported by the v1 resolver",
-            );
         }
     }
 

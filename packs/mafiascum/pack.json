@@ -1582,6 +1582,30 @@
         }
       ]
     },
+    "two_shot_vigilante": {
+      "description": "Two-shot Vigilante. Carries two pack-declared night-kill charges.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "night_kill",
+          "source_ids": ["kill"],
+          "ability": "Kill",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [
+            "XShot"
+          ],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 30,
+            "x_shots": 2
+          }
+        }
+      ]
+    },
     "simultaneous_vigilante": {
       "description": "Simultaneous Vigilante. May submit multiple personal night kills in the same night.",
       "alignment": "town",

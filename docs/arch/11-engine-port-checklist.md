@@ -215,7 +215,7 @@ The only identity that crosses into the engine is `SlotId`.
   fold, rebuild, stored-stream snapshot, and result-contract coverage]
 - [x] Include uses/counters: x-shot, cycle cooldowns, non-consecutive usage, novice/activated,
   limited day actions, inventories, shields, and grants. [command-side
-  submission rejects exhausted one-shot counters through typed `ActionUseCounted` /
+  submission rejects exhausted x-shot counters through typed `ActionUseCounted` /
   `StateSnapshot.use_counters` / `action_counter` projection state after rebuild; odd/even
   mismatch and non-consecutive repeat targets still read folded action history, and grants/items
   still read folded action-grant rows; bulletproof vest shield consumption now records
@@ -1238,10 +1238,14 @@ The only identity that crosses into the engine is `SlotId`.
   `constraints.self_allowed`, the pure resolver enforces target count, duplicate-target, and
   non-reflexive self-target constraints with `ActionInterfered`, and command validation proves
   the reflexive commuter self-target appends while non-reflexive self-targets reject before append.]
-- [x] X-shot. [v1 supports strict one-shot action constraints; multi-shot counts pending.
-  Mafiascum now models `jack_of_all_trades` as one-shot parity investigate/protect/block/track
-  choices; pure golden and Postgres command/projection/rebuild proof show JOAT block consumes
-  `x_shot:roleblocker_block` and suppresses a factional kill. The abstract
+- [x] X-shot. [v1 supports positive pack-declared x-shot counts through the typed
+  `ActionUseCounted` counter surface. Mafiascum now models `jack_of_all_trades` as one-shot
+  parity investigate/protect/block/track choices; pure golden and Postgres
+  command/projection/rebuild proof show JOAT block consumes `x_shot:roleblocker_block` and
+  suppresses a factional kill. Mafiascum `two_shot_vigilante` proves multi-shot count semantics:
+  pure goldens cover second-charge consumption (`used = 2`, `remaining = 0`) and exhausted third
+  attempts, while `host_resolve_phase_carries_mafiascum_two_shot_counter` proves
+  `ResolvePhase` persistence, projection rebuild, and reject-before-append after exhaustion. The abstract
   `core:jack_of_all_trades` inventory row is represented by concrete culture-pack JOAT roles.]
 - [x] X-voter. [mafiascum `x_voter` is modeled as a pack-declared 2.0
   `WeightPolicy::PerRole` role, matching im-human legacy voting behavior; pure golden and
@@ -1929,7 +1933,7 @@ Prioritize roles that stress the architecture:
    `untargetable` target-state gates, pure town/mafia goldens, and a Postgres trace,
    non-durable-effect, and rebuild vertical]
 6. X-shot, odd/even, non-consecutive, indecisive, uncooperative, roaming, compulsive, lazy, weak, macho, personal, loud/announcing.
-   [done for strict one-shot x-shot, odd/even night, target-repeat
+   [done for one-shot and multi-shot x-shot counts, odd/even night, target-repeat
    non-consecutive, and command-side rejection before append for exhausted x-shot,
    wrong odd/even night, repeated non-consecutive, Indecisive, and Roaming targets,
    one-non-town Lazy actions, and non-self Personal targets; compulsive missing-action audit,
@@ -1937,9 +1941,7 @@ Prioritize roles that stress the architecture:
    feedback, Disabled Endgame threshold blocking, Lazy multiple-non-town allowance,
    Weak Parity scum backlash,
    macho protection immunity, Personal self-only targeting, and loud/announcing notifications;
-   multi-shot
-   counts and broader cycle cooldowns remain pending outside the common
-   mafiascum slice]
+   broader cycle cooldowns are still pending outside the common mafiascum slice]
 
 Exit proof: mafiascum pack has goldens for each common interaction family and deterministic
 round-trip state folds.
@@ -2696,9 +2698,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    including zero unsupported primitive, modifier, result-event, and culture-note rows; the
    completion audit treats those explicit out-of-scope rows as visible but non-actionable and
    blocks completion on the five partial build-order phases instead. The no-Postgres domain CI artifact
-   reports `ok: true`, four passed lanes, zero failed lanes, 12 golden-owning pack directories, 281
-   checked golden fixtures, and Rust validator totals of 430 golden-harness tests, 63
-   result-contract tests, and 138 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
+   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 301
+   checked golden fixtures, and Rust validator totals of 453 golden-harness tests, 66
+   result-contract tests, and 146 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
@@ -2715,8 +2717,8 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 3 common mafiascum night parity by finishing the remaining modifier breadth in row
-6: multi-shot count semantics and broader cycle-cooldown proof beyond the already-covered strict
-one-shot, odd/even, target-repeat non-consecutive, Indecisive, Roaming, Uncooperative, Lazy, Weak,
-Macho, Personal, and loud/announcing surfaces. Start with a pack-owned multi-shot modifier model
-and a focused mafiascum golden that proves a role with more than one shot can spend each charge,
-persists spent count through `ResolvePhase`, and rejects only after the declared count is exhausted.
+6: broader cycle-cooldown proof beyond the already-covered one-shot/multi-shot x-shot, odd/even,
+target-repeat non-consecutive, Indecisive, Roaming, Uncooperative, Lazy, Weak, Macho, Personal,
+and loud/announcing surfaces. Start with a mafiascum role whose cooldown spans more than one
+matching phase-kind cycle, then prove the command path rejects the intervening matching night and
+accepts the first legal night after the declared cooldown expires.

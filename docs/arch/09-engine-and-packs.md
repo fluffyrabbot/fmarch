@@ -573,12 +573,14 @@ role when that source dies.
 > is the canonical im-human night-specific/day-specific policy: command validation rejects
 > wrong-window submissions before append, and the pure resolver emits
 > `ActionInterfered.reason = "night_specific" | "day_specific"` if a valid template is injected
-> into the wrong phase kind. `constraints.x_shots` is
-> currently strict one-shot support (`Some(1)` only): the first legal attempt emits
+> into the wrong phase kind. `constraints.x_shots` is a positive pack-declared action-use
+> limit: each legal attempt emits
 > `ActionUseCounted { counter_id: "x_shot:<template_id>", actor, template_id, consumed_action,
 > limit, used, remaining, phase_* }`, folds into `StateSnapshot.use_counters`, and persists in
 > the rebuildable `action_counter` projection; later attempts from the same slot are suppressed
-> as `"x_shot_exhausted"`. `constraints.cooldown_cycles` uses the same counter surface with
+> as `"x_shot_exhausted"` only once the declared count is exhausted. Mafiascum
+> `two_shot_vigilante` proves multi-shot counting through pure goldens plus a
+> `ResolvePhase`/projection-rebuild vertical. `constraints.cooldown_cycles` uses the same counter surface with
 > `counter_id = "cooldown:<template_id>"`, `cadence_policy = "cooldown"`, and
 > `phase_scope = "phase_kind"`; command validation and the resolver suppress same-phase-kind
 > attempts until the declared number of numbered cycles has elapsed. `constraints.active_from`

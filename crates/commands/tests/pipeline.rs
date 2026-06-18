@@ -23907,6 +23907,245 @@ async fn host_resolve_phase_carries_mafiascum_joat_block_counter(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_two_shot_counter(pool: PgPool) {
+    let host = "host_mafiascum_two_shot";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "mafiascum_two_shot_user_1", "two_shot_vigilante"),
+        ("slot_2", "mafiascum_two_shot_user_2", "mafia_goon"),
+        ("slot_3", "mafiascum_two_shot_user_3", "vanilla_townie"),
+        ("slot_4", "mafiascum_two_shot_user_4", "vanilla_townie"),
+        ("slot_5", "mafiascum_two_shot_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mafiascum_two_shot_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "two_shot_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "night_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("first two-shot use submits");
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 102_001,
+        },
+    )
+    .await
+    .expect("host resolves first two-shot use");
+    let n01_payload = resolution_payload(&pool, game, "N01", 102_001).await;
+    let n01 = domain::validate_resolution_json(&n01_payload, domain::RESULT_VERSION)
+        .expect("valid N01 two-shot result");
+    assert!(n01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ActionUseCounted {
+            actor,
+            counter_id,
+            template_id,
+            consumed_action,
+            limit,
+            used,
+            remaining,
+            ..
+        } if actor == "slot_1"
+            && counter_id == "x_shot:night_kill"
+            && template_id == "night_kill"
+            && consumed_action == "two_shot_n01"
+            && *limit == 2
+            && *used == 1
+            && *remaining == 1
+    )));
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "N02".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("mafiascum_two_shot_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "two_shot_n02".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "night_kill".into(),
+            targets: vec!["slot_4".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("second two-shot use submits while one charge remains");
+    handle(
+        &pool,
+        &h,
+        Command::ResolvePhase {
+            game,
+            seed: 102_002,
+        },
+    )
+    .await
+    .expect("host resolves second two-shot use");
+    let n02_payload = resolution_payload(&pool, game, "N02", 102_002).await;
+    let n02 = domain::validate_resolution_json(&n02_payload, domain::RESULT_VERSION)
+        .expect("valid N02 two-shot result");
+    assert!(n02.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ActionUseCounted {
+            actor,
+            counter_id,
+            template_id,
+            consumed_action,
+            limit,
+            used,
+            remaining,
+            ..
+        } if actor == "slot_1"
+            && counter_id == "x_shot:night_kill"
+            && template_id == "night_kill"
+            && consumed_action == "two_shot_n02"
+            && *limit == 2
+            && *used == 2
+            && *remaining == 0
+    )));
+
+    let counters = action_counters(&pool, game).await.unwrap();
+    assert!(
+        counters.iter().any(|counter| {
+            counter.slot_id == "slot_1"
+                && counter.counter_id == "x_shot:night_kill"
+                && counter.template_id == "night_kill"
+                && counter.consumed_action == "two_shot_n02"
+                && counter.cadence_policy == "x_shot"
+                && counter.phase_scope == "game"
+                && counter.limit == 2
+                && counter.used == 2
+                && counter.remaining == 0
+                && counter.phase_id == "N02"
+                && counter.phase_kind == "Night"
+                && counter.phase_number == 2
+        }),
+        "two-shot counter should preserve cumulative second use: {counters:?}"
+    );
+    let counters_before = serde_json::to_string(&counters).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("two-shot counter audit_rebuild");
+    assert!(
+        projection_audit.ok,
+        "two-shot counter projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        counters_before,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter rebuild must preserve cumulative two-shot use"
+    );
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "N03".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let err = handle(
+        &pool,
+        &user("mafiascum_two_shot_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "two_shot_n03".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "night_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect_err("third two-shot use should reject before append");
+    assert_eq!(err, Reject::InvalidTarget);
+    assert!(
+        !eventstore::load_stream(&pool, game)
+            .await
+            .unwrap()
+            .iter()
+            .any(|event| event.kind == "ActionSubmitted"
+                && event.payload["action_id"].as_str() == Some("two_shot_n03")),
+        "exhausted third use must not append an ActionSubmitted event"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_mafiascum_roleblocker_aliases(pool: PgPool) {
     let host = "host_mafiascum_roleblocker_aliases";
     let game = Uuid::new_v4();

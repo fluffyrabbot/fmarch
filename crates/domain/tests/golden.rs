@@ -3564,7 +3564,8 @@ fn resolver_rejects_missing_standard_nar_target_state_gate_policy_before_night_r
     );
     assert!(
         message.contains("target-state gate `commuted` must classify blocked abilities")
-            || message.contains("target-state gate `untargetable` must classify blocked abilities"),
+            || message.contains("target-state gate `untargetable` must classify blocked abilities")
+            || message.contains("target-state gate `ascetic` must classify blocked abilities"),
         "unexpected panic message: {message}"
     );
 }
@@ -4088,6 +4089,28 @@ fn golden_one_shot_vigilante_exhausted() {
         &got,
         &expected_events(&golden),
         "one_shot_vigilante_exhausted",
+    );
+}
+
+#[test]
+fn golden_two_shot_vigilante_second_charge_marks_exhausted() {
+    let golden = load_golden("two_shot_vigilante_second_charge_marks_exhausted.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "two_shot_vigilante_second_charge_marks_exhausted",
+    );
+}
+
+#[test]
+fn golden_two_shot_vigilante_exhausted() {
+    let golden = load_golden("two_shot_vigilante_exhausted.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "two_shot_vigilante_exhausted",
     );
 }
 
@@ -5307,7 +5330,7 @@ fn trace_records_saulus_alignment_flip() {
         .iter()
         .find(|decision| decision.outcome == "saulus_alignment_flipped")
         .expect("Saulus lynch should emit an alignment-flip trace decision");
-    assert_eq!(decision.stage, "death:trigger");
+    assert_eq!(decision.stage, "day:lynch_trigger");
     assert_eq!(decision.source, "slot:slot_1");
     assert_eq!(decision.detail["target"], "slot_1");
     assert_eq!(decision.detail["role"], "saulus");
@@ -5353,7 +5376,7 @@ fn trace_records_beloved_princess_host_prompt() {
         .iter()
         .find(|decision| decision.outcome == "host_prompt_issued")
         .expect("Beloved Princess lynch should emit a host-prompt trace decision");
-    assert_eq!(decision.stage, "day:lynch_trigger");
+    assert_eq!(decision.stage, "death:trigger");
     assert_eq!(decision.source, "slot:slot_1");
     assert_eq!(decision.detail["policy"], "beloved_princess");
     assert_eq!(decision.detail["prompt_id"], "D01:skip_next_day:slot_1");
@@ -8244,6 +8267,7 @@ fn trace_records_guard_blocking_witch_poison_policy() {
             "template_id": "night_guard",
             "intercepts": false,
             "intercept_cause": null,
+            "guard_retaliation_cause": null,
             "cpr_harm_cause": null
         }])
     );
@@ -8311,6 +8335,7 @@ fn trace_records_guard_witch_double_save_policy() {
                 "template_id": "night_guard",
                 "intercepts": false,
                 "intercept_cause": null,
+                "guard_retaliation_cause": null,
                 "cpr_harm_cause": null
             },
             {
@@ -8319,6 +8344,7 @@ fn trace_records_guard_witch_double_save_policy() {
                 "template_id": "heal_potion",
                 "intercepts": false,
                 "intercept_cause": null,
+                "guard_retaliation_cause": null,
                 "cpr_harm_cause": null
             }
         ])

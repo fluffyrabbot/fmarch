@@ -1440,12 +1440,7 @@ fn action_field_combinations_are_strict() {
 
     let mut value = valid_pack_value();
     value["roles"]["cop"]["actions"][0]["constraints"]["x_shots"] = json!(2);
-    let err = validate_pack(&pack_from_value(value)).unwrap_err();
-    assert_issue(
-        &err,
-        "roles.cop.actions[0].constraints.x_shots",
-        "only one-shot x_shots=1 is supported",
-    );
+    validate_pack(&pack_from_value(value)).unwrap();
 
     let mut value = valid_pack_value();
     value["roles"]["cop"]["actions"][0]["constraints"]["target_state"] = json!("Dead");
@@ -1878,7 +1873,7 @@ fn role_set_investigation_modes_are_strict() {
         "killer_roles": ["arsonist"],
         "specialist_roles": []
     });
-    value["visibility_families"] = json!(["EffectAudiences", "PrivateChannels"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
     value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     validate_pack(&pack_from_value(value)).unwrap();
 
@@ -4444,11 +4439,6 @@ fn standard_nar_target_state_gate_policy_classifies_supported_gates() {
         "standard_nar.target_state_gate_policy.commuted.blocks",
         "duplicate blocked ability `Kill`",
     );
-    assert_issue(
-        &err,
-        "standard_nar.target_state_gate_policy.commuted.blocks",
-        "only support Kill or Investigate, got `Protect`",
-    );
 }
 
 #[test]
@@ -4863,6 +4853,7 @@ fn standard_nar_kill_actions_must_be_explicit_conflict_policy() {
         "martyr_protect",
         "cpr_protect",
         "jail",
+        "huntsman_guard",
     ] {
         value["standard_nar"]["protection_cause_policy"][source]["blocks"]
             .as_array_mut()
