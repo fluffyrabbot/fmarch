@@ -580,6 +580,216 @@ async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "encryptor_user_1", "encryptor"),
+        ("slot_2", "encryptor_user_2", "mafia_goon"),
+        ("slot_3", "encryptor_user_3", "vanilla_townie"),
+        ("slot_4", "encryptor_user_4", "vanilla_townie"),
+        ("slot_5", "encryptor_user_5", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .expect("start declares Encryptor-gated mafia day chat");
+
+    let declaration = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelDeclared' \
+         AND payload->>'channel_id' = 'private:mafia_day_chat'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(declaration["kind"], "FactionDayChat");
+    assert_eq!(
+        declaration["member_alignments"],
+        serde_json::json!(["mafia"])
+    );
+    assert_eq!(
+        declaration["enabled_by_roles"],
+        serde_json::json!(["encryptor"])
+    );
+    assert_eq!(declaration["active_while_source_alive"], true);
+    assert_eq!(declaration["source_slots"], serde_json::json!(["slot_1"]));
+    assert_eq!(declaration["members"][0]["slot_id"], "slot_1");
+    assert_eq!(declaration["members"][0]["role_key"], "encryptor");
+    assert_eq!(declaration["members"][1]["slot_id"], "slot_2");
+    assert_eq!(declaration["members"][1]["role_key"], "mafia_goon");
+
+    let members = projections::private_channel_members(&pool, game)
+        .await
+        .expect("private channel projection");
+    let faction_members = members
+        .iter()
+        .filter(|member| member.channel_id == "private:mafia_day_chat")
+        .map(|member| {
+            (
+                member.kind.as_str(),
+                member.slot_id.as_str(),
+                member.role_key.as_str(),
+                member.reveals_alignment.as_str(),
+                member.source.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        faction_members,
+        vec![
+            (
+                "FactionDayChat",
+                "slot_1",
+                "encryptor",
+                "None",
+                "pack.private_channels.mafia_day_chat"
+            ),
+            (
+                "FactionDayChat",
+                "slot_2",
+                "mafia_goon",
+                "None",
+                "pack.private_channels.mafia_day_chat"
+            ),
+        ]
+    );
+
+    for (voter_user, voter_slot) in [
+        ("encryptor_user_3", "slot_3"),
+        ("encryptor_user_4", "slot_4"),
+        ("encryptor_user_5", "slot_5"),
+    ] {
+        handle(
+            &pool,
+            &user(voter_user),
+            Command::SubmitVote {
+                game,
+                actor_slot: voter_slot.into(),
+                target: VoteTarget::Slot("slot_1".into()),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("{voter_slot} vote against Encryptor failed: {err:?}"));
+    }
+
+    let ack = handle(&pool, &h, Command::ResolvePhase { game, seed: 771101 })
+        .await
+        .expect("host resolves Encryptor lynch and revokes day chat");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        4,
+        "Encryptor lynch appends ResolutionApplied, ResolutionTrace, PrivateChannelRevoked, and ThreadLocked atomically"
+    );
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Encryptor lynch result");
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                if slot_id == "slot_1" && cause == "day_vote"
+        )),
+        "expected Encryptor day-vote death, got {:#?}",
+        applied.events
+    );
+
+    let revocation = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelRevoked' \
+         AND payload->>'channel_id' = 'private:mafia_day_chat'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(revocation["kind"], "FactionDayChat");
+    assert_eq!(revocation["reason"], "source_role_not_alive");
+    assert_eq!(revocation["source"], "pack.private_channels.mafia_day_chat");
+
+    let members_after = projections::private_channel_members(&pool, game)
+        .await
+        .expect("private channel projection after revocation");
+    assert!(
+        members_after
+            .iter()
+            .all(|member| member.channel_id != "private:mafia_day_chat"),
+        "Encryptor day chat should be revoked after the last Encryptor dies"
+    );
+
+    let members_after_json = serde_json::to_string(&members_after).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        members_after_json,
+        serde_json::to_string(
+            &projections::private_channel_members(&pool, game)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "Encryptor private-channel revocation rebuild must be deterministic"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

@@ -2617,6 +2617,34 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "the setup pair as folded PlayersLinked state and uses lover_policy "
                 "for the linked-death cascade."
             )
+        elif scoped_name == "mafiascum:encryptor":
+            canonical = "private_channels:FactionDayChat"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and '"kind": "FactionDayChat"' in fmarch["pack_text"]
+                and '"member_alignments":' in fmarch["pack_text"]
+                and '"mafia"' in fmarch["pack_text"]
+                and '"enabled_by_roles":' in fmarch["pack_text"]
+                and '"encryptor"' in fmarch["pack_text"]
+                and '"active_while_source_alive": true' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "PrivateChannelDeclared" in commands
+                and "PrivateChannelRevoked" in commands
+                and "PrivateChannelRevoked" in projections
+                and "private_channel_member" in projections
+            )
+            golden = implemented
+            integrated = (
+                implemented
+                and "encryptor_declares_and_revokes_mafia_day_chat" in command_tests
+            )
+            notes = (
+                "Passive faction_day_chat role from the Mafiascum catalog; "
+                "fmarch models it as source-alive-gated FactionDayChat private-channel "
+                "metadata with command/projection declaration and revocation."
+            )
         elif scoped_name == "mafiascum:bomb":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
                 "mafiascum",

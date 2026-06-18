@@ -1210,7 +1210,7 @@ async fn resolve_phase(
         state,
         submissions,
         day_phase_inputs,
-        pack,
+        pack: pack.clone(),
         seed,
         logical_time: next_seq as u64,
     });
@@ -1244,7 +1244,10 @@ async fn resolve_phase(
         ActorId::System,
         next_seq,
     );
-    persist(pool, game, &[applied_ev, trace_ev, lock_ev], receipt).await
+    let mut events = vec![applied_ev, trace_ev];
+    events.extend(private_channel_revocations(&pack, &output.post_state));
+    events.push(lock_ev);
+    persist(pool, game, &events, receipt).await
 }
 
 /// Re-run ordinary `ResolvePhase` envelopes from the stored event stream and
@@ -2573,16 +2576,46 @@ fn private_channel_declarations(
     let assignments = role_assignments_from_stream(stream)?;
     let mut events = Vec::new();
     for group in &pack.private_channels.groups {
-        let mut members = assignments
-            .iter()
-            .filter(|(_, role)| group.roles.iter().any(|allowed| allowed == *role))
-            .map(|(slot, role)| {
-                serde_json::json!({
-                    "slot_id": slot,
-                    "role_key": role,
-                })
-            })
-            .collect::<Vec<_>>();
+        let mut source_slots = Vec::new();
+        let mut members = Vec::new();
+        for (slot, role) in &assignments {
+            match group.kind {
+                domain::pack::PrivateChannelKind::Mason
+                | domain::pack::PrivateChannelKind::Neighbor => {
+                    if group.roles.iter().any(|allowed| allowed == role) {
+                        members.push(serde_json::json!({
+                            "slot_id": slot,
+                            "role_key": role,
+                        }));
+                    }
+                }
+                domain::pack::PrivateChannelKind::FactionDayChat => {
+                    if group.enabled_by_roles.iter().any(|allowed| allowed == role) {
+                        source_slots.push(slot.clone());
+                    }
+                    if let Some(alignment) = pack
+                        .roles
+                        .get(role)
+                        .and_then(|role| role.alignment.as_ref())
+                    {
+                        if group
+                            .member_alignments
+                            .iter()
+                            .any(|allowed| allowed == alignment)
+                        {
+                            members.push(serde_json::json!({
+                                "slot_id": slot,
+                                "role_key": role,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+        if group.kind == domain::pack::PrivateChannelKind::FactionDayChat && source_slots.is_empty()
+        {
+            continue;
+        }
         if members.len() < 2 {
             continue;
         }
@@ -2592,6 +2625,7 @@ fn private_channel_declarations(
                 .unwrap_or_default()
                 .cmp(b["slot_id"].as_str().unwrap_or_default())
         });
+        source_slots.sort();
         events.push(EventInput::new(
             "PrivateChannelDeclared",
             1,
@@ -2600,6 +2634,10 @@ fn private_channel_declarations(
                 "group_id": group.id,
                 "kind": &group.kind,
                 "roles": &group.roles,
+                "member_alignments": &group.member_alignments,
+                "enabled_by_roles": &group.enabled_by_roles,
+                "active_while_source_alive": group.active_while_source_alive,
+                "source_slots": source_slots,
                 "members": members,
                 "reveals_alignment": &group.reveals_alignment,
                 "source": format!("pack.private_channels.{}", group.id),
@@ -2609,6 +2647,55 @@ fn private_channel_declarations(
         ));
     }
     Ok(events)
+}
+
+fn private_channel_revocations(
+    pack: &domain::Pack,
+    state: &domain::StateSnapshot,
+) -> Vec<EventInput> {
+    if !pack.private_channels.enabled {
+        return Vec::new();
+    }
+    let mut events = Vec::new();
+    for group in &pack.private_channels.groups {
+        if group.kind != domain::pack::PrivateChannelKind::FactionDayChat
+            || !group.active_while_source_alive
+        {
+            continue;
+        }
+        let channel_id = format!("private:{}", group.id);
+        if !state
+            .private_channels
+            .iter()
+            .any(|record| record.channel_id == channel_id)
+        {
+            continue;
+        }
+        let source_alive = state.slots.iter().any(|slot| {
+            slot.is_alive()
+                && group
+                    .enabled_by_roles
+                    .iter()
+                    .any(|role| role == &slot.role_key)
+        });
+        if source_alive {
+            continue;
+        }
+        events.push(EventInput::new(
+            "PrivateChannelRevoked",
+            1,
+            serde_json::json!({
+                "channel_id": channel_id,
+                "group_id": group.id,
+                "kind": &group.kind,
+                "reason": "source_role_not_alive",
+                "source": format!("pack.private_channels.{}", group.id),
+            }),
+            ActorId::System,
+            0,
+        ));
+    }
+    events
 }
 
 fn role_assignments_from_stream(
@@ -2997,6 +3084,12 @@ fn current_snapshot(
                         source: source.clone(),
                     });
                 }
+            }
+            "PrivateChannelRevoked" => {
+                let channel_id = str_payload(ev, "channel_id")?;
+                private_channels.retain(|record: &domain::PrivateChannelRecord| {
+                    record.channel_id != channel_id
+                });
             }
             "EffectsMarked" => {
                 let effect = str_payload(ev, "effect")?;

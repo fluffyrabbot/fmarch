@@ -876,6 +876,12 @@ pub struct PrivateChannelGroup {
     pub kind: PrivateChannelKind,
     #[serde(default)]
     pub roles: Vec<RoleKey>,
+    #[serde(default)]
+    pub member_alignments: Vec<AlignmentKey>,
+    #[serde(default)]
+    pub enabled_by_roles: Vec<RoleKey>,
+    #[serde(default)]
+    pub active_while_source_alive: bool,
     pub reveals_alignment: PrivateChannelAlignmentReveal,
 }
 
@@ -907,6 +913,7 @@ fn default_treestump_status_tag() -> String {
 pub enum PrivateChannelKind {
     Mason,
     Neighbor,
+    FactionDayChat,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -6843,7 +6850,8 @@ fn validate_private_channel_policy(
                 format!("duplicate private channel group id `{}`", group.id),
             );
         }
-        if group.roles.is_empty() {
+        let is_faction_day_chat = group.kind == PrivateChannelKind::FactionDayChat;
+        if group.roles.is_empty() && !is_faction_day_chat {
             issue(
                 issues,
                 group_path.clone(),
@@ -6872,9 +6880,48 @@ fn validate_private_channel_policy(
                 );
             }
         }
+        let mut enabled_by_roles = BTreeSet::new();
+        for role in &group.enabled_by_roles {
+            if role.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    "private channel enabling role must not be empty",
+                );
+            } else if !role_keys.contains(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    format!("unknown private channel enabling role `{role}`"),
+                );
+            } else if !enabled_by_roles.insert(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.enabled_by_roles"),
+                    format!("duplicate private channel enabling role `{role}`"),
+                );
+            }
+        }
+        let mut member_alignments = BTreeSet::new();
+        for alignment in &group.member_alignments {
+            if alignment.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.member_alignments"),
+                    "private channel member alignment must not be empty",
+                );
+            } else if !member_alignments.insert(alignment.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.member_alignments"),
+                    format!("duplicate private channel member alignment `{alignment}`"),
+                );
+            }
+        }
         match (group.kind, group.reveals_alignment) {
             (PrivateChannelKind::Mason, PrivateChannelAlignmentReveal::Town)
-            | (PrivateChannelKind::Neighbor, PrivateChannelAlignmentReveal::None) => {}
+            | (PrivateChannelKind::Neighbor, PrivateChannelAlignmentReveal::None)
+            | (PrivateChannelKind::FactionDayChat, PrivateChannelAlignmentReveal::None) => {}
             (PrivateChannelKind::Mason, _) => issue(
                 issues,
                 format!("{group_path}.reveals_alignment"),
@@ -6885,6 +6932,66 @@ fn validate_private_channel_policy(
                 format!("{group_path}.reveals_alignment"),
                 "neighbor private channels must not reveal alignment",
             ),
+            (PrivateChannelKind::FactionDayChat, _) => issue(
+                issues,
+                format!("{group_path}.reveals_alignment"),
+                "faction day-chat private channels must not reveal alignment",
+            ),
+        }
+        match group.kind {
+            PrivateChannelKind::Mason | PrivateChannelKind::Neighbor => {
+                if !group.member_alignments.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.member_alignments"),
+                        "role-based private channels must not declare member_alignments",
+                    );
+                }
+                if !group.enabled_by_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.enabled_by_roles"),
+                        "role-based private channels must not declare enabled_by_roles",
+                    );
+                }
+                if group.active_while_source_alive {
+                    issue(
+                        issues,
+                        format!("{group_path}.active_while_source_alive"),
+                        "role-based private channels must not be source-alive gated",
+                    );
+                }
+            }
+            PrivateChannelKind::FactionDayChat => {
+                if !group.roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.roles"),
+                        "faction day-chat private channels use member_alignments, not roles",
+                    );
+                }
+                if group.member_alignments.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.member_alignments"),
+                        "faction day-chat private channels must declare member_alignments",
+                    );
+                }
+                if group.enabled_by_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.enabled_by_roles"),
+                        "faction day-chat private channels must declare enabled_by_roles",
+                    );
+                }
+                if !group.active_while_source_alive {
+                    issue(
+                        issues,
+                        format!("{group_path}.active_while_source_alive"),
+                        "faction day-chat private channels must be source-alive gated",
+                    );
+                }
+            }
         }
     }
 }

@@ -634,6 +634,11 @@ async fn fold_event(
                 .await?;
             }
         }
+        "PrivateChannelRevoked" => {
+            let p = &ev.payload;
+            let channel_id = str_field(p, "channel_id", &ev.kind)?;
+            delete_private_channel_members(tx, game_id, &channel_id).await?;
+        }
 
         // ── engine resolution envelope: unwrap and fold inner events ──
         "ResolutionApplied" => {
@@ -2840,6 +2845,19 @@ async fn insert_private_channel_member(
     .bind(source)
     .execute(&mut **tx)
     .await?;
+    Ok(())
+}
+
+async fn delete_private_channel_members(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    channel_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query("DELETE FROM private_channel_member WHERE game_id = $1 AND channel_id = $2")
+        .bind(game_id)
+        .bind(channel_id)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 

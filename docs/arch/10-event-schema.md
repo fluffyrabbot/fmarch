@@ -82,6 +82,8 @@ enum EventKind {
     ChannelMemberAdded,     // { channel_id, slot_id }
     ChannelMemberRemoved,
     ChannelVisibilityChanged,
+    PrivateChannelDeclared, // { channel_id, group_id, kind, members, reveals_alignment, source }
+    PrivateChannelRevoked,  // { channel_id, group_id, kind, reason, source }
 
     // ── Submissions (platform → engine seam, doc 09) ──
     VoteSubmitted,          // { actor: slot, target: slot|no_lynch, phase_id }  (overwrites actor's current ballot)

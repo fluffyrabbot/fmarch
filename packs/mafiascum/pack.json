@@ -1913,6 +1913,11 @@
         }
       ]
     },
+    "encryptor": {
+      "description": "Encryptor. Mafia-aligned passive role: while alive, enables faction day chat for mafia members.",
+      "alignment": "mafia",
+      "actions": []
+    },
     "lost_mafia_goon": {
       "description": "Lost Mafia Goon. Counts as mafia but may submit the factional kill only when no other mafia are alive.",
       "alignment": "mafia",
@@ -3861,6 +3866,18 @@
         "roles": [
           "neighbor"
         ],
+        "reveals_alignment": "None"
+      },
+      {
+        "id": "mafia_day_chat",
+        "kind": "FactionDayChat",
+        "member_alignments": [
+          "mafia"
+        ],
+        "enabled_by_roles": [
+          "encryptor"
+        ],
+        "active_while_source_alive": true,
         "reveals_alignment": "None"
       }
     ]

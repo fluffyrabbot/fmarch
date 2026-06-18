@@ -489,7 +489,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:deprogrammer` | `deprogrammer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:doctor` | `doctor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:doublevoter` | `doublevoter` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:encryptor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:encryptor` | `private_channels:FactionDayChat` | 1 | no | yes | yes | yes | yes | Passive faction_day_chat role from the Mafiascum catalog; fmarch models it as source-alive-gated FactionDayChat private-channel metadata with command/projection declaration and revocation. |
 | role_id | `mafiascum:executioner` | `executioner` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:faith_healer` | `faith_healer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:follower` |  | 1 | yes | no | no | no | no |  |

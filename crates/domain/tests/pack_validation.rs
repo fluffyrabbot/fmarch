@@ -5306,6 +5306,11 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
         "actions": [],
         "effects": ["mason"]
     });
+    value["roles"]["encryptor"] = json!({
+        "description": "Encryptor.",
+        "alignment": "mafia",
+        "actions": []
+    });
     value["private_channels"] = json!({
         "enabled": true,
         "groups": [
@@ -5326,6 +5331,15 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
                 "kind": "Neighbor",
                 "roles": ["townie"],
                 "reveals_alignment": "None"
+            },
+            {
+                "id": "mafia_day_chat",
+                "kind": "FactionDayChat",
+                "roles": ["encryptor"],
+                "member_alignments": [],
+                "enabled_by_roles": ["encryptor", "missing_encryptor", "encryptor"],
+                "active_while_source_alive": false,
+                "reveals_alignment": "Town"
             }
         ]
     });
@@ -5361,6 +5375,36 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
         "private_channels.neighbor.reveals_alignment",
         "neighbor private channels must not reveal alignment",
     );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.enabled_by_roles",
+        "unknown private channel enabling role `missing_encryptor`",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.enabled_by_roles",
+        "duplicate private channel enabling role `encryptor`",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.reveals_alignment",
+        "faction day-chat private channels must not reveal alignment",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.roles",
+        "faction day-chat private channels use member_alignments, not roles",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.member_alignments",
+        "faction day-chat private channels must declare member_alignments",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.active_while_source_alive",
+        "faction day-chat private channels must be source-alive gated",
+    );
 
     value["ir_version"] = json!(29);
     value["roles"]["neighbor"] = json!({
@@ -5381,6 +5425,14 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
                 "id": "neighbor",
                 "kind": "Neighbor",
                 "roles": ["neighbor"],
+                "reveals_alignment": "None"
+            },
+            {
+                "id": "mafia_day_chat",
+                "kind": "FactionDayChat",
+                "member_alignments": ["mafia"],
+                "enabled_by_roles": ["encryptor"],
+                "active_while_source_alive": true,
                 "reveals_alignment": "None"
             }
         ]

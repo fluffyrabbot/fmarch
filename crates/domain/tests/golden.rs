@@ -339,6 +339,13 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("disabled_endgame_cop"));
     assert!(pack.roles.contains_key("lost_mafia_goon"));
     assert!(pack.roles.contains_key("recluse_mafia_goon"));
+    let encryptor = pack
+        .roles
+        .get("encryptor")
+        .expect("Mafiascum Encryptor role");
+    assert_eq!(encryptor.alignment.as_deref(), Some("mafia"));
+    assert!(encryptor.actions.is_empty());
+    assert!(encryptor.effects.is_empty());
     assert!(pack.roles.contains_key("compulsive_cop"));
     assert!(pack.roles.contains_key("simultaneous_vigilante"));
     assert!(pack.roles.contains_key("poisoner"));
@@ -435,6 +442,15 @@ fn pack_deserializes() {
         target_state_gate_tags,
         vec!["ascetic", "commuted", "untargetable"]
     );
+    assert!(pack.private_channels.groups.iter().any(|group| {
+        group.id == "mafia_day_chat"
+            && group.kind == domain::pack::PrivateChannelKind::FactionDayChat
+            && group.roles.is_empty()
+            && group.member_alignments == vec!["mafia".to_string()]
+            && group.enabled_by_roles == vec!["encryptor".to_string()]
+            && group.active_while_source_alive
+            && group.reveals_alignment == domain::pack::PrivateChannelAlignmentReveal::None
+    }));
     assert_eq!(
         pack.standard_nar
             .generated_kill_cause_policy
