@@ -62,12 +62,16 @@
         "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "day_vigilante_kill",
-            "slot_id": "slot_4"
+            "slot_id": "slot_4",
+            "template_id": "mafia_universe_day_action_death_v1"
           },
           {
+            "audience": "public",
             "cause": "day_vigilante_kill",
-            "slot_id": "slot_3"
+            "slot_id": "slot_3",
+            "template_id": "mafia_universe_day_action_death_v1"
           }
         ],
         "phase_id": "D01",

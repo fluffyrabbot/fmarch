@@ -2324,6 +2324,8 @@ fn build_pk_prompt_resolution(
                     deaths: vec![domain::Death {
                         slot_id: selected.clone(),
                         cause: "pk".to_string(),
+                        template_id: None,
+                        audience: None,
                     }],
                 }),
             },

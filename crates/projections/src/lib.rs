@@ -2984,7 +2984,22 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                     let deaths = announcement
                         .deaths
                         .iter()
-                        .map(|death| format!("{} ({})", death.slot_id, death.cause))
+                        .map(|death| {
+                            let death_template = death
+                                .template_id
+                                .as_deref()
+                                .map(|template| format!("; template: {template}"))
+                                .unwrap_or_default();
+                            let death_audience = death
+                                .audience
+                                .as_deref()
+                                .map(|audience| format!("; audience: {audience}"))
+                                .unwrap_or_default();
+                            format!(
+                                "{} ({}{}{})",
+                                death.slot_id, death.cause, death_template, death_audience
+                            )
+                        })
                         .collect::<Vec<_>>()
                         .join(", ");
                     lines.push(format!(

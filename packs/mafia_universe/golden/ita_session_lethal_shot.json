@@ -171,8 +171,10 @@
         "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "ita_shot",
-            "slot_id": "slot_4"
+            "slot_id": "slot_4",
+            "template_id": "mafia_universe_ita_death_v1"
           }
         ],
         "phase_id": "D01",

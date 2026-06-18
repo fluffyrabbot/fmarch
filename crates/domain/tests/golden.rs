@@ -49,11 +49,25 @@ fn load_pack_with_day_death_announcements(name: &str) -> Pack {
     let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
     let mut pack_json: Value =
         serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {name}/pack.json: {e}"));
-    pack_json["ir_version"] = json!(66);
+    pack_json["ir_version"] = json!(67);
     pack_json["day_notes"]["day_deaths"] = json!({
         "enabled": true,
         "template_id": "test_day_death_v1",
-        "audience": "public"
+        "audience": "public",
+        "cause_templates": {
+            "knight_duel": {
+                "template_id": "test_knight_duel_death_v1",
+                "audience": "public"
+            },
+            "self_destruct": {
+                "template_id": "test_white_wolf_self_destruct_v1",
+                "audience": "public"
+            },
+            "trigger:wolf_beauty_drag": {
+                "template_id": "test_wolf_beauty_drag_v1",
+                "audience": "public"
+            }
+        }
     });
     let raw = serde_json::to_string(&pack_json).expect("encode day-death announcement pack");
     domain::load_pack_from_json(&raw)
@@ -271,6 +285,18 @@ fn assert_phase_announcement_metadata(events: &[Value], template_id: &str, audie
     let phase_announcement = &events[first_event_index(events, "PhaseAnnouncement")]["payload"];
     assert_eq!(phase_announcement["template_id"], template_id);
     assert_eq!(phase_announcement["audience"], audience);
+}
+
+fn assert_death_metadata(events: &[Value], cause: &str, template_id: &str, audience: &str) {
+    let phase_announcement = &events[first_event_index(events, "PhaseAnnouncement")]["payload"];
+    let death = phase_announcement["deaths"]
+        .as_array()
+        .expect("PhaseAnnouncement deaths array")
+        .iter()
+        .find(|death| death["cause"] == cause)
+        .unwrap_or_else(|| panic!("missing death cause {cause}; event: {phase_announcement:#?}"));
+    assert_eq!(death["template_id"], template_id);
+    assert_eq!(death["audience"], audience);
 }
 
 #[test]
@@ -8917,6 +8943,12 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
         ],
     );
     assert_phase_announcement_metadata(&day_notes, "mafia_universe_day_death_v1", "public");
+    assert_death_metadata(
+        &day_notes,
+        "lynch",
+        "mafia_universe_lynch_death_v1",
+        "public",
+    );
 
     let reveal = {
         let golden = load_golden_in("mafia_universe", "reveal_town_day.json");
@@ -8968,6 +9000,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
         ],
     );
     assert_phase_announcement_metadata(&ita, "mafia_universe_day_death_v1", "public");
+    assert_death_metadata(&ita, "ita_shot", "mafia_universe_ita_death_v1", "public");
 
     let knight = {
         let golden = load_golden_in("chinese_structured", "knight_duel_success.json");
@@ -8998,6 +9031,12 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
         ],
     );
     assert_phase_announcement_metadata(&knight, "test_day_death_v1", "public");
+    assert_death_metadata(
+        &knight,
+        "knight_duel",
+        "test_knight_duel_death_v1",
+        "public",
+    );
 
     let self_destruct = {
         let golden = load_golden_in("chinese_structured", "wolf_self_destruct_trade.json");
@@ -9035,6 +9074,12 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
         ],
     );
     assert_phase_announcement_metadata(&self_destruct, "test_day_death_v1", "public");
+    assert_death_metadata(
+        &self_destruct,
+        "self_destruct",
+        "test_white_wolf_self_destruct_v1",
+        "public",
+    );
 
     let day_vigilante = {
         let golden = load_golden_in(
@@ -9064,10 +9109,19 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
         ],
     );
     assert_phase_announcement_metadata(&day_vigilante, "mafia_universe_day_death_v1", "public");
+    assert_death_metadata(
+        &day_vigilante,
+        "day_vigilante_kill",
+        "mafia_universe_day_action_death_v1",
+        "public",
+    );
 
     let wolf_beauty = {
         let golden = load_golden_in("chinese_structured", "wolf_beauty_drag_lynch.json");
-        run(&golden["input"], load_pack_named("chinese_structured"))
+        run(
+            &golden["input"],
+            load_pack_with_day_death_announcements("chinese_structured"),
+        )
     };
     assert_event_order(
         "wolf beauty day-death cascade",
@@ -9098,6 +9152,12 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
                 first_event_index(&wolf_beauty, "PhaseAnnouncement"),
             ),
         ],
+    );
+    assert_death_metadata(
+        &wolf_beauty,
+        "trigger:wolf_beauty_drag",
+        "test_wolf_beauty_drag_v1",
+        "public",
     );
 }
 

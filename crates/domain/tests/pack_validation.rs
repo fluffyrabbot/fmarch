@@ -1347,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 67");
+    assert_issue(&err, "ir_version", "unsupported IR version 68");
 }
 
 #[test]
@@ -6420,7 +6420,7 @@ fn day_note_templates_audiences_windows_require_v63_and_enabled_policies() {
 }
 
 #[test]
-fn day_death_announcement_metadata_requires_v66_and_complete_policy() {
+fn day_death_announcement_metadata_requires_v67_and_complete_policy() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(65);
     value["phases"]["cadence"] = json!(["Night"]);
@@ -6471,10 +6471,52 @@ fn day_death_announcement_metadata_requires_v66_and_complete_policy() {
         "metadata requires enabled day_deaths",
     );
 
+    value["ir_version"] = json!(66);
     value["day_notes"]["day_deaths"] = json!({
         "enabled": true,
         "template_id": "day_death",
-        "audience": "public"
+        "audience": "public",
+        "cause_templates": {
+            "missing_cause": {
+                "template_id": "",
+                "audience": ""
+            }
+        }
+    });
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 67",
+    );
+    assert_issue(&err, "ir_version", "day_notes.day_death_cause_templates");
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.cause_templates.missing_cause",
+        "unknown day-death cause `missing_cause`",
+    );
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.cause_templates.missing_cause.template_id",
+        "must not be empty",
+    );
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.cause_templates.missing_cause.audience",
+        "must not be empty",
+    );
+
+    value["ir_version"] = json!(67);
+    value["day_notes"]["day_deaths"] = json!({
+        "enabled": true,
+        "template_id": "day_death",
+        "audience": "public",
+        "cause_templates": {
+            "lynch": {
+                "template_id": "lynch_death",
+                "audience": "public"
+            }
+        }
     });
     validate_pack(&pack_from_value(value)).unwrap();
 }

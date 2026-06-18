@@ -519,12 +519,14 @@ death fold/reveal. v63 makes the public-note envelope pack-owned: night-victim a
 declare `template_id`, `audience`, and `role_payload` (`RoleKey` or `Hidden`), while last words
 may declare `template_id`, `audience`, and `window`. v66 adds `day_notes.day_deaths`, which lets
 a pack attach `template_id` and `audience` to the trailing day-death `PhaseAnnouncement` when a
-Day/Twilight resolution actually produced deaths. Mafia Universe opts into revealed-role
-night-victim notes, post-lynch last words, and public day-death trailer metadata; pure goldens also
-prove hidden-role multiple-death ordering plus lynch, day-action kill, ITA kill, Knight duel, and
-self-destruct day-death ordering through the same trailer metadata path. The first vertical is
-`mafia_universe`, with pure goldens plus Postgres command/projection rebuild and semantic
-minimizer proof.
+Day/Twilight resolution actually produced deaths. v67 adds per-death `cause_templates`, so each
+`PhaseAnnouncement.deaths[]` entry may carry its own `template_id`/`audience` based on the
+pack-declared death cause. Mafia Universe opts into revealed-role night-victim notes, post-lynch
+last words, public day-death trailer metadata, and per-cause public text for lynch, day-action,
+ITA, and lover-suicide deaths; pure goldens also prove hidden-role multiple-death ordering plus
+lynch, day-action kill, ITA kill, Knight duel, White Wolf self-destruct, and Wolf Beauty drag
+ordering through the trailer/per-death metadata path. The first vertical is `mafia_universe`, with
+pure goldens plus Postgres command/projection rebuild and semantic minimizer proof.
 
 `Modifier::Babysitter` is the first v5 modifier addition. It is legal only on `Protect`
 actions. The action protects its target normally; if the protecting actor dies during the
@@ -1732,9 +1734,10 @@ state directly.
 Public announcement publication is a derived projection, not a cursor-moving event path. When a
 stored `ResolutionApplied` contains public `DayAnnouncement`, `LastWordsRecorded`, or trailing
 `PhaseAnnouncement` inner events, `thread_view` derives one deterministic system-authored main
-thread row from the envelope. v66 day-death `PhaseAnnouncement` template/audience metadata is
-published in that row when present. Projection rebuilds reproduce that row from the log, and the
-phase cursor remains owned only by `GameStarted` / `PhaseAdvanced`.
+thread row from the envelope. v66 day-death `PhaseAnnouncement` template/audience metadata and v67
+per-death cause template/audience metadata are published in that row when present. Projection
+rebuilds reproduce that row from the log, and the phase cursor remains owned only by `GameStarted`
+/ `PhaseAdvanced`.
 
 ## Submissions: the platform → engine seam
 

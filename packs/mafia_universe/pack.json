@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 66,
+  "ir_version": 67,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2749,7 +2749,25 @@
     "day_deaths": {
       "enabled": true,
       "template_id": "mafia_universe_day_death_v1",
-      "audience": "public"
+      "audience": "public",
+      "cause_templates": {
+        "day_vigilante_kill": {
+          "template_id": "mafia_universe_day_action_death_v1",
+          "audience": "public"
+        },
+        "ita_shot": {
+          "template_id": "mafia_universe_ita_death_v1",
+          "audience": "public"
+        },
+        "lynch": {
+          "template_id": "mafia_universe_lynch_death_v1",
+          "audience": "public"
+        },
+        "lover_suicide": {
+          "template_id": "mafia_universe_lover_suicide_v1",
+          "audience": "public"
+        }
+      }
     }
   },
   "treestump_policy": {

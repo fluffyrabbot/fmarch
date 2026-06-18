@@ -610,6 +610,10 @@ pub struct PhaseAnnouncement {
 pub struct Death {
     pub slot_id: SlotId,
     pub cause: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1111,6 +1115,26 @@ fn validate_phase_announcement_invariant(
         return Err(ResultValidationError::PhaseAnnouncementInvariant(
             "PhaseAnnouncement.audience must not be empty".to_string(),
         ));
+    }
+    for (death_index, death) in announcement.deaths.iter().enumerate() {
+        if death
+            .template_id
+            .as_deref()
+            .is_some_and(|template_id| template_id.trim().is_empty())
+        {
+            return Err(ResultValidationError::PhaseAnnouncementInvariant(format!(
+                "PhaseAnnouncement.deaths[{death_index}].template_id must not be empty"
+            )));
+        }
+        if death
+            .audience
+            .as_deref()
+            .is_some_and(|audience| audience.trim().is_empty())
+        {
+            return Err(ResultValidationError::PhaseAnnouncementInvariant(format!(
+                "PhaseAnnouncement.deaths[{death_index}].audience must not be empty"
+            )));
+        }
     }
 
     Ok(())

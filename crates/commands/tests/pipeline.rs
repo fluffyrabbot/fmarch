@@ -6801,6 +6801,8 @@ async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
                     == vec![domain::Death {
                         slot_id: "slot_2".to_string(),
                         cause: "day_vigilante_kill".to_string(),
+                        template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                        audience: Some("public".to_string()),
                     }]
     )));
 
@@ -7293,6 +7295,8 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
                         && announcement.deaths == vec![domain::Death {
                             slot_id: "slot_2".to_string(),
                             cause: "day_vigilante_kill".to_string(),
+                            template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                            audience: Some("public".to_string()),
                         }]
             )
         })
@@ -20206,7 +20210,12 @@ fn mafia_universe_day_notes_fixture_json() -> String {
                         "phase_id": "D02",
                         "template_id": "mafia_universe_day_death_v1",
                         "audience": "public",
-                        "deaths": [{ "slot_id": "slot_3", "cause": "lynch" }]
+                        "deaths": [{
+                            "slot_id": "slot_3",
+                            "cause": "lynch",
+                            "template_id": "mafia_universe_lynch_death_v1",
+                            "audience": "public"
+                        }]
                     }
                 }
             ],
@@ -25729,6 +25738,8 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
                     deaths: vec![domain::Death {
                         slot_id: "slot_1".into(),
                         cause: "white_wolf_carry".into(),
+                        template_id: None,
+                        audience: None,
                     }],
                 }),
             },
@@ -28865,6 +28876,8 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
                     deaths: vec![domain::Death {
                         slot_id: "slot_4".into(),
                         cause: "test_prior_death".into(),
+                        template_id: None,
+                        audience: None,
                     }],
                 }),
             },
@@ -30003,6 +30016,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
                     deaths: vec![domain::Death {
                         slot_id: "slot_4".into(),
                         cause: "test_intervening_death".into(),
+                        template_id: None,
+                        audience: None,
                     }],
                 }),
             },
@@ -32787,10 +32802,14 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
                         domain::Death {
                             slot_id: "slot_4".to_string(),
                             cause: "day_vigilante_kill".to_string(),
+                            template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                            audience: Some("public".to_string()),
                         },
                         domain::Death {
                             slot_id: "slot_3".to_string(),
                             cause: "day_vigilante_kill".to_string(),
+                            template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                            audience: Some("public".to_string()),
                         },
                     ]
     )));
@@ -41028,6 +41047,8 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                 && announcement.deaths == vec![domain::Death {
                     slot_id: "slot_3".to_string(),
                     cause: "lynch".to_string(),
+                    template_id: Some("mafia_universe_lynch_death_v1".to_string()),
+                    audience: Some("public".to_string()),
                 }]
     )));
 
@@ -41072,7 +41093,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     assert!(
         d02_post
             .body
-            .contains("Phase D02 announcement: slot_3 (lynch); template: mafia_universe_day_death_v1; audience: public."),
+            .contains("Phase D02 announcement: slot_3 (lynch; template: mafia_universe_lynch_death_v1; audience: public); template: mafia_universe_day_death_v1; audience: public."),
         "thread projection publishes the trailing phase announcement metadata"
     );
 

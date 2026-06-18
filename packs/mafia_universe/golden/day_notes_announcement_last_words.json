@@ -127,8 +127,10 @@
         "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "lynch",
-            "slot_id": "slot_3"
+            "slot_id": "slot_3",
+            "template_id": "mafia_universe_lynch_death_v1"
           }
         ],
         "phase_id": "D02",

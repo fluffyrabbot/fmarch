@@ -35,7 +35,12 @@ fn valid_resolution() -> serde_json::Value {
                     "template_id": "mafia_universe_day_death_v1",
                     "audience": "public",
                     "deaths": [
-                        { "slot_id": "slot_3", "cause": "lynch" }
+                        {
+                            "slot_id": "slot_3",
+                            "cause": "lynch",
+                            "template_id": "mafia_universe_lynch_death_v1",
+                            "audience": "public"
+                        }
                     ]
                 }
             }
@@ -2493,6 +2498,26 @@ fn malformed_phase_announcement_metadata_fails_contract_validation() {
     assert!(
         err.to_string()
             .contains("PhaseAnnouncement.audience must not be empty"),
+        "unexpected error: {err}"
+    );
+
+    let mut payload = valid_resolution();
+    payload["events"][1]["payload"]["deaths"][0]["template_id"] = json!("");
+
+    let err = validate_resolution_json(&payload, RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("PhaseAnnouncement.deaths[0].template_id must not be empty"),
+        "unexpected error: {err}"
+    );
+
+    let mut payload = valid_resolution();
+    payload["events"][1]["payload"]["deaths"][0]["audience"] = json!(" ");
+
+    let err = validate_resolution_json(&payload, RESULT_VERSION).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("PhaseAnnouncement.deaths[0].audience must not be empty"),
         "unexpected error: {err}"
     );
 }

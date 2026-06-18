@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 66;
+pub const SUPPORTED_IR_VERSION: u16 = 67;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -1360,6 +1360,15 @@ pub struct DayDeathAnnouncementPolicy {
     pub template_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audience: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub cause_templates: BTreeMap<String, DayDeathCauseTemplate>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DayDeathCauseTemplate {
+    pub template_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2171,7 +2180,14 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
         &role_keys,
         &alignments,
     );
-    validate_day_note_policy(&mut issues, "day_notes", &pack.day_notes, &cadence);
+    let kill_cause_ids = pack_kill_cause_ids(pack);
+    validate_day_note_policy(
+        &mut issues,
+        "day_notes",
+        &pack.day_notes,
+        &cadence,
+        &kill_cause_ids,
+    );
     validate_wolf_carry_policy(
         &mut issues,
         "wolf_carry",
@@ -3374,6 +3390,7 @@ fn validate_day_note_policy(
     path: &str,
     policy: &DayNotePolicy,
     cadence: &BTreeSet<PhaseKind>,
+    kill_cause_ids: &BTreeSet<String>,
 ) {
     let needs_day =
         policy.announcements.enabled || policy.last_words.day_deaths || policy.day_deaths.enabled;
@@ -3455,13 +3472,50 @@ fn validate_day_note_policy(
         policy.day_deaths.audience.as_deref(),
         "day-death announcement audience",
     );
-    let day_death_metadata_declared =
-        policy.day_deaths.template_id.is_some() || policy.day_deaths.audience.is_some();
+    let day_death_metadata_declared = policy.day_deaths.template_id.is_some()
+        || policy.day_deaths.audience.is_some()
+        || !policy.day_deaths.cause_templates.is_empty();
     if day_death_metadata_declared && !policy.day_deaths.enabled {
         issue(
             issues,
             format!("{path}.day_deaths"),
             "day-death announcement metadata requires enabled day_deaths",
+        );
+    }
+    let mut cause_templates = BTreeSet::new();
+    for (cause, template) in &policy.day_deaths.cause_templates {
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates"),
+                "day-death cause template cause must not be empty",
+            );
+        } else if !cause_templates.insert(cause) {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}"),
+                "duplicate day-death cause template",
+            );
+        }
+        if template.template_id.trim().is_empty() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}.template_id"),
+                "day-death cause template_id must not be empty",
+            );
+        }
+        if !cause.trim().is_empty() && !kill_cause_ids.contains(cause) {
+            issue(
+                issues,
+                format!("{path}.day_deaths.cause_templates.{cause}"),
+                format!("unknown day-death cause `{cause}`"),
+            );
+        }
+        validate_optional_nonempty(
+            issues,
+            &format!("{path}.day_deaths.cause_templates.{cause}.audience"),
+            template.audience.as_deref(),
+            "day-death cause audience",
         );
     }
     if policy.day_deaths.enabled {
@@ -6891,6 +6945,18 @@ fn pack_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
             causes.insert(action.id.clone());
             causes.extend(action.source_ids.iter().cloned());
         }
+        if action.has_ability(IrAbility::SelfDestruct) {
+            if let Some(spec) = &action.self_destruct {
+                causes.insert(spec.cause.clone());
+            }
+        }
+        if action.has_ability(IrAbility::ItaShot) {
+            causes.insert("ita_shot".to_string());
+        }
+        if action.has_ability(IrAbility::Duel) || action.has_ability(IrAbility::VoteDuel) {
+            causes.insert(action.id.clone());
+            causes.extend(action.source_ids.iter().cloned());
+        }
     }
     for trigger in &pack.triggers {
         if trigger.produces.ability == IrAbility::Kill {
@@ -9441,6 +9507,14 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
             "day_notes.day_death_announcements",
         );
     }
+    if !pack.day_notes.day_deaths.cause_templates.is_empty() {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            67,
+            "day_notes.day_death_cause_templates",
+        );
+    }
     if pack
         .ita
         .sessions
@@ -10241,6 +10315,22 @@ mod tests {
             }
         });
         assert_versioned_pack_feature(value, 66, "day_notes.day_death_announcements");
+
+        let mut value = test_pack_value();
+        value["day_notes"] = json!({
+            "day_deaths": {
+                "enabled": true,
+                "template_id": "day_death",
+                "audience": "public",
+                "cause_templates": {
+                    "lynch": {
+                        "template_id": "lynch_death",
+                        "audience": "public"
+                    }
+                }
+            }
+        });
+        assert_versioned_pack_feature(value, 67, "day_notes.day_death_cause_templates");
 
         let mut value = test_pack_value();
         value["standard_nar"] = json!({

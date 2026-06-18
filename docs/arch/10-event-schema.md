@@ -470,7 +470,12 @@ struct PhaseAnnouncement {
     deaths: Vec<Death>,             // empty if no one died this resolution
 }
 
-struct Death { slot_id: SlotId, cause: String }
+struct Death {
+    slot_id: SlotId,
+    cause: String,
+    template_id: Option<String>,    // v67 per-cause public death template
+    audience: Option<String>,       // v67 per-cause public death audience
+}
 ```
 
 **Every resolution emits exactly ONE trailing `PhaseAnnouncement` as its final inner event.**
@@ -479,9 +484,10 @@ It lists the deaths produced in that resolution — for a night, the slots that 
 day-action deaths use their action cause such as `"knight_duel"` / `"ita_shot"` /
 `"self_destruct"`, a lynched slot uses `cause: "lynch"`, and generated day-death policy such
 as Wolf Beauty or lover-suicide uses the generated cause. It is `deaths: []` when no one died.
-v66 packs may attach `template_id`/`audience` to day/twilight `PhaseAnnouncement` events with at
-least one death; night and no-death trailers omit that metadata. This single canonical
-death-reveal signal always fires, even on a
+v66 packs may attach trailer-level `template_id`/`audience` to day/twilight
+`PhaseAnnouncement` events with at least one death, and v67 packs may attach per-death
+`template_id`/`audience` from pack-declared cause templates. Night and no-death trailers omit that
+metadata. This single canonical death-reveal signal always fires, even on a
 resolution that produces only saves, interferences, or a tie. `Death.cause` is the semantic
 death-reveal tag, distinct from `PlayerKilled.cause` when the layer needs that distinction.
 

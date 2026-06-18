@@ -9385,6 +9385,8 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
                 deaths.push(Death {
                     slot_id: w.clone(),
                     cause: "lynch".to_string(),
+                    template_id: None,
+                    audience: None,
                 });
                 resolve_last_words(input, &outcome, w, &mut events);
                 resolve_wolf_beauty_drag(
@@ -9424,6 +9426,8 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         deaths.push(Death {
             slot_id: record.target.clone(),
             cause: record.cause.clone(),
+            template_id: None,
+            audience: None,
         });
         kill_log.push(record);
     }
@@ -9437,6 +9441,8 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         deaths.push(Death {
             slot_id,
             cause: pack.lover_policy.suicide_cause.clone(),
+            template_id: None,
+            audience: None,
         });
     }
     apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
@@ -10542,6 +10548,8 @@ fn resolve_wolf_beauty_drag(
     deaths.push(Death {
         slot_id: mark.target_id.clone(),
         cause: policy.drag_cause.clone(),
+        template_id: None,
+        audience: None,
     });
 }
 
@@ -11641,6 +11649,8 @@ fn deaths_from_events(events: &[InnerEvent]) -> Vec<Death> {
             InnerEvent::PlayerKilled { slot_id, cause, .. } => Some(Death {
                 slot_id: slot_id.clone(),
                 cause: cause.clone(),
+                template_id: None,
+                audience: None,
             }),
             _ => None,
         })
@@ -11652,6 +11662,23 @@ fn phase_announcement(input: &ResolutionInput, deaths: Vec<Death>) -> PhaseAnnou
     let include_day_death_metadata = day_death_policy.enabled
         && !deaths.is_empty()
         && matches!(input.state.phase_kind, PhaseKind::Day | PhaseKind::Twilight);
+    let deaths = if include_day_death_metadata {
+        deaths
+            .into_iter()
+            .map(|mut death| {
+                if let Some(template) = day_death_policy.cause_templates.get(&death.cause) {
+                    death.template_id = Some(template.template_id.clone());
+                    death.audience = template
+                        .audience
+                        .clone()
+                        .or_else(|| day_death_policy.audience.clone());
+                }
+                death
+            })
+            .collect()
+    } else {
+        deaths
+    };
     PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
         template_id: include_day_death_metadata
