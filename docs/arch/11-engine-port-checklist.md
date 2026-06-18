@@ -2650,6 +2650,22 @@ coverage, and a playable vertical scenario through the command pipeline.
    covered by `checked_in_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
    which proves the success fixture remains promotable while the reduced negative fixture preserves
    `semantic_expectation` failure class without success promotion.
+   `crates/commands/fixtures/night-strongman-vengeful-projection-state-generated-minimized.json`
+   now promotes the StrongmanVengefulProjectionState row into a checked-in Mafiascum N01 unstoppable
+   retaliation replay with three slots, two night actions, one audited resolution envelope, and one
+   anchored trace. It checks eleven semantic expectations: the initial factional `PlayerKilled`
+   inner event for the unstoppable vengeful slot, the `Trigger` inner event for
+   `unstoppable_vengeful_retaliates`, the generated unstoppable retaliatory
+   `PlayerKilled(cause = unstoppable_vengeful_retaliates)` inner event for the attacker, the trigger
+   trace decision, the `protection_bypassed_by_unstoppable_kill` trace decision proving the doctor
+   protection is bypassed, one trigger trace note, one generated action, one generated-action count,
+   and three rebuilt `slot_state` rows proving the attacker and vengeful slot die while the doctor
+   survives. Its matching checked-in negative artifact,
+   `crates/commands/fixtures/night-strongman-vengeful-projection-state-generated-bad-expectation.json`,
+   is covered by
+   `checked_in_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
+   which proves the success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3172,7 +3188,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the next trigger projection-state
-row: promote `strongman_vengeful_projection_state`, commit its reduced
+row: promote `bodyguard_strongman_vengeful_projection_state`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures

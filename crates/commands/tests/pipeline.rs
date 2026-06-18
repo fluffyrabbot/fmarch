@@ -13673,6 +13673,203 @@ async fn checked_in_vengeful_projection_state_generated_fixtures_replay_semantic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn checked_in_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
+    pool: PgPool,
+) {
+    let success_stem = "night-strongman-vengeful-projection-state-generated-minimized";
+    let success_fixture_json = include_str!(
+        "../fixtures/night-strongman-vengeful-projection-state-generated-minimized.json"
+    );
+    let bad_stem = "night-strongman-vengeful-projection-state-generated-bad-expectation";
+    let bad_fixture_json = include_str!(
+        "../fixtures/night-strongman-vengeful-projection-state-generated-bad-expectation.json"
+    );
+    let expected_expectations = 11;
+
+    let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
+        .expect("Strongman Vengeful projection-state fixture parses");
+    assert_eq!(
+        success_fixture["roster"].as_array().map_or(0, Vec::len),
+        3,
+        "{success_stem} roster size"
+    );
+    assert_eq!(
+        success_fixture["actions"].as_array().map_or(0, Vec::len),
+        2,
+        "{success_stem} action count"
+    );
+    assert_eq!(
+        success_fixture["setup_phases"]
+            .as_array()
+            .map_or(0, Vec::len),
+        0,
+        "{success_stem} setup phase count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["inner_events"]
+            .as_array()
+            .map_or(0, Vec::len),
+        3,
+        "{success_stem} inner event expectation count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["trace_decisions"]
+            .as_array()
+            .map_or(0, Vec::len),
+        2,
+        "{success_stem} trace decision expectation count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["trace_notes"]
+            .as_array()
+            .map_or(0, Vec::len),
+        1,
+        "{success_stem} trace note expectation count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["generated_actions"]
+            .as_array()
+            .map_or(0, Vec::len),
+        1,
+        "{success_stem} generated action expectation count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["generated_action_counts"]
+            .as_array()
+            .map_or(0, Vec::len),
+        1,
+        "{success_stem} generated action count expectation count"
+    );
+    assert_eq!(
+        success_fixture["expectations"]["slot_states"]
+            .as_array()
+            .map_or(0, Vec::len),
+        3,
+        "{success_stem} slot state expectation count"
+    );
+    assert_eq!(
+        generated_expectation_count(&success_fixture["expectations"]),
+        expected_expectations,
+        "{success_stem} semantic expectation count"
+    );
+
+    let success_artifacts =
+        GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
+    success_artifacts.remove_existing();
+    success_artifacts.write_fixture(success_fixture_json);
+    let success_report = success_artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(
+        success_report["original"]["ok"], true,
+        "{success_stem} should replay"
+    );
+    assert_eq!(
+        success_report["original"]["resolution_audited"],
+        serde_json::json!(1),
+        "{success_stem} audited resolution count"
+    );
+    assert_eq!(
+        success_report["original"]["trace_count"],
+        serde_json::json!(1),
+        "{success_stem} trace count"
+    );
+    assert_eq!(
+        success_report["original"]["projection_audit_ok"],
+        serde_json::json!(true),
+        "{success_stem} projection audit"
+    );
+    assert_eq!(
+        success_report["original"]["semantic_expectations_checked"],
+        serde_json::json!(expected_expectations),
+        "{success_stem} semantic expectation count"
+    );
+    assert_eq!(
+        success_report["minimized"]["ok"], true,
+        "{success_stem} minimized replay"
+    );
+    assert_eq!(
+        success_report["minimized"]["semantic_expectations_checked"],
+        serde_json::json!(expected_expectations),
+        "{success_stem} minimized semantic expectation count"
+    );
+    assert_eq!(
+        success_report["reduction"]["replay_success"],
+        serde_json::json!(true),
+        "{success_stem} reduction replay"
+    );
+    assert_eq!(
+        success_report["reduction"]["success_invariant_preserved"],
+        serde_json::json!(true),
+        "{success_stem} success invariant"
+    );
+    assert_eq!(
+        success_report["write_reduced"]["promoted_success_fixture"],
+        serde_json::json!(true),
+        "{success_stem} promoted success fixture"
+    );
+
+    let bad_fixture: serde_json::Value = serde_json::from_str(bad_fixture_json)
+        .expect("bad Strongman Vengeful projection-state fixture parses");
+    assert_eq!(
+        bad_fixture["roster"].as_array().map_or(0, Vec::len),
+        0,
+        "{bad_stem} roster size"
+    );
+    assert_eq!(
+        bad_fixture["actions"].as_array().map_or(0, Vec::len),
+        0,
+        "{bad_stem} action count"
+    );
+    assert_eq!(
+        generated_expectation_count(&bad_fixture["expectations"]),
+        expected_expectations,
+        "{bad_stem} semantic expectation count"
+    );
+
+    let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
+    bad_artifacts.remove_existing();
+    bad_artifacts.write_fixture(bad_fixture_json);
+    let bad_report = bad_artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(
+        bad_report["original"]["ok"], false,
+        "{bad_stem} bad original should fail"
+    );
+    assert_eq!(
+        bad_report["original"]["failure_class"], "semantic_expectation",
+        "{bad_stem} bad original failure class"
+    );
+    assert_eq!(
+        bad_report["minimized"]["ok"], false,
+        "{bad_stem} bad minimized should fail"
+    );
+    assert_eq!(
+        bad_report["minimized"]["failure_class"], "semantic_expectation",
+        "{bad_stem} bad minimized failure class"
+    );
+    assert_eq!(
+        bad_report["reduction"]["replay_success"],
+        serde_json::json!(false),
+        "{bad_stem} bad reduction should remain failing"
+    );
+    assert_eq!(
+        bad_report["reduction"]["failure_class_preserved"],
+        serde_json::json!(true),
+        "{bad_stem} bad reduction should preserve semantic failure"
+    );
+    assert_eq!(
+        bad_report["write_reduced"]["wrote"],
+        serde_json::json!(true),
+        "{bad_stem} bad reduced artifact should be written"
+    );
+    assert_eq!(
+        bad_report["write_reduced"]["promoted_success_fixture"],
+        serde_json::json!(false),
+        "{bad_stem} bad reduced artifact should not be promoted"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays(pool: PgPool) {
     for (
         stem,
