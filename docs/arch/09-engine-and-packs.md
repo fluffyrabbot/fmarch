@@ -1347,8 +1347,11 @@ event extraction, audit, trace-count, anchored generated-row, and projection-reb
 Epicmafia D01 PK loop now emits minimizer-ready vote plus host-prompt fixtures, and routes setup,
 vote submission, day resolve, prompt resolve, prompt payload validation, audit, trace-count,
 anchored trace-decision, and projection-rebuild failures through saved shrink reports. The
-Epicmafia N01 Bomb/Cult half of that generated test and `default_open` generated replay lanes have
-not yet adopted this wrapper. A non-mafiascum generated
+Epicmafia N01 Bomb/Cult loop now routes setup, action submission, resolve, result validation,
+Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace note,
+anchored generated-row, anchored trace-decision, and projection-rebuild failures through the same
+saved shrink report path. The `default_open` generated replay lanes have not yet adopted this
+wrapper. A non-mafiascum generated
 replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This

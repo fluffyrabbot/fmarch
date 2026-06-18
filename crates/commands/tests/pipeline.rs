@@ -317,15 +317,6 @@ struct InspectionGeneratedExpectation<'a> {
     detail: serde_json::Value,
 }
 
-fn assert_anchored_inspection_generated(
-    report: &commands::ResolutionTraceInspectionReport,
-    expected: InspectionGeneratedExpectation<'_>,
-    context: &str,
-) {
-    check_anchored_inspection_generated(report, expected)
-        .unwrap_or_else(|reason| panic!("{context}\n{reason}"));
-}
-
 fn check_anchored_inspection_generated(
     report: &commands::ResolutionTraceInspectionReport,
     expected: InspectionGeneratedExpectation<'_>,
@@ -365,16 +356,36 @@ fn assert_anchored_inspection_note(
     expected_note: &str,
     context: &str,
 ) {
-    let note = report
+    check_anchored_inspection_note(report, phase_id, expected_note)
+        .unwrap_or_else(|reason| panic!("{context}\n{reason}"));
+}
+
+fn check_anchored_inspection_note(
+    report: &commands::ResolutionTraceInspectionReport,
+    phase_id: &str,
+    expected_note: &str,
+) -> Result<(), String> {
+    let note = match report
         .traces
         .iter()
         .filter(|trace| trace.phase_id == phase_id && trace.applied_stream_seq.is_some())
         .flat_map(|trace| trace.notes.iter())
         .find(|note| note.applied_stream_seq.is_some() && note.note == expected_note)
-        .unwrap_or_else(|| {
-            panic!("{context}\ntrace inspection should expose anchored note {expected_note}")
-        });
-    assert_eq!(note.note, expected_note, "{context}\ninspected note");
+    {
+        Some(note) => note,
+        None => {
+            return Err(format!(
+                "trace inspection should expose anchored note {expected_note}"
+            ));
+        }
+    };
+    if note.note != expected_note {
+        return Err(format!(
+            "inspected note expected {expected_note} got {}",
+            note.note
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
@@ -14849,31 +14860,39 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
         let case = generated_epicmafia_night_case(seed);
         let resolver_seed = seed + 48_000;
         let summary = generated_pack_case_summary(&case, "epicmafia", "N01", resolver_seed);
+        let fixture_json = generated_night_case_fixture_json(&case, "epicmafia", resolver_seed);
+        let shrink_stem = format!("generated-epicmafia-n01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "epicmafia".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create Epicmafia night game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate Epicmafia night game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -14881,10 +14900,13 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     slot: slot.clone(),
                     user: format!("epicmafia_night_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -14892,23 +14914,29 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "N01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start Epicmafia night failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart Epicmafia night failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "epicmafia_night_seed_{seed}_user_{}",
@@ -14922,17 +14950,18 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -14941,17 +14970,58 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Epicmafia night failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\nEpicmafia generated night resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Epicmafia night failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Epicmafia generated night resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "N01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        let bomb_trigger = applied
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        let bomb_trigger = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -14960,9 +15030,23 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     payload,
                 } if trigger_id == "bomb_retaliates" => Some((indexed.index, payload.clone())),
                 _ => None,
-            })
-            .expect("Epicmafia generated night should emit bomb trigger");
-        let converted_index = applied
+            }) {
+            Some(trigger) => trigger,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Epicmafia generated night should emit bomb trigger".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        let converted_index = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -14978,9 +15062,23 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     Some(indexed.index)
                 }
                 _ => None,
-            })
-            .expect("Epicmafia generated night should convert the plain villager");
-        let blocked_index = applied
+            }) {
+            Some(index) => index,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Epicmafia generated night should convert the plain villager".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        let blocked_index = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -14990,37 +15088,105 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     Some(indexed.index)
                 }
                 _ => None,
-            })
-            .expect("Epicmafia generated night should block loyal conversion");
+            }) {
+            Some(index) => index,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Epicmafia generated night should block loyal conversion".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\nEpicmafia night generated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none Epicmafia night phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped Epicmafia night envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("Epicmafia night generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one Epicmafia night phase audited and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none Epicmafia night trace"
-        );
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one Epicmafia night trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
         let result_contract_source =
             format!("domain::resolve/result_version:{}", applied.result_version);
         let result_contract_outcome = format!("{} inner events validated", applied.counts.events);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15032,24 +15198,79 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "saves": applied.counts.saves,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let bomb_trigger_note = format!(
             "trigger bomb_retaliates emitted at event_index {}",
             bomb_trigger.0
         );
-        assert_anchored_inspection_note(&trace_report, "N01", &bomb_trigger_note, &summary);
-        let bomb_actor = bomb_trigger
+        if let Err(reason) =
+            check_anchored_inspection_note(&trace_report, "N01", &bomb_trigger_note)
+        {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
+        let bomb_actor = match bomb_trigger
             .1
             .get("produced_actor")
             .and_then(|value| value.as_str())
-            .expect("bomb trigger produced actor");
-        let bomb_target = bomb_trigger
+        {
+            Some(actor) => actor,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "bomb trigger produced actor".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        let bomb_target = match bomb_trigger
             .1
             .get("produced_target")
             .and_then(|value| value.as_str())
-            .expect("bomb trigger produced target");
-        assert_anchored_inspection_generated(
+        {
+            Some(target) => target,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "bomb trigger produced target".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "N01",
@@ -15068,10 +15289,21 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "event_index": bomb_trigger.0,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let bomb_trigger_source = format!("event_index:{}", bomb_trigger.0);
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15080,10 +15312,21 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 outcome: "trigger",
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let converted_source = format!("event_index:{converted_index}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15092,10 +15335,21 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 outcome: "player_converted",
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let blocked_source = format!("event_index:{blocked_index}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15104,11 +15358,22 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                 outcome: "conversion_blocked",
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
         let plain_action_id = format!("epicmafia_night_seed_{seed}_cult_recruit_plain");
         let plain_source = format!("action:{plain_action_id}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15128,12 +15393,23 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "origin_source": null,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
         let loyal_action_id = format!("epicmafia_night_seed_{seed}_cult_recruit_loyal");
         let loyal_source = format!("action:{loyal_action_id}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15151,16 +15427,51 @@ async fn generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministic
                     "reason": "loyal",
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\nEpicmafia night generated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Epicmafia night generated projection rebuild audit drifted: {projection_audit:?}"
+                    ),
+                )
+                .await
+            );
+        }
     }
 }
 

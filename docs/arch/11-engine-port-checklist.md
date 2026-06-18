@@ -2452,8 +2452,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    failures. The Epicmafia D01 PK loop now emits minimizer-ready vote plus host-prompt fixtures, and
    routes setup, vote submission, day resolve, prompt resolve, prompt payload validation, audit,
    trace-count, anchored trace-decision, and projection-rebuild failures through saved shrink reports.
-   The Epicmafia N01 Bomb/Cult half of that generated test and `default_open` generated replay lanes
-   have not yet adopted it. This is a reusable
+   The Epicmafia N01 Bomb/Cult loop now routes setup, action submission, resolve, result validation,
+   Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace note, anchored
+   generated-row, anchored trace-decision, and projection-rebuild failures through the same saved
+   shrink report path. The `default_open` generated replay lanes have not yet adopted it. This is a reusable
    artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
@@ -2772,7 +2774,6 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 persistent and generated-action systems by reusing the shrink-backed generated
-command/trace wrapper in the remaining generated culture-pack lanes. Start with the Epicmafia N01
-Bomb/Cult loop in `generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically`,
-then carry the same saved artifact/minimizer report path into `default_open` N01/D01 before adding
-new generated-action semantics.
+command/trace wrapper in the remaining generated culture-pack lanes. Carry the same saved
+artifact/minimizer report path into `default_open` N01/D01 before adding new generated-action
+semantics.
