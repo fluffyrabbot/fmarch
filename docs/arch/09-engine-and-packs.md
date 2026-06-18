@@ -1422,7 +1422,10 @@ reason: "revote" }`; the dynamic vote-weight PK fixture now uses the same legal 
 `VoteWeight` grant setup phase and proves the folded grant drives a D02 `HostDecides` tie,
 `HostPromptIssued { kind: "pk" }`, `HostPromptResolved`, and host-selected
 `PlayerKilled { cause: "host_prompt:pk" }` through three audited resolution envelopes and three
-validated traces.
+validated traces. `pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage` now scans
+every pack-declared PK `day_vote_prompt_policies`/`host_prompt_resolution_effects` pair and
+requires matching golden plus semantic minimizer coverage for the Epicmafia and dynamic
+vote-weight PK policies.
 This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across the command-resolved setup-plus-day announcement

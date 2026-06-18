@@ -2465,7 +2465,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    decisions across the ordinary day and host-prompt resolution envelopes. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_fixture_replays_prompt_through_minimizer --test pipeline -- --nocapture`
    and passed one filtered pipeline test, checking five PK expectations and promoting the reduced
-   success fixture. The `default_open` N01/D01 generated replay lanes now use the same saved
+   success fixture. The PK prompt expectation now includes the pack policy metadata asserted by
+   `pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage`. The `default_open` N01/D01
+   generated replay lanes now use the same saved
    artifact/minimizer report path for setup, action/vote submission, resolve, result validation,
    event extraction, audit, trace-count, exact anchored trace decisions, and projection-rebuild
    failures. Their minimizer fixtures now also preserve lane-specific semantic expectations: N01
@@ -2530,7 +2532,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    the dynamic vote-weight PK fixture now uses the same legal N01 `VoteWeight` grant setup phase
    and proves the folded grant drives a D02 `HostDecides` tie, `HostPromptIssued { kind: "pk" }`,
    `HostPromptResolved`, and host-selected `PlayerKilled { cause: "host_prompt:pk" }` through
-   three audited resolution envelopes and three validated traces.
+   three audited resolution envelopes and three validated traces. `pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage`
+   now scans every pack-declared PK `day_vote_prompt_policies`/`host_prompt_resolution_effects`
+   pair and requires matching golden plus semantic minimizer coverage; today that proves the
+   Epicmafia and dynamic vote-weight PK policies are the complete pack-declared PK prompt set.
    This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across the command-resolved setup-plus-day announcement
@@ -2836,8 +2841,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by widening semantic minimizer coverage across the remaining PK
-prompt variants not already covered by the Epicmafia generated lane or the dynamic vote-weight PK
-fixed vertical. Start with the narrowest missing pack-declared PK policy, require prompt issue,
-host-selected kill resolution effects, projection rebuild or replay audit evidence, and minimized
-success promotion before updating the checklist again.
+Continue Phase 5 rich day systems by making sheriff badge/pass coverage explicit in the semantic
+minimizer lane instead of relying on generated Chinese D01 coverage plus the fixed lifecycle
+vertical. Start with `sheriff_badge_election_weighted_vote`, then add pass/destroy setup-phase
+fixtures that preserve `BadgeChanged`, folded `sheriff_badge` projection state, badge vote-weight
+effects on `DayVoteOutcome`, replay audit or rebuild evidence, and minimized success promotion
+before updating the checklist again.

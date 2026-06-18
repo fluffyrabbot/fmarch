@@ -24,7 +24,7 @@ use projections::{
     sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
 use sqlx::{Acquire, PgPool};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
@@ -12918,6 +12918,200 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
     assert_eq!(report["write_reduced"]["promoted_success_fixture"], true);
 }
 
+#[test]
+fn pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage() {
+    #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+    struct DeclaredPkPolicy {
+        pack: String,
+        id: String,
+        prompt_reason: String,
+        decision: String,
+        effect: String,
+    }
+
+    struct PkCoverage {
+        pack: &'static str,
+        id: &'static str,
+        prompt_reason: &'static str,
+        golden: &'static str,
+        fixture_stem: &'static str,
+        fixture_json: String,
+    }
+
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("commands crate lives under crates/commands");
+    let packs_dir = repo_root.join("packs");
+    let mut declared = BTreeSet::new();
+    let mut pack_dirs = fs::read_dir(&packs_dir)
+        .unwrap_or_else(|err| panic!("read packs dir {packs_dir:?}: {err}"))
+        .map(|entry| entry.expect("read packs dir entry").path())
+        .collect::<Vec<_>>();
+    pack_dirs.sort();
+
+    for pack_dir in pack_dirs {
+        let pack_path = pack_dir.join("pack.json");
+        if !pack_path.exists() {
+            continue;
+        }
+        let pack_name = pack_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("pack dir name is utf-8");
+        let raw = fs::read_to_string(&pack_path)
+            .unwrap_or_else(|err| panic!("read {pack_path:?}: {err}"));
+        let pack_json: serde_json::Value =
+            serde_json::from_str(&raw).unwrap_or_else(|err| panic!("parse {pack_path:?}: {err}"));
+        let prompt_policies = pack_json["day_vote_prompt_policies"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|policy| policy["prompt_kind"] == "pk");
+        for policy in prompt_policies {
+            let id = policy["id"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{pack_name} PK prompt policy is missing id"));
+            let prompt_reason = policy["prompt_reason"].as_str().unwrap_or_else(|| {
+                panic!("{pack_name} PK prompt policy {id} is missing prompt_reason")
+            });
+            let effect = pack_json["host_prompt_resolution_effects"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .find(|effect| {
+                    effect["id"] == id
+                        && effect["prompt_kind"] == "pk"
+                        && effect["prompt_reason"] == prompt_reason
+                })
+                .unwrap_or_else(|| {
+                    panic!("{pack_name} PK prompt policy {id} has no matching resolution effect")
+                });
+            declared.insert(DeclaredPkPolicy {
+                pack: pack_name.to_string(),
+                id: id.to_string(),
+                prompt_reason: prompt_reason.to_string(),
+                decision: effect["decision"]
+                    .as_str()
+                    .unwrap_or_else(|| {
+                        panic!("{pack_name} PK prompt policy {id} effect is missing decision")
+                    })
+                    .to_string(),
+                effect: effect["effect"]
+                    .as_str()
+                    .unwrap_or_else(|| {
+                        panic!("{pack_name} PK prompt policy {id} effect is missing effect")
+                    })
+                    .to_string(),
+            });
+        }
+    }
+
+    let epicmafia_pk_case = generated_epicmafia_pk_case(95_777);
+    let coverage = vec![
+        PkCoverage {
+            pack: "epicmafia",
+            id: "pk_host_decides_tie",
+            prompt_reason: "host_decides_tie",
+            golden: "pk_host_decides_tie_prompt.json",
+            fixture_stem: "generated-epicmafia-pk-d01-minimizer-ready",
+            fixture_json: generated_epicmafia_pk_case_fixture_json(
+                &epicmafia_pk_case,
+                epicmafia_pk_case.seed + 47_000,
+            ),
+        },
+        PkCoverage {
+            pack: "test_dynamic_vote_pk",
+            id: "pk_host_decides_tie",
+            prompt_reason: "host_decides_tie",
+            golden: "dynamic_vote_grant_pk_tie_prompt.json",
+            fixture_stem: "dynamic-vote-pk-resolution-semantic-expectations",
+            fixture_json: dynamic_vote_pk_prompt_fixture_json(),
+        },
+    ];
+
+    let covered = coverage
+        .iter()
+        .map(|coverage| DeclaredPkPolicy {
+            pack: coverage.pack.to_string(),
+            id: coverage.id.to_string(),
+            prompt_reason: coverage.prompt_reason.to_string(),
+            decision: "SelectSlot".to_string(),
+            effect: "PkKill".to_string(),
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        declared, covered,
+        "every pack-declared PK host prompt policy must have explicit semantic minimizer coverage"
+    );
+
+    for coverage in coverage {
+        let golden_path = packs_dir
+            .join(coverage.pack)
+            .join("golden")
+            .join(coverage.golden);
+        let golden_raw = fs::read_to_string(&golden_path)
+            .unwrap_or_else(|err| panic!("read PK golden {golden_path:?}: {err}"));
+        let golden_json: serde_json::Value = serde_json::from_str(&golden_raw)
+            .unwrap_or_else(|err| panic!("parse PK golden {golden_path:?}: {err}"));
+        assert!(
+            golden_json["expected_events"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|event| event["kind"] == "HostPromptIssued"
+                    && event["payload"]["kind"] == "pk"
+                    && event["payload"]["metadata"]["policy"] == coverage.id),
+            "{} golden {} should contain its PK HostPromptIssued event",
+            coverage.pack,
+            coverage.golden
+        );
+
+        let fixture: serde_json::Value = serde_json::from_str(&coverage.fixture_json)
+            .unwrap_or_else(|err| panic!("parse {} fixture JSON: {err}", coverage.fixture_stem));
+        assert_eq!(fixture["pack"], coverage.pack);
+        assert!(
+            fixture["host_prompt_decision"]["prompt_id"]
+                .as_str()
+                .is_some_and(|prompt_id| prompt_id.contains(":pk:")),
+            "{} should carry a PK host prompt decision",
+            coverage.fixture_stem
+        );
+        let inner_events = fixture["expectations"]["inner_events"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{} should carry inner expectations", coverage.fixture_stem));
+        assert!(
+            inner_events
+                .iter()
+                .any(|event| event["kind"] == "HostPromptIssued"
+                    && event["payload"]["kind"] == "pk"
+                    && event["payload"]["metadata"]["policy"] == coverage.id),
+            "{} should expect PK prompt issue",
+            coverage.fixture_stem
+        );
+        assert!(
+            inner_events
+                .iter()
+                .any(|event| event["kind"] == "PlayerKilled"
+                    && event["payload"]["cause"] == "host_prompt:pk"),
+            "{} should expect host-selected PK kill",
+            coverage.fixture_stem
+        );
+        assert!(
+            fixture["expectations"]["trace_decisions"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|decision| decision["stage"] == "host_prompt:resolve"
+                    && decision["outcome"] == "pk_selected"
+                    && decision["detail"]["kind"] == "pk"
+                    && decision["detail"]["reason"] == coverage.prompt_reason),
+            "{} should expect PK prompt resolution trace",
+            coverage.fixture_stem
+        );
+    }
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through_minimizer(
     pool: PgPool,
@@ -19535,6 +19729,13 @@ fn generated_epicmafia_pk_expectations_json(case: &GeneratedEpicmafiaPkCase) -> 
                     "subject": null,
                     "reason": "host_decides_tie",
                     "phase_id": "D01",
+                    "metadata": {
+                        "policy": "pk_host_decides_tie",
+                        "status": "Tie",
+                        "contenders": case.contenders,
+                        "tiebreak": "HostDecides",
+                        "outcome_reason": null,
+                    },
                 }
             },
             {
