@@ -12061,6 +12061,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("hunter", [97_021_u64, 97_022]),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
+        ("backup_inheritance", [97_071, 97_072]),
         ("ignite", [97_041, 97_042]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
@@ -12176,9 +12177,10 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 9,
-        "expected_case_count": 18,
+        "expected_family_count": 10,
+        "expected_case_count": 20,
         "family_manifest_matched": family_counts == [
+            ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
             ("bomb".to_string(), 2),
             ("extra_action".to_string(), 2),
@@ -12192,8 +12194,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(9));
-    assert_eq!(report["case_count"], serde_json::json!(18));
+    assert_eq!(report["family_count"], serde_json::json!(10));
+    assert_eq!(report["case_count"], serde_json::json!(20));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19387,6 +19389,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             "epicmafia",
             seed + 48_000,
         ),
+        "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
         "ignite" => generated_mafiascum_persistent_effect_fixture_json(family, seed),
         "extra_action" | "item_grant" => {
             generated_mafiascum_generated_action_fixture_json(family, seed)
@@ -19413,6 +19416,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
             fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
                 serde_json::json!("bomb_retaliates_wrong");
         }
+        "backup_inheritance" => {
+            fixture["expectations"]["trace_decisions"][0]["detail"]["policy_detail"]
+                ["source_action"] = serde_json::json!("target_backup_wrong");
+        }
         "ignite" => {
             fixture["expectations"]["inner_events"][0]["payload"]["cause"] =
                 serde_json::json!("ignite_wrong");
@@ -19429,6 +19436,89 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
     }
     serde_json::to_string_pretty(&fixture)
         .expect("generated persistent bad-expectation fixture serializes")
+}
+
+fn generated_mafiascum_backup_inheritance_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 35_000,
+        "pack": "mafiascum",
+        "phase": "N03",
+        "roster": [
+            { "slot": "slot_1", "role": "universal_backup" },
+            { "slot": "slot_2", "role": "cop" },
+            { "slot": "slot_3", "role": "mafia_goon" },
+            { "slot": "slot_4", "role": "vanilla_townie" },
+            { "slot": "slot_5", "role": "vanilla_townie" },
+            { "slot": "slot_6", "role": "mafia_goon" }
+        ],
+        "setup_phases": [
+            {
+                "phase": "N01",
+                "seed": seed + 33_000,
+                "actions": [{
+                    "actor_slot": "slot_1",
+                    "template_id": "target_backup",
+                    "action_id": format!("generated_seed_{seed}_target_backup_source"),
+                    "targets": ["slot_2"]
+                }]
+            },
+            {
+                "phase": "N02",
+                "seed": seed + 34_000,
+                "actions": [{
+                    "actor_slot": "slot_3",
+                    "template_id": "factional_kill",
+                    "action_id": format!("generated_seed_{seed}_kill_source_for_backup"),
+                    "targets": ["slot_2"]
+                }]
+            }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_1",
+                "template_id": "cop_investigate",
+                "action_id": format!("generated_seed_{seed}_inherited_cop_check"),
+                "targets": ["slot_3"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "InvestigationResult",
+                    "payload": {
+                        "mode": "Parity",
+                        "investigator": "slot_1",
+                        "target": "slot_3",
+                        "result": "scum"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "night:backup",
+                    "source": "slot:slot_2",
+                    "outcome": "backup_inherited_role",
+                    "detail": {
+                        "backup": "slot_1",
+                        "source_target": "slot_2",
+                        "policy": "targeted",
+                        "policy_detail": {
+                            "source_action": format!("generated_seed_{seed}_target_backup_source"),
+                            "declared_source_role": "cop",
+                            "target_phase_id": "N01",
+                            "target_phase_kind": "Night",
+                            "target_phase_number": 1
+                        },
+                        "new_role": "cop",
+                        "new_alignment": "town",
+                        "original_role": "universal_backup",
+                        "original_alignment": "town"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum backup-inheritance fixture serializes")
 }
 
 fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -> String {

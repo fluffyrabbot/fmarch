@@ -305,8 +305,8 @@ const pages = [
       "expected_family_count: 12",
       "expected_seed_count: 57",
       "family_manifest_matched: true",
-      "case_count: 18",
-      "expected_case_count: 18",
+      "case_count: 20",
+      "expected_case_count: 20",
       "audit_operator_proof_artifacts",
     ],
   },
@@ -629,10 +629,10 @@ const jsonPages = [
         artifact_version: 1,
         expected_version: 1,
         trusted: {
-          family_count: 9,
-          case_count: 18,
-          expected_family_count: 9,
-          expected_case_count: 18,
+          family_count: 10,
+          case_count: 20,
+          expected_family_count: 10,
+          expected_case_count: 20,
           family_manifest_matched: true,
         },
         audit_report: {
@@ -786,6 +786,7 @@ function determinismFuzzBootstrapReport() {
 
 function generatedShrinkMatrixBootstrapReport() {
   const families = {
+    backup_inheritance: 2,
     babysitter: 2,
     bomb: 2,
     extra_action: 2,
@@ -828,10 +829,10 @@ function generatedShrinkMatrixBootstrapReport() {
     artifact_path: generatedShrinkMatrixReport,
     ok: true,
     proof_boundary: "fixture generated shrink matrix boundary",
-    family_count: 9,
-    case_count: 18,
-    expected_family_count: 9,
-    expected_case_count: 18,
+    family_count: 10,
+    case_count: 20,
+    expected_family_count: 10,
+    expected_case_count: 20,
     family_manifest_matched: true,
     families,
     entries,
