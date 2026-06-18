@@ -2499,6 +2499,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    checked-in generated-action bad-expectation artifacts; the
    `checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure` selector proves
    all three reduced fixtures remain `semantic_expectation` failures and are not promoted as successes.
+   `crates/commands/fixtures/night-backup-inheritance-generated-minimized.json` now promotes the
+   first conversion/backup matrix row into a checked-in targeted BackupInheritance replay with
+   three slots, one action, two setup phases, three audited resolution envelopes, three anchored
+   traces, and two semantic expectations for the inherited Cop check plus `night:backup` trace
+   decision. `crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json` is
+   the matching checked-in negative artifact; the
+   `checked_in_backup_inheritance_generated_fixtures_replay_semantic_expectations` selector proves
+   the success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3021,7 +3030,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the next ordered bucket,
-conversion/deprogramming/backup inheritance: start with `backup_inheritance`, commit its reduced
+conversion/deprogramming/backup inheritance: promote `backup_projection_state`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures

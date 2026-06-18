@@ -1,0 +1,112 @@
+{
+  "seed": 132071,
+  "pack": "mafiascum",
+  "phase": "N03",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "universal_backup"
+    },
+    {
+      "slot": "slot_2",
+      "role": "cop"
+    },
+    {
+      "slot": "slot_3",
+      "role": "mafia_goon"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "cop_investigate",
+      "action_id": "generated_seed_97071_inherited_cop_check",
+      "targets": [
+        "slot_3"
+      ]
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 130071,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "target_backup",
+          "action_id": "generated_seed_97071_target_backup_source",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    },
+    {
+      "phase": "N02",
+      "seed": 131071,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_3",
+          "template_id": "factional_kill",
+          "action_id": "generated_seed_97071_kill_source_for_backup",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "InvestigationResult",
+        "payload": {
+          "investigator": "slot_1",
+          "mode": "Parity",
+          "result": "scum",
+          "target": "slot_3"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:backup",
+        "source": "slot:slot_2",
+        "outcome": "backup_inherited_role",
+        "detail": {
+          "backup": "slot_1",
+          "new_alignment": "town",
+          "new_role": "cop",
+          "original_alignment": "town",
+          "original_role": "universal_backup",
+          "policy": "targeted",
+          "policy_detail": {
+            "declared_source_role": "cop",
+            "source_action": "generated_seed_97071_target_backup_source",
+            "target_phase_id": "N01",
+            "target_phase_kind": "Night",
+            "target_phase_number": 1
+          },
+          "source_target": "slot_2"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}
