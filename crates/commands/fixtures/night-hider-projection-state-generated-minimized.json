@@ -1,0 +1,113 @@
+{
+  "seed": 139201,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [
+    {
+      "slot": "slot_2",
+      "role": "hider"
+    },
+    {
+      "slot": "slot_3",
+      "role": "vanilla_townie"
+    },
+    {
+      "slot": "slot_4",
+      "role": "mafia_goon"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_2",
+      "template_id": "hide",
+      "action_id": "generated_seed_97201_hider_hides_behind_host",
+      "targets": [
+        "slot_3"
+      ]
+    },
+    {
+      "actor_slot": "slot_4",
+      "template_id": "factional_kill",
+      "action_id": "generated_seed_97201_mafia_kills_hider_host",
+      "targets": [
+        "slot_3"
+      ]
+    }
+  ],
+  "setup_phases": [],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_4"
+          ],
+          "cause": "factional_kill",
+          "slot_id": "slot_3",
+          "unstoppable": false
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_3"
+          ],
+          "cause": "hide",
+          "slot_id": "slot_2",
+          "unstoppable": true
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:dependency_death",
+        "source": "action:generated_seed_97201_hider_hides_behind_host",
+        "outcome": "hider_dependency_death",
+        "detail": {
+          "action_id": "generated_seed_97201_hider_hides_behind_host",
+          "attackers": [
+            "slot_3"
+          ],
+          "cause": "hide",
+          "hider": "slot_2",
+          "host": "slot_3",
+          "template_id": "hide"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_3"
+        }
+      },
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_4"
+        }
+      }
+    ]
+  }
+}

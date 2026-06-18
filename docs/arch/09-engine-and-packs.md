@@ -1485,7 +1485,21 @@ checked-in negative artifact,
 `crates/commands/fixtures/night-pgo-projection-state-generated-bad-expectation.json`, is covered by
 `checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expectations`, which proves the
 success fixture remains promotable while the reduced negative fixture preserves
-`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+`semantic_expectation` failure class without success promotion.
+
+`crates/commands/fixtures/night-hider-projection-state-generated-minimized.json` now promotes the
+HiderProjectionState row into a checked-in Mafiascum N01 dependency-death replay with three slots,
+two actions, one audited resolution envelope, and one anchored trace. It checks six semantic
+expectations: the factional `PlayerKilled` inner event for the host, the dependent hider
+`PlayerKilled(cause = hide)` inner event, one `night:dependency_death` trace decision, and three
+rebuilt `slot_state` rows proving the host and hider die while the attacker survives. The matching
+checked-in negative artifact,
+`crates/commands/fixtures/night-hider-projection-state-generated-bad-expectation.json`, is covered
+by `checked_in_hider_projection_state_generated_fixtures_replay_semantic_expectations`, which proves
+the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
+The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
