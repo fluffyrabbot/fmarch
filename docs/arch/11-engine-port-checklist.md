@@ -1054,8 +1054,8 @@ The only identity that crosses into the engine is `SlotId`.
   gates lover-suicide generated deaths from folded link state, Chinese Cupid maps im-human
   `note.cupid.link` to `PlayersLinked`, keeps non-draftable `lovers_helper` as policy
   metadata, and has setup/night-kill/lynch/Witch-poison/cascade-disabled/direct-death-race
-  goldens plus command/projection rebuild proof for night, day, and stacked direct-death
-  cascades,
+  goldens plus command/projection rebuild proof for night, day, Witch-poison, and stacked
+  direct-death cascades,
   and sheriff election/pass/destroy emits foldable `BadgeChanged` plus rebuildable
   `sheriff_badge` state; Knight duel emits
   typed `DuelResolved` plus foldable `PlayerKilled`; Chinese `guard_policy` declares
@@ -2018,7 +2018,7 @@ round-trip state folds.
    use `IrAbility::Link`, folded `PlayersLinked`, v16 `lover_policy`, lover-suicide
    night-kill/day-lynch/Witch-poison, direct-death-race, and cascade-disabled goldens,
    structured generated-death and stacked-death trace attribution, and command/projection
-   rebuild proof for night, day, and direct-death-race cascades; Hunter uses
+   rebuild proof for night, day, Witch-poison, and direct-death-race cascades; Hunter uses
    `IrAbility::Retaliate`, folded `RetaliationArmed`,
    `standard_nar.chosen_retaliation_cause_policy`, goldens,
    resolver fail-closed proof, and helper-enforced command/projection trace/rebuild proof; Chinese Hunter adds v14 cause-gated
@@ -2723,8 +2723,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by finishing the remaining trigger
-fixpoint breadth under item 5. Start with one culture-specific generated-action variant that still
-lacks command/projection proof, add the smallest pack/golden shape for that variant, and prove the
-trigger trace, generated event ordering, projection rebuild, and seeded audit path through
-`ResolvePhase`.
+Continue Phase 4 persistent and generated-action systems by tightening the remaining trigger
+fixpoint fuzz/shrinking gap under item 5. Start with the seeded trigger dependency graph lane:
+persist a minimized replay case for one generated-death interaction, wire the replay through
+`audit_resolution`, `inspect_trace`, and `audit_rebuild`, then document exactly what the shrinker
+does and does not prove.

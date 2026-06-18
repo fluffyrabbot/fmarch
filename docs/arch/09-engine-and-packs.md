@@ -499,7 +499,7 @@ Cupid/lovers policy is v16 `lover_policy`: it references the `lovers_link` effec
 declares `source_helper_role: "lovers_helper"` without making that helper draftable, and gates
 the generated lover-suicide death through `suicide_on_lover_death`. Chinese goldens cover the
 night-kill, lynch, and Witch-poison cascade paths, and the command pipeline proves the setup
-link can later drive both night and day lover-suicide projection/rebuild.
+link can later drive night, day, and Witch-poison lover-suicide projection/rebuild.
 
 Day announcements and last words are pack-level culture policy, not IR abilities. A pack may
 enable `day_notes.announcements` to turn normalized `ResolutionInput.day_phase_inputs.

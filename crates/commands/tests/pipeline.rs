@@ -53671,6 +53671,248 @@ async fn host_resolve_phase_carries_chinese_cupid_link_and_lovers_cascade(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_chinese_lover_poison_cascade(pool: PgPool) {
+    let host = "host_h";
+    let h = user(host);
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "chinese_structured".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "cupid"),
+        ("slot_2", "villager"),
+        ("slot_3", "prophet"),
+        ("slot_4", "witch"),
+        ("slot_5", "wolf"),
+        ("slot_6", "wolf"),
+        ("slot_7", "villager"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": "link_lovers_n01",
+                "template_id": "link_lovers",
+                "actor": "slot_1",
+                "targets": ["slot_2", "slot_3"],
+                "phase_id": "N01"
+            }),
+            eventstore::ActorId::Slot("slot_1".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 930508 })
+        .await
+        .expect("host resolves Chinese Cupid lover link for poison cascade");
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N02".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": "poison_n02",
+                "template_id": "poison_potion",
+                "actor": "slot_4",
+                "targets": ["slot_2"],
+                "phase_id": "N02"
+            }),
+            eventstore::ActorId::Slot("slot_4".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 930509 })
+        .await
+        .expect("host resolves Chinese lover poison cascade");
+
+    let cascade_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let cascade =
+        domain::validate_resolution_json(&cascade_payload, domain::RESULT_VERSION).unwrap();
+    assert!(cascade.events.iter().any(|event| matches!(
+        &event.event,
+        domain::InnerEvent::ActionUseCounted {
+            actor,
+            counter_id,
+            template_id,
+            consumed_action,
+            remaining,
+            ..
+        } if actor == "slot_4"
+            && counter_id == "x_shot:poison_potion"
+            && template_id == "poison_potion"
+            && consumed_action == "poison_n02"
+            && *remaining == 0
+    )));
+    assert!(cascade.events.iter().any(|event| matches!(
+        &event.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_2"
+                && cause == "poison_potion"
+                && attackers == &vec!["slot_4".to_string()]
+                && !*unstoppable
+    )));
+    assert!(cascade.events.iter().any(|event| matches!(
+        &event.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_3"
+                && cause == "lover_suicide"
+                && attackers == &vec!["slot_2".to_string()]
+                && *unstoppable
+    )));
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Chinese Cupid lover poison cascade trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "death:cascade",
+            source: "link:link_lovers_n01",
+            outcome: "lover_suicide",
+            detail: vec![
+                ("link_id", serde_json::json!("link_lovers_n01")),
+                ("link_source", serde_json::json!("slot_1")),
+                ("source_dead", serde_json::json!("slot_2")),
+                ("target", serde_json::json!("slot_3")),
+                ("cause", serde_json::json!("lover_suicide")),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "poisoned lover should die"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .unwrap()
+            .alive,
+        "linked lover should die from folded Chinese Cupid link"
+    );
+    let counters = action_counters(&pool, game).await.unwrap();
+    assert!(
+        counters.iter().any(|counter| {
+            counter.slot_id == "slot_4"
+                && counter.counter_id == "x_shot:poison_potion"
+                && counter.template_id == "poison_potion"
+                && counter.consumed_action == "poison_n02"
+                && counter.limit == 1
+                && counter.used == 1
+                && counter.remaining == 0
+                && counter.phase_id == "N02"
+                && counter.phase_kind == "Night"
+                && counter.phase_number == 2
+        }),
+        "Witch poison x-shot use must persist through projection counters"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let counters_before = serde_json::to_string(&counters).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Chinese Cupid lover poison cascade"
+    );
+    assert_eq!(
+        counters_before,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter rebuild must preserve Witch poison spend"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Chinese Cupid lover poison trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_chinese_lover_lynch_cascade(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
