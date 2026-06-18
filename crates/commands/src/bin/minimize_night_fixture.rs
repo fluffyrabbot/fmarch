@@ -818,6 +818,13 @@ mod tests {
         assert_eq!(pgo.expectations.trace_notes.len(), 1);
         assert_eq!(pgo.expectations.generated_actions.len(), 1);
         assert_eq!(pgo.expectations.count(), 4);
+
+        let pgo_nonminimal: NightFixture = serde_json::from_str(include_str!(
+            "../../fixtures/night-pgo-trigger-nonminimal.json"
+        ))
+        .expect("nonminimal pgo fixture parses");
+        assert_eq!(pgo_nonminimal.roster.len(), 3);
+        assert_eq!(pgo_nonminimal.expectations.count(), 4);
     }
 
     #[test]

@@ -15206,7 +15206,7 @@ fn generated_case_fixture_json(
     phase: &str,
     resolver_seed: u64,
 ) -> String {
-    serde_json::to_string_pretty(&serde_json::json!({
+    let mut fixture = serde_json::json!({
         "seed": resolver_seed,
         "pack": pack,
         "phase": phase,
@@ -15224,8 +15224,177 @@ fn generated_case_fixture_json(
                 "targets": action.targets,
             })
         }).collect::<Vec<_>>(),
-    }))
-    .expect("generated fixture JSON serializes")
+    });
+    if let Some(expectations) = generated_case_expectations_json(case, pack, phase) {
+        fixture["expectations"] = expectations;
+    }
+    serde_json::to_string_pretty(&fixture).expect("generated fixture JSON serializes")
+}
+
+fn generated_case_expectations_json(
+    case: &GeneratedNightCase,
+    pack: &str,
+    phase: &str,
+) -> Option<serde_json::Value> {
+    if pack != "mafiascum" || phase != "N01" || has_generated_target_mutator(case) {
+        return None;
+    }
+
+    let mut inner_events = Vec::new();
+    let mut trace_decisions = Vec::new();
+    let mut generated_actions = Vec::new();
+
+    for action in &case.actions {
+        if action.template_id == "roleblocker_block"
+            && action.targets.len() == 1
+            && generated_role_for(case, &action.targets[0]) == Some("paranoid_gun_owner")
+        {
+            let pgo = &action.targets[0];
+            inner_events.push(serde_json::json!({
+                "kind": "Trigger",
+                "payload": {
+                    "trigger_id": "pgo_shoots_visitor",
+                    "payload": {
+                        "on": "Visit",
+                        "source_target": pgo,
+                        "source_actor": action.actor_slot,
+                        "source_cause": "roleblocker_block",
+                        "produced_actor": pgo,
+                        "produced_target": action.actor_slot,
+                    }
+                }
+            }));
+            generated_actions.push(serde_json::json!({
+                "action_id": "pgo_shoots_visitor",
+                "source": "Trigger",
+                "actor": pgo,
+                "targets": [action.actor_slot],
+                "detail": {
+                    "on": "Visit",
+                    "source_target": pgo,
+                    "source_actor": action.actor_slot,
+                    "source_cause": "roleblocker_block",
+                    "produced_actor": pgo,
+                    "produced_target": action.actor_slot,
+                }
+            }));
+        }
+
+        if action.template_id == "babysit"
+            && action.targets.len() == 1
+            && generated_role_for(case, &action.actor_slot) == Some("babysitter")
+            && !generated_actor_is_suppressed(case, &action.actor_slot)
+        {
+            let ward = &action.targets[0];
+            let babysitter = &action.actor_slot;
+            let ward_has_simple_kill = case.actions.iter().any(|candidate| {
+                candidate.template_id == "factional_kill"
+                    && candidate.targets == vec![ward.to_string()]
+            });
+            let babysitter_dies = case.actions.iter().any(|candidate| {
+                candidate.template_id == "factional_kill"
+                    && candidate.targets == vec![babysitter.to_string()]
+            });
+            if ward_has_simple_kill && babysitter_dies {
+                inner_events.push(serde_json::json!({
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": ward,
+                        "cause": "babysit",
+                        "attackers": [babysitter],
+                        "unstoppable": true,
+                    }
+                }));
+                trace_decisions.push(serde_json::json!({
+                    "stage": "night:dependency_death",
+                    "source": format!("action:{}", action.action_id),
+                    "outcome": "babysitter_dependency_death",
+                    "detail": {
+                        "action_id": action.action_id,
+                        "template_id": "babysit",
+                        "protector": babysitter,
+                        "ward": ward,
+                        "cause": "babysit",
+                        "attackers": [babysitter],
+                    }
+                }));
+            }
+        }
+
+        if action.template_id == "hide"
+            && action.targets.len() == 1
+            && generated_role_for(case, &action.actor_slot) == Some("hider")
+            && !generated_actor_is_suppressed(case, &action.actor_slot)
+        {
+            let host = &action.targets[0];
+            let hider = &action.actor_slot;
+            let host_has_simple_kill = case.actions.iter().any(|candidate| {
+                candidate.template_id == "factional_kill"
+                    && candidate.targets == vec![host.to_string()]
+            });
+            let hider_has_direct_kill = case.actions.iter().any(|candidate| {
+                is_generated_kill_template(&candidate.template_id)
+                    && candidate.targets == vec![hider.to_string()]
+            });
+            if host_has_simple_kill && !hider_has_direct_kill {
+                inner_events.push(serde_json::json!({
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": hider,
+                        "cause": "hide",
+                        "attackers": [host],
+                        "unstoppable": true,
+                    }
+                }));
+                trace_decisions.push(serde_json::json!({
+                    "stage": "night:dependency_death",
+                    "source": format!("action:{}", action.action_id),
+                    "outcome": "hider_dependency_death",
+                    "detail": {
+                        "action_id": action.action_id,
+                        "template_id": "hide",
+                        "host": host,
+                        "hider": hider,
+                        "cause": "hide",
+                        "attackers": [host],
+                    }
+                }));
+            }
+        }
+    }
+
+    if inner_events.is_empty() && trace_decisions.is_empty() && generated_actions.is_empty() {
+        None
+    } else {
+        Some(serde_json::json!({
+            "inner_events": inner_events,
+            "trace_decisions": trace_decisions,
+            "generated_actions": generated_actions,
+        }))
+    }
+}
+
+fn generated_role_for<'a>(case: &'a GeneratedNightCase, slot: &str) -> Option<&'a str> {
+    case.roster
+        .iter()
+        .find_map(|(candidate, role)| (candidate == slot).then_some(role.as_str()))
+}
+
+fn has_generated_target_mutator(case: &GeneratedNightCase) -> bool {
+    case.actions
+        .iter()
+        .any(|action| matches!(action.template_id.as_str(), "bus_driver_swap" | "redirect"))
+}
+
+fn generated_actor_is_suppressed(case: &GeneratedNightCase, actor: &str) -> bool {
+    case.actions.iter().any(|action| {
+        matches!(action.template_id.as_str(), "roleblocker_block" | "jail")
+            && action.targets == vec![actor.to_string()]
+    })
+}
+
+fn is_generated_kill_template(template_id: &str) -> bool {
+    matches!(template_id, "factional_kill" | "strongman_kill")
 }
 
 fn pick_generated_slot<'a>(rng: &mut DeterministicRng, slots: &'a [&'a str]) -> &'a str {
@@ -15262,6 +15431,114 @@ fn generated_night_case_fixture_json_is_minimizer_ready() {
         .unwrap();
     assert_eq!(chinese_fixture["seed"], serde_json::json!(136_001_u64));
     assert_eq!(chinese_fixture["pack"], "chinese_structured");
+}
+
+#[test]
+fn generated_mafiascum_fixture_json_emits_trigger_dependency_expectations() {
+    let pgo_case = GeneratedNightCase {
+        seed: 1,
+        roster: vec![
+            ("slot_1".to_string(), "roleblocker".to_string()),
+            ("slot_2".to_string(), "paranoid_gun_owner".to_string()),
+        ],
+        actions: vec![GeneratedNightAction {
+            actor_slot: "slot_1".to_string(),
+            template_id: "roleblocker_block".to_string(),
+            action_id: "generated_pgo_visit".to_string(),
+            targets: vec!["slot_2".to_string()],
+        }],
+    };
+    let pgo_fixture: serde_json::Value = serde_json::from_str(&generated_night_case_fixture_json(
+        &pgo_case,
+        "mafiascum",
+        44_001,
+    ))
+    .unwrap();
+    assert_eq!(
+        pgo_fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"],
+        "pgo_shoots_visitor"
+    );
+    assert_eq!(
+        pgo_fixture["expectations"]["generated_actions"][0]["action_id"],
+        "pgo_shoots_visitor"
+    );
+
+    let babysitter_case = GeneratedNightCase {
+        seed: 2,
+        roster: vec![
+            ("slot_1".to_string(), "mafia_goon".to_string()),
+            ("slot_2".to_string(), "mafia_goon".to_string()),
+            ("slot_3".to_string(), "babysitter".to_string()),
+            ("slot_4".to_string(), "vanilla_townie".to_string()),
+        ],
+        actions: vec![
+            GeneratedNightAction {
+                actor_slot: "slot_1".to_string(),
+                template_id: "factional_kill".to_string(),
+                action_id: "generated_kill_ward".to_string(),
+                targets: vec!["slot_4".to_string()],
+            },
+            GeneratedNightAction {
+                actor_slot: "slot_2".to_string(),
+                template_id: "factional_kill".to_string(),
+                action_id: "generated_kill_babysitter".to_string(),
+                targets: vec!["slot_3".to_string()],
+            },
+            GeneratedNightAction {
+                actor_slot: "slot_3".to_string(),
+                template_id: "babysit".to_string(),
+                action_id: "generated_babysit".to_string(),
+                targets: vec!["slot_4".to_string()],
+            },
+        ],
+    };
+    let babysitter_fixture: serde_json::Value = serde_json::from_str(
+        &generated_night_case_fixture_json(&babysitter_case, "mafiascum", 44_002),
+    )
+    .unwrap();
+    assert_eq!(
+        babysitter_fixture["expectations"]["inner_events"][0]["payload"]["cause"],
+        "babysit"
+    );
+    assert_eq!(
+        babysitter_fixture["expectations"]["trace_decisions"][0]["outcome"],
+        "babysitter_dependency_death"
+    );
+
+    let hider_case = GeneratedNightCase {
+        seed: 3,
+        roster: vec![
+            ("slot_1".to_string(), "mafia_goon".to_string()),
+            ("slot_2".to_string(), "hider".to_string()),
+            ("slot_3".to_string(), "vanilla_townie".to_string()),
+        ],
+        actions: vec![
+            GeneratedNightAction {
+                actor_slot: "slot_2".to_string(),
+                template_id: "hide".to_string(),
+                action_id: "generated_hide".to_string(),
+                targets: vec!["slot_3".to_string()],
+            },
+            GeneratedNightAction {
+                actor_slot: "slot_1".to_string(),
+                template_id: "factional_kill".to_string(),
+                action_id: "generated_kill_host".to_string(),
+                targets: vec!["slot_3".to_string()],
+            },
+        ],
+    };
+    let hider_fixture: serde_json::Value = serde_json::from_str(
+        &generated_night_case_fixture_json(&hider_case, "mafiascum", 44_003),
+    )
+    .unwrap();
+    assert_eq!(
+        hider_fixture["expectations"]["inner_events"][0]["payload"]["cause"],
+        "hide"
+    );
+    assert_eq!(
+        hider_fixture["expectations"]["trace_decisions"][0]["outcome"],
+        "hider_dependency_death"
+    );
 }
 
 async fn resolution_payload(

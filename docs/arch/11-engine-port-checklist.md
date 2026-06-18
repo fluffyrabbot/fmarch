@@ -2417,8 +2417,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    checked semantic expectations, while the PGO replay passes with four checked semantic
    expectations including the `Trigger` inner event, generated kill, generated-action trace row,
    and anchored diagnostic note. `--reduce` now also reduces successful fixtures with expectations
-   only while the same expectation count remains green. This is a reusable artifact-backed
-   minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
+   only while the same expectation count remains green. The generated Mafiascum N01 fixture JSON
+   helper now emits matching `expectations` metadata for unambiguous PGO visit-trigger,
+   Babysitter dependency-death, and Hider host-death cases, while avoiding inference when
+   redirect/bus target mutation or obvious actor suppression is present.
+   `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` proves the success-shrinking path:
+   `--reduce` removes the irrelevant extra slot while preserving all four declared PGO
+   expectations. This is a reusable artifact-backed minimized replay promotion path, not true
+   property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2735,9 +2741,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by connecting generated replay failures
-to the metadata-backed minimizer path. Start with the Mafiascum generated N01 lane: when a
-generated case includes PGO, Babysitter, or Hider trigger/dependency actions, emit matching
-`expectations` metadata in the printed minimizer JSON and add one non-minimal success fixture
-regression that proves `--reduce` actually removes irrelevant slots/actions while preserving the
-declared semantic invariants.
+Continue Phase 4 persistent and generated-action systems by making the minimizer promotion path
+produce reusable reduced artifacts. Start by adding an optional `--write-reduced <path>` mode that
+writes the minimized fixture after a successful `--reduce`, then prove it with the non-minimal PGO
+fixture and document the remaining gap to automatic randomized property-test shrinking.

@@ -1311,9 +1311,14 @@ checks the `Trigger` inner event, generated kill, generated-action trace row, an
 diagnostic note. `--reduce` now also runs for successful fixtures that declare expectations and
 keeps a candidate only when the same semantic expectation count still passes. These minimized
 trigger/dependency fixtures replay through legal commands and require `audit_resolution`, anchored
-`inspect_trace`, and `audit_rebuild` to agree. This proves a reusable artifact-backed promotion
-path for hand-minimized trigger/dependency replays, not automatic property-test shrinking across
-generated families. A non-mafiascum generated replay lane now covers six
+`inspect_trace`, and `audit_rebuild` to agree. The generated Mafiascum N01 replay helper now emits
+matching `expectations` metadata for unambiguous PGO visit-trigger, Babysitter dependency-death, and
+Hider host-death generated cases, avoiding raw-action inference when redirect/bus target mutation
+or obvious actor suppression is present. `crates/commands/fixtures/night-pgo-trigger-nonminimal.json`
+is the first success-shrinking regression: `--reduce` removes the irrelevant extra slot while
+preserving all four PGO semantic expectations. This proves a reusable artifact-backed promotion
+path for hand-minimized trigger/dependency replays and metadata-rich generated failure output,
+not automatic property-test shrinking across generated families. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with
