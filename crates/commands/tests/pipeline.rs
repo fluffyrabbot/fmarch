@@ -12074,6 +12074,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("mark_clear_visibility", [97_091, 97_092]),
         ("mark_clear_expiry", [97_121, 97_122]),
         ("pgo_projection_state", [97_191, 97_192]),
+        ("hider_projection_state", [97_201, 97_202]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
         ("private_notification", [97_101, 97_102]),
@@ -12189,8 +12190,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 22,
-        "expected_case_count": 44,
+        "expected_family_count": 23,
+        "expected_case_count": 46,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
@@ -12202,6 +12203,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("conversion_projection_state".to_string(), 2),
             ("extra_action".to_string(), 2),
             ("hider".to_string(), 2),
+            ("hider_projection_state".to_string(), 2),
             ("hunter".to_string(), 2),
             ("ignite".to_string(), 2),
             ("item_grant".to_string(), 2),
@@ -12218,8 +12220,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(22));
-    assert_eq!(report["case_count"], serde_json::json!(44));
+    assert_eq!(report["family_count"], serde_json::json!(23));
+    assert_eq!(report["case_count"], serde_json::json!(46));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -20017,6 +20019,93 @@ fn generated_mafiascum_pgo_projection_state_fixture_json(seed: u64) -> String {
     .expect("generated Mafiascum PGO projection-state fixture serializes")
 }
 
+fn generated_mafiascum_hider_projection_state_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 42_000,
+        "pack": "mafiascum",
+        "phase": "N01",
+        "roster": [
+            { "slot": "slot_1", "role": "mafia_goon" },
+            { "slot": "slot_2", "role": "hider" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "mafia_goon" },
+            { "slot": "slot_5", "role": "vanilla_townie" }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_2",
+                "template_id": "hide",
+                "action_id": format!("generated_seed_{seed}_hider_hides_behind_host"),
+                "targets": ["slot_3"]
+            },
+            {
+                "actor_slot": "slot_4",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_mafia_kills_hider_host"),
+                "targets": ["slot_3"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_3",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_4"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "hide",
+                        "attackers": ["slot_3"],
+                        "unstoppable": true
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "night:dependency_death",
+                    "source": format!("action:generated_seed_{seed}_hider_hides_behind_host"),
+                    "outcome": "hider_dependency_death",
+                    "detail": {
+                        "action_id": format!("generated_seed_{seed}_hider_hides_behind_host"),
+                        "template_id": "hide",
+                        "host": "slot_3",
+                        "hider": "slot_2",
+                        "cause": "hide",
+                        "attackers": ["slot_3"]
+                    }
+                }
+            ],
+            "slot_states": [
+                {
+                    "payload": {
+                        "slot_id": "slot_3",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_4",
+                        "alive": true
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum Hider projection-state fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
@@ -20034,6 +20123,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         ),
         "bomb_projection_state" => generated_mafiascum_bomb_projection_state_fixture_json(seed),
         "pgo_projection_state" => generated_mafiascum_pgo_projection_state_fixture_json(seed),
+        "hider_projection_state" => generated_mafiascum_hider_projection_state_fixture_json(seed),
         "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
         "backup_projection_state" => generated_mafiascum_backup_projection_state_fixture_json(seed),
         "conversion_deprogramming" => {
@@ -20089,6 +20179,9 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "pgo_projection_state" => {
             fixture["expectations"]["generated_actions"][0]["action_id"] =
                 serde_json::json!("pgo_shoots_wrong_visitor");
+        }
+        "hider_projection_state" => {
+            fixture["expectations"]["slot_states"][1]["payload"]["alive"] = serde_json::json!(true);
         }
         "backup_inheritance" => {
             fixture["expectations"]["trace_decisions"][0]["detail"]["policy_detail"]
