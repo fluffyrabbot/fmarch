@@ -87,8 +87,9 @@ DATABASE_URL=postgres://... cargo run -p commands --bin inspect_trace -- <game_u
 
 `inspect_trace` and the host/cohost-only REST trace endpoint flatten `ResolutionTrace` decisions,
 edges, generated actions, effect changes, visibility rows, and notes into stream-sequence anchored
-rows for operator dispute review. Seeded fuzzing, large-graph performance checks, and a browser
-diff UI remain separate hardening work.
+rows for operator dispute review. Seeded fuzzing, large-graph performance checks, and saved
+resolution-diff browser views are part of the operator proof baseline; richer interactive graph
+exploration remains future operator UX.
 
 ## Event taxonomy (illustrative, not exhaustive)
 

@@ -2216,9 +2216,10 @@ the **single responsibility of `Constraints.max_targets`** (e.g. the bus driver 
 `resolution.applied` envelope plus a `resolution.trace` event
 ([10-event-schema](10-event-schema.md)).
 
-> **v1 golden coverage.** Stacked kills, multiple protectors on one slot, and stacked blocks
-> all **compose** in the engine, but are **not yet golden-covered** (deferred). The v1 goldens
-> exercise the single-actor cases of each interaction.
+> **v1 golden coverage.** The current baseline covers the standard-NAR single-actor cases plus
+> composed protection/blocking/strongman/bodyguard/redirect families through pack goldens and
+> command/projection replay artifacts. Exhaustive permutation coverage for every stacked
+> interaction remains outside the local saved-artifact baseline.
 
 ## Determinism rules (non-negotiable — inherited from im-human)
 

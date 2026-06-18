@@ -68,20 +68,20 @@ Already present:
   action-local template ids, `mode`/`effect`/`reads_effect` legality, target cardinality,
   window/cadence compatibility, vote weight references, and win-condition references.
 
-Known gaps:
+Current proof boundaries:
 
-- Golden fixture regeneration tooling exists for the current fixture shape, but a broader
-  authoring/regeneration workflow for future pack migrations is still pending.
+- Golden fixture regeneration and minimization tooling exists for the current fixture shape,
+  including checked-in generated fixture families. A broader authoring workflow for future pack
+  migrations remains outside the completed engine-port baseline.
 - The source-derived im-human parity matrix now has no unsupported primitive, modifier,
   result-event, action-id, role-id, or culture-note rows; the only unsupported rows are the
   explicit out-of-scope Engine V4 test families `feature_flags_test` and `init`.
-- Later build-order phases remain partial even though the extracted inventory rows are covered:
-  release-time ITA replay/refund breadth, richer persistent-effect/source/expiry state, richer
-  item UX, and operational UI/tooling hardening are still tracked below.
-- Persistent effects now have a rebuildable `slot_effect` projection, and explicit-audience
-  notices have a rebuildable `player_notification` projection, but the effect projection stores
-  only the v1 effect tag. Source, expiry, visibility, counters, inventories, and other richer
-  cross-phase facts are still pending.
+- The completion audit now marks all eight build-order phases complete and the readiness
+  baseline is recorded in `docs/ops/engine-port-readiness-baseline-2026-06-18.md`.
+- Persistent effects have a rebuildable `slot_effect` projection, explicit-audience notices
+  have a rebuildable `player_notification` projection, and counters/inventory-style state is
+  covered where needed by the resolver and command/projection proof. Richer host-facing UX for
+  future pack authoring remains outside the completed engine-port baseline.
 
 ## Correct architectural shape
 
@@ -3294,9 +3294,14 @@ coverage, and a playable vertical scenario through the command pipeline.
 Exit proof: a stored game can be replayed from event zero and produce semantically identical
 resolution envelopes and projections.
 
-## Recommended next slice
+## Baseline maintenance
 
-Continue Phase 7 by running a fresh completion audit over Operational hardening and choosing the next
-remaining partly proven or pending marker by evidence strength. Start with any row that already has
-manifested local operator artifacts and browser/API coverage, then add only the missing direct CLI or
-integration proof needed to promote that row without claiming hosted/background production execution.
+Before any future release/tag, rerun:
+
+```bash
+python3 tools/engine_port_completion_audit.py --check --require-complete --output target/operator-proof/current-engine-port-completion-audit.json
+```
+
+The 2026-06-18 readiness baseline is recorded in
+`docs/ops/engine-port-readiness-baseline-2026-06-18.md` and tagged as
+`engine-port-readiness-baseline-2026-06-18`.

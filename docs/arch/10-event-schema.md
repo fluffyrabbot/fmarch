@@ -242,8 +242,8 @@ unknown Rust events.
 | `ita.session.closed` | `ItaSessionClosed` | implemented for auto-closing pack sessions |
 | `ita.shot.queued` | `ItaShotQueued` | implemented for accepted ITA shots |
 | `ita.shot.buffered` | `ItaShotBuffered` | implemented for pack-declared ITA session `buffer_delay_ms`; newly buffered shots defer same-pass queue/resolve/kill |
-| `ita.shot.invalidated` | `ItaShotInvalidated` | canonical contract/import schema frozen; resolver queue invalidation policy still pending |
-| `ita.shot.refunded` | `ItaShotRefunded` | canonical contract/import schema frozen; resolver refund policy still pending |
+| `ita.shot.invalidated` | `ItaShotInvalidated` | implemented for same-session and buffered ITA shots invalidated by an earlier target death; result contract, pure fixtures, trace rows, and command/projection rebuild proof cover the policy |
+| `ita.shot.refunded` | `ItaShotRefunded` | implemented for already-dead ITA targets under refund policy; result contract, pure fixtures, trace rows, counters, and command/projection rebuild proof cover the policy |
 | `ita.shot.resolved` | `ItaShotResolved` | implemented for deterministic hit/miss plus paired `PlayerKilled` on hit |
 | — fmarch local | `PlayersLinked` | implemented; folds Cupid/lovers-style cross-slot link state; later day/night cascade is pack-policy gated |
 | — fmarch local | `RetaliationArmed` | implemented; folds Hunter-style chosen death retaliation state |
@@ -539,10 +539,10 @@ struct ResolutionTrace {
 The trace is not folded into player-facing projections; it's the **audit + golden-test
 oracle** ([09](09-engine-and-packs.md)). The pure resolver returns it beside
 `ResolutionApplied`, the command seam persists both atomically, and projections validate it
-on replay. The v1 resolver trace records the run id, phase id, schema version, a minimal
-decision list derived from the emitted inner events, and effect deltas for `EffectsMarked`
-and `EffectsCleared`; `generated` records `ActionGranted` and `ActionGrantConsumed` rows.
-Graph/visibility detail is still pending richer resolver trace emission.
+on replay. The v1 resolver trace records the run id, phase id, schema version, decisions derived
+from emitted inner events, redirect graph edges, generated action rows, effect changes, visibility
+rows, and notes. Operator trace inspection renders those rows with stream anchors for host/cohost
+review.
 
 ---
 
