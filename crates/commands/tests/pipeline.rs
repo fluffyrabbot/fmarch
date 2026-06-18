@@ -12062,6 +12062,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("backup_inheritance", [97_071, 97_072]),
+        ("backup_projection_state", [97_141, 97_142]),
         ("conversion_deprogramming", [97_081, 97_082]),
         ("conversion_projection_state", [97_131, 97_132]),
         ("poison_cure", [97_111, 97_112]),
@@ -12183,10 +12184,11 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 16,
-        "expected_case_count": 32,
+        "expected_family_count": 17,
+        "expected_case_count": 34,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
+            ("backup_projection_state".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
             ("bomb".to_string(), 2),
             ("conversion_deprogramming".to_string(), 2),
@@ -12206,8 +12208,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(16));
-    assert_eq!(report["case_count"], serde_json::json!(32));
+    assert_eq!(report["family_count"], serde_json::json!(17));
+    assert_eq!(report["case_count"], serde_json::json!(34));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19402,6 +19404,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             seed + 48_000,
         ),
         "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
+        "backup_projection_state" => generated_mafiascum_backup_projection_state_fixture_json(seed),
         "conversion_deprogramming" => {
             generated_mafiascum_conversion_deprogramming_fixture_json(seed)
         }
@@ -19439,6 +19442,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "backup_inheritance" => {
             fixture["expectations"]["trace_decisions"][0]["detail"]["policy_detail"]
                 ["source_action"] = serde_json::json!("target_backup_wrong");
+        }
+        "backup_projection_state" => {
+            fixture["expectations"]["slot_states"][0]["payload"]["role_key"] =
+                serde_json::json!("universal_backup");
         }
         "conversion_deprogramming" => {
             fixture["expectations"]["trace_decisions"][1]["detail"]["origin_source"] =
@@ -19563,6 +19570,27 @@ fn generated_mafiascum_backup_inheritance_fixture_json(seed: u64) -> String {
         }
     }))
     .expect("generated Mafiascum backup-inheritance fixture serializes")
+}
+
+fn generated_mafiascum_backup_projection_state_fixture_json(seed: u64) -> String {
+    let mut fixture: serde_json::Value =
+        serde_json::from_str(&generated_mafiascum_backup_inheritance_fixture_json(seed))
+            .expect("generated Mafiascum backup-inheritance fixture parses");
+    fixture["expectations"]["slot_states"] = serde_json::json!([
+        {
+            "payload": {
+                "slot_id": "slot_1",
+                "alive": true,
+                "status": "alive",
+                "role_key": "cop",
+                "alignment": "town",
+                "role_revealed": false,
+                "alignment_revealed": false
+            }
+        }
+    ]);
+    serde_json::to_string_pretty(&fixture)
+        .expect("generated Mafiascum backup projection-state fixture serializes")
 }
 
 fn generated_mafiascum_conversion_deprogramming_fixture_json(seed: u64) -> String {
