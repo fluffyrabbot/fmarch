@@ -1428,6 +1428,12 @@ fn append_operator_proof_run_fixture(
                         "target/operator-proof/version-mismatch-artifact-provenance-guard.json",
                         "Fixture-only row proving artifacts whose manifest version is incompatible remain display-only.",
                     ),
+                    generated_shrink_gap_audit_fixture_row(
+                        "generated-shrink-gap-audit-drift-guard",
+                        "Generated shrink gap-audit drift guard",
+                        "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+                        "Fixture-only row proving a valid but semantically failing generated-shrink gap-audit artifact renders as drifted without trusted metadata.",
+                    ),
                 ],
             });
         }
@@ -1893,6 +1899,26 @@ fn provenance_fixture_row(
         test_selector: None,
         artifact_path: Some(artifact_path.to_string()),
         artifact_kind: ProofRunArtifactKind::GameSpecificAuditBundle,
+        audit_expected_path: None,
+        audit_actual_path: None,
+        proof_boundary: proof_boundary.to_string(),
+    }
+}
+
+fn generated_shrink_gap_audit_fixture_row(
+    id: &str,
+    family: &str,
+    artifact_path: &str,
+    proof_boundary: &str,
+) -> ProofRunSpec {
+    ProofRunSpec {
+        id: id.to_string(),
+        family: family.to_string(),
+        scope: "Local-only".to_string(),
+        command_template: format!("fixture writes {artifact_path}"),
+        test_selector: None,
+        artifact_path: Some(artifact_path.to_string()),
+        artifact_kind: ProofRunArtifactKind::GeneratedShrinkGapAuditReport,
         audit_expected_path: None,
         audit_actual_path: None,
         proof_boundary: proof_boundary.to_string(),
@@ -5264,6 +5290,13 @@ mod tests {
             1,
         );
         make_operator_artifact_stale("target/operator-proof/stale-artifact-provenance-guard.json");
+        write_workspace_json(
+            "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+            serde_json::to_value(generated_shrink_gap_audit_drift_guard_report(
+                "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+            ))
+            .expect("generated shrink gap-audit drift guard serializes"),
+        );
 
         write_workspace_json(
             "target/operator-proof/current-status-audit-report.json",
@@ -5302,7 +5335,7 @@ mod tests {
                     "non_trusted": 0
                 },
                 "fixtures": {
-                    "total_artifact_rows": 5,
+                    "total_artifact_rows": 6,
                     "trusted": 0,
                     "stale": 1,
                     "missing": 1,
@@ -5310,8 +5343,8 @@ mod tests {
                     "path_mismatch": 1,
                     "version_mismatch": 1,
                     "input_mismatch": 0,
-                    "drifted": 0,
-                    "non_trusted": 5
+                    "drifted": 1,
+                    "non_trusted": 6
                 },
                 "rows": []
             }),
@@ -5575,6 +5608,17 @@ mod tests {
             count_mismatches: Vec::new(),
             evidence_failures: Vec::new(),
         }
+    }
+
+    fn generated_shrink_gap_audit_drift_guard_report(
+        artifact_path: &str,
+    ) -> OperatorGeneratedShrinkGapAuditReport {
+        let mut report = generated_shrink_gap_audit_bootstrap_report(artifact_path);
+        report.ok = false;
+        report
+            .missing_families
+            .push("hider_projection_state".to_string());
+        report
     }
 
     fn write_operator_provenance_fixture(path: &str, reported_path: &str, manifest_version: u16) {

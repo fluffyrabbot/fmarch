@@ -27,6 +27,8 @@ const pathMismatchProofArtifact =
   "target/operator-proof/path-mismatch-artifact-provenance-guard.json";
 const versionMismatchProofArtifact =
   "target/operator-proof/version-mismatch-artifact-provenance-guard.json";
+const generatedShrinkGapAuditDriftGuard =
+  "target/operator-proof/generated-shrink-gap-audit-drift-guard.json";
 const statusAuditExport =
   "target/operator-proof/current-status-audit-check.json";
 const statusAuditReport =
@@ -93,7 +95,7 @@ const pages = [
       "PRODUCTION ARTIFACTS",
       "trusted 13 / 13; non_trusted 0",
       "FIXTURE ARTIFACTS",
-      "trusted 0 / 5; non_trusted 5",
+      "trusted 0 / 6; non_trusted 6",
       "large_action_graph_resolves_and_audits_within_regression_ceiling",
       "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
       "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
@@ -119,6 +121,9 @@ const pages = [
       "artifact manifest version incompatible",
       "artifact_version: 2",
       "expected_version: 1",
+      generatedShrinkGapAuditDriftGuard,
+      "Generated shrink gap-audit drift guard",
+      "artifact drifted",
       "game_id: 08d8a45f-6c3b-4401-8e31-8d7637f36a82",
       "game_id: 3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
       "manifest_version: 1",
@@ -144,6 +149,7 @@ const pages = [
       "#proof-run-stale-artifact-provenance-guard",
       "#proof-run-path-mismatch-artifact-provenance-guard",
       "#proof-run-version-mismatch-artifact-provenance-guard",
+      "#proof-run-generated-shrink-gap-audit-drift-guard",
     ],
     rowChecks: [
       {
@@ -210,6 +216,24 @@ const pages = [
           "game_id:",
           "manifest_version:",
           "retention_comparison.normalized_match:",
+        ],
+      },
+      {
+        selector: "#proof-run-generated-shrink-gap-audit-drift-guard",
+        required: [
+          generatedShrinkGapAuditDriftGuard,
+          "Generated shrink gap-audit drift guard",
+          "artifact drifted",
+          "diff_count:",
+          "freshness_max_age_seconds: 86400",
+        ],
+        forbidden: [
+          "game_id:",
+          "manifest_version:",
+          "retention_comparison.normalized_match:",
+          "trusted_metadata",
+          "gap_audit_ok:",
+          "manifest_family_count:",
         ],
       },
     ],
@@ -520,9 +544,10 @@ const jsonPages = [
         non_trusted: 0,
       },
       fixtures: {
-        total_artifact_rows: 5,
+        total_artifact_rows: 6,
         trusted: 0,
-        non_trusted: 5,
+        drifted: 1,
+        non_trusted: 6,
       },
     },
     rows: [
@@ -700,6 +725,16 @@ const jsonPages = [
         state: "version_mismatch",
         artifact_version: 2,
         expected_version: 1,
+      },
+      {
+        row_id: "proof-run-generated-shrink-gap-audit-drift-guard",
+        state: "drifted",
+        drifted: {
+          freshness_max_age_seconds: 86400,
+        },
+        audit_report: {
+          diff_count: 2,
+        },
       },
     ],
   },
@@ -891,6 +926,22 @@ function generatedShrinkMatrixBootstrapReport() {
     family_manifest_matched: true,
     families,
     entries,
+  };
+}
+
+function generatedShrinkGapAuditBootstrapReport(artifactPath, drifted = false) {
+  return {
+    artifact_version: 1,
+    artifact_path: artifactPath,
+    ok: !drifted,
+    expected_family_count: 29,
+    manifest_family_count: 29,
+    expected_case_count: 58,
+    manifest_case_count: 58,
+    missing_families: drifted ? ["hider_projection_state"] : [],
+    unexpected_families: [],
+    count_mismatches: [],
+    evidence_failures: [],
   };
 }
 
@@ -1284,6 +1335,14 @@ async function writeProvenanceProofArtifacts() {
       2,
     ),
   );
+  await writeFile(
+    path.join(root, generatedShrinkGapAuditDriftGuard),
+    JSON.stringify(
+      generatedShrinkGapAuditBootstrapReport(generatedShrinkGapAuditDriftGuard, true),
+      null,
+      2,
+    ),
+  );
 }
 
 async function writeLocalReportBootstraps() {
@@ -1515,6 +1574,14 @@ async function writeLocalReportBootstraps() {
   await writeFile(
     path.join(root, generatedShrinkMatrixReport),
     JSON.stringify(generatedShrinkMatrixBootstrapReport(), null, 2),
+  );
+  await writeFile(
+    path.join(root, generatedShrinkGapAuditReport),
+    JSON.stringify(
+      generatedShrinkGapAuditBootstrapReport(generatedShrinkGapAuditReport),
+      null,
+      2,
+    ),
   );
 }
 
@@ -2035,6 +2102,17 @@ async function runBrowserProof() {
           }
           if (!(row.artifact?.age_seconds > expected.stale.freshness_max_age_seconds)) {
             throw new Error(`${jsonPage.name} row ${expected.row_id} is not stale`);
+          }
+        }
+        if (expected.drifted) {
+          if (
+            row.artifact?.freshness_max_age_seconds !==
+            expected.drifted.freshness_max_age_seconds
+          ) {
+            throw new Error(`${jsonPage.name} row ${expected.row_id} freshness ceiling mismatch`);
+          }
+          if (typeof row.artifact?.age_seconds !== "number") {
+            throw new Error(`${jsonPage.name} row ${expected.row_id} missing drift freshness age`);
           }
         }
         if (expected.trusted) {

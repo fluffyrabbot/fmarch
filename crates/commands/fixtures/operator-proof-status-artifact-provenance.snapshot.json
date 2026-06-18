@@ -17,7 +17,7 @@
       "non_trusted": 0
     },
     "fixtures": {
-      "total_artifact_rows": 5,
+      "total_artifact_rows": 6,
       "trusted": 0,
       "stale": 1,
       "missing": 1,
@@ -25,8 +25,8 @@
       "path_mismatch": 1,
       "version_mismatch": 1,
       "input_mismatch": 0,
-      "drifted": 0,
-      "non_trusted": 5
+      "drifted": 1,
+      "non_trusted": 6
     }
   },
   "families": [
@@ -586,6 +586,23 @@
             "expected_version": 1
           },
           "proof_boundary": "Fixture-only row proving artifacts whose manifest version is incompatible remain display-only."
+        },
+        {
+          "id": "generated-shrink-gap-audit-drift-guard",
+          "row_id": "proof-run-generated-shrink-gap-audit-drift-guard",
+          "family": "Generated shrink gap-audit drift guard",
+          "scope": "Local-only",
+          "fixture": true,
+          "command": "fixture writes target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+          "artifact": {
+            "path": "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+            "state": "drifted",
+            "modified_at_unix_seconds": 1781796575,
+            "age_seconds": 5,
+            "freshness_max_age_seconds": 86400,
+            "diff_count": 2
+          },
+          "proof_boundary": "Fixture-only row proving a valid but semantically failing generated-shrink gap-audit artifact renders as drifted without trusted metadata."
         }
       ]
     }

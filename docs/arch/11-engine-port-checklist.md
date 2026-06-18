@@ -2780,9 +2780,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    `artifact_kind: operator_proof_status_audit_report`, expected input paths, freshness, manifest
    version, and diff count; the shared classifier distinguishes missing, malformed, stale,
    path-mismatched, input-mismatched, drifted, and trusted saved reports. The same API vertical proves the v1 contract for
-   all trusted artifact rows and all five untrusted fixture rows, plus the artifact-less
+   all trusted artifact rows and all six untrusted fixture rows, including a semantically drifted
+   generated-shrink gap-audit fixture with no trusted metadata, plus the artifact-less
    status export row, non-host rejection, and summary counts (`production.trusted = 13`,
-   `production.non_trusted = 0`, `fixtures.non_trusted = 5`), and compares the host/cohost HTTP
+   `production.non_trusted = 0`, `fixtures.non_trusted = 6`), and compares the host/cohost HTTP
    status JSON with the no-server shared model after normalizing the current game id and
    wall-clock-derived artifact age/mtime fields. The host/cohost-only
    `/operator/proof-runs/status-audit` JSON route reads the saved
@@ -2820,8 +2821,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-browser-smoke/playwright-dom-proof.json` both record the base artifact path,
    the retention artifact path, the status-audit report path, the go/no-go report path, both parsed
    `game_id` values, `manifest_version: 1`,
-   `retention_comparison.normalized_match: true`, the five provenance fixture rows, their
-   untrusted markers, freshness checks, compact summary counts, and the retention lane's
+   `retention_comparison.normalized_match: true`, the six fixture rows, their
+   untrusted markers, freshness checks, generated-shrink gap-audit drift guard, compact summary counts, and the retention lane's
    `--compare-with` command text on the proof-run page. The live HTTP artifact also records
    proof-run status JSON contract checks, and the Playwright artifact records browser-fetched JSON
    `contract_version: 1`, row-derived summary, and state-specific artifact checks. The Playwright
@@ -3003,7 +3004,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by promoting the generated-shrink gap-audit negative proof into the browser/status
-fixture set: add a fixture-only malformed or missing-family gap-audit row, prove the operator status
-page renders it as `drifted` with no trusted metadata, and keep the production gap-audit row trusted
-through the normal manifest/status/browser path without rerunning the Postgres-backed shrink cases.
+Continue Phase 4 by turning one remaining generated-shrink proof family into the next
+artifact-backed semantic minimizer promotion: pick the narrowest Phase 4 family whose generated
+matrix case still lacks a checked-in minimized fixture, commit the reduced success and
+bad-expectation artifacts, and prove it through `minimize_night_fixture`, the focused pipeline
+test, the generated-shrink matrix, and the gap audit without claiming exhaustive randomized
+coverage.

@@ -1094,9 +1094,9 @@ host/cohost-only
 commands. Its current contract is `contract_version: 1`: the root carries game id, manifest
 version, execution mode, production/fixture summary counts, and row families; each row carries
 stable ids, fixture scope, rendered command, proof boundary, optional artifact path, artifact state
-(`missing`, `malformed`, `stale`, `path_mismatch`, `version_mismatch`, or `trusted`), freshness
-fields for trusted/stale artifacts, and trusted metadata only for fresh path/version-matching
-artifacts. A focused API unit test validates the versioned shape, row-derived summary counts, and
+(`missing`, `malformed`, `stale`, `path_mismatch`, `version_mismatch`, `input_mismatch`,
+`drifted`, or `trusted`), freshness fields for trusted/stale/drifted artifacts, and trusted
+metadata only for fresh path/version-matching artifacts. A focused API unit test validates the versioned shape, row-derived summary counts, and
 state-specific fields across all eight artifact states. The proof-run manifest parser, artifact
 classifier, status builder, contract DTO, and fixture rows now live in `commands::operator_proof`,
 so the HTTP JSON endpoint and HTML page render the same shared model. The no-server
@@ -1123,10 +1123,11 @@ the manifest declares `artifact_kind: operator_proof_status_audit_report`, expec
 freshness, manifest version, and diff count; the shared classifier distinguishes missing,
 malformed, stale, path-mismatched, input-mismatched, drifted, and trusted saved reports. The same
 API vertical proves the v1 contract for all trusted artifact
-rows and all five untrusted fixture rows, plus the artifact-less status export row and trusted
+rows and all six untrusted fixture rows, including a semantically drifted generated-shrink
+gap-audit fixture with no trusted metadata, plus the artifact-less status export row and trusted
 status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 13`,
 `production.non_trusted = 0`,
-`fixtures.non_trusted = 5`), and compares the host/cohost HTTP status JSON with the no-server
+`fixtures.non_trusted = 6`), and compares the host/cohost HTTP status JSON with the no-server
 shared model after normalizing the current game id and wall-clock-derived artifact age/mtime
 fields. The host/cohost-only `/operator/proof-runs/status-audit` JSON route reads the saved
 `target/operator-proof/current-status-audit-report.json` artifact and the companion
@@ -1161,8 +1162,8 @@ The live HTTP and browser artifacts at
 `target/operator-browser-smoke/playwright-dom-proof.json` both record the base artifact path, the
 retention artifact path, the status-audit report path, the go/no-go report path, both parsed
 `game_id` values, `manifest_version: 1`,
-`retention_comparison.normalized_match: true`, the five provenance fixture rows, their untrusted
-markers, freshness checks, compact summary counts, and the `--compare-with` command text on the
+`retention_comparison.normalized_match: true`, the six fixture rows, their untrusted
+markers, freshness checks, generated-shrink gap-audit drift guard, compact summary counts, and the `--compare-with` command text on the
 proof-run page; the live HTTP artifact also records proof-run status JSON contract checks, and the
 Playwright artifact records browser-fetched JSON `contract_version: 1`, row-derived summary, and
 state-specific artifact checks, plus the go/no-go page's large-action and determinism trusted

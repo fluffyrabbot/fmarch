@@ -208,6 +208,13 @@ fn ensure_operator_proof_artifacts() {
         1,
     );
     make_operator_artifact_stale("target/operator-proof/stale-artifact-provenance-guard.json");
+    write_workspace_json(
+        "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+        serde_json::to_value(generated_shrink_gap_audit_drift_guard_report(
+            "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+        ))
+        .expect("generated shrink gap-audit drift guard serializes"),
+    );
 
     let report_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -650,23 +657,36 @@ fn generated_shrink_gap_audit_bootstrap_report(
     }
 }
 
+fn generated_shrink_gap_audit_drift_guard_report(
+    artifact_path: &str,
+) -> OperatorGeneratedShrinkGapAuditReport {
+    let mut report = generated_shrink_gap_audit_bootstrap_report(artifact_path);
+    report.ok = false;
+    report
+        .missing_families
+        .push("hider_projection_state".to_string());
+    report
+}
+
 fn write_operator_provenance_fixture(path: &str, reported_path: &str, manifest_version: u16) {
-    let artifact_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(path);
-    fs::create_dir_all(artifact_path.parent().unwrap()).unwrap();
-    fs::write(
-        artifact_path,
-        serde_json::to_vec_pretty(&serde_json::json!({
+    write_workspace_json(
+        path,
+        serde_json::json!({
             "ok": true,
             "manifest_version": manifest_version,
             "game_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "artifact_path": reported_path,
             "runs": []
-        }))
-        .unwrap(),
-    )
-    .unwrap();
+        }),
+    );
+}
+
+fn write_workspace_json(path: &str, value: serde_json::Value) {
+    let artifact_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(path);
+    fs::create_dir_all(artifact_path.parent().unwrap()).unwrap();
+    fs::write(artifact_path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
 }
 
 fn make_operator_artifact_stale(path: &str) {
@@ -1769,7 +1789,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let fixture_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(fixture_html.contains("trusted 13 / 13; non_trusted 0"));
-    assert!(fixture_html.contains("trusted 0 / 5; non_trusted 5"));
+    assert!(fixture_html.contains("trusted 0 / 6; non_trusted 6"));
     let missing_row = table_row_for(&fixture_html, "proof-run-missing-artifact-provenance-guard");
     assert!(missing_row.contains("target/operator-proof/missing-artifact-provenance-guard.json"));
     assert!(missing_row.contains("artifact not present locally"));
@@ -1820,6 +1840,23 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(!version_mismatch_row.contains("manifest_version:"));
     assert!(!version_mismatch_row.contains("retention_comparison.normalized_match:"));
 
+    let gap_drift_row = table_row_for(
+        &fixture_html,
+        "proof-run-generated-shrink-gap-audit-drift-guard",
+    );
+    assert!(
+        gap_drift_row.contains("target/operator-proof/generated-shrink-gap-audit-drift-guard.json")
+    );
+    assert!(gap_drift_row.contains("Generated shrink gap-audit drift guard"));
+    assert!(gap_drift_row.contains("artifact drifted"));
+    assert!(gap_drift_row.contains("diff_count:"));
+    assert!(gap_drift_row.contains("modified_at_unix_seconds:"));
+    assert!(gap_drift_row.contains("age_seconds:"));
+    assert!(gap_drift_row.contains("freshness_max_age_seconds: 86400"));
+    assert!(!gap_drift_row.contains("trusted_metadata"));
+    assert!(!gap_drift_row.contains("gap_audit_ok:"));
+    assert!(!gap_drift_row.contains("manifest_family_count:"));
+
     let response = app
         .clone()
         .oneshot(
@@ -1856,16 +1893,16 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(status["summary"]["production"]["non_trusted"], 0);
     assert_eq!(status["summary"]["production"]["input_mismatch"], 0);
     assert_eq!(status["summary"]["production"]["drifted"], 0);
-    assert_eq!(status["summary"]["fixtures"]["total_artifact_rows"], 5);
+    assert_eq!(status["summary"]["fixtures"]["total_artifact_rows"], 6);
     assert_eq!(status["summary"]["fixtures"]["trusted"], 0);
-    assert_eq!(status["summary"]["fixtures"]["non_trusted"], 5);
+    assert_eq!(status["summary"]["fixtures"]["non_trusted"], 6);
     assert_eq!(status["summary"]["fixtures"]["stale"], 1);
     assert_eq!(status["summary"]["fixtures"]["missing"], 1);
     assert_eq!(status["summary"]["fixtures"]["malformed"], 1);
     assert_eq!(status["summary"]["fixtures"]["path_mismatch"], 1);
     assert_eq!(status["summary"]["fixtures"]["version_mismatch"], 1);
     assert_eq!(status["summary"]["fixtures"]["input_mismatch"], 0);
-    assert_eq!(status["summary"]["fixtures"]["drifted"], 0);
+    assert_eq!(status["summary"]["fixtures"]["drifted"], 1);
 
     let trusted_row = proof_status_row(&status, "proof-run-checked-game-specific-audit-bundle");
     assert_eq!(
@@ -1960,6 +1997,30 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(version_mismatch_status_row["artifact"]
         .get("trusted_metadata")
         .is_none());
+
+    let gap_drift_status_row =
+        proof_status_row(&status, "proof-run-generated-shrink-gap-audit-drift-guard");
+    assert_eq!(gap_drift_status_row["artifact"]["state"], "drifted");
+    assert_eq!(
+        gap_drift_status_row["artifact"]["path"],
+        "target/operator-proof/generated-shrink-gap-audit-drift-guard.json"
+    );
+    assert!(
+        gap_drift_status_row["artifact"]["diff_count"]
+            .as_u64()
+            .unwrap()
+            >= 2
+    );
+    assert_eq!(
+        gap_drift_status_row["artifact"]["freshness_max_age_seconds"],
+        86400
+    );
+    assert!(gap_drift_status_row["artifact"]
+        .get("trusted_metadata")
+        .is_none());
+    assert!(gap_drift_status_row["command"].as_str().unwrap().contains(
+        "fixture writes target/operator-proof/generated-shrink-gap-audit-drift-guard.json"
+    ));
 
     let status_export_row = proof_status_row(&status, "proof-run-operator-proof-status-export");
     assert!(status_export_row["artifact"].is_null());
@@ -5160,7 +5221,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "Operator Proof-Run Index",
                 "Operator Proof Fixtures",
                 "trusted 13 / 13; non_trusted 0",
-                "trusted 0 / 5; non_trusted 5",
+                "trusted 0 / 6; non_trusted 6",
                 "target/operator-proof/missing-artifact-provenance-guard.json",
                 "artifact not present locally",
                 "target/operator-proof/malformed-artifact-metadata-guard.json",
@@ -5174,6 +5235,9 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "artifact manifest version incompatible",
                 "artifact_version: 2",
                 "expected_version: 1",
+                "target/operator-proof/generated-shrink-gap-audit-drift-guard.json",
+                "Generated shrink gap-audit drift guard",
+                "artifact drifted",
             ],
         ),
         (
@@ -5185,7 +5249,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"production\":",
                 "\"fixtures\":",
                 "\"non_trusted\":0",
-                "\"non_trusted\":5",
+                "\"non_trusted\":6",
                 "\"row_id\":\"proof-run-checked-game-specific-audit-bundle\"",
                 "\"state\":\"trusted\"",
                 "\"row_id\":\"proof-run-game-specific-audit-artifact-retention\"",
@@ -5236,6 +5300,9 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"state\":\"version_mismatch\"",
                 "\"artifact_version\":2",
                 "\"expected_version\":1",
+                "\"row_id\":\"proof-run-generated-shrink-gap-audit-drift-guard\"",
+                "\"path\":\"target/operator-proof/generated-shrink-gap-audit-drift-guard.json\"",
+                "\"state\":\"drifted\"",
             ],
         ),
         (
@@ -5626,6 +5693,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "proof-run-stale-artifact-provenance-guard",
                 "proof-run-path-mismatch-artifact-provenance-guard",
                 "proof-run-version-mismatch-artifact-provenance-guard",
+                "proof-run-generated-shrink-gap-audit-drift-guard",
             ] {
                 let row = table_row_for(&body, row_id);
                 for forbidden in [
