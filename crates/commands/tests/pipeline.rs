@@ -13306,6 +13306,72 @@ async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_mini
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    for (stem, fixture_json, expected_audited, expected_traces) in [
+        (
+            "chinese-sheriff-badge-election-semantic-expectations",
+            chinese_sheriff_badge_election_fixture_json(),
+            1,
+            1,
+        ),
+        (
+            "chinese-sheriff-badge-pass-semantic-expectations",
+            chinese_sheriff_badge_pass_fixture_json(),
+            2,
+            2,
+        ),
+        (
+            "chinese-sheriff-badge-destroy-semantic-expectations",
+            chinese_sheriff_badge_destroy_fixture_json(),
+            3,
+            3,
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(&fixture_json).expect("Sheriff badge fixture JSON parses");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= 5,
+            "{stem} should preserve BadgeChanged, vote weight, trace, and projection semantics"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(stem);
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "{stem} should replay");
+        assert_eq!(
+            report["original"]["resolution_audited"],
+            serde_json::json!(expected_audited),
+            "{stem} should audit every setup and target phase"
+        );
+        assert_eq!(
+            report["original"]["trace_count"],
+            serde_json::json!(expected_traces),
+            "{stem} should inspect every setup and target trace"
+        );
+        assert_eq!(
+            report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} should rebuild folded sheriff_badge projection state"
+        );
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} should check every sheriff badge semantic expectation"
+        );
+        assert_eq!(report["reduction"]["replay_success"], true);
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"], true,
+            "{stem} should promote the reduced success fixture"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -18912,6 +18978,314 @@ fn generated_mafia_universe_ita_expectations_json(
     }))
 }
 
+fn chinese_sheriff_badge_election_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 800_001,
+        "pack": "chinese_structured",
+        "phase": "D01",
+        "roster": [
+            { "slot": "slot_1", "role": "sheriff_badge_helper" },
+            { "slot": "slot_2", "role": "sheriff_badge_helper" },
+            { "slot": "slot_3", "role": "sheriff_badge_helper" },
+            { "slot": "slot_4", "role": "wolf" },
+            { "slot": "slot_5", "role": "wolf" }
+        ],
+        "actions": [{
+            "actor_slot": "slot_1",
+            "template_id": "sheriff_election",
+            "action_id": "badge_el_001",
+            "targets": ["slot_2"]
+        }],
+        "votes": [
+            { "actor_slot": "slot_2", "target_slot": "slot_4" },
+            { "actor_slot": "slot_3", "target_slot": "slot_4" }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "BadgeChanged",
+                    "payload": {
+                        "badge_id": "sheriff_badge",
+                        "owner": "slot_2",
+                        "previous_owner": null,
+                        "vote_weight": 1.5,
+                        "actor": "slot_1",
+                        "source_action": "badge_el_001",
+                        "reason": "elected",
+                        "destroyed": false,
+                        "phase_id": "D01",
+                        "phase_kind": "Day",
+                        "phase_number": 1
+                    }
+                },
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "NoMajority",
+                        "winner": null,
+                        "contenders": ["slot_4"],
+                        "majority": 3.0,
+                        "total_weight": 5.5,
+                        "tallies": { "slot_4": 2.5 },
+                        "weights": { "slot_2": 1.5 }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D01",
+                        "deaths": []
+                    }
+                }
+            ],
+            "generated_actions": [{
+                "action_id": "badge_el_001",
+                "source": "BadgeChanged",
+                "actor": "slot_1",
+                "targets": ["slot_2"],
+                "detail": {
+                    "badge_id": "sheriff_badge",
+                    "previous_owner": null,
+                    "vote_weight": 1.5,
+                    "reason": "elected",
+                    "destroyed": false
+                }
+            }],
+            "sheriff_badges": [{
+                "payload": {
+                    "badge_id": "sheriff_badge",
+                    "owner_slot": "slot_2",
+                    "vote_weight": 1.5,
+                    "source_slot": "slot_1",
+                    "source_action": "badge_el_001",
+                    "reason": "elected",
+                    "destroyed": false,
+                    "phase_id": "D01",
+                    "phase_kind": "Day",
+                    "phase_number": 1
+                }
+            }]
+        }
+    }))
+    .expect("Chinese sheriff badge election fixture JSON serializes")
+}
+
+fn chinese_sheriff_badge_pass_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 800_002,
+        "pack": "chinese_structured",
+        "phase": "D02",
+        "roster": [
+            { "slot": "slot_1", "role": "sheriff_badge_helper" },
+            { "slot": "slot_2", "role": "sheriff_badge_helper" },
+            { "slot": "slot_3", "role": "sheriff_badge_helper" },
+            { "slot": "slot_4", "role": "wolf" },
+            { "slot": "slot_5", "role": "wolf" }
+        ],
+        "setup_phases": [{
+            "phase": "D01",
+            "seed": 800_001,
+            "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "sheriff_election",
+                "action_id": "badge_el_001",
+                "targets": ["slot_2"]
+            }]
+        }],
+        "actions": [{
+            "actor_slot": "slot_2",
+            "template_id": "sheriff_pass",
+            "action_id": "badge_pass_001",
+            "targets": ["slot_3"]
+        }],
+        "votes": [
+            { "actor_slot": "slot_3", "target_slot": "slot_4" },
+            { "actor_slot": "slot_1", "target_slot": "slot_4" }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "BadgeChanged",
+                    "payload": {
+                        "badge_id": "sheriff_badge",
+                        "owner": "slot_3",
+                        "previous_owner": "slot_2",
+                        "vote_weight": 1.5,
+                        "actor": "slot_2",
+                        "source_action": "badge_pass_001",
+                        "reason": "voluntary",
+                        "destroyed": false,
+                        "phase_id": "D02",
+                        "phase_kind": "Day",
+                        "phase_number": 2
+                    }
+                },
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "NoMajority",
+                        "winner": null,
+                        "contenders": ["slot_4"],
+                        "majority": 3.0,
+                        "total_weight": 5.5,
+                        "tallies": { "slot_4": 2.5 },
+                        "weights": { "slot_3": 1.5 }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D02",
+                        "deaths": []
+                    }
+                }
+            ],
+            "generated_actions": [{
+                "action_id": "badge_pass_001",
+                "source": "BadgeChanged",
+                "actor": "slot_2",
+                "targets": ["slot_3"],
+                "detail": {
+                    "badge_id": "sheriff_badge",
+                    "previous_owner": "slot_2",
+                    "vote_weight": 1.5,
+                    "reason": "voluntary",
+                    "destroyed": false
+                }
+            }],
+            "sheriff_badges": [{
+                "payload": {
+                    "badge_id": "sheriff_badge",
+                    "owner_slot": "slot_3",
+                    "vote_weight": 1.5,
+                    "source_slot": "slot_2",
+                    "source_action": "badge_pass_001",
+                    "reason": "voluntary",
+                    "destroyed": false,
+                    "phase_id": "D02",
+                    "phase_kind": "Day",
+                    "phase_number": 2
+                }
+            }]
+        }
+    }))
+    .expect("Chinese sheriff badge pass fixture JSON serializes")
+}
+
+fn chinese_sheriff_badge_destroy_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 800_003,
+        "pack": "chinese_structured",
+        "phase": "D03",
+        "roster": [
+            { "slot": "slot_1", "role": "sheriff_badge_helper" },
+            { "slot": "slot_2", "role": "sheriff_badge_helper" },
+            { "slot": "slot_3", "role": "sheriff_badge_helper" },
+            { "slot": "slot_4", "role": "wolf" },
+            { "slot": "slot_5", "role": "wolf" }
+        ],
+        "setup_phases": [
+            {
+                "phase": "D01",
+                "seed": 800_001,
+                "actions": [{
+                    "actor_slot": "slot_1",
+                    "template_id": "sheriff_election",
+                    "action_id": "badge_el_001",
+                    "targets": ["slot_2"]
+                }]
+            },
+            {
+                "phase": "D02",
+                "seed": 800_002,
+                "actions": [{
+                    "actor_slot": "slot_2",
+                    "template_id": "sheriff_pass",
+                    "action_id": "badge_pass_001",
+                    "targets": ["slot_3"]
+                }]
+            }
+        ],
+        "actions": [{
+            "actor_slot": "slot_3",
+            "template_id": "sheriff_destroy",
+            "action_id": "badge_destroy_001",
+            "targets": []
+        }],
+        "votes": [
+            { "actor_slot": "slot_2", "target_slot": "slot_4" },
+            { "actor_slot": "slot_3", "target_slot": "slot_4" }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "BadgeChanged",
+                    "payload": {
+                        "badge_id": "sheriff_badge",
+                        "owner": null,
+                        "previous_owner": "slot_3",
+                        "vote_weight": null,
+                        "actor": "slot_3",
+                        "source_action": "badge_destroy_001",
+                        "reason": "destroyed",
+                        "destroyed": true,
+                        "phase_id": "D03",
+                        "phase_kind": "Day",
+                        "phase_number": 3
+                    }
+                },
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "NoMajority",
+                        "winner": null,
+                        "contenders": ["slot_4"],
+                        "majority": 3.0,
+                        "total_weight": 5.0,
+                        "tallies": { "slot_4": 2.0 },
+                        "weights": { "slot_3": 1.0 }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D03",
+                        "deaths": []
+                    }
+                }
+            ],
+            "generated_actions": [{
+                "action_id": "badge_destroy_001",
+                "source": "BadgeChanged",
+                "actor": "slot_3",
+                "targets": [],
+                "detail": {
+                    "badge_id": "sheriff_badge",
+                    "previous_owner": "slot_3",
+                    "vote_weight": null,
+                    "reason": "destroyed",
+                    "destroyed": true
+                }
+            }],
+            "sheriff_badges": [{
+                "payload": {
+                    "badge_id": "sheriff_badge",
+                    "owner_slot": null,
+                    "vote_weight": null,
+                    "source_slot": "slot_3",
+                    "source_action": "badge_destroy_001",
+                    "reason": "destroyed",
+                    "destroyed": true,
+                    "phase_id": "D03",
+                    "phase_kind": "Day",
+                    "phase_number": 3
+                }
+            }]
+        }
+    }))
+    .expect("Chinese sheriff badge destroy fixture JSON serializes")
+}
+
 fn mafia_universe_day_notes_fixture_json() -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "seed": 920_001,
@@ -19900,6 +20274,7 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
         "trace_decisions",
         "trace_notes",
         "generated_actions",
+        "sheriff_badges",
     ]
     .into_iter()
     .map(|key| expectations[key].as_array().map_or(0, Vec::len))

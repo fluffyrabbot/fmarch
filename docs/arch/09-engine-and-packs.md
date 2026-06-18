@@ -1405,7 +1405,13 @@ self-destruct generated rows, ITA session open/update/close rows, every queued/r
 and generic ITA hit/miss outcomes. This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across all twelve fixed D01 seeds and checked every emitted
-Phase 5 day semantic expectation through `minimize_night_fixture`. Dedicated Phase 5
+Phase 5 day semantic expectation through `minimize_night_fixture`. `minimize_night_fixture`
+can now assert folded `sheriff_badge` projection rows, and dedicated Chinese sheriff fixtures
+preserve election, pass, and destroy `BadgeChanged` events, badge-weighted `DayVoteOutcome`
+rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
+promotion. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
+which passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
 announcement/prompt fixtures now also prove that minimization preserves Mafia Universe prior-night
 `DayAnnouncement`, lynch `LastWordsRecorded`, trailing `PhaseAnnouncement`, and Mafiascum
 NoMajority revote `HostPromptIssued` plus prompt trace decisions. `minimize_night_fixture` prompt

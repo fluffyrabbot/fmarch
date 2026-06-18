@@ -2062,7 +2062,11 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    the same folded state; `day_vote_policy_matrix_covers_methods_and_tie_breakers` covers
    Majority, Plurality, Supermajority, Hammer, NoElimination, HostDecides, and seeded
    deterministic Random vote outcomes]
-2. Sheriff badge/pass.
+2. Sheriff badge/pass. [done: Chinese structured `sheriff_election`, `sheriff_pass`, and
+   `sheriff_destroy` emit foldable `BadgeChanged`, preserve rebuildable `sheriff_badge`
+   projection rows, and drive badge vote-weight effects on official `DayVoteOutcome`; pure
+   goldens, fixed command/projection lifecycle proof, generated D01 coverage, and dedicated
+   semantic minimizer fixtures now cover election, pass, and destroy.]
 3. Knight duel / public day duels. [v8 `Duel` IR and `DuelResolved`; Chinese structured
    success/failure goldens; command/projection death/rebuild proof. v34 `VoteDuel` now models
    mafiascum Gladiator separately as `VoteDuelDeclared` plus a restricted official
@@ -2515,7 +2519,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    and generic ITA hit/miss outcomes. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all twelve fixed D01 seeds, checking every emitted
-   Phase 5 day semantic expectation through `minimize_night_fixture`. Dedicated Phase 5
+   Phase 5 day semantic expectation through `minimize_night_fixture`. `minimize_night_fixture`
+   can now assert folded `sheriff_badge` projection rows, and dedicated Chinese sheriff fixtures
+   preserve election, pass, and destroy `BadgeChanged` events, badge-weighted `DayVoteOutcome`
+   rows, trace generated rows, projection rows, replay audit, rebuild audit, and reduced success
+   promotion. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
+   and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
    prior-night `DayAnnouncement`, lynch `LastWordsRecorded`, trailing `PhaseAnnouncement`, and
    Mafiascum NoMajority revote `HostPromptIssued` plus prompt trace decisions.
@@ -2841,9 +2851,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by making sheriff badge/pass coverage explicit in the semantic
-minimizer lane instead of relying on generated Chinese D01 coverage plus the fixed lifecycle
-vertical. Start with `sheriff_badge_election_weighted_vote`, then add pass/destroy setup-phase
-fixtures that preserve `BadgeChanged`, folded `sheriff_badge` projection state, badge vote-weight
-effects on `DayVoteOutcome`, replay audit or rebuild evidence, and minimized success promotion
+Continue Phase 5 rich day systems by tackling the remaining ITA release-time replay/refund
+breadth. Start with the buffered ITA shot release path, require a second command-resolved phase
+that releases queued shots, preserves refund/invalidation policy as explicit events or trace
+decisions, audits/rebuilds the projections, and promotes a reduced semantic minimizer fixture
 before updating the checklist again.

@@ -5,7 +5,7 @@ use commands::{
     audit_resolution_envelopes, handle, inspect_resolution_traces, Command, HostPromptDecision,
     VoteTarget,
 };
-use projections::audit_rebuild;
+use projections::{audit_rebuild, sheriff_badges};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
@@ -79,6 +79,8 @@ struct FixtureExpectations {
     trace_notes: Vec<String>,
     #[serde(default)]
     generated_actions: Vec<ExpectedGeneratedAction>,
+    #[serde(default)]
+    sheriff_badges: Vec<ExpectedProjectionRow>,
 }
 
 impl FixtureExpectations {
@@ -88,6 +90,7 @@ impl FixtureExpectations {
             + self.trace_decisions.len()
             + self.trace_notes.len()
             + self.generated_actions.len()
+            + self.sheriff_badges.len()
     }
 }
 
@@ -125,6 +128,12 @@ struct ExpectedGeneratedAction {
     targets: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     detail: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ExpectedProjectionRow {
+    #[serde(default)]
+    payload: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1062,6 +1071,34 @@ async fn validate_semantic_expectations(
         }
     }
 
+    if !expectations.sheriff_badges.is_empty() {
+        let rows = sheriff_badges(pool, game)
+            .await
+            .map_err(|err| format!("fetch sheriff_badges failed: {err}"))?
+            .into_iter()
+            .map(|row| {
+                serde_json::to_value(row)
+                    .expect("sheriff badge projection row should serialize for fixture matching")
+            })
+            .collect::<Vec<_>>();
+        for expected in &expectations.sheriff_badges {
+            let found = rows.iter().any(|actual| {
+                expected.payload.iter().all(|(key, expected_value)| {
+                    actual.get(key).is_some_and(|actual_value| {
+                        matches_expected_value(actual_value, expected_value)
+                    })
+                })
+            });
+            if !found {
+                return Err(format!(
+                    "missing expected sheriff_badge payload_subset={}",
+                    serde_json::to_string(&expected.payload)
+                        .unwrap_or_else(|_| "<unserializable>".to_string())
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1324,6 +1361,7 @@ mod tests {
                 trace_decisions: Vec::new(),
                 trace_notes: Vec::new(),
                 generated_actions: Vec::new(),
+                sheriff_badges: Vec::new(),
             },
         };
         let report = RunReport {
