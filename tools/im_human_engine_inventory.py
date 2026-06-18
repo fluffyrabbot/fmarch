@@ -2444,6 +2444,36 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "and defers same-pass queue/resolve/kill; later release, invalidation, "
                 "and refund mechanics remain pending"
             )
+        elif name == "ita.shot.invalidated":
+            modeled = (
+                canonical in fmarch["events"]
+                and "ita" in fmarch["pack_text"]
+                and "mafia_universe" in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "InnerEvent::ItaShotInvalidated" in resolver
+                and "ita_kills_by_target" in resolver
+                and "target_dead" in resolver
+            )
+            golden = (
+                implemented
+                and "ita_session_invalidates_later_dead_target"
+                in fmarch["golden_names_by_pack"].get("mafia_universe", set())
+                and "ItaShotInvalidated" in fmarch["domain_tests_text"]
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_invalidates_later_ita_shot_at_dead_target"
+                in command_tests
+                and "ItaShotInvalidated" in command_tests
+            )
+            notes = (
+                "queued ITA shots at a target killed earlier in the same session emit "
+                "canonical `ItaShotInvalidated` with `reason=target_dead` and "
+                "`invalidated_by` pointing at the killing action; buffered release-time "
+                "refund policy remains pending"
+            )
         elif name in ITA_DEFERRED_SHOT_RESULT_KINDS:
             modeled = False
             implemented = False

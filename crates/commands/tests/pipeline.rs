@@ -21056,6 +21056,279 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_invalidates_later_ita_shot_at_dead_target(pool: PgPool) {
+    let host = "host_ita_invalidated";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "town_ita_shooter"),
+        ("slot_2", "user_2", "town_ita_shooter"),
+        ("slot_3", "user_3", "town_vanilla"),
+        ("slot_4", "user_4", "mafia_goon"),
+        ("slot_5", "user_5", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let submissions = [
+        ("ita_kill_001", "slot_1", 10_u64),
+        ("ita_invalidated_002", "slot_2", 20_u64),
+    ]
+    .into_iter()
+    .map(|(action_id, actor, submitted_at)| {
+        eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": action_id,
+                "template_id": "ita_shot",
+                "actor": actor,
+                "targets": ["slot_4"],
+                "phase_id": "D01",
+                "metadata": { "ita_session_id": "d1" },
+                "submitted_at": submitted_at
+            }),
+            eventstore::ActorId::Slot(actor.into()),
+            0,
+        )
+    })
+    .collect::<Vec<_>>();
+    projections::append_and_project(&pool, game, &submissions)
+        .await
+        .unwrap();
+
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 910001 })
+        .await
+        .expect("host resolves ITA invalidation day");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("ITA invalidation ResolutionApplied validates");
+    let invalidated = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::ItaShotInvalidated {
+                session_id,
+                action_id,
+                actor_id,
+                target_id,
+                reason,
+                invalidated_by,
+                submitted_at,
+                timestamp,
+            } => Some((
+                indexed.index,
+                session_id.as_str(),
+                action_id.as_str(),
+                actor_id.as_str(),
+                target_id.as_str(),
+                reason.as_str(),
+                invalidated_by.as_deref(),
+                *submitted_at,
+                *timestamp,
+            )),
+            _ => None,
+        })
+        .expect("later ITA shot was invalidated");
+    assert_eq!(invalidated.1, "d1");
+    assert_eq!(invalidated.2, "ita_invalidated_002");
+    assert_eq!(invalidated.3, "slot_2");
+    assert_eq!(invalidated.4, "slot_4");
+    assert_eq!(invalidated.5, "target_dead");
+    assert_eq!(invalidated.6, Some("ita_kill_001"));
+    assert!(invalidated.7 > 0);
+    assert_eq!(invalidated.8, invalidated.7);
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaShotQueued {
+            session_id,
+            action_id,
+            actor,
+            targets,
+            queue_position,
+            queue_length,
+            ..
+        } if session_id == "d1"
+            && action_id == "ita_invalidated_002"
+            && actor == "slot_2"
+            && targets == &vec!["slot_4".to_string()]
+            && *queue_position == 2
+            && *queue_length == 2
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaShotResolved {
+            action_id,
+            outcome: domain::ItaShotOutcome::Hit,
+            kill,
+            ..
+        } if action_id == "ita_kill_001" && *kill
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::ItaShotResolved { action_id, .. }
+                if action_id == "ita_invalidated_002"
+        )),
+        "invalidated ITA shot must not also resolve"
+    );
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::ItaSessionUpdated {
+            session_id,
+            queue_length,
+            queue_delta,
+            shots_resolved,
+            global_shots_fired,
+            ..
+        } if session_id == "d1"
+            && *queue_length == 0
+            && *queue_delta == -2
+            && *shots_resolved == 1
+            && *global_shots_fired == 2
+    )));
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION).unwrap();
+    let invalidated_trace = trace
+        .generated
+        .iter()
+        .find(|generated| {
+            generated.source == "ItaShotInvalidated"
+                && generated.action_id == "ita_invalidated_002"
+                && generated.actor == "slot_2"
+        })
+        .expect("trace records invalidated ITA shot");
+    assert_eq!(invalidated_trace.targets, vec!["slot_4".to_string()]);
+    assert_eq!(
+        invalidated_trace.detail["invalidated_by"],
+        serde_json::json!("ita_kill_001")
+    );
+    assert_eq!(
+        invalidated_trace.detail["reason"],
+        serde_json::json!("target_dead")
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_4")
+            .unwrap()
+            .alive,
+        "first ITA shot killed the shared target through projections"
+    );
+    let counters = action_counters(&pool, game).await.unwrap();
+    for (slot, action_id) in [
+        ("slot_1", "ita_kill_001"),
+        ("slot_2", "ita_invalidated_002"),
+    ] {
+        assert!(counters.iter().any(|counter| {
+            counter.slot_id == slot
+                && counter.counter_id == "day_session:d1:ita_shot"
+                && counter.template_id == "ita_shot"
+                && counter.consumed_action == action_id
+                && counter.cadence_policy == "day_session"
+                && counter.phase_scope == "session"
+                && counter.remaining == 0
+        }));
+    }
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let counters_before = serde_json::to_string(&counters).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve ITA invalidation death"
+    );
+    assert_eq!(
+        counters_before,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter rebuild must preserve both queued ITA shot uses"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted ITA invalidation trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_buffers_ita_shot_without_same_pass_resolution(pool: PgPool) {
     let host = "host_ita_buffered";
     let game = Uuid::new_v4();

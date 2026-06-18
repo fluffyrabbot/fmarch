@@ -10065,7 +10065,9 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
     let mut counters_by_session: BTreeMap<String, ItaCounters> = BTreeMap::new();
     let mut opened = BTreeSet::new();
     let mut resolved_by_session: BTreeMap<String, u32> = BTreeMap::new();
+    let mut invalidated_by_session: BTreeMap<String, u32> = BTreeMap::new();
     let mut buffered_by_session: BTreeMap<String, u32> = BTreeMap::new();
+    let mut ita_kills_by_target: BTreeMap<SlotId, String> = BTreeMap::new();
 
     for (sub, template) in ordered {
         let Some(session) = ita_session_for_submission(input, sub) else {
@@ -10120,12 +10122,19 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             });
             continue;
         };
+        let invalidated_by = if target_slot.is_alive() {
+            None
+        } else {
+            ita_kills_by_target.get(&target).cloned()
+        };
         if !target_slot.is_alive() {
-            events.push(InnerEvent::ActionInterfered {
-                actor: sub.actor.clone(),
-                reason: "ita_target_dead".to_string(),
-            });
-            continue;
+            if invalidated_by.is_none() {
+                events.push(InnerEvent::ActionInterfered {
+                    actor: sub.actor.clone(),
+                    reason: "ita_target_dead".to_string(),
+                });
+                continue;
+            }
         }
 
         if let Some(delay_ms) = session.buffer_delay_ms {
@@ -10195,6 +10204,23 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             counters: counters.clone(),
         });
 
+        if let Some(invalidated_by) = invalidated_by {
+            *invalidated_by_session
+                .entry(session.session_id.clone())
+                .or_insert(0) += 1;
+            events.push(InnerEvent::ItaShotInvalidated {
+                session_id: session.session_id.clone(),
+                action_id: sub.action_id.clone(),
+                actor_id: sub.actor.clone(),
+                target_id: target.clone(),
+                reason: "target_dead".to_string(),
+                invalidated_by: Some(invalidated_by),
+                submitted_at: sub.submitted_at,
+                timestamp: sub.submitted_at,
+            });
+            continue;
+        }
+
         let hit_chance = ita_hit_chance(input, session, actor_slot, target_slot);
         let roll = rng.next_f64();
         let should_hit = roll <= hit_chance;
@@ -10256,6 +10282,7 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
                 unstoppable: true,
                 death_reveal: death_reveal_mode(input, &target, &template.id),
             });
+            ita_kills_by_target.insert(target.clone(), sub.action_id.clone());
         }
         events.extend(ita_events.iter().cloned());
         day_state = apply_events(&day_state, &ita_events);
@@ -10277,7 +10304,13 @@ fn resolve_ita_actions(input: &ResolutionInput, events: &mut Vec<InnerEvent>) {
             .get(&session.session_id)
             .copied()
             .unwrap_or(0);
-        let queue_length = counters.global_shots_fired.saturating_sub(resolved);
+        let invalidated = invalidated_by_session
+            .get(&session.session_id)
+            .copied()
+            .unwrap_or(0);
+        let queue_length = counters
+            .global_shots_fired
+            .saturating_sub(resolved.saturating_add(invalidated));
         events.push(InnerEvent::ItaSessionUpdated {
             session_id: session.session_id.clone(),
             queue_length,

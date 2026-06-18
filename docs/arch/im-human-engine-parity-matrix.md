@@ -336,7 +336,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | result_event_kind | `ita.session.opened` | `ItaSessionOpened` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.updated` | `ItaSessionUpdated` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.shot.buffered` | `ItaShotBuffered` | 1 | no | yes | yes | yes | yes | pack-declared ITA session buffer delay emits canonical `ItaShotBuffered` and defers same-pass queue/resolve/kill; later release, invalidation, and refund mechanics remain pending |
-| result_event_kind | `ita.shot.invalidated` | `ItaShotInvalidated` | 1 | yes | no | no | no | no | canonical Rust result event and im-human fixture importer/schema validation are frozen; pack policy, resolver production, goldens, and command/projection integration remain pending |
+| result_event_kind | `ita.shot.invalidated` | `ItaShotInvalidated` | 1 | no | yes | yes | yes | yes | queued ITA shots at a target killed earlier in the same session emit canonical `ItaShotInvalidated` with `reason=target_dead` and `invalidated_by` pointing at the killing action; buffered release-time refund policy remains pending |
 | result_event_kind | `ita.shot.queued` | `ItaShotQueued` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.shot.refunded` | `ItaShotRefunded` | 1 | yes | no | no | no | no | canonical Rust result event and im-human fixture importer/schema validation are frozen; pack policy, resolver production, goldens, and command/projection integration remain pending |
 | result_event_kind | `ita.shot.resolved` | `ItaShotResolved` | 1 | no | yes | yes | yes | yes |  |
