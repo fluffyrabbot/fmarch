@@ -12076,6 +12076,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("pgo_projection_state", [97_191, 97_192]),
         ("hider_projection_state", [97_201, 97_202]),
         ("babysitter_projection_state", [97_211, 97_212]),
+        ("lovers_projection_state", [97_221, 97_222]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
         ("private_notification", [97_101, 97_102]),
@@ -12191,8 +12192,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 24,
-        "expected_case_count": 48,
+        "expected_family_count": 25,
+        "expected_case_count": 50,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
@@ -12210,6 +12211,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("ignite".to_string(), 2),
             ("item_grant".to_string(), 2),
             ("lovers".to_string(), 2),
+            ("lovers_projection_state".to_string(), 2),
             ("mark_clear_expiry".to_string(), 2),
             ("mark_clear_visibility".to_string(), 2),
             ("poison_cure".to_string(), 2),
@@ -12222,8 +12224,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(24));
-    assert_eq!(report["case_count"], serde_json::json!(48));
+    assert_eq!(report["family_count"], serde_json::json!(25));
+    assert_eq!(report["case_count"], serde_json::json!(50));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -20208,6 +20210,35 @@ fn generated_mafiascum_babysitter_projection_state_fixture_json(seed: u64) -> St
     .expect("generated Mafiascum Babysitter projection-state fixture serializes")
 }
 
+fn generated_mafiascum_lovers_projection_state_fixture_json(seed: u64) -> String {
+    let mut fixture: serde_json::Value = serde_json::from_str(
+        &generated_mafiascum_persistent_trigger_fixture_json("lovers", seed),
+    )
+    .expect("generated Mafiascum Lovers fixture serializes");
+    fixture["expectations"]["slot_states"] = serde_json::json!([
+        {
+            "payload": {
+                "slot_id": "slot_2",
+                "alive": false
+            }
+        },
+        {
+            "payload": {
+                "slot_id": "slot_4",
+                "alive": false
+            }
+        },
+        {
+            "payload": {
+                "slot_id": "slot_5",
+                "alive": true
+            }
+        }
+    ]);
+    serde_json::to_string_pretty(&fixture)
+        .expect("generated Mafiascum Lovers projection-state fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
@@ -20229,6 +20260,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         "babysitter_projection_state" => {
             generated_mafiascum_babysitter_projection_state_fixture_json(seed)
         }
+        "lovers_projection_state" => generated_mafiascum_lovers_projection_state_fixture_json(seed),
         "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
         "backup_projection_state" => generated_mafiascum_backup_projection_state_fixture_json(seed),
         "conversion_deprogramming" => {
@@ -20290,6 +20322,9 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         }
         "babysitter_projection_state" => {
             fixture["expectations"]["slot_states"][0]["payload"]["alive"] = serde_json::json!(true);
+        }
+        "lovers_projection_state" => {
+            fixture["expectations"]["slot_states"][1]["payload"]["alive"] = serde_json::json!(true);
         }
         "backup_inheritance" => {
             fixture["expectations"]["trace_decisions"][0]["detail"]["policy_detail"]
