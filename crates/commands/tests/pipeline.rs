@@ -13151,6 +13151,13 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
             2,
             6,
         ),
+        (
+            "dynamic-vote-pk-resolution-semantic-expectations",
+            dynamic_vote_pk_prompt_fixture_json(),
+            3,
+            3,
+            7,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(&fixture_json).expect("Phase 5 fixture JSON parses");
@@ -19279,6 +19286,150 @@ fn dynamic_vote_no_majority_revote_prompt_fixture_json() -> String {
         }
     }))
     .expect("Dynamic vote NoMajority revote fixture JSON serializes")
+}
+
+fn dynamic_vote_pk_prompt_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 960_012,
+        "pack": "test_dynamic_vote_pk",
+        "phase": "D02",
+        "roster": [
+            { "slot": "slot_1", "role": "vanilla_townie" },
+            { "slot": "slot_2", "role": "mafia_goon" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "vote_granter" }
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 960_011,
+            "actions": [{
+                "actor_slot": "slot_4",
+                "template_id": "grant_vote_power",
+                "action_id": "grant_vote_power_n01",
+                "targets": ["slot_1"]
+            }]
+        }],
+        "votes": [
+            { "actor_slot": "slot_1", "target_slot": "slot_2" },
+            { "actor_slot": "slot_2", "target_slot": "slot_3" },
+            { "actor_slot": "slot_4", "target_slot": "slot_3" }
+        ],
+        "actions": [],
+        "host_prompt_decision": {
+            "prompt_id": "D02:pk:Tie",
+            "decision": {
+                "kind": "select_slot",
+                "slot": "slot_3"
+            }
+        },
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "Tie",
+                        "winner": null,
+                        "contenders": ["slot_2", "slot_3"],
+                        "majority": null,
+                        "total_weight": 5.0,
+                        "tallies": {
+                            "slot_2": 2.0,
+                            "slot_3": 2.0
+                        },
+                        "weights": { "slot_1": 2.0 },
+                        "tiebreak": "HostDecides"
+                    }
+                },
+                {
+                    "kind": "HostPromptIssued",
+                    "payload": {
+                        "prompt_id": "D02:pk:Tie",
+                        "kind": "pk",
+                        "subject": null,
+                        "reason": "host_decides_tie",
+                        "phase_id": "D02",
+                        "phase_kind": "Day",
+                        "phase_number": 2,
+                        "metadata": {
+                            "policy": "pk_host_decides_tie",
+                            "status": "Tie",
+                            "contenders": ["slot_2", "slot_3"],
+                            "tiebreak": "HostDecides",
+                            "outcome_reason": null
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D02",
+                        "deaths": []
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_3",
+                        "cause": "host_prompt:pk",
+                        "attackers": [],
+                        "unstoppable": true
+                    }
+                }
+            ],
+            "stream_events": [
+                {
+                    "kind": "HostPromptResolved",
+                    "payload": {
+                        "prompt_id": "D02:pk:Tie",
+                        "phase_id": "D02",
+                        "kind": "pk",
+                        "reason": "host_decides_tie",
+                        "decision": {
+                            "kind": "select_slot",
+                            "slot": "slot_3"
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "day:vote_prompt",
+                    "source": "day_vote",
+                    "outcome": "host_prompt_issued",
+                    "detail": {
+                        "policy": "pk_host_decides_tie",
+                        "prompt_id": "D02:pk:Tie",
+                        "kind": "pk",
+                        "subject": null,
+                        "reason": "host_decides_tie",
+                        "status": "Tie",
+                        "contenders": ["slot_2", "slot_3"],
+                        "tiebreak": "HostDecides",
+                        "outcome_reason": null
+                    }
+                },
+                {
+                    "stage": "host_prompt:resolve",
+                    "source": "D02:pk:Tie",
+                    "outcome": "pk_selected",
+                    "detail": {
+                        "prompt_id": "D02:pk:Tie",
+                        "kind": "pk",
+                        "reason": "host_decides_tie",
+                        "selected_slot": "slot_3",
+                        "contenders": ["slot_2", "slot_3"],
+                        "decision": {
+                            "kind": "select_slot",
+                            "slot": "slot_3"
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Dynamic vote PK prompt fixture JSON serializes")
 }
 
 #[derive(Debug)]

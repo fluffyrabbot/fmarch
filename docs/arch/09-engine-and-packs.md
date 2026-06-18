@@ -1418,13 +1418,18 @@ reason: "skip_next_day" }`; the Virgin night-death alias now has the same minimi
 prompt-resolution proof for `N01:skip_next_day:slot_2`; the dynamic vote-weight prompt fixture
 now uses a legal N01 `VoteWeight` grant setup phase and proves the folded grant drives a D02
 NoMajority revote prompt plus `HostPromptResolved` / `PhaseAdvanced { phase_id: "D02R1",
-reason: "revote" }`.
+reason: "revote" }`; the dynamic vote-weight PK fixture now uses the same legal N01
+`VoteWeight` grant setup phase and proves the folded grant drives a D02 `HostDecides` tie,
+`HostPromptIssued { kind: "pk" }`, `HostPromptResolved`, and host-selected
+`PlayerKilled { cause: "host_prompt:pk" }` through three audited resolution envelopes and three
+validated traces.
 This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across the command-resolved setup-plus-day announcement
 fixture, no-majority revote prompt-resolution fixture, Beloved Princess skip-next-day
 prompt-resolution fixture, Virgin night-death skip-next-day fixture, and dynamic vote-weight
-NoMajority revote fixture, checking every emitted semantic expectation through
+NoMajority revote fixture, and dynamic vote-weight PK prompt-resolution fixture, checking every
+emitted semantic expectation through
 `minimize_night_fixture`. An Epicmafia
 generated lane now covers three fixed-seed D01 plurality ties that emit PK prompts and
 host-selected kills, plus three fixed-seed N01 Bomb/Cult graphs that
