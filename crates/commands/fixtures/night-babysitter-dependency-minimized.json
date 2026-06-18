@@ -1,0 +1,43 @@
+{
+  "seed": 7202,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_2",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_3",
+      "role": "babysitter"
+    },
+    {
+      "slot": "slot_4",
+      "role": "vanilla_townie"
+    }
+  ],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "factional_kill",
+      "action_id": "minimized_mafia_kills_ward",
+      "targets": ["slot_4"]
+    },
+    {
+      "actor_slot": "slot_2",
+      "template_id": "factional_kill",
+      "action_id": "minimized_mafia_kills_babysitter",
+      "targets": ["slot_3"]
+    },
+    {
+      "actor_slot": "slot_3",
+      "template_id": "babysit",
+      "action_id": "minimized_babysitter_guards_ward",
+      "targets": ["slot_4"]
+    }
+  ]
+}

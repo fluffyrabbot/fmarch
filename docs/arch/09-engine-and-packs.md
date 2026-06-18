@@ -1299,7 +1299,13 @@ which passed one filtered pipeline test across its six fixed generated seeds.
 `minimize_night_fixture` is the first developer tool for those promotions: it reads a replayable
 JSON fixture, runs the same
 resolution/trace/rebuild audit trio, and with `--reduce` greedily drops actions then slots while
-preserving the original failure class. A non-mafiascum generated replay lane now covers six
+preserving the original failure class. `crates/commands/fixtures/night-babysitter-dependency-minimized.json`
+is the first hand-promoted minimized generated-death replay: it keeps the Babysitter dependency
+case at four slots and three actions, then `minimized_trigger_dependency_replay_audits_and_rebuilds`
+replays that checked-in fixture through legal commands, validates the saved ward and generated
+unstoppable ward death, and requires `audit_resolution`, anchored `inspect_trace`, and
+`audit_rebuild` to agree. This proves one persisted minimized replay case, not automatic
+property-test shrinking across generated families. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with

@@ -11210,6 +11210,226 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn minimized_trigger_dependency_replay_audits_and_rebuilds(pool: PgPool) {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../fixtures/night-babysitter-dependency-minimized.json"
+    ))
+    .expect("minimized babysitter dependency fixture should parse");
+    let seed = fixture["seed"]
+        .as_u64()
+        .expect("minimized fixture carries a resolver seed");
+    let pack = fixture["pack"]
+        .as_str()
+        .expect("minimized fixture carries a pack");
+    let phase = fixture["phase"]
+        .as_str()
+        .expect("minimized fixture carries a phase");
+    let roster = fixture["roster"]
+        .as_array()
+        .expect("minimized fixture carries a roster");
+    let actions = fixture["actions"]
+        .as_array()
+        .expect("minimized fixture carries actions");
+    assert_eq!(roster.len(), 4, "fixture is persisted at four slots");
+    assert_eq!(actions.len(), 3, "fixture keeps only the dependency triad");
+
+    let game = Uuid::new_v4();
+    let host = user("fixture_host");
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: pack.into(),
+        },
+    )
+    .await
+    .unwrap_or_else(|err| panic!("minimized fixture: create game failed: {err}"));
+    for slot in roster {
+        let slot_id = slot["slot"]
+            .as_str()
+            .expect("minimized fixture slot carries slot id");
+        let role = slot["role"]
+            .as_str()
+            .expect("minimized fixture slot carries role");
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot_id.into(),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: add {slot_id} failed: {err}"));
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot_id.into(),
+                user: format!("fixture_user_{}", slot_number(slot_id)),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: assign {slot_id} failed: {err}"));
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot_id.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: role {slot_id} failed: {err}"));
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: phase.into(),
+        },
+    )
+    .await
+    .unwrap_or_else(|err| panic!("minimized fixture: start game failed: {err}"));
+
+    for action in actions {
+        let actor_slot = action["actor_slot"]
+            .as_str()
+            .expect("minimized fixture action carries actor");
+        let template_id = action["template_id"]
+            .as_str()
+            .expect("minimized fixture action carries template id");
+        let action_id = action["action_id"]
+            .as_str()
+            .expect("minimized fixture action carries action id");
+        let targets = action["targets"]
+            .as_array()
+            .expect("minimized fixture action carries targets")
+            .iter()
+            .map(|target| {
+                target
+                    .as_str()
+                    .expect("minimized fixture target is a slot id")
+                    .to_string()
+            })
+            .collect();
+        handle(
+            &pool,
+            &Principal::user(format!("fixture_user_{}", slot_number(actor_slot))),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: actor_slot.into(),
+                template_id: template_id.into(),
+                targets,
+                grant_id: None,
+            },
+        )
+        .await
+        .unwrap_or_else(|err| {
+            panic!("minimized fixture: submit {action_id} for {actor_slot} failed: {err}")
+        });
+    }
+
+    let ack = handle(&pool, &host, Command::ResolvePhase { game, seed })
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: resolve failed: {err}"));
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "minimized fixture resolve appends applied/trace/phase-lock events"
+    );
+
+    let applied_payload = resolution_payload(&pool, game, phase, seed).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .unwrap_or_else(|err| panic!("minimized fixture ResolutionApplied invalid: {err}"));
+    assert!(
+        applied.events.iter().any(|event| {
+            matches!(&event.event, domain::InnerEvent::PlayerSaved { slot_id, sources, .. }
+                if slot_id == "slot_4" && sources == &vec!["slot_3".to_string()])
+        }),
+        "minimized fixture must preserve the Babysitter save edge"
+    );
+    let generated_death_index = applied
+        .events
+        .iter()
+        .find_map(|event| match &event.event {
+            domain::InnerEvent::PlayerKilled {
+                slot_id,
+                cause,
+                attackers,
+                unstoppable,
+                ..
+            } if slot_id == "slot_4"
+                && cause == "babysit"
+                && attackers == &vec!["slot_3".to_string()]
+                && *unstoppable =>
+            {
+                Some(event.index)
+            }
+            _ => None,
+        })
+        .expect("minimized fixture must preserve the generated ward death");
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: audit_resolution failed: {err}"));
+    assert!(
+        audit.ok,
+        "minimized fixture resolution audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 1, "one minimized fixture phase audited");
+    assert_eq!(audit.skipped, 0, "no minimized fixture envelopes skipped");
+
+    let trace_report = inspect_resolution_traces(&pool, game, None)
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: inspect_trace failed: {err}"));
+    assert_eq!(trace_report.traces.len(), 1, "one minimized fixture trace");
+    assert_anchored_inspection_decision(
+        &trace_report,
+        InspectionDecisionExpectation {
+            phase_id: phase,
+            stage: "night:dependency_death",
+            source: "action:minimized_babysitter_guards_ward",
+            outcome: "babysitter_dependency_death",
+            detail: serde_json::json!({
+                "action_id": "minimized_babysitter_guards_ward",
+                "template_id": "babysit",
+                "protector": "slot_3",
+                "ward": "slot_4",
+                "cause": "babysit",
+                "attackers": ["slot_3"],
+            }),
+        },
+        "minimized babysitter dependency fixture",
+    );
+    let generated_death_source = format!("event_index:{generated_death_index}");
+    assert_anchored_inspection_decision(
+        &trace_report,
+        InspectionDecisionExpectation {
+            phase_id: phase,
+            stage: "inner_event",
+            source: &generated_death_source,
+            outcome: "player_killed",
+            detail: serde_json::Value::Null,
+        },
+        "minimized babysitter dependency fixture",
+    );
+
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .unwrap_or_else(|err| panic!("minimized fixture: audit_rebuild failed: {err}"));
+    assert!(
+        projection_audit.ok,
+        "minimized fixture projection rebuild audit drifted: {projection_audit:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),

@@ -2407,7 +2407,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    `--reduce`, greedily removes actions then slots while preserving the original failure class.
    Generated failures now print valid minimizer JSON directly, and
    `crates/commands/fixtures/night-passing.json` is a checked-in passing replay sample documented
-   in the engine notes. A first non-mafiascum lane now generates six Chinese Structured N01 cases
+   in the engine notes. `crates/commands/fixtures/night-babysitter-dependency-minimized.json`
+   persists the first hand-promoted minimized generated-death replay: four slots, three actions,
+   legal command submission, validated Babysitter save plus generated unstoppable ward death, exact
+   anchored dependency-death and inner-event trace decisions, `audit_resolution`, and
+   `audit_rebuild`. This is an artifact-backed minimized replay proof, not true property-test
+   shrinking. A first non-mafiascum lane now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
    inner-event decisions in `inspect_trace`, and `audit_rebuild`. This Chinese Structured N01 lane
@@ -2723,8 +2728,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by tightening the remaining trigger
-fixpoint fuzz/shrinking gap under item 5. Start with the seeded trigger dependency graph lane:
-persist a minimized replay case for one generated-death interaction, wire the replay through
-`audit_resolution`, `inspect_trace`, and `audit_rebuild`, then document exactly what the shrinker
-does and does not prove.
+Continue Phase 4 persistent and generated-action systems by turning the minimized replay lane into
+a reusable promotion path. Start by teaching `minimize_night_fixture` to assert expected semantic
+invariants from fixture metadata, then promote one PGO or Hider trigger/dependency minimized replay
+through that metadata-backed path so future shrinks prove the preserved behavior, not only the
+generic replay/audit success class.
