@@ -2410,10 +2410,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    in the engine notes. `crates/commands/fixtures/night-babysitter-dependency-minimized.json`
    persists a four-slot, three-action Babysitter generated-death replay, and
    `crates/commands/fixtures/night-hider-dependency-minimized.json` promotes a three-slot,
-   two-action Hider host-death dependency replay. `minimize_night_fixture` now asserts fixture
-   metadata for expected inner events, anchored trace decisions, trace notes, and generated-action
-   rows; both minimized generated-death fixtures pass with three checked semantic expectations plus
-   `audit_resolution`, `inspect_trace`, and `audit_rebuild`. This is a reusable artifact-backed
+   two-action Hider host-death dependency replay. `crates/commands/fixtures/night-pgo-trigger-minimized.json`
+   covers the remaining trigger-note side with a two-slot, one-action PGO replay. `minimize_night_fixture`
+   now asserts fixture metadata for expected inner events, anchored trace decisions, trace notes,
+   and generated-action rows; the Babysitter and Hider minimized replays each pass with three
+   checked semantic expectations, while the PGO replay passes with four checked semantic
+   expectations including the `Trigger` inner event, generated kill, generated-action trace row,
+   and anchored diagnostic note. `--reduce` now also reduces successful fixtures with expectations
+   only while the same expectation count remains green. This is a reusable artifact-backed
    minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
@@ -2731,8 +2735,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by covering the remaining trigger-note
-side of the minimized replay lane. Promote a PGO minimized replay with semantic metadata for the
-`Trigger` inner event, generated-action trace row, and anchored diagnostic note, then use that
-fixture to tighten `minimize_night_fixture --reduce` around success-invariant preservation rather
-than only failure-class preservation.
+Continue Phase 4 persistent and generated-action systems by connecting generated replay failures
+to the metadata-backed minimizer path. Start with the Mafiascum generated N01 lane: when a
+generated case includes PGO, Babysitter, or Hider trigger/dependency actions, emit matching
+`expectations` metadata in the printed minimizer JSON and add one non-minimal success fixture
+regression that proves `--reduce` actually removes irrelevant slots/actions while preserving the
+declared semantic invariants.

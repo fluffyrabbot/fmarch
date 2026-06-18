@@ -1305,10 +1305,14 @@ replay if those metadata-backed invariants are missing even when the generic aud
 `crates/commands/fixtures/night-babysitter-dependency-minimized.json` keeps the Babysitter dependency
 case at four slots and three actions, while
 `crates/commands/fixtures/night-hider-dependency-minimized.json` promotes a Hider host-death
-dependency to three slots and two actions. Both minimized generated-death fixtures replay through
-legal commands, check three semantic expectations, and require `audit_resolution`, anchored
+dependency to three slots and two actions. `crates/commands/fixtures/night-pgo-trigger-minimized.json`
+adds the trigger-note side of the lane with a two-slot, one-action PGO visit trigger replay that
+checks the `Trigger` inner event, generated kill, generated-action trace row, and anchored
+diagnostic note. `--reduce` now also runs for successful fixtures that declare expectations and
+keeps a candidate only when the same semantic expectation count still passes. These minimized
+trigger/dependency fixtures replay through legal commands and require `audit_resolution`, anchored
 `inspect_trace`, and `audit_rebuild` to agree. This proves a reusable artifact-backed promotion
-path for hand-minimized generated-death replays, not automatic property-test shrinking across
+path for hand-minimized trigger/dependency replays, not automatic property-test shrinking across
 generated families. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This

@@ -145,8 +145,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     let original = run_fixture(&pool, &fixture).await;
-    let (fixture, steps, minimized) = if args.reduce && !original.ok {
-        minimize_fixture(&pool, fixture.clone(), original.failure_class).await
+    let reduction_target = ReductionTarget::from_report(&fixture, &original);
+    let (fixture, steps, minimized) = if args.reduce && reduction_target.is_some() {
+        minimize_fixture(
+            &pool,
+            fixture.clone(),
+            reduction_target.expect("checked reduction target"),
+        )
+        .await
     } else {
         (fixture, Vec::new(), original.clone())
     };
@@ -204,7 +210,7 @@ fn read_fixture(path: &str) -> Result<NightFixture, Box<dyn std::error::Error>> 
 async fn minimize_fixture(
     pool: &PgPool,
     mut fixture: NightFixture,
-    failure_class: Option<FailureClass>,
+    target: ReductionTarget,
 ) -> (NightFixture, Vec<ReductionStep>, RunReport) {
     let mut steps = Vec::new();
     let mut changed = true;
@@ -214,7 +220,7 @@ async fn minimize_fixture(
             let mut candidate = fixture.clone();
             let removed = candidate.actions.remove(index);
             let report = run_fixture(pool, &candidate).await;
-            if preserves_failure(&report, failure_class) {
+            if target.is_preserved_by(&report) {
                 fixture = candidate;
                 steps.push(ReductionStep {
                     kind: "action",
@@ -243,7 +249,7 @@ async fn minimize_fixture(
                 })
                 .collect();
             let report = run_fixture(pool, &candidate).await;
-            if preserves_failure(&report, failure_class) {
+            if target.is_preserved_by(&report) {
                 fixture = candidate;
                 steps.push(ReductionStep {
                     kind: "slot",
@@ -261,8 +267,32 @@ async fn minimize_fixture(
     (fixture, steps, minimized)
 }
 
-fn preserves_failure(report: &RunReport, failure_class: Option<FailureClass>) -> bool {
-    !report.ok && report.failure_class == failure_class
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReductionTarget {
+    FailureClass(Option<FailureClass>),
+    SuccessExpectations { expectation_count: usize },
+}
+
+impl ReductionTarget {
+    fn from_report(fixture: &NightFixture, report: &RunReport) -> Option<Self> {
+        if !report.ok {
+            return Some(ReductionTarget::FailureClass(report.failure_class));
+        }
+        let expectation_count = fixture.expectations.count();
+        (expectation_count > 0)
+            .then_some(ReductionTarget::SuccessExpectations { expectation_count })
+    }
+
+    fn is_preserved_by(self, report: &RunReport) -> bool {
+        match self {
+            ReductionTarget::FailureClass(failure_class) => {
+                !report.ok && report.failure_class == failure_class
+            }
+            ReductionTarget::SuccessExpectations { expectation_count } => {
+                report.ok && report.semantic_expectations_checked == expectation_count
+            }
+        }
+    }
 }
 
 async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
@@ -779,5 +809,61 @@ mod tests {
         assert_eq!(hider.expectations.inner_events.len(), 2);
         assert_eq!(hider.expectations.trace_decisions.len(), 1);
         assert_eq!(hider.expectations.count(), 3);
+
+        let pgo: NightFixture = serde_json::from_str(include_str!(
+            "../../fixtures/night-pgo-trigger-minimized.json"
+        ))
+        .expect("pgo fixture parses");
+        assert_eq!(pgo.expectations.inner_events.len(), 2);
+        assert_eq!(pgo.expectations.trace_notes.len(), 1);
+        assert_eq!(pgo.expectations.generated_actions.len(), 1);
+        assert_eq!(pgo.expectations.count(), 4);
+    }
+
+    #[test]
+    fn reduction_target_preserves_success_expectations() {
+        let fixture = NightFixture {
+            seed: 1,
+            pack: default_pack(),
+            phase: default_phase(),
+            roster: Vec::new(),
+            actions: Vec::new(),
+            expectations: FixtureExpectations {
+                inner_events: vec![ExpectedInnerEvent {
+                    kind: "Trigger".to_string(),
+                    payload: BTreeMap::new(),
+                }],
+                trace_decisions: Vec::new(),
+                trace_notes: Vec::new(),
+                generated_actions: Vec::new(),
+            },
+        };
+        let report = RunReport {
+            ok: true,
+            failure_class: None,
+            reason: None,
+            game_id: None,
+            resolution_audited: Some(1),
+            trace_count: Some(1),
+            projection_audit_ok: Some(true),
+            semantic_expectations_checked: 1,
+        };
+        let target =
+            ReductionTarget::from_report(&fixture, &report).expect("success target exists");
+        assert!(target.is_preserved_by(&report));
+
+        let missing_expectation_report = RunReport {
+            semantic_expectations_checked: 0,
+            ..report.clone()
+        };
+        assert!(!target.is_preserved_by(&missing_expectation_report));
+
+        let failed_report = RunReport {
+            ok: false,
+            failure_class: Some(FailureClass::SemanticExpectation),
+            reason: Some("missing expected Trigger".to_string()),
+            ..report
+        };
+        assert!(!target.is_preserved_by(&failed_report));
     }
 }
