@@ -220,8 +220,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781792247,
-            "age_seconds": 633,
+            "modified_at_unix_seconds": 1781792922,
+            "age_seconds": 653,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
@@ -240,8 +240,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781792247,
-            "age_seconds": 633,
+            "modified_at_unix_seconds": 1781792922,
+            "age_seconds": 653,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
@@ -273,8 +273,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792288,
-            "age_seconds": 592,
+            "modified_at_unix_seconds": 1781792959,
+            "age_seconds": 616,
             "freshness_max_age_seconds": 86400,
             "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
@@ -294,8 +294,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792288,
-            "age_seconds": 592,
+            "modified_at_unix_seconds": 1781792960,
+            "age_seconds": 616,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -313,8 +313,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792288,
-            "age_seconds": 591,
+            "modified_at_unix_seconds": 1781792960,
+            "age_seconds": 615,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -332,8 +332,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792289,
-            "age_seconds": 591,
+            "modified_at_unix_seconds": 1781792960,
+            "age_seconds": 615,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -351,8 +351,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792289,
-            "age_seconds": 590,
+            "modified_at_unix_seconds": 1781792961,
+            "age_seconds": 614,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -370,8 +370,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792290,
-            "age_seconds": 590,
+            "modified_at_unix_seconds": 1781792961,
+            "age_seconds": 614,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -389,8 +389,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792263,
-            "age_seconds": 616,
+            "modified_at_unix_seconds": 1781792936,
+            "age_seconds": 640,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -416,8 +416,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792287,
-            "age_seconds": 592,
+            "modified_at_unix_seconds": 1781792959,
+            "age_seconds": 617,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -442,19 +442,19 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781792804,
-            "age_seconds": 75,
+            "modified_at_unix_seconds": 1781793494,
+            "age_seconds": 81,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
-              "family_count": 27,
-              "expected_family_count": 27,
+              "family_count": 28,
+              "expected_family_count": 28,
               "family_manifest_matched": true,
-              "case_count": 54,
-              "expected_case_count": 54
+              "case_count": 56,
+              "expected_case_count": 56
             }
           },
-          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
+          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
         },
         {
           "id": "operator-proof-command-projection-resolution",
@@ -469,7 +469,7 @@
             "artifact_version": 1,
             "expected_version": 1,
             "modified_at_unix_seconds": 1781771292,
-            "age_seconds": 21587,
+            "age_seconds": 22283,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -521,7 +521,7 @@
             "path": "target/operator-proof/stale-artifact-provenance-guard.json",
             "state": "stale",
             "modified_at_unix_seconds": 946684800,
-            "age_seconds": 835108080,
+            "age_seconds": 835108776,
             "freshness_max_age_seconds": 86400
           },
           "proof_boundary": "Fixture-only row proving valid but old local artifacts remain display-only."

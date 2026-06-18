@@ -2533,10 +2533,10 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         &go_no_go_html,
         "proof-run-operator-proof-generated-shrink-matrix",
     );
-    assert!(generated_shrink_go_no_go_html.contains("family_count: 27"));
-    assert!(generated_shrink_go_no_go_html.contains("case_count: 54"));
-    assert!(generated_shrink_go_no_go_html.contains("expected_family_count: 27"));
-    assert!(generated_shrink_go_no_go_html.contains("expected_case_count: 54"));
+    assert!(generated_shrink_go_no_go_html.contains("family_count: 28"));
+    assert!(generated_shrink_go_no_go_html.contains("case_count: 56"));
+    assert!(generated_shrink_go_no_go_html.contains("expected_family_count: 28"));
+    assert!(generated_shrink_go_no_go_html.contains("expected_case_count: 56"));
     assert!(generated_shrink_go_no_go_html.contains("family_manifest_matched: true"));
 
     let response = app
@@ -5242,10 +5242,10 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "expected_family_count: 12",
                 "expected_seed_count: 57",
                 "family_manifest_matched: true",
-                "family_count: 27",
-                "expected_family_count: 27",
-                "case_count: 54",
-                "expected_case_count: 54",
+                "family_count: 28",
+                "expected_family_count: 28",
+                "case_count: 56",
+                "expected_case_count: 56",
                 "audit_operator_proof_artifacts",
             ],
         ),
