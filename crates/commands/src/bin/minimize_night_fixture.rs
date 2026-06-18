@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct NightFixture {
     seed: u64,
     #[serde(default = "default_pack")]
@@ -29,7 +29,7 @@ struct NightFixture {
     expectations: FixtureExpectations,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct FixturePhase {
     phase: String,
     seed: u64,
@@ -61,16 +61,18 @@ struct FixtureVote {
     target_slot: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct FixtureHostPromptDecision {
     prompt_id: String,
-    selected_slot: String,
+    decision: HostPromptDecision,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 struct FixtureExpectations {
     #[serde(default)]
     inner_events: Vec<ExpectedInnerEvent>,
+    #[serde(default)]
+    stream_events: Vec<ExpectedStreamEvent>,
     #[serde(default)]
     trace_decisions: Vec<ExpectedTraceDecision>,
     #[serde(default)]
@@ -82,6 +84,7 @@ struct FixtureExpectations {
 impl FixtureExpectations {
     fn count(&self) -> usize {
         self.inner_events.len()
+            + self.stream_events.len()
             + self.trace_decisions.len()
             + self.trace_notes.len()
             + self.generated_actions.len()
@@ -90,6 +93,13 @@ impl FixtureExpectations {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct ExpectedInnerEvent {
+    kind: String,
+    #[serde(default)]
+    payload: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct ExpectedStreamEvent {
     kind: String,
     #[serde(default)]
     payload: BTreeMap<String, serde_json::Value>,
@@ -125,7 +135,7 @@ struct ReductionStep {
     action_len: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 struct ToolReport {
     original: RunReport,
     minimized: RunReport,
@@ -660,13 +670,19 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
             )
         }
     };
+    let target_phase = FixturePhase {
+        phase: fixture.phase.clone(),
+        seed: fixture.seed,
+        votes: fixture.votes.clone(),
+        actions: fixture.actions.clone(),
+        host_prompt_decision: fixture.host_prompt_decision.clone(),
+    };
     let expected_trace_count = fixture
         .setup_phases
         .iter()
-        .map(|phase| 1 + usize::from(phase.host_prompt_decision.is_some()))
+        .map(expected_phase_trace_count)
         .sum::<usize>()
-        + 1
-        + usize::from(fixture.host_prompt_decision.is_some());
+        + expected_phase_trace_count(&target_phase);
     if trace_report.traces.len() != expected_trace_count
         || !trace_report.traces.iter().any(|trace| {
             trace.applied_stream_seq.is_some()
@@ -746,8 +762,14 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
                 }
             };
         }
-        if let Err(reason) =
-            validate_semantic_expectations(&fixture.expectations, &applied, &trace_report)
+        if let Err(reason) = validate_semantic_expectations(
+            pool,
+            game,
+            &fixture.expectations,
+            &applied,
+            &trace_report,
+        )
+        .await
         {
             return RunReport {
                 ok: false,
@@ -893,9 +915,7 @@ async fn run_fixture_phase(
             Command::ResolveHostPrompt {
                 game,
                 prompt_id: decision.prompt_id.clone(),
-                decision: HostPromptDecision::SelectSlot {
-                    slot: decision.selected_slot.clone(),
-                },
+                decision: decision.decision.clone(),
             },
         )
         .await
@@ -903,8 +923,8 @@ async fn run_fixture_phase(
             return Err(failed(
                 FailureClass::Resolve,
                 format!(
-                    "resolve host prompt {} selecting {} in {} failed: {err}",
-                    decision.prompt_id, decision.selected_slot, phase.phase
+                    "resolve host prompt {} in {} failed: {err}",
+                    decision.prompt_id, phase.phase
                 ),
                 game,
             ));
@@ -914,7 +934,17 @@ async fn run_fixture_phase(
     Ok(())
 }
 
-fn validate_semantic_expectations(
+fn expected_phase_trace_count(phase: &FixturePhase) -> usize {
+    1 + usize::from(
+        phase.host_prompt_decision.as_ref().is_some_and(|decision| {
+            matches!(decision.decision, HostPromptDecision::SelectSlot { .. })
+        }),
+    )
+}
+
+async fn validate_semantic_expectations(
+    pool: &PgPool,
+    game: Uuid,
     expectations: &FixtureExpectations,
     applied: &[domain::ResolutionApplied],
     trace_report: &commands::ResolutionTraceInspectionReport,
@@ -939,6 +969,34 @@ fn validate_semantic_expectations(
                 serde_json::to_string(&expected.payload)
                     .unwrap_or_else(|_| "<unserializable>".to_string())
             ));
+        }
+    }
+
+    if !expectations.stream_events.is_empty() {
+        let stream_events = sqlx::query_as::<_, (String, serde_json::Value)>(
+            "SELECT kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq",
+        )
+        .bind(game)
+        .fetch_all(pool)
+        .await
+        .map_err(|err| format!("fetch stream events failed: {err}"))?;
+        for expected in &expectations.stream_events {
+            let found = stream_events.iter().any(|(kind, payload)| {
+                kind == &expected.kind
+                    && expected.payload.iter().all(|(key, expected_value)| {
+                        payload.get(key).is_some_and(|actual_value| {
+                            matches_expected_value(actual_value, expected_value)
+                        })
+                    })
+            });
+            if !found {
+                return Err(format!(
+                    "missing expected stream event kind={} payload_subset={}",
+                    expected.kind,
+                    serde_json::to_string(&expected.payload)
+                        .unwrap_or_else(|_| "<unserializable>".to_string())
+                ));
+            }
         }
     }
 
@@ -1262,6 +1320,7 @@ mod tests {
                     kind: "Trigger".to_string(),
                     payload: BTreeMap::new(),
                 }],
+                stream_events: Vec::new(),
                 trace_decisions: Vec::new(),
                 trace_notes: Vec::new(),
                 generated_actions: Vec::new(),

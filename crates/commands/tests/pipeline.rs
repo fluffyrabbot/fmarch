@@ -13124,11 +13124,11 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
             7,
         ),
         (
-            "mafiascum-no-majority-revote-prompt-semantic-expectations",
+            "mafiascum-no-majority-revote-resolution-semantic-expectations",
             mafiascum_no_majority_revote_prompt_fixture_json(),
             1,
             1,
-            4,
+            6,
         ),
     ] {
         let fixture: serde_json::Value =
@@ -17465,7 +17465,10 @@ fn generated_epicmafia_pk_case_fixture_json(
         "selected_slot": case.selected_slot,
         "host_prompt_decision": {
             "prompt_id": "D01:pk:Tie",
-            "selected_slot": case.selected_slot,
+            "decision": {
+                "kind": "select_slot",
+                "slot": case.selected_slot,
+            },
         },
     });
     fixture["expectations"] = generated_epicmafia_pk_expectations_json(case);
@@ -18806,6 +18809,13 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
             { "actor_slot": "slot_3", "target_slot": "slot_1" }
         ],
         "actions": [],
+        "host_prompt_decision": {
+            "prompt_id": "D01:revote:NoMajority",
+            "decision": {
+                "kind": "acknowledge",
+                "metadata": { "operator_note": "minimizer revote" }
+            }
+        },
         "expectations": {
             "inner_events": [
                 {
@@ -18842,6 +18852,33 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
                     "payload": {
                         "phase_id": "D01",
                         "deaths": []
+                    }
+                }
+            ],
+            "stream_events": [
+                {
+                    "kind": "HostPromptResolved",
+                    "payload": {
+                        "prompt_id": "D01:revote:NoMajority",
+                        "phase_id": "D01",
+                        "kind": "revote",
+                        "reason": "no_majority",
+                        "decision": {
+                            "kind": "acknowledge",
+                            "metadata": {
+                                "operator_note": "minimizer revote"
+                            }
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                },
+                {
+                    "kind": "PhaseAdvanced",
+                    "payload": {
+                        "phase_id": "D01R1",
+                        "source_prompt_id": "D01:revote:NoMajority",
+                        "source_phase_id": "D01",
+                        "reason": "revote"
                     }
                 }
             ],
@@ -19131,6 +19168,7 @@ fn generated_action_by_template_target<'a>(
 fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
     [
         "inner_events",
+        "stream_events",
         "trace_decisions",
         "trace_notes",
         "generated_actions",
