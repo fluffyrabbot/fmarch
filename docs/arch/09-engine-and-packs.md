@@ -1465,6 +1465,15 @@ effect. The matching checked-in negative artifact,
 `crates/commands/fixtures/night-poison-cure-generated-bad-expectation.json`, is covered by
 `checked_in_poison_cure_generated_fixtures_replay_semantic_expectations`, which proves the success
 fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
+failure class without success promotion.
+`crates/commands/fixtures/night-ignite-generated-minimized.json` now promotes the Ignite row into a
+checked-in Mafiascum N02 carried-douse ignite replay with two slots, one action, one setup phase,
+two audited resolution envelopes, and two anchored traces. It checks two semantic expectations: the
+`PlayerKilled(cause = ignite)` inner event for the doused target and the matching phase announcement
+death entry. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-ignite-generated-bad-expectation.json`, is covered by
+`checked_in_ignite_generated_fixtures_replay_semantic_expectations`, which proves the success
+fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
 failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report

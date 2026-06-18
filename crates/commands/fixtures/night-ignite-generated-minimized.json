@@ -1,0 +1,82 @@
+{
+  "seed": 130041,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "arsonist"
+    },
+    {
+      "slot": "slot_2",
+      "role": "vanilla_townie"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "ignite",
+      "action_id": "generated_seed_97041_ignite_carried_douse",
+      "targets": []
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 129041,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "douse",
+          "action_id": "generated_seed_97041_douse_for_later_ignite",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_1"
+          ],
+          "cause": "ignite",
+          "slot_id": "slot_2",
+          "unstoppable": false
+        }
+      },
+      {
+        "kind": "PhaseAnnouncement",
+        "payload": {
+          "deaths": [
+            {
+              "cause": "ignite",
+              "slot_id": "slot_2"
+            }
+          ],
+          "phase_id": "N02"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}

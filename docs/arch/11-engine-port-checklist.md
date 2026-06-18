@@ -2558,6 +2558,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    `checked_in_poison_cure_generated_fixtures_replay_semantic_expectations`, which proves the success
    fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
    failure class without success promotion.
+   `crates/commands/fixtures/night-ignite-generated-minimized.json` now promotes the Ignite row into
+   a checked-in Mafiascum N02 carried-douse ignite replay with two slots, one action, one setup
+   phase, two audited resolution envelopes, and two anchored traces. It checks two semantic
+   expectations: the `PlayerKilled(cause = ignite)` inner event for the doused target and the
+   matching phase announcement death entry. Its matching checked-in negative artifact,
+   `crates/commands/fixtures/night-ignite-generated-bad-expectation.json`, is covered by
+   `checked_in_ignite_generated_fixtures_replay_semantic_expectations`, which proves the success
+   fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
+   failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3079,8 +3088,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by moving the artifact-backed promotion path into the remaining persistent
-douse/ignite row: promote `ignite`, commit its reduced
+Continue Phase 4 by moving the artifact-backed promotion path into the next trigger projection-state
+row: promote `pgo_projection_state`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures
