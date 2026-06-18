@@ -12067,6 +12067,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("mark_clear_visibility", [97_091, 97_092]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
+        ("private_notification", [97_101, 97_102]),
     ] {
         for seed in seeds {
             cases.push((
@@ -12179,8 +12180,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 12,
-        "expected_case_count": 24,
+        "expected_family_count": 13,
+        "expected_case_count": 26,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
@@ -12194,12 +12195,13 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("lovers".to_string(), 2),
             ("mark_clear_visibility".to_string(), 2),
             ("pgo".to_string(), 2),
+            ("private_notification".to_string(), 2),
         ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(12));
-    assert_eq!(report["case_count"], serde_json::json!(24));
+    assert_eq!(report["family_count"], serde_json::json!(13));
+    assert_eq!(report["case_count"], serde_json::json!(26));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19400,7 +19402,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         "ignite" | "mark_clear_visibility" => {
             generated_mafiascum_persistent_effect_fixture_json(family, seed)
         }
-        "extra_action" | "item_grant" => {
+        "extra_action" | "item_grant" | "private_notification" => {
             generated_mafiascum_generated_action_fixture_json(family, seed)
         }
         _ => unreachable!("unknown generated persistent trigger family"),
@@ -19448,6 +19450,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "item_grant" => {
             fixture["expectations"]["inner_events"][0]["payload"]["source_action"] =
                 serde_json::json!("grant_item_wrong");
+        }
+        "private_notification" => {
+            fixture["expectations"]["player_notifications"][0]["payload"]["audience_slot"] =
+                serde_json::json!("slot_3");
         }
         _ => unreachable!("unknown generated persistent trigger family"),
     }
@@ -20018,6 +20024,125 @@ fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) ->
             }
         }))
         .expect("generated Mafiascum item-grant fixture serializes"),
+        "private_notification" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 34_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "inventor" },
+                { "slot": "slot_2", "role": "vanilla_townie" },
+                { "slot": "slot_3", "role": "mafia_goon" },
+                { "slot": "slot_4", "role": "vanilla_townie" },
+                { "slot": "slot_5", "role": "mafia_goon" },
+                { "slot": "slot_6", "role": "vanilla_townie" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 33_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "grant_vest_item",
+                        "action_id": format!("generated_seed_{seed}_private_grant_vest_item"),
+                        "targets": ["slot_2"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "bulletproof_vest_item",
+                    "action_id": format!("generated_seed_{seed}_private_use_vest_item"),
+                    "targets": ["slot_2"],
+                    "grant_id": "bulletproof_vest_item"
+                },
+                {
+                    "actor_slot": "slot_3",
+                    "template_id": "factional_kill",
+                    "action_id": format!("generated_seed_{seed}_private_notification_noise_kill"),
+                    "targets": ["slot_4"]
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "ActionGrantConsumed",
+                        "payload": {
+                            "grant_id": "bulletproof_vest_item",
+                            "actor": "slot_2",
+                            "action_id": format!("generated_seed_{seed}_private_use_vest_item"),
+                            "source_action": format!("generated_seed_{seed}_private_grant_vest_item"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2,
+                            "remaining_uses": 0
+                        }
+                    },
+                    {
+                        "kind": "ActionUseCounted",
+                        "payload": {
+                            "counter_id": "inventory:bulletproof_vest_item",
+                            "actor": "slot_2",
+                            "template_id": "bulletproof_vest_item",
+                            "consumed_action": format!("generated_seed_{seed}_private_use_vest_item"),
+                            "cadence_policy": "inventory",
+                            "phase_scope": "grant",
+                            "remaining": 0
+                        }
+                    },
+                    {
+                        "kind": "EffectsMarked",
+                        "payload": {
+                            "effect": "bulletproof_vest",
+                            "target": "slot_2",
+                            "actor": "slot_2",
+                            "source_action": format!("generated_seed_{seed}_private_use_vest_item"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2
+                        }
+                    }
+                ],
+                "generated_actions": [
+                    {
+                        "action_id": "bulletproof_vest_item",
+                        "source": "ActionGranted",
+                        "actor": "slot_1",
+                        "targets": ["slot_2"],
+                        "detail": {
+                            "kind": "Item",
+                            "source_action": format!("generated_seed_{seed}_private_grant_vest_item"),
+                            "uses": 1,
+                            "phase_id": "N01",
+                            "phase_kind": "Night",
+                            "phase_number": 1
+                        }
+                    },
+                    {
+                        "action_id": format!("generated_seed_{seed}_private_use_vest_item"),
+                        "source": "ActionGrantConsumed",
+                        "actor": "slot_2",
+                        "targets": [],
+                        "detail": {
+                            "grant_id": "bulletproof_vest_item",
+                            "source_action": format!("generated_seed_{seed}_private_grant_vest_item"),
+                            "remaining_uses": 0
+                        }
+                    }
+                ],
+                "player_notifications": [
+                    {
+                        "payload": {
+                            "phase_id": "N01",
+                            "audience_slot": "slot_2",
+                            "effect": "grant",
+                            "status": "bulletproof_vest_item"
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum private-notification fixture serializes"),
         _ => unreachable!("unknown generated-action family"),
     }
 }
@@ -22933,6 +23058,7 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
         "trace_decisions",
         "trace_notes",
         "generated_actions",
+        "player_notifications",
         "sheriff_badges",
     ]
     .into_iter()

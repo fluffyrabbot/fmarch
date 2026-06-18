@@ -1249,11 +1249,11 @@ locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`, `expected_
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
 pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
 target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary `Runs
-the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, ConversionDeprogramming, MarkClearVisibility, Ignite, ExtraAction, ItemGrant, Lovers, and
+the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, ConversionDeprogramming, MarkClearVisibility, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and
 Bomb against local Postgres, writes a versioned report with two cases per family plus success and
 bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage.`
-This row is trusted through the artifact classifier with `ok: true`, `family_count: 12`,
-`case_count: 24`, `expected_family_count: 12`, `expected_case_count: 24`, and
+This row is trusted through the artifact classifier with `ok: true`, `family_count: 13`,
+`case_count: 26`, `expected_family_count: 13`, `expected_case_count: 26`, and
 `family_manifest_matched: true`.
 `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
 path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
@@ -1282,7 +1282,7 @@ from the generated report. The current artifact reports `ok: false`, `freshness.
 rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2 unsupported
 parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family rows
 (`feature_flags_test` and `init`). It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-browser-fetched JSON surface, all 12 browser-smoke-required go/no-go metadata needles present,
+browser-fetched JSON surface, all 14 browser-smoke-required go/no-go metadata needles present,
 trusted metadata rows for large-action, determinism, and generated shrink matrix proof rows, and a
 manifest/status trusted command/projection proof row that has not yet been promoted into the
 browser-smoke required needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable

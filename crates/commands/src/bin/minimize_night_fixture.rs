@@ -5,7 +5,7 @@ use commands::{
     audit_resolution_envelopes, handle, inspect_resolution_traces, Command, HostPromptDecision,
     VoteTarget,
 };
-use projections::{audit_rebuild, sheriff_badges};
+use projections::{audit_rebuild, player_notifications, sheriff_badges};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
@@ -94,6 +94,8 @@ struct FixtureExpectations {
     #[serde(default)]
     generated_actions: Vec<ExpectedGeneratedAction>,
     #[serde(default)]
+    player_notifications: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
     sheriff_badges: Vec<ExpectedProjectionRow>,
 }
 
@@ -104,6 +106,7 @@ impl FixtureExpectations {
             + self.trace_decisions.len()
             + self.trace_notes.len()
             + self.generated_actions.len()
+            + self.player_notifications.len()
             + self.sheriff_badges.len()
     }
 }
@@ -1139,6 +1142,35 @@ async fn validate_semantic_expectations(
         }
     }
 
+    if !expectations.player_notifications.is_empty() {
+        let rows = player_notifications(pool, game)
+            .await
+            .map_err(|err| format!("fetch player_notifications failed: {err}"))?
+            .into_iter()
+            .map(|row| {
+                serde_json::to_value(row).expect(
+                    "player notification projection row should serialize for fixture matching",
+                )
+            })
+            .collect::<Vec<_>>();
+        for expected in &expectations.player_notifications {
+            let found = rows.iter().any(|actual| {
+                expected.payload.iter().all(|(key, expected_value)| {
+                    actual.get(key).is_some_and(|actual_value| {
+                        matches_expected_value(actual_value, expected_value)
+                    })
+                })
+            });
+            if !found {
+                return Err(format!(
+                    "missing expected player_notification payload_subset={}",
+                    serde_json::to_string(&expected.payload)
+                        .unwrap_or_else(|_| "<unserializable>".to_string())
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -1439,6 +1471,7 @@ mod tests {
                 trace_decisions: Vec::new(),
                 trace_notes: Vec::new(),
                 generated_actions: Vec::new(),
+                player_notifications: Vec::new(),
                 sheriff_badges: Vec::new(),
             },
         };

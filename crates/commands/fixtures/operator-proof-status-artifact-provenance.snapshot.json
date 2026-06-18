@@ -220,8 +220,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781781264,
-            "age_seconds": 563,
+            "modified_at_unix_seconds": 1781781870,
+            "age_seconds": 717,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
@@ -240,8 +240,8 @@
           "artifact": {
             "path": "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
             "state": "trusted",
-            "modified_at_unix_seconds": 1781781264,
-            "age_seconds": 563,
+            "modified_at_unix_seconds": 1781781870,
+            "age_seconds": 717,
             "freshness_max_age_seconds": 86400,
             "trusted_metadata": {
               "game_id": "3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
@@ -273,8 +273,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781298,
-            "age_seconds": 530,
+            "modified_at_unix_seconds": 1781781901,
+            "age_seconds": 685,
             "freshness_max_age_seconds": 86400,
             "expected_path": "crates/commands/fixtures/operator-proof-status-artifact-provenance.snapshot.json",
             "actual_path": "target/operator-proof/current-status-audit-check.json",
@@ -294,8 +294,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781298,
-            "age_seconds": 529,
+            "modified_at_unix_seconds": 1781781901,
+            "age_seconds": 685,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -313,8 +313,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781298,
-            "age_seconds": 529,
+            "modified_at_unix_seconds": 1781781902,
+            "age_seconds": 685,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -332,8 +332,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781299,
-            "age_seconds": 529,
+            "modified_at_unix_seconds": 1781781902,
+            "age_seconds": 684,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -351,8 +351,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781299,
-            "age_seconds": 528,
+            "modified_at_unix_seconds": 1781781903,
+            "age_seconds": 684,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -370,8 +370,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781300,
-            "age_seconds": 528,
+            "modified_at_unix_seconds": 1781781903,
+            "age_seconds": 683,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0
           },
@@ -389,8 +389,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781271,
-            "age_seconds": 557,
+            "modified_at_unix_seconds": 1781781876,
+            "age_seconds": 711,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -416,8 +416,8 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781297,
-            "age_seconds": 530,
+            "modified_at_unix_seconds": 1781781901,
+            "age_seconds": 686,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -442,19 +442,19 @@
             "state": "trusted",
             "artifact_version": 1,
             "expected_version": 1,
-            "modified_at_unix_seconds": 1781781742,
-            "age_seconds": 85,
+            "modified_at_unix_seconds": 1781782459,
+            "age_seconds": 128,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
-              "family_count": 12,
-              "expected_family_count": 12,
+              "family_count": 13,
+              "expected_family_count": 13,
               "family_manifest_matched": true,
-              "case_count": 24,
-              "expected_case_count": 24
+              "case_count": 26,
+              "expected_case_count": 26
             }
           },
-          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, ConversionDeprogramming, MarkClearVisibility, Ignite, ExtraAction, ItemGrant, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
+          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, ConversionDeprogramming, MarkClearVisibility, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
         },
         {
           "id": "operator-proof-command-projection-resolution",
@@ -469,7 +469,7 @@
             "artifact_version": 1,
             "expected_version": 1,
             "modified_at_unix_seconds": 1781771292,
-            "age_seconds": 10535,
+            "age_seconds": 11294,
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
@@ -521,7 +521,7 @@
             "path": "target/operator-proof/stale-artifact-provenance-guard.json",
             "state": "stale",
             "modified_at_unix_seconds": 946684800,
-            "age_seconds": 835097028,
+            "age_seconds": 835097787,
             "freshness_max_age_seconds": 86400
           },
           "proof_boundary": "Fixture-only row proving valid but old local artifacts remain display-only."
