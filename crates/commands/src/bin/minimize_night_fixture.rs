@@ -192,17 +192,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
 
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&ToolReport {
-            original,
-            minimized,
-            reduction_steps: steps,
-            reduction,
-            write_reduced,
-            fixture,
-        })?
-    );
+    let report = ToolReport {
+        original,
+        minimized,
+        reduction_steps: steps,
+        reduction,
+        write_reduced,
+        fixture,
+    };
+    let report_json = format!("{}\n", serde_json::to_string_pretty(&report)?);
+    if let Some(write_report_path) = &args.write_report_path {
+        write_text(write_report_path, &report_json)?;
+    }
+    print!("{report_json}");
     Ok(())
 }
 
@@ -211,6 +213,7 @@ struct Args {
     fixture_path: String,
     reduce: bool,
     write_reduced_path: Option<String>,
+    write_report_path: Option<String>,
 }
 
 impl Args {
@@ -221,6 +224,7 @@ impl Args {
         let mut fixture_path = None;
         let mut reduce = false;
         let mut write_reduced_path = None;
+        let mut write_report_path = None;
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -232,6 +236,13 @@ impl Args {
                     }
                     write_reduced_path = Some(path);
                 }
+                "--write-report" => {
+                    let path = args.next().ok_or_else(usage)?;
+                    if path.starts_with('-') {
+                        return Err(usage());
+                    }
+                    write_report_path = Some(path);
+                }
                 "-h" | "--help" => return Err(usage()),
                 _ if arg.starts_with('-') => return Err(usage()),
                 _ if fixture_path.is_none() => fixture_path = Some(arg),
@@ -242,12 +253,13 @@ impl Args {
             fixture_path: fixture_path.ok_or_else(usage)?,
             reduce,
             write_reduced_path,
+            write_report_path,
         })
     }
 }
 
 fn usage() -> String {
-    "usage: minimize_night_fixture [--reduce] [--write-reduced <path>] <fixture.json>".to_string()
+    "usage: minimize_night_fixture [--reduce] [--write-reduced <path>] [--write-report <path>] <fixture.json>".to_string()
 }
 
 fn read_fixture(path: &str) -> Result<NightFixture, Box<dyn std::error::Error>> {
@@ -256,10 +268,15 @@ fn read_fixture(path: &str) -> Result<NightFixture, Box<dyn std::error::Error>> 
 }
 
 fn write_fixture(path: &str, fixture: &NightFixture) -> Result<(), Box<dyn std::error::Error>> {
-    fs::write(
-        Path::new(path),
-        format!("{}\n", serde_json::to_string_pretty(fixture)?),
+    write_text(
+        path,
+        &format!("{}\n", serde_json::to_string_pretty(fixture)?),
     )?;
+    Ok(())
+}
+
+fn write_text(path: &str, text: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(Path::new(path), text)?;
     Ok(())
 }
 
@@ -828,11 +845,14 @@ mod tests {
             "--reduce".to_string(),
             "--write-reduced".to_string(),
             "reduced.json".to_string(),
+            "--write-report".to_string(),
+            "report.json".to_string(),
             "case.json".to_string(),
         ])
         .expect("args parse");
         assert!(args.reduce);
         assert_eq!(args.write_reduced_path.as_deref(), Some("reduced.json"));
+        assert_eq!(args.write_report_path.as_deref(), Some("report.json"));
         assert_eq!(args.fixture_path, "case.json");
     }
 

@@ -25,6 +25,8 @@ use projections::{
 };
 use sqlx::{Acquire, PgPool};
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -12506,6 +12508,60 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
+    let case = GeneratedNightCase {
+        seed: 91_777,
+        roster: vec![
+            ("slot_1".to_string(), "roleblocker".to_string()),
+            ("slot_2".to_string(), "paranoid_gun_owner".to_string()),
+            ("slot_3".to_string(), "vanilla_townie".to_string()),
+        ],
+        actions: vec![GeneratedNightAction {
+            actor_slot: "slot_1".to_string(),
+            template_id: "roleblocker_block".to_string(),
+            action_id: "generated_seed_91777_slot_1_roleblocker_block".to_string(),
+            targets: vec!["slot_2".to_string()],
+        }],
+    };
+    let mut fixture: serde_json::Value = serde_json::from_str(&generated_night_case_fixture_json(
+        &case,
+        "mafiascum",
+        case.seed + 43_000,
+    ))
+    .expect("generated Mafiascum fixture serializes");
+    fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
+        serde_json::json!("pgo_shoots_wrong_visitor");
+    let fixture_json =
+        serde_json::to_string_pretty(&fixture).expect("generated failure fixture serializes");
+
+    let artifacts = GeneratedShrinkArtifacts::new("generated-mafiascum-n01-bad-pgo-expectation");
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], false);
+    assert_eq!(report["original"]["failure_class"], "semantic_expectation");
+    assert_eq!(report["minimized"]["ok"], false);
+    assert_eq!(report["minimized"]["failure_class"], "semantic_expectation");
+    assert_eq!(report["reduction"]["replay_success"], false);
+    assert_eq!(report["reduction"]["failure_class_preserved"], true);
+    assert_eq!(report["write_reduced"]["wrote"], true);
+    assert_eq!(report["write_reduced"]["promoted_success_fixture"], false);
+    assert!(
+        artifacts.fixture_path.exists(),
+        "generated failure fixture artifact should be saved"
+    );
+    assert!(
+        artifacts.reduced_path.exists(),
+        "generated reduced fixture artifact should be saved"
+    );
+    assert!(
+        artifacts.report_path.exists(),
+        "generated shrink report artifact should be saved"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -15229,6 +15285,88 @@ fn generated_case_fixture_json(
         fixture["expectations"] = expectations;
     }
     serde_json::to_string_pretty(&fixture).expect("generated fixture JSON serializes")
+}
+
+struct GeneratedShrinkArtifacts {
+    fixture_path: PathBuf,
+    reduced_path: PathBuf,
+    report_path: PathBuf,
+}
+
+impl GeneratedShrinkArtifacts {
+    fn new(stem: &str) -> Self {
+        let root = generated_shrink_artifact_root();
+        GeneratedShrinkArtifacts {
+            fixture_path: root.join(format!("{stem}.fixture.tmp.json")),
+            reduced_path: root.join(format!("{stem}.reduced.tmp.json")),
+            report_path: root.join(format!("{stem}.report.tmp.json")),
+        }
+    }
+
+    fn remove_existing(&self) {
+        for path in [&self.fixture_path, &self.reduced_path, &self.report_path] {
+            match fs::remove_file(path) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => panic!("remove stale generated shrink artifact {path:?}: {err}"),
+            }
+        }
+    }
+
+    fn write_fixture(&self, fixture_json: &str) {
+        write_generated_shrink_artifact(&self.fixture_path, fixture_json);
+    }
+
+    async fn run_minimizer(&self, pool: &PgPool) -> serde_json::Value {
+        let database_url = database_url_for_pool(pool).await;
+        let bin = std::env::var("CARGO_BIN_EXE_minimize_night_fixture")
+            .unwrap_or_else(|_| env!("CARGO_BIN_EXE_minimize_night_fixture").to_string());
+        let output = ProcessCommand::new(bin)
+            .arg("--reduce")
+            .arg("--write-reduced")
+            .arg(&self.reduced_path)
+            .arg("--write-report")
+            .arg(&self.report_path)
+            .arg(&self.fixture_path)
+            .env("DATABASE_URL", database_url)
+            .output()
+            .expect("run minimize_night_fixture for generated failure fixture");
+        assert!(
+            output.status.success(),
+            "minimize_night_fixture failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout_report: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("minimizer stdout is JSON");
+        let saved_report: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&self.report_path).expect("read saved minimizer report"),
+        )
+        .expect("saved minimizer report is JSON");
+        assert_eq!(
+            stdout_report, saved_report,
+            "saved minimizer report should match stdout"
+        );
+        saved_report
+    }
+}
+
+fn generated_shrink_artifact_root() -> PathBuf {
+    if let Ok(root) = std::env::var("FMARCH_GENERATED_SHRINK_DIR") {
+        return PathBuf::from(root);
+    }
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("commands crate lives under workspace crates/")
+        .join("target/operator-proof")
+}
+
+fn write_generated_shrink_artifact(path: &Path, text: &str) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create generated shrink artifact directory");
+    }
+    fs::write(path, format!("{text}\n")).expect("write generated shrink artifact");
 }
 
 fn generated_case_expectations_json(
