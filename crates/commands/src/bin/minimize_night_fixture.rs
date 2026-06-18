@@ -5,7 +5,9 @@ use commands::{
     audit_resolution_envelopes, handle, inspect_resolution_traces, Command, HostPromptDecision,
     VoteTarget,
 };
-use projections::{audit_rebuild, player_notifications, sheriff_badges};
+use projections::{
+    audit_rebuild, delayed_death_queues, player_notifications, sheriff_badges, slot_effects,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use uuid::Uuid;
@@ -94,6 +96,14 @@ struct FixtureExpectations {
     #[serde(default)]
     generated_actions: Vec<ExpectedGeneratedAction>,
     #[serde(default)]
+    delayed_death_queues: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
+    absent_delayed_death_queues: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
+    slot_effects: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
+    absent_slot_effects: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
     player_notifications: Vec<ExpectedProjectionRow>,
     #[serde(default)]
     sheriff_badges: Vec<ExpectedProjectionRow>,
@@ -106,6 +116,10 @@ impl FixtureExpectations {
             + self.trace_decisions.len()
             + self.trace_notes.len()
             + self.generated_actions.len()
+            + self.delayed_death_queues.len()
+            + self.absent_delayed_death_queues.len()
+            + self.slot_effects.len()
+            + self.absent_slot_effects.len()
             + self.player_notifications.len()
             + self.sheriff_badges.len()
     }
@@ -1142,6 +1156,53 @@ async fn validate_semantic_expectations(
         }
     }
 
+    let delayed_death_rows = if expectations.delayed_death_queues.is_empty()
+        && expectations.absent_delayed_death_queues.is_empty()
+    {
+        Vec::new()
+    } else {
+        delayed_death_queues(pool, game)
+            .await
+            .map_err(|err| format!("fetch delayed_death_queues failed: {err}"))?
+            .into_iter()
+            .map(|row| {
+                serde_json::to_value(row)
+                    .expect("delayed death queue row should serialize for fixture matching")
+            })
+            .collect::<Vec<_>>()
+    };
+    validate_projection_rows_present(
+        "delayed_death_queue",
+        &delayed_death_rows,
+        &expectations.delayed_death_queues,
+    )?;
+    validate_projection_rows_absent(
+        "delayed_death_queue",
+        &delayed_death_rows,
+        &expectations.absent_delayed_death_queues,
+    )?;
+
+    let slot_effect_rows =
+        if expectations.slot_effects.is_empty() && expectations.absent_slot_effects.is_empty() {
+            Vec::new()
+        } else {
+            slot_effects(pool, game)
+                .await
+                .map_err(|err| format!("fetch slot_effects failed: {err}"))?
+                .into_iter()
+                .map(|row| {
+                    serde_json::to_value(row)
+                        .expect("slot effect row should serialize for fixture matching")
+                })
+                .collect::<Vec<_>>()
+        };
+    validate_projection_rows_present("slot_effect", &slot_effect_rows, &expectations.slot_effects)?;
+    validate_projection_rows_absent(
+        "slot_effect",
+        &slot_effect_rows,
+        &expectations.absent_slot_effects,
+    )?;
+
     if !expectations.player_notifications.is_empty() {
         let rows = player_notifications(pool, game)
             .await
@@ -1172,6 +1233,54 @@ async fn validate_semantic_expectations(
     }
 
     Ok(())
+}
+
+fn validate_projection_rows_present(
+    label: &str,
+    rows: &[serde_json::Value],
+    expected_rows: &[ExpectedProjectionRow],
+) -> Result<(), String> {
+    for expected in expected_rows {
+        if !rows
+            .iter()
+            .any(|actual| projection_row_matches(actual, expected))
+        {
+            return Err(format!(
+                "missing expected {label} payload_subset={}",
+                serde_json::to_string(&expected.payload)
+                    .unwrap_or_else(|_| "<unserializable>".to_string())
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_projection_rows_absent(
+    label: &str,
+    rows: &[serde_json::Value],
+    expected_rows: &[ExpectedProjectionRow],
+) -> Result<(), String> {
+    for expected in expected_rows {
+        if rows
+            .iter()
+            .any(|actual| projection_row_matches(actual, expected))
+        {
+            return Err(format!(
+                "unexpected {label} payload_subset={}",
+                serde_json::to_string(&expected.payload)
+                    .unwrap_or_else(|_| "<unserializable>".to_string())
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn projection_row_matches(actual: &serde_json::Value, expected: &ExpectedProjectionRow) -> bool {
+    expected.payload.iter().all(|(key, expected_value)| {
+        actual
+            .get(key)
+            .is_some_and(|actual_value| matches_expected_value(actual_value, expected_value))
+    })
 }
 
 fn matches_expected_value(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
@@ -1471,6 +1580,10 @@ mod tests {
                 trace_decisions: Vec::new(),
                 trace_notes: Vec::new(),
                 generated_actions: Vec::new(),
+                delayed_death_queues: Vec::new(),
+                absent_delayed_death_queues: Vec::new(),
+                slot_effects: Vec::new(),
+                absent_slot_effects: Vec::new(),
                 player_notifications: Vec::new(),
                 sheriff_badges: Vec::new(),
             },

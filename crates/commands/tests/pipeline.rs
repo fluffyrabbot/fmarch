@@ -12063,6 +12063,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("bomb", [96_777, 96_778]),
         ("backup_inheritance", [97_071, 97_072]),
         ("conversion_deprogramming", [97_081, 97_082]),
+        ("poison_cure", [97_111, 97_112]),
         ("ignite", [97_041, 97_042]),
         ("mark_clear_visibility", [97_091, 97_092]),
         ("extra_action", [97_051, 97_052]),
@@ -12180,8 +12181,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 13,
-        "expected_case_count": 26,
+        "expected_family_count": 14,
+        "expected_case_count": 28,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
@@ -12194,14 +12195,15 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("item_grant".to_string(), 2),
             ("lovers".to_string(), 2),
             ("mark_clear_visibility".to_string(), 2),
+            ("poison_cure".to_string(), 2),
             ("pgo".to_string(), 2),
             ("private_notification".to_string(), 2),
         ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(13));
-    assert_eq!(report["case_count"], serde_json::json!(26));
+    assert_eq!(report["family_count"], serde_json::json!(14));
+    assert_eq!(report["case_count"], serde_json::json!(28));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19399,7 +19401,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         "conversion_deprogramming" => {
             generated_mafiascum_conversion_deprogramming_fixture_json(seed)
         }
-        "ignite" | "mark_clear_visibility" => {
+        "ignite" | "mark_clear_visibility" | "poison_cure" => {
             generated_mafiascum_persistent_effect_fixture_json(family, seed)
         }
         "extra_action" | "item_grant" | "private_notification" => {
@@ -19442,6 +19444,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "mark_clear_visibility" => {
             fixture["expectations"]["inner_events"][2]["payload"]["visibility"] =
                 serde_json::json!("Hidden");
+        }
+        "poison_cure" => {
+            fixture["expectations"]["player_notifications"][0]["payload"]["audience_slot"] =
+                serde_json::json!("slot_4");
         }
         "extra_action" => {
             fixture["expectations"]["inner_events"][0]["payload"]["source_action"] =
@@ -19806,6 +19812,158 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
             }
         }))
         .expect("generated Mafiascum mark/clear visibility fixture serializes"),
+        "poison_cure" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 33_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "poisoner" },
+                { "slot": "slot_2", "role": "poison_doctor" },
+                { "slot": "slot_3", "role": "vanilla_townie" },
+                { "slot": "slot_4", "role": "mafia_goon" },
+                { "slot": "slot_5", "role": "vanilla_townie" },
+                { "slot": "slot_6", "role": "mafia_goon" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 32_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "poison",
+                        "action_id": format!("generated_seed_{seed}_poison_for_cure"),
+                        "targets": ["slot_3"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "cure_poison",
+                    "action_id": format!("generated_seed_{seed}_cure_pending_poison"),
+                    "targets": ["slot_3"]
+                },
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "poison",
+                    "action_id": format!("generated_seed_{seed}_fresh_poison_noise"),
+                    "targets": ["slot_5"]
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "EffectNotification",
+                        "payload": {
+                            "effect": "poisoned",
+                            "status": "cleared",
+                            "audience": ["slot_3"]
+                        }
+                    },
+                    {
+                        "kind": "EffectsCleared",
+                        "payload": {
+                            "effect": "poisoned",
+                            "targets": ["slot_3"],
+                            "actor": "slot_2"
+                        }
+                    },
+                    {
+                        "kind": "DelayedDeathResolved",
+                        "payload": {
+                            "queue_id": format!("poisoned:slot_3:generated_seed_{seed}_poison_for_cure"),
+                            "target": "slot_3",
+                            "cause": "poison",
+                            "effect": "poisoned",
+                            "outcome": "preempted_by_clear",
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2
+                        }
+                    },
+                    {
+                        "kind": "PhaseAnnouncement",
+                        "payload": {
+                            "phase_id": "N02",
+                            "deaths": []
+                        }
+                    }
+                ],
+                "trace_decisions": [
+                    {
+                        "stage": "night:pending_effect",
+                        "source": format!("delayed_death:poisoned:slot_3:generated_seed_{seed}_poison_for_cure"),
+                        "outcome": "pending_poison_preempted_by_clear",
+                        "detail": {
+                            "target": "slot_3",
+                            "effect": "poisoned",
+                            "cause": "poison",
+                            "source": "slot_1",
+                            "source_action": format!("generated_seed_{seed}_poison_for_cure")
+                        }
+                    }
+                ],
+                "player_notifications": [
+                    {
+                        "payload": {
+                            "phase_id": "N02",
+                            "audience_slot": "slot_3",
+                            "effect": "poisoned",
+                            "status": "cleared"
+                        }
+                    }
+                ],
+                "delayed_death_queues": [
+                    {
+                        "payload": {
+                            "queue_id": format!("poisoned:slot_5:generated_seed_{seed}_fresh_poison_noise"),
+                            "target_slot": "slot_5",
+                            "cause": "poison",
+                            "effect": "poisoned",
+                            "source_slot": "slot_1",
+                            "source_action": format!("generated_seed_{seed}_fresh_poison_noise"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2
+                        }
+                    }
+                ],
+                "absent_delayed_death_queues": [
+                    {
+                        "payload": {
+                            "queue_id": format!("poisoned:slot_3:generated_seed_{seed}_poison_for_cure"),
+                            "target_slot": "slot_3",
+                            "source_action": format!("generated_seed_{seed}_poison_for_cure")
+                        }
+                    }
+                ],
+                "slot_effects": [
+                    {
+                        "payload": {
+                            "slot_id": "slot_5",
+                            "effect": "poisoned",
+                            "source_slot": "slot_1",
+                            "source_action": format!("generated_seed_{seed}_fresh_poison_noise"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2,
+                            "duration": "Persistent",
+                            "visibility": "Target"
+                        }
+                    }
+                ],
+                "absent_slot_effects": [
+                    {
+                        "payload": {
+                            "slot_id": "slot_3",
+                            "effect": "poisoned",
+                            "source_action": format!("generated_seed_{seed}_poison_for_cure")
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum poison/cure delayed-effect fixture serializes"),
         _ => unreachable!("unknown generated persistent effect family"),
     }
 }
@@ -23058,6 +23216,10 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
         "trace_decisions",
         "trace_notes",
         "generated_actions",
+        "delayed_death_queues",
+        "absent_delayed_death_queues",
+        "slot_effects",
+        "absent_slot_effects",
         "player_notifications",
         "sheriff_badges",
     ]

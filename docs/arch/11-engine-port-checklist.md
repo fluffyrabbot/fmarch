@@ -2508,12 +2508,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
    in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
    generated seeds plus two deterministic Hunter, BackupInheritance, ConversionDeprogramming,
-   MarkClearVisibility, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and Bomb persistent/generated-action
-   seeds, runs each of the 26 cases through success and bad-expectation reductions, asserts success
+   MarkClearVisibility, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and Bomb persistent/generated-action
+   seeds, runs each of the 28 cases through success and bad-expectation reductions, asserts success
    invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
    report artifacts under `target/operator-proof`, and saves
-   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 13
-   families, 26 cases, and the proof boundary that it is bounded local-Postgres coverage rather
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 14
+   families, 28 cases, and the proof boundary that it is bounded local-Postgres coverage rather
    than exhaustive randomized coverage.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
@@ -2901,10 +2901,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter,
-   BackupInheritance, ConversionDeprogramming, MarkClearVisibility, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
+   BackupInheritance, ConversionDeprogramming, MarkClearVisibility, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
    plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive
    randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
-   `family_count: 13`, `case_count: 26`, `expected_family_count: 13`, `expected_case_count: 26`,
+   `family_count: 14`, `case_count: 28`, `expected_family_count: 14`, `expected_case_count: 28`,
    and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
@@ -2967,7 +2967,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    a manifest/status trusted command/projection proof row that has not yet been promoted into the
    browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
-   `ok: true`, 13 families, 26 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/BackupInheritance/ConversionDeprogramming/MarkClearVisibility/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/Bomb
+   `ok: true`, 14 families, 28 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/BackupInheritance/ConversionDeprogramming/MarkClearVisibility/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/Bomb
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
    breadth remains future work. The local-Postgres
@@ -2982,9 +2982,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by extending the generated shrink matrix to poison/cure delayed-effect breadth.
-Build a multi-phase fixture where a persistent poison schedules delayed death, a later cure/heal
-clears both the folded effect and delayed-death queue before the kill fires, and a private clear
-notification is asserted through the folded `player_notification` projection. Add a
-bad-expectation variant that mutates the queue source or notification audience, prove the minimizer
-preserves `semantic_expectation`, and only then raise the matrix manifest from 13/26 to 14/28.
+Continue Phase 4 by extending the generated shrink matrix to mark/clear expiry breadth.
+Build a multi-phase fixture where a finite-duration mark is visible in folded projections before
+expiry, then expires or is cleared on the next phase without leaving stale `slot_effect` rows, while
+the relevant private visibility notification remains audience-scoped. Add a bad-expectation variant
+that mutates the expiry phase or notification audience, prove the minimizer preserves
+`semantic_expectation`, and only then raise the matrix manifest from 14/28 to 15/30.
