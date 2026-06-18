@@ -12062,6 +12062,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("backup_inheritance", [97_071, 97_072]),
+        ("conversion_deprogramming", [97_081, 97_082]),
         ("ignite", [97_041, 97_042]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
@@ -12177,12 +12178,13 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 10,
-        "expected_case_count": 20,
+        "expected_family_count": 11,
+        "expected_case_count": 22,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
             ("bomb".to_string(), 2),
+            ("conversion_deprogramming".to_string(), 2),
             ("extra_action".to_string(), 2),
             ("hider".to_string(), 2),
             ("hunter".to_string(), 2),
@@ -12194,8 +12196,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(10));
-    assert_eq!(report["case_count"], serde_json::json!(20));
+    assert_eq!(report["family_count"], serde_json::json!(11));
+    assert_eq!(report["case_count"], serde_json::json!(22));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19390,6 +19392,9 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             seed + 48_000,
         ),
         "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
+        "conversion_deprogramming" => {
+            generated_mafiascum_conversion_deprogramming_fixture_json(seed)
+        }
         "ignite" => generated_mafiascum_persistent_effect_fixture_json(family, seed),
         "extra_action" | "item_grant" => {
             generated_mafiascum_generated_action_fixture_json(family, seed)
@@ -19419,6 +19424,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "backup_inheritance" => {
             fixture["expectations"]["trace_decisions"][0]["detail"]["policy_detail"]
                 ["source_action"] = serde_json::json!("target_backup_wrong");
+        }
+        "conversion_deprogramming" => {
+            fixture["expectations"]["trace_decisions"][1]["detail"]["origin_source"] =
+                serde_json::json!("slot_wrong");
         }
         "ignite" => {
             fixture["expectations"]["inner_events"][0]["payload"]["cause"] =
@@ -19519,6 +19528,102 @@ fn generated_mafiascum_backup_inheritance_fixture_json(seed: u64) -> String {
         }
     }))
     .expect("generated Mafiascum backup-inheritance fixture serializes")
+}
+
+fn generated_mafiascum_conversion_deprogramming_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 36_000,
+        "pack": "mafiascum",
+        "phase": "N03",
+        "roster": [
+            { "slot": "slot_1", "role": "cult_leader" },
+            { "slot": "slot_2", "role": "deprogrammer" },
+            { "slot": "slot_3", "role": "cop" },
+            { "slot": "slot_4", "role": "mafia_goon" },
+            { "slot": "slot_5", "role": "vanilla_townie" },
+            { "slot": "slot_6", "role": "vanilla_townie" }
+        ],
+        "setup_phases": [
+            {
+                "phase": "N01",
+                "seed": seed + 33_000,
+                "actions": [{
+                    "actor_slot": "slot_1",
+                    "template_id": "cult_recruit",
+                    "action_id": format!("generated_seed_{seed}_cult_recruit_cop"),
+                    "targets": ["slot_3"]
+                }]
+            },
+            {
+                "phase": "N02",
+                "seed": seed + 34_000,
+                "actions": [{
+                    "actor_slot": "slot_2",
+                    "template_id": "deprogram",
+                    "action_id": format!("generated_seed_{seed}_deprogram_cop"),
+                    "targets": ["slot_3"]
+                }]
+            }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_3",
+                "template_id": "cop_investigate",
+                "action_id": format!("generated_seed_{seed}_restored_cop_check"),
+                "targets": ["slot_4"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "InvestigationResult",
+                    "payload": {
+                        "mode": "Parity",
+                        "investigator": "slot_3",
+                        "target": "slot_4",
+                        "result": "scum"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "night:conversion",
+                    "source": format!("action:generated_seed_{seed}_cult_recruit_cop"),
+                    "outcome": "conversion_assigned_role",
+                    "detail": {
+                        "action_id": format!("generated_seed_{seed}_cult_recruit_cop"),
+                        "template_id": "cult_recruit",
+                        "actor": "slot_1",
+                        "target": "slot_3",
+                        "mode": "AssignRole",
+                        "new_role": "cultist",
+                        "new_alignment": "cult",
+                        "original_role": "cop",
+                        "original_alignment": "town",
+                        "origin_source": null
+                    }
+                },
+                {
+                    "stage": "night:conversion",
+                    "source": format!("action:generated_seed_{seed}_deprogram_cop"),
+                    "outcome": "conversion_restored_original",
+                    "detail": {
+                        "action_id": format!("generated_seed_{seed}_deprogram_cop"),
+                        "template_id": "deprogram",
+                        "actor": "slot_2",
+                        "target": "slot_3",
+                        "mode": "RestoreOriginal",
+                        "new_role": "cop",
+                        "new_alignment": "town",
+                        "original_role": "cultist",
+                        "original_alignment": "cult",
+                        "origin_source": "slot_1"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum conversion/deprogramming fixture serializes")
 }
 
 fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -> String {

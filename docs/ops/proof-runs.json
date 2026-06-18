@@ -248,7 +248,7 @@
           "test_selector": "generated_shrink_matrix_writes_compact_operator_report",
           "artifact_path": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
           "artifact_kind": "generated_shrink_matrix_report",
-          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, Ignite, ExtraAction, ItemGrant, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
+          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, BackupInheritance, ConversionDeprogramming, Ignite, ExtraAction, ItemGrant, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
         },
         {
           "id": "operator-proof-command-projection-resolution",

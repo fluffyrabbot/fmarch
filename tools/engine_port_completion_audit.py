@@ -59,8 +59,8 @@ REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "expected_family_count: 12",
     "expected_seed_count: 57",
     "family_manifest_matched: true",
-    "case_count: 20",
-    "expected_case_count: 20",
+    "case_count: 22",
+    "expected_case_count: 22",
 ]
 REQUIRED_BROWSER_STATUS_METADATA_ROWS = [
     "proof-run-operator-proof-large-action-graph-performance",
