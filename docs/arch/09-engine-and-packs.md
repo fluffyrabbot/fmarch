@@ -1536,6 +1536,18 @@ survives. The matching checked-in negative artifact,
 success fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
 failure class without success promotion.
 
+`crates/commands/fixtures/night-hunter-projection-state-generated-minimized.json` now promotes the
+HunterProjectionState row into a checked-in Mafiascum N02 carried-retaliation replay with four slots,
+one setup phase, one night action, two audited resolution envelopes, and two anchored traces. It
+checks six semantic expectations: the factional `PlayerKilled` inner event for the hunter, the
+retaliatory `PlayerKilled(cause = hunter_retaliate)` inner event for the selected target, one
+`death:cascade` trace decision, and three rebuilt `slot_state` rows proving the hunter and chosen
+target die while the unrelated slot survives. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-hunter-projection-state-generated-bad-expectation.json`, is covered
+by `checked_in_hunter_projection_state_generated_fixtures_replay_semantic_expectations`, which
+proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
 The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report

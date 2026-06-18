@@ -1,0 +1,125 @@
+{
+  "seed": 129231,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "hunter"
+    },
+    {
+      "slot": "slot_2",
+      "role": "vanilla_townie"
+    },
+    {
+      "slot": "slot_3",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_5",
+      "role": "mafia_goon"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_3",
+      "template_id": "factional_kill",
+      "action_id": "generated_seed_97231_mafia_kills_hunter",
+      "targets": [
+        "slot_1"
+      ]
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 128231,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "hunter_retaliate",
+          "action_id": "generated_seed_97231_hunter_arms_retaliation",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_3"
+          ],
+          "cause": "factional_kill",
+          "slot_id": "slot_1"
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_1"
+          ],
+          "cause": "hunter_retaliate",
+          "slot_id": "slot_2",
+          "unstoppable": false
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "death:cascade",
+        "source": "retaliation:generated_seed_97231_hunter_arms_retaliation",
+        "outcome": "chosen_retaliation",
+        "detail": {
+          "actor": "slot_1",
+          "cause": "hunter_retaliate",
+          "retaliation_id": "generated_seed_97231_hunter_arms_retaliation",
+          "source_action": "hunter_retaliate",
+          "source_death_cause": "factional_kill",
+          "target": "slot_2",
+          "timing": "ImmediateBeforePhaseAnnouncement",
+          "unstoppable": false
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_1"
+        }
+      },
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_5"
+        }
+      }
+    ]
+  }
+}
