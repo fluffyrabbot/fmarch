@@ -293,8 +293,9 @@ unknown Rust events.
 > `PhaseAnnouncement`, below) is a **semantic**
 > death-reveal tag: night announcements collapse killed slots to `"night_kill"`, while day
 > announcements use semantic day causes such as `"lynch"` plus generated policy causes such as
-> `"lover_suicide"`. These are deliberately different fields serving different layers — do not
-> conflate them.
+> `"lover_suicide"`. Host-prompt PK uses `"host_prompt:pk"` at both layers because the prompt
+> resolution itself is the durable kill source. These are deliberately different fields serving
+> different layers — do not conflate them.
 
 `Trigger.payload` is intentionally opaque to the state fold, but the resolver emits a
 canonical attribution shape for generated kills: `{ on, source_target, source_actor,

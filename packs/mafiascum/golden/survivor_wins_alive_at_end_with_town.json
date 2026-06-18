@@ -1,13 +1,113 @@
 {
   "description": "Survivor is alive when Town eliminates the last Mafia slot. Town remains the terminal faction winner, and Survivor is recorded as an alive-at-end survival award.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_1",
+        "sequence": 1,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayVoteRecorded",
+      "payload": {
+        "actor": "slot_3",
+        "sequence": 2,
+        "target": "slot_2",
+        "withdrawn": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [
+          "slot_2"
+        ],
+        "majority": 2,
+        "status": "Lynch",
+        "tallies": {
+          "slot_2": 2
+        },
+        "thresholds": {
+          "slot_1": 2,
+          "slot_2": 2,
+          "slot_3": 2
+        },
+        "tiebreak": null,
+        "total_weight": 3,
+        "votes": {
+          "slot_1": "slot_2",
+          "slot_3": "slot_2"
+        },
+        "weights": {
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1
+        },
+        "winner": "slot_2"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PlayerKilled",
+      "payload": {
+        "attackers": [],
+        "cause": "day_vote",
+        "slot_id": "slot_2",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 4,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "audience": "public",
+        "deaths": [
+          {
+            "audience": "public",
+            "cause": "lynch",
+            "slot_id": "slot_2",
+            "template_id": "mafiascum_lynch_death_v1"
+          }
+        ],
+        "phase_id": "D01",
+        "template_id": "mafiascum_day_death_v1"
+      }
+    },
+    {
+      "index": 5,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": {
+          "survival_awards": [
+            {
+              "policy": "survivor",
+              "role": "survivor",
+              "slot_id": "slot_3",
+              "source_event": "win.survivor",
+              "winner": "survivor"
+            }
+          ]
+        },
+        "winner": "town"
+      }
+    }
+  ],
   "input": {
     "game_id": "game_demo_survivor_001",
+    "pack": "mafiascum",
     "phase_id": "D01",
+    "seed": 630001,
     "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
       "phase_kind": "Day",
       "phase_number": 1,
-      "phase_id": "D01",
-      "phase_deadline": null,
       "phase_policy": {
         "cadence": [
           "Day",
@@ -24,25 +124,25 @@
       },
       "slots": [
         {
-          "slot_id": "slot_1",
-          "role_key": "vanilla_townie",
           "alignment": "town",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_1",
+          "status": "alive"
         },
         {
-          "slot_id": "slot_2",
-          "role_key": "mafia_goon",
           "alignment": "mafia",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_2",
+          "status": "alive"
         },
         {
-          "slot_id": "slot_3",
-          "role_key": "survivor",
           "alignment": "independent",
-          "status": "alive",
-          "effects": []
+          "effects": [],
+          "role_key": "survivor",
+          "slot_id": "slot_3",
+          "status": "alive"
         }
       ]
     },
@@ -50,124 +150,27 @@
       {
         "action_id": "vote_001",
         "actor": "slot_1",
-        "template_id": "day_vote",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
         "targets": [
           "slot_2"
         ],
-        "phase_id": "D01",
-        "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
+        "template_id": "day_vote",
+        "withdrawn": false
       },
       {
         "action_id": "vote_002",
         "actor": "slot_3",
-        "template_id": "day_vote",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
         "targets": [
           "slot_2"
         ],
-        "phase_id": "D01",
-        "submitted_at": 2,
-        "withdrawn": false,
-        "metadata": {}
+        "template_id": "day_vote",
+        "withdrawn": false
       }
-    ],
-    "pack": "mafiascum",
-    "seed": 630001
-  },
-  "expected_events": [
-    {
-      "index": 0,
-      "kind": "DayVoteRecorded",
-      "payload": {
-        "actor": "slot_1",
-        "target": "slot_2",
-        "withdrawn": false,
-        "sequence": 1
-      }
-    },
-    {
-      "index": 1,
-      "kind": "DayVoteRecorded",
-      "payload": {
-        "actor": "slot_3",
-        "target": "slot_2",
-        "withdrawn": false,
-        "sequence": 2
-      }
-    },
-    {
-      "index": 2,
-      "kind": "DayVoteOutcome",
-      "payload": {
-        "status": "Lynch",
-        "winner": "slot_2",
-        "contenders": [
-          "slot_2"
-        ],
-        "tallies": {
-          "slot_2": 2
-        },
-        "votes": {
-          "slot_1": "slot_2",
-          "slot_3": "slot_2"
-        },
-        "weights": {
-          "slot_1": 1,
-          "slot_2": 1,
-          "slot_3": 1
-        },
-        "majority": 2,
-        "thresholds": {
-          "slot_1": 2,
-          "slot_2": 2,
-          "slot_3": 2
-        },
-        "total_weight": 3,
-        "tiebreak": null
-      }
-    },
-    {
-      "index": 3,
-      "kind": "PlayerKilled",
-      "payload": {
-        "slot_id": "slot_2",
-        "cause": "day_vote",
-        "attackers": [],
-        "unstoppable": true
-      }
-    },
-    {
-      "index": 4,
-      "kind": "PhaseAnnouncement",
-      "payload": {
-        "phase_id": "D01",
-        "deaths": [
-          {
-            "slot_id": "slot_2",
-            "cause": "lynch"
-          }
-        ]
-      }
-    },
-    {
-      "index": 5,
-      "kind": "WinReached",
-      "payload": {
-        "winner": "town",
-        "reason": "all factions other than town eliminated (1 alive)",
-        "metadata": {
-          "survival_awards": [
-            {
-              "policy": "survivor",
-              "winner": "survivor",
-              "slot_id": "slot_3",
-              "role": "survivor",
-              "source_event": "win.survivor"
-            }
-          ]
-        }
-      }
-    }
-  ]
+    ]
+  }
 }

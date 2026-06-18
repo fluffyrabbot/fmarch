@@ -20426,7 +20426,14 @@ fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
                     "kind": "PhaseAnnouncement",
                     "payload": {
                         "phase_id": "D01",
-                        "deaths": [{ "slot_id": "slot_1", "cause": "lynch" }]
+                        "template_id": "mafiascum_day_death_v1",
+                        "audience": "public",
+                        "deaths": [{
+                            "slot_id": "slot_1",
+                            "cause": "lynch",
+                            "template_id": "mafiascum_lynch_death_v1",
+                            "audience": "public"
+                        }]
                     }
                 }
             ],
@@ -24384,6 +24391,28 @@ async fn host_resolve_phase_projects_epicmafia_pk_tie_prompt(pool: PgPool) {
             && attackers.is_empty()
             && *unstoppable
     )));
+    let prompt_announcement = prompt_applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PhaseAnnouncement(announcement) => Some(announcement),
+            _ => None,
+        })
+        .expect("host-selected PK should emit a trailing PhaseAnnouncement");
+    assert_eq!(
+        prompt_announcement.template_id.as_deref(),
+        Some("epicmafia_day_death_v1")
+    );
+    assert_eq!(prompt_announcement.audience.as_deref(), Some("public"));
+    assert_eq!(
+        prompt_announcement.deaths,
+        vec![domain::Death {
+            slot_id: "slot_4".into(),
+            cause: "host_prompt:pk".into(),
+            template_id: Some("epicmafia_pk_death_v1".into()),
+            audience: Some("public".into()),
+        }]
+    );
 
     let prompt_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \

@@ -123,17 +123,21 @@
       "index": 8,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "lynch",
-            "slot_id": "slot_1"
+            "slot_id": "slot_1",
+            "template_id": "mafiascum_lynch_death_v1"
           },
           {
             "cause": "super_saint_retaliates",
             "slot_id": "slot_2"
           }
         ],
-        "phase_id": "D01"
+        "phase_id": "D01",
+        "template_id": "mafiascum_day_death_v1"
       }
     }
   ],

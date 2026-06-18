@@ -1360,7 +1360,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 65",
+        "pack declares features requiring ir_version >= 67",
     );
     assert_issue(
         &err,

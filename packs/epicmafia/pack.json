@@ -1,7 +1,7 @@
 {
   "name": "epicmafia",
   "version": 1,
-  "ir_version": 46,
+  "ir_version": 67,
   "roles": {
     "villager": {
       "description": "Villager. No night action; wins with the town.",
@@ -263,6 +263,19 @@
       "Day": ["sod", "main", "eod"]
     },
     "twilight": false
+  },
+  "day_notes": {
+    "day_deaths": {
+      "enabled": true,
+      "template_id": "epicmafia_day_death_v1",
+      "audience": "public",
+      "cause_templates": {
+        "host_prompt:pk": {
+          "template_id": "epicmafia_pk_death_v1",
+          "audience": "public"
+        }
+      }
+    }
   },
   "win_families": [
     "AllOtherFactionsEliminated",

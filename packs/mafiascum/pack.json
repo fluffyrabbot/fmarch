@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 65,
+  "ir_version": 67,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -3918,6 +3918,27 @@
       ]
     },
     "twilight": false
+  },
+  "day_notes": {
+    "day_deaths": {
+      "enabled": true,
+      "template_id": "mafiascum_day_death_v1",
+      "audience": "public",
+      "cause_templates": {
+        "hunter_retaliate": {
+          "template_id": "mafiascum_hunter_retaliation_death_v1",
+          "audience": "public"
+        },
+        "lover_suicide": {
+          "template_id": "mafiascum_lover_suicide_v1",
+          "audience": "public"
+        },
+        "lynch": {
+          "template_id": "mafiascum_lynch_death_v1",
+          "audience": "public"
+        }
+      }
+    }
   },
   "investigation_overrides": {
     "framed": {

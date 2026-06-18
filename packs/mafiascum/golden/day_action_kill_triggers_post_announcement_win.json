@@ -1,67 +1,15 @@
 {
   "description": "A Day Vigilante kills the only mafia before the official vote outcome. The ordinary faction win check runs after folding the day-action death and after the canonical PhaseAnnouncement, leaving WinReached as the final event.",
-  "input": {
-    "game_id": "game_demo_day_action_win_001",
-    "phase_id": "D01",
-    "state": {
-      "phase_kind": "Day",
-      "phase_number": 1,
-      "phase_id": "D01",
-      "phase_deadline": null,
-      "phase_policy": {
-        "cadence": ["Day", "Night"],
-        "subsegments": {
-          "Day": ["sod", "main", "eod"]
-        },
-        "twilight": false
-      },
-      "slots": [
-        {
-          "slot_id": "slot_1",
-          "role_key": "day_vigilante",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_2",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_3",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        }
-      ]
-    },
-    "submissions": [
-      {
-        "action_id": "day_vig_win_001",
-        "actor": "slot_1",
-        "template_id": "day_vigilante_kill",
-        "targets": ["slot_2"],
-        "phase_id": "D01",
-        "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
-      }
-    ],
-    "pack": "mafiascum",
-    "seed": 930211
-  },
   "expected_events": [
     {
       "index": 0,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_2",
+        "attackers": [
+          "slot_1"
+        ],
         "cause": "day_vigilante_kill",
-        "attackers": ["slot_1"],
+        "slot_id": "slot_2",
         "unstoppable": false
       }
     },
@@ -69,46 +17,109 @@
       "index": 1,
       "kind": "DayVoteOutcome",
       "payload": {
-        "status": "NoLynch",
-        "winner": null,
         "contenders": [],
+        "majority": 2,
+        "status": "NoLynch",
         "tallies": {},
+        "thresholds": {
+          "slot_1": 2,
+          "slot_3": 2
+        },
+        "tiebreak": null,
+        "total_weight": 2,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_3": 1.0
+          "slot_1": 1,
+          "slot_3": 1
         },
-        "majority": 2.0,
-        "thresholds": {
-          "slot_1": 2.0,
-          "slot_3": 2.0
-        },
-        "total_weight": 2.0,
-        "tiebreak": null,
-        "reason": null
+        "winner": null
       }
     },
     {
       "index": 2,
       "kind": "PhaseAnnouncement",
       "payload": {
-        "phase_id": "D01",
+        "audience": "public",
         "deaths": [
           {
-            "slot_id": "slot_2",
-            "cause": "day_vigilante_kill"
+            "cause": "day_vigilante_kill",
+            "slot_id": "slot_2"
           }
-        ]
+        ],
+        "phase_id": "D01",
+        "template_id": "mafiascum_day_death_v1"
       }
     },
     {
       "index": 3,
       "kind": "WinReached",
       "payload": {
-        "winner": "town",
-        "reason": "faction mafia eliminated (0 alive)",
-        "metadata": null
+        "metadata": null,
+        "winner": "town"
       }
     }
-  ]
+  ],
+  "input": {
+    "game_id": "game_demo_day_action_win_001",
+    "pack": "mafiascum",
+    "phase_id": "D01",
+    "seed": 930211,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "day_vigilante",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "vanilla_townie",
+          "slot_id": "slot_3",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "day_vig_win_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_2"
+        ],
+        "template_id": "day_vigilante_kill",
+        "withdrawn": false
+      }
+    ]
+  }
 }

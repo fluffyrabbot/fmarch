@@ -2226,6 +2226,7 @@ fn rerun_stored_host_prompt(
             selected,
             contenders,
         } => Ok(Some(build_pk_prompt_resolution(
+            &pack,
             game,
             &prompt,
             selected,
@@ -2278,6 +2279,7 @@ fn host_prompt_from_stream(
 }
 
 fn build_pk_prompt_resolution(
+    pack: &domain::Pack,
     game: Uuid,
     prompt: &projections::HostPromptRow,
     selected: String,
@@ -2288,6 +2290,16 @@ fn build_pk_prompt_resolution(
 ) -> Result<RebuiltResolutionEnvelope, Reject> {
     let phase_kind = phase_kind(&prompt.phase_id)?;
     let phase_number = prompt.phase_number as u32;
+    let (template_id, audience, deaths) = domain::day_death_announcement_metadata(
+        pack,
+        phase_kind,
+        vec![domain::Death {
+            slot_id: selected.clone(),
+            cause: "host_prompt:pk".to_string(),
+            template_id: None,
+            audience: None,
+        }],
+    );
     let run_id = format!(
         "host-prompt:{game}:{}:{}:{prompt_resolved_seq}",
         prompt.phase_id, prompt.prompt_id
@@ -2319,14 +2331,9 @@ fn build_pk_prompt_resolution(
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: prompt.phase_id.clone(),
-                    template_id: None,
-                    audience: None,
-                    deaths: vec![domain::Death {
-                        slot_id: selected.clone(),
-                        cause: "pk".to_string(),
-                        template_id: None,
-                        audience: None,
-                    }],
+                    template_id,
+                    audience,
+                    deaths,
                 }),
             },
         ],
@@ -2428,6 +2435,7 @@ async fn resolve_host_prompt(
         } => {
             require_slot_alive(pool, game, &selected).await?;
             let rebuilt = build_pk_prompt_resolution(
+                &pack,
                 game,
                 &prompt,
                 selected,

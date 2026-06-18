@@ -2108,9 +2108,11 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    v66 adds pack-declared day-death `PhaseAnnouncement` `template_id` and `audience` metadata.
    v67 adds per-death cause templates on `PhaseAnnouncement.deaths[]`.
    Mafia Universe opts into revealed-role public notes, post-lynch last words, and public
-   day-death trailer/per-cause metadata; pure goldens prove revealed and hidden role payloads,
-   multiple-death ordering, and lynch/day-action/ITA/Knight/self-destruct/Wolf Beauty
-   day-death ordering,
+   day-death trailer/per-cause metadata; EpicMafia, Chinese structured, and Mafiascum now ship
+   v67 day-death metadata for their PK, Hunter-retaliation, lover-suicide, and lynch culture
+   causes where exposed. Pure goldens prove revealed and hidden role payloads, multiple-death
+   ordering, and lynch/day-action/ITA/Knight/self-destruct/Wolf Beauty/lover-suicide/Hunter
+   retaliation day-death ordering,
    while Postgres command/projection and minimizer proof covers the revealed-role
    template/audience/window path plus day-death trailer/per-cause metadata through replay audit,
    thread projection, and rebuild.]
@@ -2126,8 +2128,8 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    disabled self-save/night-one override variants, and proves the lethal `KillTarget`
    same-target variant through an override golden plus minimal command/projection fixture;
    v14 `death_retaliation` models Chinese
-   Hunter trigger availability for ordinary wolf kill versus Witch poison plus the immediate
-   before-announcement no-host-prompt timing contract; v15
+   Hunter trigger availability for ordinary wolf kill, lynch/day-vote death, and Witch poison
+   suppression plus the immediate before-announcement no-host-prompt timing contract; v15
    `idiot_policy` maps Chinese Idiot first lynch survival to `PlayerSaved` plus
    `idiot_vote_loss`; command-side vote submission rejects later vote-lost Idiot ballots
    with `Reject::VoteNotAllowed` before append, and official later vote tallies give that
@@ -2143,7 +2145,8 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    command-constructed through a typed provenance shape and projection-validated before phase_state
    moves:
    host-selected PK kills append validated `ResolutionApplied`/`ResolutionTrace` envelopes with
-   rebuild proof; resolving a mafiascum no-majority revote prompt opens a fresh `D01R1` vote
+   pack-declared `host_prompt:pk` day-death trailer/per-cause metadata and rebuild proof;
+   resolving a mafiascum no-majority revote prompt opens a fresh `D01R1` vote
    window, and a second `ResolvePhase` lynches from that revote ballot set with rebuild proof;
    folded dynamic vote-weight grants can now emit a NoMajority revote prompt when they raise the
    majority threshold above an ordinary two-vote wagon, with prompt resolution and rebuild proof;
@@ -2582,8 +2585,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    trailer/per-cause metadata, thread projection, replay audit, and projection rebuild; pure golden
    `day_notes_hidden_role_multiple_deaths` covers the hidden-role payload path, and the canonical
    day-substep golden assertion covers lynch, day-action kill, ITA kill, Knight duel, White Wolf
-   self-destruct, and Wolf Beauty drag ordering through the day-death trailer/per-cause metadata
-   path.
+   self-destruct, Wolf Beauty drag, Chinese lover suicide, and Chinese Hunter lynch retaliation
+   ordering through the day-death trailer/per-cause metadata path.
    `minimize_night_fixture` prompt fixtures now carry the command-native `HostPromptDecision`
    shape and can assert stream-level prompt resolution effects; the Mafiascum NoMajority fixture
    now acknowledges the prompt and checks `HostPromptResolved` plus prompt-driven
@@ -2597,7 +2600,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    the dynamic vote-weight PK fixture now uses the same legal N01 `VoteWeight` grant setup phase
    and proves the folded grant drives a D02 `HostDecides` tie, `HostPromptIssued { kind: "pk" }`,
    `HostPromptResolved`, and host-selected `PlayerKilled { cause: "host_prompt:pk" }` through
-   three audited resolution envelopes and three validated traces. `pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage`
+   three audited resolution envelopes and three validated traces; the direct EpicMafia command
+   proof covers pack-declared prompt-death `PhaseAnnouncement` metadata for shipped
+   `host_prompt:pk`. `pack_declared_pk_prompt_policies_have_semantic_minimizer_coverage`
    now scans every pack-declared PK `day_vote_prompt_policies`/`host_prompt_resolution_effects`
    pair and requires matching golden plus semantic minimizer coverage; today that proves the
    Epicmafia and dynamic vote-weight PK policies are the complete pack-declared PK prompt set.
@@ -2906,9 +2911,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by closing the remaining prompt-driven and retaliation day-death
-culture breadth. Add per-cause template coverage for host-selected PK, Hunter retaliation, and
-lover-suicide day cascades in the shipped packs that expose those causes; prove prompt-driven PK,
-retaliation-generated death, and lover cascade ordering through pure goldens, then add one
+Continue Phase 5 rich day systems by closing the remaining culture-specific day-death policy
+breadth around generated and prompt-adjacent cascades. Add shipped-pack per-cause coverage and
+golden assertions for Super-Saint/vengeful day retaliation, Gladiator/VoteDuel deaths, and any
+remaining day-action causes that still receive only trailer-level metadata; then add one
 command/projection audit/rebuild and semantic minimizer fixture before updating this checklist
 again.

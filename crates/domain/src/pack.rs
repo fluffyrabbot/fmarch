@@ -6957,10 +6957,19 @@ fn pack_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
             causes.insert(action.id.clone());
             causes.extend(action.source_ids.iter().cloned());
         }
+        if action.has_ability(IrAbility::Retaliate) {
+            causes.insert(action.id.clone());
+            causes.extend(action.source_ids.iter().cloned());
+        }
     }
     for trigger in &pack.triggers {
         if trigger.produces.ability == IrAbility::Kill {
             causes.insert(trigger.id.clone());
+        }
+    }
+    for effect in &pack.host_prompt_resolution_effects {
+        if effect.effect == HostPromptResolutionEffect::PkKill {
+            causes.insert("host_prompt:pk".to_string());
         }
     }
     if pack.wolf_carry.enabled {
@@ -6990,6 +6999,12 @@ fn pack_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
         pack.standard_nar
             .hide_dependency_cause_policy
             .values()
+            .cloned(),
+    );
+    causes.extend(
+        pack.standard_nar
+            .chosen_retaliation_cause_policy
+            .keys()
             .cloned(),
     );
     causes.insert("day_vote".to_string());

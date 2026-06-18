@@ -93,17 +93,23 @@
       "index": 6,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "lynch",
-            "slot_id": "slot_2"
+            "slot_id": "slot_2",
+            "template_id": "chinese_structured_lynch_death_v1"
           },
           {
+            "audience": "public",
             "cause": "lover_suicide",
-            "slot_id": "slot_3"
+            "slot_id": "slot_3",
+            "template_id": "chinese_structured_lover_suicide_v1"
           }
         ],
-        "phase_id": "D01"
+        "phase_id": "D01",
+        "template_id": "chinese_structured_day_death_v1"
       }
     }
   ],

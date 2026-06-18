@@ -523,10 +523,14 @@ Day/Twilight resolution actually produced deaths. v67 adds per-death `cause_temp
 `PhaseAnnouncement.deaths[]` entry may carry its own `template_id`/`audience` based on the
 pack-declared death cause. Mafia Universe opts into revealed-role night-victim notes, post-lynch
 last words, public day-death trailer metadata, and per-cause public text for lynch, day-action,
-ITA, and lover-suicide deaths; pure goldens also prove hidden-role multiple-death ordering plus
-lynch, day-action kill, ITA kill, Knight duel, White Wolf self-destruct, and Wolf Beauty drag
-ordering through the trailer/per-death metadata path. The first vertical is `mafia_universe`, with
-pure goldens plus Postgres command/projection rebuild and semantic minimizer proof.
+ITA, and lover-suicide deaths. EpicMafia opts into public PK prompt-death text for
+`host_prompt:pk`, while Chinese structured and Mafiascum opt into culture-pack day-death trailer
+metadata plus per-cause Hunter retaliation, lover-suicide, and lynch text where those causes are
+shipped. Pure goldens also prove hidden-role multiple-death ordering plus lynch, day-action kill,
+ITA kill, Knight duel, White Wolf self-destruct, Wolf Beauty drag, Chinese lover-suicide, and
+Chinese Hunter lynch-retaliation ordering through the trailer/per-death metadata path. The first
+vertical is `mafia_universe`, with pure goldens plus Postgres command/projection rebuild and
+semantic minimizer proof.
 
 `Modifier::Babysitter` is the first v5 modifier addition. It is legal only on `Protect`
 actions. The action protects its target normally; if the protecting actor dies during the
@@ -1002,7 +1006,9 @@ The commands crate ships `audit_resolution`, which reruns
 ordinary `ResolvePhase` envelopes from the stored event-prefix and compares both
 `ResolutionApplied` and `ResolutionTrace` to the persisted payloads. It also reconstructs PK
 `ResolveHostPrompt` envelopes from `HostPromptIssued` plus `HostPromptResolved` and compares the
-host-selected kill envelope and trace. Revote and skip-next-day prompt decisions do not produce
+host-selected kill envelope and trace. PK prompt resolution uses the same v67 day-death metadata
+helper as the pure resolver, so a pack-declared `host_prompt:pk` cause template appears on the
+trailing prompt `PhaseAnnouncement`. Revote and skip-next-day prompt decisions do not produce
 resolution envelopes; their phase movement is audited through `host_phase_control`. Drifted
 resolution phases include compact structural `diffs[]` entries with the envelope side, JSON path
 or missing-envelope root, rebuilt expected value, and stored actual value, while retaining the

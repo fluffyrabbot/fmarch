@@ -15,7 +15,7 @@ use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
 use domain::{InvestigateMode, IrAbility};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 fn repo_root() -> PathBuf {
     // crates/domain -> repo root is two parents up.
@@ -42,36 +42,6 @@ fn load_pack_for_golden(name: &str, golden: &Value) -> Pack {
         .unwrap_or_else(|e| panic!("apply {name} golden overrides: {e}"));
     let raw = serde_json::to_string(&pack_json).expect("encode overridden pack");
     domain::load_pack_from_json(&raw).unwrap_or_else(|e| panic!("load {name}/pack.json: {e}"))
-}
-
-fn load_pack_with_day_death_announcements(name: &str) -> Pack {
-    let p = repo_root().join("packs").join(name).join("pack.json");
-    let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
-    let mut pack_json: Value =
-        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {name}/pack.json: {e}"));
-    pack_json["ir_version"] = json!(67);
-    pack_json["day_notes"]["day_deaths"] = json!({
-        "enabled": true,
-        "template_id": "test_day_death_v1",
-        "audience": "public",
-        "cause_templates": {
-            "knight_duel": {
-                "template_id": "test_knight_duel_death_v1",
-                "audience": "public"
-            },
-            "self_destruct": {
-                "template_id": "test_white_wolf_self_destruct_v1",
-                "audience": "public"
-            },
-            "trigger:wolf_beauty_drag": {
-                "template_id": "test_wolf_beauty_drag_v1",
-                "audience": "public"
-            }
-        }
-    });
-    let raw = serde_json::to_string(&pack_json).expect("encode day-death announcement pack");
-    domain::load_pack_from_json(&raw)
-        .unwrap_or_else(|e| panic!("load {name}/pack.json with day-death announcements: {e}"))
 }
 
 fn load_pack() -> Pack {
@@ -303,7 +273,7 @@ fn assert_death_metadata(events: &[Value], cause: &str, template_id: &str, audie
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 65);
+    assert_eq!(pack.ir_version, 67);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -7616,7 +7586,7 @@ fn golden_day_vote_hated_threshold() {
 fn epicmafia_pack_deserializes() {
     let pack = load_pack_named("epicmafia");
     assert_eq!(pack.name, "epicmafia");
-    assert_eq!(pack.ir_version, 46);
+    assert_eq!(pack.ir_version, 67);
     assert!(pack.roles.contains_key("bomb"));
     assert!(pack.roles.contains_key("cult_leader"));
     assert!(pack.roles.contains_key("arsonist"));
@@ -7641,7 +7611,7 @@ fn epicmafia_pack_deserializes() {
 fn chinese_structured_pack_deserializes() {
     let pack = load_pack_named("chinese_structured");
     assert_eq!(pack.name, "chinese_structured");
-    assert_eq!(pack.ir_version, 46);
+    assert_eq!(pack.ir_version, 67);
     assert!(pack.roles.contains_key("knight"));
     assert!(pack.roles.contains_key("wolf"));
     assert!(pack.roles.contains_key("wolf_beauty"));
@@ -7713,7 +7683,7 @@ fn chinese_structured_pack_deserializes() {
 fn mafia_universe_pack_deserializes() {
     let pack = load_pack_named("mafia_universe");
     assert_eq!(pack.name, "mafia_universe");
-    assert_eq!(pack.ir_version, 60);
+    assert_eq!(pack.ir_version, 67);
     assert!(pack.roles.contains_key("town_ita_shooter"));
     assert!(pack.roles.contains_key("town_ita_sharpshooter"));
     assert!(pack.roles.contains_key("town_ita_bad_shot"));
@@ -9004,10 +8974,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
 
     let knight = {
         let golden = load_golden_in("chinese_structured", "knight_duel_success.json");
-        run(
-            &golden["input"],
-            load_pack_with_day_death_announcements("chinese_structured"),
-        )
+        run(&golden["input"], load_pack_named("chinese_structured"))
     };
     assert_event_order(
         "knight duel",
@@ -9030,20 +8997,17 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
-    assert_phase_announcement_metadata(&knight, "test_day_death_v1", "public");
+    assert_phase_announcement_metadata(&knight, "chinese_structured_day_death_v1", "public");
     assert_death_metadata(
         &knight,
         "knight_duel",
-        "test_knight_duel_death_v1",
+        "chinese_structured_knight_duel_death_v1",
         "public",
     );
 
     let self_destruct = {
         let golden = load_golden_in("chinese_structured", "wolf_self_destruct_trade.json");
-        run(
-            &golden["input"],
-            load_pack_with_day_death_announcements("chinese_structured"),
-        )
+        run(&golden["input"], load_pack_named("chinese_structured"))
     };
     assert_event_order(
         "wolf self-destruct",
@@ -9073,11 +9037,11 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
-    assert_phase_announcement_metadata(&self_destruct, "test_day_death_v1", "public");
+    assert_phase_announcement_metadata(&self_destruct, "chinese_structured_day_death_v1", "public");
     assert_death_metadata(
         &self_destruct,
         "self_destruct",
-        "test_white_wolf_self_destruct_v1",
+        "chinese_structured_white_wolf_self_destruct_v1",
         "public",
     );
 
@@ -9118,10 +9082,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
 
     let wolf_beauty = {
         let golden = load_golden_in("chinese_structured", "wolf_beauty_drag_lynch.json");
-        run(
-            &golden["input"],
-            load_pack_with_day_death_announcements("chinese_structured"),
-        )
+        run(&golden["input"], load_pack_named("chinese_structured"))
     };
     assert_event_order(
         "wolf beauty day-death cascade",
@@ -9156,7 +9117,97 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
     assert_death_metadata(
         &wolf_beauty,
         "trigger:wolf_beauty_drag",
-        "test_wolf_beauty_drag_v1",
+        "chinese_structured_wolf_beauty_drag_v1",
+        "public",
+    );
+
+    let lover_cascade = {
+        let golden = load_golden_in("chinese_structured", "cupid_lovers_lynch_cascade.json");
+        run(&golden["input"], load_pack_named("chinese_structured"))
+    };
+    assert_event_order(
+        "Chinese lover day-death cascade",
+        &lover_cascade,
+        &[
+            (
+                "resolve_votes",
+                first_event_index(&lover_cascade, "DayVoteOutcome"),
+            ),
+            (
+                "lynch_death",
+                first_event_index_where(&lover_cascade, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vote"
+                }),
+            ),
+            (
+                "lover_suicide",
+                first_event_index_where(&lover_cascade, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "lover_suicide"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&lover_cascade, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &lover_cascade,
+        "lover_suicide",
+        "chinese_structured_lover_suicide_v1",
+        "public",
+    );
+
+    let hunter_lynch = {
+        let mut golden = load_golden_in("chinese_structured", "cupid_lovers_lynch_cascade.json");
+        golden["input"]["game_id"] = serde_json::json!("chinese_hunter_lynch_retaliation_001");
+        golden["input"]["state"]["linked_slots"] = serde_json::json!([]);
+        golden["input"]["state"]["retaliations"] = serde_json::json!([{
+            "retaliation_id": "hunt_day_001",
+            "actor": "slot_2",
+            "target": "slot_1",
+            "source_action": "hunter_retaliate"
+        }]);
+        if let Some(slots) = golden["input"]["state"]["slots"].as_array_mut() {
+            if let Some(slot_2) = slots.iter_mut().find(|slot| slot["slot_id"] == "slot_2") {
+                slot_2["role_key"] = serde_json::json!("hunter");
+            }
+            if let Some(slot_3) = slots.iter_mut().find(|slot| slot["slot_id"] == "slot_3") {
+                slot_3["role_key"] = serde_json::json!("villager");
+            }
+        }
+        run(&golden["input"], load_pack_named("chinese_structured"))
+    };
+    assert_event_order(
+        "Chinese Hunter lynch retaliation",
+        &hunter_lynch,
+        &[
+            (
+                "resolve_votes",
+                first_event_index(&hunter_lynch, "DayVoteOutcome"),
+            ),
+            (
+                "lynch_death",
+                first_event_index_where(&hunter_lynch, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vote"
+                }),
+            ),
+            (
+                "hunter_retaliation",
+                first_event_index_where(&hunter_lynch, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "hunter_retaliate"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&hunter_lynch, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &hunter_lynch,
+        "hunter_retaliate",
+        "chinese_structured_hunter_retaliation_death_v1",
         "public",
     );
 }

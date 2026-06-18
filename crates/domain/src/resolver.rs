@@ -11,10 +11,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::events::{
-    DayAnnouncement, DayVoteOutcome, Death, DecisionTrace, DuelResult, EffectDeltaTrace,
-    GeneratedActionTrace, HostPromptIssued, IndexedEvent, InnerEvent, ItaCounters, ItaShotOutcome,
-    LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement, ResolutionApplied,
-    ResolutionCounts, ResolutionTrace, TraceEdge, VoteStatus,
+    day_death_announcement_metadata, DayAnnouncement, DayVoteOutcome, Death, DecisionTrace,
+    DuelResult, EffectDeltaTrace, GeneratedActionTrace, HostPromptIssued, IndexedEvent, InnerEvent,
+    ItaCounters, ItaShotOutcome, LastWordsRecorded, LastWordsVoteSummary, PhaseAnnouncement,
+    ResolutionApplied, ResolutionCounts, ResolutionTrace, TraceEdge, VoteStatus,
 };
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
@@ -9431,6 +9431,24 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
         });
         kill_log.push(record);
     }
+    let chosen_retaliation_start = kill_log.len();
+    apply_chosen_retaliations(
+        input,
+        &BTreeMap::new(),
+        &mut killed,
+        &mut kill_log,
+        &mut cpr_saves,
+        &mut events,
+        &mut trace_decisions,
+    );
+    for record in kill_log.iter().skip(chosen_retaliation_start) {
+        deaths.push(Death {
+            slot_id: record.target.clone(),
+            cause: record.cause.clone(),
+            template_id: None,
+            audience: None,
+        });
+    }
     for slot_id in apply_lover_suicides(
         input,
         &mut killed,
@@ -11658,35 +11676,12 @@ fn deaths_from_events(events: &[InnerEvent]) -> Vec<Death> {
 }
 
 fn phase_announcement(input: &ResolutionInput, deaths: Vec<Death>) -> PhaseAnnouncement {
-    let day_death_policy = &input.pack.day_notes.day_deaths;
-    let include_day_death_metadata = day_death_policy.enabled
-        && !deaths.is_empty()
-        && matches!(input.state.phase_kind, PhaseKind::Day | PhaseKind::Twilight);
-    let deaths = if include_day_death_metadata {
-        deaths
-            .into_iter()
-            .map(|mut death| {
-                if let Some(template) = day_death_policy.cause_templates.get(&death.cause) {
-                    death.template_id = Some(template.template_id.clone());
-                    death.audience = template
-                        .audience
-                        .clone()
-                        .or_else(|| day_death_policy.audience.clone());
-                }
-                death
-            })
-            .collect()
-    } else {
-        deaths
-    };
+    let (template_id, audience, deaths) =
+        day_death_announcement_metadata(&input.pack, input.state.phase_kind, deaths);
     PhaseAnnouncement {
         phase_id: input.phase_id.clone(),
-        template_id: include_day_death_metadata
-            .then(|| day_death_policy.template_id.clone())
-            .flatten(),
-        audience: include_day_death_metadata
-            .then(|| day_death_policy.audience.clone())
-            .flatten(),
+        template_id,
+        audience,
         deaths,
     }
 }

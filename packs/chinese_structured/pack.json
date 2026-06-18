@@ -1,7 +1,7 @@
 {
   "name": "chinese_structured",
   "version": 1,
-  "ir_version": 46,
+  "ir_version": 67,
   "roles": {
     "villager": {
       "description": "Villager. No night action; wins with the town.",
@@ -355,6 +355,39 @@
     },
     "twilight": false
   },
+  "day_notes": {
+    "day_deaths": {
+      "enabled": true,
+      "template_id": "chinese_structured_day_death_v1",
+      "audience": "public",
+      "cause_templates": {
+        "hunter_retaliate": {
+          "template_id": "chinese_structured_hunter_retaliation_death_v1",
+          "audience": "public"
+        },
+        "knight_duel": {
+          "template_id": "chinese_structured_knight_duel_death_v1",
+          "audience": "public"
+        },
+        "lover_suicide": {
+          "template_id": "chinese_structured_lover_suicide_v1",
+          "audience": "public"
+        },
+        "lynch": {
+          "template_id": "chinese_structured_lynch_death_v1",
+          "audience": "public"
+        },
+        "self_destruct": {
+          "template_id": "chinese_structured_white_wolf_self_destruct_v1",
+          "audience": "public"
+        },
+        "trigger:wolf_beauty_drag": {
+          "template_id": "chinese_structured_wolf_beauty_drag_v1",
+          "audience": "public"
+        }
+      }
+    }
+  },
   "investigation_results": {
     "parity": {
       "town": "good",
@@ -417,7 +450,7 @@
     "enabled": true,
     "eligible_roles": ["hunter"],
     "timing": "ImmediateBeforePhaseAnnouncement",
-    "allowed_death_causes": ["wolf_night_kill", "lynch"],
+    "allowed_death_causes": ["wolf_night_kill", "day_vote", "lynch"],
     "suppressed_death_causes": ["poison", "poison_potion"]
   },
   "idiot_policy": {

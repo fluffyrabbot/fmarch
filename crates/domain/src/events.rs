@@ -11,6 +11,7 @@ use crate::pack::{
     EffectVisibility, GrantKind, PhaseKind, RoleKey, Tag,
 };
 use crate::state::{LogicalTime, PhaseId, Seed, SlotId};
+use crate::Pack;
 
 /// The closed, enumerated set of inner domain events (doc 10).
 ///
@@ -614,6 +615,36 @@ pub struct Death {
     pub template_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audience: Option<String>,
+}
+
+pub fn day_death_announcement_metadata(
+    pack: &Pack,
+    phase_kind: PhaseKind,
+    deaths: Vec<Death>,
+) -> (Option<String>, Option<String>, Vec<Death>) {
+    let policy = &pack.day_notes.day_deaths;
+    let include_day_death_metadata = policy.enabled
+        && !deaths.is_empty()
+        && matches!(phase_kind, PhaseKind::Day | PhaseKind::Twilight);
+    if !include_day_death_metadata {
+        return (None, None, deaths);
+    }
+
+    let deaths = deaths
+        .into_iter()
+        .map(|mut death| {
+            if let Some(template) = policy.cause_templates.get(&death.cause) {
+                death.template_id = Some(template.template_id.clone());
+                death.audience = template
+                    .audience
+                    .clone()
+                    .or_else(|| policy.audience.clone());
+            }
+            death
+        })
+        .collect();
+
+    (policy.template_id.clone(), policy.audience.clone(), deaths)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
