@@ -20,8 +20,8 @@ pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 14;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 28;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 15;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 30;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2217,6 +2217,7 @@ pub fn generated_shrink_matrix_expected_families() -> BTreeMap<String, usize> {
         ("ignite", 2),
         ("item_grant", 2),
         ("lovers", 2),
+        ("mark_clear_expiry", 2),
         ("mark_clear_visibility", 2),
         ("poison_cure", 2),
         ("pgo", 2),

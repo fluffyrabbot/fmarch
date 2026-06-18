@@ -12066,6 +12066,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("poison_cure", [97_111, 97_112]),
         ("ignite", [97_041, 97_042]),
         ("mark_clear_visibility", [97_091, 97_092]),
+        ("mark_clear_expiry", [97_121, 97_122]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
         ("private_notification", [97_101, 97_102]),
@@ -12181,8 +12182,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 14,
-        "expected_case_count": 28,
+        "expected_family_count": 15,
+        "expected_case_count": 30,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
@@ -12194,6 +12195,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("ignite".to_string(), 2),
             ("item_grant".to_string(), 2),
             ("lovers".to_string(), 2),
+            ("mark_clear_expiry".to_string(), 2),
             ("mark_clear_visibility".to_string(), 2),
             ("poison_cure".to_string(), 2),
             ("pgo".to_string(), 2),
@@ -12202,8 +12204,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(14));
-    assert_eq!(report["case_count"], serde_json::json!(28));
+    assert_eq!(report["family_count"], serde_json::json!(15));
+    assert_eq!(report["case_count"], serde_json::json!(30));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19401,7 +19403,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         "conversion_deprogramming" => {
             generated_mafiascum_conversion_deprogramming_fixture_json(seed)
         }
-        "ignite" | "mark_clear_visibility" | "poison_cure" => {
+        "ignite" | "mark_clear_visibility" | "mark_clear_expiry" | "poison_cure" => {
             generated_mafiascum_persistent_effect_fixture_json(family, seed)
         }
         "extra_action" | "item_grant" | "private_notification" => {
@@ -19444,6 +19446,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "mark_clear_visibility" => {
             fixture["expectations"]["inner_events"][2]["payload"]["visibility"] =
                 serde_json::json!("Hidden");
+        }
+        "mark_clear_expiry" => {
+            fixture["expectations"]["player_notifications"][0]["payload"]["audience_slot"] =
+                serde_json::json!("slot_4");
         }
         "poison_cure" => {
             fixture["expectations"]["player_notifications"][0]["payload"]["audience_slot"] =
@@ -19964,6 +19970,93 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
             }
         }))
         .expect("generated Mafiascum poison/cure delayed-effect fixture serializes"),
+        "mark_clear_expiry" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 33_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "fruit_vendor" },
+                { "slot": "slot_2", "role": "vanilla_townie" },
+                { "slot": "slot_3", "role": "vanilla_townie" },
+                { "slot": "slot_4", "role": "mafia_goon" },
+                { "slot": "slot_5", "role": "vanilla_townie" },
+                { "slot": "slot_6", "role": "mafia_goon" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 32_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "send_fruit",
+                        "action_id": format!("generated_seed_{seed}_send_fruit_expiring_setup"),
+                        "targets": ["slot_2"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "send_fruit",
+                    "action_id": format!("generated_seed_{seed}_send_fruit_expiring_target"),
+                    "targets": ["slot_3"]
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "EffectNotification",
+                        "payload": {
+                            "effect": "fruit_received",
+                            "status": "marked",
+                            "audience": ["slot_3"]
+                        }
+                    },
+                    {
+                        "kind": "PhaseAnnouncement",
+                        "payload": {
+                            "phase_id": "N02",
+                            "deaths": []
+                        }
+                    }
+                ],
+                "player_notifications": [
+                    {
+                        "payload": {
+                            "phase_id": "N01",
+                            "audience_slot": "slot_2",
+                            "effect": "fruit_received",
+                            "status": "marked"
+                        }
+                    },
+                    {
+                        "payload": {
+                            "phase_id": "N02",
+                            "audience_slot": "slot_3",
+                            "effect": "fruit_received",
+                            "status": "marked"
+                        }
+                    }
+                ],
+                "absent_slot_effects": [
+                    {
+                        "payload": {
+                            "slot_id": "slot_2",
+                            "effect": "fruit_received",
+                            "source_action": format!("generated_seed_{seed}_send_fruit_expiring_setup")
+                        }
+                    },
+                    {
+                        "payload": {
+                            "slot_id": "slot_3",
+                            "effect": "fruit_received",
+                            "source_action": format!("generated_seed_{seed}_send_fruit_expiring_target")
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum mark/clear expiry fixture serializes"),
         _ => unreachable!("unknown generated persistent effect family"),
     }
 }
