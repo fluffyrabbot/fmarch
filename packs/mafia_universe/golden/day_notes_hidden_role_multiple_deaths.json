@@ -1,0 +1,201 @@
+{
+  "description": "Mafia Universe day-note culture can hide role payloads while preserving multiple prior-night death ordering.",
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "DayAnnouncement",
+      "payload": {
+        "attackers": [
+          "slot_4"
+        ],
+        "audience": "public",
+        "cause": "factional_kill",
+        "day": 2,
+        "night": 1,
+        "phase_id": "D02",
+        "player_id": "slot_5",
+        "recorded_at": 77,
+        "role_key": null,
+        "role_payload": "Hidden",
+        "sequence": 0,
+        "source_action_id": "nightkill_001",
+        "template_id": "mafia_universe_hidden_night_death_v1",
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "DayAnnouncement",
+      "payload": {
+        "attackers": [
+          "slot_6"
+        ],
+        "audience": "public",
+        "cause": "poison",
+        "day": 2,
+        "night": 1,
+        "phase_id": "D02",
+        "player_id": "slot_2",
+        "recorded_at": 78,
+        "role_key": null,
+        "role_payload": "Hidden",
+        "sequence": 1,
+        "source_action_id": "poison_001",
+        "template_id": "mafia_universe_hidden_night_death_v1",
+        "unstoppable": true
+      }
+    },
+    {
+      "index": 2,
+      "kind": "DayVoteOutcome",
+      "payload": {
+        "contenders": [],
+        "majority": 3,
+        "status": "NoLynch",
+        "tallies": {},
+        "thresholds": {
+          "slot_1": 3,
+          "slot_3": 3,
+          "slot_4": 3,
+          "slot_6": 3
+        },
+        "tiebreak": null,
+        "total_weight": 4,
+        "votes": {},
+        "weights": {
+          "slot_1": 1,
+          "slot_3": 1,
+          "slot_4": 1,
+          "slot_6": 1
+        },
+        "winner": null
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "deaths": [],
+        "phase_id": "D02"
+      }
+    },
+    {
+      "index": 4,
+      "kind": "WinReached",
+      "payload": {
+        "metadata": null,
+        "winner": "mafia"
+      }
+    }
+  ],
+  "input": {
+    "day_phase_inputs": {
+      "night_victims": [
+        {
+          "attackers": [
+            "slot_4"
+          ],
+          "cause": "factional_kill",
+          "player_id": "slot_5",
+          "recorded_at": 77,
+          "role_key": "mafia_goon",
+          "source_action_id": "nightkill_001",
+          "unstoppable": false
+        },
+        {
+          "attackers": [
+            "slot_6"
+          ],
+          "cause": "poison",
+          "player_id": "slot_2",
+          "recorded_at": 78,
+          "role_key": "town_vanilla",
+          "source_action_id": "poison_001",
+          "unstoppable": true
+        }
+      ]
+    },
+    "game_id": "mafia_universe_day_notes_hidden_roles_001",
+    "pack": "mafia_universe",
+    "phase_id": "D02",
+    "seed": 920101,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D02",
+      "phase_kind": "Day",
+      "phase_number": 2,
+      "phase_policy": {
+        "cadence": [
+          "Night",
+          "Day"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_2",
+          "status": "dead"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "dead"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_6",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": []
+  },
+  "pack_overrides": {
+    "day_notes": {
+      "announcements": {
+        "audience": "public",
+        "enabled": true,
+        "multiple_night_deaths_n2plus": true,
+        "night_deaths_after_n1": true,
+        "night_deaths_n1": true,
+        "role_payload": "Hidden",
+        "template_id": "mafia_universe_hidden_night_death_v1"
+      }
+    }
+  }
+}

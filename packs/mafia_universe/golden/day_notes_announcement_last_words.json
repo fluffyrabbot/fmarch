@@ -8,6 +8,7 @@
         "attackers": [
           "slot_4"
         ],
+        "audience": "public",
         "cause": "factional_kill",
         "day": 2,
         "night": 1,
@@ -15,8 +16,10 @@
         "player_id": "slot_5",
         "recorded_at": 77,
         "role_key": "mafia_goon",
+        "role_payload": "RoleKey",
         "sequence": 0,
         "source_action_id": "nightkill_001",
+        "template_id": "mafia_universe_night_death_v1",
         "unstoppable": false
       }
     },
@@ -98,11 +101,13 @@
       "index": 6,
       "kind": "LastWordsRecorded",
       "payload": {
+        "audience": "public",
         "day": 2,
         "phase_id": "D02",
         "player_id": "slot_3",
         "reason": "lynch",
         "sequence": 0,
+        "template_id": "mafia_universe_last_words_v1",
         "vote": {
           "majority": 3,
           "status": "Lynch",
@@ -111,7 +116,8 @@
           },
           "total_weight": 4,
           "winner": "slot_3"
-        }
+        },
+        "window": "post_lynch"
       }
     },
     {

@@ -20,14 +20,14 @@ use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
     night_ability_order, visibility_required_families, win_required_families, ActionTemplate,
     ActivationGateReason, ActorRef, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
-    ConversionPendingDeathPolicy, DeathRetaliationTiming, DeathRevealMode, EffectDuration,
-    EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec,
-    GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy,
-    ItaVoteConflictPolicy, KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind,
-    ResultMemoryOutput, ResultMemoryScope, RoleModifier, StandardNarConflictFamily,
-    SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy,
-    TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker,
-    WeightPolicy, WinCondition, WinFamily, Window,
+    ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
+    EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker,
+    GrantKind, GrantSpec, GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec,
+    ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy, KillStackingPolicy, Pack, PhaseKind,
+    PhaseParity, RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier,
+    StandardNarConflictFamily, SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent,
+    TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod,
+    VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -10348,10 +10348,16 @@ fn resolve_day_announcements(input: &ResolutionInput, events: &mut Vec<InnerEven
         events.push(InnerEvent::DayAnnouncement(DayAnnouncement {
             player_id: victim.player_id.clone(),
             cause: victim.cause.clone(),
+            template_id: policy.template_id.clone(),
+            audience: policy.audience.clone(),
             source_action_id: victim.source_action_id.clone(),
             attackers: victim.attackers.clone(),
             unstoppable: victim.unstoppable,
-            role_key: victim.role_key.clone(),
+            role_key: match policy.role_payload {
+                DayNoteRolePayload::Hidden => None,
+                DayNoteRolePayload::RoleKey => victim.role_key.clone(),
+            },
+            role_payload: day_announcement_role_payload(policy),
             recorded_at: victim.recorded_at,
             sequence: sequence as u32,
             day,
@@ -10359,6 +10365,15 @@ fn resolve_day_announcements(input: &ResolutionInput, events: &mut Vec<InnerEven
             phase_id: input.phase_id.clone(),
         }));
     }
+}
+
+fn day_announcement_role_payload(
+    policy: &crate::pack::DayAnnouncementPolicy,
+) -> Option<DayNoteRolePayload> {
+    (policy.template_id.is_some()
+        || policy.audience.is_some()
+        || policy.role_payload != DayNoteRolePayload::default())
+    .then_some(policy.role_payload)
 }
 
 fn resolve_self_lynch_wins(
@@ -10438,6 +10453,9 @@ fn resolve_last_words(
     events.push(InnerEvent::LastWordsRecorded(LastWordsRecorded {
         player_id: killed.clone(),
         reason: "lynch".to_string(),
+        template_id: input.pack.day_notes.last_words.template_id.clone(),
+        audience: input.pack.day_notes.last_words.audience.clone(),
+        window: input.pack.day_notes.last_words.window.clone(),
         sequence,
         day: input.state.phase_number,
         phase_id: input.phase_id.clone(),

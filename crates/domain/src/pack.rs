@@ -1307,6 +1307,12 @@ pub struct DayNotePolicy {
 pub struct DayAnnouncementPolicy {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    #[serde(default, skip_serializing_if = "is_default_day_note_role_payload")]
+    pub role_payload: DayNoteRolePayload,
     #[serde(default = "default_day_note_n1_announcements")]
     pub night_deaths_n1: bool,
     #[serde(default)]
@@ -1319,6 +1325,9 @@ impl Default for DayAnnouncementPolicy {
     fn default() -> Self {
         Self {
             enabled: false,
+            template_id: None,
+            audience: None,
+            role_payload: DayNoteRolePayload::default(),
             night_deaths_n1: default_day_note_n1_announcements(),
             night_deaths_after_n1: false,
             multiple_night_deaths_n2plus: false,
@@ -1330,15 +1339,37 @@ fn default_day_note_n1_announcements() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum DayNoteRolePayload {
+    Hidden,
+    #[default]
+    RoleKey,
+}
+
+fn is_default_day_note_role_payload(value: &DayNoteRolePayload) -> bool {
+    *value == DayNoteRolePayload::default()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LastWordsPolicy {
     #[serde(default)]
     pub day_deaths: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
 }
 
 impl Default for LastWordsPolicy {
     fn default() -> Self {
-        Self { day_deaths: false }
+        Self {
+            day_deaths: false,
+            template_id: None,
+            audience: None,
+            window: None,
+        }
     }
 }
 
@@ -3340,6 +3371,28 @@ fn validate_day_note_policy(
             "day-note policy requires Day in phases.cadence",
         );
     }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.announcements.template_id"),
+        policy.announcements.template_id.as_deref(),
+        "day announcement template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.announcements.audience"),
+        policy.announcements.audience.as_deref(),
+        "day announcement audience",
+    );
+    let announcement_metadata_declared = policy.announcements.template_id.is_some()
+        || policy.announcements.audience.is_some()
+        || policy.announcements.role_payload != DayNoteRolePayload::default();
+    if announcement_metadata_declared && !policy.announcements.enabled {
+        issue(
+            issues,
+            format!("{path}.announcements"),
+            "day announcement metadata requires enabled announcements",
+        );
+    }
     if policy.announcements.multiple_night_deaths_n2plus
         && !policy.announcements.night_deaths_after_n1
     {
@@ -3348,6 +3401,45 @@ fn validate_day_note_policy(
             format!("{path}.announcements.multiple_night_deaths_n2plus"),
             "multiple_night_deaths_n2plus requires night_deaths_after_n1",
         );
+    }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.template_id"),
+        policy.last_words.template_id.as_deref(),
+        "last words template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.audience"),
+        policy.last_words.audience.as_deref(),
+        "last words audience",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.last_words.window"),
+        policy.last_words.window.as_deref(),
+        "last words window",
+    );
+    let last_words_metadata_declared = policy.last_words.template_id.is_some()
+        || policy.last_words.audience.is_some()
+        || policy.last_words.window.is_some();
+    if last_words_metadata_declared && !policy.last_words.day_deaths {
+        issue(
+            issues,
+            format!("{path}.last_words"),
+            "last words metadata requires day_deaths",
+        );
+    }
+}
+
+fn validate_optional_nonempty(
+    issues: &mut Vec<PackValidationIssue>,
+    path: &str,
+    value: Option<&str>,
+    label: &str,
+) {
+    if value.is_some_and(|value| value.trim().is_empty()) {
+        issue(issues, path, format!("{label} must not be empty"));
     }
 }
 
@@ -9278,6 +9370,15 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     }
     if !pack.ita.lifecycle.is_empty() {
         require_ir(&mut required, &mut reasons, 62, "ita.lifecycle");
+    }
+    if pack.day_notes.announcements.template_id.is_some()
+        || pack.day_notes.announcements.audience.is_some()
+        || pack.day_notes.announcements.role_payload != DayNoteRolePayload::default()
+        || pack.day_notes.last_words.template_id.is_some()
+        || pack.day_notes.last_words.audience.is_some()
+        || pack.day_notes.last_words.window.is_some()
+    {
+        require_ir(&mut required, &mut reasons, 63, "day_notes.templates");
     }
     if pack
         .ita

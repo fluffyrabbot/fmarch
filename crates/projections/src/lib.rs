@@ -2878,8 +2878,18 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                     .as_deref()
                     .map(|role| format!("; role: {role}"))
                     .unwrap_or_default();
+                let template = note
+                    .template_id
+                    .as_deref()
+                    .map(|template| format!("; template: {template}"))
+                    .unwrap_or_default();
+                let audience = note
+                    .audience
+                    .as_deref()
+                    .map(|audience| format!("; audience: {audience}"))
+                    .unwrap_or_default();
                 lines.push(format!(
-                    "Day {} announcement: {} died during night {} (cause: {}; {attackers}{role}).",
+                    "Day {} announcement: {} died during night {} (cause: {}; {attackers}{role}{template}{audience}).",
                     note.day, note.player_id, note.night, note.cause
                 ));
             }
@@ -2890,8 +2900,23 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                     .as_deref()
                     .map(|winner| format!(" winner: {winner};"))
                     .unwrap_or_default();
+                let template = note
+                    .template_id
+                    .as_deref()
+                    .map(|template| format!(" template: {template};"))
+                    .unwrap_or_default();
+                let audience = note
+                    .audience
+                    .as_deref()
+                    .map(|audience| format!(" audience: {audience};"))
+                    .unwrap_or_default();
+                let window = note
+                    .window
+                    .as_deref()
+                    .map(|window| format!(" window: {window};"))
+                    .unwrap_or_default();
                 lines.push(format!(
-                    "Last words: {} may speak after {} in {}.{vote}",
+                    "Last words: {} may speak after {} in {}.{vote}{template}{audience}{window}",
                     note.player_id, note.reason, note.phase_id
                 ));
             }

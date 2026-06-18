@@ -2103,7 +2103,12 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    pause control.]
 5. Last words and day announcements. [partly done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
-   lynch; `mafia_universe` golden plus Postgres command/projection rebuild proof]
+   lynch; v63 adds pack-declared night-victim `template_id`, `audience`, and role payload
+   policy (`RoleKey` or `Hidden`) plus last-word `template_id`, `audience`, and `window`.
+   Mafia Universe opts into revealed-role public notes and post-lynch last words; pure
+   goldens prove revealed and hidden role payloads plus multiple-death ordering, while
+   Postgres command/projection and minimizer proof covers the revealed-role template/audience/window
+   path through replay audit, thread projection, and rebuild.]
 6. Wolf self-destruct / day-death culture mechanics. [partly done: v10 `SelfDestruct`
    emits `WolfSelfDestructed` plus paired `PlayerKilled` events for Chinese structured White
    Wolf King; v11 `WolfCarryQueued`/`WolfCarryUsed` queues the White Wolf carry token and
@@ -2564,8 +2569,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
-   prior-night `DayAnnouncement`, lynch `LastWordsRecorded`, trailing `PhaseAnnouncement`, and
-   Mafiascum NoMajority revote `HostPromptIssued` plus prompt trace decisions.
+   prior-night `DayAnnouncement` template/audience/role payload metadata, lynch
+   `LastWordsRecorded` template/audience/window metadata, trailing `PhaseAnnouncement`, and
+   Mafiascum NoMajority revote `HostPromptIssued` plus prompt trace decisions. The direct Mafia
+   Universe command proof now covers two prior-night deaths in source order with revealed role
+   payloads, thread projection, replay audit, and projection rebuild; pure golden
+   `day_notes_hidden_role_multiple_deaths` covers the hidden-role payload path.
    `minimize_night_fixture` prompt fixtures now carry the command-native `HostPromptDecision`
    shape and can assert stream-level prompt resolution effects; the Mafiascum NoMajority fixture
    now acknowledges the prompt and checks `HostPromptResolved` plus prompt-driven
@@ -2888,8 +2897,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by closing the remaining last-words and day-announcement breadth.
-Model pack-declared announcement templates/audiences for night-victim announcements, day-death
-announcements, and last-words windows; prove multiple-death ordering plus hidden/revealed role
-payloads through pure goldens, command/projection audit/rebuild, and semantic minimizer fixtures
-before updating the checklist again.
+Continue Phase 5 rich day systems by finishing day-death announcement metadata. Add pack-declared
+template/audience fields to the trailing day-death `PhaseAnnouncement` surface or an explicit
+day-death announcement event, prove lynch, day-action kill, ITA kill, Knight duel, and
+self-destruct death ordering through pure goldens, then add command/projection audit/rebuild and
+semantic minimizer coverage before updating the checklist again.

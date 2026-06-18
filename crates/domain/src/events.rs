@@ -537,10 +537,16 @@ pub struct DayVoteOutcome {
 pub struct DayAnnouncement {
     pub player_id: SlotId,
     pub cause: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
     pub source_action_id: Option<String>,
     pub attackers: Vec<SlotId>,
     pub unstoppable: bool,
     pub role_key: Option<RoleKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role_payload: Option<crate::pack::DayNoteRolePayload>,
     pub recorded_at: Option<LogicalTime>,
     pub sequence: u32,
     pub day: u32,
@@ -553,6 +559,12 @@ pub struct DayAnnouncement {
 pub struct LastWordsRecorded {
     pub player_id: SlotId,
     pub reason: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<String>,
     pub sequence: u32,
     pub day: u32,
     pub phase_id: PhaseId,

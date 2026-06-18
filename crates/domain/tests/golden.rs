@@ -8832,6 +8832,35 @@ fn golden_day_notes_announcement_last_words() {
 }
 
 #[test]
+fn golden_day_notes_hidden_role_multiple_deaths() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "day_notes_hidden_role_multiple_deaths.json",
+    );
+    let got = run(
+        &golden["input"],
+        load_pack_for_golden("mafia_universe", &golden),
+    );
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "day_notes_hidden_role_multiple_deaths",
+    );
+    let notes = got
+        .iter()
+        .filter(|event| event["kind"] == "DayAnnouncement")
+        .collect::<Vec<_>>();
+    assert_eq!(notes.len(), 2);
+    assert_eq!(notes[0]["payload"]["player_id"], "slot_5");
+    assert_eq!(notes[0]["payload"]["sequence"], 0);
+    assert_eq!(notes[1]["payload"]["player_id"], "slot_2");
+    assert_eq!(notes[1]["payload"]["sequence"], 1);
+    assert!(notes.iter().all(|event| {
+        event["payload"]["role_payload"] == "Hidden" && event["payload"]["role_key"].is_null()
+    }));
+}
+
+#[test]
 fn day_substep_goldens_expose_canonical_host_console_ordering() {
     let day_notes = {
         let golden = load_golden_in("mafia_universe", "day_notes_announcement_last_words.json");

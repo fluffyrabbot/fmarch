@@ -694,10 +694,13 @@ fn day_note_payloads_pass_contract_validation() {
                 "payload": {
                     "player_id": "slot_5",
                     "cause": "factional_kill",
+                    "template_id": "mafia_universe_night_death_v1",
+                    "audience": "public",
                     "source_action_id": "nightkill_001",
                     "attackers": ["slot_4"],
                     "unstoppable": false,
                     "role_key": "mafia_goon",
+                    "role_payload": "RoleKey",
                     "recorded_at": 77,
                     "sequence": 0,
                     "day": 2,
@@ -711,6 +714,9 @@ fn day_note_payloads_pass_contract_validation() {
                 "payload": {
                     "player_id": "slot_3",
                     "reason": "lynch",
+                    "template_id": "mafia_universe_last_words_v1",
+                    "audience": "public",
+                    "window": "post_lynch",
                     "sequence": 0,
                     "day": 2,
                     "phase_id": "D02",

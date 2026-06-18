@@ -25,14 +25,15 @@ pub use golden::{
 pub use ir::{InvestigateMode, IrAbility, Modifier};
 pub use pack::{
     load_pack_from_json, night_ability_order, upcast_pack_json, validate_pack, BackupPolicy,
-    BelovedPrincessPolicy, DayAnnouncementPolicy, DayNotePolicy, DayVotePromptPolicy,
-    DeathRetaliationPolicy, DeathRevealMode, DeathRevealPolicy, EffectDuration, EffectVisibility,
-    GrantKind, GrantSpec, HostPromptDecisionKind, HostPromptResolutionEffect,
-    HostPromptResolutionEffectPolicy, IdiotPolicy, InvestigationResultPolicy, ItaLifecyclePolicy,
-    ItaSessionControlKind, LastWordsPolicy, Pack, PackLoadError, PackMigrationError,
-    PackValidationError, PackValidationIssue, ParityResultPolicy, RoleModifier, SelfDestructSpec,
-    WinCondition, WinPolicy, WinRule, WolfBeautyPolicy, WolfCarryPolicy, MIN_SUPPORTED_IR_VERSION,
-    SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
+    BelovedPrincessPolicy, DayAnnouncementPolicy, DayNotePolicy, DayNoteRolePayload,
+    DayVotePromptPolicy, DeathRetaliationPolicy, DeathRevealMode, DeathRevealPolicy,
+    EffectDuration, EffectVisibility, GrantKind, GrantSpec, HostPromptDecisionKind,
+    HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, IdiotPolicy,
+    InvestigationResultPolicy, ItaLifecyclePolicy, ItaSessionControlKind, LastWordsPolicy, Pack,
+    PackLoadError, PackMigrationError, PackValidationError, PackValidationIssue,
+    ParityResultPolicy, RoleModifier, SelfDestructSpec, WinCondition, WinPolicy, WinRule,
+    WolfBeautyPolicy, WolfCarryPolicy, MIN_SUPPORTED_IR_VERSION, SUPPORTED_IR_VERSION,
+    SUPPORTED_PACK_VERSION,
 };
 pub use resolver::{
     check_win, resolve, resolve_events, resolve_instant, DayAnnouncementInput, DayPhaseInputs,

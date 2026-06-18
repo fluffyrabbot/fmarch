@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 62,
+  "ir_version": 63,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2733,12 +2733,18 @@
   "day_notes": {
     "announcements": {
       "enabled": true,
+      "template_id": "mafia_universe_night_death_v1",
+      "audience": "public",
+      "role_payload": "RoleKey",
       "night_deaths_n1": true,
       "night_deaths_after_n1": true,
       "multiple_night_deaths_n2plus": true
     },
     "last_words": {
-      "day_deaths": true
+      "day_deaths": true,
+      "template_id": "mafia_universe_last_words_v1",
+      "audience": "public",
+      "window": "post_lynch"
     }
   },
   "treestump_policy": {

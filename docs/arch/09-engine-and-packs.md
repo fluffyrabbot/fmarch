@@ -515,8 +515,12 @@ enable `day_notes.announcements` to turn normalized `ResolutionInput.day_phase_i
 night_victims` into `DayAnnouncement` events, and may enable `day_notes.last_words.day_deaths`
 to emit `LastWordsRecorded` for a lynched slot. Both events are typed public notes and state
 no-ops; the ordinary `PlayerKilled` plus trailing `PhaseAnnouncement` remains the authoritative
-death fold/reveal. The first proven vertical is `mafia_universe`, with one golden and one
-Postgres command/projection rebuild test.
+death fold/reveal. v63 makes the public-note envelope pack-owned: night-victim announcements may
+declare `template_id`, `audience`, and `role_payload` (`RoleKey` or `Hidden`), while last words
+may declare `template_id`, `audience`, and `window`. Mafia Universe opts into revealed-role
+night-victim notes and post-lynch last words; pure goldens also prove hidden-role multiple-death
+ordering. The first vertical is `mafia_universe`, with pure goldens plus Postgres
+command/projection rebuild and semantic minimizer proof.
 
 `Modifier::Babysitter` is the first v5 modifier addition. It is legal only on `Protect`
 actions. The action protects its target normally; if the protecting actor dies during the
@@ -1440,8 +1444,12 @@ proof was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_sheriff_badge_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
 announcement/prompt fixtures now also prove that minimization preserves Mafia Universe prior-night
-`DayAnnouncement`, lynch `LastWordsRecorded`, trailing `PhaseAnnouncement`, and Mafiascum
-NoMajority revote `HostPromptIssued` plus prompt trace decisions. `minimize_night_fixture` prompt
+`DayAnnouncement` template/audience/role payload metadata, lynch `LastWordsRecorded`
+template/audience/window metadata, trailing `PhaseAnnouncement`, and Mafiascum NoMajority revote
+`HostPromptIssued` plus prompt trace decisions. The direct Mafia Universe command proof now covers
+two prior-night deaths in source order with revealed role payloads, thread projection, replay audit,
+and projection rebuild; pure golden `day_notes_hidden_role_multiple_deaths` covers the hidden-role
+payload path. `minimize_night_fixture` prompt
 fixtures now carry the command-native `HostPromptDecision` shape and can assert stream-level prompt
 resolution effects; the Mafiascum NoMajority fixture now acknowledges the prompt and checks
 `HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`,

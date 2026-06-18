@@ -6368,6 +6368,58 @@ fn day_note_policy_requires_day_cadence_and_consistent_announcement_gates() {
 }
 
 #[test]
+fn day_note_templates_audiences_windows_require_v63_and_enabled_policies() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(62);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["day_notes"] = json!({
+        "announcements": {
+            "enabled": false,
+            "template_id": "",
+            "audience": "public",
+            "role_payload": "Hidden",
+            "night_deaths_n1": true,
+            "night_deaths_after_n1": true
+        },
+        "last_words": {
+            "day_deaths": false,
+            "template_id": "last_words",
+            "audience": "",
+            "window": "post_lynch"
+        }
+    });
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 63",
+    );
+    assert_issue(&err, "ir_version", "day_notes.templates");
+    assert_issue(
+        &err,
+        "day_notes.announcements.template_id",
+        "must not be empty",
+    );
+    assert_issue(
+        &err,
+        "day_notes.announcements",
+        "metadata requires enabled announcements",
+    );
+    assert_issue(&err, "day_notes.last_words.audience", "must not be empty");
+    assert_issue(&err, "day_notes.last_words", "metadata requires day_deaths");
+
+    value["ir_version"] = json!(63);
+    value["day_notes"]["announcements"]["enabled"] = json!(true);
+    value["day_notes"]["announcements"]["template_id"] = json!("night_death");
+    value["day_notes"]["last_words"]["day_deaths"] = json!(true);
+    value["day_notes"]["last_words"]["audience"] = json!("public");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
 fn babysitter_modifier_requires_v5_and_protect_action() {
     let mut value = valid_pack_value();
     let action = &mut value["roles"]["cop"]["actions"][0];

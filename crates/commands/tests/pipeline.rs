@@ -20160,9 +20160,12 @@ fn mafia_universe_day_notes_fixture_json() -> String {
                     "payload": {
                         "player_id": "slot_5",
                         "cause": "factional_kill",
+                        "template_id": "mafia_universe_night_death_v1",
+                        "audience": "public",
                         "attackers": ["slot_4"],
                         "unstoppable": false,
                         "role_key": "mafia_goon",
+                        "role_payload": "RoleKey",
                         "sequence": 0,
                         "day": 2,
                         "night": 1,
@@ -20183,6 +20186,9 @@ fn mafia_universe_day_notes_fixture_json() -> String {
                     "payload": {
                         "player_id": "slot_3",
                         "reason": "lynch",
+                        "template_id": "mafia_universe_last_words_v1",
+                        "audience": "public",
+                        "window": "post_lynch",
                         "sequence": 0,
                         "day": 2,
                         "phase_id": "D02",
@@ -28240,6 +28246,7 @@ async fn host_resolve_phase_carries_ita_session_lethal_shot(pool: PgPool) {
         ("slot_3", "user_3", "town_vanilla"),
         ("slot_4", "user_4", "mafia_goon"),
         ("slot_5", "user_5", "mafia_goon"),
+        ("slot_6", "user_6", "mafia_goon"),
     ] {
         handle(
             &pool,
@@ -40863,7 +40870,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                 "run_id": "resolution:test:N01:day_notes",
                 "result_version": domain::RESULT_VERSION,
                 "seed": 77,
-                "counts": { "events": 2, "kills": 1, "saves": 0 },
+                "counts": { "events": 3, "kills": 2, "saves": 0 },
                 "events": [
                     {
                         "index": 0,
@@ -40877,11 +40884,22 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                     },
                     {
                         "index": 1,
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_2",
+                            "cause": "poison",
+                            "attackers": ["slot_6"],
+                            "unstoppable": true
+                        }
+                    },
+                    {
+                        "index": 2,
                         "kind": "PhaseAnnouncement",
                         "payload": {
                             "phase_id": "N01",
                             "deaths": [
-                                { "slot_id": "slot_5", "cause": "night_kill" }
+                                { "slot_id": "slot_5", "cause": "night_kill" },
+                                { "slot_id": "slot_2", "cause": "poison" }
                             ]
                         }
                     }
@@ -40896,7 +40914,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     .await
     .unwrap();
 
-    for (seq, actor) in [(1, "slot_1"), (2, "slot_2"), (3, "slot_4")] {
+    for (seq, actor) in [(1, "slot_1"), (2, "slot_4"), (3, "slot_6")] {
         projections::append_and_project(
             &pool,
             game,
@@ -40929,23 +40947,59 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     .await
     .unwrap();
     let d02 = domain::validate_resolution_json(&d02_payload, domain::RESULT_VERSION).unwrap();
+    let day_notes = d02
+        .events
+        .iter()
+        .filter_map(|indexed| match &indexed.event {
+            domain::InnerEvent::DayAnnouncement(note) => Some(note),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(day_notes.len(), 2);
+    assert!(
+        matches!(
+            day_notes.as_slice(),
+            [first, second]
+                if first.player_id == "slot_5"
+                    && first.sequence == 0
+                    && second.player_id == "slot_2"
+                    && second.sequence == 1
+        ),
+        "prior-night death announcements should preserve PlayerKilled order"
+    );
     assert!(d02.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::DayAnnouncement(note)
             if note.player_id == "slot_5"
                 && note.cause == "factional_kill"
+                && note.template_id.as_deref() == Some("mafia_universe_night_death_v1")
+                && note.audience.as_deref() == Some("public")
                 && note.attackers == vec!["slot_4".to_string()]
                 && note.role_key.as_deref() == Some("mafia_goon")
+                && note.role_payload == Some(domain::DayNoteRolePayload::RoleKey)
                 && note.day == 2
                 && note.night == 1
+    )));
+    assert!(d02.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayAnnouncement(note)
+            if note.player_id == "slot_2"
+                && note.cause == "poison"
+                && note.attackers == vec!["slot_6".to_string()]
+                && note.role_key.as_deref() == Some("town_vanilla")
+                && note.role_payload == Some(domain::DayNoteRolePayload::RoleKey)
+                && note.sequence == 1
     )));
     assert!(d02.events.iter().any(|indexed| matches!(
         &indexed.event,
         domain::InnerEvent::LastWordsRecorded(note)
             if note.player_id == "slot_3"
                 && note.reason == "lynch"
+                && note.template_id.as_deref() == Some("mafia_universe_last_words_v1")
+                && note.audience.as_deref() == Some("public")
+                && note.window.as_deref() == Some("post_lynch")
                 && note.vote.winner.as_deref() == Some("slot_3")
-                && (note.vote.total_weight - 4.0).abs() < f64::EPSILON
+                && (note.vote.total_weight - 3.0).abs() < f64::EPSILON
     )));
     assert!(d02.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -40970,15 +41024,29 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         })
         .expect("D02 resolution publishes a system announcement row");
     assert!(
-        d02_post.body.contains(
-            "slot_5 died during night 1 (cause: factional_kill; attackers: slot_4; role: mafia_goon)."
-        ),
+        d02_post.body.contains("slot_5 died during night 1")
+            && d02_post.body.contains("role: mafia_goon")
+            && d02_post
+                .body
+                .contains("template: mafia_universe_night_death_v1")
+            && d02_post.body.contains("audience: public"),
         "thread projection publishes prior-night death announcement"
+    );
+    assert!(
+        d02_post.body.contains("slot_2 died during night 1")
+            && d02_post.body.contains("cause: poison")
+            && d02_post.body.contains("role: town_vanilla"),
+        "thread projection publishes the second prior-night death announcement"
     );
     assert!(
         d02_post
             .body
-            .contains("Last words: slot_3 may speak after lynch in D02. winner: slot_3;"),
+            .contains("Last words: slot_3 may speak after lynch in D02.")
+            && d02_post
+                .body
+                .contains("template: mafia_universe_last_words_v1")
+            && d02_post.body.contains("audience: public")
+            && d02_post.body.contains("window: post_lynch"),
         "thread projection publishes lynch last words"
     );
     assert!(
@@ -40996,6 +41064,14 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
             .unwrap()
             .alive,
         "prior night death folded before day notes"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "second prior night death folded before day notes"
     );
     assert!(
         !slots
