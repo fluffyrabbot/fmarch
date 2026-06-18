@@ -1316,9 +1316,13 @@ matching `expectations` metadata for unambiguous PGO visit-trigger, Babysitter d
 Hider host-death generated cases, avoiding raw-action inference when redirect/bus target mutation
 or obvious actor suppression is present. `crates/commands/fixtures/night-pgo-trigger-nonminimal.json`
 is the first success-shrinking regression: `--reduce` removes the irrelevant extra slot while
-preserving all four PGO semantic expectations. This proves a reusable artifact-backed promotion
-path for hand-minimized trigger/dependency replays and metadata-rich generated failure output,
-not automatic property-test shrinking across generated families. A non-mafiascum generated replay lane now covers six
+preserving all four PGO semantic expectations. `--write-reduced <path>` now writes the minimized
+fixture after reduction; the non-minimal PGO replay was reduced into
+`target/operator-proof/night-pgo-trigger-reduced.tmp.json` and replayed from that written file with
+one audited resolution, one trace, clean projection rebuild, and all four semantic expectations
+checked. This proves a reusable artifact-backed promotion path for hand-minimized
+trigger/dependency replays and metadata-rich generated failure output, not automatic property-test
+shrinking across generated families. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with

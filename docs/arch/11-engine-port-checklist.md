@@ -2423,8 +2423,11 @@ coverage, and a playable vertical scenario through the command pipeline.
    redirect/bus target mutation or obvious actor suppression is present.
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` proves the success-shrinking path:
    `--reduce` removes the irrelevant extra slot while preserving all four declared PGO
-   expectations. This is a reusable artifact-backed minimized replay promotion path, not true
-   property-test shrinking. A first non-mafiascum lane
+   expectations. `--write-reduced <path>` now writes the post-reduction fixture; the non-minimal
+   PGO replay was reduced into `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and then
+   replayed from that written artifact with one audited resolution, one trace, clean projection
+   rebuild, and all four semantic expectations checked. This is a reusable artifact-backed
+   minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2741,7 +2744,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by making the minimizer promotion path
-produce reusable reduced artifacts. Start by adding an optional `--write-reduced <path>` mode that
-writes the minimized fixture after a successful `--reduce`, then prove it with the non-minimal PGO
-fixture and document the remaining gap to automatic randomized property-test shrinking.
+Continue Phase 4 persistent and generated-action systems by hardening the minimizer's failure-mode
+surface. Add a negative fixture or unit test proving `--write-reduced` does not silently bless a
+fixture when semantic expectations fail, then extend the saved report to distinguish replay
+success, failure-class preservation, and success-invariant preservation before moving to randomized
+property-test shrinking.

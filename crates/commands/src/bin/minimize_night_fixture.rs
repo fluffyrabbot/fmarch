@@ -156,6 +156,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         (fixture, Vec::new(), original.clone())
     };
+    if let Some(write_reduced_path) = &args.write_reduced_path {
+        write_fixture(write_reduced_path, &fixture)?;
+    }
 
     println!(
         "{}",
@@ -173,6 +176,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct Args {
     fixture_path: String,
     reduce: bool,
+    write_reduced_path: Option<String>,
 }
 
 impl Args {
@@ -182,9 +186,18 @@ impl Args {
     {
         let mut fixture_path = None;
         let mut reduce = false;
-        for arg in args {
+        let mut write_reduced_path = None;
+        let mut args = args.into_iter();
+        while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--reduce" => reduce = true,
+                "--write-reduced" => {
+                    let path = args.next().ok_or_else(usage)?;
+                    if path.starts_with('-') {
+                        return Err(usage());
+                    }
+                    write_reduced_path = Some(path);
+                }
                 "-h" | "--help" => return Err(usage()),
                 _ if arg.starts_with('-') => return Err(usage()),
                 _ if fixture_path.is_none() => fixture_path = Some(arg),
@@ -194,17 +207,26 @@ impl Args {
         Ok(Args {
             fixture_path: fixture_path.ok_or_else(usage)?,
             reduce,
+            write_reduced_path,
         })
     }
 }
 
 fn usage() -> String {
-    "usage: minimize_night_fixture [--reduce] <fixture.json>".to_string()
+    "usage: minimize_night_fixture [--reduce] [--write-reduced <path>] <fixture.json>".to_string()
 }
 
 fn read_fixture(path: &str) -> Result<NightFixture, Box<dyn std::error::Error>> {
     let text = fs::read_to_string(Path::new(path))?;
     Ok(serde_json::from_str(&text)?)
+}
+
+fn write_fixture(path: &str, fixture: &NightFixture) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(
+        Path::new(path),
+        format!("{}\n", serde_json::to_string_pretty(fixture)?),
+    )?;
+    Ok(())
 }
 
 async fn minimize_fixture(
@@ -716,6 +738,21 @@ mod tests {
         let args =
             Args::parse(["--reduce".to_string(), "case.json".to_string()]).expect("args parse");
         assert!(args.reduce);
+        assert_eq!(args.fixture_path, "case.json");
+        assert_eq!(args.write_reduced_path, None);
+    }
+
+    #[test]
+    fn arg_parser_accepts_write_reduced_path() {
+        let args = Args::parse([
+            "--reduce".to_string(),
+            "--write-reduced".to_string(),
+            "reduced.json".to_string(),
+            "case.json".to_string(),
+        ])
+        .expect("args parse");
+        assert!(args.reduce);
+        assert_eq!(args.write_reduced_path.as_deref(), Some("reduced.json"));
         assert_eq!(args.fixture_path, "case.json");
     }
 
