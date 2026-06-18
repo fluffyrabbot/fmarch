@@ -2016,7 +2016,7 @@ round-trip state folds.
    proof for both multi-source variants. A command-level hybrid passive+targeted backup role remains
    future work if a shipped culture pack needs one.]
 5. Trigger fixpoint for bomb, hunter, vengeful, PGO, lovers, babysitter, hider.
-   [partly done: the trigger queue now supports `Kill`, `Visit`, `Lynch`, `Death`,
+   [done: the trigger queue now supports `Kill`, `Visit`, `Lynch`, `Death`,
    `EffectMarked`, `PhaseEnd`, and non-kill `Win` observations,
    re-enters generated kills into the bounded fixpoint, and has goldens for Bomb,
    Vengeful Townie, Death-Cursed Townie, Death Marker, Phase-End Doomed Townie, Win Witness, Super-Saint, PGO, and pack-declared Strongman Vengeful retaliation plus
@@ -2057,8 +2057,12 @@ round-trip state folds.
    `audit_resolution`, `inspect_trace`, and `audit_rebuild`; another seeded lane drives two-phase
    Hunter retaliation and Cupid/Lovers folded state through the same audit trio; the day-trigger
    policy lane now drives Super-Saint lynch retaliation and Hero/VoteDuel retaliation through legal
-   D01 votes/actions, anchored trace inspection, and rebuild proof. Remaining fuzz gaps are true
-   shrinking plus broader multi-phase culture-specific variants.]
+   D01 votes/actions, anchored trace inspection, and rebuild proof. The generated-shrink matrix now
+   has checked-in success and bad-expectation fixtures plus focused replay selectors for
+   VengefulFixpoint, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, and the PGO,
+   Hider, Babysitter, Hunter, Vengeful, Strongman Vengeful, Bodyguard Strongman Vengeful, Lovers,
+   and Bomb projection-state rows; exhaustive randomized shrink breadth and broader multi-phase
+   culture-specific variants are outside this deterministic proof boundary.]
 
 Exit proof: multi-phase goldens show effects carrying forward only through state folds.
 
@@ -3246,9 +3250,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by auditing the trigger-fixpoint build-order row now that all generated matrix
-fixpoint and projection-state artifacts have checked-in success and bad-expectation fixtures. If
-the focused selectors, generated-shrink matrix, gap audit, and completion audit all agree, replace
-the remaining `[partly done: ...]` trigger-fixpoint marker with an honest `[done: ...]` summary and
-refresh only the truth surfaces made true by that proof; keep the proof boundary bounded to
-deterministic generated fixtures rather than exhaustive randomized coverage.
+Continue Phase 4 by auditing the remaining completion-audit pending markers in the Phase 4 body:
+separate domain uses of `pending`/`remaining` from true open work, decide whether the conditional
+hybrid passive+targeted backup role is required for a shipped pack or explicitly outside the
+current port contract, and refresh only the checklist/audit truth surfaces made true by that
+evidence.
