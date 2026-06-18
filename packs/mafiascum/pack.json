@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 67,
+  "ir_version": 68,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -4141,7 +4141,8 @@
   "backup_policy": {
     "enabled": true,
     "passive_effect_prefix": "backup:",
-    "targeted_effect": "backup_target"
+    "targeted_effect": "backup_target",
+    "priority": "TargetedThenPassive"
   },
   "conversion_policy": {
     "on_dead_target": "Block",

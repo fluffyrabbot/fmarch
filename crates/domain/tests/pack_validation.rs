@@ -1347,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 68");
+    assert_issue(&err, "ir_version", "unsupported IR version 69");
 }
 
 #[test]
@@ -1360,7 +1360,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 67",
+        "pack declares features requiring ir_version >= 68",
     );
     assert_issue(
         &err,
@@ -1384,6 +1384,7 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     );
     assert_issue(&err, "ir_version", "vote.tiebreaker_roles");
     assert_issue(&err, "ir_version", "Disloyal");
+    assert_issue(&err, "ir_version", "backup_policy.priority");
 }
 
 #[test]
@@ -5569,6 +5570,55 @@ fn backup_policy_requires_v17_declared_effect_and_role_refs() {
     });
     set_effect_policy(&mut value, "doused", "Persistent", "ActorAndTarget");
     validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn backup_priority_policy_is_explicit_and_versioned() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(67);
+    value["effects"] = json!({
+        "backup_target": { "duration": "Persistent", "visibility": "Hidden" },
+        "backup:cop": { "duration": "Persistent", "visibility": "Hidden" }
+    });
+    set_effect_policy(&mut value, "doused", "Persistent", "ActorAndTarget");
+    value["backup_policy"] = json!({
+        "enabled": true,
+        "passive_effect_prefix": "backup:",
+        "targeted_effect": "backup_target",
+        "priority": "PassiveThenTargeted"
+    });
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(&err, "backup_policy.priority", "requires ir_version >= 68");
+    assert_issue(&err, "ir_version", "backup_policy.priority");
+
+    value["ir_version"] = json!(68);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn backup_priority_defaults_to_targeted_then_passive_when_omitted() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(17);
+    value["effects"] = json!({
+        "backup_target": { "duration": "Persistent", "visibility": "Hidden" },
+        "backup:cop": { "duration": "Persistent", "visibility": "Hidden" }
+    });
+    set_effect_policy(&mut value, "doused", "Persistent", "ActorAndTarget");
+    value["backup_policy"] = json!({
+        "enabled": true,
+        "passive_effect_prefix": "backup:",
+        "targeted_effect": "backup_target"
+    });
+
+    let pack = pack_from_value(value);
+    validate_pack(&pack).unwrap();
+    assert_eq!(
+        pack.backup_policy.effective_priority(),
+        domain::pack::BackupPriorityPolicy::TargetedThenPassive
+    );
 }
 
 #[test]

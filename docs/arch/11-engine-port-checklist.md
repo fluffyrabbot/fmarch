@@ -1365,10 +1365,12 @@ The only identity that crosses into the engine is `SlotId`.
   `backup_target` source selection into canonical Rust `BackupTargeted` and
   `PlayerConverted` inner events. Mafiascum declares `backup_cop`,
   `universal_backup`, `inherit_role`, and `backup_target`; validation requires
-  IR v17 plus declared passive/targeted effects and role refs. Mafia Universe now declares
+  IR v17 plus declared passive/targeted effects and role refs, and explicit
+  `backup_policy.priority` requires IR v68. Mafia Universe now declares
   `town_universal_backup`, `mafia_universal_backup`, `inherit_role`, and `backup_target` through
   the same targeted backup policy. Pure goldens prove passive inheritance, targeted designation,
-  targeted inheritance, and MU town/mafia designation/inheritance variants; command tests prove
+  targeted inheritance, targeted-over-passive multi-source priority, passive-over-targeted priority
+  as a resolver policy variant, and MU town/mafia designation/inheritance variants; command tests prove
   `ResolvePhase` appends/folds Backup through Postgres projections and rebuilds slot state
   identically.]
 - [x] Vengeful. [im-human's action modifier metadata maps to fmarch's
@@ -2008,8 +2010,10 @@ round-trip state folds.
    Epicmafia generated replay lane,
    helper-enforced passive backup inheritance attribution, helper-enforced targeted backup
    inheritance attribution including folded target-phase `policy_detail`, and targeted backup via
-   v17 `backup_policy` + folded `BackupTargeted`; broader multi-source priority variants
-   remain pending]
+   v17 `backup_policy` + folded `BackupTargeted`; v68 `backup_policy.priority` now declares
+   targeted-over-passive versus passive-over-targeted inheritance priority, with pure golden/trace
+   proof for both multi-source variants. A command-level hybrid passive+targeted backup role remains
+   future work if a shipped culture pack needs one.]
 5. Trigger fixpoint for bomb, hunter, vengeful, PGO, lovers, babysitter, hider.
    [partly done: the trigger queue now supports `Kill`, `Visit`, `Lynch`, `Death`,
    `EffectMarked`, `PhaseEnd`, and non-kill `Win` observations,
@@ -2903,9 +2907,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    including zero unsupported primitive, modifier, result-event, and culture-note rows; the
    completion audit treats those explicit out-of-scope rows as visible but non-actionable and
    blocks completion on the remaining partial build-order phases instead. The no-Postgres domain CI artifact
-   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 303
-   checked golden fixtures, and Rust validator totals of 455 golden-harness tests, 66
-   result-contract tests, and 146 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
+   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
+   checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
+   result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
@@ -2921,8 +2925,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 trigger-fixpoint hardening by replacing the remaining report-only fuzz gap with a
-real shrinking/minimizer proof. Promote one failing or hand-reduced trigger/dependency scenario
-into a checked minimized fixture, then prove that the minimizer preserves its semantic
-expectations and that command replay, trace inspection, and projection rebuild stay drift-free
-before updating this checklist again.
+Continue Phase 4 by closing the remaining generated-capability UX gap for richer item selection.
+Make item-grant selection a first-class command/projection surface instead of only resolver
+metadata: persist the selected `grant_option`, expose enough host/player projection state to inspect
+which item was granted without replaying the trace, reject stale or mismatched selections after
+rebuild, and prove the Mafia Universe inventor path through private notification, inventory counter,
+effect fold, trace inspection, and projection rebuild before updating this checklist again.

@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 
 use domain::pack::{
-    ActionTemplate, ActorRef, Pack, PrecedenceRule, PrecedenceWhen, SuppressionPolicy,
-    SuppressionScope, TargetRef, TriggerEvent, TriggerLoopCapPolicy, TriggerOn,
+    ActionTemplate, ActorRef, BackupPriorityPolicy, Pack, PrecedenceRule, PrecedenceWhen,
+    SuppressionPolicy, SuppressionScope, TargetRef, TriggerEvent, TriggerLoopCapPolicy, TriggerOn,
 };
 use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
@@ -273,7 +273,7 @@ fn assert_death_metadata(events: &[Value], cause: &str, template_id: &str, audie
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 67);
+    assert_eq!(pack.ir_version, 68);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -5174,6 +5174,94 @@ fn trace_records_targeted_backup_inheritance() {
 }
 
 #[test]
+fn golden_backup_priority_targeted_over_passive() {
+    let golden = load_golden("backup_priority_targeted_over_passive.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "backup_priority_targeted_over_passive",
+    );
+}
+
+#[test]
+fn trace_records_targeted_backup_priority_over_passive() {
+    let golden = load_golden("backup_priority_targeted_over_passive.json");
+    let output = run_output(
+        &golden["input"],
+        load_pack(),
+        "backup-priority-targeted-over-passive-trace-run",
+    );
+
+    let decision = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "backup_inherited_role")
+        .expect("targeted-over-passive backup should emit an inheritance trace decision");
+    assert_eq!(decision.stage, "night:backup");
+    assert_eq!(decision.source, "slot:slot_2");
+    assert_eq!(decision.detail["backup"], "slot_1");
+    assert_eq!(decision.detail["source_target"], "slot_2");
+    assert_eq!(decision.detail["policy"], "targeted");
+    assert_eq!(
+        decision.detail["policy_detail"]["source_action"],
+        "target_backup_n01"
+    );
+    assert_eq!(
+        decision.detail["policy_detail"]["declared_source_role"],
+        "cop"
+    );
+    assert_eq!(decision.detail["new_role"], "cop");
+    assert_eq!(decision.detail["original_role"], "universal_backup");
+}
+
+#[test]
+fn backup_priority_can_prefer_passive_over_targeted() {
+    let golden = load_golden("backup_priority_targeted_over_passive.json");
+    let mut pack = load_pack();
+    pack.backup_policy.priority = Some(BackupPriorityPolicy::PassiveThenTargeted);
+    let output = run_output(
+        &golden["input"],
+        pack,
+        "backup-priority-passive-over-targeted-trace-run",
+    );
+
+    let converted = output
+        .applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PlayerConverted {
+                target,
+                new_role,
+                source,
+                ..
+            } => Some((target, new_role, source)),
+            _ => None,
+        })
+        .expect("passive-over-targeted backup should convert");
+    assert_eq!(converted.0, "slot_1");
+    assert_eq!(converted.1, "doctor");
+    assert_eq!(converted.2, "slot_4");
+
+    let decision = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "backup_inherited_role")
+        .expect("passive-over-targeted backup should emit an inheritance trace decision");
+    assert_eq!(decision.stage, "night:backup");
+    assert_eq!(decision.source, "slot:slot_4");
+    assert_eq!(decision.detail["backup"], "slot_1");
+    assert_eq!(decision.detail["source_target"], "slot_4");
+    assert_eq!(decision.detail["policy"], "passive");
+    assert_eq!(decision.detail["policy_detail"]["effect"], "backup:doctor");
+    assert_eq!(decision.detail["new_role"], "doctor");
+    assert_eq!(decision.detail["original_role"], "universal_backup");
+}
+
+#[test]
 fn golden_executioner_targets_victim() {
     let golden = load_golden("executioner_targets_victim.json");
     let got = run(&golden["input"], load_pack());
@@ -7820,7 +7908,7 @@ fn chinese_structured_pack_deserializes() {
 fn mafia_universe_pack_deserializes() {
     let pack = load_pack_named("mafia_universe");
     assert_eq!(pack.name, "mafia_universe");
-    assert_eq!(pack.ir_version, 67);
+    assert_eq!(pack.ir_version, 68);
     assert!(pack.roles.contains_key("town_ita_shooter"));
     assert!(pack.roles.contains_key("town_ita_sharpshooter"));
     assert!(pack.roles.contains_key("town_ita_bad_shot"));

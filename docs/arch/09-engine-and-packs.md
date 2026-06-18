@@ -158,7 +158,7 @@ reruns a fixture input, `domain::normalize_golden_event` strips only explicitly 
 `DayVoteOutcome.reason` / `WinReached.reason` prose plus whole-number JSON float drift, and
 `cargo run -p commands --bin check_goldens -- --check` walks `packs/*/golden/*.json`. Fixtures
 that intentionally model a pack-policy variant declare `pack_overrides` in the fixture; the current
-repo-wide proof checked 139 golden fixtures without drift. Write-mode is
+repo-wide proof checked 307 golden fixtures without drift. Write-mode is
 `cargo run -p commands --bin check_goldens -- --write <fixture-or-dir>`; binary test
 `write_mode_regenerates_a_drifted_temp_fixture` proves it repairs a drifted temp-copy fixture and
 that the regenerated copy immediately passes check-mode.
@@ -204,6 +204,7 @@ Current additive IR gates are:
 | 37 | `InvestigateMode::Role` |
 | 38 | `InvestigateMode::FullRole` |
 | 39 | investigator-scoped / same-different `ActionTemplate.result_memory` |
+| 68 | explicit `backup_policy.priority` |
 
 The guard tests are `pack_required_ir_version_covers_versioned_action_features`,
 `pack_required_ir_version_covers_versioned_policy_features`, and
@@ -573,7 +574,12 @@ such as `backup:`; when a matching role dies, the backup slot receives a normal
 configured `targeted_effect`; the resolver emits `BackupTargeted { backup, source_target,
 source_role, source_action, phase_id, phase_kind, phase_number }`, folds that source choice
 into `StateSnapshot.backup_targets`, and later inherits the chosen source target's current
-role when that source dies.
+role when that source dies. v68 adds explicit `backup_policy.priority`: omitted priority keeps the
+legacy `TargetedThenPassive` order, while `PassiveThenTargeted` lets a culture pack prefer a passive
+role-specific backup tag when both passive and targeted source roles die in the same resolution.
+`backup_priority_policy_is_explicit_and_versioned` proves explicit priority is gated behind v68,
+and `backup_priority_targeted_over_passive` proves the shipped Mafiascum policy plus the alternate
+passive-first resolver branch.
 
 > **`mode` and `Investigate`.** `IrAbility` stays a **flat tag** (we do *not* parameterize the
 > enum as `Investigate(InvestigateMode)`); the mode rides alongside on the template. `mode`

@@ -19,15 +19,16 @@ use crate::events::{
 use crate::ir::{InvestigateMode, IrAbility, Modifier};
 use crate::pack::{
     night_ability_order, visibility_required_families, win_required_families, ActionTemplate,
-    ActivationGateReason, ActorRef, BadgeOperation, ConversionDeadTargetPolicy, ConversionMode,
-    ConversionPendingDeathPolicy, DayNoteRolePayload, DeathRetaliationTiming, DeathRevealMode,
-    EffectDuration, EffectSourceDeathRevealKind, EffectVisibility, FactionVoteTieBreaker,
-    GrantKind, GrantSpec, GuardWitchSameTargetPolicy, ItaSessionControlKind, ItaSessionSpec,
-    ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy, KillStackingPolicy, Pack, PhaseKind,
-    PhaseParity, RedirectKind, ResultMemoryOutput, ResultMemoryScope, RoleModifier,
-    StandardNarConflictFamily, SuppressionScope, TargetRef, TargetSpec, TieBreaker, TriggerEvent,
-    TriggerLoopCapPolicy, TriggerOn, TriggerRule, VisibilityFamily, VoteDuelTieBreaker, VoteMethod,
-    VoteTieBreaker, WeightPolicy, WinCondition, WinFamily, Window,
+    ActivationGateReason, ActorRef, BackupPriorityPolicy, BadgeOperation,
+    ConversionDeadTargetPolicy, ConversionMode, ConversionPendingDeathPolicy, DayNoteRolePayload,
+    DeathRetaliationTiming, DeathRevealMode, EffectDuration, EffectSourceDeathRevealKind,
+    EffectVisibility, FactionVoteTieBreaker, GrantKind, GrantSpec, GuardWitchSameTargetPolicy,
+    ItaSessionControlKind, ItaSessionSpec, ItaTargetAlreadyDeadPolicy, ItaVoteConflictPolicy,
+    KillStackingPolicy, Pack, PhaseKind, PhaseParity, RedirectKind, ResultMemoryOutput,
+    ResultMemoryScope, RoleModifier, StandardNarConflictFamily, SuppressionScope, TargetRef,
+    TargetSpec, TieBreaker, TriggerEvent, TriggerLoopCapPolicy, TriggerOn, TriggerRule,
+    VisibilityFamily, VoteDuelTieBreaker, VoteMethod, VoteTieBreaker, WeightPolicy, WinCondition,
+    WinFamily, Window,
 };
 use crate::state::{
     apply_events, BackupTargetRecord, BadgeRecord, DelayedDeathRecord, LogicalTime, PhaseId,
@@ -6120,7 +6121,11 @@ fn apply_backup_inheritance(
                     )
                 })
         });
-        let Some((source, inherited_role, policy, policy_detail)) = targeted.or(passive) else {
+        let candidate = match input.pack.backup_policy.effective_priority() {
+            BackupPriorityPolicy::TargetedThenPassive => targeted.or(passive),
+            BackupPriorityPolicy::PassiveThenTargeted => passive.or(targeted),
+        };
+        let Some((source, inherited_role, policy, policy_detail)) = candidate else {
             continue;
         };
         if backup.role_key == inherited_role {

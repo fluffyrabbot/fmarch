@@ -1,0 +1,171 @@
+{
+  "description": "A hybrid backup with both a passive backup tag and a targeted source inherits the targeted source when both source roles die in the same resolution under TargetedThenPassive policy.",
+  "input": {
+    "game_id": "game_demo_backup_priority_001",
+    "phase_id": "N02",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 2,
+      "phase_id": "N02",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "universal_backup",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "backup:doctor"
+          ]
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": [
+            "backup_target"
+          ]
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_5",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "backup_targets": [
+        {
+          "backup": "slot_1",
+          "source_target": "slot_2",
+          "source_role": "cop",
+          "source_action": "target_backup_n01",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mafia_kill_cop_n02",
+        "actor": "slot_3",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_2"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "mafia_kill_doctor_n02",
+        "actor": "slot_5",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_4"
+        ],
+        "phase_id": "N02",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 828283
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_3"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_4",
+        "cause": "factional_kill",
+        "attackers": [
+          "slot_5"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerConverted",
+      "payload": {
+        "target": "slot_1",
+        "new_role": "cop",
+        "new_alignment": "town",
+        "original_role": "universal_backup",
+        "original_alignment": "town",
+        "source": "slot_2"
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N02",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "factional_kill"
+          },
+          {
+            "slot_id": "slot_4",
+            "cause": "factional_kill"
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "mafia",
+        "reason": "faction mafia reaches parity (2 vs 1 others)",
+        "metadata": null
+      }
+    }
+  ]
+}

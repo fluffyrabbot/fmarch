@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 67;
+pub const SUPPORTED_IR_VERSION: u16 = 68;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -872,6 +872,8 @@ pub struct BackupPolicy {
     pub passive_effect_prefix: Tag,
     #[serde(default = "default_backup_targeted_effect")]
     pub targeted_effect: Tag,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<BackupPriorityPolicy>,
 }
 
 impl Default for BackupPolicy {
@@ -880,7 +882,26 @@ impl Default for BackupPolicy {
             enabled: false,
             passive_effect_prefix: default_backup_passive_effect_prefix(),
             targeted_effect: default_backup_targeted_effect(),
+            priority: None,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackupPriorityPolicy {
+    TargetedThenPassive,
+    PassiveThenTargeted,
+}
+
+impl Default for BackupPriorityPolicy {
+    fn default() -> Self {
+        Self::TargetedThenPassive
+    }
+}
+
+impl BackupPolicy {
+    pub fn effective_priority(&self) -> BackupPriorityPolicy {
+        self.priority.unwrap_or_default()
     }
 }
 
@@ -7352,6 +7373,13 @@ fn validate_backup_policy(
             "enabled backup policy requires ir_version >= 17",
         );
     }
+    if policy.priority.is_some() && ir_version < 68 {
+        issue(
+            issues,
+            format!("{path}.priority"),
+            "backup priority policy requires ir_version >= 68",
+        );
+    }
     if policy.passive_effect_prefix.trim().is_empty() {
         issue(
             issues,
@@ -9567,6 +9595,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if pack.backup_policy.enabled {
         require_ir(&mut required, &mut reasons, 17, "backup_policy");
     }
+    if pack.backup_policy.priority.is_some() {
+        require_ir(&mut required, &mut reasons, 68, "backup_policy.priority");
+    }
     if pack.private_channels.enabled {
         require_ir(&mut required, &mut reasons, 29, "private_channels");
     }
@@ -10195,6 +10226,13 @@ mod tests {
         let mut value = test_pack_value();
         value["backup_policy"] = json!({ "enabled": true });
         assert_versioned_pack_feature(value, 17, "backup_policy");
+
+        let mut value = test_pack_value();
+        value["backup_policy"] = json!({
+            "enabled": true,
+            "priority": "PassiveThenTargeted"
+        });
+        assert_versioned_pack_feature(value, 68, "backup_policy.priority");
 
         let mut value = test_pack_value();
         value["private_channels"] = json!({

@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 67,
+  "ir_version": 68,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2629,7 +2629,8 @@
   "backup_policy": {
     "enabled": true,
     "passive_effect_prefix": "backup:",
-    "targeted_effect": "backup_target"
+    "targeted_effect": "backup_target",
+    "priority": "TargetedThenPassive"
   },
   "visibility": {
     "Investigate": {
