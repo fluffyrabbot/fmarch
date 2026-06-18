@@ -583,7 +583,9 @@ role when that source dies.
 > `ResolvePhase`/projection-rebuild vertical. `constraints.cooldown_cycles` uses the same counter surface with
 > `counter_id = "cooldown:<template_id>"`, `cadence_policy = "cooldown"`, and
 > `phase_scope = "phase_kind"`; command validation and the resolver suppress same-phase-kind
-> attempts until the declared number of numbered cycles has elapsed. `constraints.active_from`
+> attempts until the declared number of numbered cycles has elapsed. Mafiascum
+> `long_cooldown_cop` proves a two-cycle window through pure goldens plus a
+> command/projection/rebuild vertical that rejects N02/N03 and accepts N04. `constraints.active_from`
 > models Novice/Activated gates as phase-kind/phase-number thresholds; before that threshold the
 > resolver emits `ActionInterfered.reason = "novice_inactive" | "activated_inactive"`, and command
 > validation rejects the same submissions before append. `constraints.target_state` is the

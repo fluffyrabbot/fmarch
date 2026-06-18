@@ -1406,6 +1406,29 @@
         }
       ]
     },
+    "long_cooldown_cop": {
+      "description": "Long Cooldown Cop. Must wait two matching night cycles after each Parity investigation.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "investigate_alignment",
+          "ability": "Investigate",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 20,
+            "x_shots": null,
+            "cooldown_cycles": 2
+          },
+          "mode": "Parity"
+        }
+      ]
+    },
     "uncooperative_cop": {
       "description": "Uncooperative Cop. Receives setup-defined ambiguous feedback instead of ordinary town/scum detail.",
       "alignment": "town",

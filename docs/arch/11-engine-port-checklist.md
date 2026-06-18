@@ -1288,8 +1288,11 @@ The only identity that crosses into the engine is `SlotId`.
   cooldown windows, the resolver emits `ActionUseCounted { counter_id:
   "cooldown:<template_id>", cadence_policy: "cooldown", phase_scope: "phase_kind" }`, command
   validation rejects still-cooling actions from rebuilt `action_counter` projection state, and
-  `cooldown_cop_*` goldens plus `action_submission_rejects_cadence_and_exhausted_constraints`
-  prove use, suppression, expiry, and rebuild]
+  `cooldown_cop_*` plus `long_cooldown_cop_*` goldens prove one-cycle and two-cycle use,
+  suppression, and expiry; `action_submission_rejects_cadence_and_exhausted_constraints` keeps
+  one-cycle command/rebuild coverage green, while
+  `action_submission_respects_multi_cycle_cooldown_expiry` proves N01 two-cycle use, N02/N03
+  reject-before-append, N04 acceptance, refreshed counter projection, and rebuild]
 - [x] Compulsive. [missing required night action emits interference plus action-history audit
   record; pure golden plus `host_resolve_phase_records_missing_compulsive_action` prove persisted
   `ResolutionApplied`, envelope audit, `action_history` projection, and rebuild]
@@ -1940,8 +1943,8 @@ Prioritize roles that stress the architecture:
    Indecisive different-target allowance, Roaming new-target allowance, Uncooperative ambiguous
    feedback, Disabled Endgame threshold blocking, Lazy multiple-non-town allowance,
    Weak Parity scum backlash,
-   macho protection immunity, Personal self-only targeting, and loud/announcing notifications;
-   broader cycle cooldowns are still pending outside the common mafiascum slice]
+   macho protection immunity, Personal self-only targeting, loud/announcing notifications, and
+   broader cycle-cooldown windows]
 
 Exit proof: mafiascum pack has goldens for each common interaction family and deterministic
 round-trip state folds.
@@ -2697,9 +2700,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    im-human inventory artifact reports only those 2 explicit out-of-scope unsupported parity rows,
    including zero unsupported primitive, modifier, result-event, and culture-note rows; the
    completion audit treats those explicit out-of-scope rows as visible but non-actionable and
-   blocks completion on the five partial build-order phases instead. The no-Postgres domain CI artifact
-   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 301
-   checked golden fixtures, and Rust validator totals of 453 golden-harness tests, 66
+   blocks completion on the remaining partial build-order phases instead. The no-Postgres domain CI artifact
+   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 303
+   checked golden fixtures, and Rust validator totals of 455 golden-harness tests, 66
    result-contract tests, and 146 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
@@ -2716,9 +2719,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 3 common mafiascum night parity by finishing the remaining modifier breadth in row
-6: broader cycle-cooldown proof beyond the already-covered one-shot/multi-shot x-shot, odd/even,
-target-repeat non-consecutive, Indecisive, Roaming, Uncooperative, Lazy, Weak, Macho, Personal,
-and loud/announcing surfaces. Start with a mafiascum role whose cooldown spans more than one
-matching phase-kind cycle, then prove the command path rejects the intervening matching night and
-accepts the first legal night after the declared cooldown expires.
+Continue Phase 4 persistent and generated-action systems by finishing the remaining Mark/Clear
+metadata breadth: source/phase/expiry projection metadata for persistent marks. Start with a
+focused projection/rebuild slice that records source action, phase identity, duration, visibility,
+and expiry semantics for a non-resolution Mark/Clear effect, then prove the command snapshot reads
+the structured effect record rather than only the tag index.

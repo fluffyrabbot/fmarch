@@ -1,0 +1,120 @@
+{
+  "description": "Long Cooldown Cop has a two-cycle cooldown counter from N01. N04 is the first legal matching night and records a fresh cooldown counter.",
+  "input": {
+    "game_id": "game_demo_cooldown_004",
+    "phase_id": "N04",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 4,
+      "phase_id": "N04",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "long_cooldown_cop",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ],
+      "use_counters": [
+        {
+          "counter_id": "cooldown:investigate_alignment",
+          "actor": "slot_1",
+          "template_id": "investigate_alignment",
+          "consumed_action": "sub_001",
+          "cadence_policy": "cooldown",
+          "phase_scope": "phase_kind",
+          "limit": 2,
+          "used": 1,
+          "remaining": 2,
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "sub_004",
+        "actor": "slot_1",
+        "template_id": "investigate_alignment",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N04",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 120004
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionUseCounted",
+      "payload": {
+        "counter_id": "cooldown:investigate_alignment",
+        "actor": "slot_1",
+        "template_id": "investigate_alignment",
+        "consumed_action": "sub_004",
+        "cadence_policy": "cooldown",
+        "phase_scope": "phase_kind",
+        "limit": 2,
+        "used": 1,
+        "remaining": 2,
+        "phase_id": "N04",
+        "phase_kind": "Night",
+        "phase_number": 4
+      }
+    },
+    {
+      "index": 1,
+      "kind": "InvestigationResult",
+      "payload": {
+        "investigator": "slot_1",
+        "target": "slot_3",
+        "mode": "Parity",
+        "result": "town"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N04",
+        "deaths": []
+      }
+    }
+  ]
+}

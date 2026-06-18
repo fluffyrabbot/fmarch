@@ -4293,6 +4293,28 @@ fn golden_cooldown_cop_blocks_next_cycle() {
 }
 
 #[test]
+fn golden_long_cooldown_cop_blocks_second_cycle() {
+    let golden = load_golden("long_cooldown_cop_blocks_second_cycle.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "long_cooldown_cop_blocks_second_cycle",
+    );
+}
+
+#[test]
+fn golden_long_cooldown_cop_accepts_after_second_cycle() {
+    let golden = load_golden("long_cooldown_cop_accepts_after_second_cycle.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "long_cooldown_cop_accepts_after_second_cycle",
+    );
+}
+
+#[test]
 fn golden_novice_cop_blocks_before_active() {
     let golden = load_golden("novice_cop_blocks_before_active.json");
     let got = run(&golden["input"], load_pack());

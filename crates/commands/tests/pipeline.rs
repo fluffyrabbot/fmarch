@@ -34453,6 +34453,229 @@ async fn action_submission_rejects_cadence_and_exhausted_constraints(pool: PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn action_submission_respects_multi_cycle_cooldown_expiry(pool: PgPool) {
+    let host = "host_long_cooldown";
+    let h = user(host);
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "long_cooldown_user_1", "long_cooldown_cop"),
+        ("slot_2", "long_cooldown_user_2", "mafia_goon"),
+        ("slot_3", "long_cooldown_user_3", "vanilla_townie"),
+        ("slot_4", "long_cooldown_user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("long_cooldown_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "long_cooldown_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "investigate_alignment".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("first long-cooldown action is valid");
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 8804 })
+        .await
+        .expect("host resolves first long-cooldown action");
+
+    let counters = action_counters(&pool, game).await.unwrap();
+    assert!(
+        counters.iter().any(|counter| {
+            counter.slot_id == "slot_1"
+                && counter.counter_id == "cooldown:investigate_alignment"
+                && counter.template_id == "investigate_alignment"
+                && counter.consumed_action == "long_cooldown_n01"
+                && counter.cadence_policy == "cooldown"
+                && counter.phase_scope == "phase_kind"
+                && counter.limit == 2
+                && counter.used == 1
+                && counter.remaining == 2
+                && counter.phase_id == "N01"
+                && counter.phase_kind == "Night"
+                && counter.phase_number == 1
+        }),
+        "resolved long-cooldown action should fold the declared two-cycle counter: {counters:?}"
+    );
+
+    for (phase, action_id) in [("N02", "long_cooldown_n02"), ("N03", "long_cooldown_n03")] {
+        handle(
+            &pool,
+            &h,
+            Command::OpenDayPhase {
+                game,
+                phase: phase.into(),
+            },
+        )
+        .await
+        .unwrap();
+        let err = handle(
+            &pool,
+            &user("long_cooldown_user_1"),
+            Command::SubmitAction {
+                game,
+                action_id: action_id.into(),
+                actor_slot: "slot_1".into(),
+                template_id: "investigate_alignment".into(),
+                targets: vec!["slot_2".into()],
+                grant_id: None,
+            },
+        )
+        .await
+        .expect_err("two-cycle cooldown should reject before expiry");
+        assert_eq!(err, Reject::InvalidTarget);
+    }
+    let rejected_actions: Vec<_> = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|event| event.kind == "ActionSubmitted")
+        .filter_map(|event| event.payload["action_id"].as_str().map(str::to_string))
+        .filter(|action_id| action_id == "long_cooldown_n02" || action_id == "long_cooldown_n03")
+        .collect();
+    assert!(
+        rejected_actions.is_empty(),
+        "blocked long-cooldown submissions must reject before append: {rejected_actions:?}"
+    );
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "N04".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle(
+        &pool,
+        &user("long_cooldown_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "long_cooldown_n04".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "investigate_alignment".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("two-cycle cooldown expires on the first matching night after N03");
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 8805 })
+        .await
+        .expect("host resolves expired long-cooldown action");
+
+    let n04_payload = resolution_payload(&pool, game, "N04", 8805).await;
+    let n04 = domain::validate_resolution_json(&n04_payload, domain::RESULT_VERSION)
+        .expect("long cooldown N04 ResolutionApplied validates");
+    assert!(
+        n04.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::InvestigationResult {
+                mode: domain::InvestigateMode::Parity,
+                investigator,
+                target,
+                result,
+            } if investigator == "slot_1"
+                && target == "slot_3"
+                && result == &serde_json::json!("town")
+        )),
+        "expired long-cooldown action should resolve through Command::ResolvePhase"
+    );
+
+    let counters = action_counters(&pool, game).await.unwrap();
+    assert!(
+        counters.iter().any(|counter| {
+            counter.slot_id == "slot_1"
+                && counter.counter_id == "cooldown:investigate_alignment"
+                && counter.template_id == "investigate_alignment"
+                && counter.consumed_action == "long_cooldown_n04"
+                && counter.cadence_policy == "cooldown"
+                && counter.phase_scope == "phase_kind"
+                && counter.limit == 2
+                && counter.used == 1
+                && counter.remaining == 2
+                && counter.phase_id == "N04"
+                && counter.phase_kind == "Night"
+                && counter.phase_number == 4
+        }),
+        "expired long-cooldown action should refresh the cooldown counter: {counters:?}"
+    );
+
+    let counters_before_rebuild = serde_json::to_string(&counters).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("long-cooldown projection rebuild");
+    assert!(
+        projection_audit.ok,
+        "long-cooldown projection rebuild audit drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        counters_before_rebuild,
+        serde_json::to_string(&action_counters(&pool, game).await.unwrap()).unwrap(),
+        "action_counter rebuild should preserve long-cooldown expiry proof"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn action_submission_rejects_disabled_endgame_threshold_before_append(pool: PgPool) {
     let host = "host_h";
     let h = user(host);
