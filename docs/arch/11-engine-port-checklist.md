@@ -1966,7 +1966,7 @@ round-trip state folds.
    goldens plus a Postgres two-alignment queue/effect/trace/rebuild vertical; Mafia Universe
    `town_firefighter_preempt` now reuses the `extinguish` Clear spine with alias-specific pure
    preemption golden plus a Postgres douse/clear/read-effect trace/rebuild vertical.]
-2. Mark/Clear with expiry and visibility. [partly done: pack-declared `Persistent`/`Resolution`
+2. Mark/Clear with expiry and visibility. [done for current v1 `Persistent`/`Resolution`
    duration and `Hidden`/`Public`/`Actor`/`Target`/`ActorAndTarget` visibility now drive
    Mark/Clear notifications; Mafia Universe `town_empowerer`, `mafia_empowerer`, and `empower`
    now use a hidden resolution-scoped `empowered` Mark plus `standard_nar.empower_effects`
@@ -1975,8 +1975,12 @@ round-trip state folds.
    `town_fruit_vendor`, `mafia_fruit_vendor`, Mafia Universe `send_fruit`, and Mafiascum
    `fruit_vendor`/`send_fruit` now use a target-visible resolution-scoped `fruit_received`
    Mark to emit private fruit notifications without persistent `EffectsMarked`/`slot_effects`,
-   with pure culture-pack goldens and Postgres notification/rebuild verticals; richer
-   source/phase/expiry projection metadata is still pending]
+   with pure culture-pack goldens and Postgres notification/rebuild verticals; persistent
+   `EffectsMarked` source action, phase id/kind/number, duration, and visibility are carried
+   through `EffectRecord`, `slot_effect`, projection rebuild, and command snapshots; direct
+   `EffectsMarked { duration: Resolution }` fixture/history events now expire before durable
+   `SlotState.effects`, `effect_records`, `slot_effect`, and command snapshot state, proven by
+   pure state evolution, projection/rebuild, and Postgres command snapshot tests]
 3. Motivator/grant item/extra action and private notifications. [done for pack-declared
    `Grant` actions, `ActionGranted` state/projection facts, durable `ActionGrantConsumed`
    remaining-use folds, typed `inventory:<grant_id>` counters for item spends, trace generated
@@ -2719,8 +2723,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by finishing the remaining Mark/Clear
-metadata breadth: source/phase/expiry projection metadata for persistent marks. Start with a
-focused projection/rebuild slice that records source action, phase identity, duration, visibility,
-and expiry semantics for a non-resolution Mark/Clear effect, then prove the command snapshot reads
-the structured effect record rather than only the tag index.
+Continue Phase 4 persistent and generated-action systems by finishing the remaining trigger
+fixpoint breadth under item 5. Start with one culture-specific generated-action variant that still
+lacks command/projection proof, add the smallest pack/golden shape for that variant, and prove the
+trigger trace, generated event ordering, projection rebuild, and seeded audit path through
+`ResolvePhase`.

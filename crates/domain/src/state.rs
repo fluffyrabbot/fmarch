@@ -468,24 +468,26 @@ pub fn apply_events(state: &StateSnapshot, events: &[InnerEvent]) -> StateSnapsh
                 duration,
                 visibility,
             } => {
-                if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
-                    if !slot.effects.contains(effect) {
-                        slot.effects.push(effect.clone());
+                if *duration == EffectDuration::Persistent {
+                    if let Some(slot) = next.slots.iter_mut().find(|s| &s.slot_id == target) {
+                        if !slot.effects.contains(effect) {
+                            slot.effects.push(effect.clone());
+                        }
                     }
+                    next.effect_records
+                        .retain(|record| record.effect != *effect || record.target != *target);
+                    next.effect_records.push(EffectRecord {
+                        effect: effect.clone(),
+                        target: target.clone(),
+                        source: actor.clone(),
+                        source_action: source_action.clone(),
+                        phase_id: phase_id.clone(),
+                        phase_kind: *phase_kind,
+                        phase_number: *phase_number,
+                        duration: *duration,
+                        visibility: *visibility,
+                    });
                 }
-                next.effect_records
-                    .retain(|record| record.effect != *effect || record.target != *target);
-                next.effect_records.push(EffectRecord {
-                    effect: effect.clone(),
-                    target: target.clone(),
-                    source: actor.clone(),
-                    source_action: source_action.clone(),
-                    phase_id: phase_id.clone(),
-                    phase_kind: *phase_kind,
-                    phase_number: *phase_number,
-                    duration: *duration,
-                    visibility: *visibility,
-                });
             }
             InnerEvent::EffectsCleared {
                 effect, targets, ..

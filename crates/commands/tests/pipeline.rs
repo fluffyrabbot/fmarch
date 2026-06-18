@@ -48504,6 +48504,114 @@ async fn host_resolve_phase_persists_redirect_loop_cap_trace_note(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn resolution_scoped_effects_do_not_enter_command_snapshot(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "fruit_vendor"),
+        ("slot_2", "vanilla_townie"),
+        ("slot_3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "EffectsMarked",
+            1,
+            serde_json::json!({
+                "effect": "fruit_received",
+                "target": "slot_2",
+                "actor": "slot_1",
+                "source_action": "fixture:send_fruit_n01",
+                "phase_id": "N01",
+                "phase_kind": "Night",
+                "phase_number": 1,
+                "duration": "Resolution",
+                "visibility": "Target"
+            }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+
+    let snapshot = load_engine_snapshot(&pool, game, "N01")
+        .await
+        .expect("load snapshot after resolution-scoped fixture mark");
+    let slot = snapshot
+        .slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_2")
+        .expect("slot_2 snapshot");
+    assert!(
+        slot.effects.is_empty(),
+        "resolution-scoped EffectsMarked must expire before command snapshot tag state"
+    );
+    assert!(
+        snapshot.effect_records.is_empty(),
+        "resolution-scoped EffectsMarked must expire before command snapshot metadata state"
+    );
+    assert!(
+        slot_effects(&pool, game).await.unwrap().is_empty(),
+        "resolution-scoped EffectsMarked must not project as durable slot_effect"
+    );
+
+    rebuild(&pool, game)
+        .await
+        .expect("projection rebuild after resolution-scoped fixture mark");
+    assert!(
+        slot_effects(&pool, game).await.unwrap().is_empty(),
+        "slot_effect rebuild must preserve resolution-scoped expiry"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_persists_trigger_loop_cap_trace_note(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

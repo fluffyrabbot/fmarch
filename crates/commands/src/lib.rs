@@ -3107,31 +3107,34 @@ fn current_snapshot(
                 let duration = payload_enum_or_default::<domain::EffectDuration>(ev, "duration")?;
                 let visibility =
                     payload_enum_or_default::<domain::EffectVisibility>(ev, "visibility")?;
-                let slot = slots.entry(target.clone()).or_insert(domain::SlotState {
-                    slot_id: target.clone(),
-                    role_key: String::new(),
-                    alignment: None,
-                    role_reveal: domain::RevealState::Private,
-                    alignment_reveal: domain::RevealState::Private,
-                    status: domain::SlotLifecycle::Alive,
-                    status_tags: Vec::new(),
-                    effects: Vec::new(),
-                });
-                if !slot.effects.contains(&effect) {
-                    slot.effects.push(effect.clone());
+                if duration == domain::EffectDuration::Persistent {
+                    let slot = slots.entry(target.clone()).or_insert(domain::SlotState {
+                        slot_id: target.clone(),
+                        role_key: String::new(),
+                        alignment: None,
+                        role_reveal: domain::RevealState::Private,
+                        alignment_reveal: domain::RevealState::Private,
+                        status: domain::SlotLifecycle::Alive,
+                        status_tags: Vec::new(),
+                        effects: Vec::new(),
+                    });
+                    if !slot.effects.contains(&effect) {
+                        slot.effects.push(effect.clone());
+                    }
+                    effect_records
+                        .retain(|record| record.effect != effect || record.target != target);
+                    effect_records.push(domain::EffectRecord {
+                        effect,
+                        target,
+                        source: actor,
+                        source_action,
+                        phase_id: marked_phase_id,
+                        phase_kind: marked_phase_kind,
+                        phase_number: marked_phase_number,
+                        duration,
+                        visibility,
+                    });
                 }
-                effect_records.retain(|record| record.effect != effect || record.target != target);
-                effect_records.push(domain::EffectRecord {
-                    effect,
-                    target,
-                    source: actor,
-                    source_action,
-                    phase_id: marked_phase_id,
-                    phase_kind: marked_phase_kind,
-                    phase_number: marked_phase_number,
-                    duration,
-                    visibility,
-                });
             }
             "EffectsCleared" => {
                 let effect = str_payload(ev, "effect")?;

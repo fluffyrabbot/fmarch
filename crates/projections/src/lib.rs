@@ -806,22 +806,24 @@ async fn fold_inner(
             duration,
             visibility,
         } => {
-            ensure_slot(tx, game_id, target).await?;
-            let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
-            upsert_effect(
-                tx,
-                game_id,
-                target,
-                effect,
-                actor,
-                source_action.as_deref(),
-                phase_id.as_deref(),
-                phase_kind.as_deref(),
-                phase_number.map(|number| number as i32),
-                &format!("{duration:?}"),
-                &format!("{visibility:?}"),
-            )
-            .await?;
+            if *duration == domain::EffectDuration::Persistent {
+                ensure_slot(tx, game_id, target).await?;
+                let phase_kind = phase_kind.map(|kind| format!("{kind:?}"));
+                upsert_effect(
+                    tx,
+                    game_id,
+                    target,
+                    effect,
+                    actor,
+                    source_action.as_deref(),
+                    phase_id.as_deref(),
+                    phase_kind.as_deref(),
+                    phase_number.map(|number| number as i32),
+                    &format!("{duration:?}"),
+                    &format!("{visibility:?}"),
+                )
+                .await?;
+            }
         }
         EffectsCleared {
             effect, targets, ..

@@ -300,7 +300,10 @@ state such as `commuted`) and `visibility` (`Hidden`, `Public`, `Actor`, `Target
 `EffectNotification { effect, status: "marked", audience }`; a non-hidden `Clear` emits the
 same shape with `status: "cleared"`. `ActionTemplate.effect_duration` remains as an
 action-local override during the port, but pack-level policy is the preferred authoring
-surface.
+surface. Durable state honors that expiry boundary: only `Persistent` marks fold into
+`StateSnapshot.effect_records` and projection `slot_effect` rows, while any
+`EffectsMarked { duration: Resolution }` event expires before cross-phase snapshot state and
+therefore cannot leak into a later resolver input.
 
 `Pack.investigation_results` is the pack-owned label table for base information results.
 The default Parity vocabulary remains `town` / `scum`, but a culture can rename those labels
@@ -1237,9 +1240,8 @@ browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go me
 present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
 trusted command/projection proof row that has not yet been promoted into the browser-smoke required
 needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
-and blocks completion on the five partial build-order phases: Phase 3 common mafiascum night
-parity, Phase 4 persistent/generated-action systems, Phase 5 rich day systems, Phase 6 culture
-packs, and Phase 7 operational hardening.
+and blocks completion on the four partial build-order phases: Phase 4 persistent/generated-action
+systems, Phase 5 rich day systems, Phase 6 culture packs, and Phase 7 operational hardening.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,
 operator proof-run index, projection rebuild view, resolution replay view, resolution trace view,
 host phase-control view, artifact go/no-go view, artifact retention JSON/view, projection rebuild

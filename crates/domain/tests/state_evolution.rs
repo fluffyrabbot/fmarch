@@ -374,6 +374,58 @@ fn apply_effects_mark_then_clear() {
 }
 
 #[test]
+fn apply_resolution_duration_effect_expires_without_durable_state() {
+    let state = StateSnapshot {
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        phase_id: "N01".to_string(),
+        phase_deadline: None,
+        phase_policy: load_pack().phases,
+        slots: vec![slot("a", "vanilla_townie", "town", "alive")],
+        private_channels: Vec::new(),
+        effect_records: Vec::new(),
+        action_history: Vec::new(),
+        use_counters: Vec::new(),
+        investigation_memory: Vec::new(),
+        delayed_deaths: Vec::new(),
+        visit_history: Vec::new(),
+        action_grants: Vec::new(),
+        conversion_origins: Vec::new(),
+        linked_slots: Vec::new(),
+        retaliations: Vec::new(),
+        backup_targets: Vec::new(),
+        target_lynch_win_targets: Vec::new(),
+        wolf_carry_tokens: Vec::new(),
+        wolf_beauty_marks: Vec::new(),
+        badges: Vec::new(),
+    };
+
+    let marked = apply_events(
+        &state,
+        &[InnerEvent::EffectsMarked {
+            effect: "fruit_received".to_string(),
+            target: "a".to_string(),
+            actor: "p".to_string(),
+            source_action: Some("send_fruit".to_string()),
+            phase_id: Some("N01".to_string()),
+            phase_kind: Some(PhaseKind::Night),
+            phase_number: Some(1),
+            duration: domain::EffectDuration::Resolution,
+            visibility: domain::EffectVisibility::Target,
+        }],
+    );
+
+    assert!(
+        find(&marked, "a").effects.is_empty(),
+        "resolution-scoped effects expire before the cross-phase tag index"
+    );
+    assert!(
+        marked.effect_records.is_empty(),
+        "resolution-scoped effects must not become durable effect records"
+    );
+}
+
+#[test]
 fn apply_delayed_death_queue_then_resolve() {
     let state = StateSnapshot {
         phase_kind: PhaseKind::Night,

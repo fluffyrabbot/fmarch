@@ -146,6 +146,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
             slot("slot_4", "vanilla_townie", "town"),
             slot("slot_5", "vanilla_townie", "town"),
         ],
+        private_channels: Vec::new(),
         effect_records: Vec::new(),
         action_history: Vec::new(),
         use_counters: Vec::new(),
@@ -875,6 +876,68 @@ async fn persistent_effect_projection_marks_clears_and_rebuilds(pool: sqlx::PgPo
         before_json,
         serde_json::to_string(&slot_effects(&pool, game).await.unwrap()).unwrap(),
         "slot_effect: rebuild != incremental"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn resolution_scoped_effect_projection_expires_without_slot_effect(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let applied = ResolutionApplied {
+        phase_id: "N01".into(),
+        phase_kind: PhaseKind::Night,
+        phase_number: 1,
+        run_id: "run_resolution_effect_projection".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 100,
+        counts: ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            IndexedEvent {
+                index: 0,
+                event: InnerEvent::EffectsMarked {
+                    effect: "fruit_received".into(),
+                    target: "slot_1".into(),
+                    actor: "slot_a".into(),
+                    source_action: Some("send_fruit_n01".into()),
+                    phase_id: Some("N01".into()),
+                    phase_kind: Some(PhaseKind::Night),
+                    phase_number: Some(1),
+                    duration: domain::EffectDuration::Resolution,
+                    visibility: domain::EffectVisibility::Target,
+                },
+            },
+            empty_phase_announcement(1, "N01"),
+        ],
+        started_at: 12,
+        finished_at: 13,
+    };
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(applied).unwrap(),
+            ActorId::System,
+            12,
+        )],
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        slot_effects(&pool, game).await.unwrap().is_empty(),
+        "resolution-scoped EffectsMarked must not persist into slot_effect"
+    );
+
+    rebuild(&pool, game).await.unwrap();
+    assert!(
+        slot_effects(&pool, game).await.unwrap().is_empty(),
+        "slot_effect rebuild must preserve resolution-scoped expiry"
     );
 }
 
