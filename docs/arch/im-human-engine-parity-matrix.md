@@ -134,7 +134,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | action_id | `mafiascum:follow` | `follow` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:friendly_neighbor` | `friendly_neighbor` | 1 | no | yes | yes | yes | yes | info |
 | action_id | `mafiascum:grant_item` | `grant_item` | 1 | no | yes | yes | yes | yes | schedule |
-| action_id | `mafiascum:guard_retaliate` | `bodyguard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
+| action_id | `mafiascum:guard_retaliate` | `huntsman_guard` | 1 | no | yes | yes | yes | yes | protect,guard,trigger |
 | action_id | `mafiascum:gunsmith` | `gunsmith` | 1 | no | yes | yes | yes | yes | investigate |
 | action_id | `mafiascum:hide` | `hide` | 1 | no | yes | yes | yes | yes | untargetable,trigger,mark |
 | action_id | `mafiascum:ignite` | `ignite` | 1 | no | yes | yes | yes | yes | kill; standard-NAR kill cause catalog |
@@ -505,7 +505,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:hider` | `hider` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:hooker` | `hooker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:hunter` | `hunter` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:huntsman` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:huntsman` | `huntsman` | 1 | no | yes | yes | yes | yes | Mafiascum Huntsman uses im-human guard_retaliate protect+trigger; fmarch models it as a Bodyguard-style protect source with distinct intercept and guard-retaliation causes. |
 | role_id | `mafiascum:innocent_child` | `innocent_child` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:inventor` | `inventor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:jack_of_all_trades` | `jack_of_all_trades` | 1 | no | yes | yes | yes | yes |  |

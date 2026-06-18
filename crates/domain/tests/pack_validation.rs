@@ -4175,6 +4175,35 @@ fn standard_nar_intercept_cause_policy_classifies_every_interceptor() {
 }
 
 #[test]
+fn standard_nar_guard_retaliation_policy_requires_intercept_source_and_kill_cause() {
+    let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    validate_pack(&pack_from_value(value.clone())).unwrap();
+
+    value["standard_nar"]["guard_retaliation_cause_policy"]["doctor_protect"] =
+        json!("doctor_retaliates");
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "standard_nar.guard_retaliation_cause_policy.doctor_protect",
+        "must also be an intercept source",
+    );
+    assert_issue(
+        &err,
+        "standard_nar.guard_retaliation_cause_policy.doctor_protect",
+        "must be declared in kill_cause_ids",
+    );
+
+    value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
+    value["standard_nar"]["guard_retaliation_cause_policy"]["huntsman_guard"] = json!("");
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "standard_nar.guard_retaliation_cause_policy.huntsman_guard",
+        "guard retaliation cause must not be empty",
+    );
+}
+
+#[test]
 fn standard_nar_protection_cause_policy_classifies_every_pair() {
     let mut value = serde_json::to_value(load_pack_named("mafiascum")).unwrap();
     validate_pack(&pack_from_value(value.clone())).unwrap();

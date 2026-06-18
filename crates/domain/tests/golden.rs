@@ -292,6 +292,11 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("observer"));
     assert!(pack.roles.contains_key("reporter"));
     assert!(pack.roles.contains_key("bodyguard"));
+    assert!(pack.roles.contains_key("huntsman"));
+    assert!(role_action(&pack, "huntsman", "huntsman_guard")
+        .source_ids
+        .iter()
+        .any(|source_id| source_id == "guard_retaliate"));
     assert!(pack.roles.contains_key("faith_healer"));
     assert!(pack.roles.contains_key("martyr"));
     assert!(pack.roles.contains_key("cpr_doctor"));
@@ -436,6 +441,7 @@ fn pack_deserializes() {
             "factional_kill",
             "hero_instigator_kill",
             "hunter_retaliate",
+            "huntsman_retaliation",
             "ignite",
             "janitor_kill",
             "night_kill",
@@ -729,6 +735,20 @@ fn pack_deserializes() {
             .get("bodyguard")
             .map(String::as_str),
         Some("bodyguard_intercept")
+    );
+    assert_eq!(
+        pack.standard_nar
+            .intercept_cause_policy
+            .get("huntsman_guard")
+            .map(String::as_str),
+        Some("huntsman_intercept")
+    );
+    assert_eq!(
+        pack.standard_nar
+            .guard_retaliation_cause_policy
+            .get("huntsman_guard")
+            .map(String::as_str),
+        Some("huntsman_retaliation")
     );
     assert_eq!(
         pack.standard_nar
@@ -2714,6 +2734,13 @@ fn golden_bodyguard_intercept() {
     let golden = load_golden("bodyguard_intercept.json");
     let got = run(&golden["input"], load_pack());
     assert_events_eq(&got, &expected_events(&golden), "bodyguard_intercept");
+}
+
+#[test]
+fn golden_huntsman_guard_retaliates() {
+    let golden = load_golden("huntsman_guard_retaliates.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(&got, &expected_events(&golden), "huntsman_guard_retaliates");
 }
 
 #[test]

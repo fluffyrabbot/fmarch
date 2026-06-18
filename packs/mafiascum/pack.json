@@ -653,6 +653,32 @@
         }
       ]
     },
+    "huntsman": {
+      "description": "Huntsman. Each night, protects one slot from a kill; if the target is attacked and saved, the Huntsman dies intercepting the kill and kills the attacker.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "huntsman_guard",
+          "source_ids": [
+            "guard_retaliate"
+          ],
+          "ability": "Protect",
+          "window": "Night",
+          "targets": "One",
+          "modifiers": [
+            "Bodyguard"
+          ],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": true,
+            "priority": 70,
+            "x_shots": null
+          }
+        }
+      ]
+    },
     "martyr": {
       "description": "Martyr. Each night, protects one slot from a kill; if the target is attacked and saved, the Martyr dies in the target's place through a distinct martyr-intercept attribution.",
       "alignment": "town",
@@ -2825,6 +2851,7 @@
       "StrongmanBypassesProtect",
       "KillStacking",
       "InterceptProtection",
+      "GuardRetaliation",
       "CprProtection",
       "GuardDependency",
       "HideDependency",
@@ -2855,7 +2882,8 @@
       "factional_kill"
     ],
     "bodyguard_action_ids": [
-      "bodyguard"
+      "bodyguard",
+      "huntsman_guard"
     ],
     "martyr_action_ids": [
       "martyr_protect"
@@ -2877,6 +2905,7 @@
       "factional_kill",
       "hero_instigator_kill",
       "hunter_retaliate",
+      "huntsman_retaliation",
       "ignite",
       "janitor_kill",
       "night_kill",
@@ -2899,7 +2928,11 @@
     ],
     "intercept_cause_policy": {
       "bodyguard": "bodyguard_intercept",
+      "huntsman_guard": "huntsman_intercept",
       "martyr_protect": "martyr_intercept"
+    },
+    "guard_retaliation_cause_policy": {
+      "huntsman_guard": "huntsman_retaliation"
     },
     "cpr_harm_cause_policy": {
       "cpr_protect": "cpr_protect"
@@ -3047,6 +3080,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3069,6 +3103,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3091,6 +3126,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3113,6 +3149,30 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
+          "ignite",
+          "janitor_kill",
+          "night_kill",
+          "phase_end_doom_claims",
+          "pgo_shoots_visitor",
+          "super_saint_retaliates",
+          "vengeful_retaliates",
+          "visitor_kill_marked_visitor"
+        ],
+        "bypasses": [
+          "hero_instigator_kill",
+          "strongman_kill",
+          "unstoppable_vengeful_retaliates"
+        ]
+      },
+      "huntsman_guard": {
+        "blocks": [
+          "bomb_retaliates",
+          "death_curse_retaliates",
+          "death_mark_detonates",
+          "factional_kill",
+          "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3135,6 +3195,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3157,6 +3218,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3179,6 +3241,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3203,6 +3266,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3225,6 +3289,7 @@
           "death_mark_detonates",
           "factional_kill",
           "hunter_retaliate",
+          "huntsman_retaliation",
           "ignite",
           "janitor_kill",
           "night_kill",
@@ -3297,6 +3362,7 @@
           "gunsmith",
           "hide",
           "hunter_retaliate",
+          "huntsman_guard",
           "ignite",
           "inspect_corpse",
           "investigate_alignment",
@@ -3374,6 +3440,7 @@
           "gunsmith",
           "hide",
           "hunter_retaliate",
+          "huntsman_guard",
           "ignite",
           "inspect_corpse",
           "investigate_alignment",
@@ -3452,6 +3519,7 @@
           "gunsmith",
           "hide",
           "hunter_retaliate",
+          "huntsman_guard",
           "ignite",
           "inspect_corpse",
           "investigate_alignment",
@@ -3827,6 +3895,7 @@
         "cpr_doctor",
         "hero",
         "hunter",
+        "huntsman",
         "vengeful",
         "unstoppable_vengeful_townie",
         "super_saint",

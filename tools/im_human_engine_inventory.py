@@ -2735,6 +2735,36 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "fmarch models Hero as a hidden VoteDuel trigger that kills the "
                 "instigating challenger with an unstoppable generated kill."
             )
+        elif scoped_name == "mafiascum:huntsman":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum",
+                set(),
+            )
+            canonical = "huntsman"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafiascum:huntsman_guard" in fmarch["pack_actions"]
+                and '"id": "huntsman_guard"' in fmarch["pack_text"]
+                and '"guard_retaliation_cause_policy"' in fmarch["pack_text"]
+                and '"huntsman_intercept"' in fmarch["pack_text"]
+                and '"huntsman_retaliation"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "guard_retaliation_cause" in resolver
+                and "guard_retaliation_killed_attacker" in resolver
+            )
+            golden = modeled and "huntsman_guard_retaliates" in mafiascum_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_projects_huntsman_guard_retaliation"
+                in command_tests
+            )
+            notes = (
+                "Mafiascum Huntsman uses im-human guard_retaliate protect+trigger; "
+                "fmarch models it as a Bodyguard-style protect source with distinct "
+                "intercept and guard-retaliation causes."
+            )
         elif scoped_name in {
             "mafia_universe:mafia_bomber",
             "mafia_universe:town_bomber",

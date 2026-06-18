@@ -577,6 +577,8 @@ pub struct StandardNarPolicy {
     #[serde(default)]
     pub intercept_cause_policy: BTreeMap<String, String>,
     #[serde(default)]
+    pub guard_retaliation_cause_policy: BTreeMap<String, String>,
+    #[serde(default)]
     pub cpr_harm_cause_policy: BTreeMap<String, String>,
     #[serde(default)]
     pub guard_dependency_cause_policy: BTreeMap<String, String>,
@@ -621,6 +623,7 @@ impl Default for StandardNarPolicy {
             target_state_gate_tags: Vec::new(),
             empower_effects: Vec::new(),
             intercept_cause_policy: BTreeMap::new(),
+            guard_retaliation_cause_policy: BTreeMap::new(),
             cpr_harm_cause_policy: BTreeMap::new(),
             guard_dependency_cause_policy: BTreeMap::new(),
             hide_dependency_cause_policy: BTreeMap::new(),
@@ -643,6 +646,7 @@ pub enum StandardNarConflictFamily {
     StrongmanBypassesProtect,
     KillStacking,
     InterceptProtection,
+    GuardRetaliation,
     CprProtection,
     GuardDependency,
     HideDependency,
@@ -3739,6 +3743,7 @@ fn validate_standard_nar_policy(
     validate_standard_nar_jailkeep_is_explicit_block_and_protect(issues, path, policy);
     validate_standard_nar_kill_cause_catalog(issues, path, policy, pack);
     validate_standard_nar_intercept_cause_policy(issues, path, policy, pack);
+    validate_standard_nar_guard_retaliation_cause_policy(issues, path, policy, pack);
     validate_standard_nar_cpr_harm_cause_policy(issues, path, policy, pack);
     validate_standard_nar_guard_dependency_cause_policy(issues, path, policy, pack);
     validate_standard_nar_hide_dependency_cause_policy(issues, path, policy, pack);
@@ -3860,6 +3865,9 @@ fn standard_nar_required_conflict_families(
         || !policy.martyr_action_ids.is_empty()
     {
         required.insert(StandardNarConflictFamily::InterceptProtection);
+    }
+    if !policy.guard_retaliation_cause_policy.is_empty() {
+        required.insert(StandardNarConflictFamily::GuardRetaliation);
     }
     if !policy.cpr_action_ids.is_empty() || !policy.cpr_harm_cause_policy.is_empty() {
         required.insert(StandardNarConflictFamily::CprProtection);
@@ -5243,6 +5251,14 @@ fn standard_nar_intercept_source_ids(policy: &StandardNarPolicy) -> BTreeSet<Str
         .collect()
 }
 
+fn standard_nar_guard_retaliation_source_ids(policy: &StandardNarPolicy) -> BTreeSet<String> {
+    policy
+        .guard_retaliation_cause_policy
+        .keys()
+        .cloned()
+        .collect()
+}
+
 fn standard_nar_guard_dependency_source_ids(pack: &Pack) -> BTreeSet<String> {
     standard_nar_pack_actions(pack)
         .into_iter()
@@ -5320,6 +5336,12 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
             causes.insert(trigger.id.clone());
         }
     }
+    causes.extend(
+        pack.standard_nar
+            .guard_retaliation_cause_policy
+            .values()
+            .cloned(),
+    );
     causes
 }
 
@@ -5621,6 +5643,52 @@ fn validate_standard_nar_intercept_cause_policy(
                 entry_path,
                 format!(
                     "standard_nar intercept cause `{cause}` must not reuse a direct kill cause"
+                ),
+            );
+        }
+    }
+}
+
+fn validate_standard_nar_guard_retaliation_cause_policy(
+    issues: &mut Vec<PackValidationIssue>,
+    policy_path: &str,
+    policy: &StandardNarPolicy,
+    pack: &Pack,
+) {
+    let path = format!("{policy_path}.guard_retaliation_cause_policy");
+    let retaliation_sources = standard_nar_guard_retaliation_source_ids(policy);
+    if retaliation_sources.is_empty() {
+        return;
+    }
+
+    let intercept_sources = standard_nar_intercept_source_ids(policy);
+    let declared_kill_causes = standard_nar_kill_cause_ids(pack);
+    for source_id in &retaliation_sources {
+        if !intercept_sources.contains(source_id) {
+            issue(
+                issues,
+                format!("{path}.{source_id}"),
+                format!(
+                    "standard_nar guard retaliation source `{source_id}` must also be an intercept source"
+                ),
+            );
+        }
+    }
+
+    for (source_id, cause) in &policy.guard_retaliation_cause_policy {
+        let entry_path = format!("{path}.{source_id}");
+        if cause.trim().is_empty() {
+            issue(
+                issues,
+                entry_path.clone(),
+                "standard_nar guard retaliation cause must not be empty",
+            );
+        } else if !declared_kill_causes.contains(cause) {
+            issue(
+                issues,
+                entry_path,
+                format!(
+                    "standard_nar guard retaliation cause `{cause}` must be declared in kill_cause_ids"
                 ),
             );
         }
@@ -6501,6 +6569,12 @@ fn pack_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
         causes.insert(pack.lover_policy.suicide_cause.clone());
     }
     causes.extend(pack.standard_nar.intercept_cause_policy.values().cloned());
+    causes.extend(
+        pack.standard_nar
+            .guard_retaliation_cause_policy
+            .values()
+            .cloned(),
+    );
     causes.extend(pack.standard_nar.cpr_harm_cause_policy.values().cloned());
     causes.extend(
         pack.standard_nar

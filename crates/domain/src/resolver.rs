@@ -133,6 +133,7 @@ struct ProtectionSource {
     action_id: String,
     template_id: String,
     intercept_cause: Option<String>,
+    guard_retaliation_cause: Option<String>,
     cpr_harm_cause: Option<String>,
 }
 
@@ -322,6 +323,7 @@ fn resolve_one_kill(
                         "template_id": source.template_id,
                         "intercepts": source.intercept_cause.is_some(),
                         "intercept_cause": source.intercept_cause.as_deref(),
+                        "guard_retaliation_cause": source.guard_retaliation_cause.as_deref(),
                         "cpr_harm_cause": source.cpr_harm_cause.as_deref(),
                     })
                 }).collect::<Vec<_>>(),
@@ -337,7 +339,7 @@ fn resolve_one_kill(
                 cpr_saves.insert(source.action_id.clone());
             }
         }
-        for source in protectors {
+        for source in &protectors {
             let Some(intercept_cause) = source.intercept_cause.as_deref() else {
                 continue;
             };
@@ -367,6 +369,88 @@ fn resolve_one_kill(
                 target: source.protector.clone(),
                 attacker: attacker.clone(),
                 cause: intercept_cause.to_string(),
+            });
+        }
+        for source in &protectors {
+            let Some(retaliation_cause) = source.guard_retaliation_cause.as_deref() else {
+                continue;
+            };
+            if killed.contains(attacker) {
+                if standard_nar_aggregates_kill_attackers(pack) {
+                    let _ = merge_stacked_kill_attribution(
+                        attacker,
+                        &source.protector,
+                        retaliation_cause,
+                        false,
+                        events,
+                        log,
+                        trace_decisions,
+                    );
+                }
+                continue;
+            }
+            let attacker_protectors = protections
+                .get(attacker)
+                .into_iter()
+                .flat_map(|sources| sources.iter())
+                .filter(|protector| protection_blocks_cause(pack, retaliation_cause, protector))
+                .collect::<Vec<_>>();
+            if !attacker_protectors.is_empty() {
+                trace_decisions.push(DecisionTrace {
+                    stage: "kill_resolution".to_string(),
+                    source: format!("cause:{retaliation_cause}"),
+                    outcome: "guard_retaliation_prevented_by_protection".to_string(),
+                    detail: serde_json::json!({
+                        "protected_target": target,
+                        "protector": source.protector,
+                        "attacker": attacker,
+                        "source_action": source.action_id,
+                        "template_id": source.template_id,
+                        "cause": retaliation_cause,
+                        "attacker_protectors": attacker_protectors.iter().map(|protector| {
+                            serde_json::json!({
+                                "protector": protector.protector,
+                                "action_id": protector.action_id,
+                                "template_id": protector.template_id,
+                            })
+                        }).collect::<Vec<_>>(),
+                    }),
+                });
+                events.push(InnerEvent::PlayerSaved {
+                    slot_id: attacker.clone(),
+                    reasons: vec!["protected".to_string()],
+                    sources: attacker_protectors
+                        .iter()
+                        .map(|protector| protector.protector.clone())
+                        .collect(),
+                });
+                continue;
+            }
+            killed.push(attacker.clone());
+            trace_decisions.push(DecisionTrace {
+                stage: "kill_resolution".to_string(),
+                source: format!("cause:{retaliation_cause}"),
+                outcome: "guard_retaliation_killed_attacker".to_string(),
+                detail: serde_json::json!({
+                    "protected_target": target,
+                    "protector": source.protector,
+                    "attacker": attacker,
+                    "source_action": source.action_id,
+                    "template_id": source.template_id,
+                    "cause": retaliation_cause,
+                }),
+            });
+            events.push(InnerEvent::PlayerKilled {
+                slot_id: attacker.clone(),
+                cause: retaliation_cause.to_string(),
+                attackers: vec![source.protector.clone()],
+                unstoppable: false,
+                death_reveal: DeathRevealMode::Full,
+            });
+            log.push(KillRecord {
+                target: attacker.clone(),
+                attacker: source.protector.clone(),
+                cause: retaliation_cause.to_string(),
             });
         }
     } else if let Some(reason) = bulletproof_reason(target_tags)
@@ -413,6 +497,7 @@ fn resolve_one_kill(
                             "template_id": source.template_id,
                             "intercepts": source.intercept_cause.is_some(),
                             "intercept_cause": source.intercept_cause.as_deref(),
+                            "guard_retaliation_cause": source.guard_retaliation_cause.as_deref(),
                             "cpr_harm_cause": source.cpr_harm_cause.as_deref(),
                         })
                     }).collect::<Vec<_>>(),
@@ -2014,6 +2099,48 @@ fn require_standard_nar_intercept_cause_policy(pack: &Pack) {
     }
 }
 
+fn require_standard_nar_guard_retaliation_cause_policy(pack: &Pack) {
+    if !pack.standard_nar.enabled {
+        return;
+    }
+    let intercept_sources = pack
+        .standard_nar
+        .bodyguard_action_ids
+        .iter()
+        .chain(pack.standard_nar.martyr_action_ids.iter())
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    let kill_causes = pack
+        .standard_nar
+        .kill_cause_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+
+    for (source, cause) in &pack.standard_nar.guard_retaliation_cause_policy {
+        if source.trim().is_empty() {
+            panic!(
+                "invalid standard_nar guard retaliation cause policy: source id must not be empty"
+            );
+        }
+        if !intercept_sources.contains(source.as_str()) {
+            panic!(
+                "invalid standard_nar guard retaliation cause policy: source `{source}` must also be an intercept source"
+            );
+        }
+        if cause.trim().is_empty() {
+            panic!(
+                "invalid standard_nar guard retaliation cause policy: source `{source}` must declare non-empty retaliation cause"
+            );
+        }
+        if !kill_causes.contains(cause.as_str()) {
+            panic!(
+                "invalid standard_nar guard retaliation cause policy: cause `{cause}` must be declared in kill_cause_ids"
+            );
+        }
+    }
+}
+
 fn require_standard_nar_cpr_harm_cause_policy(pack: &Pack) {
     if !pack.standard_nar.enabled {
         return;
@@ -2611,6 +2738,12 @@ fn standard_nar_derived_kill_cause_ids(pack: &Pack) -> BTreeSet<String> {
     {
         causes.insert(trigger.id.clone());
     }
+    causes.extend(
+        pack.standard_nar
+            .guard_retaliation_cause_policy
+            .values()
+            .cloned(),
+    );
     causes
 }
 
@@ -5859,6 +5992,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     require_standard_nar_team_kill_action_policy(pack);
     require_standard_nar_action_bucket_shapes(pack);
     require_standard_nar_intercept_cause_policy(pack);
+    require_standard_nar_guard_retaliation_cause_policy(pack);
     require_standard_nar_cpr_harm_cause_policy(pack);
     require_standard_nar_guard_dependency_cause_policy(pack);
     require_standard_nar_block_action_policy(pack);
@@ -6552,6 +6686,8 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     }
                     let actor = actions[idx].sub.actor.clone();
                     let intercept_cause = standard_nar_intercept_cause(pack, actions[idx].template);
+                    let guard_retaliation_cause =
+                        standard_nar_guard_retaliation_cause(pack, actions[idx].template);
                     let cpr_harm_cause = standard_nar_cpr_harm_cause(pack, actions[idx].template);
                     let guard_dependency_cause =
                         standard_nar_guard_dependency_cause(pack, actions[idx].template);
@@ -6592,6 +6728,7 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                 action_id: actions[idx].sub.action_id.clone(),
                                 template_id: actions[idx].template.id.clone(),
                                 intercept_cause: intercept_cause.clone(),
+                                guard_retaliation_cause: guard_retaliation_cause.clone(),
                                 cpr_harm_cause: cpr_harm_cause.clone(),
                             });
                         if let Some(cause) = guard_dependency_cause.clone() {
@@ -8244,6 +8381,9 @@ fn standard_nar_required_conflict_families(pack: &Pack) -> BTreeSet<StandardNarC
     {
         required.insert(StandardNarConflictFamily::InterceptProtection);
     }
+    if !policy.guard_retaliation_cause_policy.is_empty() {
+        required.insert(StandardNarConflictFamily::GuardRetaliation);
+    }
     if !policy.cpr_action_ids.is_empty() || !policy.cpr_harm_cause_policy.is_empty() {
         required.insert(StandardNarConflictFamily::CprProtection);
     }
@@ -8327,6 +8467,17 @@ fn standard_nar_intercept_cause(pack: &Pack, template: &ActionTemplate) -> Optio
     }
     if template.has_modifier(Modifier::Martyr) {
         return Some("martyr_intercept".to_string());
+    }
+    None
+}
+
+fn standard_nar_guard_retaliation_cause(pack: &Pack, template: &ActionTemplate) -> Option<String> {
+    if pack.standard_nar.enabled {
+        return pack
+            .standard_nar
+            .guard_retaliation_cause_policy
+            .get(&template.id)
+            .cloned();
     }
     None
 }

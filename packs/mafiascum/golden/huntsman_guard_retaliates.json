@@ -1,0 +1,150 @@
+{
+  "description": "Huntsman guards slot_3 while Mafia Goon attacks slot_3. The protected target is saved, the Huntsman dies intercepting the kill, and the attacker dies to guard retaliation.",
+  "input": {
+    "game_id": "game_demo_huntsman_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "mafia_goon",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "huntsman",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_4",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "kill_001",
+        "actor": "slot_1",
+        "template_id": "factional_kill",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "guard_001",
+        "actor": "slot_2",
+        "template_id": "huntsman_guard",
+        "targets": [
+          "slot_3"
+        ],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 727272
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PlayerSaved",
+      "payload": {
+        "slot_id": "slot_3",
+        "reasons": [
+          "protected"
+        ],
+        "sources": [
+          "slot_2"
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_2",
+        "cause": "huntsman_intercept",
+        "attackers": [
+          "slot_1"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PlayerKilled",
+      "payload": {
+        "slot_id": "slot_1",
+        "cause": "huntsman_retaliation",
+        "attackers": [
+          "slot_2"
+        ],
+        "unstoppable": false
+      }
+    },
+    {
+      "index": 3,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": [
+          {
+            "slot_id": "slot_2",
+            "cause": "huntsman_intercept"
+          },
+          {
+            "slot_id": "slot_1",
+            "cause": "huntsman_retaliation"
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "town",
+        "reason": "all factions other than town eliminated (2 alive)",
+        "metadata": null
+      }
+    }
+  ]
+}

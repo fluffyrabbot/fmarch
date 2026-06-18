@@ -1112,6 +1112,176 @@ async fn host_resolve_phase_carries_mafia_universe_town_strongman_pierce(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_huntsman_guard_retaliation(pool: PgPool) {
+    let host = user("host_huntsman_guard");
+    let game = Uuid::new_v4();
+
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "huntsman_user_1", "mafia_goon"),
+        ("slot_2", "huntsman_user_2", "huntsman"),
+        ("slot_3", "huntsman_user_3", "doctor"),
+        ("slot_4", "huntsman_user_4", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("huntsman_user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "mafia_kill_doctor_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("mafia submits kill against Huntsman ward");
+    handle(
+        &pool,
+        &user("huntsman_user_2"),
+        Command::SubmitAction {
+            game,
+            action_id: "huntsman_guard_doctor_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "huntsman_guard".into(),
+            targets: vec!["slot_3".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Huntsman guards the kill target");
+
+    let ack = handle(&pool, &host, Command::ResolvePhase { game, seed: 727272 })
+        .await
+        .expect("host resolves Huntsman guard retaliation");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "Huntsman resolution should append ResolutionApplied, ResolutionTrace, and ThreadLocked"
+    );
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 727272).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Huntsman guard-retaliation ResolutionApplied validates");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerSaved { slot_id, sources, .. }
+            if slot_id == "slot_3" && sources == &vec!["slot_2".to_string()]
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_2"
+            && cause == "huntsman_intercept"
+            && attackers == &vec!["slot_1".to_string()]
+            && !*unstoppable
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_1"
+            && cause == "huntsman_retaliation"
+            && attackers == &vec!["slot_2".to_string()]
+            && !*unstoppable
+    )));
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    for (slot_id, alive) in [("slot_1", false), ("slot_2", false), ("slot_3", true)] {
+        assert_eq!(
+            slots
+                .iter()
+                .find(|slot| slot.slot_id == slot_id)
+                .expect("Huntsman projection slot")
+                .alive,
+            alive,
+            "{slot_id} alive projection should match Huntsman outcome"
+        );
+    }
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Huntsman guard-retaliation audit");
+    assert!(
+        audit.ok,
+        "Huntsman guard-retaliation audit drifted: {audit:?}"
+    );
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Huntsman guard-retaliation deaths"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
