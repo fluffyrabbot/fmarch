@@ -2178,7 +2178,7 @@ without recomputing rules client-side.
 
 ### Phase 6 - Culture packs and policy breadth
 
-1. Mafia Universe. [partly done: ITA `ita_shot` is modeled in `packs/mafia_universe`,
+1. Mafia Universe. [done: ITA `ita_shot` is modeled in `packs/mafia_universe`,
    covered by a golden and result-schema events, proven through a command/projection rebuild
    vertical, declares pack-owned `ResolveShotsBeforeVote` conflict policy, and now covered by a
    six-seed generated D01 replay lane with mixed deterministic hit/miss outcomes plus
@@ -3253,7 +3253,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 6 by auditing the Mafia Universe culture-pack row against its focused proof
-surfaces. Separate already-proven ITA/day-note/prompt/default proof from remaining culture-policy
-breadth, and promote only the pack, linter, parity-matrix, golden, result-schema, and playable
-vertical claims that current evidence proves.
+Continue Phase 6 by auditing the Chinese structured werewolf culture-pack row against its focused
+proof surfaces. Separate already-proven Prophet, Wolf/Witch/Guard/Cupid/Hunter/Sheriff/Knight,
+White Wolf, Wolf Beauty, Idiot, and generated D01/N01 proof from any remaining culture-policy
+breadth, and promote only the linter, parity-matrix, golden, result-schema, and playable vertical
+claims that current evidence proves.

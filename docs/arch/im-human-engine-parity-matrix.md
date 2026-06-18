@@ -335,7 +335,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | result_event_kind | `ita.session.closed` | `ItaSessionClosed` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.opened` | `ItaSessionOpened` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.session.updated` | `ItaSessionUpdated` | 1 | no | yes | yes | yes | yes |  |
-| result_event_kind | `ita.shot.buffered` | `ItaShotBuffered` | 1 | no | yes | yes | yes | yes | pack-declared ITA session buffer delay emits canonical `ItaShotBuffered`, defers same-pass queue/resolve/kill, and releases from folded state in a later command-resolved phase |
+| result_event_kind | `ita.shot.buffered` | `ItaShotBuffered` | 1 | no | yes | yes | yes | yes | pack-declared ITA session buffer delay emits canonical `ItaShotBuffered` and defers same-pass queue/resolve/kill; later release mechanics are covered from folded state in a later command-resolved phase |
 | result_event_kind | `ita.shot.invalidated` | `ItaShotInvalidated` | 1 | no | yes | yes | yes | yes | queued and buffered-release ITA shots at a target killed earlier in the same session emit canonical `ItaShotInvalidated` with `reason=target_dead` and `invalidated_by` pointing at the killing action |
 | result_event_kind | `ita.shot.queued` | `ItaShotQueued` | 1 | no | yes | yes | yes | yes |  |
 | result_event_kind | `ita.shot.refunded` | `ItaShotRefunded` | 1 | no | yes | yes | yes | yes | pack-declared `resolution_policy.on_target_already_dead=REFUND_SHOT` emits canonical `ItaShotRefunded` with `reason=target_dead`, HP metadata, and quota-neutral refund counters when a queued ITA shot executes into an already-dead target |
@@ -377,7 +377,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:innocent_child` | `innocent_child` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:lover` | `lover` | 1 | no | yes | yes | yes | yes | Passive Lover role from the Mafia Universe catalog; fmarch keeps the setup pair as folded PlayersLinked state and uses lover_policy for the linked-death cascade. |
 | role_id | `mafia_universe:mafia_alignment_cop` | `mafia_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_alignment_oracle` | `mafia_alignment_oracle` | 1 | no | yes | yes | no | yes |  |
+| role_id | `mafia_universe:mafia_alignment_oracle` | `mafia_alignment_oracle` | 1 | no | yes | yes | yes | yes | Mafia Universe mafia_alignment_oracle marks a target with hidden `alignment_oracle_mark` state; the family goldens cover the mark plus source-death public reveal, and the command vertical proves the folded mark/reveal/rebuild path. |
 | role_id | `mafia_universe:mafia_arsonist` | `mafia_arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_bodyguard` | `mafia_bodyguard` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_bomber` | `mafia_bomber` | 1 | no | yes | yes | yes | yes | Passive night_retribution role from the Mafia Universe catalog; fmarch folds it as a hidden bomb role effect consumed by the bomb_retaliates Kill trigger. |
@@ -410,7 +410,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:mafia_power_role_killer` | `mafia_power_role_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_redirector` | `mafia_redirector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_role_cop` | `mafia_role_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_role_oracle` | `mafia_role_oracle` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:mafia_role_oracle` | `mafia_role_oracle` | 1 | no | yes | yes | yes | yes | Mafia Universe mafia_role_oracle marks a target with hidden `role_oracle_mark` state; the family goldens cover the mark plus source-death public reveal, and the command vertical proves the folded mark/reveal/rebuild path. |
 | role_id | `mafia_universe:mafia_roleblocker` | `mafia_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_rolestopper` | `mafia_rolestopper` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_strongman` | `mafia_strongman` | 1 | no | yes | yes | yes | yes |  |
@@ -426,7 +426,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:neighbor` | `neighbor` | 1 | no | yes | yes | yes | yes | Passive private-chat role from the Mafia Universe catalog; fmarch models it as setup-time private_channels metadata. Resolver golden output is not applicable, so command/projection coverage is the proof surface. |
 | role_id | `mafia_universe:serial_killer` | `serial_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_alignment_cop` | `town_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_alignment_oracle` | `town_alignment_oracle` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:town_alignment_oracle` | `town_alignment_oracle` | 1 | no | yes | yes | yes | yes | Mafia Universe town_alignment_oracle marks a target with hidden `alignment_oracle_mark` state; the family goldens cover the mark plus source-death public reveal, and the command vertical proves the folded mark/reveal/rebuild path. |
 | role_id | `mafia_universe:town_arsonist` | `town_arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_bodyguard` | `town_bodyguard` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_bomber` | `town_bomber` | 1 | no | yes | yes | yes | yes | Passive night_retribution role from the Mafia Universe catalog; fmarch folds it as a hidden bomb role effect consumed by the bomb_retaliates Kill trigger. |
@@ -459,7 +459,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_power_role_killer` | `town_power_role_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_redirector` | `town_redirector` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_role_cop` | `town_role_cop` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_role_oracle` | `town_role_oracle` | 1 | no | yes | yes | yes | yes |  |
+| role_id | `mafia_universe:town_role_oracle` | `town_role_oracle` | 1 | no | yes | yes | yes | yes | Mafia Universe town_role_oracle marks a target with hidden `role_oracle_mark` state; the family goldens cover the mark plus source-death public reveal, and the command vertical proves the folded mark/reveal/rebuild path. |
 | role_id | `mafia_universe:town_roleblocker` | `town_roleblocker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_rolestopper` | `town_rolestopper` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_strongman` | `town_strongman` | 1 | no | yes | yes | yes | yes | Mafia Universe Town Strongman is a town-aligned strongman_kill role with kill,pierce semantics; fmarch maps it to the existing Strongman kill modifier and standard-NAR protection bypass policy. |

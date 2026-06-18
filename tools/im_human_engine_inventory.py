@@ -937,6 +937,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         treestump_policy = pack.get("treestump_policy")
         if isinstance(treestump_policy, dict) and treestump_policy.get("enabled") is True:
             pack_policies.add(f"{pack_name}:treestump_policy")
+        effect_source_death_reveals = pack.get("effect_source_death_reveals")
+        if isinstance(effect_source_death_reveals, list) and effect_source_death_reveals:
+            pack_policies.add(f"{pack_name}:effect_source_death_reveals")
         conversion_policy = pack.get("conversion_policy")
         if isinstance(conversion_policy, dict):
             on_dead_target = conversion_policy.get("on_dead_target")
@@ -2448,7 +2451,8 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             )
             notes = (
                 "pack-declared ITA session buffer delay emits canonical `ItaShotBuffered` "
-                "and defers same-pass queue/resolve/kill; later release mechanics remain pending"
+                "and defers same-pass queue/resolve/kill; later release mechanics are "
+                "covered from folded state in a later command-resolved phase"
             )
         elif name == "ita.shot.invalidated":
             modeled = (
@@ -2475,10 +2479,9 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "ItaShotInvalidated" in command_tests
             )
             notes = (
-                "queued ITA shots at a target killed earlier in the same session emit "
-                "canonical `ItaShotInvalidated` with `reason=target_dead` and "
-                "`invalidated_by` pointing at the killing action; buffered release mechanics "
-                "remain pending"
+                "queued and buffered-release ITA shots at a target killed earlier in the same "
+                "session emit canonical `ItaShotInvalidated` with `reason=target_dead` and "
+                "`invalidated_by` pointing at the killing action"
             )
         elif name == "ita.shot.refunded":
             modeled = (
@@ -2943,6 +2946,58 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "Passive night_retribution role from the Mafia Universe catalog; "
                 "fmarch folds it as a hidden bomb role effect consumed by the "
                 "bomb_retaliates Kill trigger."
+            )
+        elif scoped_name in {
+            "mafia_universe:mafia_alignment_oracle",
+            "mafia_universe:town_alignment_oracle",
+            "mafia_universe:mafia_role_oracle",
+            "mafia_universe:town_role_oracle",
+        }:
+            mu_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafia_universe",
+                set(),
+            )
+            is_alignment = "alignment_oracle" in name
+            effect = "alignment_oracle_mark" if is_alignment else "role_oracle_mark"
+            reveal = "Alignment" if is_alignment else "Role"
+            source_death_golden = (
+                "alignment_oracle_source_death_reveals_target"
+                if is_alignment
+                else "role_oracle_source_death_reveals_target"
+            )
+            mark_golden = (
+                "alignment_oracle_marks_target"
+                if is_alignment
+                else "role_oracle_marks_target"
+            )
+            command_selector = (
+                "host_resolve_phase_carries_mafia_universe_alignment_oracle_reveal"
+                if is_alignment
+                else "host_resolve_phase_carries_mafia_universe_role_oracle_reveal"
+            )
+            canonical = name
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and f'"effect": "{effect}"' in fmarch["pack_text"]
+                and f'"reveal": "{reveal}"' in fmarch["pack_text"]
+                and "mafia_universe:effect_source_death_reveals" in fmarch["pack_policies"]
+            )
+            implemented = (
+                modeled
+                and "apply_effect_source_death_reveals" in resolver
+                and "InnerEvent::AlignmentRevealed" in resolver
+                and "InnerEvent::RoleRevealed" in resolver
+            )
+            golden = (
+                modeled
+                and mark_golden in mu_golden_names
+                and source_death_golden in mu_golden_names
+            )
+            integrated = implemented and command_selector in command_tests
+            notes = (
+                f"Mafia Universe {name} marks a target with hidden `{effect}` state; "
+                "the family goldens cover the mark plus source-death public reveal, "
+                "and the command vertical proves the folded mark/reveal/rebuild path."
             )
         elif scoped_name in {
             "mafia_universe:mason",

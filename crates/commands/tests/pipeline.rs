@@ -39558,7 +39558,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_vigilante_kills(pool: PgP
                 && post.author_user.as_deref() == Some("system")
                 && post
                     .body
-                    .contains("Phase D01 announcement: slot_4 (day_vigilante_kill), slot_3 (day_vigilante_kill).")
+                    .contains("Phase D01 announcement: slot_4 (day_vigilante_kill; template: mafia_universe_day_action_death_v1; audience: public), slot_3 (day_vigilante_kill; template: mafia_universe_day_action_death_v1; audience: public); template: mafia_universe_day_death_v1; audience: public.")
         }),
         "thread projection should publish the day-shot deaths"
     );
@@ -39798,7 +39798,7 @@ async fn host_resolve_phase_carries_mafia_universe_day_desperado_failback(pool: 
             post.phase_id == "D01"
                 && post.author_user.as_deref() == Some("system")
                 && post.body.contains(
-                    "Phase D01 announcement: slot_4 (day_desperado), slot_2 (day_desperado).",
+                    "Phase D01 announcement: slot_4 (day_desperado), slot_2 (day_desperado); template: mafia_universe_day_death_v1; audience: public.",
                 )
         }),
         "thread projection should publish target death plus failback self-death"
@@ -45420,13 +45420,17 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         "MU healer aliases must consume both delayed death queues"
     );
     let notices = player_notifications(&pool, game).await.unwrap();
+    let clear_notices = notices
+        .iter()
+        .filter(|notice| notice.effect == "poisoned" && notice.status == "cleared")
+        .collect::<Vec<_>>();
     assert_eq!(
-        notices.len(),
+        clear_notices.len(),
         2,
-        "MU Inventor grants should project exactly one private grant notice per target"
+        "MU healer aliases should project exactly one private clear notice per target"
     );
     assert!(
-        notices.iter().any(|notice| {
+        clear_notices.iter().any(|notice| {
             notice.audience_slot == "slot_3"
                 && notice.effect == "poisoned"
                 && notice.status == "cleared"
@@ -45434,7 +45438,7 @@ async fn host_resolve_phase_carries_mafia_universe_healer_alias_cure(pool: PgPoo
         "Town Healer alias cure should project a target-visible clear notification"
     );
     assert!(
-        notices.iter().any(|notice| {
+        clear_notices.iter().any(|notice| {
             notice.audience_slot == "slot_4"
                 && notice.effect == "poisoned"
                 && notice.status == "cleared"
