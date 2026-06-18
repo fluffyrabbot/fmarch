@@ -2131,7 +2131,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    while Postgres command/projection and minimizer proof covers the revealed-role
    template/audience/window path plus day-death trailer/per-cause metadata through replay audit,
    thread projection, and rebuild.]
-6. Wolf self-destruct / day-death culture mechanics. [partly done: v10 `SelfDestruct`
+6. Wolf self-destruct / day-death culture mechanics. [done: v10 `SelfDestruct`
    emits `WolfSelfDestructed` plus paired `PlayerKilled` events for Chinese structured White
    Wolf King; v11 `WolfCarryQueued`/`WolfCarryUsed` queues the White Wolf carry token and
    consumes it on the next two-target wolf faction kill; v12 `WolfBeautyMarked`/
@@ -3252,8 +3252,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 by auditing the Wolf self-destruct / day-death culture mechanics row against its
-focused proof surfaces. Separate stale `[partly done]` wording from true open Chinese
-self-destruct, carry, Wolf Beauty, Guard/Witch, Hunter, and Idiot policy work, then refresh only
-the checklist/parity truth surfaces backed by current goldens, command/projection proof, and
-completion-audit evidence.
+Continue Phase 5 by auditing the PK/revote/no-majority host prompts row against its focused proof
+surfaces. Keep the skipped day/night scheduling sentence as real open work unless current command
+and projection evidence proves automated scheduling now exists; otherwise split completed prompt
+resolution mechanics from that remaining operational scheduler gap without promoting the whole
+Phase 5 claim.

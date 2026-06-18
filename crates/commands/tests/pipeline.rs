@@ -7579,7 +7579,7 @@ async fn host_resolve_phase_carries_mafiascum_white_wolf_king_dual_window(pool: 
             post.phase_id == "D01"
                 && post.author_user.as_deref() == Some("system")
                 && post.body.contains(
-                    "Phase D01 announcement: slot_2 (self_destruct), slot_1 (self_destruct).",
+                    "Phase D01 announcement: slot_2 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public), slot_1 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public); template: mafiascum_day_death_v1; audience: public.",
                 )
         }),
         "thread projection should publish White Wolf King self-destruct deaths"
@@ -34214,6 +34214,7 @@ async fn host_resolve_phase_carries_guard_witch_poison_policy(pool: PgPool) {
                         "template_id": "night_guard",
                         "intercepts": false,
                         "intercept_cause": null,
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -34435,6 +34436,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
                             "template_id": "night_guard",
                             "intercepts": false,
                             "intercept_cause": null,
+                            "guard_retaliation_cause": null,
                             "cpr_harm_cause": null
                         },
                         {
@@ -34443,6 +34445,7 @@ async fn host_resolve_phase_carries_guard_witch_double_save_policy(pool: PgPool)
                             "template_id": "heal_potion",
                             "intercepts": false,
                             "intercept_cause": null,
+                            "guard_retaliation_cause": null,
                             "cpr_harm_cause": null
                         }
                     ]),
@@ -34651,6 +34654,7 @@ async fn host_resolve_phase_carries_chinese_guard_self_save_night_one_policy(poo
                         "template_id": "night_guard",
                         "intercepts": false,
                         "intercept_cause": null,
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -34883,7 +34887,7 @@ async fn host_resolve_phase_carries_guard_witch_killtarget_policy(pool: PgPool) 
 
     let slots = slot_state(&pool, game).await.unwrap();
     assert!(
-        slots
+        !slots
             .iter()
             .find(|slot| slot.slot_id == "slot_3")
             .unwrap()

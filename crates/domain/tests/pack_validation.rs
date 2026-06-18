@@ -1321,7 +1321,7 @@ fn precedence_order_contract_fixture_is_valid_and_non_legacy() {
 fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
     let pack = load_pack_named("test_guard_witch_killtarget");
     validate_pack(&pack).unwrap();
-    assert_eq!(pack.ir_version, 13);
+    assert_eq!(pack.ir_version, 46);
     assert!(pack.guard_policy.enabled);
 }
 
