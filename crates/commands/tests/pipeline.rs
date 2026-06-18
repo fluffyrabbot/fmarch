@@ -10138,27 +10138,9 @@ async fn action_submission_rejects_day_specific_action_in_night_window(pool: PgP
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "applied_drift", 778).await;
-
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("temporarily disable append-only guard for synthetic drift");
-    let update = sqlx::query(
-        "UPDATE events \
-         SET payload = jsonb_set(payload, '{events,0,payload,winner}', '\"slot_2\"'::jsonb, false) \
-         WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .execute(&mut *tx)
-    .await
-    .expect("perturb stored ResolutionApplied winner");
-    assert_eq!(update.rows_affected(), 1, "one applied envelope perturbed");
-    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("restore append-only guard after synthetic drift");
-    tx.commit().await.expect("commit drift perturbation");
+    let (winner_event_index, expected_winner) =
+        perturb_stored_resolution_winner(&pool, game, "slot_2").await;
+    let winner_path = format!("$.events[{winner_event_index}].payload.winner");
 
     let audit = audit_resolution_envelopes(&pool, game)
         .await
@@ -10179,11 +10161,10 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
         .diffs
         .iter()
         .find(|diff| {
-            diff.envelope == ResolutionEnvelopeAuditEnvelope::Applied
-                && diff.path == "$.events[0].payload.winner"
+            diff.envelope == ResolutionEnvelopeAuditEnvelope::Applied && diff.path == winner_path
         })
         .unwrap_or_else(|| panic!("winner drift diff missing: {phase:#?}"));
-    assert_eq!(diff.expected, serde_json::json!("slot_3"));
+    assert_eq!(diff.expected, serde_json::json!(expected_winner));
     assert_eq!(diff.actual, serde_json::json!("slot_2"));
     assert_eq!(audit.summary.first_drift_paths.len(), 1);
     assert_eq!(audit.summary.first_drift_paths[0].phase_id, "D01");
@@ -10191,15 +10172,13 @@ async fn audit_resolution_reports_structural_drift_path_expected_and_actual(pool
         audit.summary.first_drift_paths[0].envelope,
         ResolutionEnvelopeAuditEnvelope::Applied
     );
-    assert_eq!(
-        audit.summary.first_drift_paths[0].path,
-        "$.events[0].payload.winner"
-    );
+    assert_eq!(audit.summary.first_drift_paths[0].path, winner_path);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "trace_drift", 779).await;
+    let expected_outcome = stored_first_trace_decision_outcome(&pool, game).await;
 
     let mut tx = pool.begin().await.unwrap();
     sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
@@ -10245,7 +10224,7 @@ async fn audit_resolution_reports_trace_drift_path_expected_and_actual(pool: PgP
                 && diff.path == "$.decisions[0].outcome"
         })
         .unwrap_or_else(|| panic!("trace drift diff missing: {phase:#?}"));
-    assert_eq!(diff.expected, serde_json::json!("4 inner events validated"));
+    assert_eq!(diff.expected, serde_json::json!(expected_outcome));
     assert_eq!(diff.actual, serde_json::json!("tampered_trace"));
     assert_eq!(audit.summary.first_drift_paths.len(), 1);
     assert_eq!(
@@ -10352,31 +10331,9 @@ async fn audit_resolution_cli_exits_zero_and_prints_json_for_matched_game(pool: 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn audit_resolution_cli_exits_nonzero_and_prints_diffs_for_drift(pool: PgPool) {
     let game = setup_resolved_audit_drift_game(&pool, "cli_drift", 782).await;
-
-    let mut tx = pool.begin().await.unwrap();
-    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("temporarily disable append-only guard for CLI drift");
-    let update = sqlx::query(
-        "UPDATE events \
-         SET payload = jsonb_set(payload, '{events,0,payload,winner}', '\"slot_2\"'::jsonb, false) \
-         WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
-    )
-    .bind(game)
-    .execute(&mut *tx)
-    .await
-    .expect("perturb stored ResolutionApplied winner for CLI");
-    assert_eq!(
-        update.rows_affected(),
-        1,
-        "one applied envelope perturbed for CLI"
-    );
-    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
-        .execute(&mut *tx)
-        .await
-        .expect("restore append-only guard after CLI drift");
-    tx.commit().await.expect("commit CLI drift perturbation");
+    let (winner_event_index, expected_winner) =
+        perturb_stored_resolution_winner(&pool, game, "slot_2").await;
+    let winner_path = format!("$.events[{winner_event_index}].payload.winner");
 
     let output = run_audit_resolution_cli(&pool, game).await;
     assert!(
@@ -10405,17 +10362,97 @@ async fn audit_resolution_cli_exits_nonzero_and_prints_diffs_for_drift(pool: PgP
     );
     assert_eq!(
         report["summary"]["first_drift_paths"][0]["path"],
-        "$.events[0].payload.winner"
+        winner_path
     );
     assert_eq!(report["phases"][0]["status"], "drifted");
     let diff = report["phases"][0]["diffs"]
         .as_array()
         .expect("drift report has diffs")
         .iter()
-        .find(|diff| diff["envelope"] == "applied" && diff["path"] == "$.events[0].payload.winner")
+        .find(|diff| diff["envelope"] == "applied" && diff["path"] == winner_path)
         .unwrap_or_else(|| panic!("CLI applied drift diff missing: {report:#?}"));
-    assert_eq!(diff["expected"], "slot_3");
+    assert_eq!(diff["expected"], expected_winner);
     assert_eq!(diff["actual"], "slot_2");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_resolution_diff_artifact_cli_writes_matched_and_drift_reports(pool: PgPool) {
+    let matched_game = setup_resolved_audit_drift_game(&pool, "artifact_matched", 783).await;
+    let matched_path = test_operator_proof_artifact_path("resolution-diff-matched", matched_game);
+    let _ = fs::remove_file(&matched_path);
+
+    let matched_output =
+        run_audit_resolution_diff_artifact_cli(&pool, matched_game, &matched_path).await;
+    assert!(
+        matched_output.status.success(),
+        "matched resolution diff artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&matched_output.stdout),
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    assert!(
+        matched_output.stderr.is_empty(),
+        "matched resolution diff artifact should not write stderr: {}",
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    let matched_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&matched_path).expect("matched artifact report exists"))
+            .expect("matched artifact report is JSON");
+    let matched_stdout: serde_json::Value =
+        serde_json::from_slice(&matched_output.stdout).expect("matched artifact stdout is JSON");
+    assert_eq!(matched_stdout, matched_file);
+    assert_eq!(matched_file["ok"], true);
+    assert_eq!(
+        matched_file["artifact_path"].as_str(),
+        Some(matched_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(matched_file["audited_phase_count"], 1);
+    assert_eq!(matched_file["matched_phase_count"], 1);
+    assert_eq!(matched_file["drifted_phase_count"], 0);
+    assert_eq!(matched_file["diff_count"], 0);
+    assert_eq!(matched_file["phases"][0]["status"], "matched");
+
+    let drift_game = setup_resolved_audit_drift_game(&pool, "artifact_drift", 784).await;
+    let (winner_event_index, expected_winner) =
+        perturb_stored_resolution_winner(&pool, drift_game, "slot_2").await;
+    let winner_path = format!("$.events[{winner_event_index}].payload.winner");
+    let drift_path = test_operator_proof_artifact_path("resolution-diff-drift", drift_game);
+    let _ = fs::remove_file(&drift_path);
+
+    let drift_output = run_audit_resolution_diff_artifact_cli(&pool, drift_game, &drift_path).await;
+    assert!(
+        !drift_output.status.success(),
+        "drifted resolution diff artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stdout),
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&drift_output.stderr)
+            .contains("resolution diff artifact found drift"),
+        "drift artifact stderr should name drift\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    let drift_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&drift_path).expect("drift artifact report exists"))
+            .expect("drift artifact report is JSON");
+    let drift_stdout: serde_json::Value =
+        serde_json::from_slice(&drift_output.stdout).expect("drift artifact stdout is JSON");
+    assert_eq!(drift_stdout, drift_file);
+    assert_eq!(drift_file["ok"], false);
+    assert_eq!(
+        drift_file["artifact_path"].as_str(),
+        Some(drift_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(drift_file["audited_phase_count"], 1);
+    assert_eq!(drift_file["matched_phase_count"], 0);
+    assert_eq!(drift_file["drifted_phase_count"], 1);
+    assert_eq!(drift_file["diff_count"], 1);
+    assert_eq!(drift_file["first_drift_paths"][0]["path"], winner_path);
+    assert_eq!(drift_file["phases"][0]["status"], "drifted");
+    assert_eq!(
+        drift_file["phases"][0]["diffs"][0]["expected"],
+        expected_winner
+    );
+    assert_eq!(drift_file["phases"][0]["diffs"][0]["actual"], "slot_2");
 }
 
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
@@ -10503,6 +10540,80 @@ async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed:
     game
 }
 
+async fn perturb_stored_resolution_winner(
+    pool: &PgPool,
+    game: Uuid,
+    winner: &str,
+) -> (usize, String) {
+    let (winner_event_index, expected_winner) = stored_win_reached_event_index(pool, game).await;
+    let jsonb_path = format!("{{events,{winner_event_index},payload,winner}}");
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("ALTER TABLE events DISABLE TRIGGER events_no_update")
+        .execute(&mut *tx)
+        .await
+        .expect("temporarily disable append-only guard for synthetic applied drift");
+    let update = sqlx::query(
+        "UPDATE events \
+         SET payload = jsonb_set(payload, $2::text[], to_jsonb($3::text), false) \
+         WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .bind(&jsonb_path)
+    .bind(winner)
+    .execute(&mut *tx)
+    .await
+    .expect("perturb stored ResolutionApplied winner");
+    assert_eq!(update.rows_affected(), 1, "one applied envelope perturbed");
+    sqlx::query("ALTER TABLE events ENABLE TRIGGER events_no_update")
+        .execute(&mut *tx)
+        .await
+        .expect("restore append-only guard after synthetic applied drift");
+    tx.commit()
+        .await
+        .expect("commit applied drift perturbation");
+    (winner_event_index, expected_winner)
+}
+
+async fn stored_win_reached_event_index(pool: &PgPool, game: Uuid) -> (usize, String) {
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .expect("stored ResolutionApplied payload");
+    let applied = domain::validate_resolution_json(&payload, domain::RESULT_VERSION)
+        .expect("stored ResolutionApplied validates");
+    applied
+        .events
+        .iter()
+        .enumerate()
+        .find_map(|(index, indexed)| match &indexed.event {
+            domain::InnerEvent::WinReached { winner, .. } => Some((index, winner.clone())),
+            _ => None,
+        })
+        .unwrap_or_else(|| {
+            panic!("stored ResolutionApplied should contain WinReached: {applied:#?}")
+        })
+}
+
+async fn stored_first_trace_decision_outcome(pool: &PgPool, game: Uuid) -> String {
+    let payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace'",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .expect("stored ResolutionTrace payload");
+    let trace = domain::validate_trace_json(&payload, domain::TRACE_VERSION)
+        .expect("stored ResolutionTrace validates");
+    trace
+        .decisions
+        .first()
+        .map(|decision| decision.outcome.clone())
+        .unwrap_or_else(|| panic!("stored ResolutionTrace should contain decisions: {trace:#?}"))
+}
+
 async fn run_audit_resolution_cli(pool: &PgPool, game: Uuid) -> std::process::Output {
     let database_url = database_url_for_pool(pool).await;
     let bin = std::env::var("CARGO_BIN_EXE_audit_resolution")
@@ -10512,6 +10623,32 @@ async fn run_audit_resolution_cli(pool: &PgPool, game: Uuid) -> std::process::Ou
         .env("DATABASE_URL", database_url)
         .output()
         .expect("run audit_resolution binary")
+}
+
+async fn run_audit_resolution_diff_artifact_cli(
+    pool: &PgPool,
+    game: Uuid,
+    output_path: &Path,
+) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_resolution_diff_artifact")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_resolution_diff_artifact").to_string());
+    ProcessCommand::new(bin)
+        .arg("--output")
+        .arg(output_path)
+        .arg(game.to_string())
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_resolution_diff_artifact binary")
+}
+
+fn test_operator_proof_artifact_path(label: &str, game: Uuid) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("commands crate lives under crates/commands")
+        .join("target/operator-proof")
+        .join(format!("test-{label}-{game}.json"))
 }
 
 async fn database_url_for_pool(pool: &PgPool) -> String {

@@ -2327,7 +2327,7 @@ coverage, and a playable vertical scenario through the command pipeline.
 ### Phase 7 - Operational hardening
 
 1. Replay tooling and resolution diff UI.
-   [partly proven: `cargo run -p commands --bin audit_resolution -- <game_uuid>` scans stored
+   [done: `cargo run -p commands --bin audit_resolution -- <game_uuid>` scans stored
    `ResolutionApplied` / `ResolutionTrace` pairs, reruns ordinary `ResolvePhase` envelopes from
    the event-stream prefix with the stored seed/run id/logical time, reconstructs PK
    `ResolveHostPrompt` envelopes from `HostPromptIssued` + `HostPromptResolved`, emits a JSON
@@ -2351,7 +2351,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    was rerun by `prove_game_specific_audits` against freshly seeded fixture game
    `08d8a45f-6c3b-4401-8e31-8d7637f36a82` and
    returned `ok: true`, `audited: 1`, `skipped: 0`, one matched `N01` phase, and zero drifted
-   envelopes. Richer visual diff editing remains future work]
+   envelopes. The `audit_resolution_diff_artifact` binary is covered end-to-end for matched and
+   drifted synthetic games, proving exit code, stdout/file JSON parity, artifact path,
+   audited/matched/drift counts, first drift path, phase status, and expected/actual values. Richer
+   visual diff editing is non-blocking UX debt outside this row's replay/diff exit proof]
 2. Host/admin trace inspection.
    [partly proven: host-prompt phase-control decisions now fold into rebuildable
    `host_phase_control` audit rows and are exposed through host/cohost-only
@@ -3256,6 +3259,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 7 by auditing replay tooling and resolution diff UI against the stored-game replay
-exit proof. Separate already-proven `audit_resolution` CLI drift checks from any remaining diff UI or
-operator-facing replay gaps, and promote only the audit/tooling claims that current evidence proves.
+Continue Phase 7 by auditing host/admin trace inspection against its operator-review proof surfaces.
+Separate already-proven `inspect_trace`, `/games/{game}/resolution-traces` JSON/HTML, host
+phase-control audit, and operator index/proof-run links from any remaining interactive trace graph or
+scheduler-principal work, and promote only the trace-inspection claims that current evidence proves.
