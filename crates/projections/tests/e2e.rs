@@ -6,6 +6,7 @@
 //! never silently passes without a DB.
 
 use std::collections::BTreeMap;
+use std::process::Command as ProcessCommand;
 
 use domain::events::{IndexedEvent, ResolutionCounts};
 use domain::pack::{GrantKind, Pack, PhaseKind};
@@ -17,6 +18,7 @@ use projections::{
     host_phase_controls, host_prompts, phase_state, player_notifications, rebuild, slot_effects,
     slot_state, votecount,
 };
+use sqlx::PgPool;
 use uuid::Uuid;
 
 fn load_pack() -> Pack {
@@ -769,6 +771,134 @@ async fn rebuild_is_deterministic(pool: sqlx::PgPool) {
         .unwrap(),
         "second thread_view rebuild diverged"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_rebuild_cli_exits_zero_for_match_and_nonzero_for_drift(pool: sqlx::PgPool) {
+    let pack = load_pack();
+    let matched_game = Uuid::new_v4();
+    append_and_project(&pool, matched_game, &scenario_events(&pack))
+        .await
+        .expect("append matched projection CLI scenario");
+
+    let matched_output = run_audit_rebuild_cli(&pool, matched_game).await;
+    assert!(
+        matched_output.status.success(),
+        "matched projection audit should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&matched_output.stdout),
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    assert!(
+        matched_output.stderr.is_empty(),
+        "matched projection audit should not write stderr: {}",
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    let matched_report: serde_json::Value =
+        serde_json::from_slice(&matched_output.stdout).expect("matched audit stdout is JSON");
+    assert_eq!(matched_report["game_id"], matched_game.to_string());
+    assert_eq!(matched_report["ok"], true);
+    assert!(matched_report["tables"]
+        .as_array()
+        .expect("matched projection tables")
+        .iter()
+        .all(|table| table["matches"] == true));
+
+    let drift_game = Uuid::new_v4();
+    append_and_project(&pool, drift_game, &scenario_events(&pack))
+        .await
+        .expect("append drift projection CLI scenario");
+    tamper_slot_state_role(&pool, drift_game, "slot_2", "tampered_doctor").await;
+
+    let drift_output = run_audit_rebuild_cli(&pool, drift_game).await;
+    assert!(
+        !drift_output.status.success(),
+        "drifted projection audit should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stdout),
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&drift_output.stderr)
+            .contains("projection rebuild audit found drift"),
+        "drift projection audit stderr should name drift\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    let drift_report: serde_json::Value =
+        serde_json::from_slice(&drift_output.stdout).expect("drift audit stdout is JSON");
+    assert_eq!(drift_report["game_id"], drift_game.to_string());
+    assert_eq!(drift_report["ok"], false);
+    let slot_state = drift_report["tables"]
+        .as_array()
+        .expect("drift projection tables")
+        .iter()
+        .find(|table| table["table"] == "slot_state")
+        .expect("slot_state drift table");
+    assert_eq!(slot_state["matches"], false);
+    let before_slot = slot_state["before"]
+        .as_array()
+        .expect("slot_state before rows")
+        .iter()
+        .find(|row| row["slot_id"] == "slot_2")
+        .expect("tampered slot before row");
+    let rebuilt_slot = slot_state["rebuilt"]
+        .as_array()
+        .expect("slot_state rebuilt rows")
+        .iter()
+        .find(|row| row["slot_id"] == "slot_2")
+        .expect("rebuilt slot row");
+    assert_eq!(before_slot["role_key"], "tampered_doctor");
+    assert_eq!(rebuilt_slot["role_key"], "doctor");
+    let live_role: String =
+        sqlx::query_scalar("SELECT role_key FROM slot_state WHERE game_id = $1 AND slot_id = $2")
+            .bind(drift_game)
+            .bind("slot_2")
+            .fetch_one(&pool)
+            .await
+            .expect("live drifted projection row after rollback audit");
+    assert_eq!(live_role, "tampered_doctor");
+}
+
+async fn run_audit_rebuild_cli(pool: &PgPool, game: Uuid) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_rebuild")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_rebuild").to_string());
+    ProcessCommand::new(bin)
+        .arg(game.to_string())
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_rebuild binary")
+}
+
+async fn tamper_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {
+    let update =
+        sqlx::query("UPDATE slot_state SET role_key = $3 WHERE game_id = $1 AND slot_id = $2")
+            .bind(game)
+            .bind(slot)
+            .bind(role_key)
+            .execute(pool)
+            .await
+            .expect("tamper live slot_state role");
+    assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
+}
+
+async fn database_url_for_pool(pool: &PgPool) -> String {
+    let database: String = sqlx::query_scalar("SELECT current_database()")
+        .fetch_one(pool)
+        .await
+        .expect("query current test database");
+    let base = std::env::var("DATABASE_URL").expect("DATABASE_URL for sqlx test");
+    let (without_query, query) = base
+        .split_once('?')
+        .map(|(left, right)| (left, Some(right)))
+        .unwrap_or((base.as_str(), None));
+    let slash = without_query
+        .rfind('/')
+        .expect("DATABASE_URL includes database path");
+    let mut url = format!("{}/{}", &without_query[..slash], database);
+    if let Some(query) = query {
+        url.push('?');
+        url.push_str(query);
+    }
+    url
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

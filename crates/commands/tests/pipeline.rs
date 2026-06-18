@@ -10558,6 +10558,116 @@ async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(p
         .is_empty());
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(pool: PgPool) {
+    let matched_game =
+        setup_resolved_audit_drift_game(&pool, "projection_artifact_matched", 786).await;
+    let matched_path =
+        test_operator_proof_artifact_path("projection-rebuild-matched", matched_game);
+    let _ = fs::remove_file(&matched_path);
+
+    let matched_output =
+        run_audit_projection_rebuild_artifact_cli(&pool, matched_game, &matched_path).await;
+    assert!(
+        matched_output.status.success(),
+        "matched projection rebuild artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&matched_output.stdout),
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    assert!(
+        matched_output.stderr.is_empty(),
+        "matched projection rebuild artifact should not write stderr: {}",
+        String::from_utf8_lossy(&matched_output.stderr)
+    );
+    let matched_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&matched_path).expect("matched rebuild artifact exists"))
+            .expect("matched rebuild artifact is JSON");
+    let matched_stdout: serde_json::Value =
+        serde_json::from_slice(&matched_output.stdout).expect("matched rebuild stdout is JSON");
+    assert_eq!(matched_stdout, matched_file);
+    assert_eq!(matched_file["ok"], true);
+    assert_eq!(matched_file["artifact_version"], 1);
+    assert_eq!(
+        matched_file["artifact_path"].as_str(),
+        Some(matched_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(matched_file["game_id"], matched_game.to_string());
+    assert_eq!(matched_file["isolation"], "rollback-only transaction");
+    assert!(matched_file["table_count"].as_u64().unwrap_or_default() > 0);
+    assert_eq!(
+        matched_file["matched_table_count"],
+        matched_file["table_count"]
+    );
+    assert_eq!(matched_file["drifted_table_count"], 0);
+    assert!(matched_file["tables"]
+        .as_array()
+        .expect("matched rebuild tables")
+        .iter()
+        .all(|table| table["matches"] == true));
+
+    let drift_game = setup_resolved_audit_drift_game(&pool, "projection_artifact_drift", 787).await;
+    tamper_live_slot_state_role(&pool, drift_game, "slot_1", "tampered_projection_role").await;
+    let drift_path = test_operator_proof_artifact_path("projection-rebuild-drift", drift_game);
+    let _ = fs::remove_file(&drift_path);
+
+    let drift_output =
+        run_audit_projection_rebuild_artifact_cli(&pool, drift_game, &drift_path).await;
+    assert!(
+        !drift_output.status.success(),
+        "drifted projection rebuild artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stdout),
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&drift_output.stderr)
+            .contains("projection rebuild artifact audit found drift"),
+        "drift rebuild artifact stderr should name drift\nstderr:\n{}",
+        String::from_utf8_lossy(&drift_output.stderr)
+    );
+    let drift_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&drift_path).expect("drift rebuild artifact exists"))
+            .expect("drift rebuild artifact is JSON");
+    let drift_stdout: serde_json::Value =
+        serde_json::from_slice(&drift_output.stdout).expect("drift rebuild stdout is JSON");
+    assert_eq!(drift_stdout, drift_file);
+    assert_eq!(drift_file["ok"], false);
+    assert_eq!(
+        drift_file["artifact_path"].as_str(),
+        Some(drift_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(drift_file["game_id"], drift_game.to_string());
+    assert_eq!(drift_file["drifted_table_count"], 1);
+    let slot_state = drift_file["tables"]
+        .as_array()
+        .expect("drift rebuild tables")
+        .iter()
+        .find(|table| table["table"] == "slot_state")
+        .expect("slot_state drift table");
+    assert_eq!(slot_state["matches"], false);
+    let before_slot = slot_state["before"]
+        .as_array()
+        .expect("slot_state before rows")
+        .iter()
+        .find(|row| row["slot_id"] == "slot_1")
+        .expect("tampered slot before row");
+    let rebuilt_slot = slot_state["rebuilt"]
+        .as_array()
+        .expect("slot_state rebuilt rows")
+        .iter()
+        .find(|row| row["slot_id"] == "slot_1")
+        .expect("rebuilt slot row");
+    assert_eq!(before_slot["role_key"], "tampered_projection_role");
+    assert_ne!(rebuilt_slot["role_key"], "tampered_projection_role");
+    let live_role: String =
+        sqlx::query_scalar("SELECT role_key FROM slot_state WHERE game_id = $1 AND slot_id = $2")
+            .bind(drift_game)
+            .bind("slot_1")
+            .fetch_one(&pool)
+            .await
+            .expect("live drifted projection row after artifact audit");
+    assert_eq!(live_role, "tampered_projection_role");
+}
+
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
     let host = format!("{user_prefix}_host");
     let game = Uuid::new_v4();
@@ -10764,6 +10874,35 @@ async fn run_audit_trace_inspection_artifact_cli(
         .env("DATABASE_URL", database_url)
         .output()
         .expect("run audit_trace_inspection_artifact binary")
+}
+
+async fn run_audit_projection_rebuild_artifact_cli(
+    pool: &PgPool,
+    game: Uuid,
+    output_path: &Path,
+) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_projection_rebuild_artifact")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_projection_rebuild_artifact").to_string());
+    ProcessCommand::new(bin)
+        .arg("--output")
+        .arg(output_path)
+        .arg(game.to_string())
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_projection_rebuild_artifact binary")
+}
+
+async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {
+    let update =
+        sqlx::query("UPDATE slot_state SET role_key = $3 WHERE game_id = $1 AND slot_id = $2")
+            .bind(game)
+            .bind(slot)
+            .bind(role_key)
+            .execute(pool)
+            .await
+            .expect("tamper live slot_state role");
+    assert_eq!(update.rows_affected(), 1, "one slot_state row tampered");
 }
 
 fn test_operator_proof_artifact_path(label: &str, game: Uuid) -> PathBuf {

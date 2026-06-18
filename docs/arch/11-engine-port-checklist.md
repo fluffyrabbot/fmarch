@@ -2407,7 +2407,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    skipped day/night cadence is future operational work outside this trace-inspection row; today
    `AdvancePhaseByDeadline` stores inert deadline evidence and is still host-gated]
 3. Projection rebuild and audit commands.
-   [partly proven: `cargo run -p projections --bin audit_rebuild -- <game_uuid>` snapshots
+   [done: `cargo run -p projections --bin audit_rebuild -- <game_uuid>` snapshots
    every rebuildable projection table, replays the game stream inside a rollback-only
    transaction, emits a JSON `ProjectionAuditReport`, and exits non-zero on row drift. The same
    callable library report is exposed through host/cohost-only
@@ -2421,7 +2421,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    page. The manifest-listed command
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p projections --bin audit_rebuild -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
    was rerun against the same freshly seeded fixture game and returned `ok: true` with all 13
-   rebuildable projection tables matching]
+   rebuildable projection tables matching. The raw `audit_rebuild` binary is now covered
+   end-to-end for matched and drifted synthetic games, proving exit code, JSON stdout, drifted
+   `slot_state` before/rebuilt rows, and rollback isolation that leaves the tampered live row
+   unrepaired. The `audit_projection_rebuild_artifact` binary is covered end-to-end for matched and
+   drifted synthetic games, proving exit code, stdout/file JSON parity, artifact path, game id,
+   rollback-only isolation metadata, table/matched/drift counts, drifted `slot_state` rows, and
+   rollback isolation. The Playwright operator browser smoke was rerun against a short-lived local
+   scratch database and proved the projection-audit view plus operator projection-rebuild
+   saved-artifact JSON/HTML and fixture pages render through the browser proof lane]
 4. Performance tests around large action graphs.
    [partly proven: `large_action_graph_resolves_and_audits_within_regression_ceiling` builds a
    deterministic 40-slot / 29-action Mafiascum N01 graph through legal `SubmitAction` commands
@@ -3265,7 +3273,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 7 by auditing projection rebuild/audit commands against their stored-game replay
-proof surfaces. Separate the already-proven rollback-only `audit_rebuild` library/CLI behavior and
-host/cohost projection-audit JSON/HTML from any remaining saved-artifact binary, browser-smoke, or
-operator proof-run gaps, and promote only the projection rebuild claims that current evidence proves.
+Continue Phase 7 by auditing performance tests around large action graphs. Separate the already
+proven deterministic 40-slot dense graph regression guard, operator large-action artifact report,
+and browser/operator proof-run surfaces from any remaining production benchmark or broader
+performance-budget claim, and promote only the large-action performance evidence that current
+commands prove.
