@@ -11812,6 +11812,115 @@ async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(po
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
+    for (family, stem, seed, min_expectations) in [
+        (
+            "hunter",
+            "generated-mafiascum-hunter-persistent-trigger",
+            97_011,
+            3,
+        ),
+        (
+            "lovers",
+            "generated-mafiascum-lovers-persistent-trigger",
+            97_012,
+            3,
+        ),
+        ("bomb", "generated-epicmafia-bomb-trigger", 96_777, 8),
+    ] {
+        let success_fixture_json = generated_persistent_trigger_success_fixture_json(family, seed);
+        let success_fixture: serde_json::Value = serde_json::from_str(&success_fixture_json)
+            .expect("generated persistent success fixture parses");
+        let expectation_count = generated_expectation_count(&success_fixture["expectations"]);
+        assert!(
+            expectation_count >= min_expectations,
+            "{stem} success fixture should carry semantic expectations"
+        );
+
+        let bad_fixture_json =
+            generated_persistent_trigger_bad_expectation_fixture_json(family, seed);
+        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-bad-expectation"));
+        bad_artifacts.remove_existing();
+        bad_artifacts.write_fixture(&bad_fixture_json);
+        let bad_report = bad_artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(
+            bad_report["original"]["ok"], false,
+            "{stem} bad original should fail"
+        );
+        assert_eq!(
+            bad_report["original"]["failure_class"], "semantic_expectation",
+            "{stem} bad original failure class"
+        );
+        assert_eq!(
+            bad_report["minimized"]["ok"], false,
+            "{stem} bad minimized should fail"
+        );
+        assert_eq!(
+            bad_report["minimized"]["failure_class"], "semantic_expectation",
+            "{stem} bad minimized failure class"
+        );
+        assert_eq!(
+            bad_report["reduction"]["replay_success"],
+            serde_json::json!(false),
+            "{stem} bad reduction should remain failing"
+        );
+        assert_eq!(
+            bad_report["reduction"]["failure_class_preserved"],
+            serde_json::json!(true),
+            "{stem} bad reduction should preserve semantic failure class"
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["wrote"],
+            serde_json::json!(true),
+            "{stem} bad reduced artifact should be written"
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(false),
+            "{stem} bad reduced artifact should not be promoted as success"
+        );
+        assert!(
+            bad_artifacts.fixture_path.exists(),
+            "{stem} bad fixture artifact should be saved"
+        );
+        assert!(
+            bad_artifacts.reduced_path.exists(),
+            "{stem} bad reduced artifact should be saved"
+        );
+        assert!(
+            bad_artifacts.report_path.exists(),
+            "{stem} bad report artifact should be saved"
+        );
+
+        let success_artifacts =
+            GeneratedShrinkArtifacts::new(&format!("{stem}-success-after-bad-expectation"));
+        success_artifacts.remove_existing();
+        success_artifacts.write_fixture(&success_fixture_json);
+        let success_report = success_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            success_report["original"]["ok"], true,
+            "{stem} success replay after bad expectation"
+        );
+        assert_eq!(
+            success_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} success expectation count after bad expectation"
+        );
+        assert_eq!(
+            success_report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} success projection audit after bad expectation"
+        );
+        assert_eq!(
+            success_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "{stem} success reduced artifact should still be promoted"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),
@@ -18973,6 +19082,42 @@ fn generated_mafiascum_persistent_trigger_fixture_json(family: &str, seed: u64) 
         "expectations": expectations
     }))
     .expect("generated Mafiascum persistent trigger fixture serializes")
+}
+
+fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
+    match family {
+        "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
+        "bomb" => generated_night_case_fixture_json(
+            &generated_epicmafia_night_case(seed),
+            "epicmafia",
+            seed + 48_000,
+        ),
+        _ => unreachable!("unknown generated persistent trigger family"),
+    }
+}
+
+fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed: u64) -> String {
+    let mut fixture: serde_json::Value = serde_json::from_str(
+        &generated_persistent_trigger_success_fixture_json(family, seed),
+    )
+    .expect("generated persistent success fixture serializes");
+    match family {
+        "hunter" => {
+            fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
+                serde_json::json!("hunter_retaliate_wrong");
+        }
+        "lovers" => {
+            fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
+                serde_json::json!("lover_suicide_wrong");
+        }
+        "bomb" => {
+            fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
+                serde_json::json!("bomb_retaliates_wrong");
+        }
+        _ => unreachable!("unknown generated persistent trigger family"),
+    }
+    serde_json::to_string_pretty(&fixture)
+        .expect("generated persistent bad-expectation fixture serializes")
 }
 
 fn generated_case_fixture_json(

@@ -2445,7 +2445,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    consumption, reduce via `minimize_night_fixture --reduce --write-reduced --write-report`, and
    replay the reduced JSON artifact with the same semantic expectation counts, while the generated
    Epicmafia Bomb fixture proves the Bomb trigger/generated-action side through the same reduced
-   artifact replay path. The large-action-graph
+   artifact replay path.
+   `generated_persistent_trigger_bad_expectations_shrink_to_failing_artifacts` now proves the
+   negative generated path for the same Hunter/Lovers/Bomb families: each generated fixture gets
+   one intentionally wrong semantic expectation, the minimizer preserves the `semantic_expectation`
+   failure class, writes a reduced failing artifact with `promoted_success_fixture: false`, and then
+   replays the original success fixture so the negative lane cannot hide a resolver regression. The large-action-graph
    lane adds a fixed dense scenario with exact anchored trace assertions for its representative
    generated rows plus explicit event/trace/duration ceilings and was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands large_action_graph_resolves_and_audits_within_regression_ceiling`,
@@ -2934,8 +2939,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
    required needle set. The bounded generated trigger/dependency shrink lanes cover representative
-   PGO/Babysitter/Hider successes plus representative persistent Hunter/Lovers/Bomb successes;
-   broader randomized shrink breadth and generated failure-case shrinking remain future work. The local-Postgres
+   PGO/Babysitter/Hider successes plus representative persistent Hunter/Lovers/Bomb success and
+   failure cases; broader randomized shrink breadth and PGO/Babysitter/Hider generated failure-case
+   breadth remain future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
@@ -2947,8 +2953,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by turning the representative generated shrink lanes into generated failure-case
-shrinking. Start with the Hunter/Lovers/Bomb fixtures: inject one wrong semantic expectation per
-family, assert the minimizer preserves the `semantic_expectation` failure class, writes a reduced
-failing artifact, and does not promote it as a success fixture, then replay the original success
-fixture again so the negative lane cannot mask a real resolver regression.
+Continue Phase 4 by completing the generated failure-case breadth for the earlier
+PGO/Babysitter/Hider trigger/dependency search lane. Reuse the bounded generated search fixtures,
+inject one wrong semantic expectation per discovered family, assert the minimizer preserves the
+`semantic_expectation` failure class and writes a reduced non-promoted artifact, then replay the
+original generated success fixtures so negative shrink evidence cannot mask resolver drift.
