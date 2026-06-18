@@ -1328,9 +1328,12 @@ same JSON report that is printed to stdout. The generated Mafiascum N01 failure-
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
-This proves a reusable artifact-backed promotion path for generated Mafiascum failure fixtures and
-hand-minimized trigger/dependency replays, not automatic property-test shrinking across generated
-families. A non-mafiascum generated replay lane now covers six
+The Chinese Structured N01 failure-artifact proof now uses the same helper to write
+`target/operator-proof/generated-chinese-n01-bad-prophet-expectation.fixture.tmp.json`, shrink it,
+and verify the saved report preserves `semantic_expectation` failure class without promoting the
+fixture as a success. This proves a reusable artifact-backed promotion path for generated Mafiascum
+and Chinese Structured failure fixtures plus hand-minimized trigger/dependency replays, not
+automatic property-test shrinking across ordinary generated failure panic paths. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with

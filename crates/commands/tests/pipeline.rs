@@ -12562,6 +12562,68 @@ async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: Pg
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_chinese_failure_fixture_shrinks_to_saved_artifacts(pool: PgPool) {
+    let case = GeneratedNightCase {
+        seed: 92_777,
+        roster: vec![
+            ("slot_1".to_string(), "prophet".to_string()),
+            ("slot_2".to_string(), "wolf".to_string()),
+            ("slot_3".to_string(), "villager".to_string()),
+        ],
+        actions: vec![GeneratedNightAction {
+            actor_slot: "slot_1".to_string(),
+            template_id: "investigate_alignment".to_string(),
+            action_id: "chinese_generated_seed_92777_slot_1_investigate_alignment".to_string(),
+            targets: vec!["slot_2".to_string()],
+        }],
+    };
+    let mut fixture: serde_json::Value = serde_json::from_str(&generated_night_case_fixture_json(
+        &case,
+        "chinese_structured",
+        case.seed + 44_000,
+    ))
+    .expect("generated Chinese Structured fixture serializes");
+    fixture["expectations"] = serde_json::json!({
+        "inner_events": [{
+            "kind": "InvestigationResult",
+            "payload": {
+                "investigator": "slot_1",
+                "target": "slot_2",
+                "result": "good"
+            }
+        }]
+    });
+    let fixture_json = serde_json::to_string_pretty(&fixture)
+        .expect("generated Chinese failure fixture serializes");
+
+    let artifacts = GeneratedShrinkArtifacts::new("generated-chinese-n01-bad-prophet-expectation");
+    artifacts.remove_existing();
+    artifacts.write_fixture(&fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], false);
+    assert_eq!(report["original"]["failure_class"], "semantic_expectation");
+    assert_eq!(report["minimized"]["ok"], false);
+    assert_eq!(report["minimized"]["failure_class"], "semantic_expectation");
+    assert_eq!(report["reduction"]["replay_success"], false);
+    assert_eq!(report["reduction"]["failure_class_preserved"], true);
+    assert_eq!(report["write_reduced"]["wrote"], true);
+    assert_eq!(report["write_reduced"]["promoted_success_fixture"], false);
+    assert!(
+        artifacts.fixture_path.exists(),
+        "generated Chinese failure fixture artifact should be saved"
+    );
+    assert!(
+        artifacts.reduced_path.exists(),
+        "generated Chinese reduced fixture artifact should be saved"
+    );
+    assert!(
+        artifacts.report_path.exists(),
+        "generated Chinese shrink report artifact should be saved"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {

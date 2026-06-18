@@ -2435,6 +2435,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
    `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
    preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
+   The Chinese Structured N01 failure-artifact proof uses the same helper to write
+   `target/operator-proof/generated-chinese-n01-bad-prophet-expectation.fixture.tmp.json`, shrink it,
+   and verify the saved report preserves `semantic_expectation` failure class without promoting the
+   fixture as a success.
    This is a reusable artifact-backed minimized replay promotion path, not true property-test
    shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
@@ -2753,8 +2757,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by widening deterministic generated-case
-shrinking beyond Mafiascum. Start by routing the Chinese Structured N01 generated failure fixture
-emission through the same saved artifact/minimizer report helper, then assert its saved report
-preserves either failure class or success invariants before moving the hook into ordinary generated
-failure panic paths.
+Continue Phase 4 persistent and generated-action systems by moving deterministic shrinking into
+ordinary generated failure panic paths. Start with the Mafiascum and Chinese Structured generated
+N01 replay lanes: when a seed fails after fixture construction, save the generated fixture, run
+`minimize_night_fixture --reduce --write-reduced --write-report`, and include the saved report path
+and preservation summary in the panic message.
