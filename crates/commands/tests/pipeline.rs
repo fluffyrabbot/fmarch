@@ -47141,6 +47141,255 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "ascetic_user", "ascetic"),
+        ("slot_2", "cop_user", "cop"),
+        ("slot_3", "poisoner_user", "poisoner"),
+        ("slot_4", "goon_user", "mafia_goon"),
+        ("slot_5", "townie_user_1", "vanilla_townie"),
+        ("slot_6", "townie_user_2", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &user("poisoner_user"),
+        Command::SubmitAction {
+            game,
+            action_id: "poison_ascetic_n01".into(),
+            actor_slot: "slot_3".into(),
+            template_id: "poison".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Poisoner submits poison against Ascetic");
+    handle(
+        &pool,
+        &user("goon_user"),
+        Command::SubmitAction {
+            game,
+            action_id: "kill_ascetic_n01".into(),
+            actor_slot: "slot_4".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Goon submits kill against Ascetic");
+    handle(
+        &pool,
+        &user("cop_user"),
+        Command::SubmitAction {
+            game,
+            action_id: "cop_check_ascetic_n01".into(),
+            actor_slot: "slot_2".into(),
+            template_id: "cop_investigate".into(),
+            targets: vec!["slot_1".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("Cop submits investigation against Ascetic");
+
+    let ack = handle(&pool, &h, Command::ResolvePhase { game, seed: 480701 })
+        .await
+        .expect("host resolves Ascetic non-lethal immunity scenario");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "ResolvePhase should append applied results, trace, and phase lock atomically"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Ascetic target-state trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "night:target_state",
+            source: "action:poison_ascetic_n01",
+            outcome: "action_interfered_by_target_state",
+            detail: vec![
+                ("action_id", serde_json::json!("poison_ascetic_n01")),
+                ("template_id", serde_json::json!("poison")),
+                ("actor", serde_json::json!("slot_3")),
+                ("target", serde_json::json!("slot_1")),
+                ("ability", serde_json::json!("Mark")),
+                ("reason", serde_json::json!("ascetic")),
+                ("target_tags", serde_json::json!(["ascetic"])),
+            ],
+        },
+    );
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "night:target_state",
+            source: "action:cop_check_ascetic_n01",
+            outcome: "action_interfered_by_target_state",
+            detail: vec![
+                ("action_id", serde_json::json!("cop_check_ascetic_n01")),
+                ("template_id", serde_json::json!("cop_investigate")),
+                ("actor", serde_json::json!("slot_2")),
+                ("target", serde_json::json!("slot_1")),
+                ("ability", serde_json::json!("Investigate")),
+                ("mode", serde_json::json!("Parity")),
+                ("reason", serde_json::json!("ascetic")),
+                ("target_tags", serde_json::json!(["ascetic"])),
+            ],
+        },
+    );
+
+    let applied_payload = resolution_payload(&pool, game, "N01", 480701).await;
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Ascetic ResolutionApplied");
+    for actor in ["slot_2", "slot_3"] {
+        assert!(applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::ActionInterfered { actor: event_actor, reason }
+                if event_actor == actor && reason == "ascetic"
+        )));
+    }
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled {
+            slot_id,
+            cause,
+            attackers,
+            unstoppable,
+            ..
+        } if slot_id == "slot_1"
+            && cause == "factional_kill"
+            && attackers == &vec!["slot_4".to_string()]
+            && !*unstoppable
+    )));
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::EffectsMarked { effect, target, actor, .. }
+                if effect == "poisoned" && target == "slot_1" && actor == "slot_3"
+        )),
+        "Ascetic should suppress Poisoner's mark"
+    );
+    assert!(
+        !applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::InvestigationResult { investigator, target, .. }
+                if investigator == "slot_2" && target == "slot_1"
+        )),
+        "Ascetic should suppress Cop result"
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "Ascetic should still die to lethal factional kill"
+    );
+    assert!(
+        slot_effects(&pool, game)
+            .await
+            .unwrap()
+            .iter()
+            .all(|effect| !(effect.slot_id == "slot_1" && effect.effect == "poisoned")),
+        "Ascetic poison mark should not project"
+    );
+    assert!(
+        projections::player_investigation_results(&pool, game)
+            .await
+            .expect("read Ascetic private investigation results")
+            .is_empty(),
+        "Ascetic investigation should not project a private result"
+    );
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    let projection_audit = audit_rebuild(&pool, game)
+        .await
+        .expect("Ascetic projection rebuild audit");
+    assert!(
+        projection_audit.ok,
+        "Ascetic projection rebuild drifted: {projection_audit:?}"
+    );
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Ascetic lethal death"
+    );
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Ascetic resolution audit");
+    assert!(audit.ok, "Ascetic resolution audit drifted: {audit:?}");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_preserves_ninja_hidden_visit_results(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

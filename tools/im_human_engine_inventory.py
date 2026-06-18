@@ -2682,6 +2682,48 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "Resolver golden output is not applicable, so command/projection "
                 "coverage is the proof surface."
             )
+        elif scoped_name == "mafiascum:ascetic":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum",
+                set(),
+            )
+            canonical = "ascetic"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafiascum:ascetic" in fmarch["pack_standard_nar_target_state_gate_tags"]
+                and '"ascetic": {' in fmarch["pack_text"]
+                and '"Protect"' in fmarch["pack_text"]
+                and '"Investigate"' in fmarch["pack_text"]
+                and '"Convert"' in fmarch["pack_text"]
+                and '"Mark"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "target_state_gate_reason" in resolver
+                and "IrAbility::Protect" in resolver
+                and "IrAbility::Convert" in resolver
+                and "IrAbility::Mark" in resolver
+                and "IrAbility::Investigate" in resolver
+                and "conversion_blocked" in resolver
+            )
+            golden = modeled and all(
+                fixture in mafiascum_golden_names
+                for fixture in [
+                    "ascetic_blocks_non_lethal_actions",
+                    "ascetic_blocks_protect_and_convert",
+                ]
+            )
+            integrated = (
+                implemented
+                and "host_resolve_phase_carries_mafiascum_ascetic_non_lethal_immunity"
+                in command_tests
+            )
+            notes = (
+                "Mafiascum Ascetic is a town passive non-lethal immunity role; "
+                "fmarch models it as a persistent `ascetic` target-state gate "
+                "that blocks Protect, Investigate, Convert, and Mark while leaving "
+                "Kill ungated."
+            )
         elif scoped_name == "mafia_universe:town_strongman":
             mu_golden_names = fmarch["golden_names_by_pack"].get(
                 "mafia_universe",

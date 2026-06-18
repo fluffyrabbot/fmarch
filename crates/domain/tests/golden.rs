@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 57);
+    assert_eq!(pack.ir_version, 58);
     assert!(pack.roles.contains_key("cop"));
     assert!(pack.roles.contains_key("vanilla_cop"));
     assert!(pack.roles.contains_key("neapolitan"));
@@ -426,7 +426,10 @@ fn pack_deserializes() {
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-    assert_eq!(target_state_gate_tags, vec!["commuted", "untargetable"]);
+    assert_eq!(
+        target_state_gate_tags,
+        vec!["ascetic", "commuted", "untargetable"]
+    );
     assert_eq!(
         pack.standard_nar
             .generated_kill_cause_policy
@@ -692,6 +695,10 @@ fn pack_deserializes() {
         .standard_nar
         .target_state_save_policy
         .contains_key("bulletproof_vest"));
+    assert!(pack
+        .standard_nar
+        .target_state_gate_policy
+        .contains_key("ascetic"));
     assert!(pack
         .standard_nar
         .target_state_gate_policy
@@ -3471,7 +3478,7 @@ fn resolver_rejects_malformed_standard_nar_target_state_gate_policy_before_night
                     .expect("mafiascum declares commuted target-state gate policy")
                     .blocks = vec![IrAbility::Block];
             },
-            "target-state gate `commuted` only supports Kill or Investigate, got `Block`",
+            "target-state gate `commuted` only supports Kill, Protect, Investigate, Convert, or Mark, got `Block`",
         ),
     ];
 
@@ -3966,6 +3973,100 @@ fn golden_non_reflexive_self_target_rejected() {
         &expected_events(&golden),
         "non_reflexive_self_target_rejected",
     );
+}
+
+#[test]
+fn golden_ascetic_blocks_non_lethal_actions() {
+    let golden = load_golden("ascetic_blocks_non_lethal_actions.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "ascetic_blocks_non_lethal_actions",
+    );
+}
+
+#[test]
+fn trace_records_ascetic_non_lethal_target_state_gate() {
+    let golden = load_golden("ascetic_blocks_non_lethal_actions.json");
+    let output = run_output(
+        &golden["input"],
+        load_pack(),
+        "ascetic-target-state-trace-run",
+    );
+    let poison = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "action_interfered_by_target_state"
+                && decision.detail["reason"] == "ascetic"
+                && decision.detail["ability"] == "Mark"
+        })
+        .expect("ascetic poison target should emit a Mark interference trace decision");
+    assert_eq!(poison.detail["target_tags"], serde_json::json!(["ascetic"]));
+    let investigation = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "action_interfered_by_target_state"
+                && decision.detail["reason"] == "ascetic"
+                && decision.detail["ability"] == "Investigate"
+        })
+        .expect(
+            "ascetic investigation target should emit an Investigate interference trace decision",
+        );
+    assert_eq!(
+        investigation.detail["target_tags"],
+        serde_json::json!(["ascetic"])
+    );
+}
+
+#[test]
+fn golden_ascetic_blocks_protect_and_convert() {
+    let golden = load_golden("ascetic_blocks_protect_and_convert.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "ascetic_blocks_protect_and_convert",
+    );
+}
+
+#[test]
+fn trace_records_ascetic_protect_and_convert_target_state_gate() {
+    let golden = load_golden("ascetic_blocks_protect_and_convert.json");
+    let output = run_output(
+        &golden["input"],
+        load_pack(),
+        "ascetic-protect-convert-target-state-trace-run",
+    );
+    let protect = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "action_interfered_by_target_state"
+                && decision.detail["reason"] == "ascetic"
+                && decision.detail["ability"] == "Protect"
+        })
+        .expect("ascetic protect target should emit a Protect interference trace decision");
+    assert_eq!(
+        protect.detail["target_tags"],
+        serde_json::json!(["ascetic"])
+    );
+    let conversion = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| {
+            decision.outcome == "conversion_blocked"
+                && decision.detail["reason"] == "ascetic"
+                && decision.detail["target_tags"] == serde_json::json!(["ascetic"])
+        })
+        .expect("ascetic conversion target should emit a conversion_blocked trace decision");
+    assert_eq!(conversion.detail["target_role"], "ascetic");
 }
 
 #[test]

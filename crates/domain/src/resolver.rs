@@ -1514,6 +1514,48 @@ fn target_state_gate_reason<'a>(
     }
 }
 
+fn target_state_interference_reason(reason: &str) -> String {
+    if reason == "commuted" || reason == "untargetable" {
+        "untargetable".to_string()
+    } else {
+        reason.to_string()
+    }
+}
+
+fn emit_action_interfered_by_target_state(
+    trace_decisions: &mut Vec<DecisionTrace>,
+    events: &mut Vec<InnerEvent>,
+    action: &Action<'_>,
+    target: &SlotId,
+    ability: IrAbility,
+    mode: Option<InvestigateMode>,
+    reason: &str,
+    target_tags: &BTreeSet<String>,
+) {
+    let mut detail = serde_json::json!({
+        "action_id": action.sub.action_id,
+        "template_id": action.template.id,
+        "actor": action.sub.actor,
+        "target": target,
+        "ability": format!("{ability:?}"),
+        "reason": reason,
+        "target_tags": target_tags,
+    });
+    if let Some(mode) = mode {
+        detail["mode"] = serde_json::json!(mode);
+    }
+    trace_decisions.push(DecisionTrace {
+        stage: "night:target_state".to_string(),
+        source: format!("action:{}", action.sub.action_id),
+        outcome: "action_interfered_by_target_state".to_string(),
+        detail,
+    });
+    events.push(InnerEvent::ActionInterfered {
+        actor: action.sub.actor.clone(),
+        reason: target_state_interference_reason(reason),
+    });
+}
+
 fn require_standard_nar_target_state_save_catalog(pack: &Pack) {
     if !pack.standard_nar.enabled {
         return;
@@ -1685,9 +1727,16 @@ fn require_standard_nar_target_state_gate_policy(pack: &Pack) {
                     "invalid standard_nar target-state gate policy: target-state gate `{tag}` contains duplicate blocked ability `{ability:?}`"
                 );
             }
-            if !matches!(ability, IrAbility::Kill | IrAbility::Investigate) {
+            if !matches!(
+                ability,
+                IrAbility::Kill
+                    | IrAbility::Protect
+                    | IrAbility::Investigate
+                    | IrAbility::Convert
+                    | IrAbility::Mark
+            ) {
                 panic!(
-                    "invalid standard_nar target-state gate policy: target-state gate `{tag}` only supports Kill or Investigate, got `{ability:?}`"
+                    "invalid standard_nar target-state gate policy: target-state gate `{tag}` only supports Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
                 );
             }
         }
@@ -3323,7 +3372,7 @@ fn standard_nar_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<&str> {
 }
 
 fn record_standard_nar_target_state_gate_tag<'a>(tags: &mut BTreeSet<&'a str>, effect: &'a str) {
-    if effect == "commuted" || effect == "untargetable" {
+    if effect == "ascetic" || effect == "commuted" || effect == "untargetable" {
         tags.insert(effect);
     }
 }
@@ -6116,6 +6165,21 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                     let hide_dependency_cause =
                         standard_nar_hide_dependency_cause(pack, actions[idx].template);
                     for target in actions[idx].targets.clone() {
+                        let tags = target_tags(input, &transient_effects, &target);
+                        if let Some(reason) = target_state_gate_reason(pack, &tags, IrAbility::Mark)
+                        {
+                            emit_action_interfered_by_target_state(
+                                &mut trace_decisions,
+                                &mut events,
+                                &actions[idx],
+                                &target,
+                                IrAbility::Mark,
+                                None,
+                                reason,
+                                &tags,
+                            );
+                            continue;
+                        }
                         if let Some(cause) = hide_dependency_cause.clone() {
                             hide_dependencies.push(HideDependency {
                                 host: target.clone(),
@@ -6493,6 +6557,21 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         standard_nar_guard_dependency_cause(pack, actions[idx].template);
                     for t in actions[idx].targets.clone() {
                         let tags = target_tags(input, &transient_effects, &t);
+                        if let Some(reason) =
+                            target_state_gate_reason(pack, &tags, IrAbility::Protect)
+                        {
+                            emit_action_interfered_by_target_state(
+                                &mut trace_decisions,
+                                &mut events,
+                                &actions[idx],
+                                &t,
+                                IrAbility::Protect,
+                                None,
+                                reason,
+                                &tags,
+                            );
+                            continue;
+                        }
                         if tags.contains("macho") {
                             continue;
                         }
@@ -6750,6 +6829,33 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                                     .as_ref()
                                     .map(|_| ConversionMode::AssignRole)
                             });
+                        let tags = target_tags(input, &transient_effects, &target);
+                        if let Some(reason) =
+                            target_state_gate_reason(pack, &tags, IrAbility::Convert)
+                        {
+                            trace_decisions.push(DecisionTrace {
+                                stage: "night:conversion".to_string(),
+                                source: format!("action:{action_id}"),
+                                outcome: "conversion_blocked".to_string(),
+                                detail: serde_json::json!({
+                                    "action_id": action_id,
+                                    "template_id": template_id,
+                                    "actor": source,
+                                    "target": target,
+                                    "target_role": slot.role_key,
+                                    "target_alignment": slot.alignment,
+                                    "mode": conversion_mode,
+                                    "reason": reason,
+                                    "target_tags": tags,
+                                }),
+                            });
+                            events.push(InnerEvent::ConversionBlocked {
+                                target: target.clone(),
+                                status: "blocked".to_string(),
+                                reason: reason.to_string(),
+                            });
+                            continue;
+                        }
                         if killed.contains(&target) {
                             match pack.conversion_policy.on_dead_target {
                                 Some(ConversionDeadTargetPolicy::Block) => {
@@ -6922,25 +7028,16 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
                         if let Some(reason) =
                             target_state_gate_reason(pack, &tags, IrAbility::Investigate)
                         {
-                            trace_decisions.push(DecisionTrace {
-                                stage: "night:target_state".to_string(),
-                                source: format!("action:{}", actions[idx].sub.action_id),
-                                outcome: "action_interfered_by_target_state".to_string(),
-                                detail: serde_json::json!({
-                                    "action_id": actions[idx].sub.action_id,
-                                    "template_id": actions[idx].template.id,
-                                    "actor": investigator,
-                                    "target": target,
-                                    "ability": "Investigate",
-                                    "mode": mode,
-                                    "reason": reason,
-                                    "target_tags": tags,
-                                }),
-                            });
-                            events.push(InnerEvent::ActionInterfered {
-                                actor: investigator.clone(),
-                                reason: "untargetable".to_string(),
-                            });
+                            emit_action_interfered_by_target_state(
+                                &mut trace_decisions,
+                                &mut events,
+                                &actions[idx],
+                                &target,
+                                IrAbility::Investigate,
+                                Some(mode),
+                                reason,
+                                &tags,
+                            );
                             continue;
                         }
                         match mode {

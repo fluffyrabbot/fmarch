@@ -4822,12 +4822,19 @@ fn validate_standard_nar_target_state_gate_policy(
                     format!("duplicate blocked ability `{ability:?}`"),
                 );
             }
-            if !matches!(ability, IrAbility::Kill | IrAbility::Investigate) {
+            if !matches!(
+                ability,
+                IrAbility::Kill
+                    | IrAbility::Protect
+                    | IrAbility::Investigate
+                    | IrAbility::Convert
+                    | IrAbility::Mark
+            ) {
                 issue(
                     issues,
                     format!("{tag_path}.blocks"),
                     format!(
-                        "target-state gates only support Kill or Investigate, got `{ability:?}`"
+                        "target-state gates only support Kill, Protect, Investigate, Convert, or Mark, got `{ability:?}`"
                     ),
                 );
             }
@@ -5357,7 +5364,7 @@ fn standard_nar_derived_target_state_gate_tags(pack: &Pack) -> BTreeSet<String> 
 }
 
 fn record_standard_nar_target_state_gate_tag(tags: &mut BTreeSet<String>, effect: &str) {
-    if effect == "commuted" || effect == "untargetable" {
+    if effect == "ascetic" || effect == "commuted" || effect == "untargetable" {
         tags.insert(effect.to_string());
     }
 }

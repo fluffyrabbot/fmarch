@@ -472,7 +472,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_watcher` | `town_watcher` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:vanilla_town` | `vanilla_town` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:arsonist` | `arsonist` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:ascetic` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:ascetic` | `ascetic` | 1 | no | yes | yes | yes | yes | Mafiascum Ascetic is a town passive non-lethal immunity role; fmarch models it as a persistent `ascetic` target-state gate that blocks Protect, Investigate, Convert, and Mark while leaving Kill ungated. |
 | role_id | `mafiascum:babysitter` | `babysitter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:beloved_princess` | `beloved_princess` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:bodyguard` | `bodyguard` | 1 | no | yes | yes | yes | yes |  |

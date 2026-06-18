@@ -1,0 +1,92 @@
+{
+  "description": "Mafiascum Ascetic suppresses non-lethal Doctor protection and Cult conversion.",
+  "input": {
+    "game_id": "game_ascetic_blocks_protect_and_convert_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": ["Day", "Night"],
+        "subsegments": {},
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "ascetic",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "doctor",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_3",
+          "role_key": "cult_leader",
+          "alignment": "cult",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "protect_ascetic_001",
+        "actor": "slot_2",
+        "template_id": "doctor_protect",
+        "targets": ["slot_1"],
+        "phase_id": "N01",
+        "submitted_at": 1,
+        "withdrawn": false,
+        "metadata": {}
+      },
+      {
+        "action_id": "convert_ascetic_001",
+        "actor": "slot_3",
+        "template_id": "cult_recruit",
+        "targets": ["slot_1"],
+        "phase_id": "N01",
+        "submitted_at": 2,
+        "withdrawn": false,
+        "metadata": {}
+      }
+    ],
+    "pack": "mafiascum",
+    "seed": 480702
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "ActionInterfered",
+      "payload": {
+        "actor": "slot_2",
+        "reason": "ascetic"
+      }
+    },
+    {
+      "index": 1,
+      "kind": "ConversionBlocked",
+      "payload": {
+        "target": "slot_1",
+        "status": "blocked",
+        "reason": "ascetic"
+      }
+    },
+    {
+      "index": 2,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    }
+  ]
+}

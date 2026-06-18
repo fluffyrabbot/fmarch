@@ -249,6 +249,14 @@
         "bulletproof"
       ]
     },
+    "ascetic": {
+      "description": "Ascetic. Town-aligned passive role immune to pack-declared non-lethal actions.",
+      "alignment": "town",
+      "actions": [],
+      "effects": [
+        "ascetic"
+      ]
+    },
     "rolestopper": {
       "description": "Rolestopper. Passively untargetable, and may rolestop one other slot for the current resolution only.",
       "alignment": "town",
@@ -2840,6 +2848,7 @@
       "bulletproof_vest"
     ],
     "target_state_gate_tags": [
+      "ascetic",
       "commuted",
       "untargetable"
     ],
@@ -3146,6 +3155,14 @@
       }
     },
     "target_state_gate_policy": {
+      "ascetic": {
+        "blocks": [
+          "Protect",
+          "Investigate",
+          "Convert",
+          "Mark"
+        ]
+      },
       "commuted": {
         "blocks": [
           "Kill",
@@ -3704,6 +3721,10 @@
     }
   },
   "effects": {
+    "ascetic": {
+      "duration": "Persistent",
+      "visibility": "Public"
+    },
     "commuted": {
       "duration": "Resolution",
       "visibility": "Hidden"
