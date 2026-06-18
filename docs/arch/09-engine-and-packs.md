@@ -1374,7 +1374,15 @@ Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically`,
-which passed one filtered pipeline test across its six fixed generated seeds. A second Chinese
+which passed one filtered pipeline test across its six fixed generated seeds. Those six generated
+N01 fixtures now also carry artifact-backed semantic minimizer expectations for Prophet parity
+results, Witch heal/poison x-shot use, unsaved poison kills, Guard/Witch protection decisions when
+the generated graph produces them, Cupid lover links plus private lover notices, Hunter
+`RetaliationArmed`, and Wolf Beauty persistent mark rows. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`,
+which passed one filtered pipeline test across all six fixed seeds and checked every generated
+Chinese N01 semantic expectation through `minimize_night_fixture`. That one-phase minimizer proof
+does not cover Wolf Beauty drag because night drag reads a prior folded mark from snapshot state. A second Chinese
 Structured generated lane covers six D01 cases from fixed seeds with legal command
 submissions for sheriff election, Knight duel, White Wolf self-destruct, and ordinary votes, then
 requires replay audit, trace inspection, and projection rebuild. This manifest-listed Chinese

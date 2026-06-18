@@ -2481,7 +2481,16 @@ coverage, and a playable vertical scenario through the command pipeline.
    inner-event decisions in `inspect_trace`, and `audit_rebuild`. This Chinese Structured N01 lane
    was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically`
-   and passed one filtered pipeline test across its six fixed generated seeds. A second
+   and passed one filtered pipeline test across its six fixed generated seeds. Those six generated
+   N01 fixtures now also carry artifact-backed semantic minimizer expectations for Prophet parity
+   results, Witch heal/poison x-shot use, unsaved poison kills, Guard/Witch protection decisions
+   when the generated graph produces them, Cupid lover links plus private lover notices, Hunter
+   `RetaliationArmed`, and Wolf Beauty persistent mark rows. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
+   and passed one filtered pipeline test across all six fixed seeds, checking every generated
+   Chinese N01 semantic expectation through `minimize_night_fixture`. Wolf Beauty drag remains
+   outside that one-phase minimizer proof because night drag reads a prior folded mark from snapshot
+   state. A second
    non-mafiascum lane now generates six Chinese Structured D01 cases from fixed seeds with legal
    sheriff election, Knight duel, White Wolf self-destruct, and ordinary vote submissions, then
    proves the same audit trio plus exact anchored BadgeChanged, DuelResolved, and
@@ -2791,7 +2800,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by extending semantic minimizer
-expectations into the Chinese Structured N01 generated fixture family. Start with Prophet
-investigation, Guard/Witch protection and poison, Cupid link, Hunter retaliation, and Wolf Beauty
-mark/drag rows so minimized fixtures preserve the lane-specific semantics, not only replay success.
+Continue Phase 4 persistent and generated-action systems by teaching `minimize_night_fixture` a
+small folded-state setup surface, then add Chinese Structured semantic minimizer fixtures for Wolf
+Beauty drag, Cupid lover-suicide cascades, and Hunter retaliation/suppression after prior N01 state.
+That should preserve the generated cascade rows through minimization instead of stopping at direct
+one-phase mark/link/retaliation setup events.

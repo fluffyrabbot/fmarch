@@ -12946,6 +12946,41 @@ async fn generated_epicmafia_night_fixture_replays_semantic_expectations_through
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    for seed in [92_001_u64, 92_113, 92_227, 92_331, 92_447, 92_559] {
+        let case = generated_chinese_night_case(seed);
+        let fixture_json =
+            generated_night_case_fixture_json(&case, "chinese_structured", case.seed + 44_000);
+        let fixture: serde_json::Value = serde_json::from_str(&fixture_json)
+            .expect("generated Chinese Structured N01 fixture JSON parses");
+        assert!(
+            generated_expectation_count(&fixture["expectations"]) > 0,
+            "Chinese Structured N01 fixture seed {seed} should preserve semantic expectations"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "generated-chinese-n01-seed-{seed}-semantic-expectations"
+        ));
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "seed {seed} should replay");
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(generated_expectation_count(&fixture["expectations"])),
+            "seed {seed} should check every generated Chinese expectation"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"], true,
+            "seed {seed} should remain minimizer-replayable"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -17498,6 +17533,7 @@ fn generated_case_expectations_json(
 ) -> Option<serde_json::Value> {
     match (pack, phase) {
         ("mafiascum", "N01") => generated_mafiascum_night_expectations_json(case),
+        ("chinese_structured", "N01") => generated_chinese_night_expectations_json(case),
         ("epicmafia", "N01") => generated_epicmafia_night_expectations_json(case),
         ("default_open", "N01") => generated_default_open_night_expectations_json(case),
         _ => None,
@@ -17750,6 +17786,253 @@ fn generated_epicmafia_night_expectations_json(
     }))
 }
 
+fn generated_chinese_night_expectations_json(
+    case: &GeneratedNightCase,
+) -> Option<serde_json::Value> {
+    let mut inner_events = Vec::new();
+    let mut trace_decisions = Vec::new();
+
+    for action in &case.actions {
+        match action.template_id.as_str() {
+            "investigate_alignment" => {
+                let target = action.targets.first()?;
+                inner_events.push(serde_json::json!({
+                    "kind": "InvestigationResult",
+                    "payload": {
+                        "mode": "Parity",
+                        "investigator": action.actor_slot,
+                        "target": target,
+                        "result": generated_chinese_alignment_result(case, target),
+                    }
+                }));
+            }
+            "heal_potion" | "poison_potion" | "link_lovers" => {
+                inner_events.push(generated_chinese_x_shot_expectation(action));
+                if action.template_id == "poison_potion" {
+                    let Some(target) = action.targets.first() else {
+                        continue;
+                    };
+                    if !generated_chinese_guard_sources_for(case, target).is_empty() {
+                        continue;
+                    }
+                    inner_events.push(serde_json::json!({
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": target,
+                            "cause": "poison_potion",
+                            "attackers": [action.actor_slot],
+                            "unstoppable": false,
+                        }
+                    }));
+                } else if action.template_id == "link_lovers" {
+                    let mut slots = action.targets.clone();
+                    slots.sort();
+                    slots.dedup();
+                    if slots.len() >= 2 {
+                        inner_events.push(serde_json::json!({
+                            "kind": "PlayersLinked",
+                            "payload": {
+                                "link_id": action.action_id,
+                                "slots": slots,
+                                "source": action.actor_slot,
+                            }
+                        }));
+                        inner_events.push(serde_json::json!({
+                            "kind": "EffectNotification",
+                            "payload": {
+                                "effect": "lovers_link",
+                                "status": action.action_id,
+                                "audience": slots,
+                            }
+                        }));
+                    }
+                }
+            }
+            "beauty_mark" => {
+                let target = action.targets.first()?;
+                inner_events.push(serde_json::json!({
+                    "kind": "EffectsMarked",
+                    "payload": {
+                        "effect": "wolf_beauty_mark",
+                        "target": target,
+                        "actor": action.actor_slot,
+                        "source_action": action.action_id,
+                        "phase_id": "N01",
+                        "phase_kind": "Night",
+                        "phase_number": 1,
+                        "duration": "Persistent",
+                        "visibility": "Hidden",
+                    }
+                }));
+                inner_events.push(serde_json::json!({
+                    "kind": "WolfBeautyMarked",
+                    "payload": {
+                        "beauty_id": action.actor_slot,
+                        "target_id": target,
+                        "effect": "wolf_beauty_mark",
+                        "source_action": action.action_id,
+                        "phase_id": "N01",
+                        "phase_kind": "Night",
+                        "phase_number": 1,
+                    }
+                }));
+            }
+            "hunter_retaliate" => {
+                let target = action.targets.first()?;
+                inner_events.push(serde_json::json!({
+                    "kind": "RetaliationArmed",
+                    "payload": {
+                        "retaliation_id": action.action_id,
+                        "actor": action.actor_slot,
+                        "target": target,
+                        "source_action": "hunter_retaliate",
+                    }
+                }));
+            }
+            _ => {}
+        }
+    }
+
+    for kill in case.actions.iter().filter(|action| {
+        matches!(
+            action.template_id.as_str(),
+            "wolf_night_kill" | "poison_potion"
+        )
+    }) {
+        let Some(target) = kill.targets.first() else {
+            continue;
+        };
+        if generated_chinese_alignment_result(case, target) == "evil" {
+            continue;
+        }
+        let protectors = if kill.template_id == "poison_potion" {
+            generated_chinese_guard_sources_for(case, target)
+        } else {
+            generated_chinese_protection_sources_for(case, target)
+        };
+        if protectors.is_empty() {
+            continue;
+        }
+        let sources = protectors
+            .iter()
+            .map(|source| source.protector.clone())
+            .collect::<Vec<_>>();
+        inner_events.push(serde_json::json!({
+            "kind": "PlayerSaved",
+            "payload": {
+                "slot_id": target,
+                "reasons": ["protected"],
+                "sources": sources,
+            }
+        }));
+        trace_decisions.push(serde_json::json!({
+            "stage": "kill_resolution",
+            "source": format!("cause:{}", kill.template_id),
+            "outcome": "kill_prevented_by_protection",
+            "detail": {
+                "target": target,
+                "attacker": kill.actor_slot,
+                "cause": kill.template_id,
+                "unstoppable": false,
+                "protectors": protectors,
+            }
+        }));
+    }
+
+    if inner_events.is_empty() && trace_decisions.is_empty() {
+        None
+    } else {
+        Some(serde_json::json!({
+            "inner_events": inner_events,
+            "trace_decisions": trace_decisions,
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct GeneratedChineseProtector {
+    protector: String,
+    action_id: String,
+    template_id: String,
+}
+
+impl serde::Serialize for GeneratedChineseProtector {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serde_json::json!({
+            "protector": self.protector,
+            "action_id": self.action_id,
+            "template_id": self.template_id,
+            "intercepts": false,
+            "intercept_cause": null,
+            "guard_retaliation_cause": null,
+            "cpr_harm_cause": null,
+        })
+        .serialize(serializer)
+    }
+}
+
+fn generated_chinese_x_shot_expectation(action: &GeneratedNightAction) -> serde_json::Value {
+    serde_json::json!({
+        "kind": "ActionUseCounted",
+        "payload": {
+            "actor": action.actor_slot,
+            "template_id": action.template_id,
+            "consumed_action": action.action_id,
+            "counter_id": format!("x_shot:{}", action.template_id),
+            "cadence_policy": "x_shot",
+            "phase_scope": "game",
+            "limit": 1,
+            "used": 1,
+            "remaining": 0,
+            "phase_id": "N01",
+            "phase_kind": "Night",
+            "phase_number": 1,
+        }
+    })
+}
+
+fn generated_chinese_alignment_result(case: &GeneratedNightCase, target: &str) -> &'static str {
+    match generated_role_for(case, target) {
+        Some("wolf" | "wolf_beauty" | "white_wolf_king") => "evil",
+        _ => "good",
+    }
+}
+
+fn generated_chinese_protection_sources_for(
+    case: &GeneratedNightCase,
+    target: &str,
+) -> Vec<GeneratedChineseProtector> {
+    case.actions
+        .iter()
+        .filter(|action| matches!(action.template_id.as_str(), "night_guard" | "heal_potion"))
+        .filter(|action| action.targets == vec![target.to_string()])
+        .map(generated_chinese_protector)
+        .collect()
+}
+
+fn generated_chinese_guard_sources_for(
+    case: &GeneratedNightCase,
+    target: &str,
+) -> Vec<GeneratedChineseProtector> {
+    case.actions
+        .iter()
+        .filter(|action| action.template_id == "night_guard")
+        .filter(|action| action.targets == vec![target.to_string()])
+        .map(generated_chinese_protector)
+        .collect()
+}
+
+fn generated_chinese_protector(action: &GeneratedNightAction) -> GeneratedChineseProtector {
+    GeneratedChineseProtector {
+        protector: action.actor_slot.clone(),
+        action_id: action.action_id.clone(),
+        template_id: action.template_id.clone(),
+    }
+}
+
 fn generated_epicmafia_pk_expectations_json(case: &GeneratedEpicmafiaPkCase) -> serde_json::Value {
     serde_json::json!({
         "inner_events": [
@@ -17995,6 +18278,27 @@ fn generated_night_case_fixture_json_is_minimizer_ready() {
         .unwrap();
     assert_eq!(chinese_fixture["seed"], serde_json::json!(136_001_u64));
     assert_eq!(chinese_fixture["pack"], "chinese_structured");
+    assert_eq!(
+        generated_expectation_count(&chinese_fixture["expectations"]),
+        7,
+        "Chinese N01 seed 92001 should preserve Prophet, Witch, Hunter, and Wolf Beauty semantics"
+    );
+    assert!(
+        chinese_fixture["expectations"]["inner_events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "InvestigationResult"),
+        "Chinese generated fixtures should assert Prophet results"
+    );
+    assert!(
+        chinese_fixture["expectations"]["inner_events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "WolfBeautyMarked"),
+        "Chinese generated fixtures should assert Wolf Beauty marks"
+    );
 }
 
 #[test]
