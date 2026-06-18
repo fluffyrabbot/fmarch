@@ -2481,6 +2481,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    clean projection rebuild, and all semantic expectations checked by
    `nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays`. The report now distinguishes replay
    success, failure-class preservation, and success-invariant preservation.
+   `generated_trigger_dependency_search_shrinks_to_replayable_artifacts` now removes the
+   hand-authored nonminimal-fixture dependency for that proof shape: it runs a bounded
+   `generated_night_case` seed search, discovers generated PGO, Babysitter, and Hider cases with
+   emitted semantic expectations, writes each generated fixture through `GeneratedShrinkArtifacts`,
+   reduces it with `minimize_night_fixture --reduce --write-reduced --write-report`, and replays the
+   reduced JSON artifact with the same expectation counts and clean projection rebuilds.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
    `promoted_success_fixture: false`. `--write-report <path>` now persists the minimizer JSON
@@ -2920,20 +2926,22 @@ coverage, and a playable vertical scenario through the command pipeline.
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
-   required needle set. The local-Postgres
+   required needle set. The bounded generated trigger/dependency shrink lane covers representative
+   PGO/Babysitter/Hider successes; broader randomized shrink breadth and persistent-trigger
+   generated shrinking remain future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
-   culture-pack generation, production benchmark coverage, hosted/operator production capture, and
-   true property-test shrinking remain future work]
+   culture-pack generation, production benchmark coverage, and hosted/operator production capture
+   remain future work]
 
 Exit proof: a stored game can be replayed from event zero and produce semantically identical
 resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by turning the artifact-backed trigger/dependency shrink lane into true
-property-test shrinking. Start with the existing PGO/Babysitter/Hider generated night case builder:
-run a bounded seeded search that automatically emits the minimizer fixture on failure, shrinks it
-with the same semantic expectations, and asserts the reduced artifact still reproduces the
-failure or representative success without relying on a hand-authored nonminimal fixture.
+Continue Phase 4 by extending generated shrink evidence from representative
+PGO/Babysitter/Hider successes into persistent-trigger fixpoint cases. Start with the existing
+Hunter/Lovers/Bomb-style generated lanes: have the generated case builder emit minimizer-ready
+fixtures with semantic expectations, shrink the generated artifact, and replay the reduced JSON
+through command/projection audit before updating the trigger-fixpoint wording again.
