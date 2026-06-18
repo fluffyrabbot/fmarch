@@ -1124,7 +1124,7 @@ freshness, manifest version, and diff count; the shared classifier distinguishes
 malformed, stale, path-mismatched, input-mismatched, drifted, and trusted saved reports. The same
 API vertical proves the v1 contract for all five trusted artifact
 rows and all five untrusted fixture rows, plus the artifact-less status export row and trusted
-status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 11`,
+status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 12`,
 `production.non_trusted = 0`,
 `fixtures.non_trusted = 5`), and compares the host/cohost HTTP status JSON with the no-server
 shared model after normalizing the current game id and wall-clock-derived artifact age/mtime
@@ -1244,6 +1244,17 @@ failing seed, and fails on failed, missing, or manifest-mismatched seeded famili
 deterministic generator coverage, not exhaustive state-space verification.` This command was rerun
 locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`, `expected_family_count: 12`,
 `expected_seed_count: 57`, and `family_manifest_matched: true`.
+`operator-proof-generated-shrink-matrix` currently has artifact state `trusted`, artifact path
+`target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, rendered command
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
+pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
+target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary `Runs
+the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, Lovers, and
+Bomb against local Postgres, writes a versioned report with two cases per family plus success and
+bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage.`
+This row is trusted through the artifact classifier with `ok: true`, `family_count: 6`,
+`case_count: 12`, `expected_family_count: 6`, `expected_case_count: 12`, and
+`family_manifest_matched: true`.
 `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
 path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -1267,14 +1278,14 @@ Read-only consumers can use `python3 tools/engine_port_completion_audit.py --che
 target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
 artifact, and fails if the saved audit is missing, stale versus any declared input, or different
 from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-19 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+20 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
 rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2 unsupported
 parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family rows
 (`feature_flags_test` and `init`). It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
-present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
-trusted command/projection proof row that has not yet been promoted into the browser-smoke required
-needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
+browser-fetched JSON surface, all 12 browser-smoke-required go/no-go metadata needles present,
+trusted metadata rows for large-action, determinism, and generated shrink matrix proof rows, and a
+manifest/status trusted command/projection proof row that has not yet been promoted into the
+browser-smoke required needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
 and blocks completion on the four partial build-order phases: Phase 4 persistent/generated-action
 systems, Phase 5 rich day systems, Phase 6 culture packs, and Phase 7 operational hardening.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,

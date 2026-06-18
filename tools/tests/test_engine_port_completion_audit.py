@@ -132,6 +132,19 @@ class EnginePortCompletionAuditTests(unittest.TestCase):
                 "failed_lanes": [],
                 "golden_pack_dirs": [],
             },
+            "target/operator-proof/current-generated-shrink-matrix-report.tmp.json": {
+                "artifact_version": 1,
+                "artifact_path": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+                "ok": True,
+                "proof_boundary": "fixture boundary",
+                "family_count": 6,
+                "case_count": 12,
+                "expected_family_count": 6,
+                "expected_case_count": 12,
+                "family_manifest_matched": True,
+                "families": {},
+                "entries": [],
+            },
         }
         for relative, data in artifacts.items():
             (root / relative).write_text(

@@ -45,6 +45,7 @@ SAVED_ARTIFACTS = {
     "engine_v4_test_family_coverage": "target/operator-proof/current-engine-v4-test-family-coverage-report.json",
     "unported_im_human_inventory": "target/operator-proof/current-unported-im-human-inventory-report.json",
     "domain_ci_no_postgres": "target/operator-proof/current-domain-ci-no-postgres-report.json",
+    "generated_shrink_matrix": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
     "browser_smoke": "target/operator-browser-smoke/playwright-dom-proof.json",
 }
 REQUIRED_BROWSER_GO_NO_GO_METADATA = [
@@ -53,15 +54,18 @@ REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "trace_row_count: 74",
     "phase_trace_anchored: true",
     "decision_trace_anchored: true",
-    "family_count: 11",
-    "seed_count: 55",
-    "expected_family_count: 11",
-    "expected_seed_count: 55",
+    "family_count: 12",
+    "seed_count: 57",
+    "expected_family_count: 12",
+    "expected_seed_count: 57",
     "family_manifest_matched: true",
+    "case_count: 12",
+    "expected_case_count: 12",
 ]
 REQUIRED_BROWSER_STATUS_METADATA_ROWS = [
     "proof-run-operator-proof-large-action-graph-performance",
     "proof-run-operator-proof-determinism-fuzz",
+    "proof-run-operator-proof-generated-shrink-matrix",
 ]
 
 
@@ -336,6 +340,12 @@ def summarize_saved_artifacts(root: Path) -> dict[str, Any]:
             row["failed_count"] = data.get("failed_count")
             row["failed_lanes"] = data.get("failed_lanes")
             row["golden_pack_dirs"] = data.get("golden_pack_dirs")
+        elif name == "generated_shrink_matrix":
+            row["family_count"] = data.get("family_count")
+            row["case_count"] = data.get("case_count")
+            row["expected_family_count"] = data.get("expected_family_count")
+            row["expected_case_count"] = data.get("expected_case_count")
+            row["family_manifest_matched"] = data.get("family_manifest_matched")
         elif name == "browser_smoke":
             row.update(summarize_browser_smoke(data))
         result[name] = row

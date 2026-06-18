@@ -2771,7 +2771,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    version, and diff count; the shared classifier distinguishes missing, malformed, stale,
    path-mismatched, input-mismatched, drifted, and trusted saved reports. The same API vertical proves the v1 contract for
    all five trusted artifact rows and all five untrusted fixture rows, plus the artifact-less
-   status export row, non-host rejection, and summary counts (`production.trusted = 11`,
+   status export row, non-host rejection, and summary counts (`production.trusted = 12`,
    `production.non_trusted = 0`, `fixtures.non_trusted = 5`), and compares the host/cohost HTTP
    status JSON with the no-server shared model after normalizing the current game id and
    wall-clock-derived artifact age/mtime fields. The host/cohost-only
@@ -2894,6 +2894,17 @@ coverage, and a playable vertical scenario through the command pipeline.
    deterministic generator coverage, not exhaustive state-space verification.` This command was
    rerun locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`,
    `expected_family_count: 12`, `expected_seed_count: 57`, and `family_manifest_matched: true`.
+   `operator-proof-generated-shrink-matrix` currently has artifact state `trusted`, artifact path
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, rendered command
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
+   pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
+   target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
+   `Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter,
+   Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
+   plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive
+   randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
+   `family_count: 6`, `case_count: 12`, `expected_family_count: 6`, `expected_case_count: 12`,
+   and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -2950,15 +2961,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
    checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
    result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-   browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
-   present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
-   trusted command/projection proof row that has not yet been promoted into the browser-smoke
-   required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
+   browser-fetched JSON surface, all 12 browser-smoke-required go/no-go metadata needles present,
+   trusted metadata rows for large-action, determinism, and generated shrink matrix proof rows, and
+   a manifest/status trusted command/projection proof row that has not yet been promoted into the
+   browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
    `ok: true`, six families, 12 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Lovers/Bomb
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
-   breadth and first-class proof-run promotion remain future work. The local-Postgres
+   breadth remains future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
@@ -2970,8 +2981,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by promoting the deterministic generated shrink matrix from a `.tmp` local report
-into a first-class proof surface. Start by adding an operator-proof manifest/status row for
-`current-generated-shrink-matrix-report.tmp.json`, include it in the completion-audit freshness
-inputs, and add the smallest browser/status-smoke needle so generated shrink breadth cannot drift
-silently while still preserving its local-Postgres-only, non-exhaustive proof boundary.
+Continue Phase 4 by moving from proof-surface promotion back into generated-action semantics:
+extend the generated shrink matrix to cover one additional persistent/generated-action family with
+a real reduced replay, preferably poison/douse/ignite or motivator/extra-action because those still
+exercise state that carries across phases. Start with one deterministic success fixture plus one
+bad-expectation fixture, prove the minimizer preserves both success and failure semantics, then add
+the family to the matrix only after the reduced replay is green.

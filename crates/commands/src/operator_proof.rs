@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path as FsPath, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -19,6 +19,9 @@ pub const COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
+pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 6;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 12;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,6 +74,7 @@ pub enum ProofRunArtifactKind {
     TraceInspectionReport,
     LargeActionGraphPerformanceReport,
     DeterminismFuzzReport,
+    GeneratedShrinkMatrixReport,
 }
 
 impl Default for ProofRunArtifactKind {
@@ -190,6 +194,15 @@ pub enum ProofRunArtifactState {
         seed_count: usize,
         expected_family_count: usize,
         expected_seed_count: usize,
+        family_manifest_matched: bool,
+        freshness: ProofRunArtifactFreshness,
+    },
+    GeneratedShrinkMatrixReportPresent {
+        artifact_version: u16,
+        family_count: usize,
+        case_count: usize,
+        expected_family_count: usize,
+        expected_case_count: usize,
         family_manifest_matched: bool,
         freshness: ProofRunArtifactFreshness,
     },
@@ -315,6 +328,10 @@ pub struct OperatorProofRunTrustedArtifactMetadata {
     pub expected_seed_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub family_manifest_matched: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub case_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected_case_count: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -552,6 +569,51 @@ pub struct OperatorDeterminismFuzzReport {
     pub first_failing_seed: Option<u64>,
     pub proof_boundary: String,
     pub families: Vec<OperatorDeterminismFuzzFamily>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorGeneratedShrinkMatrixReport {
+    pub artifact_version: u16,
+    pub artifact_path: String,
+    pub ok: bool,
+    pub proof_boundary: String,
+    pub family_count: usize,
+    pub case_count: usize,
+    pub expected_family_count: usize,
+    pub expected_case_count: usize,
+    pub family_manifest_matched: bool,
+    pub families: BTreeMap<String, usize>,
+    pub entries: Vec<OperatorGeneratedShrinkMatrixEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorGeneratedShrinkMatrixEntry {
+    pub family: String,
+    pub seed: u64,
+    pub expectation_count: usize,
+    pub success: OperatorGeneratedShrinkMatrixSuccess,
+    pub bad_expectation: OperatorGeneratedShrinkMatrixBadExpectation,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorGeneratedShrinkMatrixSuccess {
+    pub ok: bool,
+    pub success_invariant_preserved: bool,
+    pub promoted_success_fixture: bool,
+    pub reduction_steps: usize,
+    pub report_path: String,
+    pub reduced_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorGeneratedShrinkMatrixBadExpectation {
+    pub ok: bool,
+    pub failure_class: String,
+    pub failure_class_preserved: bool,
+    pub promoted_success_fixture: bool,
+    pub reduction_steps: usize,
+    pub report_path: String,
+    pub reduced_path: String,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
@@ -1698,6 +1760,37 @@ pub fn proof_run_artifact_status(
                 ..OperatorProofRunTrustedArtifactMetadata::default()
             }),
         },
+        ProofRunArtifactState::GeneratedShrinkMatrixReportPresent {
+            artifact_version,
+            family_count,
+            case_count,
+            expected_family_count,
+            expected_case_count,
+            family_manifest_matched,
+            freshness,
+        } => OperatorProofRunArtifactStatus {
+            path: path.to_string(),
+            state: OperatorProofRunArtifactStateKind::Trusted,
+            reported_path: None,
+            artifact_version: Some(artifact_version),
+            expected_version: Some(GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION),
+            modified_at_unix_seconds: Some(freshness.modified_at_unix_seconds),
+            age_seconds: Some(freshness.age_seconds),
+            freshness_max_age_seconds: Some(freshness.max_age_seconds),
+            expected_path: None,
+            actual_path: None,
+            reported_expected_path: None,
+            reported_actual_path: None,
+            diff_count: Some(0),
+            trusted_metadata: Some(OperatorProofRunTrustedArtifactMetadata {
+                family_count: Some(family_count as u64),
+                case_count: Some(case_count as u64),
+                expected_family_count: Some(expected_family_count as u64),
+                expected_case_count: Some(expected_case_count as u64),
+                family_manifest_matched: Some(family_manifest_matched),
+                ..OperatorProofRunTrustedArtifactMetadata::default()
+            }),
+        },
     }
 }
 
@@ -1818,6 +1911,13 @@ pub fn proof_run_artifact_state_for_spec(
         }
         ProofRunArtifactKind::DeterminismFuzzReport => {
             proof_run_determinism_fuzz_report_artifact_state(
+                path,
+                expected_manifest_version,
+                artifact_freshness_max_age_seconds,
+            )
+        }
+        ProofRunArtifactKind::GeneratedShrinkMatrixReport => {
+            proof_run_generated_shrink_matrix_report_artifact_state(
                 path,
                 expected_manifest_version,
                 artifact_freshness_max_age_seconds,
@@ -1990,6 +2090,133 @@ pub fn proof_run_determinism_fuzz_report_artifact_state(
         artifact_freshness_max_age_seconds,
         SystemTime::now(),
     )
+}
+
+pub fn proof_run_generated_shrink_matrix_report_artifact_state(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+) -> ProofRunArtifactState {
+    proof_run_generated_shrink_matrix_report_artifact_state_at(
+        path,
+        expected_manifest_version,
+        artifact_freshness_max_age_seconds,
+        SystemTime::now(),
+    )
+}
+
+pub fn proof_run_generated_shrink_matrix_report_artifact_state_at(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+    now: SystemTime,
+) -> ProofRunArtifactState {
+    let artifact_path = proof_run_artifact_fs_path(path);
+    if !artifact_path.exists() {
+        return ProofRunArtifactState::Missing;
+    }
+    let Ok(text) = fs::read_to_string(&artifact_path) else {
+        return ProofRunArtifactState::Malformed;
+    };
+    let Ok(report) = serde_json::from_str::<OperatorGeneratedShrinkMatrixReport>(&text) else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if report.artifact_path != path {
+        return ProofRunArtifactState::PathMismatch {
+            reported_path: report.artifact_path,
+        };
+    }
+    if report.artifact_version != GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION {
+        return ProofRunArtifactState::VersionMismatch {
+            artifact_manifest_version: report.artifact_version,
+            expected_manifest_version: GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
+        };
+    }
+    if expected_manifest_version == 0 {
+        return ProofRunArtifactState::Malformed;
+    }
+    let Ok(freshness) =
+        proof_run_artifact_freshness(&artifact_path, artifact_freshness_max_age_seconds, now)
+    else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if freshness.age_seconds > artifact_freshness_max_age_seconds {
+        return ProofRunArtifactState::Stale { freshness };
+    }
+
+    let expected_families = generated_shrink_matrix_expected_families();
+    let expected_family_count = expected_families.len();
+    let expected_case_count: usize = expected_families.values().sum();
+    let actual_family_counts =
+        report
+            .entries
+            .iter()
+            .fold(BTreeMap::<String, usize>::new(), |mut counts, entry| {
+                *counts.entry(entry.family.clone()).or_default() += 1;
+                counts
+            });
+    let family_manifest_matched = report.families == expected_families
+        && actual_family_counts == expected_families
+        && report.family_count == expected_family_count
+        && report.expected_family_count == expected_family_count
+        && report.case_count == expected_case_count
+        && report.expected_case_count == expected_case_count
+        && report.family_manifest_matched
+        && report.entries.len() == expected_case_count;
+    let entry_failures = report
+        .entries
+        .iter()
+        .filter(|entry| {
+            entry.expectation_count == 0
+                || !entry.success.ok
+                || !entry.success.success_invariant_preserved
+                || !entry.success.promoted_success_fixture
+                || entry.bad_expectation.ok
+                || entry.bad_expectation.failure_class != "semantic_expectation"
+                || !entry.bad_expectation.failure_class_preserved
+                || entry.bad_expectation.promoted_success_fixture
+                || entry.success.report_path.is_empty()
+                || entry.success.reduced_path.is_empty()
+                || entry.bad_expectation.report_path.is_empty()
+                || entry.bad_expectation.reduced_path.is_empty()
+        })
+        .count();
+    let semantic_failures = [
+        usize::from(!report.ok),
+        usize::from(!family_manifest_matched),
+        entry_failures,
+    ]
+    .into_iter()
+    .sum();
+    if semantic_failures > 0 {
+        return ProofRunArtifactState::Drifted {
+            diff_count: semantic_failures,
+            freshness,
+        };
+    }
+    ProofRunArtifactState::GeneratedShrinkMatrixReportPresent {
+        artifact_version: report.artifact_version,
+        family_count: report.family_count,
+        case_count: report.case_count,
+        expected_family_count: report.expected_family_count,
+        expected_case_count: report.expected_case_count,
+        family_manifest_matched: report.family_manifest_matched,
+        freshness,
+    }
+}
+
+pub fn generated_shrink_matrix_expected_families() -> BTreeMap<String, usize> {
+    [
+        ("babysitter", 2_usize),
+        ("bomb", 2),
+        ("hider", 2),
+        ("hunter", 2),
+        ("lovers", 2),
+        ("pgo", 2),
+    ]
+    .into_iter()
+    .map(|(family, count)| (family.to_string(), count))
+    .collect()
 }
 
 pub fn proof_run_determinism_fuzz_report_artifact_state_at(
@@ -3059,7 +3286,7 @@ mod tests {
                 "{doc_name} should record current trusted artifact state"
             );
             assert!(
-                doc.contains("production.trusted = 11")
+                doc.contains("production.trusted = 12")
                     && doc.contains("production.non_trusted = 0"),
                 "{doc_name} should record production artifact go/no-go counts"
             );
@@ -3181,6 +3408,8 @@ mod tests {
                                 "seed_count",
                                 "expected_family_count",
                                 "expected_seed_count",
+                                "case_count",
+                                "expected_case_count",
                             ] {
                                 assert_optional_metadata_u64(metadata, field);
                             }
@@ -3612,6 +3841,39 @@ mod tests {
             true
         );
         assert!(determinism["trusted_metadata"].get("game_id").is_none());
+
+        let generated_matrix = serde_json::to_value(proof_run_artifact_status(
+            "target/generated-shrink-matrix.json",
+            ProofRunArtifactState::GeneratedShrinkMatrixReportPresent {
+                artifact_version: GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
+                family_count: 6,
+                case_count: 12,
+                expected_family_count: 6,
+                expected_case_count: 12,
+                family_manifest_matched: true,
+                freshness: ProofRunArtifactFreshness {
+                    modified_at_unix_seconds: 23,
+                    age_seconds: 1,
+                    max_age_seconds: 86_400,
+                },
+            },
+        ))
+        .unwrap();
+        assert_eq!(generated_matrix["state"], "trusted");
+        assert_eq!(generated_matrix["trusted_metadata"]["family_count"], 6);
+        assert_eq!(generated_matrix["trusted_metadata"]["case_count"], 12);
+        assert_eq!(
+            generated_matrix["trusted_metadata"]["expected_family_count"],
+            6
+        );
+        assert_eq!(
+            generated_matrix["trusted_metadata"]["expected_case_count"],
+            12
+        );
+        assert_eq!(
+            generated_matrix["trusted_metadata"]["family_manifest_matched"],
+            true
+        );
     }
 
     #[test]
@@ -4372,6 +4634,67 @@ mod tests {
     }
 
     #[test]
+    fn generated_shrink_matrix_report_classifies_trusted_and_drifted() {
+        let dir = env::temp_dir().join(format!("fmarch-generated-shrink-{}", Uuid::new_v4()));
+        let artifact = dir.join("generated-shrink-matrix.json");
+        fs::create_dir_all(&dir).expect("artifact dir");
+        let artifact_text = artifact.to_string_lossy().to_string();
+        let mut trusted = generated_shrink_matrix_bootstrap_report(&artifact_text);
+        fs::write(&artifact, serde_json::to_vec_pretty(&trusted).unwrap())
+            .expect("generated shrink matrix report write");
+
+        match proof_run_generated_shrink_matrix_report_artifact_state_at(
+            &artifact_text,
+            1,
+            86_400,
+            SystemTime::now(),
+        ) {
+            ProofRunArtifactState::GeneratedShrinkMatrixReportPresent {
+                artifact_version,
+                family_count,
+                case_count,
+                expected_family_count,
+                expected_case_count,
+                family_manifest_matched,
+                freshness,
+            } => {
+                assert_eq!(
+                    artifact_version,
+                    GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION
+                );
+                assert_eq!(family_count, GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT);
+                assert_eq!(case_count, GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT);
+                assert_eq!(
+                    expected_family_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+                );
+                assert_eq!(
+                    expected_case_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+                );
+                assert!(family_manifest_matched);
+                assert_eq!(freshness.max_age_seconds, 86_400);
+            }
+            other => panic!("expected trusted generated shrink matrix report, got {other:?}"),
+        }
+
+        trusted.ok = false;
+        trusted.entries[0].bad_expectation.failure_class = "wrong_failure".to_string();
+        fs::write(&artifact, serde_json::to_vec_pretty(&trusted).unwrap())
+            .expect("drifted generated shrink matrix report write");
+        assert!(matches!(
+            proof_run_generated_shrink_matrix_report_artifact_state_at(
+                &artifact_text,
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::Drifted { diff_count, .. } if diff_count >= 1
+        ));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn proof_run_artifact_state_classifies_local_artifacts() {
         let dir = env::temp_dir().join(format!("fmarch-proof-page-{}", Uuid::new_v4()));
         let artifact = dir.join("report.json");
@@ -4769,6 +5092,13 @@ mod tests {
             ))
             .expect("determinism fuzz report serializes"),
         );
+        write_workspace_json(
+            "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+            serde_json::to_value(generated_shrink_matrix_bootstrap_report(
+                "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+            ))
+            .expect("generated shrink matrix report serializes"),
+        );
     }
 
     fn determinism_fuzz_bootstrap_report(artifact_path: &str) -> OperatorDeterminismFuzzReport {
@@ -4785,6 +5115,63 @@ mod tests {
             true,
             &output,
         )
+    }
+
+    fn generated_shrink_matrix_bootstrap_report(
+        artifact_path: &str,
+    ) -> OperatorGeneratedShrinkMatrixReport {
+        let families = generated_shrink_matrix_expected_families();
+        let entries = families
+            .iter()
+            .flat_map(|(family, count)| {
+                (0..*count).map(move |index| {
+                    let seed = 90_000 + index as u64;
+                    OperatorGeneratedShrinkMatrixEntry {
+                        family: family.clone(),
+                        seed,
+                        expectation_count: 3,
+                        success: OperatorGeneratedShrinkMatrixSuccess {
+                            ok: true,
+                            success_invariant_preserved: true,
+                            promoted_success_fixture: true,
+                            reduction_steps: 2,
+                            report_path: format!(
+                                "target/operator-proof/generated-shrink-matrix-{family}-{seed}-ok.report.tmp.json"
+                            ),
+                            reduced_path: format!(
+                                "target/operator-proof/generated-shrink-matrix-{family}-{seed}-ok.reduced.tmp.json"
+                            ),
+                        },
+                        bad_expectation: OperatorGeneratedShrinkMatrixBadExpectation {
+                            ok: false,
+                            failure_class: "semantic_expectation".to_string(),
+                            failure_class_preserved: true,
+                            promoted_success_fixture: false,
+                            reduction_steps: 1,
+                            report_path: format!(
+                                "target/operator-proof/generated-shrink-matrix-{family}-{seed}-bad.report.tmp.json"
+                            ),
+                            reduced_path: format!(
+                                "target/operator-proof/generated-shrink-matrix-{family}-{seed}-bad.reduced.tmp.json"
+                            ),
+                        },
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        OperatorGeneratedShrinkMatrixReport {
+            artifact_version: GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
+            artifact_path: artifact_path.to_string(),
+            ok: true,
+            proof_boundary: "fixture generated shrink matrix boundary".to_string(),
+            family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+            case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+            expected_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+            expected_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+            family_manifest_matched: true,
+            families,
+            entries,
+        }
     }
 
     fn write_operator_provenance_fixture(path: &str, reported_path: &str, manifest_version: u16) {

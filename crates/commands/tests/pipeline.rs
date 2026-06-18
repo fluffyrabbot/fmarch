@@ -12163,20 +12163,33 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             .to_string();
         *family_counts.entry(family).or_default() += 1;
     }
+    let artifact_path = "target/operator-proof/current-generated-shrink-matrix-report.tmp.json";
+    let report_path =
+        generated_shrink_artifact_root().join("current-generated-shrink-matrix-report.tmp.json");
     let report = serde_json::json!({
         "artifact_version": 1,
+        "artifact_path": artifact_path,
         "ok": true,
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
+        "expected_family_count": 6,
+        "expected_case_count": 12,
+        "family_manifest_matched": family_counts == [
+            ("babysitter".to_string(), 2_usize),
+            ("bomb".to_string(), 2),
+            ("hider".to_string(), 2),
+            ("hunter".to_string(), 2),
+            ("lovers".to_string(), 2),
+            ("pgo".to_string(), 2),
+        ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
     assert_eq!(report["family_count"], serde_json::json!(6));
     assert_eq!(report["case_count"], serde_json::json!(12));
+    assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
-    let report_path =
-        generated_shrink_artifact_root().join("current-generated-shrink-matrix-report.tmp.json");
     write_generated_shrink_artifact(
         &report_path,
         &serde_json::to_string_pretty(&report).expect("matrix report serializes"),

@@ -47,6 +47,8 @@ const largeActionGraphPerformanceReport =
   "target/operator-proof/current-large-action-graph-performance-report.json";
 const determinismFuzzReport =
   "target/operator-proof/current-determinism-fuzz-report.json";
+const generatedShrinkMatrixReport =
+  "target/operator-proof/current-generated-shrink-matrix-report.tmp.json";
 const proofRunSelectors = await proofRunAnchorSelectors();
 const checkedAuditGame = "08d8a45f-6c3b-4401-8e31-8d7637f36a82";
 
@@ -87,7 +89,7 @@ const pages = [
       "Local-Only Regression Lanes",
       "Operator Proof Fixtures",
       "PRODUCTION ARTIFACTS",
-      "trusted 10 / 10; non_trusted 0",
+      "trusted 12 / 12; non_trusted 0",
       "FIXTURE ARTIFACTS",
       "trusted 0 / 5; non_trusted 5",
       "large_action_graph_resolves_and_audits_within_regression_ceiling",
@@ -101,6 +103,7 @@ const pages = [
       "target/operator-proof/current-trace-inspection-report.json",
       "target/operator-proof/current-large-action-graph-performance-report.json",
       "target/operator-proof/current-determinism-fuzz-report.json",
+      generatedShrinkMatrixReport,
       "target/operator-proof/missing-artifact-provenance-guard.json",
       "artifact not present locally",
       "target/operator-proof/malformed-artifact-metadata-guard.json",
@@ -128,6 +131,7 @@ const pages = [
       "audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json",
       "audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json",
       "audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
+      "generated_shrink_matrix_writes_compact_operator_report",
     ],
     selectors: [
       ...proofRunSelectors,
@@ -282,7 +286,7 @@ const pages = [
     checks: [
       "Operator Proof Artifact Go/No-Go",
       "go",
-      "trusted 10 / 10; non_trusted 0",
+      "trusted 12 / 12; non_trusted 0",
       "proof-run-operator-proof-artifact-go-no-go",
       "proof-run-operator-proof-artifact-retention",
       "proof-run-operator-proof-projection-rebuild",
@@ -290,16 +294,19 @@ const pages = [
       "proof-run-operator-proof-trace-inspection",
       "proof-run-operator-proof-large-action-graph-performance",
       "proof-run-operator-proof-determinism-fuzz",
+      "proof-run-operator-proof-generated-shrink-matrix",
       "resolve_elapsed_ms: 321",
       "threshold_ms: 20000",
       "trace_row_count: 74",
       "phase_trace_anchored: true",
       "decision_trace_anchored: true",
-      "family_count: 11",
-      "seed_count: 55",
-      "expected_family_count: 11",
-      "expected_seed_count: 55",
+      "family_count: 12",
+      "seed_count: 57",
+      "expected_family_count: 12",
+      "expected_seed_count: 57",
       "family_manifest_matched: true",
+      "case_count: 12",
+      "expected_case_count: 12",
       "audit_operator_proof_artifacts",
     ],
   },
@@ -494,8 +501,8 @@ const jsonPages = [
     contractVersion: 1,
     summary: {
       production: {
-        total_artifact_rows: 10,
-        trusted: 10,
+        total_artifact_rows: 12,
+        trusted: 12,
         non_trusted: 0,
       },
       fixtures: {
@@ -606,10 +613,26 @@ const jsonPages = [
         artifact_version: 1,
         expected_version: 1,
         trusted: {
-          family_count: 11,
-          seed_count: 55,
-          expected_family_count: 11,
-          expected_seed_count: 55,
+          family_count: 12,
+          seed_count: 57,
+          expected_family_count: 12,
+          expected_seed_count: 57,
+          family_manifest_matched: true,
+        },
+        audit_report: {
+          diff_count: 0,
+        },
+      },
+      {
+        row_id: "proof-run-operator-proof-generated-shrink-matrix",
+        state: "trusted",
+        artifact_version: 1,
+        expected_version: 1,
+        trusted: {
+          family_count: 6,
+          case_count: 12,
+          expected_family_count: 6,
+          expected_case_count: 12,
           family_manifest_matched: true,
         },
         audit_report: {
@@ -674,6 +697,13 @@ const determinismFuzzFamilies = [
     pack: "mafiascum",
     phase_scope: "N01,N02",
     seeds: [8101, 8202, 8303, 8404],
+  },
+  {
+    id: "seeded-day-trigger-policy",
+    selector: "seeded_day_trigger_policy_replay_audit_and_rebuild_deterministically",
+    pack: "mafiascum",
+    phase_scope: "D01",
+    seeds: [8501, 8602],
   },
   {
     id: "generated-mafiascum-night",
@@ -751,6 +781,57 @@ function determinismFuzzBootstrapReport() {
     proof_boundary:
       "Runs the known seeded command-pipeline replay/projection/trace scenario families as local Postgres integration tests; this is deterministic generator coverage, not exhaustive state-space verification.",
     families,
+  };
+}
+
+function generatedShrinkMatrixBootstrapReport() {
+  const families = {
+    babysitter: 2,
+    bomb: 2,
+    hider: 2,
+    hunter: 2,
+    lovers: 2,
+    pgo: 2,
+  };
+  const entries = Object.entries(families).flatMap(([family, count]) =>
+    Array.from({ length: count }, (_, index) => {
+      const seed = 90000 + index;
+      return {
+        family,
+        seed,
+        expectation_count: 3,
+        success: {
+          ok: true,
+          success_invariant_preserved: true,
+          promoted_success_fixture: true,
+          reduction_steps: 2,
+          report_path: `target/operator-proof/generated-shrink-matrix-${family}-${seed}-ok.report.tmp.json`,
+          reduced_path: `target/operator-proof/generated-shrink-matrix-${family}-${seed}-ok.reduced.tmp.json`,
+        },
+        bad_expectation: {
+          ok: false,
+          failure_class: "semantic_expectation",
+          failure_class_preserved: true,
+          promoted_success_fixture: false,
+          reduction_steps: 1,
+          report_path: `target/operator-proof/generated-shrink-matrix-${family}-${seed}-bad.report.tmp.json`,
+          reduced_path: `target/operator-proof/generated-shrink-matrix-${family}-${seed}-bad.reduced.tmp.json`,
+        },
+      };
+    }),
+  );
+  return {
+    artifact_version: 1,
+    artifact_path: generatedShrinkMatrixReport,
+    ok: true,
+    proof_boundary: "fixture generated shrink matrix boundary",
+    family_count: 6,
+    case_count: 12,
+    expected_family_count: 6,
+    expected_case_count: 12,
+    family_manifest_matched: true,
+    families,
+    entries,
   };
 }
 
@@ -876,6 +957,8 @@ function assertProofRunStatusContract(name, body, expectedContractVersion) {
               "seed_count",
               "expected_family_count",
               "expected_seed_count",
+              "case_count",
+              "expected_case_count",
             ]) {
               assertOptionalNumber(metadata, field, `${name} row ${row.row_id}.trusted_metadata`);
             }
@@ -1362,6 +1445,10 @@ async function writeLocalReportBootstraps() {
   await writeFile(
     path.join(root, determinismFuzzReport),
     JSON.stringify(determinismFuzzBootstrapReport(), null, 2),
+  );
+  await writeFile(
+    path.join(root, generatedShrinkMatrixReport),
+    JSON.stringify(generatedShrinkMatrixBootstrapReport(), null, 2),
   );
 }
 

@@ -2984,6 +2984,12 @@ fn render_operator_proof_go_no_go_html(
                 "expected_seed_count",
                 metadata.expected_seed_count,
             );
+            render_optional_artifact_u64(&mut html, "case_count", metadata.case_count);
+            render_optional_artifact_u64(
+                &mut html,
+                "expected_case_count",
+                metadata.expected_case_count,
+            );
             render_optional_artifact_bool(
                 &mut html,
                 "family_manifest_matched",
@@ -3303,6 +3309,12 @@ fn render_artifact_cell(html: &mut String, artifact: &SharedOperatorProofRunArti
                     html,
                     "expected_seed_count",
                     metadata.expected_seed_count,
+                );
+                render_optional_artifact_u64(html, "case_count", metadata.case_count);
+                render_optional_artifact_u64(
+                    html,
+                    "expected_case_count",
+                    metadata.expected_case_count,
                 );
                 render_optional_artifact_bool(
                     html,
@@ -4432,7 +4444,7 @@ mod tests {
                 "{doc_name} should record current trusted artifact state"
             );
             assert!(
-                doc.contains("production.trusted = 10")
+                doc.contains("production.trusted = 12")
                     && doc.contains("production.non_trusted = 0"),
                 "{doc_name} should record production artifact go/no-go counts"
             );
@@ -4550,6 +4562,8 @@ mod tests {
                                 "seed_count",
                                 "expected_family_count",
                                 "expected_seed_count",
+                                "case_count",
+                                "expected_case_count",
                             ] {
                                 assert_optional_metadata_u64(metadata, field);
                             }

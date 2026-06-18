@@ -241,6 +241,16 @@
           "proof_boundary": "Runs the known seeded command-pipeline replay/projection/trace scenario families as local Postgres integration tests, writes a versioned report with exact expected family/seed manifest coverage and first failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is deterministic generator coverage, not exhaustive state-space verification."
         },
         {
+          "id": "operator-proof-generated-shrink-matrix",
+          "family": "Operator proof generated shrink matrix",
+          "scope": "Local-only",
+          "command_template": "DATABASE_URL={database_url} cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+          "test_selector": "generated_shrink_matrix_writes_compact_operator_report",
+          "artifact_path": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+          "artifact_kind": "generated_shrink_matrix_report",
+          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
+        },
+        {
           "id": "operator-proof-command-projection-resolution",
           "family": "Operator proof command/projection resolution",
           "scope": "Local-only",
