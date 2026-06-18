@@ -1,7 +1,7 @@
 {
   "name": "test_ita_buffered",
   "version": 1,
-  "ir_version": 59,
+  "ir_version": 60,
   "roles": {
     "ita_shooter": {
       "description": "Test ITA participant whose session buffers shots before release.",
@@ -28,6 +28,27 @@
       "description": "Town-aligned test role with no actions.",
       "alignment": "town",
       "actions": []
+    },
+    "day_killer": {
+      "description": "Test day killer used to make buffered ITA release-time refund fixtures command-native.",
+      "alignment": "town",
+      "actions": [
+        {
+          "id": "day_kill",
+          "ability": "Kill",
+          "window": "Day",
+          "targets": "One",
+          "modifiers": [],
+          "constraints": {
+            "max_targets": 1,
+            "self_allowed": false,
+            "unique_targets": true,
+            "roleblockable": false,
+            "priority": 90,
+            "x_shots": null
+          }
+        }
+      ]
     },
     "mafia_goon": {
       "description": "Mafia-aligned test role with no actions.",
@@ -63,6 +84,9 @@
     "default_hit_chance": 1.0,
     "auto_close": true,
     "vote_conflict": "ResolveShotsBeforeVote",
+    "resolution_policy": {
+      "on_target_already_dead": "REFUND_SHOT"
+    },
     "sessions": [
       {
         "session_id": "d1",

@@ -3202,19 +3202,20 @@ fn ita_shot_actions_require_v9_day_target_shape_and_sessions() {
 }
 
 #[test]
-fn ita_session_buffer_delay_requires_v59_and_positive_delay() {
+fn ita_session_buffer_delay_with_resolution_policy_requires_v60_and_positive_delay() {
     let mut value = serde_json::to_value(load_pack_named("test_ita_buffered")).unwrap();
-    value["ir_version"] = json!(58);
+    value["ir_version"] = json!(59);
 
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 59",
+        "pack declares features requiring ir_version >= 60",
     );
     assert_issue(&err, "ir_version", "ita.session.buffer_delay_ms");
+    assert_issue(&err, "ir_version", "ita.resolution_policy");
 
-    value["ir_version"] = json!(59);
+    value["ir_version"] = json!(60);
     value["ita"]["sessions"][0]["buffer_delay_ms"] = json!(0);
     let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
     assert_issue(&err, "ita.sessions[0].buffer_delay_ms", "greater than zero");
