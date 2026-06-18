@@ -20,6 +20,7 @@ pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
+pub const GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 29;
 pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 58;
 
@@ -75,6 +76,7 @@ pub enum ProofRunArtifactKind {
     LargeActionGraphPerformanceReport,
     DeterminismFuzzReport,
     GeneratedShrinkMatrixReport,
+    GeneratedShrinkGapAuditReport,
 }
 
 impl Default for ProofRunArtifactKind {
@@ -206,6 +208,19 @@ pub enum ProofRunArtifactState {
         family_manifest_matched: bool,
         freshness: ProofRunArtifactFreshness,
     },
+    GeneratedShrinkGapAuditReportPresent {
+        artifact_version: u16,
+        expected_family_count: usize,
+        manifest_family_count: usize,
+        expected_case_count: usize,
+        manifest_case_count: usize,
+        missing_family_count: usize,
+        unexpected_family_count: usize,
+        count_mismatch_count: usize,
+        evidence_failure_count: usize,
+        gap_audit_ok: bool,
+        freshness: ProofRunArtifactFreshness,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -332,6 +347,20 @@ pub struct OperatorProofRunTrustedArtifactMetadata {
     pub case_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expected_case_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_family_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest_case_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing_family_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unexpected_family_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count_mismatch_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub evidence_failure_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gap_audit_ok: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -584,6 +613,21 @@ pub struct OperatorGeneratedShrinkMatrixReport {
     pub family_manifest_matched: bool,
     pub families: BTreeMap<String, usize>,
     pub entries: Vec<OperatorGeneratedShrinkMatrixEntry>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OperatorGeneratedShrinkGapAuditReport {
+    pub artifact_version: u16,
+    pub artifact_path: String,
+    pub ok: bool,
+    pub expected_family_count: usize,
+    pub manifest_family_count: usize,
+    pub expected_case_count: usize,
+    pub manifest_case_count: usize,
+    pub missing_families: Vec<String>,
+    pub unexpected_families: Vec<String>,
+    pub count_mismatches: Vec<Value>,
+    pub evidence_failures: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -1791,6 +1835,47 @@ pub fn proof_run_artifact_status(
                 ..OperatorProofRunTrustedArtifactMetadata::default()
             }),
         },
+        ProofRunArtifactState::GeneratedShrinkGapAuditReportPresent {
+            artifact_version,
+            expected_family_count,
+            manifest_family_count,
+            expected_case_count,
+            manifest_case_count,
+            missing_family_count,
+            unexpected_family_count,
+            count_mismatch_count,
+            evidence_failure_count,
+            gap_audit_ok,
+            freshness,
+        } => OperatorProofRunArtifactStatus {
+            path: path.to_string(),
+            state: OperatorProofRunArtifactStateKind::Trusted,
+            reported_path: None,
+            artifact_version: Some(artifact_version),
+            expected_version: Some(GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION),
+            modified_at_unix_seconds: Some(freshness.modified_at_unix_seconds),
+            age_seconds: Some(freshness.age_seconds),
+            freshness_max_age_seconds: Some(freshness.max_age_seconds),
+            expected_path: None,
+            actual_path: None,
+            reported_expected_path: None,
+            reported_actual_path: None,
+            diff_count: Some(0),
+            trusted_metadata: Some(OperatorProofRunTrustedArtifactMetadata {
+                expected_family_count: Some(expected_family_count as u64),
+                manifest_family_count: Some(manifest_family_count as u64),
+                expected_case_count: Some(expected_case_count as u64),
+                manifest_case_count: Some(manifest_case_count as u64),
+                family_count: Some(manifest_family_count as u64),
+                case_count: Some(manifest_case_count as u64),
+                missing_family_count: Some(missing_family_count as u64),
+                unexpected_family_count: Some(unexpected_family_count as u64),
+                count_mismatch_count: Some(count_mismatch_count as u64),
+                evidence_failure_count: Some(evidence_failure_count as u64),
+                gap_audit_ok: Some(gap_audit_ok),
+                ..OperatorProofRunTrustedArtifactMetadata::default()
+            }),
+        },
     }
 }
 
@@ -1918,6 +2003,13 @@ pub fn proof_run_artifact_state_for_spec(
         }
         ProofRunArtifactKind::GeneratedShrinkMatrixReport => {
             proof_run_generated_shrink_matrix_report_artifact_state(
+                path,
+                expected_manifest_version,
+                artifact_freshness_max_age_seconds,
+            )
+        }
+        ProofRunArtifactKind::GeneratedShrinkGapAuditReport => {
+            proof_run_generated_shrink_gap_audit_report_artifact_state(
                 path,
                 expected_manifest_version,
                 artifact_freshness_max_age_seconds,
@@ -2201,6 +2293,95 @@ pub fn proof_run_generated_shrink_matrix_report_artifact_state_at(
         expected_family_count: report.expected_family_count,
         expected_case_count: report.expected_case_count,
         family_manifest_matched: report.family_manifest_matched,
+        freshness,
+    }
+}
+
+pub fn proof_run_generated_shrink_gap_audit_report_artifact_state(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+) -> ProofRunArtifactState {
+    proof_run_generated_shrink_gap_audit_report_artifact_state_at(
+        path,
+        expected_manifest_version,
+        artifact_freshness_max_age_seconds,
+        SystemTime::now(),
+    )
+}
+
+pub fn proof_run_generated_shrink_gap_audit_report_artifact_state_at(
+    path: &str,
+    expected_manifest_version: u16,
+    artifact_freshness_max_age_seconds: u64,
+    now: SystemTime,
+) -> ProofRunArtifactState {
+    let artifact_path = proof_run_artifact_fs_path(path);
+    if !artifact_path.exists() {
+        return ProofRunArtifactState::Missing;
+    }
+    let Ok(text) = fs::read_to_string(&artifact_path) else {
+        return ProofRunArtifactState::Malformed;
+    };
+    let Ok(report) = serde_json::from_str::<OperatorGeneratedShrinkGapAuditReport>(&text) else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if report.artifact_path != path {
+        return ProofRunArtifactState::PathMismatch {
+            reported_path: report.artifact_path,
+        };
+    }
+    if report.artifact_version != GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION {
+        return ProofRunArtifactState::VersionMismatch {
+            artifact_manifest_version: report.artifact_version,
+            expected_manifest_version: GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
+        };
+    }
+    if expected_manifest_version == 0 {
+        return ProofRunArtifactState::Malformed;
+    }
+    let Ok(freshness) =
+        proof_run_artifact_freshness(&artifact_path, artifact_freshness_max_age_seconds, now)
+    else {
+        return ProofRunArtifactState::Malformed;
+    };
+    if freshness.age_seconds > artifact_freshness_max_age_seconds {
+        return ProofRunArtifactState::Stale { freshness };
+    }
+
+    let expected_family_count = generated_shrink_matrix_expected_families().len();
+    let expected_case_count: usize = generated_shrink_matrix_expected_families().values().sum();
+    let drift_count = [
+        usize::from(!report.ok),
+        usize::from(report.expected_family_count != expected_family_count),
+        usize::from(report.manifest_family_count != expected_family_count),
+        usize::from(report.expected_case_count != expected_case_count),
+        usize::from(report.manifest_case_count != expected_case_count),
+        report.missing_families.len(),
+        report.unexpected_families.len(),
+        report.count_mismatches.len(),
+        report.evidence_failures.len(),
+    ]
+    .into_iter()
+    .sum();
+    if drift_count > 0 {
+        return ProofRunArtifactState::Drifted {
+            diff_count: drift_count,
+            freshness,
+        };
+    }
+
+    ProofRunArtifactState::GeneratedShrinkGapAuditReportPresent {
+        artifact_version: report.artifact_version,
+        expected_family_count: report.expected_family_count,
+        manifest_family_count: report.manifest_family_count,
+        expected_case_count: report.expected_case_count,
+        manifest_case_count: report.manifest_case_count,
+        missing_family_count: report.missing_families.len(),
+        unexpected_family_count: report.unexpected_families.len(),
+        count_mismatch_count: report.count_mismatches.len(),
+        evidence_failure_count: report.evidence_failures.len(),
+        gap_audit_ok: report.ok,
         freshness,
     }
 }
@@ -3309,7 +3490,7 @@ mod tests {
                 "{doc_name} should record current trusted artifact state"
             );
             assert!(
-                doc.contains("production.trusted = 12")
+                doc.contains("production.trusted = 13")
                     && doc.contains("production.non_trusted = 0"),
                 "{doc_name} should record production artifact go/no-go counts"
             );
@@ -3903,6 +4084,50 @@ mod tests {
             generated_matrix["trusted_metadata"]["family_manifest_matched"],
             true
         );
+
+        let gap_audit = serde_json::to_value(proof_run_artifact_status(
+            "target/generated-shrink-gap-audit.json",
+            ProofRunArtifactState::GeneratedShrinkGapAuditReportPresent {
+                artifact_version: GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
+                expected_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+                manifest_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+                expected_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+                manifest_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+                missing_family_count: 0,
+                unexpected_family_count: 0,
+                count_mismatch_count: 0,
+                evidence_failure_count: 0,
+                gap_audit_ok: true,
+                freshness: ProofRunArtifactFreshness {
+                    modified_at_unix_seconds: 24,
+                    age_seconds: 1,
+                    max_age_seconds: 86_400,
+                },
+            },
+        ))
+        .unwrap();
+        assert_eq!(gap_audit["state"], "trusted");
+        assert_eq!(
+            gap_audit["trusted_metadata"]["expected_family_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+        );
+        assert_eq!(
+            gap_audit["trusted_metadata"]["manifest_family_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+        );
+        assert_eq!(
+            gap_audit["trusted_metadata"]["expected_case_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+        );
+        assert_eq!(
+            gap_audit["trusted_metadata"]["manifest_case_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+        );
+        assert_eq!(gap_audit["trusted_metadata"]["missing_family_count"], 0);
+        assert_eq!(gap_audit["trusted_metadata"]["unexpected_family_count"], 0);
+        assert_eq!(gap_audit["trusted_metadata"]["count_mismatch_count"], 0);
+        assert_eq!(gap_audit["trusted_metadata"]["evidence_failure_count"], 0);
+        assert_eq!(gap_audit["trusted_metadata"]["gap_audit_ok"], true);
     }
 
     #[test]
@@ -4027,6 +4252,53 @@ mod tests {
             .any(|row| row.row_id == "proof-run-prod-stale"
                 && row.state == "stale"
                 && row.command == "run prod-stale"));
+    }
+
+    #[test]
+    fn proof_run_go_no_go_report_blocks_drifted_generated_shrink_gap_audit() {
+        let production_row = contract_status_row(
+            "operator-proof-generated-shrink-gap-audit",
+            false,
+            proof_run_artifact_status(
+                "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+                ProofRunArtifactState::Drifted {
+                    diff_count: 2,
+                    freshness: ProofRunArtifactFreshness {
+                        modified_at_unix_seconds: 1,
+                        age_seconds: 4,
+                        max_age_seconds: 86_400,
+                    },
+                },
+            ),
+        );
+        let families = vec![OperatorProofRunStatusFamily {
+            heading: "Production".to_string(),
+            fixture: false,
+            runs: vec![production_row],
+        }];
+        let summary = proof_run_summary(&families);
+        let report = build_operator_proof_run_go_no_go_report_from_status(
+            OperatorProofRunStatus {
+                contract_version: PROOF_RUN_STATUS_CONTRACT_VERSION,
+                game: Uuid::from_u128(9),
+                manifest_version: 1,
+                execution: "local-only command copy",
+                summary,
+                families,
+            },
+            "target/go-no-go.json",
+        );
+
+        assert!(!report.ok);
+        assert_eq!(report.production.drifted, 1);
+        assert_eq!(report.production.non_trusted, 1);
+        let row = report
+            .rows
+            .iter()
+            .find(|row| row.row_id == "proof-run-operator-proof-generated-shrink-gap-audit")
+            .expect("gap-audit row present in go/no-go report");
+        assert_eq!(row.state, "drifted");
+        assert!(row.trusted_metadata.is_none());
     }
 
     #[test]
@@ -4724,6 +4996,83 @@ mod tests {
     }
 
     #[test]
+    fn generated_shrink_gap_audit_report_classifies_trusted_and_drifted() {
+        let dir = env::temp_dir().join(format!("fmarch-generated-gap-{}", Uuid::new_v4()));
+        let artifact = dir.join("generated-shrink-gap-audit.json");
+        fs::create_dir_all(&dir).expect("artifact dir");
+        let artifact_text = artifact.to_string_lossy().to_string();
+        let mut trusted = generated_shrink_gap_audit_bootstrap_report(&artifact_text);
+        fs::write(&artifact, serde_json::to_vec_pretty(&trusted).unwrap())
+            .expect("generated shrink gap audit report write");
+
+        match proof_run_generated_shrink_gap_audit_report_artifact_state_at(
+            &artifact_text,
+            1,
+            86_400,
+            SystemTime::now(),
+        ) {
+            ProofRunArtifactState::GeneratedShrinkGapAuditReportPresent {
+                artifact_version,
+                expected_family_count,
+                manifest_family_count,
+                expected_case_count,
+                manifest_case_count,
+                missing_family_count,
+                unexpected_family_count,
+                count_mismatch_count,
+                evidence_failure_count,
+                gap_audit_ok,
+                freshness,
+            } => {
+                assert_eq!(
+                    artifact_version,
+                    GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION
+                );
+                assert_eq!(
+                    expected_family_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+                );
+                assert_eq!(
+                    manifest_family_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+                );
+                assert_eq!(
+                    expected_case_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+                );
+                assert_eq!(
+                    manifest_case_count,
+                    GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+                );
+                assert_eq!(missing_family_count, 0);
+                assert_eq!(unexpected_family_count, 0);
+                assert_eq!(count_mismatch_count, 0);
+                assert_eq!(evidence_failure_count, 0);
+                assert!(gap_audit_ok);
+                assert_eq!(freshness.max_age_seconds, 86_400);
+            }
+            other => panic!("expected trusted generated shrink gap audit report, got {other:?}"),
+        }
+
+        trusted.ok = false;
+        trusted
+            .missing_families
+            .push("hider_projection_state".to_string());
+        fs::write(&artifact, serde_json::to_vec_pretty(&trusted).unwrap())
+            .expect("drifted generated shrink gap audit report write");
+        assert!(matches!(
+            proof_run_generated_shrink_gap_audit_report_artifact_state_at(
+                &artifact_text,
+                1,
+                86_400,
+                SystemTime::now(),
+            ),
+            ProofRunArtifactState::Drifted { diff_count, .. } if diff_count >= 2
+        ));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn proof_run_artifact_state_classifies_local_artifacts() {
         let dir = env::temp_dir().join(format!("fmarch-proof-page-{}", Uuid::new_v4()));
         let artifact = dir.join("report.json");
@@ -5128,6 +5477,13 @@ mod tests {
             ))
             .expect("generated shrink matrix report serializes"),
         );
+        write_workspace_json(
+            "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+            serde_json::to_value(generated_shrink_gap_audit_bootstrap_report(
+                "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+            ))
+            .expect("generated shrink gap audit report serializes"),
+        );
     }
 
     fn determinism_fuzz_bootstrap_report(artifact_path: &str) -> OperatorDeterminismFuzzReport {
@@ -5200,6 +5556,24 @@ mod tests {
             family_manifest_matched: true,
             families,
             entries,
+        }
+    }
+
+    fn generated_shrink_gap_audit_bootstrap_report(
+        artifact_path: &str,
+    ) -> OperatorGeneratedShrinkGapAuditReport {
+        OperatorGeneratedShrinkGapAuditReport {
+            artifact_version: GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
+            artifact_path: artifact_path.to_string(),
+            ok: true,
+            expected_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+            manifest_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+            expected_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+            manifest_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+            missing_families: Vec::new(),
+            unexpected_families: Vec::new(),
+            count_mismatches: Vec::new(),
+            evidence_failures: Vec::new(),
         }
     }
 

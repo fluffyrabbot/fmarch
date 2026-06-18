@@ -251,6 +251,15 @@
           "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
         },
         {
+          "id": "operator-proof-generated-shrink-gap-audit",
+          "family": "Operator proof generated shrink gap audit",
+          "scope": "Local-only",
+          "command_template": "python3 tools/check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check",
+          "artifact_path": "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+          "artifact_kind": "generated_shrink_gap_audit_report",
+          "proof_boundary": "Runs the no-Postgres generated-shrink gap audit over the Phase 4 checklist expectation set, source/test evidence needles, and generated_shrink_matrix_expected_families(), writes a versioned report with expected/manifest family and case counts plus missing, unexpected, count-mismatch, and evidence-failure rows, and fails without rerunning resolver or Postgres-backed shrink cases."
+        },
+        {
           "id": "operator-proof-command-projection-resolution",
           "family": "Operator proof command/projection resolution",
           "scope": "Local-only",

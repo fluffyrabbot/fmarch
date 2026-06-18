@@ -2990,11 +2990,42 @@ fn render_operator_proof_go_no_go_html(
                 "expected_case_count",
                 metadata.expected_case_count,
             );
+            render_optional_artifact_u64(
+                &mut html,
+                "manifest_family_count",
+                metadata.manifest_family_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "manifest_case_count",
+                metadata.manifest_case_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "missing_family_count",
+                metadata.missing_family_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "unexpected_family_count",
+                metadata.unexpected_family_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "count_mismatch_count",
+                metadata.count_mismatch_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "evidence_failure_count",
+                metadata.evidence_failure_count,
+            );
             render_optional_artifact_bool(
                 &mut html,
                 "family_manifest_matched",
                 metadata.family_manifest_matched,
             );
+            render_optional_artifact_bool(&mut html, "gap_audit_ok", metadata.gap_audit_ok);
         }
         html.push_str("</td><td><code>");
         html_escape_into(&mut html, &row.command);
@@ -3316,11 +3347,42 @@ fn render_artifact_cell(html: &mut String, artifact: &SharedOperatorProofRunArti
                     "expected_case_count",
                     metadata.expected_case_count,
                 );
+                render_optional_artifact_u64(
+                    html,
+                    "manifest_family_count",
+                    metadata.manifest_family_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "manifest_case_count",
+                    metadata.manifest_case_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "missing_family_count",
+                    metadata.missing_family_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "unexpected_family_count",
+                    metadata.unexpected_family_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "count_mismatch_count",
+                    metadata.count_mismatch_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "evidence_failure_count",
+                    metadata.evidence_failure_count,
+                );
                 render_optional_artifact_bool(
                     html,
                     "family_manifest_matched",
                     metadata.family_manifest_matched,
                 );
+                render_optional_artifact_bool(html, "gap_audit_ok", metadata.gap_audit_ok);
             }
             render_artifact_freshness(html, artifact);
         }
@@ -4444,7 +4506,7 @@ mod tests {
                 "{doc_name} should record current trusted artifact state"
             );
             assert!(
-                doc.contains("production.trusted = 12")
+                doc.contains("production.trusted = 13")
                     && doc.contains("production.non_trusted = 0"),
                 "{doc_name} should record production artifact go/no-go counts"
             );
@@ -4564,6 +4626,12 @@ mod tests {
                                 "expected_seed_count",
                                 "case_count",
                                 "expected_case_count",
+                                "manifest_family_count",
+                                "manifest_case_count",
+                                "missing_family_count",
+                                "unexpected_family_count",
+                                "count_mismatch_count",
+                                "evidence_failure_count",
                             ] {
                                 assert_optional_metadata_u64(metadata, field);
                             }
@@ -4572,6 +4640,7 @@ mod tests {
                                 "phase_trace_anchored",
                                 "decision_trace_anchored",
                                 "family_manifest_matched",
+                                "gap_audit_ok",
                             ] {
                                 assert_optional_metadata_bool(metadata, field);
                             }

@@ -145,6 +145,20 @@ class EnginePortCompletionAuditTests(unittest.TestCase):
                 "families": {},
                 "entries": [],
             },
+            "target/operator-proof/current-generated-shrink-gap-audit-report.json": {
+                "artifact_version": 1,
+                "artifact_path": "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+                "ok": True,
+                "proof_boundary": "fixture gap audit boundary",
+                "expected_family_count": 29,
+                "manifest_family_count": 29,
+                "expected_case_count": 58,
+                "manifest_case_count": 58,
+                "missing_families": [],
+                "unexpected_families": [],
+                "count_mismatches": [],
+                "evidence_failures": [],
+            },
         }
         for relative, data in artifacts.items():
             (root / relative).write_text(

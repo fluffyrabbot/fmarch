@@ -46,6 +46,7 @@ SAVED_ARTIFACTS = {
     "unported_im_human_inventory": "target/operator-proof/current-unported-im-human-inventory-report.json",
     "domain_ci_no_postgres": "target/operator-proof/current-domain-ci-no-postgres-report.json",
     "generated_shrink_matrix": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+    "generated_shrink_gap_audit": "target/operator-proof/current-generated-shrink-gap-audit-report.json",
     "browser_smoke": "target/operator-browser-smoke/playwright-dom-proof.json",
 }
 REQUIRED_BROWSER_GO_NO_GO_METADATA = [
@@ -63,11 +64,19 @@ REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "family_manifest_matched: true",
     "case_count: 58",
     "expected_case_count: 58",
+    "manifest_family_count: 29",
+    "manifest_case_count: 58",
+    "missing_family_count: 0",
+    "unexpected_family_count: 0",
+    "count_mismatch_count: 0",
+    "evidence_failure_count: 0",
+    "gap_audit_ok: true",
 ]
 REQUIRED_BROWSER_STATUS_METADATA_ROWS = [
     "proof-run-operator-proof-large-action-graph-performance",
     "proof-run-operator-proof-determinism-fuzz",
     "proof-run-operator-proof-generated-shrink-matrix",
+    "proof-run-operator-proof-generated-shrink-gap-audit",
 ]
 
 
@@ -348,6 +357,15 @@ def summarize_saved_artifacts(root: Path) -> dict[str, Any]:
             row["expected_family_count"] = data.get("expected_family_count")
             row["expected_case_count"] = data.get("expected_case_count")
             row["family_manifest_matched"] = data.get("family_manifest_matched")
+        elif name == "generated_shrink_gap_audit":
+            row["expected_family_count"] = data.get("expected_family_count")
+            row["manifest_family_count"] = data.get("manifest_family_count")
+            row["expected_case_count"] = data.get("expected_case_count")
+            row["manifest_case_count"] = data.get("manifest_case_count")
+            row["missing_family_count"] = len(data.get("missing_families", []))
+            row["unexpected_family_count"] = len(data.get("unexpected_families", []))
+            row["count_mismatch_count"] = len(data.get("count_mismatches", []))
+            row["evidence_failure_count"] = len(data.get("evidence_failures", []))
         elif name == "browser_smoke":
             row.update(summarize_browser_smoke(data))
         result[name] = row

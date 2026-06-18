@@ -49,6 +49,8 @@ const determinismFuzzReport =
   "target/operator-proof/current-determinism-fuzz-report.json";
 const generatedShrinkMatrixReport =
   "target/operator-proof/current-generated-shrink-matrix-report.tmp.json";
+const generatedShrinkGapAuditReport =
+  "target/operator-proof/current-generated-shrink-gap-audit-report.json";
 const proofRunSelectors = await proofRunAnchorSelectors();
 const checkedAuditGame = "08d8a45f-6c3b-4401-8e31-8d7637f36a82";
 
@@ -89,7 +91,7 @@ const pages = [
       "Local-Only Regression Lanes",
       "Operator Proof Fixtures",
       "PRODUCTION ARTIFACTS",
-      "trusted 12 / 12; non_trusted 0",
+      "trusted 13 / 13; non_trusted 0",
       "FIXTURE ARTIFACTS",
       "trusted 0 / 5; non_trusted 5",
       "large_action_graph_resolves_and_audits_within_regression_ceiling",
@@ -104,6 +106,7 @@ const pages = [
       "target/operator-proof/current-large-action-graph-performance-report.json",
       "target/operator-proof/current-determinism-fuzz-report.json",
       generatedShrinkMatrixReport,
+      generatedShrinkGapAuditReport,
       "target/operator-proof/missing-artifact-provenance-guard.json",
       "artifact not present locally",
       "target/operator-proof/malformed-artifact-metadata-guard.json",
@@ -132,6 +135,7 @@ const pages = [
       "audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json",
       "audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
       "generated_shrink_matrix_writes_compact_operator_report",
+      "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check",
     ],
     selectors: [
       ...proofRunSelectors,
@@ -286,7 +290,7 @@ const pages = [
     checks: [
       "Operator Proof Artifact Go/No-Go",
       "go",
-      "trusted 12 / 12; non_trusted 0",
+      "trusted 13 / 13; non_trusted 0",
       "proof-run-operator-proof-artifact-go-no-go",
       "proof-run-operator-proof-artifact-retention",
       "proof-run-operator-proof-projection-rebuild",
@@ -295,6 +299,7 @@ const pages = [
       "proof-run-operator-proof-large-action-graph-performance",
       "proof-run-operator-proof-determinism-fuzz",
       "proof-run-operator-proof-generated-shrink-matrix",
+      "proof-run-operator-proof-generated-shrink-gap-audit",
       "resolve_elapsed_ms: 321",
       "threshold_ms: 20000",
       "trace_row_count: 74",
@@ -309,6 +314,13 @@ const pages = [
       "family_manifest_matched: true",
       "case_count: 58",
       "expected_case_count: 58",
+      "manifest_family_count: 29",
+      "manifest_case_count: 58",
+      "missing_family_count: 0",
+      "unexpected_family_count: 0",
+      "count_mismatch_count: 0",
+      "evidence_failure_count: 0",
+      "gap_audit_ok: true",
       "audit_operator_proof_artifacts",
     ],
   },
@@ -503,8 +515,8 @@ const jsonPages = [
     contractVersion: 1,
     summary: {
       production: {
-        total_artifact_rows: 12,
-        trusted: 12,
+        total_artifact_rows: 13,
+        trusted: 13,
         non_trusted: 0,
       },
       fixtures: {
@@ -636,6 +648,28 @@ const jsonPages = [
           expected_family_count: 29,
           expected_case_count: 58,
           family_manifest_matched: true,
+        },
+        audit_report: {
+          diff_count: 0,
+        },
+      },
+      {
+        row_id: "proof-run-operator-proof-generated-shrink-gap-audit",
+        state: "trusted",
+        artifact_version: 1,
+        expected_version: 1,
+        trusted: {
+          expected_family_count: 29,
+          manifest_family_count: 29,
+          expected_case_count: 58,
+          manifest_case_count: 58,
+          family_count: 29,
+          case_count: 58,
+          missing_family_count: 0,
+          unexpected_family_count: 0,
+          count_mismatch_count: 0,
+          evidence_failure_count: 0,
+          gap_audit_ok: true,
         },
         audit_report: {
           diff_count: 0,
@@ -984,6 +1018,12 @@ function assertProofRunStatusContract(name, body, expectedContractVersion) {
               "expected_seed_count",
               "case_count",
               "expected_case_count",
+              "manifest_family_count",
+              "manifest_case_count",
+              "missing_family_count",
+              "unexpected_family_count",
+              "count_mismatch_count",
+              "evidence_failure_count",
             ]) {
               assertOptionalNumber(metadata, field, `${name} row ${row.row_id}.trusted_metadata`);
             }
@@ -992,6 +1032,7 @@ function assertProofRunStatusContract(name, body, expectedContractVersion) {
               "phase_trace_anchored",
               "decision_trace_anchored",
               "family_manifest_matched",
+              "gap_audit_ok",
             ]) {
               assertOptionalBoolean(metadata, field, `${name} row ${row.row_id}.trusted_metadata`);
             }

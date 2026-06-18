@@ -2780,8 +2780,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    `artifact_kind: operator_proof_status_audit_report`, expected input paths, freshness, manifest
    version, and diff count; the shared classifier distinguishes missing, malformed, stale,
    path-mismatched, input-mismatched, drifted, and trusted saved reports. The same API vertical proves the v1 contract for
-   all five trusted artifact rows and all five untrusted fixture rows, plus the artifact-less
-   status export row, non-host rejection, and summary counts (`production.trusted = 12`,
+   all trusted artifact rows and all five untrusted fixture rows, plus the artifact-less
+   status export row, non-host rejection, and summary counts (`production.trusted = 13`,
    `production.non_trusted = 0`, `fixtures.non_trusted = 5`), and compares the host/cohost HTTP
    status JSON with the no-server shared model after normalizing the current game id and
    wall-clock-derived artifact age/mtime fields. The host/cohost-only
@@ -2915,6 +2915,18 @@ coverage, and a playable vertical scenario through the command pipeline.
    randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
    `family_count: 29`, `case_count: 58`, `expected_family_count: 29`, `expected_case_count: 58`,
    and `family_manifest_matched: true`.
+   `operator-proof-generated-shrink-gap-audit` currently has artifact state `trusted`, artifact path
+   `target/operator-proof/current-generated-shrink-gap-audit-report.json`, rendered command
+   `python3 tools/check_generated_shrink_matrix_gap_audit.py --output
+   target/operator-proof/current-generated-shrink-gap-audit-report.json --check`, and proof boundary
+   `Runs the no-Postgres generated-shrink gap audit over the Phase 4 checklist expectation set,
+   source/test evidence needles, and generated_shrink_matrix_expected_families(), writes a versioned
+   report with expected/manifest family and case counts plus missing, unexpected, count-mismatch, and
+   evidence-failure rows, and fails without rerunning resolver or Postgres-backed shrink cases.` This
+   row is trusted through the artifact classifier with `ok: true`, `expected_family_count: 29`,
+   `manifest_family_count: 29`, `expected_case_count: 58`, `manifest_case_count: 58`,
+   `missing_family_count: 0`, `unexpected_family_count: 0`, `count_mismatch_count: 0`,
+   `evidence_failure_count: 0`, and `gap_audit_ok: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -2971,10 +2983,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
    checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
    result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-   browser-fetched JSON surface, all 14 browser-smoke-required go/no-go metadata needles present,
-   trusted metadata rows for large-action, determinism, and generated shrink matrix proof rows, and
-   a manifest/status trusted command/projection proof row that has not yet been promoted into the
-   browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
+   browser-fetched JSON surface, all 21 browser-smoke-required go/no-go metadata needles present,
+   trusted metadata rows for large-action, determinism, generated shrink matrix, and generated
+   shrink gap-audit proof rows, and a manifest/status trusted command/projection proof row that has
+   not yet been promoted into the browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
    `ok: true`, 29 families, 58 cases, two representative seeds per PGO/PgoProjectionState/Babysitter/BabysitterProjectionState/Hider/HiderProjectionState/Hunter/HunterProjectionState/VengefulFixpoint/VengefulProjectionState/StrongmanVengefulFixpoint/StrongmanVengefulProjectionState/BodyguardStrongmanVengefulFixpoint/BodyguardStrongmanVengefulProjectionState/BackupInheritance/BackupProjectionState/ConversionDeprogramming/ConversionProjectionState/MarkClearVisibility/MarkClearExpiry/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/LoversProjectionState/Bomb/BombProjectionState
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
@@ -2991,8 +3003,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by wiring the new generated-shrink gap audit into the operator proof manifest and
-browser/status truth surfaces. Add the report as a saved proof artifact, expose its `ok`, family,
-case, missing/unexpected/count-mismatch, and evidence-failure fields in the status/go-no-go path, and
-prove that a stale or failing gap audit blocks the same local truth surface as the generated-shrink
-matrix report without rerunning Postgres-backed resolver cases.
+Continue Phase 4 by promoting the generated-shrink gap-audit negative proof into the browser/status
+fixture set: add a fixture-only malformed or missing-family gap-audit row, prove the operator status
+page renders it as `drifted` with no trusted metadata, and keep the production gap-audit row trusted
+through the normal manifest/status/browser path without rerunning the Postgres-backed shrink cases.

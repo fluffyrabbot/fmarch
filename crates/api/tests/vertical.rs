@@ -5,10 +5,11 @@ use commands::operator_proof::{
     audit_operator_proof_run_go_no_go_retention, build_operator_determinism_fuzz_report,
     build_operator_proof_run_go_no_go_report, build_operator_proof_run_status,
     determinism_fuzz_family_specs, generated_shrink_matrix_expected_families,
-    OperatorGeneratedShrinkMatrixBadExpectation, OperatorGeneratedShrinkMatrixEntry,
-    OperatorGeneratedShrinkMatrixReport, OperatorGeneratedShrinkMatrixSuccess,
-    OperatorProofRunArtifactCounts, OperatorProofRunFixture, OperatorProofRunGoNoGoReport,
-    OperatorProofRunGoNoGoRetentionReport, DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION,
+    OperatorGeneratedShrinkGapAuditReport, OperatorGeneratedShrinkMatrixBadExpectation,
+    OperatorGeneratedShrinkMatrixEntry, OperatorGeneratedShrinkMatrixReport,
+    OperatorGeneratedShrinkMatrixSuccess, OperatorProofRunArtifactCounts, OperatorProofRunFixture,
+    OperatorProofRunGoNoGoReport, OperatorProofRunGoNoGoRetentionReport,
+    DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION, GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
     GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT, GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
     GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
     LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION,
@@ -258,6 +259,9 @@ fn ensure_operator_proof_artifacts() {
     let generated_shrink_matrix_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("target/operator-proof/current-generated-shrink-matrix-report.tmp.json");
+    let generated_shrink_gap_audit_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target/operator-proof/current-generated-shrink-gap-audit-report.json");
     fs::write(
         &go_no_go_path,
         serde_json::to_vec_pretty(&OperatorProofRunGoNoGoReport {
@@ -463,14 +467,22 @@ fn ensure_operator_proof_artifacts() {
         .unwrap(),
     )
     .unwrap();
+    fs::write(
+        &generated_shrink_gap_audit_path,
+        serde_json::to_vec_pretty(&generated_shrink_gap_audit_bootstrap_report(
+            "target/operator-proof/current-generated-shrink-gap-audit-report.json",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
 
     let status_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("target/operator-proof/current-status-audit-check.json");
     fs::create_dir_all(status_path.parent().unwrap()).unwrap();
     let mut trusted_production = OperatorProofRunArtifactCounts::default();
-    trusted_production.total_artifact_rows = 12;
-    trusted_production.trusted = 12;
+    trusted_production.total_artifact_rows = 13;
+    trusted_production.trusted = 13;
     trusted_production.non_trusted = 0;
 
     let snapshot_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -617,6 +629,24 @@ fn generated_shrink_matrix_bootstrap_report(
         family_manifest_matched: true,
         families,
         entries,
+    }
+}
+
+fn generated_shrink_gap_audit_bootstrap_report(
+    artifact_path: &str,
+) -> OperatorGeneratedShrinkGapAuditReport {
+    OperatorGeneratedShrinkGapAuditReport {
+        artifact_version: GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
+        artifact_path: artifact_path.to_string(),
+        ok: true,
+        expected_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+        manifest_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+        expected_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+        manifest_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+        missing_families: Vec::new(),
+        unexpected_families: Vec::new(),
+        count_mismatches: Vec::new(),
+        evidence_failures: Vec::new(),
     }
 }
 
@@ -1654,7 +1684,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(proof_html.contains("Game-Specific Audits"));
     assert!(proof_html.contains("server page does not execute background jobs"));
     assert!(proof_html.contains("Production Artifacts"));
-    assert!(proof_html.contains("trusted 12 / 12; non_trusted 0"));
+    assert!(proof_html.contains("trusted 13 / 13; non_trusted 0"));
     assert!(proof_html.contains("Fixture Artifacts"));
     assert!(proof_html.contains("trusted 0 / 0; non_trusted 0"));
     assert!(proof_html.contains("id=\"proof-run-large-action-graph-regression\""));
@@ -1670,6 +1700,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(proof_html.contains("id=\"proof-run-operator-proof-large-action-graph-performance\""));
     assert!(proof_html.contains("id=\"proof-run-operator-proof-determinism-fuzz\""));
     assert!(proof_html.contains("id=\"proof-run-operator-proof-generated-shrink-matrix\""));
+    assert!(proof_html.contains("id=\"proof-run-operator-proof-generated-shrink-gap-audit\""));
     assert!(proof_html.contains(&format!(
         "cargo run -p commands --bin audit_resolution -- {game}"
     )));
@@ -1717,6 +1748,9 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(proof_html.contains(
         "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture"
     ));
+    assert!(proof_html.contains(
+        "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check"
+    ));
 
     let response = app
         .clone()
@@ -1734,7 +1768,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(response.status(), StatusCode::OK);
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let fixture_html = String::from_utf8(bytes.to_vec()).unwrap();
-    assert!(fixture_html.contains("trusted 12 / 12; non_trusted 0"));
+    assert!(fixture_html.contains("trusted 13 / 13; non_trusted 0"));
     assert!(fixture_html.contains("trusted 0 / 5; non_trusted 5"));
     let missing_row = table_row_for(&fixture_html, "proof-run-missing-artifact-provenance-guard");
     assert!(missing_row.contains("target/operator-proof/missing-artifact-provenance-guard.json"));
@@ -1817,8 +1851,8 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(status["game"], game.to_string());
     assert_eq!(status["manifest_version"], 1);
     assert_eq!(status["execution"], "local-only command copy");
-    assert_eq!(status["summary"]["production"]["total_artifact_rows"], 12);
-    assert_eq!(status["summary"]["production"]["trusted"], 12);
+    assert_eq!(status["summary"]["production"]["total_artifact_rows"], 13);
+    assert_eq!(status["summary"]["production"]["trusted"], 13);
     assert_eq!(status["summary"]["production"]["non_trusted"], 0);
     assert_eq!(status["summary"]["production"]["input_mismatch"], 0);
     assert_eq!(status["summary"]["production"]["drifted"], 0);
@@ -2344,7 +2378,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         go_no_go["artifact_path"],
         "target/operator-proof/current-artifact-go-no-go-report.json"
     );
-    assert_eq!(go_no_go["production"]["trusted"], 12);
+    assert_eq!(go_no_go["production"]["trusted"], 13);
     assert_eq!(go_no_go["production"]["non_trusted"], 0);
     assert!(go_no_go["rows"].as_array().unwrap().iter().any(|row| {
         row["row_id"] == "proof-run-operator-proof-artifact-go-no-go"
@@ -2409,6 +2443,14 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
                 .as_str()
                 .unwrap()
                 .contains("generated_shrink_matrix_writes_compact_operator_report")
+    }));
+    assert!(go_no_go["rows"].as_array().unwrap().iter().any(|row| {
+        row["row_id"] == "proof-run-operator-proof-generated-shrink-gap-audit"
+            && row["state"] == "trusted"
+            && row["command"]
+                .as_str()
+                .unwrap()
+                .contains("check_generated_shrink_matrix_gap_audit.py")
     }));
     let go_no_go_performance_row = proof_go_no_go_row(
         &go_no_go,
@@ -2484,6 +2526,54 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         go_no_go_generated_shrink_row["trusted_metadata"]["family_manifest_matched"],
         true
     );
+    let go_no_go_generated_gap_row = proof_go_no_go_row(
+        &go_no_go,
+        "proof-run-operator-proof-generated-shrink-gap-audit",
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["family_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["case_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["expected_family_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["manifest_family_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["expected_case_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["manifest_case_count"],
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["missing_family_count"],
+        0
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["unexpected_family_count"],
+        0
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["count_mismatch_count"],
+        0
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["evidence_failure_count"],
+        0
+    );
+    assert_eq!(
+        go_no_go_generated_gap_row["trusted_metadata"]["gap_audit_ok"],
+        true
+    );
 
     let response = app
         .clone()
@@ -2503,7 +2593,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     let go_no_go_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(go_no_go_html.contains("Operator Proof Artifact Go/No-Go"));
     assert!(go_no_go_html.contains("go"));
-    assert!(go_no_go_html.contains("trusted 12 / 12; non_trusted 0"));
+    assert!(go_no_go_html.contains("trusted 13 / 13; non_trusted 0"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-artifact-go-no-go"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-artifact-retention"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-projection-rebuild"));
@@ -2512,6 +2602,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(go_no_go_html.contains("proof-run-operator-proof-large-action-graph-performance"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-determinism-fuzz"));
     assert!(go_no_go_html.contains("proof-run-operator-proof-generated-shrink-matrix"));
+    assert!(go_no_go_html.contains("proof-run-operator-proof-generated-shrink-gap-audit"));
     assert!(go_no_go_html.contains("audit_operator_proof_artifacts"));
     let performance_go_no_go_html = table_row_for(
         &go_no_go_html,
@@ -2538,6 +2629,21 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(generated_shrink_go_no_go_html.contains("expected_family_count: 29"));
     assert!(generated_shrink_go_no_go_html.contains("expected_case_count: 58"));
     assert!(generated_shrink_go_no_go_html.contains("family_manifest_matched: true"));
+    let generated_shrink_gap_go_no_go_html = table_row_for(
+        &go_no_go_html,
+        "proof-run-operator-proof-generated-shrink-gap-audit",
+    );
+    assert!(generated_shrink_gap_go_no_go_html.contains("family_count: 29"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("case_count: 58"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("expected_family_count: 29"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("expected_case_count: 58"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("manifest_family_count: 29"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("manifest_case_count: 58"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("missing_family_count: 0"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("unexpected_family_count: 0"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("count_mismatch_count: 0"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("evidence_failure_count: 0"));
+    assert!(generated_shrink_gap_go_no_go_html.contains("gap_audit_ok: true"));
 
     let response = app
         .clone()
@@ -5016,7 +5122,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "Operator Proof-Run Index",
                 "Local-Only Regression Lanes",
                 "Production Artifacts",
-                "trusted 12 / 12; non_trusted 0",
+                "trusted 13 / 13; non_trusted 0",
                 "large_action_graph_resolves_and_audits_within_regression_ceiling",
                 "target/operator-proof/game-specific-audit-bundle-20260613T000000Z.json",
                 "target/operator-proof/game-specific-audit-bundle-20260613T001500Z.json",
@@ -5029,6 +5135,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "target/operator-proof/current-large-action-graph-performance-report.json",
                 "target/operator-proof/current-determinism-fuzz-report.json",
                 "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+                "target/operator-proof/current-generated-shrink-gap-audit-report.json",
                 "game_id: 08d8a45f-6c3b-4401-8e31-8d7637f36a82",
                 "game_id: 3e3cccc1-c837-46d3-b0d6-1b83ae0cc82b",
                 "manifest_version: 1",
@@ -5044,6 +5151,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json",
                 "audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
                 "generated_shrink_matrix_writes_compact_operator_report",
+                "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check",
             ],
         ),
         (
@@ -5051,7 +5159,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "Operator Proof-Run Index",
                 "Operator Proof Fixtures",
-                "trusted 12 / 12; non_trusted 0",
+                "trusted 13 / 13; non_trusted 0",
                 "trusted 0 / 5; non_trusted 5",
                 "target/operator-proof/missing-artifact-provenance-guard.json",
                 "artifact not present locally",
@@ -5186,7 +5294,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "\"ok\":true",
                 "\"artifact_path\":\"target/operator-proof/current-artifact-go-no-go-report.json\"",
-                "\"production\":{\"total_artifact_rows\":12,\"trusted\":12",
+                "\"production\":{\"total_artifact_rows\":13,\"trusted\":13",
                 "\"row_id\":\"proof-run-operator-proof-artifact-go-no-go\"",
                 "\"row_id\":\"proof-run-operator-proof-artifact-retention\"",
                 "\"row_id\":\"proof-run-operator-proof-projection-rebuild\"",
@@ -5195,6 +5303,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"row_id\":\"proof-run-operator-proof-large-action-graph-performance\"",
                 "\"row_id\":\"proof-run-operator-proof-determinism-fuzz\"",
                 "\"row_id\":\"proof-run-operator-proof-generated-shrink-matrix\"",
+                "\"row_id\":\"proof-run-operator-proof-generated-shrink-gap-audit\"",
                 "\"resolve_elapsed_ms\":321",
                 "\"threshold_ms\":20000",
                 "\"trace_row_count\":74",
@@ -5204,8 +5313,11 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "\"seed_count\":57",
                 "\"expected_family_count\":12",
                 "\"expected_seed_count\":57",
-                "\"case_count\":12",
-                "\"expected_case_count\":12",
+                "\"case_count\":58",
+                "\"expected_case_count\":58",
+                "\"manifest_family_count\":29",
+                "\"manifest_case_count\":58",
+                "\"gap_audit_ok\":true",
                 "\"family_manifest_matched\":true",
                 "\"state\":\"trusted\"",
                 "audit_operator_proof_artifacts",
@@ -5223,7 +5335,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "Operator Proof Artifact Go/No-Go",
                 "go",
-                "trusted 12 / 12; non_trusted 0",
+                "trusted 13 / 13; non_trusted 0",
                 "proof-run-operator-proof-artifact-go-no-go",
                 "proof-run-operator-proof-artifact-retention",
                 "proof-run-operator-proof-projection-rebuild",
@@ -5232,6 +5344,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "proof-run-operator-proof-large-action-graph-performance",
                 "proof-run-operator-proof-determinism-fuzz",
                 "proof-run-operator-proof-generated-shrink-matrix",
+                "proof-run-operator-proof-generated-shrink-gap-audit",
                 "resolve_elapsed_ms: 321",
                 "threshold_ms: 20000",
                 "trace_row_count: 74",
@@ -5246,6 +5359,13 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "expected_family_count: 29",
                 "case_count: 58",
                 "expected_case_count: 58",
+                "manifest_family_count: 29",
+                "manifest_case_count: 58",
+                "missing_family_count: 0",
+                "unexpected_family_count: 0",
+                "count_mismatch_count: 0",
+                "evidence_failure_count: 0",
+                "gap_audit_ok: true",
                 "audit_operator_proof_artifacts",
             ],
         ),

@@ -1122,9 +1122,9 @@ publishes two local-only rows for those commands: `operator-proof-status-export`
 the manifest declares `artifact_kind: operator_proof_status_audit_report`, expected input paths,
 freshness, manifest version, and diff count; the shared classifier distinguishes missing,
 malformed, stale, path-mismatched, input-mismatched, drifted, and trusted saved reports. The same
-API vertical proves the v1 contract for all five trusted artifact
+API vertical proves the v1 contract for all trusted artifact
 rows and all five untrusted fixture rows, plus the artifact-less status export row and trusted
-status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 12`,
+status-audit/go-no-go/retention report artifact rows, non-host rejection, and summary counts (`production.trusted = 13`,
 `production.non_trusted = 0`,
 `fixtures.non_trusted = 5`), and compares the host/cohost HTTP status JSON with the no-server
 shared model after normalizing the current game id and wall-clock-derived artifact age/mtime
@@ -1255,6 +1255,18 @@ bad-expectation shrink preservation metadata, and does not prove exhaustive rand
 This row is trusted through the artifact classifier with `ok: true`, `family_count: 29`,
 `case_count: 58`, `expected_family_count: 29`, `expected_case_count: 58`, and
 `family_manifest_matched: true`.
+`operator-proof-generated-shrink-gap-audit` currently has artifact state `trusted`, artifact path
+`target/operator-proof/current-generated-shrink-gap-audit-report.json`, rendered command
+`python3 tools/check_generated_shrink_matrix_gap_audit.py --output
+target/operator-proof/current-generated-shrink-gap-audit-report.json --check`, and proof boundary
+`Runs the no-Postgres generated-shrink gap audit over the Phase 4 checklist expectation set,
+source/test evidence needles, and generated_shrink_matrix_expected_families(), writes a versioned
+report with expected/manifest family and case counts plus missing, unexpected, count-mismatch, and
+evidence-failure rows, and fails without rerunning resolver or Postgres-backed shrink cases.` This
+row is trusted through the artifact classifier with `ok: true`, `expected_family_count: 29`,
+`manifest_family_count: 29`, `expected_case_count: 58`, `manifest_case_count: 58`,
+`missing_family_count: 0`, `unexpected_family_count: 0`, `count_mismatch_count: 0`,
+`evidence_failure_count: 0`, and `gap_audit_ok: true`.
 `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
 path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin
@@ -1278,14 +1290,14 @@ Read-only consumers can use `python3 tools/engine_port_completion_audit.py --che
 target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
 artifact, and fails if the saved audit is missing, stale versus any declared input, or different
 from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-20 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+21 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
 rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2 unsupported
 parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family rows
 (`feature_flags_test` and `init`). It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-browser-fetched JSON surface, all 14 browser-smoke-required go/no-go metadata needles present,
-trusted metadata rows for large-action, determinism, and generated shrink matrix proof rows, and a
-manifest/status trusted command/projection proof row that has not yet been promoted into the
-browser-smoke required needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
+browser-fetched JSON surface, all 21 browser-smoke-required go/no-go metadata needles present,
+trusted metadata rows for large-action, determinism, generated shrink matrix, and generated shrink
+gap-audit proof rows, and a manifest/status trusted command/projection proof row that has not yet
+been promoted into the browser-smoke required needle set. The audit now treats explicit out-of-scope parity rows as visible but non-actionable
 and blocks completion on the four partial build-order phases: Phase 4 persistent/generated-action
 systems, Phase 5 rich day systems, Phase 6 culture packs, and Phase 7 operational hardening.
 A seeded live-HTTP smoke test now starts a local Axum server and verifies the operator index,
