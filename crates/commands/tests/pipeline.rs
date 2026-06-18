@@ -12064,6 +12064,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("backup_inheritance", [97_071, 97_072]),
         ("conversion_deprogramming", [97_081, 97_082]),
         ("ignite", [97_041, 97_042]),
+        ("mark_clear_visibility", [97_091, 97_092]),
         ("extra_action", [97_051, 97_052]),
         ("item_grant", [97_061, 97_062]),
     ] {
@@ -12178,8 +12179,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 11,
-        "expected_case_count": 22,
+        "expected_family_count": 12,
+        "expected_case_count": 24,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
@@ -12191,13 +12192,14 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
             ("ignite".to_string(), 2),
             ("item_grant".to_string(), 2),
             ("lovers".to_string(), 2),
+            ("mark_clear_visibility".to_string(), 2),
             ("pgo".to_string(), 2),
         ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(11));
-    assert_eq!(report["case_count"], serde_json::json!(22));
+    assert_eq!(report["family_count"], serde_json::json!(12));
+    assert_eq!(report["case_count"], serde_json::json!(24));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19395,7 +19397,9 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         "conversion_deprogramming" => {
             generated_mafiascum_conversion_deprogramming_fixture_json(seed)
         }
-        "ignite" => generated_mafiascum_persistent_effect_fixture_json(family, seed),
+        "ignite" | "mark_clear_visibility" => {
+            generated_mafiascum_persistent_effect_fixture_json(family, seed)
+        }
         "extra_action" | "item_grant" => {
             generated_mafiascum_generated_action_fixture_json(family, seed)
         }
@@ -19432,6 +19436,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "ignite" => {
             fixture["expectations"]["inner_events"][0]["payload"]["cause"] =
                 serde_json::json!("ignite_wrong");
+        }
+        "mark_clear_visibility" => {
+            fixture["expectations"]["inner_events"][2]["payload"]["visibility"] =
+                serde_json::json!("Hidden");
         }
         "extra_action" => {
             fixture["expectations"]["inner_events"][0]["payload"]["source_action"] =
@@ -19691,6 +19699,107 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
             }
         }))
         .expect("generated Mafiascum persistent effect fixture serializes"),
+        "mark_clear_visibility" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 33_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "arsonist" },
+                { "slot": "slot_2", "role": "cleanser" },
+                { "slot": "slot_3", "role": "vanilla_townie" },
+                { "slot": "slot_4", "role": "vanilla_townie" },
+                { "slot": "slot_5", "role": "mafia_goon" },
+                { "slot": "slot_6", "role": "vanilla_townie" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 32_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "douse",
+                        "action_id": format!("generated_seed_{seed}_douse_for_cleanse"),
+                        "targets": ["slot_3"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "cleanse",
+                    "action_id": format!("generated_seed_{seed}_cleanse_carried_douse"),
+                    "targets": ["slot_3"]
+                },
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "ignite",
+                    "action_id": format!("generated_seed_{seed}_ignite_after_cleanse"),
+                    "targets": []
+                },
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "douse",
+                    "action_id": format!("generated_seed_{seed}_fresh_visible_douse"),
+                    "targets": ["slot_4"]
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "EffectNotification",
+                        "payload": {
+                            "effect": "doused",
+                            "status": "cleared",
+                            "audience": ["slot_2", "slot_3"]
+                        }
+                    },
+                    {
+                        "kind": "EffectsCleared",
+                        "payload": {
+                            "effect": "doused",
+                            "targets": ["slot_3"],
+                            "actor": "slot_2"
+                        }
+                    },
+                    {
+                        "kind": "EffectsMarked",
+                        "payload": {
+                            "effect": "doused",
+                            "target": "slot_4",
+                            "actor": "slot_1",
+                            "source_action": format!("generated_seed_{seed}_fresh_visible_douse"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2,
+                            "duration": "Persistent",
+                            "visibility": "ActorAndTarget"
+                        }
+                    },
+                    {
+                        "kind": "PhaseAnnouncement",
+                        "payload": {
+                            "phase_id": "N02",
+                            "deaths": []
+                        }
+                    }
+                ],
+                "trace_decisions": [
+                    {
+                        "stage": "night:read_effect",
+                        "source": format!("action:generated_seed_{seed}_ignite_after_cleanse"),
+                        "outcome": "read_effect_target_preempted_by_clear",
+                        "detail": {
+                            "action_id": format!("generated_seed_{seed}_ignite_after_cleanse"),
+                            "template_id": "ignite",
+                            "actor": "slot_1",
+                            "target": "slot_3",
+                            "reads_effect": "doused"
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum mark/clear visibility fixture serializes"),
         _ => unreachable!("unknown generated persistent effect family"),
     }
 }
