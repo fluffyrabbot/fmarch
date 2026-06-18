@@ -124,6 +124,18 @@
       "description": "Mafia Universe Lover. Passive role bound to another lover by setup state; if either dies by any means, the linked partner dies too.",
       "actions": []
     },
+    "mafia_bomber": {
+      "description": "Mafia Universe Mafia Bomber. Hidden passive role: when killed at night, detonates against the killing actor.",
+      "alignment": "mafia",
+      "actions": [],
+      "effects": ["bomb"]
+    },
+    "town_bomber": {
+      "description": "Mafia Universe Town Bomber. Hidden passive role: when killed at night, detonates against the killing actor.",
+      "alignment": "town",
+      "actions": [],
+      "effects": ["bomb"]
+    },
     "town_treestump": {
       "description": "Town-aligned Treestump. Remains in thread without a vote after elimination.",
       "alignment": "town",
@@ -2384,6 +2396,7 @@
       "ProtectBlocksKills",
       "StrongmanBypassesProtect",
       "KillStacking",
+      "GeneratedKillReentry",
       "InterceptProtection",
       "CprProtection",
       "TargetStateSave",
@@ -2399,7 +2412,7 @@
     "jailkeep_action_ids": ["jail"],
     "strongman_action_ids": ["strongman_kill"],
     "strongman_bypasses_protect": true,
-    "kill_cause_ids": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "strongman_kill", "vigilante_kill"],
+    "kill_cause_ids": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "strongman_kill", "vigilante_kill"],
     "target_state_save_tags": ["bulletproof_vest"],
     "target_state_gate_tags": ["commuted", "untargetable"],
     "empower_effects": ["empowered"],
@@ -2413,33 +2426,47 @@
     "guard_dependency_cause_policy": {},
     "hide_dependency_cause_policy": {},
     "chosen_retaliation_cause_policy": {},
-    "generated_kill_cause_policy": {},
-    "trigger_fixpoint_policy": {},
+    "generated_kill_cause_policy": {
+      "bomb_retaliates": {
+        "on": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "strongman_bypasses_protect": false
+      }
+    },
+    "trigger_fixpoint_policy": {
+      "bomb_retaliates": {
+        "on": "Kill",
+        "produced_kill_reenters": true,
+        "loop_cap": "RedirectLoopCap",
+        "trace": true
+      }
+    },
     "protection_cause_policy": {
       "doctor_protect": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "bodyguard": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "martyr_protect": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "cpr_protect": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       },
       "jail": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       }
     },
     "target_state_save_policy": {
       "bulletproof_vest": {
-        "blocks": ["factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
+        "blocks": ["bomb_retaliates", "factional_kill", "ignite", "janitor_kill", "night_desperado", "ninja_kill", "power_role_kill", "serial_killer_kill", "vigilante_kill"],
         "bypasses": ["strongman_kill"]
       }
     },
@@ -2592,7 +2619,19 @@
     "loop_cap": 8,
     "tie_breaker": "Stable"
   },
-  "triggers": [],
+  "triggers": [
+    {
+      "id": "bomb_retaliates",
+      "on": "Kill",
+      "if_target_has": ["bomb"],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "modifiers": []
+      }
+    }
+  ],
   "vote": {
     "method": "Majority",
     "no_lynch_allowed": true,
@@ -2670,6 +2709,7 @@
   "effects": {
     "alignment_oracle_mark": { "duration": "Persistent", "visibility": "Hidden" },
     "backup_target": { "duration": "Persistent", "visibility": "Hidden" },
+    "bomb": { "duration": "Persistent", "visibility": "Hidden" },
     "bulletproof_vest": { "duration": "Persistent", "visibility": "Target" },
     "commuted": { "duration": "Resolution", "visibility": "Hidden" },
     "doused": { "duration": "Persistent", "visibility": "ActorAndTarget" },

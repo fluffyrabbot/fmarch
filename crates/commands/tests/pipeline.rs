@@ -49141,6 +49141,247 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
     );
 }
 
+async fn assert_mafia_universe_bomber_case(
+    pool: &PgPool,
+    bomber_role: &str,
+    killer_role: &str,
+    kill_template: &str,
+    direct_cause: &str,
+    seed: u64,
+) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", killer_role),
+        ("slot_2", bomber_role),
+        ("slot_3", "town_vanilla"),
+        ("slot_4", "mafia_goon"),
+        ("slot_5", "town_vanilla"),
+    ] {
+        handle(
+            pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let effects = slot_effects(pool, game).await.unwrap();
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_2"
+                && effect.effect == "bomb"
+                && effect.source_action.as_deref() == Some(&format!("role:{bomber_role}"))
+                && effect.visibility == "Hidden"
+        }),
+        "{bomber_role} role assignment should fold hidden bomb effect into projections"
+    );
+
+    handle(
+        pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": format!("mu_{bomber_role}_kill_n01"),
+                "template_id": kill_template,
+                "actor": "slot_1",
+                "targets": ["slot_2"],
+                "phase_id": "N01"
+            }),
+            eventstore::ActorId::Slot("slot_1".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(pool, &h, Command::ResolvePhase { game, seed })
+        .await
+        .unwrap_or_else(|err| panic!("host resolves Mafia Universe {bomber_role}: {err:?}"));
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .unwrap_or_else(|err| panic!("valid Mafia Universe {bomber_role} result: {err}"));
+    let trigger_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::Trigger {
+                trigger_id,
+                payload,
+            } if trigger_id == "bomb_retaliates"
+                && payload["on"] == "Kill"
+                && payload["source_target"] == "slot_2"
+                && payload["source_actor"] == "slot_1"
+                && payload["source_cause"] == direct_cause
+                && payload["produced_actor"] == "slot_2"
+                && payload["produced_target"] == "slot_1" =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("Mafia Universe {bomber_role} should emit bomb trigger"));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_2"
+                && cause == direct_cause
+                && attackers == &vec!["slot_1".to_string()]
+                && !*unstoppable
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_1"
+                && cause == "bomb_retaliates"
+                && attackers == &vec!["slot_2".to_string()]
+                && !*unstoppable
+    )));
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(indexed.event, domain::InnerEvent::WinReached { .. })),
+        "{bomber_role} vertical should stay focused on bomb trigger, not win resolution"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .unwrap_or_else(|err| panic!("valid Mafia Universe {bomber_role} trace: {err}"));
+    assert!(
+        trace.notes.iter().any(|note| {
+            note == &format!("trigger bomb_retaliates emitted at event_index {trigger_index}")
+        }),
+        "Mafia Universe {bomber_role} bomb trigger note should persist in ResolutionTrace"
+    );
+    assert_trigger_generated_trace(
+        &trace,
+        TriggerGeneratedTraceExpectation {
+            action_id: "bomb_retaliates",
+            on: "Kill",
+            source_target: "slot_2",
+            source_actor: "slot_1",
+            source_cause: direct_cause,
+            produced_actor: "slot_2",
+            produced_target: "slot_1",
+            actor_filter: None,
+            event_index: trigger_index as i64,
+        },
+    );
+
+    let slots = slot_state(pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "{bomber_role} retaliation should kill the original killer"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "{bomber_role} should die to the submitted kill"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafia Universe {bomber_role} trigger deaths"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Mafia Universe {bomber_role} trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool) {
+    assert_mafia_universe_bomber_case(
+        &pool,
+        "town_bomber",
+        "mafia_goon",
+        "factional_kill",
+        "factional_kill",
+        701201,
+    )
+    .await;
+    assert_mafia_universe_bomber_case(
+        &pool,
+        "mafia_bomber",
+        "town_vigilante",
+        "vigilante_kill",
+        "vigilante_kill",
+        701202,
+    )
+    .await;
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     let host = "host_h";

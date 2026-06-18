@@ -380,7 +380,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:mafia_alignment_oracle` | `mafia_alignment_oracle` | 1 | no | yes | yes | no | yes |  |
 | role_id | `mafia_universe:mafia_arsonist` | `mafia_arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_bodyguard` | `mafia_bodyguard` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mafia_bomber` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mafia_bomber` | `mafia_bomber` | 1 | no | yes | yes | yes | yes | Passive night_retribution role from the Mafia Universe catalog; fmarch folds it as a hidden bomb role effect consumed by the bomb_retaliates Kill trigger. |
 | role_id | `mafia_universe:mafia_bus_driver` | `mafia_bus_driver` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_commuter` | `mafia_commuter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_cop` | `mafia_cop` | 1 | no | yes | yes | yes | yes |  |
@@ -429,7 +429,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:town_alignment_oracle` | `town_alignment_oracle` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_arsonist` | `town_arsonist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_bodyguard` | `town_bodyguard` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:town_bomber` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:town_bomber` | `town_bomber` | 1 | no | yes | yes | yes | yes | Passive night_retribution role from the Mafia Universe catalog; fmarch folds it as a hidden bomb role effect consumed by the bomb_retaliates Kill trigger. |
 | role_id | `mafia_universe:town_bus_driver` | `town_bus_driver` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_commuter` | `town_commuter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_cop` | `town_cop` | 1 | no | yes | yes | yes | yes |  |

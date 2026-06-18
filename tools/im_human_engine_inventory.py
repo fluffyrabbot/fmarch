@@ -2614,6 +2614,40 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "the setup pair as folded PlayersLinked state and uses lover_policy "
                 "for the linked-death cascade."
             )
+        elif scoped_name in {
+            "mafia_universe:mafia_bomber",
+            "mafia_universe:town_bomber",
+        }:
+            mu_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafia_universe",
+                set(),
+            )
+            golden_name = f"{name}_retaliates_on_night_kill"
+            canonical = name
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and '"bomb"' in fmarch["pack_text"]
+                and '"id": "bomb_retaliates"' in fmarch["pack_text"]
+                and '"if_target_has": ["bomb"]' in fmarch["pack_text"]
+                and '"target": "Killer"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "apply_trigger_fixpoint" in resolver
+                and "InnerEvent::Trigger" in resolver
+                and "bomb_retaliates" in fmarch["pack_text"]
+            )
+            golden = modeled and golden_name in mu_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_projects_mafia_universe_bomber_triggers"
+                in command_tests
+            )
+            notes = (
+                "Passive night_retribution role from the Mafia Universe catalog; "
+                "fmarch folds it as a hidden bomb role effect consumed by the "
+                "bomb_retaliates Kill trigger."
+            )
         elif scoped_name == "core:jack_of_all_trades":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
             mafia_universe_golden_names = fmarch["golden_names_by_pack"].get(

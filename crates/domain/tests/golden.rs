@@ -7244,6 +7244,27 @@ fn mafia_universe_pack_deserializes() {
     assert_eq!(lover.alignment.as_deref(), None);
     assert!(lover.actions.is_empty());
     assert!(lover.effects.is_empty());
+    let mafia_bomber = pack
+        .roles
+        .get("mafia_bomber")
+        .expect("Mafia Universe Mafia Bomber role");
+    assert_eq!(mafia_bomber.alignment.as_deref(), Some("mafia"));
+    assert!(mafia_bomber.actions.is_empty());
+    assert_eq!(mafia_bomber.effects, vec!["bomb".to_string()]);
+    let town_bomber = pack
+        .roles
+        .get("town_bomber")
+        .expect("Mafia Universe Town Bomber role");
+    assert_eq!(town_bomber.alignment.as_deref(), Some("town"));
+    assert!(town_bomber.actions.is_empty());
+    assert_eq!(town_bomber.effects, vec!["bomb".to_string()]);
+    assert!(pack.effects.contains_key("bomb"));
+    assert!(pack.triggers.iter().any(|trigger| {
+        trigger.id == "bomb_retaliates"
+            && trigger.on == domain::pack::TriggerOn::Ability(domain::IrAbility::Kill)
+            && trigger.if_target_has == vec!["bomb".to_string()]
+            && trigger.produces.ability == domain::IrAbility::Kill
+    }));
     assert!(pack.lover_policy.enabled);
     assert_eq!(pack.lover_policy.link_effect, "lovers_link");
     assert_eq!(pack.lover_policy.suicide_cause, "lover_suicide");
@@ -8505,6 +8526,34 @@ fn golden_mafia_universe_lover_suicide_on_partner_death() {
         &got,
         &expected_events(&golden),
         "mafia_universe lover_suicide_on_partner_death",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_town_bomber_retaliates_on_night_kill() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "town_bomber_retaliates_on_night_kill.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe town_bomber_retaliates_on_night_kill",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_mafia_bomber_retaliates_on_night_kill() {
+    let golden = load_golden_in(
+        "mafia_universe",
+        "mafia_bomber_retaliates_on_night_kill.json",
+    );
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe mafia_bomber_retaliates_on_night_kill",
     );
 }
 
