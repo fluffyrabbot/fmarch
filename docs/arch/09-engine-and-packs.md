@@ -1249,11 +1249,11 @@ locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`, `expected_
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
 pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
 target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary `Runs
-the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and
+the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and
 BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and
 bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage.`
-This row is trusted through the artifact classifier with `ok: true`, `family_count: 28`,
-`case_count: 56`, `expected_family_count: 28`, `expected_case_count: 56`, and
+This row is trusted through the artifact classifier with `ok: true`, `family_count: 29`,
+`case_count: 58`, `expected_family_count: 29`, `expected_case_count: 58`, and
 `family_manifest_matched: true`.
 `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
 path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command

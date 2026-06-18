@@ -12065,6 +12065,10 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("strongman_vengeful_fixpoint", [97_161, 97_162]),
         ("strongman_vengeful_projection_state", [97_251, 97_252]),
         ("bodyguard_strongman_vengeful_fixpoint", [97_171, 97_172]),
+        (
+            "bodyguard_strongman_vengeful_projection_state",
+            [97_261, 97_262],
+        ),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("bomb_projection_state", [97_181, 97_182]),
@@ -12195,14 +12199,15 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 28,
-        "expected_case_count": 56,
+        "expected_family_count": 29,
+        "expected_case_count": 58,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
             ("babysitter_projection_state".to_string(), 2),
             ("bodyguard_strongman_vengeful_fixpoint".to_string(), 2),
+            ("bodyguard_strongman_vengeful_projection_state".to_string(), 2),
             ("bomb".to_string(), 2),
             ("bomb_projection_state".to_string(), 2),
             ("conversion_deprogramming".to_string(), 2),
@@ -12230,8 +12235,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(28));
-    assert_eq!(report["case_count"], serde_json::json!(56));
+    assert_eq!(report["family_count"], serde_json::json!(29));
+    assert_eq!(report["case_count"], serde_json::json!(58));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -20310,6 +20315,18 @@ fn generated_mafiascum_strongman_vengeful_projection_state_fixture_json(seed: u6
         .expect("generated Mafiascum Strongman Vengeful projection-state fixture serializes")
 }
 
+fn generated_mafiascum_bodyguard_strongman_vengeful_projection_state_fixture_json(
+    seed: u64,
+) -> String {
+    let fixture: serde_json::Value = serde_json::from_str(
+        &generated_mafiascum_bodyguard_strongman_vengeful_fixpoint_fixture_json(seed),
+    )
+    .expect("generated Mafiascum Bodyguard Strongman Vengeful fixture serializes");
+    serde_json::to_string_pretty(&fixture).expect(
+        "generated Mafiascum Bodyguard Strongman Vengeful projection-state fixture serializes",
+    )
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
@@ -20326,6 +20343,9 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
         }
         "bodyguard_strongman_vengeful_fixpoint" => {
             generated_mafiascum_bodyguard_strongman_vengeful_fixpoint_fixture_json(seed)
+        }
+        "bodyguard_strongman_vengeful_projection_state" => {
+            generated_mafiascum_bodyguard_strongman_vengeful_projection_state_fixture_json(seed)
         }
         "bomb" => generated_night_case_fixture_json(
             &generated_epicmafia_night_case(seed),
@@ -20387,6 +20407,9 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "bodyguard_strongman_vengeful_fixpoint" => {
             fixture["expectations"]["trace_decisions"][1]["detail"]["protectors"][0]
                 ["intercepts"] = serde_json::json!(false);
+        }
+        "bodyguard_strongman_vengeful_projection_state" => {
+            fixture["expectations"]["slot_states"][0]["payload"]["alive"] = serde_json::json!(true);
         }
         "lovers" => {
             fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
