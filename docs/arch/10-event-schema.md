@@ -253,6 +253,7 @@ unknown Rust events.
 | `win.executioner` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through target-lynch independent win metadata |
 | `win.condemner` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through target-lynch independent win metadata |
 | `win.jester` | `WinReached` | implemented; dynamic im-human trigger-win result mapped through self-lynch independent win metadata |
+| `win.survivor` | `WinReached` | implemented; dynamic im-human alive-at-end win result mapped through `metadata.survival_awards[]` on the terminal faction win |
 > **`ActionInterfered` vs `EffectNotification`.** When an action fails to resolve because it
 > was interfered with (e.g. a roleblocked Cop), the resolver emits
 > `ActionInterfered { actor, reason }` (reason `"roleblocked"`) addressed to the actor whose
@@ -486,15 +487,16 @@ death-reveal tag, distinct from `PlayerKilled.cause` when the layer needs that d
 struct WinReached {
     winner: AlignmentKey,           // the winning faction tag (pack-opaque, e.g. "town" / "mafia")
     reason: String,                 // human-readable cause, e.g. "faction mafia reaches parity (1 vs 1 others)"
-    metadata: Json,                 // optional structured detail; `null` in v1 (RESERVED)
+    metadata: Json,                 // optional structured detail; `null` when no pack policy adds detail
 }
 ```
 
 `WinReached.reason` is a stable, resolver-derived string, but (R3) it is **NOT part of the
 asserted golden contract** — the asserted contract is `{winner}`. The golden harness **strips
 `WinReached.reason` before comparison**, exactly as it strips `DayVoteOutcome.reason`; the
-resolver may still emit prose there for humans. `metadata` is reserved for future structured
-detail and is `null` in v1. A reveal-flags projection flips role/alignment visibility off `WinReached`
+resolver may still emit prose there for humans. `metadata.survival_awards[]` records pack-declared
+alive-at-end co-winners such as Survivor while keeping the terminal faction in `winner`.
+A reveal-flags projection flips role/alignment visibility off `WinReached`
 ([How events feed projections](#how-events-feed-projections)).
 
 `Seed` and `LogicalTime` carried on engine events are both `u64` (see

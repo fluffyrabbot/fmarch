@@ -944,6 +944,74 @@ fn win_policy_rules_must_not_duplicate_terminal_conditions() {
 }
 
 #[test]
+fn survival_win_awards_require_v63_role_refs_and_source_event_shape() {
+    let mut value = valid_pack_value();
+    value["win"]["survival_awards"] = json!([
+        {
+            "id": "survivor",
+            "winner": "",
+            "eligible_roles": ["missing_survivor", ""],
+            "source_event": "survivor"
+        },
+        {
+            "id": "survivor",
+            "winner": "survivor",
+            "eligible_roles": []
+        }
+    ]);
+    let err = validate_pack(&pack_from_value(value)).unwrap_err();
+    assert_issue(
+        &err,
+        "win.survival_awards[0]",
+        "survival awards require ir_version >= 63",
+    );
+    assert_issue(
+        &err,
+        "win.survival_awards[0].winner",
+        "winner must not be empty",
+    );
+    assert_issue(
+        &err,
+        "win.survival_awards[0].eligible_roles",
+        "unknown eligible role `missing_survivor`",
+    );
+    assert_issue(
+        &err,
+        "win.survival_awards[0].source_event",
+        "source_event must be a win.* result event string",
+    );
+    assert_issue(
+        &err,
+        "win.survival_awards[1].id",
+        "duplicate survival award id `survivor`",
+    );
+    assert_issue(
+        &err,
+        "win.survival_awards[1].eligible_roles",
+        "survival award must declare eligible_roles",
+    );
+
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(63);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["roles"]["survivor"] = json!({
+        "description": "Survivor.",
+        "alignment": "independent",
+        "actions": []
+    });
+    value["win_families"] = json!(["FactionElimination", "FactionParity", "SurvivalIndependent"]);
+    value["win"]["survival_awards"] = json!([
+        {
+            "id": "survivor",
+            "winner": "survivor",
+            "eligible_roles": ["survivor"],
+            "source_event": "win.survivor"
+        }
+    ]);
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
 fn win_rule_alive_blockers_are_strict_and_versioned() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(52);
@@ -1279,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 63");
+    assert_issue(&err, "ir_version", "unsupported IR version 64");
 }
 
 #[test]
@@ -1292,12 +1360,13 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 58",
+        "pack declares features requiring ir_version >= 63",
     );
     assert_issue(&err, "ir_version", "private_channels");
     assert_issue(&err, "ir_version", "Simultaneous");
     assert_issue(&err, "ir_version", "role_modifiers");
     assert_issue(&err, "ir_version", "death_reveal");
+    assert_issue(&err, "ir_version", "win.survival_awards");
     assert_issue(&err, "ir_version", "self_lynch_win_policies");
     assert_issue(&err, "ir_version", "Rotate");
     assert_issue(&err, "ir_version", "win_rule_blockers");

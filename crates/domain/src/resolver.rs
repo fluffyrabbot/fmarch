@@ -5596,7 +5596,27 @@ fn build_trace(
                 });
                 "trigger"
             }
-            InnerEvent::WinReached { .. } => "win_reached",
+            InnerEvent::WinReached { metadata, .. } => {
+                if let Some(awards) = metadata
+                    .get("survival_awards")
+                    .and_then(|value| value.as_array())
+                {
+                    for award in awards {
+                        let source = award
+                            .get("slot_id")
+                            .and_then(|value| value.as_str())
+                            .map(|slot_id| format!("slot:{slot_id}"))
+                            .unwrap_or_else(|| format!("event_index:{}", indexed.index));
+                        decisions.push(DecisionTrace {
+                            stage: "win:survival".to_string(),
+                            source,
+                            outcome: "survival_win_awarded".to_string(),
+                            detail: award.clone(),
+                        });
+                    }
+                }
+                "win_reached"
+            }
             InnerEvent::DayVoteRecorded { .. } => "day_vote_recorded",
             InnerEvent::PhaseAnnouncement(_) => "phase_announcement",
             InnerEvent::EffectNotification { .. } => "effect_notification",
@@ -5631,15 +5651,15 @@ pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
     for rule in &pack.win.rules {
         let (fires, reason) = match &rule.when {
             WinCondition::FactionEliminated(faction) => {
-                let alive = alive_in_faction(state, faction);
+                let alive = alive_in_faction_for_win(state, pack, faction);
                 (
                     alive == 0,
                     format!("faction {faction} eliminated (0 alive)"),
                 )
             }
             WinCondition::FactionReachesParity(faction) => {
-                let alive = alive_in_faction(state, faction);
-                let others = alive_total(state) - alive;
+                let alive = alive_in_faction_for_win(state, pack, faction);
+                let others = alive_total_for_win(state, pack) - alive;
                 (
                     alive > 0 && alive >= others,
                     format!("faction {faction} reaches parity ({alive} vs {others} others)"),
@@ -5649,8 +5669,8 @@ pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
                 // R5: faction `f` is the sole surviving faction. Every other
                 // alive slot (any other alignment, or alignment-less) must be 0,
                 // and `f` must have >= 1 alive.
-                let alive = alive_in_faction(state, faction);
-                let others = alive_total(state) - alive;
+                let alive = alive_in_faction_for_win(state, pack, faction);
+                let others = alive_total_for_win(state, pack) - alive;
                 (
                     alive > 0 && others == 0,
                     format!("all factions other than {faction} eliminated ({alive} alive)"),
@@ -5660,12 +5680,12 @@ pub fn check_win(state: &StateSnapshot, pack: &Pack) -> Option<InnerEvent> {
         let blocked_by_alive = rule
             .blocked_by_alive
             .iter()
-            .any(|alignment| alive_in_faction(state, alignment) > 0);
+            .any(|alignment| alive_in_faction_for_win(state, pack, alignment) > 0);
         if fires && !blocked_by_alive {
             return Some(InnerEvent::WinReached {
                 winner: rule.winner.clone(),
                 reason,
-                metadata: serde_json::Value::Null,
+                metadata: survival_win_metadata(state, pack),
             });
         }
     }
@@ -5703,20 +5723,68 @@ fn require_win_families(pack: &Pack) {
     {
         panic!("invalid win families: SelfLynchIndependent requires self_lynch_win_policies");
     }
+    if required.contains(&WinFamily::SurvivalIndependent) && pack.win.survival_awards.is_empty() {
+        panic!("invalid win families: SurvivalIndependent requires win.survival_awards");
+    }
 }
 
-/// Count alive slots whose alignment equals `faction`.
-fn alive_in_faction(state: &StateSnapshot, faction: &str) -> usize {
+fn alive_in_faction_for_win(state: &StateSnapshot, pack: &Pack, faction: &str) -> usize {
     state
         .slots
         .iter()
-        .filter(|s| s.is_alive() && s.alignment.as_deref() == Some(faction))
+        .filter(|slot| {
+            slot.is_alive()
+                && slot.alignment.as_deref() == Some(faction)
+                && !is_survival_award_slot(pack, slot)
+        })
         .count()
 }
 
-/// Total alive slots, all factions (and alignment-less slots) included.
-fn alive_total(state: &StateSnapshot) -> usize {
-    state.slots.iter().filter(|s| s.is_alive()).count()
+fn alive_total_for_win(state: &StateSnapshot, pack: &Pack) -> usize {
+    state
+        .slots
+        .iter()
+        .filter(|slot| slot.is_alive() && !is_survival_award_slot(pack, slot))
+        .count()
+}
+
+fn is_survival_award_slot(pack: &Pack, slot: &SlotState) -> bool {
+    pack.win.survival_awards.iter().any(|award| {
+        award
+            .eligible_roles
+            .iter()
+            .any(|role| role == &slot.role_key)
+    })
+}
+
+fn survival_win_metadata(state: &StateSnapshot, pack: &Pack) -> serde_json::Value {
+    let mut awards = Vec::new();
+    for award in &pack.win.survival_awards {
+        let source_event = award
+            .source_event
+            .clone()
+            .unwrap_or_else(|| format!("win.{}", award.id));
+        for slot in state.slots.iter().filter(|slot| {
+            slot.is_alive()
+                && award
+                    .eligible_roles
+                    .iter()
+                    .any(|role| role == &slot.role_key)
+        }) {
+            awards.push(serde_json::json!({
+                "policy": award.id,
+                "winner": award.winner,
+                "slot_id": slot.slot_id,
+                "role": slot.role_key,
+                "source_event": source_event,
+            }));
+        }
+    }
+    if awards.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::json!({ "survival_awards": awards })
+    }
 }
 
 fn effect_was_cleared(

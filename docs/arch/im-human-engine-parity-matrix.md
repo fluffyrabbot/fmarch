@@ -552,7 +552,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:specialist` | `specialist` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:strongman` | `strongman` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:super_saint` | `super_saint` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:survivor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:survivor` | `win.survival_awards` | 1 | no | yes | yes | yes | yes | im-human Survivor uses hidden survivor_win; fmarch models it as win.survival_awards metadata on the terminal faction WinReached while treating eligible live survivors as neutral for primary faction alive-count checks. |
 | role_id | `mafiascum:tracker` | `tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:traffic_analyst` | `traffic_analyst` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:traitor` |  | 1 | yes | no | no | no | no |  |

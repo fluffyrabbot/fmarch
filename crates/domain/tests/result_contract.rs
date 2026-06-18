@@ -2416,6 +2416,42 @@ fn final_win_after_phase_announcement_passes_contract_validation() {
 }
 
 #[test]
+fn final_win_survival_awards_metadata_passes_contract_validation() {
+    let mut payload = valid_resolution();
+    payload["events"].as_array_mut().unwrap().push(json!({
+        "index": 2,
+        "kind": "WinReached",
+        "payload": {
+            "winner": "town",
+            "reason": "all threats eliminated",
+            "metadata": {
+                "survival_awards": [
+                    {
+                        "policy": "survivor",
+                        "winner": "survivor",
+                        "slot_id": "slot_3",
+                        "role": "survivor",
+                        "source_event": "win.survivor"
+                    }
+                ]
+            }
+        }
+    }));
+    payload["counts"]["events"] = json!(3);
+
+    let applied = validate_resolution_json(&with_phase_announcement(payload), RESULT_VERSION)
+        .expect("survival-award WinReached metadata should pass");
+    let metadata = match &applied.events[2].event {
+        domain::InnerEvent::WinReached { metadata, .. } => metadata,
+        other => panic!("expected terminal WinReached, got {other:?}"),
+    };
+    assert_eq!(
+        metadata["survival_awards"][0]["source_event"],
+        "win.survivor"
+    );
+}
+
+#[test]
 fn non_final_win_fails_contract_validation() {
     let mut payload = valid_resolution();
     payload["events"].as_array_mut().unwrap().insert(

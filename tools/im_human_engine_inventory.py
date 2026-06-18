@@ -2632,6 +2632,38 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "the setup pair as folded PlayersLinked state and uses lover_policy "
                 "for the linked-death cascade."
             )
+        elif scoped_name == "mafiascum:survivor":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum", set()
+            )
+            canonical = "win.survival_awards"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and '"survival_awards": [' in fmarch["pack_text"]
+                and '"winner": "survivor"' in fmarch["pack_text"]
+                and '"source_event": "win.survivor"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "survival_win_metadata" in resolver
+                and "alive_total_for_win" in resolver
+                and "survival_win_awarded" in resolver
+            )
+            golden = (
+                implemented
+                and "survivor_wins_alive_at_end_with_town" in mafiascum_golden_names
+            )
+            integrated = (
+                golden
+                and "host_resolve_phase_awards_survivor_alive_at_end"
+                in command_tests
+            )
+            notes = (
+                "im-human Survivor uses hidden survivor_win; fmarch models it "
+                "as win.survival_awards metadata on the terminal faction "
+                "WinReached while treating eligible live survivors as neutral "
+                "for primary faction alive-count checks."
+            )
         elif scoped_name == "mafiascum:saulus":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
                 "mafiascum", set()

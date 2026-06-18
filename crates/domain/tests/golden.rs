@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 62);
+    assert_eq!(pack.ir_version, 63);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -408,6 +408,19 @@ fn pack_deserializes() {
         vec!["saulus".to_string()]
     );
     assert_eq!(pack.saulus_policy.target_alignment, "town");
+    let survivor = pack.roles.get("survivor").expect("Mafiascum Survivor role");
+    assert_eq!(survivor.alignment.as_deref(), Some("independent"));
+    assert!(survivor.actions.is_empty());
+    assert!(survivor.effects.is_empty());
+    let survivor_award = pack
+        .win
+        .survival_awards
+        .iter()
+        .find(|award| award.id == "survivor")
+        .expect("Mafiascum Survivor win award");
+    assert_eq!(survivor_award.winner, "survivor");
+    assert_eq!(survivor_award.eligible_roles, vec!["survivor".to_string()]);
+    assert_eq!(survivor_award.source_event.as_deref(), Some("win.survivor"));
     assert!(role_action(&pack, "vigilante", "night_kill")
         .source_ids
         .iter()
@@ -5141,6 +5154,17 @@ fn golden_saulus_flips_alignment_on_lynch() {
 }
 
 #[test]
+fn golden_survivor_wins_alive_at_end_with_town() {
+    let golden = load_golden("survivor_wins_alive_at_end_with_town.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "survivor_wins_alive_at_end_with_town",
+    );
+}
+
+#[test]
 fn trace_records_executioner_target_lynch_win() {
     let golden = load_golden("executioner_wins_on_target_lynch.json");
     let output = run_output(
@@ -5216,6 +5240,30 @@ fn trace_records_jester_self_lynch_win() {
     assert_eq!(decision.detail["role"], "jester");
     assert_eq!(decision.detail["winner"], "jester");
     assert_eq!(decision.detail["source_event"], "win.jester");
+}
+
+#[test]
+fn trace_records_survivor_alive_at_end_award() {
+    let golden = load_golden("survivor_wins_alive_at_end_with_town.json");
+    let output = run_output(
+        &golden["input"],
+        load_pack(),
+        "survivor-alive-at-end-trace-run",
+    );
+
+    let decision = output
+        .trace
+        .decisions
+        .iter()
+        .find(|decision| decision.outcome == "survival_win_awarded")
+        .expect("Survivor alive at end should emit a survival-award trace decision");
+    assert_eq!(decision.stage, "win:survival");
+    assert_eq!(decision.source, "slot:slot_3");
+    assert_eq!(decision.detail["policy"], "survivor");
+    assert_eq!(decision.detail["winner"], "survivor");
+    assert_eq!(decision.detail["slot_id"], "slot_3");
+    assert_eq!(decision.detail["role"], "survivor");
+    assert_eq!(decision.detail["source_event"], "win.survivor");
 }
 
 #[test]

@@ -41708,6 +41708,194 @@ async fn host_resolve_phase_carries_saulus_alignment_flip_on_lynch(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "vanilla_townie"),
+        ("slot_2", "user_2", "mafia_goon"),
+        ("slot_3", "user_3", "survivor"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (user_id, actor_slot) in [("user_1", "slot_1"), ("user_3", "slot_3")] {
+        handle(
+            &pool,
+            &user(user_id),
+            Command::SubmitVote {
+                game,
+                actor_slot: actor_slot.into(),
+                target: VoteTarget::Slot("slot_2".into()),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 7434 })
+        .await
+        .expect("host resolves Survivor alive-at-end win award");
+
+    let d01_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let d01 = domain::validate_resolution_json(&d01_payload, domain::RESULT_VERSION).unwrap();
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::DayVoteOutcome(outcome)
+            if outcome.winner.as_deref() == Some("slot_2")
+                && outcome.tallies.get("slot_2").copied() == Some(2.0)
+    )));
+    assert!(d01.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+            if slot_id == "slot_2" && cause == "day_vote"
+    )));
+    let win_metadata = d01
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::WinReached {
+                winner, metadata, ..
+            } if winner == "town" => Some(metadata),
+            _ => None,
+        })
+        .expect("town win should be reached with Survivor alive");
+    assert_eq!(
+        win_metadata["survival_awards"],
+        serde_json::json!([
+            {
+                "policy": "survivor",
+                "winner": "survivor",
+                "slot_id": "slot_3",
+                "role": "survivor",
+                "source_event": "win.survivor"
+            }
+        ])
+    );
+
+    let d01_trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let d01_trace = domain::validate_trace_json(&d01_trace_payload, domain::TRACE_VERSION)
+        .expect("valid Survivor alive-at-end trace");
+    assert_decision_trace(
+        &d01_trace,
+        DecisionTraceExpectation {
+            stage: "win:survival",
+            source: "slot:slot_3",
+            outcome: "survival_win_awarded",
+            detail: vec![
+                ("policy", serde_json::json!("survivor")),
+                ("winner", serde_json::json!("survivor")),
+                ("slot_id", serde_json::json!("slot_3")),
+                ("role", serde_json::json!("survivor")),
+                ("source_event", serde_json::json!("win.survivor")),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let survivor = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_3")
+        .expect("Survivor projection slot");
+    assert!(survivor.alive, "Survivor should remain alive at endgame");
+    assert_eq!(survivor.role_key.as_deref(), Some("survivor"));
+    assert_eq!(survivor.alignment.as_deref(), Some("independent"));
+    assert_win_revealed_all_slots(&slots, "Survivor alive-at-end win award");
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Survivor alive-at-end audit");
+    assert!(audit.ok, "Survivor resolution audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Survivor alive-at-end award"
+    );
+    let d01_trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        d01_trace_payload, d01_trace_after_rebuild,
+        "projection rebuild must not rewrite Survivor trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_self_lynch_win_suppresses_target_lynch_and_faction_wins(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

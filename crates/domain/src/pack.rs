@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 62;
+pub const SUPPORTED_IR_VERSION: u16 = 63;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -1801,6 +1801,10 @@ fn default_parity_non_town_result() -> String {
 pub struct WinPolicy {
     #[serde(default)]
     pub rules: Vec<WinRule>,
+    /// Optional alive-at-end co-winners. Matching alive slots are neutral for
+    /// primary faction end-state checks and are recorded in WinReached metadata.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub survival_awards: Vec<SurvivalWinAward>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1811,6 +1815,16 @@ pub struct WinRule {
     /// Alignments that must have zero living slots before this rule can fire.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocked_by_alive: Vec<AlignmentKey>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SurvivalWinAward {
+    pub id: String,
+    pub winner: String,
+    #[serde(default)]
+    pub eligible_roles: Vec<RoleKey>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_event: Option<String>,
 }
 
 /// A win condition over alive-counts on the post-resolution state.
@@ -1839,6 +1853,7 @@ pub enum WinFamily {
     CultParity,
     TargetLynchIndependent,
     SelfLynchIndependent,
+    SurvivalIndependent,
     WinTriggeredActions,
 }
 
@@ -2394,7 +2409,13 @@ pub fn validate_pack(pack: &Pack) -> Result<(), PackValidationError> {
         pack_uses_ability(pack, IrAbility::VoteDuel),
     );
 
-    validate_win_policy(&mut issues, &pack.win, &alignments);
+    validate_win_policy(
+        &mut issues,
+        &pack.win,
+        pack.ir_version,
+        &alignments,
+        &role_keys,
+    );
     validate_win_families(&mut issues, pack);
 
     if issues.is_empty() {
@@ -2727,7 +2748,9 @@ fn pack_uses_grant_audience(pack: &Pack) -> bool {
 fn validate_win_policy(
     issues: &mut Vec<PackValidationIssue>,
     win: &WinPolicy,
+    ir_version: u16,
     alignments: &BTreeSet<&str>,
+    role_keys: &BTreeSet<&str>,
 ) {
     let mut conditions = BTreeSet::new();
     for (idx, rule) in win.rules.iter().enumerate() {
@@ -2790,6 +2813,70 @@ fn validate_win_policy(
                     issues,
                     blockers_path.clone(),
                     format!("duplicate win rule blocker `{blocker}`"),
+                );
+            }
+        }
+    }
+
+    let mut award_ids = BTreeSet::new();
+    for (idx, award) in win.survival_awards.iter().enumerate() {
+        let award_path = format!("win.survival_awards[{idx}]");
+        if ir_version < 63 {
+            issue(
+                issues,
+                award_path.clone(),
+                "survival awards require ir_version >= 63",
+            );
+        }
+        if award.id.trim().is_empty() {
+            issue(issues, format!("{award_path}.id"), "id must not be empty");
+        } else if !award_ids.insert(award.id.as_str()) {
+            issue(
+                issues,
+                format!("{award_path}.id"),
+                format!("duplicate survival award id `{}`", award.id),
+            );
+        }
+        if award.winner.trim().is_empty() {
+            issue(
+                issues,
+                format!("{award_path}.winner"),
+                "winner must not be empty",
+            );
+        }
+        if award.eligible_roles.is_empty() {
+            issue(
+                issues,
+                format!("{award_path}.eligible_roles"),
+                "survival award must declare eligible_roles",
+            );
+        }
+        validate_unique_strings(
+            issues,
+            format!("{award_path}.eligible_roles"),
+            &award.eligible_roles,
+        );
+        for role_key in &award.eligible_roles {
+            if !role_keys.contains(role_key.as_str()) {
+                issue(
+                    issues,
+                    format!("{award_path}.eligible_roles"),
+                    format!("unknown eligible role `{role_key}`"),
+                );
+            }
+        }
+        if let Some(source_event) = &award.source_event {
+            if source_event.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{award_path}.source_event"),
+                    "source_event must not be empty",
+                );
+            } else if !source_event.starts_with("win.") {
+                issue(
+                    issues,
+                    format!("{award_path}.source_event"),
+                    "source_event must be a win.* result event string",
                 );
             }
         }
@@ -2877,6 +2964,9 @@ pub(crate) fn win_required_families(pack: &Pack) -> BTreeSet<WinFamily> {
         .any(|trigger| trigger.on == TriggerOn::Event(TriggerEvent::Win))
     {
         required.insert(WinFamily::WinTriggeredActions);
+    }
+    if !pack.win.survival_awards.is_empty() {
+        required.insert(WinFamily::SurvivalIndependent);
     }
     required
 }
@@ -9120,6 +9210,9 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if !pack.target_lynch_win_policies.is_empty() {
         require_ir(&mut required, &mut reasons, 19, "target_lynch_win_policies");
     }
+    if !pack.win.survival_awards.is_empty() {
+        require_ir(&mut required, &mut reasons, 63, "win.survival_awards");
+    }
     if pack.beloved_princess_policy.enabled {
         require_ir(&mut required, &mut reasons, 20, "beloved_princess_policy");
     }
@@ -9800,6 +9893,15 @@ mod tests {
         let mut value = test_pack_value();
         value["win_families"] = json!(["FactionParity"]);
         assert_versioned_pack_feature(value, 46, "win_families");
+
+        let mut value = test_pack_value();
+        value["win"]["survival_awards"] = json!([{
+            "id": "survivor",
+            "winner": "survivor",
+            "eligible_roles": ["townie"],
+            "source_event": "win.survivor"
+        }]);
+        assert_versioned_pack_feature(value, 63, "win.survival_awards");
 
         let mut value = test_pack_value();
         value["standard_nar"] = json!({

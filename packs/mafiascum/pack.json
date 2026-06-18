@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 62,
+  "ir_version": 63,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -2246,6 +2246,11 @@
         }
       ]
     },
+    "survivor": {
+      "description": "Survivor. Independent passive role; wins alongside the terminal faction if alive at endgame.",
+      "alignment": "independent",
+      "actions": []
+    },
     "strongman": {
       "description": "Strongman. Carries out the factional kill; the kill bypasses Protect (Strongman modifier on the action).",
       "alignment": "mafia",
@@ -4122,6 +4127,7 @@
     "FactionParity",
     "TargetLynchIndependent",
     "SelfLynchIndependent",
+    "SurvivalIndependent",
     "WinTriggeredActions"
   ],
   "win": {
@@ -4144,6 +4150,16 @@
           "FactionReachesParity": "mafia"
         },
         "blocked_by_alive": ["independent"]
+      }
+    ],
+    "survival_awards": [
+      {
+        "id": "survivor",
+        "winner": "survivor",
+        "eligible_roles": [
+          "survivor"
+        ],
+        "source_event": "win.survivor"
       }
     ]
   }
