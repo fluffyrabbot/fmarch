@@ -255,7 +255,7 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
 fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
-    assert_eq!(pack.ir_version, 63);
+    assert_eq!(pack.ir_version, 64);
     let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
     assert_eq!(bomb.alignment.as_deref(), Some("town"));
     assert!(bomb.actions.is_empty());
@@ -421,6 +421,10 @@ fn pack_deserializes() {
     assert_eq!(survivor_award.winner, "survivor");
     assert_eq!(survivor_award.eligible_roles, vec!["survivor".to_string()]);
     assert_eq!(survivor_award.source_event.as_deref(), Some("win.survivor"));
+    let traitor = pack.roles.get("traitor").expect("Mafiascum Traitor role");
+    assert_eq!(traitor.alignment.as_deref(), Some("mafia"));
+    assert!(traitor.actions.is_empty());
+    assert!(traitor.effects.is_empty());
     assert!(role_action(&pack, "vigilante", "night_kill")
         .source_ids
         .iter()
@@ -507,6 +511,7 @@ fn pack_deserializes() {
             && group.roles.is_empty()
             && group.member_alignments == vec!["mafia".to_string()]
             && group.enabled_by_roles == vec!["encryptor".to_string()]
+            && group.excluded_roles == vec!["traitor".to_string()]
             && group.active_while_source_alive
             && group.reveals_alignment == domain::pack::PrivateChannelAlignmentReveal::None
     }));
@@ -5161,6 +5166,17 @@ fn golden_survivor_wins_alive_at_end_with_town() {
         &got,
         &expected_events(&golden),
         "survivor_wins_alive_at_end_with_town",
+    );
+}
+
+#[test]
+fn golden_traitor_counts_for_mafia_parity_without_faction_action() {
+    let golden = load_golden("traitor_counts_for_mafia_parity.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "traitor_counts_for_mafia_parity",
     );
 }
 

@@ -601,6 +601,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         ("slot_3", "encryptor_user_3", "vanilla_townie"),
         ("slot_4", "encryptor_user_4", "vanilla_townie"),
         ("slot_5", "encryptor_user_5", "vanilla_townie"),
+        ("slot_6", "encryptor_user_6", "traitor"),
     ] {
         handle(
             &pool,
@@ -664,8 +665,13 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         declaration["enabled_by_roles"],
         serde_json::json!(["encryptor"])
     );
+    assert_eq!(
+        declaration["excluded_roles"],
+        serde_json::json!(["traitor"])
+    );
     assert_eq!(declaration["active_while_source_alive"], true);
     assert_eq!(declaration["source_slots"], serde_json::json!(["slot_1"]));
+    assert_eq!(declaration["members"].as_array().unwrap().len(), 2);
     assert_eq!(declaration["members"][0]["slot_id"], "slot_1");
     assert_eq!(declaration["members"][0]["role_key"], "encryptor");
     assert_eq!(declaration["members"][1]["slot_id"], "slot_2");
@@ -711,6 +717,7 @@ async fn encryptor_declares_and_revokes_mafia_day_chat(pool: PgPool) {
         ("encryptor_user_3", "slot_3"),
         ("encryptor_user_4", "slot_4"),
         ("encryptor_user_5", "slot_5"),
+        ("encryptor_user_6", "slot_6"),
     ] {
         handle(
             &pool,
@@ -41892,6 +41899,202 @@ async fn host_resolve_phase_awards_survivor_alive_at_end(pool: PgPool) {
     assert_eq!(
         d01_trace_payload, d01_trace_after_rebuild,
         "projection rebuild must not rewrite Survivor trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_counts_traitor_for_mafia_parity(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "user_1", "traitor"),
+        ("slot_2", "user_2", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let err = handle(
+        &pool,
+        &user("user_1"),
+        Command::SubmitAction {
+            game,
+            action_id: "traitor_attempts_factional_kill_n01".into(),
+            actor_slot: "slot_1".into(),
+            template_id: "factional_kill".into(),
+            targets: vec!["slot_2".into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(err, Reject::InvalidTarget);
+
+    let action_submitted_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        action_submitted_count, 0,
+        "invalid Traitor factional-kill attempt must not append an action"
+    );
+
+    let ack = handle(&pool, &h, Command::ResolvePhase { game, seed: 640001 })
+        .await
+        .expect("host resolves Traitor mafia parity");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        3,
+        "Traitor parity resolve appends ResolutionApplied, ResolutionTrace, and ThreadLocked atomically"
+    );
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Traitor parity ResolutionApplied");
+    assert_eq!(applied.phase_id, "N01");
+    assert_eq!(applied.phase_kind, domain::pack::PhaseKind::Night);
+    assert_eq!(applied.seed, 640001);
+    let win_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::WinReached { winner, reason, .. }
+                if winner == "mafia"
+                    && reason == "faction mafia reaches parity (1 vs 1 others)" =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("Traitor should count as mafia for parity win");
+    assert!(
+        applied.events.iter().any(|indexed| matches!(
+            &indexed.event,
+            domain::InnerEvent::PhaseAnnouncement(announcement)
+                if announcement.phase_id == "N01" && announcement.deaths.is_empty()
+        )),
+        "Traitor parity should not require a submitted kill: {:#?}",
+        applied.events
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Traitor parity trace");
+    let win_source = format!("event_index:{win_index}");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "inner_event",
+            source: &win_source,
+            outcome: "win_reached",
+            detail: vec![],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    let traitor = slots
+        .iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("Traitor projection slot");
+    assert!(traitor.alive, "Traitor should remain alive at parity win");
+    assert_eq!(traitor.role_key.as_deref(), Some("traitor"));
+    assert_eq!(traitor.alignment.as_deref(), Some("mafia"));
+    assert_win_revealed_all_slots(&slots, "Traitor mafia parity win");
+
+    let audit = audit_resolution_envelopes(&pool, game)
+        .await
+        .expect("Traitor parity audit");
+    assert!(audit.ok, "Traitor resolution audit drifted: {audit:?}");
+    assert_eq!(audit.audited, 1);
+    assert_eq!(audit.skipped, 0);
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Traitor mafia parity"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite Traitor parity trace envelope"
     );
 }
 

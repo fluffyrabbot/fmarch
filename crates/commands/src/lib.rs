@@ -2593,6 +2593,9 @@ fn private_channel_declarations(
                     if group.enabled_by_roles.iter().any(|allowed| allowed == role) {
                         source_slots.push(slot.clone());
                     }
+                    if group.excluded_roles.iter().any(|excluded| excluded == role) {
+                        continue;
+                    }
                     if let Some(alignment) = pack
                         .roles
                         .get(role)
@@ -2634,6 +2637,7 @@ fn private_channel_declarations(
                 "group_id": group.id,
                 "kind": &group.kind,
                 "roles": &group.roles,
+                "excluded_roles": &group.excluded_roles,
                 "member_alignments": &group.member_alignments,
                 "enabled_by_roles": &group.enabled_by_roles,
                 "active_while_source_alive": group.active_while_source_alive,

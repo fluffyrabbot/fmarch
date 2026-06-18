@@ -555,7 +555,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:survivor` | `win.survival_awards` | 1 | no | yes | yes | yes | yes | im-human Survivor uses hidden survivor_win; fmarch models it as win.survival_awards metadata on the terminal faction WinReached while treating eligible live survivors as neutral for primary faction alive-count checks. |
 | role_id | `mafiascum:tracker` | `tracker` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:traffic_analyst` | `traffic_analyst` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:traitor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:traitor` | `mafia_loner` | 1 | no | yes | yes | yes | yes | im-human Traitor uses hidden mafia_loner; fmarch models it as a mafia-aligned passive role with no actions, counts it through ordinary faction parity, and excludes it from FactionDayChat via private_channels.excluded_roles. |
 | role_id | `mafiascum:universal_backup` | `universal_backup` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vanilla_cop` | `vanilla_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:vanillaiser` | `vanillaiser` | 1 | no | yes | yes | yes | yes |  |

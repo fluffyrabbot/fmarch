@@ -1347,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 64");
+    assert_issue(&err, "ir_version", "unsupported IR version 65");
 }
 
 #[test]
@@ -1360,9 +1360,10 @@ fn pack_ir_version_must_cover_declared_additive_features() {
     assert_issue(
         &err,
         "ir_version",
-        "pack declares features requiring ir_version >= 63",
+        "pack declares features requiring ir_version >= 64",
     );
     assert_issue(&err, "ir_version", "private_channels");
+    assert_issue(&err, "ir_version", "private_channels.excluded_roles");
     assert_issue(&err, "ir_version", "Simultaneous");
     assert_issue(&err, "ir_version", "role_modifiers");
     assert_issue(&err, "ir_version", "death_reveal");
@@ -1872,7 +1873,7 @@ fn role_set_investigation_modes_are_strict() {
         "killer_roles": ["arsonist"],
         "specialist_roles": []
     });
-    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["visibility_families"] = json!(["EffectAudiences", "PrivateChannels"]);
     value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     validate_pack(&pack_from_value(value)).unwrap();
 
@@ -5496,6 +5497,11 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
         "alignment": "mafia",
         "actions": []
     });
+    value["roles"]["traitor"] = json!({
+        "description": "Traitor.",
+        "alignment": "mafia",
+        "actions": []
+    });
     value["private_channels"] = json!({
         "enabled": true,
         "groups": [
@@ -5503,6 +5509,7 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
                 "id": "mason",
                 "kind": "Mason",
                 "roles": ["mason", "missing_role", "mason"],
+                "excluded_roles": ["traitor"],
                 "reveals_alignment": "None"
             },
             {
@@ -5523,6 +5530,7 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
                 "roles": ["encryptor"],
                 "member_alignments": [],
                 "enabled_by_roles": ["encryptor", "missing_encryptor", "encryptor"],
+                "excluded_roles": ["missing_traitor", "traitor", "traitor", ""],
                 "active_while_source_alive": false,
                 "reveals_alignment": "Town"
             }
@@ -5544,6 +5552,16 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
         &err,
         "private_channels.mason.reveals_alignment",
         "mason private channels must reveal Town alignment",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mason.excluded_roles",
+        "private channel role exclusions require ir_version >= 64",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mason.excluded_roles",
+        "role-based private channels must not declare excluded_roles",
     );
     assert_issue(
         &err,
@@ -5572,6 +5590,26 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
     );
     assert_issue(
         &err,
+        "private_channels.mafia_day_chat.excluded_roles",
+        "private channel role exclusions require ir_version >= 64",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.excluded_roles",
+        "unknown private channel excluded role `missing_traitor`",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.excluded_roles",
+        "duplicate private channel excluded role `traitor`",
+    );
+    assert_issue(
+        &err,
+        "private_channels.mafia_day_chat.excluded_roles",
+        "private channel excluded role must not be empty",
+    );
+    assert_issue(
+        &err,
         "private_channels.mafia_day_chat.reveals_alignment",
         "faction day-chat private channels must not reveal alignment",
     );
@@ -5591,7 +5629,9 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
         "faction day-chat private channels must be source-alive gated",
     );
 
-    value["ir_version"] = json!(29);
+    value["ir_version"] = json!(64);
+    value["visibility_families"] = json!(["EffectAudiences", "PrivateChannels"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
     value["roles"]["neighbor"] = json!({
         "description": "Neighbor.",
         "actions": [],
@@ -5617,6 +5657,7 @@ fn private_channel_policy_requires_v29_roles_and_group_contracts() {
                 "kind": "FactionDayChat",
                 "member_alignments": ["mafia"],
                 "enabled_by_roles": ["encryptor"],
+                "excluded_roles": ["traitor"],
                 "active_while_source_alive": true,
                 "reveals_alignment": "None"
             }

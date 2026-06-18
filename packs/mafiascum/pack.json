@@ -1,7 +1,7 @@
 {
   "name": "mafiascum",
   "version": 1,
-  "ir_version": 63,
+  "ir_version": 64,
   "item_actions": {
     "single_use_item": {
       "id": "single_use_item",
@@ -1971,6 +1971,11 @@
     },
     "encryptor": {
       "description": "Encryptor. Mafia-aligned passive role: while alive, enables faction day chat for mafia members.",
+      "alignment": "mafia",
+      "actions": []
+    },
+    "traitor": {
+      "description": "Traitor. Mafia-aligned loner; counts as Mafia for win conditions but starts outside faction chat and has no factional kill action.",
       "alignment": "mafia",
       "actions": []
     },
@@ -4034,6 +4039,9 @@
         ],
         "enabled_by_roles": [
           "encryptor"
+        ],
+        "excluded_roles": [
+          "traitor"
         ],
         "active_while_source_alive": true,
         "reveals_alignment": "None"

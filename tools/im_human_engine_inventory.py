@@ -2695,6 +2695,39 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "models it as saulus_policy that saves the lynch and emits "
                 "PlayerConverted from mafia to town."
             )
+        elif scoped_name == "mafiascum:traitor":
+            mafiascum_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafiascum", set()
+            )
+            canonical = "mafia_loner"
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and '"alignment": "mafia"' in fmarch["pack_text"]
+                and '"excluded_roles": [' in fmarch["pack_text"]
+                and '"traitor"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "WinCondition::FactionReachesParity" in resolver
+                and "alive_in_faction_for_win" in resolver
+                and "excluded_roles" in commands
+            )
+            golden = (
+                implemented
+                and "traitor_counts_for_mafia_parity" in mafiascum_golden_names
+            )
+            integrated = (
+                golden
+                and "host_resolve_phase_counts_traitor_for_mafia_parity"
+                in command_tests
+                and "encryptor_declares_and_revokes_mafia_day_chat" in command_tests
+            )
+            notes = (
+                "im-human Traitor uses hidden mafia_loner; fmarch models it "
+                "as a mafia-aligned passive role with no actions, counts it "
+                "through ordinary faction parity, and excludes it from "
+                "FactionDayChat via private_channels.excluded_roles."
+            )
         elif scoped_name == "mafiascum:encryptor":
             canonical = "private_channels:FactionDayChat"
             modeled = (

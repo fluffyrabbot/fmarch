@@ -1,0 +1,68 @@
+{
+  "description": "Traitor is mafia-aligned but has no factional kill action. With one Traitor and one Town slot alive, the existing mafia parity win condition counts the Traitor as Mafia.",
+  "input": {
+    "game_id": "game_mafiascum_traitor_001",
+    "phase_id": "N01",
+    "state": {
+      "phase_kind": "Night",
+      "phase_number": 1,
+      "phase_id": "N01",
+      "phase_deadline": null,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "sod",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "slot_id": "slot_1",
+          "role_key": "traitor",
+          "alignment": "mafia",
+          "status": "alive",
+          "effects": []
+        },
+        {
+          "slot_id": "slot_2",
+          "role_key": "vanilla_townie",
+          "alignment": "town",
+          "status": "alive",
+          "effects": []
+        }
+      ]
+    },
+    "submissions": [],
+    "pack": "mafiascum",
+    "seed": 640001
+  },
+  "expected_events": [
+    {
+      "index": 0,
+      "kind": "PhaseAnnouncement",
+      "payload": {
+        "phase_id": "N01",
+        "deaths": []
+      }
+    },
+    {
+      "index": 1,
+      "kind": "WinReached",
+      "payload": {
+        "winner": "mafia",
+        "reason": "faction mafia reaches parity (1 vs 1 others)",
+        "metadata": null
+      }
+    }
+  ],
+  "notes": {
+    "parity": "Post-resolution alive: slot_1 Traitor is mafia-aligned and slot_2 is town. The Traitor has no action submissions, but faction parity counts alignment, so mafia wins."
+  }
+}

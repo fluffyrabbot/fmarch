@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 63;
+pub const SUPPORTED_IR_VERSION: u16 = 64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -915,6 +915,8 @@ pub struct PrivateChannelGroup {
     pub kind: PrivateChannelKind,
     #[serde(default)]
     pub roles: Vec<RoleKey>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub excluded_roles: Vec<RoleKey>,
     #[serde(default)]
     pub member_alignments: Vec<AlignmentKey>,
     #[serde(default)]
@@ -7188,6 +7190,35 @@ fn validate_private_channel_policy(
                 );
             }
         }
+        if !group.excluded_roles.is_empty() && ir_version < 64 {
+            issue(
+                issues,
+                format!("{group_path}.excluded_roles"),
+                "private channel role exclusions require ir_version >= 64",
+            );
+        }
+        let mut excluded_roles = BTreeSet::new();
+        for role in &group.excluded_roles {
+            if role.trim().is_empty() {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    "private channel excluded role must not be empty",
+                );
+            } else if !role_keys.contains(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    format!("unknown private channel excluded role `{role}`"),
+                );
+            } else if !excluded_roles.insert(role.as_str()) {
+                issue(
+                    issues,
+                    format!("{group_path}.excluded_roles"),
+                    format!("duplicate private channel excluded role `{role}`"),
+                );
+            }
+        }
         let mut enabled_by_roles = BTreeSet::new();
         for role in &group.enabled_by_roles {
             if role.trim().is_empty() {
@@ -7267,6 +7298,13 @@ fn validate_private_channel_policy(
                         issues,
                         format!("{group_path}.active_while_source_alive"),
                         "role-based private channels must not be source-alive gated",
+                    );
+                }
+                if !group.excluded_roles.is_empty() {
+                    issue(
+                        issues,
+                        format!("{group_path}.excluded_roles"),
+                        "role-based private channels must not declare excluded_roles",
                     );
                 }
             }
@@ -9204,6 +9242,19 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     if pack.private_channels.enabled {
         require_ir(&mut required, &mut reasons, 29, "private_channels");
     }
+    if pack
+        .private_channels
+        .groups
+        .iter()
+        .any(|group| !group.excluded_roles.is_empty())
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            64,
+            "private_channels.excluded_roles",
+        );
+    }
     if pack.treestump_policy.enabled {
         require_ir(&mut required, &mut reasons, 30, "treestump_policy");
     }
@@ -9820,6 +9871,26 @@ mod tests {
             }]
         });
         assert_versioned_pack_feature(value, 29, "private_channels");
+
+        let mut value = test_pack_value();
+        value["roles"]["traitor"] = json!({
+            "description": "Traitor.",
+            "alignment": "mafia",
+            "actions": []
+        });
+        value["private_channels"] = json!({
+            "enabled": true,
+            "groups": [{
+                "id": "mafia_day_chat",
+                "kind": "FactionDayChat",
+                "member_alignments": ["mafia"],
+                "enabled_by_roles": ["townie"],
+                "excluded_roles": ["traitor"],
+                "active_while_source_alive": true,
+                "reveals_alignment": "None"
+            }]
+        });
+        assert_versioned_pack_feature(value, 64, "private_channels.excluded_roles");
 
         let mut value = test_pack_value();
         value["ita"] = json!({
