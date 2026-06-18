@@ -120,6 +120,10 @@
       "alignment": "mafia",
       "actions": []
     },
+    "lover": {
+      "description": "Mafia Universe Lover. Passive role bound to another lover by setup state; if either dies by any means, the linked partner dies too.",
+      "actions": []
+    },
     "town_treestump": {
       "description": "Town-aligned Treestump. Remains in thread without a vote after elimination.",
       "alignment": "town",
@@ -2673,10 +2677,18 @@
     "fruit_received": { "duration": "Resolution", "visibility": "Target" },
     "framed": { "duration": "Persistent", "visibility": "Hidden" },
     "godfather": { "duration": "Persistent", "visibility": "Hidden" },
+    "lovers_link": { "duration": "Persistent", "visibility": "Hidden" },
     "miller": { "duration": "Persistent", "visibility": "Hidden" },
     "poisoned": { "duration": "Persistent", "visibility": "Target" },
     "role_oracle_mark": { "duration": "Persistent", "visibility": "Hidden" },
     "untargetable": { "duration": "Resolution", "visibility": "Hidden" }
+  },
+  "lover_policy": {
+    "enabled": true,
+    "link_effect": "lovers_link",
+    "suicide_cause": "lover_suicide",
+    "suicide_on_lover_death": true,
+    "lovers_known_to_each_other": true
   },
   "effect_source_death_reveals": [
     {

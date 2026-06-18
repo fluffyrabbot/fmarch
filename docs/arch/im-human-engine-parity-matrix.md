@@ -375,7 +375,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:blank_town_role` | `blank_town_role` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:godfather` | `godfather` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:innocent_child` | `innocent_child` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:lover` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:lover` | `lover` | 1 | no | yes | yes | yes | yes | Passive Lover role from the Mafia Universe catalog; fmarch keeps the setup pair as folded PlayersLinked state and uses lover_policy for the linked-death cascade. |
 | role_id | `mafia_universe:mafia_alignment_cop` | `mafia_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_alignment_oracle` | `mafia_alignment_oracle` | 1 | no | yes | yes | no | yes |  |
 | role_id | `mafia_universe:mafia_arsonist` | `mafia_arsonist` | 1 | no | yes | yes | yes | yes |  |

@@ -2585,6 +2585,35 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "non-draftable im-human helper role represented as "
                 "lover_policy.source_helper_role metadata, not a pack.roles entry"
             )
+        elif scoped_name == "mafia_universe:lover":
+            mu_golden_names = fmarch["golden_names_by_pack"].get(
+                "mafia_universe",
+                set(),
+            )
+            canonical = "lover"
+            modeled = (
+                "mafia_universe:lover" in fmarch["pack_roles"]
+                and "mafia_universe:lover_policy" in fmarch["pack_policies"]
+                and '"lovers_link"' in fmarch["pack_text"]
+                and '"suicide_cause": "lover_suicide"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "apply_lover_suicides" in resolver
+                and "input.state.linked_slots" in resolver
+                and "lover_suicide" in resolver
+            )
+            golden = modeled and "lover_suicide_on_partner_death" in mu_golden_names
+            integrated = (
+                implemented
+                and "host_resolve_phase_carries_mafia_universe_lover_setup_cascade"
+                in command_tests
+            )
+            notes = (
+                "Passive Lover role from the Mafia Universe catalog; fmarch keeps "
+                "the setup pair as folded PlayersLinked state and uses lover_policy "
+                "for the linked-death cascade."
+            )
         elif scoped_name == "core:jack_of_all_trades":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())
             mafia_universe_golden_names = fmarch["golden_names_by_pack"].get(

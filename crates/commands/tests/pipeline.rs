@@ -48902,6 +48902,246 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "mafia_goon"),
+        ("slot_2", "lover"),
+        ("slot_3", "lover"),
+        ("slot_4", "town_vanilla"),
+        ("slot_5", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let setup_link = domain::ResolutionApplied {
+        phase_id: "N01".into(),
+        phase_kind: domain::pack::PhaseKind::Night,
+        phase_number: 1,
+        run_id: "mafia-universe-lover-setup".into(),
+        result_version: domain::RESULT_VERSION,
+        seed: 701100,
+        counts: domain::events::ResolutionCounts {
+            events: 2,
+            kills: 0,
+            saves: 0,
+        },
+        events: vec![
+            domain::events::IndexedEvent {
+                index: 0,
+                event: domain::InnerEvent::PlayersLinked {
+                    link_id: "mu_lovers_setup".into(),
+                    slots: vec!["slot_2".into(), "slot_3".into()],
+                    source: "slot_2".into(),
+                },
+            },
+            domain::events::IndexedEvent {
+                index: 1,
+                event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
+                    phase_id: "N01".into(),
+                    deaths: Vec::new(),
+                }),
+            },
+        ],
+        started_at: 0,
+        finished_at: 0,
+    };
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ResolutionApplied",
+            1,
+            serde_json::to_value(setup_link).unwrap(),
+            eventstore::ActorId::Host,
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &h,
+        Command::OpenDayPhase {
+            game,
+            phase: "N02".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": "mu_kill_lover_n02",
+                "template_id": "factional_kill",
+                "actor": "slot_1",
+                "targets": ["slot_2"],
+                "phase_id": "N02"
+            }),
+            eventstore::ActorId::Slot("slot_1".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 701101 })
+        .await
+        .expect("host resolves Mafia Universe lover cascade");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("Mafia Universe Lover ResolutionApplied validates");
+    assert!(
+        applied.events.iter().any(|event| {
+            matches!(&event.event, domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, .. }
+                if slot_id == "slot_2"
+                    && cause == "factional_kill"
+                    && attackers == &vec!["slot_1".to_string()])
+        }),
+        "directly killed Lover should die to the submitted mafia kill"
+    );
+    assert!(
+        applied.events.iter().any(|event| {
+            matches!(&event.event, domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+                if slot_id == "slot_3"
+                    && cause == "lover_suicide"
+                    && attackers == &vec!["slot_2".to_string()]
+                    && *unstoppable)
+        }),
+        "linked Mafia Universe Lover should die from folded setup state"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Mafia Universe lover cascade trace");
+    assert_decision_trace(
+        &trace,
+        DecisionTraceExpectation {
+            stage: "death:cascade",
+            source: "link:mu_lovers_setup",
+            outcome: "lover_suicide",
+            detail: vec![
+                ("link_id", serde_json::json!("mu_lovers_setup")),
+                ("link_source", serde_json::json!("slot_2")),
+                ("source_dead", serde_json::json!("slot_2")),
+                ("target", serde_json::json!("slot_3")),
+                ("cause", serde_json::json!("lover_suicide")),
+            ],
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert_eq!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .role_key
+            .as_deref(),
+        Some("lover"),
+        "slot_2 should keep the Mafia Universe Lover role assignment"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "directly killed Lover should be dead"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_3")
+            .unwrap()
+            .alive,
+        "linked Lover should be dead after cascade"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafia Universe lover cascade"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N02'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Mafia Universe lover trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

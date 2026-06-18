@@ -7233,13 +7233,20 @@ fn chinese_structured_pack_deserializes() {
 fn mafia_universe_pack_deserializes() {
     let pack = load_pack_named("mafia_universe");
     assert_eq!(pack.name, "mafia_universe");
-    assert_eq!(pack.ir_version, 58);
+    assert_eq!(pack.ir_version, 60);
     assert!(pack.roles.contains_key("town_ita_shooter"));
     assert!(pack.roles.contains_key("town_ita_sharpshooter"));
     assert!(pack.roles.contains_key("town_ita_bad_shot"));
     assert!(pack.roles.contains_key("mafia_ita_evasive"));
     assert!(pack.roles.contains_key("mafia_ita_shielded"));
     assert!(pack.roles.contains_key("mafia_ita_evasive_shielded"));
+    let lover = pack.roles.get("lover").expect("Mafia Universe Lover role");
+    assert_eq!(lover.alignment.as_deref(), None);
+    assert!(lover.actions.is_empty());
+    assert!(lover.effects.is_empty());
+    assert!(pack.lover_policy.enabled);
+    assert_eq!(pack.lover_policy.link_effect, "lovers_link");
+    assert_eq!(pack.lover_policy.suicide_cause, "lover_suicide");
     assert!(pack.roles.contains_key("town_fruit_vendor"));
     assert!(pack.roles.contains_key("mafia_fruit_vendor"));
     assert!(pack.roles.contains_key("town_night_desperado"));
@@ -8487,6 +8494,17 @@ fn golden_mafia_universe_basic_nar_roleblock_opens_kill() {
         &got,
         &expected_events(&golden),
         "mafia_universe basic_nar_roleblock_opens_kill",
+    );
+}
+
+#[test]
+fn golden_mafia_universe_lover_suicide_on_partner_death() {
+    let golden = load_golden_in("mafia_universe", "lover_suicide_on_partner_death.json");
+    let got = run(&golden["input"], load_pack_named("mafia_universe"));
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "mafia_universe lover_suicide_on_partner_death",
     );
 }
 
