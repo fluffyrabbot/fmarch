@@ -2520,11 +2520,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    `minimize_night_fixture` prompt fixtures now carry the command-native `HostPromptDecision`
    shape and can assert stream-level prompt resolution effects; the Mafiascum NoMajority fixture
    now acknowledges the prompt and checks `HostPromptResolved` plus prompt-driven
-   `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`. This was rerun locally with
+   `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`, and the Beloved Princess fixture now
+   acknowledges the skip-next-day prompt and checks `HostPromptResolved` plus prompt-driven
+   `PhaseAdvanced { phase_id: "N02", skipped_phase_id: "D02", reason: "skip_next_day" }`. This was
+   rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across the command-resolved setup-plus-day announcement
-   fixture and the no-majority revote prompt-resolution fixture, checking every emitted semantic
-   expectation through `minimize_night_fixture`. A fourth
+   fixture, no-majority revote prompt-resolution fixture, and Beloved Princess skip-next-day
+   prompt-resolution fixture, checking every emitted semantic expectation through
+   `minimize_night_fixture`. A fourth
    non-mafiascum lane now generates three Epicmafia D01 PK prompt cases and three
    Epicmafia N01 Bomb/Cult cases from fixed seeds, proving the same audit trio across host-prompt
    resolution and night action graphs; PK prompt issue/resolution, Bomb trigger note/generated
@@ -2822,9 +2826,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by widening semantic minimizer coverage across unresolved
-host-decision shapes: Beloved Princess skip-next-day prompt resolution and any PK prompt variants
-not already covered by the Epicmafia generated lane. Start by reusing the command-native
-`HostPromptDecision` fixture shape for a skip-next-day prompt, then prove `HostPromptResolved`,
-prompt-driven `PhaseAdvanced { reason: "skip_next_day" }`, projection rebuild, and minimized
-success promotion before widening to additional culture-pack variants.
+Continue Phase 5 rich day systems by widening semantic minimizer coverage across remaining
+host-decision breadth: PK prompt variants not already covered by the Epicmafia generated lane,
+dynamic vote-weight PK/revote variants, and the Virgin night-death alias for the same
+skip-next-day policy. Start with the smallest existing fixed vertical that is not yet represented
+as a minimizer fixture, then require prompt issue, prompt resolution effects, projection rebuild,
+and minimized success promotion before updating the checklist again.

@@ -1411,12 +1411,16 @@ announcement/prompt fixtures now also prove that minimization preserves Mafia Un
 NoMajority revote `HostPromptIssued` plus prompt trace decisions. `minimize_night_fixture` prompt
 fixtures now carry the command-native `HostPromptDecision` shape and can assert stream-level prompt
 resolution effects; the Mafiascum NoMajority fixture now acknowledges the prompt and checks
-`HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`.
+`HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`,
+and the Beloved Princess fixture now acknowledges the skip-next-day prompt and checks
+`HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "N02", skipped_phase_id: "D02",
+reason: "skip_next_day" }`.
 This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across the command-resolved setup-plus-day announcement
-fixture and the no-majority revote prompt-resolution fixture, checking every emitted semantic
-expectation through `minimize_night_fixture`. An Epicmafia
+fixture, no-majority revote prompt-resolution fixture, and Beloved Princess skip-next-day
+prompt-resolution fixture, checking every emitted semantic expectation through
+`minimize_night_fixture`. An Epicmafia
 generated lane now covers three fixed-seed D01 plurality ties that emit PK prompts and
 host-selected kills, plus three fixed-seed N01 Bomb/Cult graphs that
 submit Bomb-triggering mafia kills and plain/loyal cult recruits through legal commands, again

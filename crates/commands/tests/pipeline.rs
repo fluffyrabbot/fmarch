@@ -13130,6 +13130,13 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
             1,
             6,
         ),
+        (
+            "mafiascum-beloved-princess-skip-next-day-semantic-expectations",
+            mafiascum_beloved_princess_skip_next_day_fixture_json(),
+            1,
+            1,
+            7,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(&fixture_json).expect("Phase 5 fixture JSON parses");
@@ -18903,6 +18910,128 @@ fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
         }
     }))
     .expect("Mafiascum revote prompt fixture JSON serializes")
+}
+
+fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 940_001,
+        "pack": "mafiascum",
+        "phase": "D01",
+        "roster": [
+            { "slot": "slot_1", "role": "beloved_princess" },
+            { "slot": "slot_2", "role": "vanilla_townie" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "mafia_goon" },
+            { "slot": "slot_5", "role": "mafia_goon" },
+            { "slot": "slot_6", "role": "vanilla_townie" }
+        ],
+        "votes": [
+            { "actor_slot": "slot_2", "target_slot": "slot_1" },
+            { "actor_slot": "slot_3", "target_slot": "slot_1" },
+            { "actor_slot": "slot_4", "target_slot": "slot_1" },
+            { "actor_slot": "slot_5", "target_slot": "slot_1" }
+        ],
+        "actions": [],
+        "host_prompt_decision": {
+            "prompt_id": "D01:skip_next_day:slot_1",
+            "decision": {
+                "kind": "acknowledge",
+                "metadata": { "operator_note": "minimizer skip next day" }
+            }
+        },
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "Lynch",
+                        "winner": "slot_1",
+                        "contenders": ["slot_1"],
+                        "majority": 4.0,
+                        "total_weight": 6.0
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "day_vote",
+                        "attackers": [],
+                        "unstoppable": true
+                    }
+                },
+                {
+                    "kind": "HostPromptIssued",
+                    "payload": {
+                        "prompt_id": "D01:skip_next_day:slot_1",
+                        "kind": "skip_next_day",
+                        "subject": "slot_1",
+                        "reason": "beloved_princess_death",
+                        "phase_id": "D01",
+                        "phase_kind": "Day",
+                        "phase_number": 1,
+                        "metadata": {
+                            "policy": "beloved_princess",
+                            "role": "beloved_princess",
+                            "death_cause": "lynch"
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D01",
+                        "deaths": [{ "slot_id": "slot_1", "cause": "lynch" }]
+                    }
+                }
+            ],
+            "stream_events": [
+                {
+                    "kind": "HostPromptResolved",
+                    "payload": {
+                        "prompt_id": "D01:skip_next_day:slot_1",
+                        "phase_id": "D01",
+                        "kind": "skip_next_day",
+                        "reason": "beloved_princess_death",
+                        "decision": {
+                            "kind": "acknowledge",
+                            "metadata": {
+                                "operator_note": "minimizer skip next day"
+                            }
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                },
+                {
+                    "kind": "PhaseAdvanced",
+                    "payload": {
+                        "phase_id": "N02",
+                        "source_prompt_id": "D01:skip_next_day:slot_1",
+                        "source_phase_id": "D01",
+                        "reason": "skip_next_day",
+                        "skipped_phase_id": "D02"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "death:trigger",
+                    "source": "slot:slot_1",
+                    "outcome": "host_prompt_issued",
+                    "detail": {
+                        "policy": "beloved_princess",
+                        "prompt_id": "D01:skip_next_day:slot_1",
+                        "kind": "skip_next_day",
+                        "subject": "slot_1",
+                        "reason": "beloved_princess_death",
+                        "death_cause": "lynch",
+                        "role": "beloved_princess"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Mafiascum Beloved Princess skip-next-day fixture JSON serializes")
 }
 
 #[derive(Debug)]
