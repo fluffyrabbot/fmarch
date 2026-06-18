@@ -10798,6 +10798,133 @@ async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_thres
     assert_eq!(threshold_file["lovers_linked"], true);
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_determinism_fuzz_artifact_cli_writes_pass_and_missing_family_reports(pool: PgPool) {
+    let family_specs = commands::operator_proof::determinism_fuzz_family_specs();
+    let expected_family_count = family_specs.len() as u64;
+    let expected_seed_count = family_specs
+        .iter()
+        .map(|family| family.seeds.len() as u64)
+        .sum::<u64>();
+
+    let pass_path = test_operator_proof_artifact_path("determinism-fuzz-pass", Uuid::new_v4());
+    let _ = fs::remove_file(&pass_path);
+
+    let pass_output = run_audit_determinism_fuzz_artifact_cli(&pool, &pass_path, None).await;
+    assert!(
+        pass_output.status.success(),
+        "determinism fuzz artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&pass_output.stdout),
+        String::from_utf8_lossy(&pass_output.stderr)
+    );
+    assert!(
+        pass_output.stderr.is_empty(),
+        "determinism fuzz artifact should not write stderr: {}",
+        String::from_utf8_lossy(&pass_output.stderr)
+    );
+    let pass_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&pass_path).expect("passing determinism artifact exists"))
+            .expect("passing determinism artifact is JSON");
+    let pass_stdout: serde_json::Value =
+        serde_json::from_slice(&pass_output.stdout).expect("passing determinism stdout is JSON");
+    assert_eq!(pass_stdout, pass_file);
+    assert_eq!(pass_file["ok"], true);
+    assert_eq!(pass_file["artifact_version"], 1);
+    assert_eq!(
+        pass_file["artifact_path"].as_str(),
+        Some(pass_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        pass_file["test_filter"],
+        "replay_audit_and_rebuild_deterministically"
+    );
+    assert!(pass_file["command"]
+        .as_str()
+        .expect("passing determinism command")
+        .contains("cargo test -p commands --test pipeline replay_audit_and_rebuild_deterministically -- --nocapture"));
+    assert_eq!(pass_file["family_count"], expected_family_count);
+    assert_eq!(pass_file["passed_family_count"], expected_family_count);
+    assert_eq!(pass_file["failed_family_count"], 0);
+    assert_eq!(pass_file["seed_count"], expected_seed_count);
+    assert_eq!(pass_file["expected_family_count"], expected_family_count);
+    assert_eq!(pass_file["expected_seed_count"], expected_seed_count);
+    assert_eq!(pass_file["family_manifest_matched"], true);
+    assert!(pass_file.get("first_failing_seed").is_none());
+    assert!(pass_file["elapsed_ms"].as_u64().unwrap_or_default() > 0);
+    assert!(pass_file["proof_boundary"]
+        .as_str()
+        .expect("determinism proof boundary")
+        .contains("not exhaustive state-space verification"));
+    let pass_families = pass_file["families"]
+        .as_array()
+        .expect("passing determinism families");
+    assert_eq!(pass_families.len(), family_specs.len());
+    for (family_json, spec) in pass_families.iter().zip(family_specs.iter()) {
+        assert_eq!(family_json["id"], spec.id);
+        assert_eq!(family_json["selector"], spec.selector);
+        assert_eq!(family_json["pack"], spec.pack);
+        assert_eq!(family_json["phase_scope"], spec.phase_scope);
+        assert_eq!(family_json["seed_count"], spec.seeds.len() as u64);
+        assert_eq!(family_json["status"], "passed");
+        assert!(family_json.get("first_failing_seed").is_none());
+    }
+
+    let missing_path =
+        test_operator_proof_artifact_path("determinism-fuzz-missing", Uuid::new_v4());
+    let _ = fs::remove_file(&missing_path);
+
+    let missing_output = run_audit_determinism_fuzz_artifact_cli(
+        &pool,
+        &missing_path,
+        Some("no_such_determinism_family_selector"),
+    )
+    .await;
+    assert!(
+        !missing_output.status.success(),
+        "missing-family determinism artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&missing_output.stdout),
+        String::from_utf8_lossy(&missing_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&missing_output.stderr)
+            .contains("determinism fuzz artifact found failed or missing seeded families"),
+        "missing-family stderr should name determinism artifact failure\nstderr:\n{}",
+        String::from_utf8_lossy(&missing_output.stderr)
+    );
+    let missing_file: serde_json::Value = serde_json::from_slice(
+        &fs::read(&missing_path).expect("missing determinism artifact exists"),
+    )
+    .expect("missing determinism artifact is JSON");
+    let missing_stdout: serde_json::Value =
+        serde_json::from_slice(&missing_output.stdout).expect("missing determinism stdout is JSON");
+    assert_eq!(missing_stdout, missing_file);
+    assert_eq!(missing_file["ok"], false);
+    assert_eq!(missing_file["artifact_version"], 1);
+    assert_eq!(
+        missing_file["artifact_path"].as_str(),
+        Some(missing_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(
+        missing_file["test_filter"],
+        "no_such_determinism_family_selector"
+    );
+    assert_eq!(missing_file["family_count"], expected_family_count);
+    assert_eq!(missing_file["passed_family_count"], 0);
+    assert_eq!(missing_file["failed_family_count"], 0);
+    assert_eq!(missing_file["seed_count"], expected_seed_count);
+    assert_eq!(missing_file["expected_family_count"], expected_family_count);
+    assert_eq!(missing_file["expected_seed_count"], expected_seed_count);
+    assert_eq!(missing_file["family_manifest_matched"], true);
+    assert!(missing_file.get("first_failing_seed").is_none());
+    let missing_families = missing_file["families"]
+        .as_array()
+        .expect("missing determinism families");
+    assert_eq!(missing_families.len(), family_specs.len());
+    assert!(missing_families
+        .iter()
+        .all(|family| family["status"] == "not_run"));
+}
+
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
     let host = format!("{user_prefix}_host");
     let game = Uuid::new_v4();
@@ -11042,6 +11169,25 @@ async fn run_audit_large_action_graph_performance_artifact_cli(
         .env("DATABASE_URL", database_url)
         .output()
         .expect("run audit_large_action_graph_performance_artifact binary")
+}
+
+async fn run_audit_determinism_fuzz_artifact_cli(
+    pool: &PgPool,
+    output_path: &Path,
+    test_filter: Option<&str>,
+) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_determinism_fuzz_artifact")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_determinism_fuzz_artifact").to_string());
+    let mut command = ProcessCommand::new(bin);
+    command.arg("--output").arg(output_path);
+    if let Some(test_filter) = test_filter {
+        command.arg("--test-filter").arg(test_filter);
+    }
+    command
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_determinism_fuzz_artifact binary")
 }
 
 async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {

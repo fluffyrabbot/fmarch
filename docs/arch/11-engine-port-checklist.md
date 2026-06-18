@@ -2453,7 +2453,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-browser-smoke/playwright-dom-proof.json`. This is a local regression guard, not
    a production benchmark]
 5. Determinism fuzzing with random but seeded scenario generation.
-   [partly proven: the command pipeline now has seeded day-vote scenario generation across five
+   [done: the command pipeline now has seeded day-vote scenario generation across five
    deterministic seeds. Each generated game appends legal vote changes/withdrawals, resolves
    through `Command::ResolvePhase`, then proves `audit_resolution`, exact anchored day-vote
    inner-event decisions in `inspect_trace`, and `audit_rebuild` all stay clean. This
@@ -3183,8 +3183,17 @@ coverage, and a playable vertical scenario through the command pipeline.
    tests, writes a versioned report with exact expected family/seed manifest coverage and first
    failing seed, and fails on failed, missing, or manifest-mismatched seeded families; this is
    deterministic generator coverage, not exhaustive state-space verification.` This command was
-   rerun locally and emitted `ok: true`, `family_count: 12`, `seed_count: 57`,
-   `expected_family_count: 12`, `expected_seed_count: 57`, and `family_manifest_matched: true`.
+   rerun locally against a short-lived scratch database and emitted `ok: true`,
+   `family_count: 12`, `passed_family_count: 12`, `failed_family_count: 0`, `seed_count: 57`,
+   `expected_family_count: 12`, `expected_seed_count: 57`, `family_manifest_matched: true`,
+   `test_filter: replay_audit_and_rebuild_deterministically`, and `elapsed_ms: 5289`. The
+   `audit_determinism_fuzz_artifact_cli_writes_pass_and_missing_family_reports` Postgres
+   integration test now proves the artifact binary end to end for both a passing default selector and
+   a selector that runs no seeded families, including exit code, stderr boundary, stdout/file JSON
+   parity, artifact path, command/test-filter fields, exact family/seed manifest counts, per-family
+   passed/not-run status, and the non-exhaustive proof boundary. The operator browser smoke was
+   rerun against the same scratch lane and proved the determinism proof-run JSON/HTML surfaces through
+   `target/operator-browser-smoke/playwright-dom-proof.json`.
    `operator-proof-generated-shrink-matrix` currently has artifact state `trusted`, artifact path
    `target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, rendered command
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test
@@ -3284,7 +3293,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 7 by auditing determinism fuzzing with seeded scenarios. Separate the already proven
-seeded day-vote and night-action fuzz lanes, determinism artifact report, and browser/operator
-proof-run surfaces from any remaining exhaustive state-space or production-scale fuzz claim, then
-promote only the seeded determinism evidence that current commands prove.
+Continue Phase 7 by running a fresh completion audit over Operational hardening and choosing the next
+remaining partly proven or pending marker by evidence strength. Start with any row that already has
+manifested local operator artifacts and browser/API coverage, then add only the missing direct CLI or
+integration proof needed to promote that row without claiming hosted/background production execution.
