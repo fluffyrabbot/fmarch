@@ -912,6 +912,9 @@ def load_fmarch_context(fmarch_root: Path) -> dict[str, Any]:
         backup_policy = pack.get("backup_policy")
         if isinstance(backup_policy, dict) and backup_policy.get("enabled") is True:
             pack_policies.add(f"{pack_name}:backup_policy")
+        private_channels = pack.get("private_channels")
+        if isinstance(private_channels, dict) and private_channels.get("enabled") is True:
+            pack_policies.add(f"{pack_name}:private_channels")
         ita_policy = pack.get("ita")
         if isinstance(ita_policy, dict) and isinstance(
             ita_policy.get("role_overrides"), dict
@@ -2647,6 +2650,37 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "Passive night_retribution role from the Mafia Universe catalog; "
                 "fmarch folds it as a hidden bomb role effect consumed by the "
                 "bomb_retaliates Kill trigger."
+            )
+        elif scoped_name in {
+            "mafia_universe:mason",
+            "mafia_universe:neighbor",
+        }:
+            kind = "Mason" if name == "mason" else "Neighbor"
+            reveal = "Town" if name == "mason" else "None"
+            canonical = name
+            modeled = (
+                scoped_name in fmarch["pack_roles"]
+                and "mafia_universe:private_channels" in fmarch["pack_policies"]
+                and f'"kind": "{kind}"' in fmarch["pack_text"]
+                and f'"roles": ["{name}"]' in fmarch["pack_text"]
+                and f'"reveals_alignment": "{reveal}"' in fmarch["pack_text"]
+            )
+            implemented = (
+                modeled
+                and "PrivateChannelDeclared" in commands
+                and "private_channel_member" in projections
+            )
+            golden = implemented
+            integrated = (
+                implemented
+                and "start_game_declares_mafia_universe_mason_neighbor_private_channels"
+                in command_tests
+            )
+            notes = (
+                "Passive private-chat role from the Mafia Universe catalog; "
+                "fmarch models it as setup-time private_channels metadata. "
+                "Resolver golden output is not applicable, so command/projection "
+                "coverage is the proof surface."
             )
         elif scoped_name == "core:jack_of_all_trades":
             mafiascum_golden_names = fmarch["golden_names_by_pack"].get("mafiascum", set())

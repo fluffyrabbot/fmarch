@@ -136,6 +136,15 @@
       "actions": [],
       "effects": ["bomb"]
     },
+    "mason": {
+      "description": "Mafia Universe Mason. Town-aligned passive member of a confirmed private Mason chat.",
+      "alignment": "town",
+      "actions": []
+    },
+    "neighbor": {
+      "description": "Mafia Universe Neighbor. Passive member of a private chat with no alignment confirmation.",
+      "actions": []
+    },
     "town_treestump": {
       "description": "Town-aligned Treestump. Remains in thread without a vote after elimination.",
       "alignment": "town",
@@ -2612,7 +2621,8 @@
     "ResultTampering",
     "EffectAudiences",
     "GrantAudiences",
-    "DeathRevealVariants"
+    "DeathRevealVariants",
+    "PrivateChannels"
   ],
   "redirects": {
     "order": ["Redirect"],
@@ -2729,6 +2739,23 @@
     "suicide_cause": "lover_suicide",
     "suicide_on_lover_death": true,
     "lovers_known_to_each_other": true
+  },
+  "private_channels": {
+    "enabled": true,
+    "groups": [
+      {
+        "id": "mason",
+        "kind": "Mason",
+        "roles": ["mason"],
+        "reveals_alignment": "Town"
+      },
+      {
+        "id": "neighbor",
+        "kind": "Neighbor",
+        "roles": ["neighbor"],
+        "reveals_alignment": "None"
+      }
+    ]
   },
   "effect_source_death_reveals": [
     {

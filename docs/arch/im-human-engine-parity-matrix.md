@@ -271,8 +271,8 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | modifier:effect | `ninja` | `Ninja` | 1 | no | yes | yes | yes | yes | im-human effect modifier maps to fmarch Ninja action modifier plus visibility policy |
 | pack:action_window | `day` | `action_window:Day` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
 | pack:action_window | `night_specific` | `action_window:Night` | 1 | no | yes | yes | yes | yes | im-human action modifier maps to fmarch action window plus phase-cadence validation |
-| platform:private_channel | `mason` | `private_channels:Mason` | 1 | no | no | no | yes | no | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
-| platform:private_channel | `neighbor` | `private_channels:Neighbor` | 1 | no | no | no | yes | no | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
+| platform:private_channel | `mason` | `private_channels:Mason` | 1 | no | yes | yes | yes | yes | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
+| platform:private_channel | `neighbor` | `private_channels:Neighbor` | 1 | no | yes | yes | yes | yes | setup-time private-channel metadata; command/projection proof applies, resolver golden output is not applicable |
 | policy:death_reveal | `alignment_only_flip` | `death_reveal:AlignmentOnly` | 1 | no | no | yes | yes | yes | im-human effect modifier maps to mafiascum death_reveal policy and PlayerKilled.death_reveal projection fold |
 | policy:death_reveal | `conceal` | `death_reveal:Concealed` | 1 | no | yes | yes | yes | yes | pack `death_reveal` policy owns concealed death flips through cause/effect rules |
 | policy:death_reveal | `flipless` | `death_reveal:Concealed` | 1 | no | no | yes | yes | yes | im-human effect modifier maps to mafiascum death_reveal policy and PlayerKilled.death_reveal projection fold |
@@ -421,9 +421,9 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafia_universe:mafia_vigilante` | `mafia_vigilante` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_voyeur` | `mafia_voyeur` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:mafia_watcher` | `mafia_watcher` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:mason` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:mason` | `mason` | 1 | no | yes | yes | yes | yes | Passive private-chat role from the Mafia Universe catalog; fmarch models it as setup-time private_channels metadata. Resolver golden output is not applicable, so command/projection coverage is the proof surface. |
 | role_id | `mafia_universe:miller` | `miller` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafia_universe:neighbor` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafia_universe:neighbor` | `neighbor` | 1 | no | yes | yes | yes | yes | Passive private-chat role from the Mafia Universe catalog; fmarch models it as setup-time private_channels metadata. Resolver golden output is not applicable, so command/projection coverage is the proof surface. |
 | role_id | `mafia_universe:serial_killer` | `serial_killer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_alignment_cop` | `town_alignment_cop` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafia_universe:town_alignment_oracle` | `town_alignment_oracle` | 1 | no | yes | yes | yes | yes |  |

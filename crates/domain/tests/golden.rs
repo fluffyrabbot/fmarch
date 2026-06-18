@@ -7258,6 +7258,30 @@ fn mafia_universe_pack_deserializes() {
     assert_eq!(town_bomber.alignment.as_deref(), Some("town"));
     assert!(town_bomber.actions.is_empty());
     assert_eq!(town_bomber.effects, vec!["bomb".to_string()]);
+    let mason = pack.roles.get("mason").expect("Mafia Universe Mason role");
+    assert_eq!(mason.alignment.as_deref(), Some("town"));
+    assert!(mason.actions.is_empty());
+    assert!(mason.effects.is_empty());
+    let neighbor = pack
+        .roles
+        .get("neighbor")
+        .expect("Mafia Universe Neighbor role");
+    assert_eq!(neighbor.alignment.as_deref(), None);
+    assert!(neighbor.actions.is_empty());
+    assert!(neighbor.effects.is_empty());
+    assert!(pack.private_channels.enabled);
+    assert!(pack.private_channels.groups.iter().any(|group| {
+        group.id == "mason"
+            && group.kind == domain::pack::PrivateChannelKind::Mason
+            && group.roles == vec!["mason".to_string()]
+            && group.reveals_alignment == domain::pack::PrivateChannelAlignmentReveal::Town
+    }));
+    assert!(pack.private_channels.groups.iter().any(|group| {
+        group.id == "neighbor"
+            && group.kind == domain::pack::PrivateChannelKind::Neighbor
+            && group.roles == vec!["neighbor".to_string()]
+            && group.reveals_alignment == domain::pack::PrivateChannelAlignmentReveal::None
+    }));
     assert!(pack.effects.contains_key("bomb"));
     assert!(pack.triggers.iter().any(|trigger| {
         trigger.id == "bomb_retaliates"

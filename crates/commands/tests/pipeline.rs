@@ -580,6 +580,165 @@ async fn start_game_declares_mason_neighbor_private_channels(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn start_game_declares_mafia_universe_mason_neighbor_private_channels(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafia_universe".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "mason"),
+        ("slot_2", "mason"),
+        ("slot_3", "neighbor"),
+        ("slot_4", "neighbor"),
+        ("slot_5", "town_vanilla"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .expect("start declares Mafia Universe setup private channels");
+
+    let declarations = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PrivateChannelDeclared' \
+         ORDER BY payload->>'channel_id'",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(declarations.len(), 2);
+    assert_eq!(declarations[0]["channel_id"], "private:mason");
+    assert_eq!(declarations[0]["kind"], "Mason");
+    assert_eq!(declarations[0]["roles"], serde_json::json!(["mason"]));
+    assert_eq!(declarations[0]["reveals_alignment"], "Town");
+    assert_eq!(declarations[0]["source"], "pack.private_channels.mason");
+    assert_eq!(declarations[0]["members"][0]["slot_id"], "slot_1");
+    assert_eq!(declarations[0]["members"][0]["role_key"], "mason");
+    assert_eq!(declarations[0]["members"][1]["slot_id"], "slot_2");
+    assert_eq!(declarations[1]["channel_id"], "private:neighbor");
+    assert_eq!(declarations[1]["kind"], "Neighbor");
+    assert_eq!(declarations[1]["roles"], serde_json::json!(["neighbor"]));
+    assert_eq!(declarations[1]["reveals_alignment"], "None");
+    assert_eq!(declarations[1]["source"], "pack.private_channels.neighbor");
+    assert_eq!(declarations[1]["members"][0]["slot_id"], "slot_3");
+    assert_eq!(declarations[1]["members"][0]["role_key"], "neighbor");
+    assert_eq!(declarations[1]["members"][1]["slot_id"], "slot_4");
+
+    let members = projections::private_channel_members(&pool, game)
+        .await
+        .expect("Mafia Universe private channel projection");
+    let summary = members
+        .iter()
+        .map(|member| {
+            (
+                member.channel_id.as_str(),
+                member.kind.as_str(),
+                member.slot_id.as_str(),
+                member.role_key.as_str(),
+                member.reveals_alignment.as_str(),
+                member.source.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        summary,
+        vec![
+            (
+                "private:mason",
+                "Mason",
+                "slot_1",
+                "mason",
+                "Town",
+                "pack.private_channels.mason"
+            ),
+            (
+                "private:mason",
+                "Mason",
+                "slot_2",
+                "mason",
+                "Town",
+                "pack.private_channels.mason"
+            ),
+            (
+                "private:neighbor",
+                "Neighbor",
+                "slot_3",
+                "neighbor",
+                "None",
+                "pack.private_channels.neighbor"
+            ),
+            (
+                "private:neighbor",
+                "Neighbor",
+                "slot_4",
+                "neighbor",
+                "None",
+                "pack.private_channels.neighbor"
+            ),
+        ]
+    );
+    assert!(
+        projections::thread_view(&pool, game, None, 50)
+            .await
+            .unwrap()
+            .posts
+            .is_empty(),
+        "Mafia Universe private channel metadata must not leak into public thread_view"
+    );
+
+    let members_before = serde_json::to_string(&members).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        members_before,
+        serde_json::to_string(
+            &projections::private_channel_members(&pool, game)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "Mafia Universe private channel membership rebuild must be deterministic"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn resolve_phase_rejects_invalid_pack_precedence_before_append(pool: PgPool) {
     let host_id = "host_h";
     let game = Uuid::new_v4();
