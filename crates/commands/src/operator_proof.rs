@@ -20,8 +20,8 @@ pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 20;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 40;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 21;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 42;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2212,6 +2212,7 @@ pub fn generated_shrink_matrix_expected_families() -> BTreeMap<String, usize> {
         ("babysitter", 2_usize),
         ("bodyguard_strongman_vengeful_fixpoint", 2),
         ("bomb", 2),
+        ("bomb_projection_state", 2),
         ("conversion_deprogramming", 2),
         ("conversion_projection_state", 2),
         ("extra_action", 2),

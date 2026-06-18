@@ -12064,6 +12064,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("bodyguard_strongman_vengeful_fixpoint", [97_171, 97_172]),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
+        ("bomb_projection_state", [97_181, 97_182]),
         ("backup_inheritance", [97_071, 97_072]),
         ("backup_projection_state", [97_141, 97_142]),
         ("conversion_deprogramming", [97_081, 97_082]),
@@ -12187,14 +12188,15 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 20,
-        "expected_case_count": 40,
+        "expected_family_count": 21,
+        "expected_case_count": 42,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
             ("bodyguard_strongman_vengeful_fixpoint".to_string(), 2),
             ("bomb".to_string(), 2),
+            ("bomb_projection_state".to_string(), 2),
             ("conversion_deprogramming".to_string(), 2),
             ("conversion_projection_state".to_string(), 2),
             ("extra_action".to_string(), 2),
@@ -12214,8 +12216,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(20));
-    assert_eq!(report["case_count"], serde_json::json!(40));
+    assert_eq!(report["family_count"], serde_json::json!(21));
+    assert_eq!(report["case_count"], serde_json::json!(42));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19794,6 +19796,120 @@ fn generated_mafiascum_bodyguard_strongman_vengeful_fixpoint_fixture_json(seed: 
     .expect("generated Mafiascum bodyguard strongman vengeful fixpoint fixture serializes")
 }
 
+fn generated_mafiascum_bomb_projection_state_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 40_000,
+        "pack": "mafiascum",
+        "phase": "N01",
+        "roster": [
+            { "slot": "slot_1", "role": "mafia_goon" },
+            { "slot": "slot_2", "role": "bomb" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "vanilla_townie" },
+            { "slot": "slot_5", "role": "mafia_goon" }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_1",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_bomb_kill"),
+                "targets": ["slot_2"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_1"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "Trigger",
+                    "payload": {
+                        "trigger_id": "bomb_retaliates",
+                        "payload": {
+                            "on": "Kill",
+                            "source_target": "slot_2",
+                            "source_actor": "slot_1",
+                            "source_cause": "factional_kill",
+                            "produced_actor": "slot_2",
+                            "produced_target": "slot_1"
+                        }
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "bomb_retaliates",
+                        "attackers": ["slot_2"],
+                        "unstoppable": false
+                    }
+                }
+            ],
+            "trace_notes": [
+                "trigger bomb_retaliates emitted at event_index 1"
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:1",
+                    "outcome": "trigger",
+                    "detail": null
+                }
+            ],
+            "generated_actions": [
+                {
+                    "action_id": "bomb_retaliates",
+                    "source": "Trigger",
+                    "actor": "slot_2",
+                    "targets": ["slot_1"],
+                    "detail": {
+                        "on": "Kill",
+                        "source_target": "slot_2",
+                        "source_actor": "slot_1",
+                        "source_cause": "factional_kill",
+                        "produced_actor": "slot_2",
+                        "produced_target": "slot_1"
+                    }
+                }
+            ],
+            "generated_action_counts": [
+                {
+                    "action_id": "bomb_retaliates",
+                    "source": "Trigger",
+                    "count": 1
+                }
+            ],
+            "slot_states": [
+                {
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_5",
+                        "alive": true
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum bomb projection-state fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
@@ -19809,6 +19925,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             "epicmafia",
             seed + 48_000,
         ),
+        "bomb_projection_state" => generated_mafiascum_bomb_projection_state_fixture_json(seed),
         "backup_inheritance" => generated_mafiascum_backup_inheritance_fixture_json(seed),
         "backup_projection_state" => generated_mafiascum_backup_projection_state_fixture_json(seed),
         "conversion_deprogramming" => {
@@ -19855,6 +19972,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         }
         "bomb" => {
             fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
+                serde_json::json!("bomb_retaliates_wrong");
+        }
+        "bomb_projection_state" => {
+            fixture["expectations"]["generated_actions"][0]["action_id"] =
                 serde_json::json!("bomb_retaliates_wrong");
         }
         "backup_inheritance" => {
