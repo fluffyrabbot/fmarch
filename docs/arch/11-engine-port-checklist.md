@@ -2602,6 +2602,17 @@ coverage, and a playable vertical scenario through the command pipeline.
    `checked_in_babysitter_projection_state_generated_fixtures_replay_semantic_expectations`, which
    proves the success fixture remains promotable while the reduced negative fixture preserves
    `semantic_expectation` failure class without success promotion.
+   `crates/commands/fixtures/night-lovers-projection-state-generated-minimized.json` now promotes
+   the LoversProjectionState row into a checked-in Mafiascum N02 carried-link cascade replay with
+   five slots, one setup phase, one night action, two audited resolution envelopes, and two anchored
+   traces. It checks six semantic expectations: the factional `PlayerKilled` inner event for the
+   first lover, the linked `PlayerKilled(cause = lover_suicide)` inner event for the surviving lover,
+   one `death:cascade` trace decision, and three rebuilt `slot_state` rows proving both linked slots
+   die while the unrelated attacker remains alive. Its matching checked-in negative artifact,
+   `crates/commands/fixtures/night-lovers-projection-state-generated-bad-expectation.json`, is
+   covered by `checked_in_lovers_projection_state_generated_fixtures_replay_semantic_expectations`,
+   which proves the success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3124,7 +3135,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the next trigger projection-state
-row: promote `lovers_projection_state`, commit its reduced
+row: promote `bomb_projection_state`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures

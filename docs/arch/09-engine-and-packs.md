@@ -1511,6 +1511,18 @@ covered by `checked_in_babysitter_projection_state_generated_fixtures_replay_sem
 which proves the success fixture remains promotable while the reduced negative fixture preserves
 `semantic_expectation` failure class without success promotion.
 
+`crates/commands/fixtures/night-lovers-projection-state-generated-minimized.json` now promotes the
+LoversProjectionState row into a checked-in Mafiascum N02 carried-link cascade replay with five
+slots, one setup phase, one night action, two audited resolution envelopes, and two anchored traces.
+It checks six semantic expectations: the factional `PlayerKilled` inner event for the first lover,
+the linked `PlayerKilled(cause = lover_suicide)` inner event for the surviving lover, one
+`death:cascade` trace decision, and three rebuilt `slot_state` rows proving both linked slots die
+while the unrelated attacker remains alive. The matching checked-in negative artifact,
+`crates/commands/fixtures/night-lovers-projection-state-generated-bad-expectation.json`, is covered
+by `checked_in_lovers_projection_state_generated_fixtures_replay_semantic_expectations`, which
+proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
 The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report

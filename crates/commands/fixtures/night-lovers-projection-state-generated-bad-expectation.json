@@ -1,0 +1,91 @@
+{
+  "seed": 129221,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 128221,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": []
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_3"
+          ],
+          "cause": "factional_kill",
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_2"
+          ],
+          "cause": "lover_suicide",
+          "slot_id": "slot_4",
+          "unstoppable": true
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "death:cascade",
+        "source": "link:generated_seed_97221_cupid_links_lovers",
+        "outcome": "lover_suicide",
+        "detail": {
+          "cause": "lover_suicide",
+          "link_id": "generated_seed_97221_cupid_links_lovers",
+          "link_source": "slot_1",
+          "linked_slots": [
+            "slot_2",
+            "slot_4"
+          ],
+          "source_dead": "slot_2",
+          "target": "slot_4"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_4"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_5"
+        }
+      }
+    ]
+  }
+}
