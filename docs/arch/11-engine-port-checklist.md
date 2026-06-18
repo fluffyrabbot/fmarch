@@ -1960,11 +1960,11 @@ round-trip state folds.
 
 1. Poison/douse/ignite/heal/cleanse. [done for persistent poisoned/doused tags, delayed poison death,
    cure/cleanse preemption, read-effect ignite, helper-enforced command trace detail for standalone
-   and conversion-racing pending poison applied, pending poison preempted, and cleanse-preempted
+   and conversion-racing queued poison applied, queued poison preempted, and cleanse-preempted
    read-effect targets, plus command/projection rebuild proof; Mafia Universe `town_poisoner`,
    `mafia_poisoner`, `town_poison_doctor`, `mafia_poison_doctor`, `poison`, and
    `cure_poison` now reuse the same persistent `poisoned` delayed-death/clear spine with pure
-   mark, cure, pending-kill, and already-dead goldens plus a Postgres queue/effect/trace/rebuild
+   mark, cure, queued-kill, and already-dead goldens plus a Postgres queue/effect/trace/rebuild
    vertical; Mafia Universe `town_arsonist`, `mafia_arsonist`, `town_firefighter`,
    `mafia_firefighter`, `douse`, `ignite`, and `extinguish` now reuse the same persistent
    `doused` mark, read-effect ignite, and Clear-preemption spine with pure mark/kill/preempt
@@ -1990,7 +1990,7 @@ round-trip state folds.
    pure state evolution, projection/rebuild, and Postgres command snapshot tests]
 3. Motivator/grant item/extra action and private notifications. [done for pack-declared
    `Grant` actions, `ActionGranted` state/projection facts, durable `ActionGrantConsumed`
-   remaining-use folds, typed `inventory:<grant_id>` counters for item spends, trace generated
+   grant-balance folds, typed `inventory:<grant_id>` counters for item spends, trace generated
    rows, private target notifications, and `SubmitAction.grant_id` enforcement across phases;
    pack-declared single-use item actions are consumable through command/projection/resolver;
    generated vest items write persistent state and later consume through the ordinary vest-save
@@ -2006,15 +2006,17 @@ round-trip state folds.
    rebuild vertical that rejects stale and mismatched item selections after rebuild]
 4. Conversion/deprogramming/backup inheritance. [done for conversion origin memory,
    vanillaize as `Convert::AssignRole`, helper-enforced command trace decisions for hand-built
-   cult conversion, dead-target/pending-death/loyal conversion blocks, vanillaize assignment, and
+   cult conversion, dead-target/queued-death/loyal conversion blocks, vanillaize assignment, and
    restore-original deprogramming, plus exact anchored Cult/Loyal conversion trace detail in the
    Epicmafia generated replay lane,
    helper-enforced passive backup inheritance attribution, helper-enforced targeted backup
    inheritance attribution including folded target-phase `policy_detail`, and targeted backup via
    v17 `backup_policy` + folded `BackupTargeted`; v68 `backup_policy.priority` now declares
    targeted-over-passive versus passive-over-targeted inheritance priority, with pure golden/trace
-   proof for both multi-source variants. A command-level hybrid passive+targeted backup role remains
-   future work if a shipped culture pack needs one.]
+   proof for both multi-source variants. The current port contract has no shipped culture pack that
+   declares a single hybrid passive+targeted backup role; the resolver covers the architecturally
+   relevant shared-source case through pack-owned backup priority when folded passive and targeted
+   sources coexist.]
 5. Trigger fixpoint for bomb, hunter, vengeful, PGO, lovers, babysitter, hider.
    [done: the trigger queue now supports `Kill`, `Visit`, `Lynch`, `Death`,
    `EffectMarked`, `PhaseEnd`, and non-kill `Win` observations,
@@ -3250,8 +3252,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by auditing the remaining completion-audit pending markers in the Phase 4 body:
-separate domain uses of `pending`/`remaining` from true open work, decide whether the conditional
-hybrid passive+targeted backup role is required for a shipped pack or explicitly outside the
-current port contract, and refresh only the checklist/audit truth surfaces made true by that
-evidence.
+Continue Phase 5 by auditing the rich day-system build-order rows against their focused proof
+surfaces. Start with the completion-audit markers in the Phase 5 body, separate domain terms from
+true open work, and only promote a row or phase claim after the relevant golden, command/projection,
+and audit evidence is current.
