@@ -2455,8 +2455,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    The Epicmafia N01 Bomb/Cult loop now routes setup, action submission, resolve, result validation,
    Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace note, anchored
    generated-row, anchored trace-decision, and projection-rebuild failures through the same saved
-   shrink report path. The `default_open` generated replay lanes have not yet adopted it. This is a reusable
-   artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
+   shrink report path. The `default_open` N01/D01 generated replay lanes now use the same saved
+   artifact/minimizer report path for setup, action/vote submission, resolve, result validation,
+   event extraction, audit, trace-count, exact anchored trace decisions, and projection-rebuild
+   failures. This is a reusable artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2488,10 +2490,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    majority-elimination cases from fixed seeds, proving the same audit trio plus exact anchored
    N01 investigation and D01 day-vote inner-event trace decisions for the first copyright-free
    default candidate. The `default_open` N01 lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its three fixed generated seeds. The `default_open`
    D01 lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its three fixed generated seeds. The fixed
    `host_resolve_phase_carries_default_open_guardian_seer` vertical now helper-enforces
    exact anchored N01 result-contract, saved-target, and investigation trace rows and was rerun
@@ -2773,7 +2775,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by reusing the shrink-backed generated
-command/trace wrapper in the remaining generated culture-pack lanes. Carry the same saved
-artifact/minimizer report path into `default_open` N01/D01 before adding new generated-action
-semantics.
+Continue Phase 4 persistent and generated-action systems by adding semantic minimizer
+expectations to the generated culture-pack fixtures that are now shrink-routable, starting with
+`default_open` N01/D01. Preserve each lane's lane-specific assertions inside the fixture-driven
+minimizer path before adding the next generated-action semantic.

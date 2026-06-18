@@ -1350,8 +1350,10 @@ anchored trace-decision, and projection-rebuild failures through saved shrink re
 Epicmafia N01 Bomb/Cult loop now routes setup, action submission, resolve, result validation,
 Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace note,
 anchored generated-row, anchored trace-decision, and projection-rebuild failures through the same
-saved shrink report path. The `default_open` generated replay lanes have not yet adopted this
-wrapper. A non-mafiascum generated
+saved shrink report path. The `default_open` N01/D01 generated replay lanes now use that same artifact-backed
+minimizer path for setup, action/vote submission, resolve, result validation, event extraction,
+audit, trace-count, exact anchored trace decisions, and projection-rebuild failures. A
+non-mafiascum generated
 replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
@@ -1381,10 +1383,10 @@ guardian-save plus seer-check N01 golden, majority-elimination D01 golden, comma
 verticals for both paths, parity-matrix rows for its actions and day-vote policy, and three-seed
 N01/D01 generated replay lanes under the same audit trio. The manifest-listed `default_open` N01
 lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its three fixed generated seeds.
 The manifest-listed `default_open` D01 lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_day_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its three fixed generated seeds.
 The manifest-listed fixture minimizer lane was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin minimize_night_fixture -- crates/commands/fixtures/night-passing.json`,

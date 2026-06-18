@@ -15749,31 +15749,39 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
         let case = generated_default_open_night_case(seed);
         let resolver_seed = seed + 49_000;
         let summary = generated_pack_case_summary(&case, "default_open", "N01", resolver_seed);
+        let fixture_json = generated_night_case_fixture_json(&case, "default_open", resolver_seed);
+        let shrink_stem = format!("generated-default-open-n01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "default_open".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create default_open game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate default_open game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -15781,10 +15789,13 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
                     slot: slot.clone(),
                     user: format!("default_open_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -15792,23 +15803,29 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "N01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start default_open game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart default_open game failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "default_open_seed_{seed}_user_{}",
@@ -15822,17 +15839,18 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -15841,56 +15859,182 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve default_open night failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\ndefault_open events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve default_open night failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "default_open events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "N01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        let investigation_index = applied
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        let investigation_index =
+            match applied
+                .events
+                .iter()
+                .find_map(|indexed| match &indexed.event {
+                    domain::InnerEvent::InvestigationResult {
+                        investigator,
+                        result,
+                        ..
+                    } if investigator == "slot_1" && result == "scum" => Some(indexed.index),
+                    _ => None,
+                }) {
+                Some(index) => index,
+                None => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            "generated default_open investigation result missing".to_string(),
+                        )
+                        .await
+                    )
+                }
+            };
+        if !applied
             .events
             .iter()
-            .find_map(|indexed| match &indexed.event {
-                domain::InnerEvent::InvestigationResult {
-                    investigator,
-                    result,
-                    ..
-                } if investigator == "slot_1" && result == "scum" => Some(indexed.index),
-                _ => None,
-            })
-            .expect("generated default_open investigation result");
-        assert!(applied
-            .events
-            .iter()
-            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::PlayerSaved { .. })));
+            .any(|indexed| matches!(&indexed.event, domain::InnerEvent::PlayerSaved { .. }))
+        {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "generated default_open player save missing".to_string(),
+                )
+                .await
+            );
+        }
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(audit.ok, "{summary}\ndefault_open audit drifted: {audit:?}");
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none default_open phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped default_open envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("default_open audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited default_open phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none default_open trace"
-        );
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one default_open trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
         let investigation_source = format!("event_index:{investigation_index}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "N01",
@@ -15899,16 +16043,49 @@ async fn generated_default_open_night_replay_audit_and_rebuild_deterministically
                 outcome: "investigation_result",
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\ndefault_open projection rebuild drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("default_open projection rebuild drifted: {projection_audit:?}"),
+                )
+                .await
+            );
+        }
     }
 }
 
@@ -16146,31 +16323,39 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
         let case = generated_default_open_day_case(seed);
         let resolver_seed = seed + 50_000;
         let summary = generated_default_open_day_case_summary(&case, resolver_seed);
+        let fixture_json = generated_default_open_day_case_fixture_json(&case, resolver_seed);
+        let shrink_stem = format!("generated-default-open-d01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "default_open".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create default_open D01 game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate default_open D01 game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -16178,10 +16363,13 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                     slot: slot.clone(),
                     user: format!("default_open_day_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -16189,23 +16377,29 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "D01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start default_open D01 game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart default_open D01 game failed: {err}"));
+        .await;
 
         for vote in &case.votes {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "default_open_day_seed_{seed}_user_{}",
@@ -16216,17 +16410,18 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                     actor_slot: vote.actor_slot.clone(),
                     target: VoteTarget::Slot(vote.target_slot.clone()),
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit vote {} -> {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit vote {} -> {} failed",
                     vote.actor_slot, vote.target_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -16235,17 +16430,58 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve default_open D01 failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\ndefault_open D01 generated resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve default_open D01 failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "default_open D01 generated resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "D01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        let day_vote_index = applied
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        let day_vote_index = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -16256,44 +16492,140 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                     Some(indexed.index)
                 }
                 _ => None,
-            })
-            .expect("generated default_open day vote outcome");
-        assert!(applied.events.iter().any(|indexed| matches!(
-            &indexed.event,
-            domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
-                if slot_id == &case.lynched_slot && cause == "day_vote"
-        )));
-        assert!(applied.events.iter().any(|indexed| matches!(
-            &indexed.event,
-            domain::InnerEvent::WinReached { winner, .. } if winner == "town"
-        )));
+            }) {
+            Some(index) => index,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "generated default_open day vote outcome missing".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::PlayerKilled { slot_id, cause, .. }
+                    if slot_id == &case.lynched_slot && cause == "day_vote"
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "generated default_open day-vote kill missing".to_string(),
+                )
+                .await
+            );
+        }
+        if !applied.events.iter().any(|indexed| {
+            matches!(
+                &indexed.event,
+                domain::InnerEvent::WinReached { winner, .. } if winner == "town"
+            )
+        }) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    "generated default_open town win missing".to_string(),
+                )
+                .await
+            );
+        }
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\ndefault_open D01 resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none default_open D01 phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped default_open D01 envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("default_open D01 resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited default_open D01 phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none default_open D01 trace"
-        );
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one default_open D01 trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
         let day_vote_source = format!("event_index:{day_vote_index}");
-        assert_anchored_inspection_decision(
+        if let Err(reason) = check_anchored_inspection_decision(
             &trace_report,
             InspectionDecisionExpectation {
                 phase_id: "D01",
@@ -16302,16 +16634,49 @@ async fn generated_default_open_day_replay_audit_and_rebuild_deterministically(p
                 outcome: "day_vote_outcome",
                 detail: serde_json::Value::Null,
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\ndefault_open D01 projection rebuild drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("default_open D01 projection rebuild drifted: {projection_audit:?}"),
+                )
+                .await
+            );
+        }
     }
 }
 
@@ -16800,6 +17165,17 @@ fn generated_default_open_day_case_summary(
     case: &GeneratedDefaultOpenDayCase,
     resolver_seed: u64,
 ) -> String {
+    let json = generated_default_open_day_case_fixture_json(case, resolver_seed);
+    format!(
+        "generated default_open D01 case generator_seed={}\nminimize_night_fixture JSON:\n{}",
+        case.seed, json
+    )
+}
+
+fn generated_default_open_day_case_fixture_json(
+    case: &GeneratedDefaultOpenDayCase,
+    resolver_seed: u64,
+) -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "seed": resolver_seed,
         "pack": "default_open",
@@ -16810,6 +17186,7 @@ fn generated_default_open_day_case_summary(
                 "role": role,
             })
         }).collect::<Vec<_>>(),
+        "actions": [],
         "votes": case.votes.iter().map(|vote| {
             serde_json::json!({
                 "actor_slot": vote.actor_slot,
@@ -16818,13 +17195,7 @@ fn generated_default_open_day_case_summary(
         }).collect::<Vec<_>>(),
         "lynched_slot": case.lynched_slot,
     }))
-    .map(|json| {
-        format!(
-            "generated default_open D01 case generator_seed={}\n{}",
-            case.seed, json
-        )
-    })
-    .expect("generated default_open D01 summary serializes")
+    .expect("generated default_open D01 fixture serializes")
 }
 
 fn generated_night_case_fixture_json(
