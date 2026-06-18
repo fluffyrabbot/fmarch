@@ -13112,6 +13112,63 @@ async fn generated_phase5_day_fixtures_replay_semantic_expectations_through_mini
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    for (stem, fixture_json, expected_audited, expected_traces, min_expectations) in [
+        (
+            "mafia-universe-day-notes-semantic-expectations",
+            mafia_universe_day_notes_fixture_json(),
+            2,
+            2,
+            7,
+        ),
+        (
+            "mafiascum-no-majority-revote-prompt-semantic-expectations",
+            mafiascum_no_majority_revote_prompt_fixture_json(),
+            1,
+            1,
+            4,
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(&fixture_json).expect("Phase 5 fixture JSON parses");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= min_expectations,
+            "{stem} should preserve the announcement/prompt semantic contract"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(stem);
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "{stem} should replay");
+        assert_eq!(
+            report["original"]["resolution_audited"],
+            serde_json::json!(expected_audited),
+            "{stem} should audit every command-resolved phase"
+        );
+        assert_eq!(
+            report["original"]["trace_count"],
+            serde_json::json!(expected_traces),
+            "{stem} should inspect every command-resolved trace"
+        );
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} should check every emitted Phase 5 expectation"
+        );
+        assert_eq!(report["reduction"]["replay_success"], true);
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"], true,
+            "{stem} should promote the reduced success fixture"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -18628,6 +18685,187 @@ fn generated_mafia_universe_ita_expectations_json(
         "inner_events": inner_events,
         "generated_actions": generated_actions,
     }))
+}
+
+fn mafia_universe_day_notes_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 920_001,
+        "pack": "mafia_universe",
+        "phase": "D02",
+        "roster": [
+            { "slot": "slot_1", "role": "town_vanilla" },
+            { "slot": "slot_2", "role": "town_vanilla" },
+            { "slot": "slot_3", "role": "town_vanilla" },
+            { "slot": "slot_4", "role": "mafia_goon" },
+            { "slot": "slot_5", "role": "mafia_goon" }
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 919_001,
+            "actions": [{
+                "actor_slot": "slot_4",
+                "template_id": "factional_kill",
+                "action_id": "day_notes_setup_factional_kill",
+                "targets": ["slot_5"]
+            }]
+        }],
+        "votes": [
+            { "actor_slot": "slot_1", "target_slot": "slot_3" },
+            { "actor_slot": "slot_2", "target_slot": "slot_3" },
+            { "actor_slot": "slot_4", "target_slot": "slot_3" }
+        ],
+        "actions": [],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "DayAnnouncement",
+                    "payload": {
+                        "player_id": "slot_5",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_4"],
+                        "unstoppable": false,
+                        "role_key": "mafia_goon",
+                        "sequence": 0,
+                        "day": 2,
+                        "night": 1,
+                        "phase_id": "D02"
+                    }
+                },
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "Lynch",
+                        "winner": "slot_3",
+                        "majority": 3.0,
+                        "total_weight": 4.0
+                    }
+                },
+                {
+                    "kind": "LastWordsRecorded",
+                    "payload": {
+                        "player_id": "slot_3",
+                        "reason": "lynch",
+                        "sequence": 0,
+                        "day": 2,
+                        "phase_id": "D02",
+                        "vote": {
+                            "status": "Lynch",
+                            "winner": "slot_3",
+                            "majority": 3.0,
+                            "total_weight": 4.0
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D02",
+                        "deaths": [{ "slot_id": "slot_3", "cause": "lynch" }]
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:0",
+                    "outcome": "day_announcement",
+                    "detail": null
+                },
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:6",
+                    "outcome": "last_words_recorded",
+                    "detail": null
+                },
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:7",
+                    "outcome": "phase_announcement",
+                    "detail": null
+                }
+            ]
+        }
+    }))
+    .expect("Mafia Universe day notes fixture JSON serializes")
+}
+
+fn mafiascum_no_majority_revote_prompt_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 930_001,
+        "pack": "mafiascum",
+        "phase": "D01",
+        "roster": [
+            { "slot": "slot_1", "role": "vanilla_townie" },
+            { "slot": "slot_2", "role": "vanilla_townie" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "mafia_goon" },
+            { "slot": "slot_5", "role": "mafia_goon" }
+        ],
+        "votes": [
+            { "actor_slot": "slot_2", "target_slot": "slot_1" },
+            { "actor_slot": "slot_3", "target_slot": "slot_1" }
+        ],
+        "actions": [],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "DayVoteOutcome",
+                    "payload": {
+                        "status": "NoMajority",
+                        "winner": null,
+                        "contenders": ["slot_1"],
+                        "majority": 3.0,
+                        "total_weight": 5.0
+                    }
+                },
+                {
+                    "kind": "HostPromptIssued",
+                    "payload": {
+                        "prompt_id": "D01:revote:NoMajority",
+                        "kind": "revote",
+                        "subject": null,
+                        "reason": "no_majority",
+                        "phase_id": "D01",
+                        "phase_kind": "Day",
+                        "phase_number": 1,
+                        "metadata": {
+                            "policy": "no_majority_revote",
+                            "status": "NoMajority",
+                            "contenders": ["slot_1"],
+                            "tiebreak": null,
+                            "outcome_reason": null
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "D01",
+                        "deaths": []
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "day:vote_prompt",
+                    "source": "day_vote",
+                    "outcome": "host_prompt_issued",
+                    "detail": {
+                        "policy": "no_majority_revote",
+                        "prompt_id": "D01:revote:NoMajority",
+                        "kind": "revote",
+                        "subject": null,
+                        "reason": "no_majority",
+                        "status": "NoMajority",
+                        "contenders": ["slot_1"],
+                        "tiebreak": null,
+                        "outcome_reason": null
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Mafiascum revote prompt fixture JSON serializes")
 }
 
 #[derive(Debug)]

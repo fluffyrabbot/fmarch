@@ -2513,7 +2513,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    and generic ITA hit/miss outcomes. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_phase5_day_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
    and passed one filtered pipeline test across all twelve fixed D01 seeds, checking every emitted
-   Phase 5 day semantic expectation through `minimize_night_fixture`. A fourth
+   Phase 5 day semantic expectation through `minimize_night_fixture`. Dedicated Phase 5
+   announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
+   prior-night `DayAnnouncement`, lynch `LastWordsRecorded`, trailing `PhaseAnnouncement`, and
+   Mafiascum NoMajority revote `HostPromptIssued` plus prompt trace decisions. This was rerun
+   locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`
+   and passed one filtered pipeline test across the command-resolved setup-plus-day announcement
+   fixture and the no-majority revote prompt fixture, checking every emitted semantic expectation
+   through `minimize_night_fixture`. A fourth
    non-mafiascum lane now generates three Epicmafia D01 PK prompt cases and three
    Epicmafia N01 Bomb/Cult cases from fixed seeds, proving the same audit trio across host-prompt
    resolution and night action graphs; PK prompt issue/resolution, Bomb trigger note/generated
@@ -2811,8 +2819,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by adding semantic minimizer coverage for the remaining day
-announcement and host-prompt mechanics: last words, day announcements, no-majority/revote prompts,
-and any PK prompt variants not already covered by the Epicmafia generated lane. Start with one
-fixture family that proves the emitted announcement/prompt inner events, trace decisions, and
-projection rebuild survive minimization before widening to more culture-pack variants.
+Continue Phase 5 rich day systems by widening semantic minimizer coverage across unresolved
+host-decision shapes: Beloved Princess skip-next-day prompt resolution, dynamic vote-weight
+NoMajority revote prompt resolution into `D01R1`, and any PK prompt variants not already covered by
+the Epicmafia generated lane. Start with the smallest fixture shape that can express non-select-slot
+host decisions, prove prompt issue plus resolution effects through minimization, then reuse it for
+the remaining culture-pack variants.
