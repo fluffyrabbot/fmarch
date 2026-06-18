@@ -12061,6 +12061,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("hunter", [97_021_u64, 97_022]),
         ("vengeful_fixpoint", [97_151, 97_152]),
         ("strongman_vengeful_fixpoint", [97_161, 97_162]),
+        ("bodyguard_strongman_vengeful_fixpoint", [97_171, 97_172]),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("backup_inheritance", [97_071, 97_072]),
@@ -12186,12 +12187,13 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 19,
-        "expected_case_count": 38,
+        "expected_family_count": 20,
+        "expected_case_count": 40,
         "family_manifest_matched": family_counts == [
             ("backup_inheritance".to_string(), 2_usize),
             ("backup_projection_state".to_string(), 2_usize),
             ("babysitter".to_string(), 2_usize),
+            ("bodyguard_strongman_vengeful_fixpoint".to_string(), 2),
             ("bomb".to_string(), 2),
             ("conversion_deprogramming".to_string(), 2),
             ("conversion_projection_state".to_string(), 2),
@@ -12212,8 +12214,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(19));
-    assert_eq!(report["case_count"], serde_json::json!(38));
+    assert_eq!(report["family_count"], serde_json::json!(20));
+    assert_eq!(report["case_count"], serde_json::json!(40));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19649,12 +19651,158 @@ fn generated_mafiascum_strongman_vengeful_fixpoint_fixture_json(seed: u64) -> St
     .expect("generated Mafiascum strongman vengeful fixpoint fixture serializes")
 }
 
+fn generated_mafiascum_bodyguard_strongman_vengeful_fixpoint_fixture_json(seed: u64) -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 39_000,
+        "pack": "mafiascum",
+        "phase": "N01",
+        "roster": [
+            { "slot": "slot_1", "role": "mafia_goon" },
+            { "slot": "slot_2", "role": "unstoppable_vengeful_townie" },
+            { "slot": "slot_3", "role": "bodyguard" },
+            { "slot": "slot_4", "role": "vanilla_townie" },
+            { "slot": "slot_5", "role": "mafia_goon" },
+            { "slot": "slot_6", "role": "vanilla_townie" }
+        ],
+        "actions": [
+            {
+                "actor_slot": "slot_1",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_kill_unstoppable_vengeful_bodyguard"),
+                "targets": ["slot_2"]
+            },
+            {
+                "actor_slot": "slot_3",
+                "template_id": "bodyguard",
+                "action_id": format!("generated_seed_{seed}_bodyguard_saves_killer"),
+                "targets": ["slot_1"]
+            }
+        ],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_1"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "Trigger",
+                    "payload": {
+                        "trigger_id": "unstoppable_vengeful_retaliates",
+                        "payload": {
+                            "on": "Kill",
+                            "source_target": "slot_2",
+                            "source_actor": "slot_1",
+                            "source_cause": "factional_kill",
+                            "produced_actor": "slot_2",
+                            "produced_target": "slot_1"
+                        }
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "unstoppable_vengeful_retaliates",
+                        "attackers": ["slot_2"],
+                        "unstoppable": true
+                    }
+                }
+            ],
+            "trace_notes": [
+                "trigger unstoppable_vengeful_retaliates emitted at event_index 1"
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "inner_event",
+                    "source": "event_index:1",
+                    "outcome": "trigger",
+                    "detail": null
+                },
+                {
+                    "stage": "kill_resolution",
+                    "source": "cause:unstoppable_vengeful_retaliates",
+                    "outcome": "protection_bypassed_by_unstoppable_kill",
+                    "detail": {
+                        "cause": "unstoppable_vengeful_retaliates",
+                        "target": "slot_1",
+                        "attacker": "slot_2",
+                        "unstoppable": true,
+                        "protectors": [
+                            {
+                                "protector": "slot_3",
+                                "action_id": format!("generated_seed_{seed}_bodyguard_saves_killer"),
+                                "template_id": "bodyguard",
+                                "intercepts": true,
+                                "intercept_cause": "bodyguard_intercept",
+                                "guard_retaliation_cause": null,
+                                "cpr_harm_cause": null
+                            }
+                        ]
+                    }
+                }
+            ],
+            "generated_actions": [
+                {
+                    "action_id": "unstoppable_vengeful_retaliates",
+                    "source": "Trigger",
+                    "actor": "slot_2",
+                    "targets": ["slot_1"],
+                    "detail": {
+                        "on": "Kill",
+                        "source_target": "slot_2",
+                        "source_actor": "slot_1",
+                        "source_cause": "factional_kill",
+                        "produced_actor": "slot_2",
+                        "produced_target": "slot_1"
+                    }
+                }
+            ],
+            "generated_action_counts": [
+                {
+                    "action_id": "unstoppable_vengeful_retaliates",
+                    "source": "Trigger",
+                    "count": 1
+                }
+            ],
+            "slot_states": [
+                {
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "alive": false
+                    }
+                },
+                {
+                    "payload": {
+                        "slot_id": "slot_3",
+                        "alive": true
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("generated Mafiascum bodyguard strongman vengeful fixpoint fixture serializes")
+}
+
 fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) -> String {
     match family {
         "hunter" | "lovers" => generated_mafiascum_persistent_trigger_fixture_json(family, seed),
         "vengeful_fixpoint" => generated_mafiascum_vengeful_fixpoint_fixture_json(seed),
         "strongman_vengeful_fixpoint" => {
             generated_mafiascum_strongman_vengeful_fixpoint_fixture_json(seed)
+        }
+        "bodyguard_strongman_vengeful_fixpoint" => {
+            generated_mafiascum_bodyguard_strongman_vengeful_fixpoint_fixture_json(seed)
         }
         "bomb" => generated_night_case_fixture_json(
             &generated_epicmafia_night_case(seed),
@@ -19696,6 +19844,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "strongman_vengeful_fixpoint" => {
             fixture["expectations"]["trace_decisions"][1]["outcome"] =
                 serde_json::json!("kill_prevented_by_protection");
+        }
+        "bodyguard_strongman_vengeful_fixpoint" => {
+            fixture["expectations"]["trace_decisions"][1]["detail"]["protectors"][0]
+                ["intercepts"] = serde_json::json!(false);
         }
         "lovers" => {
             fixture["expectations"]["inner_events"][1]["payload"]["cause"] =
