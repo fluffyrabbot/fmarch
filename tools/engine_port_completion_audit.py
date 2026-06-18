@@ -71,12 +71,15 @@ REQUIRED_BROWSER_GO_NO_GO_METADATA = [
     "count_mismatch_count: 0",
     "evidence_failure_count: 0",
     "gap_audit_ok: true",
+    "projection_table_count: 20",
+    "resolution_phase_count: 1",
 ]
 REQUIRED_BROWSER_STATUS_METADATA_ROWS = [
     "proof-run-operator-proof-large-action-graph-performance",
     "proof-run-operator-proof-determinism-fuzz",
     "proof-run-operator-proof-generated-shrink-matrix",
     "proof-run-operator-proof-generated-shrink-gap-audit",
+    "proof-run-operator-proof-command-projection-resolution",
 ]
 
 

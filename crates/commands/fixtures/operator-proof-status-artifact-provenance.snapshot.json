@@ -505,7 +505,9 @@
             "freshness_max_age_seconds": 86400,
             "diff_count": 0,
             "trusted_metadata": {
-              "game_id": "300fb41f-2a97-43ab-9192-f9f7bf179511"
+              "game_id": "300fb41f-2a97-43ab-9192-f9f7bf179511",
+              "projection_table_count": 20,
+              "resolution_phase_count": 1
             }
           },
           "proof_boundary": "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes the saved report under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior."

@@ -2972,6 +2972,16 @@ fn render_operator_proof_go_no_go_html(
                 "decision_trace_anchored",
                 metadata.decision_trace_anchored,
             );
+            render_optional_artifact_u64(
+                &mut html,
+                "projection_table_count",
+                metadata.projection_table_count,
+            );
+            render_optional_artifact_u64(
+                &mut html,
+                "resolution_phase_count",
+                metadata.resolution_phase_count,
+            );
             render_optional_artifact_u64(&mut html, "family_count", metadata.family_count);
             render_optional_artifact_u64(&mut html, "seed_count", metadata.seed_count);
             render_optional_artifact_u64(
@@ -3328,6 +3338,16 @@ fn render_artifact_cell(html: &mut String, artifact: &SharedOperatorProofRunArti
                     html,
                     "decision_trace_anchored",
                     metadata.decision_trace_anchored,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "projection_table_count",
+                    metadata.projection_table_count,
+                );
+                render_optional_artifact_u64(
+                    html,
+                    "resolution_phase_count",
+                    metadata.resolution_phase_count,
                 );
                 render_optional_artifact_u64(html, "family_count", metadata.family_count);
                 render_optional_artifact_u64(html, "seed_count", metadata.seed_count);
@@ -4754,6 +4774,8 @@ mod tests {
                                 "resolve_elapsed_ms",
                                 "threshold_ms",
                                 "trace_row_count",
+                                "projection_table_count",
+                                "resolution_phase_count",
                                 "family_count",
                                 "seed_count",
                                 "expected_family_count",

@@ -334,6 +334,10 @@ pub struct OperatorProofRunTrustedArtifactMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision_trace_anchored: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub projection_table_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolution_phase_count: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub family_count: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub seed_count: Option<u64>,
@@ -1701,8 +1705,8 @@ pub fn proof_run_artifact_status(
         ProofRunArtifactState::CommandProjectionResolutionReportPresent {
             artifact_version,
             game_id,
-            table_count: _,
-            phase_count: _,
+            table_count,
+            phase_count,
             diff_count,
             freshness,
         } => OperatorProofRunArtifactStatus {
@@ -1721,6 +1725,8 @@ pub fn proof_run_artifact_status(
             diff_count: Some(diff_count as u64),
             trusted_metadata: Some(OperatorProofRunTrustedArtifactMetadata {
                 game_id: Some(game_id),
+                projection_table_count: Some(table_count as u64),
+                resolution_phase_count: Some(phase_count as u64),
                 ..OperatorProofRunTrustedArtifactMetadata::default()
             }),
         },
@@ -3067,6 +3073,7 @@ pub fn audit_operator_proof_status_values(
             "$.families[*].runs[*].command.{game}",
             "$.families[*].runs[*].artifact.modified_at_unix_seconds",
             "$.families[*].runs[*].artifact.age_seconds",
+            "$.families[*].runs[*].artifact.trusted_metadata.game_id",
         ]
         .into_iter()
         .map(str::to_string)
@@ -3111,6 +3118,14 @@ fn normalize_operator_proof_status_value(
                     "age_seconds".to_string(),
                     Value::String("<normalized-age>".to_string()),
                 );
+            }
+            if let Some(Value::Object(metadata)) = object.get_mut("trusted_metadata") {
+                if metadata.get("game_id").and_then(Value::as_str).is_some() {
+                    metadata.insert(
+                        "game_id".to_string(),
+                        Value::String("<normalized-artifact-game>".to_string()),
+                    );
+                }
             }
             for nested in object.values_mut() {
                 normalize_operator_proof_status_value(nested, expected_game, actual_game);
@@ -3634,6 +3649,8 @@ mod tests {
                                 "resolve_elapsed_ms",
                                 "threshold_ms",
                                 "trace_row_count",
+                                "projection_table_count",
+                                "resolution_phase_count",
                                 "family_count",
                                 "seed_count",
                                 "expected_family_count",
@@ -4007,6 +4024,40 @@ mod tests {
         assert_eq!(trusted["freshness_max_age_seconds"], 86400);
         assert!(trusted.get("reported_path").is_none());
         assert!(trusted.get("artifact_version").is_none());
+
+        let command_projection_game = Uuid::from_u128(89);
+        let command_projection = serde_json::to_value(proof_run_artifact_status(
+            "target/command-projection.json",
+            ProofRunArtifactState::CommandProjectionResolutionReportPresent {
+                artifact_version: COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
+                game_id: command_projection_game,
+                table_count: 20,
+                phase_count: 1,
+                diff_count: 0,
+                freshness: ProofRunArtifactFreshness {
+                    modified_at_unix_seconds: 21,
+                    age_seconds: 2,
+                    max_age_seconds: 86_400,
+                },
+            },
+        ))
+        .unwrap();
+        assert_eq!(command_projection["state"], "trusted");
+        assert_eq!(command_projection["artifact_version"], 1);
+        assert_eq!(command_projection["expected_version"], 1);
+        assert_eq!(command_projection["diff_count"], 0);
+        assert_eq!(
+            command_projection["trusted_metadata"]["game_id"],
+            command_projection_game.to_string()
+        );
+        assert_eq!(
+            command_projection["trusted_metadata"]["projection_table_count"],
+            20
+        );
+        assert_eq!(
+            command_projection["trusted_metadata"]["resolution_phase_count"],
+            1
+        );
 
         let large_action_game = Uuid::from_u128(99);
         let large_action = serde_json::to_value(proof_run_artifact_status(
@@ -5310,7 +5361,8 @@ mod tests {
                     "$.game",
                     "$.families[*].runs[*].command.{game}",
                     "$.families[*].runs[*].artifact.modified_at_unix_seconds",
-                    "$.families[*].runs[*].artifact.age_seconds"
+                    "$.families[*].runs[*].artifact.age_seconds",
+                    "$.families[*].runs[*].artifact.trusted_metadata.game_id"
                 ],
                 "diffs": []
             }),

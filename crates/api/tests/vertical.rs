@@ -9,6 +9,7 @@ use commands::operator_proof::{
     OperatorGeneratedShrinkMatrixEntry, OperatorGeneratedShrinkMatrixReport,
     OperatorGeneratedShrinkMatrixSuccess, OperatorProofRunArtifactCounts, OperatorProofRunFixture,
     OperatorProofRunGoNoGoReport, OperatorProofRunGoNoGoRetentionReport,
+    COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
     DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION, GENERATED_SHRINK_GAP_AUDIT_REPORT_ARTIFACT_VERSION,
     GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT, GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
     GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
@@ -232,7 +233,8 @@ fn ensure_operator_proof_artifacts() {
                 "$.game",
                 "$.families[*].runs[*].command.{game}",
                 "$.families[*].runs[*].artifact.modified_at_unix_seconds",
-                "$.families[*].runs[*].artifact.age_seconds"
+                "$.families[*].runs[*].artifact.age_seconds",
+                "$.families[*].runs[*].artifact.trusted_metadata.game_id"
             ],
             "diffs": []
         }))
@@ -254,6 +256,9 @@ fn ensure_operator_proof_artifacts() {
     let resolution_diff_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("target/operator-proof/current-resolution-diff-report.json");
+    let command_projection_resolution_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("target/operator-proof/current-command-projection-resolution-report.json");
     let trace_inspection_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("target/operator-proof/current-trace-inspection-report.json");
@@ -373,6 +378,69 @@ fn ensure_operator_proof_artifacts() {
                     "diffs": []
                 }
             ]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        &command_projection_resolution_path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "artifact_version": COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION,
+            "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+            "ok": true,
+            "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+            "fixture_path": "crates/commands/fixtures/night-passing.json",
+            "pack": "mafiascum",
+            "phase": "N01",
+            "resolve_seed": 4242,
+            "proof_boundary": "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes this artifact under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior.",
+            "projection_rebuild": {
+                "artifact_version": PROJECTION_REBUILD_AUDIT_REPORT_ARTIFACT_VERSION,
+                "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+                "ok": true,
+                "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+                "isolation": "rollback-only transaction",
+                "table_count": 20,
+                "matched_table_count": 20,
+                "drifted_table_count": 0,
+                "tables": [
+                    {
+                        "table": "slot_state",
+                        "matches": true,
+                        "before_rows": 6,
+                        "rebuilt_rows": 6
+                    }
+                ]
+            },
+            "resolution_diff": {
+                "artifact_version": RESOLUTION_DIFF_REPORT_ARTIFACT_VERSION,
+                "artifact_path": "target/operator-proof/current-command-projection-resolution-report.json",
+                "ok": true,
+                "game_id": "08d8a45f-6c3b-4401-8e31-8d7637f36a82",
+                "normalized_fields": [
+                    "$.phases[*].applied_stream_seq",
+                    "$.phases[*].trace_stream_seq",
+                    "$.phases[*].stored_*",
+                    "$.phases[*].rebuilt_*"
+                ],
+                "audited_phase_count": 1,
+                "matched_phase_count": 1,
+                "drifted_phase_count": 0,
+                "skipped_phase_count": 0,
+                "diff_count": 0,
+                "first_drift_paths": [],
+                "phases": [
+                    {
+                        "phase_id": "N01",
+                        "run_id": "resolution:N01",
+                        "status": "matched",
+                        "applied_matches": true,
+                        "trace_matches": true,
+                        "diff_count": 0,
+                        "diffs": []
+                    }
+                ]
+            }
         }))
         .unwrap(),
     )
@@ -508,7 +576,8 @@ fn ensure_operator_proof_artifacts() {
                 "$.game",
                 "$.families[*].runs[*].command.{game}",
                 "$.families[*].runs[*].artifact.modified_at_unix_seconds",
-                "$.families[*].runs[*].artifact.age_seconds"
+                "$.families[*].runs[*].artifact.age_seconds",
+                "$.families[*].runs[*].artifact.trusted_metadata.game_id"
             ],
             "diffs": []
         }))
@@ -2137,6 +2206,38 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert!(trace_inspection_status_row["command"].as_str().unwrap().contains(
         "cargo run -q -p commands --bin audit_trace_inspection_artifact -- --output target/operator-proof/current-trace-inspection-report.json 08d8a45f-6c3b-4401-8e31-8d7637f36a82"
     ));
+    let command_projection_status_row = proof_status_row(
+        &status,
+        "proof-run-operator-proof-command-projection-resolution",
+    );
+    assert_eq!(
+        command_projection_status_row["artifact"]["state"],
+        "trusted"
+    );
+    assert_eq!(
+        command_projection_status_row["artifact"]["path"],
+        "target/operator-proof/current-command-projection-resolution-report.json"
+    );
+    assert_eq!(
+        command_projection_status_row["artifact"]["artifact_version"],
+        COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION
+    );
+    assert_eq!(
+        command_projection_status_row["artifact"]["expected_version"],
+        COMMAND_PROJECTION_RESOLUTION_REPORT_ARTIFACT_VERSION
+    );
+    assert_eq!(command_projection_status_row["artifact"]["diff_count"], 0);
+    assert_eq!(
+        command_projection_status_row["artifact"]["trusted_metadata"]["projection_table_count"],
+        20
+    );
+    assert_eq!(
+        command_projection_status_row["artifact"]["trusted_metadata"]["resolution_phase_count"],
+        1
+    );
+    assert!(command_projection_status_row["command"].as_str().unwrap().contains(
+        "cargo run -q -p commands --bin prove_command_projection_resolution -- --output target/operator-proof/current-command-projection-resolution-report.json crates/commands/fixtures/night-passing.json"
+    ));
     let performance_status_row = proof_status_row(
         &status,
         "proof-run-operator-proof-large-action-graph-performance",
@@ -2540,6 +2641,18 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(
         go_no_go_performance_row["trusted_metadata"]["decision_trace_anchored"],
         true
+    );
+    let go_no_go_command_projection_row = proof_go_no_go_row(
+        &go_no_go,
+        "proof-run-operator-proof-command-projection-resolution",
+    );
+    assert_eq!(
+        go_no_go_command_projection_row["trusted_metadata"]["projection_table_count"],
+        20
+    );
+    assert_eq!(
+        go_no_go_command_projection_row["trusted_metadata"]["resolution_phase_count"],
+        1
     );
     let go_no_go_determinism_row =
         proof_go_no_go_row(&go_no_go, "proof-run-operator-proof-determinism-fuzz");
@@ -5330,6 +5443,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "diff_count: 0",
                 "No status audit drift.",
                 "$.families[*].runs[*].artifact.age_seconds",
+                "$.families[*].runs[*].artifact.trusted_metadata.game_id",
             ],
         ),
         (

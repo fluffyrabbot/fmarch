@@ -3227,9 +3227,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that
    generated game, writes the saved report under target/operator-proof, and does not prove hosted,
    multi-node, production, browser, or exhaustive state-space behavior.` This command was run
-   against a scratch database on the local Postgres service and emitted `ok: true`, 20 matched
-   projection tables, one matched resolution envelope, zero drifted tables, zero drifted phases, and
-   zero diffs.
+	   against a scratch database on the local Postgres service and emitted `ok: true`, 20 matched
+	   projection tables, one matched resolution envelope, zero drifted tables, zero drifted phases, and
+	   zero diffs. The shared status/go-no-go/browser-smoke surfaces now require this trusted row and
+	   carry exact trusted metadata for `projection_table_count: 20` and `resolution_phase_count: 1`.
    The API manifest unit test now mechanically checks those artifact doc-truth rows in both the
    engine note and this checklist: every manifest row with an `artifact_path` must have its artifact
    path, rendered command, exact proof boundary, current `trusted` artifact state, and production
@@ -3240,9 +3241,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    im-human inventory/parity matrix with `python3 tools/im_human_engine_inventory.py --fmarch-root
    .`. Read-only consumers can use `python3 tools/engine_port_completion_audit.py --check --output
    target/operator-proof/current-engine-port-completion-audit.json`; it does not rewrite the saved
-   artifact, and fails if the saved audit is missing, stale versus any declared input, or different
-   from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
-   19 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
+	   artifact, and fails if the saved audit is missing, stale versus any declared input, or different
+	   from the generated report. The current artifact reports `ok: false`, `freshness.status: fresh`,
+	   21 tracked inputs, eight parsed build-order phases, 192 exhaustive checklist rows, 192 checked
    rows, 0 unchecked rows, zero rows marked `partly proven`, 593 parity-matrix rows, 2
    unsupported parity rows, 0 actionable unsupported rows, and 2 explicit out-of-scope test-family
    rows (`feature_flags_test` and `init`). Mafia Universe now models `vanilla_town`, `blank_town_role`,
@@ -3270,13 +3271,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    including zero unsupported primitive, modifier, result-event, and culture-note rows; the
    completion audit treats those explicit out-of-scope rows as visible but non-actionable and
    blocks completion on the remaining partial build-order phases instead. The no-Postgres domain CI artifact
-   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
-   checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
-   result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
-   browser-fetched JSON surface, all 21 browser-smoke-required go/no-go metadata needles present,
-   trusted metadata rows for large-action, determinism, generated shrink matrix, and generated
-   shrink gap-audit proof rows, and a manifest/status trusted command/projection proof row that has
-   not yet been promoted into the browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
+	   reports `ok: true`, four passed lanes, zero failed lanes, 14 golden-owning pack directories, 307
+	   checked golden fixtures, and Rust validator totals of 462 golden-harness tests, 68
+	   result-contract tests, and 152 pack-validation tests. It also records `browser_smoke.ok: true`, 42 rendered HTML pages, one
+	   browser-fetched JSON surface, all 23 browser-smoke-required go/no-go metadata needles present,
+	   trusted metadata rows for large-action, determinism, generated shrink matrix, generated
+	   shrink gap-audit, and command/projection proof rows, including `projection_table_count: 20`
+	   and `resolution_phase_count: 1` for command/projection. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
    `ok: true`, 29 families, 58 cases, two representative seeds per PGO/PgoProjectionState/Babysitter/BabysitterProjectionState/Hider/HiderProjectionState/Hunter/HunterProjectionState/VengefulFixpoint/VengefulProjectionState/StrongmanVengefulFixpoint/StrongmanVengefulProjectionState/BodyguardStrongmanVengefulFixpoint/BodyguardStrongmanVengefulProjectionState/BackupInheritance/BackupProjectionState/ConversionDeprogramming/ConversionProjectionState/MarkClearVisibility/MarkClearExpiry/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/LoversProjectionState/Bomb/BombProjectionState
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,

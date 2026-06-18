@@ -53,6 +53,8 @@ const generatedShrinkMatrixReport =
   "target/operator-proof/current-generated-shrink-matrix-report.tmp.json";
 const generatedShrinkGapAuditReport =
   "target/operator-proof/current-generated-shrink-gap-audit-report.json";
+const commandProjectionResolutionReport =
+  "target/operator-proof/current-command-projection-resolution-report.json";
 const proofRunSelectors = await proofRunAnchorSelectors();
 const checkedAuditGame = "08d8a45f-6c3b-4401-8e31-8d7637f36a82";
 
@@ -109,6 +111,7 @@ const pages = [
       "target/operator-proof/current-determinism-fuzz-report.json",
       generatedShrinkMatrixReport,
       generatedShrinkGapAuditReport,
+      commandProjectionResolutionReport,
       "target/operator-proof/missing-artifact-provenance-guard.json",
       "artifact not present locally",
       "target/operator-proof/malformed-artifact-metadata-guard.json",
@@ -141,6 +144,7 @@ const pages = [
       "audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json",
       "generated_shrink_matrix_writes_compact_operator_report",
       "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check",
+      "prove_command_projection_resolution -- --output target/operator-proof/current-command-projection-resolution-report.json",
     ],
     selectors: [
       ...proofRunSelectors,
@@ -276,6 +280,7 @@ const pages = [
       "artifact_version: 1",
       "diff_count: 0",
       "$.families[*].runs[*].artifact.age_seconds",
+      "$.families[*].runs[*].artifact.trusted_metadata.game_id",
       "target/operator-proof/current-status-audit-check.json",
       "target/operator-proof/current-status-audit-report.json",
     ],
@@ -325,6 +330,7 @@ const pages = [
       "proof-run-operator-proof-determinism-fuzz",
       "proof-run-operator-proof-generated-shrink-matrix",
       "proof-run-operator-proof-generated-shrink-gap-audit",
+      "proof-run-operator-proof-command-projection-resolution",
       "resolve_elapsed_ms: 321",
       "threshold_ms: 20000",
       "trace_row_count: 74",
@@ -346,6 +352,8 @@ const pages = [
       "count_mismatch_count: 0",
       "evidence_failure_count: 0",
       "gap_audit_ok: true",
+      "projection_table_count: 20",
+      "resolution_phase_count: 1",
       "audit_operator_proof_artifacts",
     ],
   },
@@ -626,6 +634,19 @@ const jsonPages = [
         state: "trusted",
         artifact_version: 1,
         expected_version: 1,
+        audit_report: {
+          diff_count: 0,
+        },
+      },
+      {
+        row_id: "proof-run-operator-proof-command-projection-resolution",
+        state: "trusted",
+        artifact_version: 1,
+        expected_version: 1,
+        trusted: {
+          projection_table_count: 20,
+          resolution_phase_count: 1,
+        },
         audit_report: {
           diff_count: 0,
         },
@@ -1266,6 +1287,7 @@ async function writeOperatorReports() {
   await writeResolutionDiffReport();
   await writeTraceInspectionReport();
   await writeDeterminismFuzzReport();
+  await writeCommandProjectionResolutionReport();
   await writeStatusAuditExport();
   await writeStatusAuditReport();
   await writeGoNoGoReport();
@@ -1274,6 +1296,7 @@ async function writeOperatorReports() {
   await writeProjectionRebuildReport();
   await writeResolutionDiffReport();
   await writeTraceInspectionReport();
+  await writeCommandProjectionResolutionReport();
 }
 
 async function requireProofArtifacts() {
@@ -1362,6 +1385,7 @@ async function writeLocalReportBootstraps() {
           "$.families[*].runs[*].command.{game}",
           "$.families[*].runs[*].artifact.modified_at_unix_seconds",
           "$.families[*].runs[*].artifact.age_seconds",
+          "$.families[*].runs[*].artifact.trusted_metadata.game_id",
         ],
         diffs: [],
       },
@@ -1478,6 +1502,72 @@ async function writeLocalReportBootstraps() {
             diffs: [],
           },
         ],
+      },
+      null,
+      2,
+    ),
+  );
+  await writeFile(
+    path.join(root, commandProjectionResolutionReport),
+    JSON.stringify(
+      {
+        artifact_version: 1,
+        artifact_path: commandProjectionResolutionReport,
+        ok: true,
+        game_id: "08d8a45f-2a97-43ab-9192-f9f7bf179511",
+        fixture_path: "crates/commands/fixtures/night-passing.json",
+        pack: "mafiascum",
+        phase: "N01",
+        resolve_seed: 4242,
+        proof_boundary:
+          "Local-Postgres-only proof: seeds the checked fixture through commands::handle, runs Command::ResolvePhase against the local DATABASE_URL Postgres service, compares resolution replay and projection rebuild results for that generated game, writes this artifact under target/operator-proof, and does not prove hosted, multi-node, production, browser, or exhaustive state-space behavior.",
+        projection_rebuild: {
+          artifact_version: 1,
+          artifact_path: commandProjectionResolutionReport,
+          ok: true,
+          game_id: "08d8a45f-2a97-43ab-9192-f9f7bf179511",
+          isolation: "rollback-only transaction",
+          table_count: 20,
+          matched_table_count: 20,
+          drifted_table_count: 0,
+          tables: [
+            {
+              table: "slot_state",
+              matches: true,
+              before_rows: 6,
+              rebuilt_rows: 6,
+            },
+          ],
+        },
+        resolution_diff: {
+          artifact_version: 1,
+          artifact_path: commandProjectionResolutionReport,
+          ok: true,
+          game_id: "08d8a45f-2a97-43ab-9192-f9f7bf179511",
+          normalized_fields: [
+            "$.phases[*].applied_stream_seq",
+            "$.phases[*].trace_stream_seq",
+            "$.phases[*].stored_*",
+            "$.phases[*].rebuilt_*",
+          ],
+          audited_phase_count: 1,
+          matched_phase_count: 1,
+          drifted_phase_count: 0,
+          skipped_phase_count: 0,
+          diff_count: 0,
+          first_drift_paths: [],
+          phases: [
+            {
+              phase_id: "N01",
+              run_id: "resolution:N01",
+              status: "matched",
+              applied_matches: true,
+              trace_matches: true,
+              diff_count: 0,
+              diffs: [],
+            },
+          ],
+        },
       },
       null,
       2,
@@ -1727,6 +1817,21 @@ async function writeDeterminismFuzzReport() {
     "--",
     "--output",
     determinismFuzzReport,
+  ]);
+}
+
+async function writeCommandProjectionResolutionReport() {
+  await runCheckedCommand("cargo", [
+    "run",
+    "-q",
+    "-p",
+    "commands",
+    "--bin",
+    "prove_command_projection_resolution",
+    "--",
+    "--output",
+    commandProjectionResolutionReport,
+    "crates/commands/fixtures/night-passing.json",
   ]);
 }
 
