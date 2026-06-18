@@ -2303,12 +2303,15 @@ without recomputing rules client-side.
    policy is explicitly declared in `guard_policy`, covered by shipped and disabled-variant
    goldens plus a command/projection rebuild proof; generated N01/D01 replay lanes now include
    exact anchored `inspect_trace` decisions/generated rows]
-3. Epicmafia-style variants. [partly done: Bomb trigger, Cult conversion, loyal conversion
+3. Epicmafia-style variants. [done: Bomb trigger, Cult conversion, loyal conversion
    block, and HostDecides PK prompts are modeled in `packs/epicmafia`, covered by goldens and
-   result-schema events, proven through command/projection verticals, and now covered by a
-   six-case generated replay lane across D01 PK prompt resolution and N01 Bomb/Cult graphs with
-   `audit_resolution`, exact anchored PK prompt issue/resolution and Cult/Loyal conversion detail
-   in `inspect_trace`, and `audit_rebuild`]
+   result-schema events, proven through command/projection verticals; Epicmafia Arsonist douse /
+   ignite is covered by a source-aware persistent-effect notification/non-leakage and read-effect
+   command/projection rebuild vertical; Epicmafia three-faction town/cult/mafia win policy is covered
+   by state-evolution tests plus a multi-phase command/projection rebuild vertical; the row is now
+   covered by a six-case generated replay lane across D01 PK prompt resolution and N01 Bomb/Cult
+   graphs with `audit_resolution`, exact anchored PK prompt issue/resolution and Cult/Loyal
+   conversion detail in `inspect_trace`, and `audit_rebuild`]
 4. Any copyright-free/default social-deduction pack fmarch wants to ship.
    [partly done: `default_open` is the first copyright-free default candidate with
    Citizen/Guardian/Seer/Agent roles, linter coverage through `shipped_packs_validate`,
@@ -3253,7 +3256,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 6 by auditing the Epicmafia-style variants culture-pack row against its focused
-proof surfaces. Separate already-proven Bomb/Cult/Loyal/PK generated lanes from any remaining
-Epicmafia policy breadth, and promote only the linter, parity-matrix, golden, result-schema, and
-playable vertical claims that current evidence proves.
+Continue Phase 6 by auditing the copyright-free/default pack row against its focused proof surfaces.
+Separate the already-proven `default_open` linter, parity, N01/D01 goldens, command/projection
+verticals, and three-seed replay lanes from the unresolved product decision of whether it is the final
+default pack, and promote only the claims that current evidence proves.
