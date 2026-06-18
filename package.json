@@ -2,7 +2,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "operator:browser-smoke": "node tools/operator_browser_smoke.mjs"
+    "operator:browser-smoke": "node tools/operator_browser_smoke.mjs",
+    "test:host-console-tablet-smoke": "node tools/host_console_tablet_smoke.mjs",
+    "test:frontend-contract": "node --test frontend/src/lib/components/host-action/*.test.mjs",
+    "frontend:dev": "npm --prefix frontend run dev"
   },
   "devDependencies": {
     "playwright": "1.60.0"

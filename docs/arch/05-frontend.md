@@ -36,8 +36,14 @@ shrunk down.
 Frontend slices that affect core gameplay or host workflows should be judged against this
 checklist before they are called done:
 
+- **Cheap proof first** — shared touch controls and host actions start from
+  `frontend/src/lib/components/host-action/`: the CSS variables/classes define the target
+  floor, and the host-action contract tests prove confirmation and dispatch behavior without
+  a browser.
 - **Viewport proof** — exercise the changed surface at 1024x768, 1180x820, 1280x900, and
-  one desktop width. The tablet widths are the design baseline; desktop is the scale-up case.
+  one desktop width once the surface has a real shell. The tablet widths are the design
+  baseline; desktop is the scale-up case. The first host-console critical path is guarded by
+  `npm run test:host-console-tablet-smoke` at 1024x768 through `/g/[game]/host`.
 - **Touch target floor** — primary controls, destructive actions, channel switches, vote
   controls, and host console actions have at least a 44x44 CSS pixel hit area with visible
   spacing between neighboring actions.
