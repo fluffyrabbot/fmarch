@@ -1414,12 +1414,14 @@ resolution effects; the Mafiascum NoMajority fixture now acknowledges the prompt
 `HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "D01R1", reason: "revote" }`,
 and the Beloved Princess fixture now acknowledges the skip-next-day prompt and checks
 `HostPromptResolved` plus prompt-driven `PhaseAdvanced { phase_id: "N02", skipped_phase_id: "D02",
-reason: "skip_next_day" }`.
+reason: "skip_next_day" }`; the Virgin night-death alias now has the same minimized
+prompt-resolution proof for `N01:skip_next_day:slot_2`.
 This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations_through_minimizer -- --nocapture`,
 which passed one filtered pipeline test across the command-resolved setup-plus-day announcement
-fixture, no-majority revote prompt-resolution fixture, and Beloved Princess skip-next-day
-prompt-resolution fixture, checking every emitted semantic expectation through
+fixture, no-majority revote prompt-resolution fixture, Beloved Princess skip-next-day
+prompt-resolution fixture, and Virgin night-death skip-next-day fixture, checking every emitted
+semantic expectation through
 `minimize_night_fixture`. An Epicmafia
 generated lane now covers three fixed-seed D01 plurality ties that emit PK prompts and
 host-selected kills, plus three fixed-seed N01 Bomb/Cult graphs that

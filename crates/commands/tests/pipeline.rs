@@ -13137,6 +13137,13 @@ async fn phase5_day_note_and_revote_prompt_fixtures_replay_semantic_expectations
             1,
             7,
         ),
+        (
+            "mafiascum-virgin-night-skip-next-day-semantic-expectations",
+            mafiascum_virgin_night_skip_next_day_fixture_json(),
+            1,
+            1,
+            6,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(&fixture_json).expect("Phase 5 fixture JSON parses");
@@ -19032,6 +19039,116 @@ fn mafiascum_beloved_princess_skip_next_day_fixture_json() -> String {
         }
     }))
     .expect("Mafiascum Beloved Princess skip-next-day fixture JSON serializes")
+}
+
+fn mafiascum_virgin_night_skip_next_day_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 950_001,
+        "pack": "mafiascum",
+        "phase": "N01",
+        "roster": [
+            { "slot": "slot_1", "role": "mafia_goon" },
+            { "slot": "slot_2", "role": "virgin" },
+            { "slot": "slot_3", "role": "vanilla_townie" },
+            { "slot": "slot_4", "role": "vanilla_townie" }
+        ],
+        "votes": [],
+        "actions": [{
+            "actor_slot": "slot_1",
+            "template_id": "factional_kill",
+            "action_id": "mafia_kills_virgin_n01",
+            "targets": ["slot_2"]
+        }],
+        "host_prompt_decision": {
+            "prompt_id": "N01:skip_next_day:slot_2",
+            "decision": {
+                "kind": "acknowledge",
+                "metadata": { "operator_note": "minimizer virgin skip next day" }
+            }
+        },
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "factional_kill",
+                        "attackers": ["slot_1"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "HostPromptIssued",
+                    "payload": {
+                        "prompt_id": "N01:skip_next_day:slot_2",
+                        "kind": "skip_next_day",
+                        "subject": "slot_2",
+                        "reason": "beloved_princess_death",
+                        "phase_id": "N01",
+                        "phase_kind": "Night",
+                        "phase_number": 1,
+                        "metadata": {
+                            "policy": "beloved_princess",
+                            "role": "virgin",
+                            "death_cause": "factional_kill"
+                        }
+                    }
+                },
+                {
+                    "kind": "PhaseAnnouncement",
+                    "payload": {
+                        "phase_id": "N01",
+                        "deaths": [{ "slot_id": "slot_2", "cause": "factional_kill" }]
+                    }
+                }
+            ],
+            "stream_events": [
+                {
+                    "kind": "HostPromptResolved",
+                    "payload": {
+                        "prompt_id": "N01:skip_next_day:slot_2",
+                        "phase_id": "N01",
+                        "kind": "skip_next_day",
+                        "reason": "beloved_princess_death",
+                        "decision": {
+                            "kind": "acknowledge",
+                            "metadata": {
+                                "operator_note": "minimizer virgin skip next day"
+                            }
+                        },
+                        "resolved_by": "fixture_host"
+                    }
+                },
+                {
+                    "kind": "PhaseAdvanced",
+                    "payload": {
+                        "phase_id": "N02",
+                        "source_prompt_id": "N01:skip_next_day:slot_2",
+                        "source_phase_id": "N01",
+                        "reason": "skip_next_day",
+                        "skipped_phase_id": "D02"
+                    }
+                }
+            ],
+            "trace_decisions": [
+                {
+                    "stage": "death:trigger",
+                    "source": "slot:slot_2",
+                    "outcome": "host_prompt_issued",
+                    "detail": {
+                        "policy": "beloved_princess",
+                        "prompt_id": "N01:skip_next_day:slot_2",
+                        "kind": "skip_next_day",
+                        "subject": "slot_2",
+                        "reason": "beloved_princess_death",
+                        "death_cause": "factional_kill",
+                        "role": "virgin"
+                    }
+                }
+            ]
+        }
+    }))
+    .expect("Mafiascum Virgin night skip-next-day fixture JSON serializes")
 }
 
 #[derive(Debug)]
