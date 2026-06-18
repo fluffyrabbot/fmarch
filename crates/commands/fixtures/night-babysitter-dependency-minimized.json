@@ -39,5 +39,40 @@
       "action_id": "minimized_babysitter_guards_ward",
       "targets": ["slot_4"]
     }
-  ]
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerSaved",
+        "payload": {
+          "slot_id": "slot_4",
+          "sources": ["slot_3"]
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "slot_id": "slot_4",
+          "cause": "babysit",
+          "attackers": ["slot_3"],
+          "unstoppable": true
+        }
+      }
+    ],
+    "trace_decisions": [
+      {
+        "stage": "night:dependency_death",
+        "source": "action:minimized_babysitter_guards_ward",
+        "outcome": "babysitter_dependency_death",
+        "detail": {
+          "action_id": "minimized_babysitter_guards_ward",
+          "template_id": "babysit",
+          "protector": "slot_3",
+          "ward": "slot_4",
+          "cause": "babysit",
+          "attackers": ["slot_3"]
+        }
+      }
+    ]
+  }
 }
