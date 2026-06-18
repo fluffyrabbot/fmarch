@@ -2499,14 +2499,18 @@ coverage, and a playable vertical scenario through the command pipeline.
    checked-in generated-action bad-expectation artifacts; the
    `checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure` selector proves
    all three reduced fixtures remain `semantic_expectation` failures and are not promoted as successes.
-   `crates/commands/fixtures/night-backup-inheritance-generated-minimized.json` now promotes the
-   first conversion/backup matrix row into a checked-in targeted BackupInheritance replay with
-   three slots, one action, two setup phases, three audited resolution envelopes, three anchored
-   traces, and two semantic expectations for the inherited Cop check plus `night:backup` trace
-   decision. `crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json` is
-   the matching checked-in negative artifact; the
-   `checked_in_backup_inheritance_generated_fixtures_replay_semantic_expectations` selector proves
-   the success fixture remains promotable while the reduced negative fixture preserves
+   `crates/commands/fixtures/night-backup-inheritance-generated-minimized.json` and
+   `crates/commands/fixtures/night-backup-projection-state-generated-minimized.json` now promote
+   the first conversion/backup matrix rows into checked-in targeted BackupInheritance replays. Both
+   carry one action, two setup phases, three audited resolution envelopes, and three anchored traces;
+   the inheritance fixture keeps three slots and two semantic expectations for the inherited Cop
+   check plus `night:backup` trace decision, while the projection-state fixture keeps four slots
+   and three semantic expectations by also checking the rebuilt Cop `slot_state`. Their matching
+   checked-in negative artifacts,
+   `crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json` and
+   `crates/commands/fixtures/night-backup-projection-state-generated-bad-expectation.json`, are
+   covered by `checked_in_backup_generated_fixtures_replay_semantic_expectations`, which proves
+   both success fixtures remain promotable while both reduced negative fixtures preserve
    `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
@@ -3030,7 +3034,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the next ordered bucket,
-conversion/deprogramming/backup inheritance: promote `backup_projection_state`, commit its reduced
+conversion/deprogramming/backup inheritance: promote `conversion_deprogramming`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures

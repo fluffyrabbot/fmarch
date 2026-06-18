@@ -1408,14 +1408,18 @@ negative artifacts and proves, through
 `checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure`, that all three
 reduced fixtures preserve `semantic_expectation` failure class while keeping
 `promoted_success_fixture: false`. `crates/commands/fixtures/night-backup-inheritance-generated-minimized.json`
-now promotes the first conversion/backup matrix row into a checked-in targeted BackupInheritance
-replay with three slots, one action, two setup phases, three audited resolution envelopes, three
-anchored traces, and two semantic expectations for the inherited Cop check plus `night:backup`
-trace decision. `crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json`
-is the matching checked-in negative artifact; the
-`checked_in_backup_inheritance_generated_fixtures_replay_semantic_expectations` selector proves the
-success fixture remains promotable while the reduced negative fixture preserves
-`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+and `crates/commands/fixtures/night-backup-projection-state-generated-minimized.json` now promote
+the first conversion/backup matrix rows into checked-in targeted BackupInheritance replays. Both
+carry one action, two setup phases, three audited resolution envelopes, and three anchored traces;
+the inheritance fixture keeps three slots and two semantic expectations for the inherited Cop check
+plus `night:backup` trace decision, while the projection-state fixture keeps four slots and three
+semantic expectations by also checking the rebuilt Cop `slot_state`. Their matching checked-in
+negative artifacts,
+`crates/commands/fixtures/night-backup-inheritance-generated-bad-expectation.json` and
+`crates/commands/fixtures/night-backup-projection-state-generated-bad-expectation.json`, are covered
+by `checked_in_backup_generated_fixtures_replay_semantic_expectations`, which proves both success
+fixtures remain promotable while both reduced negative fixtures preserve `semantic_expectation`
+failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
