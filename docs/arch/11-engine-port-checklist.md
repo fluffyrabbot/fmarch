@@ -2431,7 +2431,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    scratch database and proved the projection-audit view plus operator projection-rebuild
    saved-artifact JSON/HTML and fixture pages render through the browser proof lane]
 4. Performance tests around large action graphs.
-   [partly proven: `large_action_graph_resolves_and_audits_within_regression_ceiling` builds a
+   [done: `large_action_graph_resolves_and_audits_within_regression_ceiling` builds a
    deterministic 40-slot / 29-action Mafiascum N01 graph through legal `SubmitAction` commands
    across redirect, protect, investigative, kill, PGO, Babysitter, Hider, Hunter, and Cupid
    families, resolves with a fixed seed, validates replay audit, exact anchored trace inspection
@@ -2439,8 +2439,19 @@ coverage, and a playable vertical scenario through the command pipeline.
    event/trace rows, and a 20-second local regression ceiling. This manifest-listed lane was rerun
    locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands large_action_graph_resolves_and_audits_within_regression_ceiling`
-   and passed one filtered pipeline test for the fixed dense graph. This is a regression guard,
-   not a production benchmark]
+   and passed one filtered pipeline test for the fixed dense graph. The
+   `audit_large_action_graph_performance_artifact_cli_writes_pass_and_threshold_failure_reports`
+   Postgres integration test now proves the operator artifact binary end to end for both a passing
+   default-threshold run and a deliberate zero-threshold failure, including exit code, stderr
+   boundary, stdout/file JSON parity, artifact path, fixed dimensions, replay/projection audit
+   flags, trace anchors, elapsed/threshold fields, and bounded count fields. The manifest artifact
+   was regenerated from a short-lived scratch database with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch_large_action_perf cargo run -q -p commands --bin audit_large_action_graph_performance_artifact -- --output target/operator-proof/current-large-action-graph-performance-report.json`
+   and produced `ok: true` for 40 slots, 29 submitted actions, 25 inner events, 154 stream events,
+   73 trace rows, and 36 ms under the 20-second local ceiling. The operator browser smoke was rerun
+   against the same scratch lane and proved the large-action proof-run JSON/HTML surfaces through
+   `target/operator-browser-smoke/playwright-dom-proof.json`. This is a local regression guard, not
+   a production benchmark]
 5. Determinism fuzzing with random but seeded scenario generation.
    [partly proven: the command pipeline now has seeded day-vote scenario generation across five
    deterministic seeds. Each generated game appends legal vote changes/withdrawals, resolves
@@ -3273,8 +3284,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 7 by auditing performance tests around large action graphs. Separate the already
-proven deterministic 40-slot dense graph regression guard, operator large-action artifact report,
-and browser/operator proof-run surfaces from any remaining production benchmark or broader
-performance-budget claim, and promote only the large-action performance evidence that current
-commands prove.
+Continue Phase 7 by auditing determinism fuzzing with seeded scenarios. Separate the already proven
+seeded day-vote and night-action fuzz lanes, determinism artifact report, and browser/operator
+proof-run surfaces from any remaining exhaustive state-space or production-scale fuzz claim, then
+promote only the seeded determinism evidence that current commands prove.

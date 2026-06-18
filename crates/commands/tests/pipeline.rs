@@ -14,7 +14,7 @@ use commands::{
     audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle,
     inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot, Ack, Command,
     HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus,
-    VoteTarget,
+    VoteTarget, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
 use eventstore::{ActorId, EventInput};
 use projections::{
@@ -10668,6 +10668,136 @@ async fn audit_projection_rebuild_artifact_cli_writes_matched_and_drift_reports(
     assert_eq!(live_role, "tampered_projection_role");
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_large_action_graph_performance_artifact_cli_writes_pass_and_threshold_failure_reports(
+    pool: PgPool,
+) {
+    let pass_path =
+        test_operator_proof_artifact_path("large-action-graph-performance-pass", Uuid::new_v4());
+    let _ = fs::remove_file(&pass_path);
+
+    let pass_output =
+        run_audit_large_action_graph_performance_artifact_cli(&pool, &pass_path, None).await;
+    assert!(
+        pass_output.status.success(),
+        "large action performance artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&pass_output.stdout),
+        String::from_utf8_lossy(&pass_output.stderr)
+    );
+    assert!(
+        pass_output.stderr.is_empty(),
+        "large action performance artifact should not write stderr: {}",
+        String::from_utf8_lossy(&pass_output.stderr)
+    );
+    let pass_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&pass_path).expect("passing large graph artifact exists"))
+            .expect("passing large graph artifact is JSON");
+    let pass_stdout: serde_json::Value =
+        serde_json::from_slice(&pass_output.stdout).expect("passing large graph stdout is JSON");
+    assert_eq!(pass_stdout, pass_file);
+    assert_eq!(pass_file["ok"], true);
+    assert_eq!(pass_file["artifact_version"], 1);
+    assert_eq!(
+        pass_file["artifact_path"].as_str(),
+        Some(pass_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(pass_file["pack"], "mafiascum");
+    assert_eq!(pass_file["phase_id"], "N01");
+    assert_eq!(pass_file["roster_count"], 40);
+    assert_eq!(pass_file["submitted_action_count"], 29);
+    assert_eq!(
+        pass_file["threshold_ms"],
+        serde_json::json!(LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS)
+    );
+    assert!(
+        pass_file["resolve_elapsed_ms"].as_u64().unwrap_or(u64::MAX)
+            <= LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
+        "passing report should stay under the local regression ceiling: {pass_file:#?}"
+    );
+    assert_eq!(pass_file["replay_audit_ok"], true);
+    assert_eq!(pass_file["replay_audited"], 1);
+    assert_eq!(pass_file["replay_skipped"], 0);
+    assert_eq!(pass_file["projection_rebuild_ok"], true);
+    assert_eq!(pass_file["phase_trace_anchored"], true);
+    assert_eq!(pass_file["decision_trace_anchored"], true);
+    assert_eq!(pass_file["pgo_triggered"], true);
+    assert_eq!(pass_file["babysitter_death"], true);
+    assert_eq!(pass_file["hider_death"], true);
+    assert_eq!(pass_file["lovers_linked"], true);
+    assert!(
+        pass_file["resolution_inner_event_count"]
+            .as_u64()
+            .unwrap_or(u64::MAX)
+            < 200,
+        "large graph inner events should remain bounded: {pass_file:#?}"
+    );
+    assert!(
+        pass_file["stream_event_count"].as_u64().unwrap_or(u64::MAX) <= 200,
+        "large graph stream event count should remain bounded: {pass_file:#?}"
+    );
+    assert!(
+        pass_file["trace_row_count"].as_u64().unwrap_or_default() > 0,
+        "large graph report should inspect stored trace rows: {pass_file:#?}"
+    );
+
+    let threshold_path = test_operator_proof_artifact_path(
+        "large-action-graph-performance-threshold",
+        Uuid::new_v4(),
+    );
+    let _ = fs::remove_file(&threshold_path);
+
+    let threshold_output =
+        run_audit_large_action_graph_performance_artifact_cli(&pool, &threshold_path, Some(0))
+            .await;
+    assert!(
+        !threshold_output.status.success(),
+        "threshold-regressed large action performance artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&threshold_output.stdout),
+        String::from_utf8_lossy(&threshold_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&threshold_output.stderr)
+            .contains("large action graph performance artifact failed its ceiling or audits"),
+        "threshold failure stderr should name performance artifact failure\nstderr:\n{}",
+        String::from_utf8_lossy(&threshold_output.stderr)
+    );
+    let threshold_file: serde_json::Value = serde_json::from_slice(
+        &fs::read(&threshold_path).expect("threshold large graph artifact exists"),
+    )
+    .expect("threshold large graph artifact is JSON");
+    let threshold_stdout: serde_json::Value = serde_json::from_slice(&threshold_output.stdout)
+        .expect("threshold large graph stdout is JSON");
+    assert_eq!(threshold_stdout, threshold_file);
+    assert_eq!(threshold_file["ok"], false);
+    assert_eq!(threshold_file["artifact_version"], 1);
+    assert_eq!(
+        threshold_file["artifact_path"].as_str(),
+        Some(threshold_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(threshold_file["pack"], "mafiascum");
+    assert_eq!(threshold_file["phase_id"], "N01");
+    assert_eq!(threshold_file["roster_count"], 40);
+    assert_eq!(threshold_file["submitted_action_count"], 29);
+    assert_eq!(threshold_file["threshold_ms"], 0);
+    assert!(
+        threshold_file["resolve_elapsed_ms"]
+            .as_u64()
+            .unwrap_or_default()
+            > 0,
+        "zero-threshold report should prove an elapsed-time regression boundary: {threshold_file:#?}"
+    );
+    assert_eq!(threshold_file["replay_audit_ok"], true);
+    assert_eq!(threshold_file["replay_audited"], 1);
+    assert_eq!(threshold_file["replay_skipped"], 0);
+    assert_eq!(threshold_file["projection_rebuild_ok"], true);
+    assert_eq!(threshold_file["phase_trace_anchored"], true);
+    assert_eq!(threshold_file["decision_trace_anchored"], true);
+    assert_eq!(threshold_file["pgo_triggered"], true);
+    assert_eq!(threshold_file["babysitter_death"], true);
+    assert_eq!(threshold_file["hider_death"], true);
+    assert_eq!(threshold_file["lovers_linked"], true);
+}
+
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
     let host = format!("{user_prefix}_host");
     let game = Uuid::new_v4();
@@ -10891,6 +11021,27 @@ async fn run_audit_projection_rebuild_artifact_cli(
         .env("DATABASE_URL", database_url)
         .output()
         .expect("run audit_projection_rebuild_artifact binary")
+}
+
+async fn run_audit_large_action_graph_performance_artifact_cli(
+    pool: &PgPool,
+    output_path: &Path,
+    threshold_ms: Option<u64>,
+) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_large_action_graph_performance_artifact")
+        .unwrap_or_else(|_| {
+            env!("CARGO_BIN_EXE_audit_large_action_graph_performance_artifact").to_string()
+        });
+    let mut command = ProcessCommand::new(bin);
+    command.arg("--output").arg(output_path);
+    if let Some(threshold_ms) = threshold_ms {
+        command.arg("--threshold-ms").arg(threshold_ms.to_string());
+    }
+    command
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_large_action_graph_performance_artifact binary")
 }
 
 async fn tamper_live_slot_state_role(pool: &PgPool, game: Uuid, slot: &str, role_key: &str) {
