@@ -2288,7 +2288,7 @@ without recomputing rules client-side.
    `alignment_failback` are now modeled as pre-vote Day kills that kill hostile targets or
    self-kill on non-hostile targets, with pure success/failback coverage and a Postgres D01
    trace/thread/rebuild vertical.]
-2. Chinese structured werewolf. [partly done: Prophet `investigate_alignment` now has
+2. Chinese structured werewolf. [done: Prophet `investigate_alignment` now has
    linter coverage, good/evil goldens, parity-matrix coverage, result-schema coverage via
    `InvestigationResult`, and a command/projection rebuild vertical; Cupid `link_lovers`
    now has linter/order coverage, setup, night-kill cascade, day-lynch cascade,
@@ -3253,8 +3253,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 6 by auditing the Chinese structured werewolf culture-pack row against its focused
-proof surfaces. Separate already-proven Prophet, Wolf/Witch/Guard/Cupid/Hunter/Sheriff/Knight,
-White Wolf, Wolf Beauty, Idiot, and generated D01/N01 proof from any remaining culture-policy
-breadth, and promote only the linter, parity-matrix, golden, result-schema, and playable vertical
-claims that current evidence proves.
+Continue Phase 6 by auditing the Epicmafia-style variants culture-pack row against its focused
+proof surfaces. Separate already-proven Bomb/Cult/Loyal/PK generated lanes from any remaining
+Epicmafia policy breadth, and promote only the linter, parity-matrix, golden, result-schema, and
+playable vertical claims that current evidence proves.
