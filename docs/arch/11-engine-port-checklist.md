@@ -2488,9 +2488,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    `RetaliationArmed`, and Wolf Beauty persistent mark rows. This was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
    and passed one filtered pipeline test across all six fixed seeds, checking every generated
-   Chinese N01 semantic expectation through `minimize_night_fixture`. Wolf Beauty drag remains
-   outside that one-phase minimizer proof because night drag reads a prior folded mark from snapshot
-   state. A second
+   Chinese N01 semantic expectation through `minimize_night_fixture`. `minimize_night_fixture` now
+   also accepts real command-submitted `setup_phases`, so folded-state Chinese cascade fixtures can
+   seed an N01 setup phase before minimizing the target N02. This was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands chinese_folded_state_cascade_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
+   and passed one filtered pipeline test covering Wolf Beauty drag after prior mark, Cupid
+   lover-suicide after prior link, Hunter retaliation after prior target choice, and Hunter poison
+   suppression after prior target choice. A second
    non-mafiascum lane now generates six Chinese Structured D01 cases from fixed seeds with legal
    sheriff election, Knight duel, White Wolf self-destruct, and ordinary vote submissions, then
    proves the same audit trio plus exact anchored BadgeChanged, DuelResolved, and
@@ -2800,8 +2804,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by teaching `minimize_night_fixture` a
-small folded-state setup surface, then add Chinese Structured semantic minimizer fixtures for Wolf
-Beauty drag, Cupid lover-suicide cascades, and Hunter retaliation/suppression after prior N01 state.
-That should preserve the generated cascade rows through minimization instead of stopping at direct
-one-phase mark/link/retaliation setup events.
+Continue Phase 5 rich day systems by extending semantic minimizer expectations into the Chinese
+Structured D01 and Mafia Universe ITA generated fixture lanes. Start with Chinese sheriff badge,
+Knight duel, White Wolf self-destruct, and Mafia Universe ITA queued shot/hit/miss rows so minimized
+day fixtures preserve rich day semantics, not only replay/audit success.

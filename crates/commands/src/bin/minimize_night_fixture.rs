@@ -21,10 +21,24 @@ struct NightFixture {
     #[serde(default)]
     votes: Vec<FixtureVote>,
     actions: Vec<FixtureAction>,
+    #[serde(default)]
+    setup_phases: Vec<FixturePhase>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     host_prompt_decision: Option<FixtureHostPromptDecision>,
     #[serde(default)]
     expectations: FixtureExpectations,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FixturePhase {
+    phase: String,
+    seed: u64,
+    #[serde(default)]
+    votes: Vec<FixtureVote>,
+    #[serde(default)]
+    actions: Vec<FixtureAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    host_prompt_decision: Option<FixtureHostPromptDecision>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -318,7 +332,7 @@ async fn minimize_fixture(
                     kind: "vote",
                     removed: format!("{}->{}", removed.actor_slot, removed.target_slot),
                     roster_len: fixture.roster.len(),
-                    action_len: fixture.actions.len(),
+                    action_len: fixture_action_len(&fixture),
                 });
                 changed = true;
                 break;
@@ -337,9 +351,59 @@ async fn minimize_fixture(
                     kind: "action",
                     removed: removed.action_id,
                     roster_len: fixture.roster.len(),
-                    action_len: fixture.actions.len(),
+                    action_len: fixture_action_len(&fixture),
                 });
                 changed = true;
+                break;
+            }
+        }
+        if changed {
+            continue;
+        }
+        for phase_index in 0..fixture.setup_phases.len() {
+            for action_index in 0..fixture.setup_phases[phase_index].actions.len() {
+                let mut candidate = fixture.clone();
+                let removed = candidate.setup_phases[phase_index]
+                    .actions
+                    .remove(action_index);
+                let report = run_fixture(pool, &candidate).await;
+                if target.is_preserved_by(&report) {
+                    fixture = candidate;
+                    steps.push(ReductionStep {
+                        kind: "setup_action",
+                        removed: removed.action_id,
+                        roster_len: fixture.roster.len(),
+                        action_len: fixture_action_len(&fixture),
+                    });
+                    changed = true;
+                    break;
+                }
+            }
+            if changed {
+                break;
+            }
+        }
+        if changed {
+            continue;
+        }
+        for phase_index in 0..fixture.setup_phases.len() {
+            for vote_index in 0..fixture.setup_phases[phase_index].votes.len() {
+                let mut candidate = fixture.clone();
+                let removed = candidate.setup_phases[phase_index].votes.remove(vote_index);
+                let report = run_fixture(pool, &candidate).await;
+                if target.is_preserved_by(&report) {
+                    fixture = candidate;
+                    steps.push(ReductionStep {
+                        kind: "setup_vote",
+                        removed: format!("{}->{}", removed.actor_slot, removed.target_slot),
+                        roster_len: fixture.roster.len(),
+                        action_len: fixture_action_len(&fixture),
+                    });
+                    changed = true;
+                    break;
+                }
+            }
+            if changed {
                 break;
             }
         }
@@ -351,19 +415,7 @@ async fn minimize_fixture(
         for index in 0..fixture.roster.len() {
             let mut candidate = fixture.clone();
             let removed = candidate.roster.remove(index);
-            candidate.votes = candidate
-                .votes
-                .into_iter()
-                .filter(|vote| vote.actor_slot != removed.slot && vote.target_slot != removed.slot)
-                .collect();
-            candidate.actions = candidate
-                .actions
-                .into_iter()
-                .filter(|action| {
-                    action.actor_slot != removed.slot
-                        && action.targets.iter().all(|target| target != &removed.slot)
-                })
-                .collect();
+            prune_slot_references(&mut candidate, &removed.slot);
             let report = run_fixture(pool, &candidate).await;
             if target.is_preserved_by(&report) {
                 fixture = candidate;
@@ -371,7 +423,7 @@ async fn minimize_fixture(
                     kind: "slot",
                     removed: removed.slot,
                     roster_len: fixture.roster.len(),
-                    action_len: fixture.actions.len(),
+                    action_len: fixture_action_len(&fixture),
                 });
                 changed = true;
                 break;
@@ -457,6 +509,34 @@ impl WriteReducedReport {
     }
 }
 
+fn fixture_action_len(fixture: &NightFixture) -> usize {
+    fixture.actions.len()
+        + fixture
+            .setup_phases
+            .iter()
+            .map(|phase| phase.actions.len())
+            .sum::<usize>()
+}
+
+fn prune_slot_references(fixture: &mut NightFixture, removed_slot: &str) {
+    fixture
+        .votes
+        .retain(|vote| vote.actor_slot != removed_slot && vote.target_slot != removed_slot);
+    fixture.actions.retain(|action| {
+        action.actor_slot != removed_slot
+            && action.targets.iter().all(|target| target != removed_slot)
+    });
+    for phase in &mut fixture.setup_phases {
+        phase
+            .votes
+            .retain(|vote| vote.actor_slot != removed_slot && vote.target_slot != removed_slot);
+        phase.actions.retain(|action| {
+            action.actor_slot != removed_slot
+                && action.targets.iter().all(|target| target != removed_slot)
+        });
+    }
+}
+
 async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
     let game = Uuid::new_v4();
     let host = Principal::user("fixture_host");
@@ -530,111 +610,21 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
         }
     }
 
-    if let Err(err) = handle(
-        pool,
-        &host,
-        Command::StartGame {
-            game,
-            phase: fixture.phase.clone(),
-        },
-    )
-    .await
-    {
-        return failed(FailureClass::Command, format!("start failed: {err}"), game);
-    }
-
-    for action in &fixture.actions {
-        if let Err(err) = handle(
-            pool,
-            &Principal::user(format!(
-                "fixture_user_{}",
-                slot_number(&action.actor_slot).unwrap_or(0)
-            )),
-            Command::SubmitAction {
-                game,
-                action_id: action.action_id.clone(),
-                actor_slot: action.actor_slot.clone(),
-                template_id: action.template_id.clone(),
-                targets: action.targets.clone(),
-                grant_id: None,
-            },
-        )
-        .await
-        {
-            return failed(
-                FailureClass::Command,
-                format!("submit {} failed: {err}", action.action_id),
-                game,
-            );
+    for phase in &fixture.setup_phases {
+        if let Err(report) = run_fixture_phase(pool, game, &host, phase).await {
+            return report;
         }
     }
 
-    for vote in &fixture.votes {
-        if let Err(err) = handle(
-            pool,
-            &Principal::user(format!(
-                "fixture_user_{}",
-                slot_number(&vote.actor_slot).unwrap_or(0)
-            )),
-            Command::SubmitVote {
-                game,
-                actor_slot: vote.actor_slot.clone(),
-                target: VoteTarget::Slot(vote.target_slot.clone()),
-            },
-        )
-        .await
-        {
-            return failed(
-                FailureClass::Command,
-                format!(
-                    "submit vote {} -> {} failed: {err}",
-                    vote.actor_slot, vote.target_slot
-                ),
-                game,
-            );
-        }
-    }
-
-    if let Err(err) = handle(
-        pool,
-        &host,
-        Command::ResolvePhase {
-            game,
-            seed: fixture.seed,
-        },
-    )
-    .await
-    {
-        return failed(
-            FailureClass::Resolve,
-            format!("resolve failed: {err}"),
-            game,
-        );
-    }
-
-    if let Some(decision) = &fixture.host_prompt_decision {
-        if let Err(err) = handle(
-            pool,
-            &host,
-            Command::ResolveHostPrompt {
-                game,
-                prompt_id: decision.prompt_id.clone(),
-                decision: HostPromptDecision::SelectSlot {
-                    slot: decision.selected_slot.clone(),
-                },
-            },
-        )
-        .await
-        {
-            return failed(
-                FailureClass::Resolve,
-                format!(
-                    "resolve host prompt {} selecting {} failed: {err}",
-                    decision.prompt_id, decision.selected_slot
-                ),
-                game,
-            );
-        }
+    let target_phase = FixturePhase {
+        phase: fixture.phase.clone(),
+        seed: fixture.seed,
+        votes: fixture.votes.clone(),
+        actions: fixture.actions.clone(),
+        host_prompt_decision: fixture.host_prompt_decision.clone(),
+    };
+    if let Err(report) = run_fixture_phase(pool, game, &host, &target_phase).await {
+        return report;
     }
 
     let resolution_audit = match audit_resolution_envelopes(pool, game).await {
@@ -670,11 +660,13 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
             )
         }
     };
-    let expected_trace_count = if fixture.host_prompt_decision.is_some() {
-        2
-    } else {
-        1
-    };
+    let expected_trace_count = fixture
+        .setup_phases
+        .iter()
+        .map(|phase| 1 + usize::from(phase.host_prompt_decision.is_some()))
+        .sum::<usize>()
+        + 1
+        + usize::from(fixture.host_prompt_decision.is_some());
     if trace_report.traces.len() != expected_trace_count
         || !trace_report.traces.iter().any(|trace| {
             trace.applied_stream_seq.is_some()
@@ -797,6 +789,129 @@ async fn run_fixture(pool: &PgPool, fixture: &NightFixture) -> RunReport {
             game,
         ),
     }
+}
+
+async fn run_fixture_phase(
+    pool: &PgPool,
+    game: Uuid,
+    host: &Principal,
+    phase: &FixturePhase,
+) -> Result<(), RunReport> {
+    if let Err(err) = handle(
+        pool,
+        host,
+        Command::StartGame {
+            game,
+            phase: phase.phase.clone(),
+        },
+    )
+    .await
+    {
+        return Err(failed(
+            FailureClass::Command,
+            format!("start {} failed: {err}", phase.phase),
+            game,
+        ));
+    }
+
+    for action in &phase.actions {
+        if let Err(err) = handle(
+            pool,
+            &Principal::user(format!(
+                "fixture_user_{}",
+                slot_number(&action.actor_slot).unwrap_or(0)
+            )),
+            Command::SubmitAction {
+                game,
+                action_id: action.action_id.clone(),
+                actor_slot: action.actor_slot.clone(),
+                template_id: action.template_id.clone(),
+                targets: action.targets.clone(),
+                grant_id: None,
+            },
+        )
+        .await
+        {
+            return Err(failed(
+                FailureClass::Command,
+                format!(
+                    "submit {} in {} failed: {err}",
+                    action.action_id, phase.phase
+                ),
+                game,
+            ));
+        }
+    }
+
+    for vote in &phase.votes {
+        if let Err(err) = handle(
+            pool,
+            &Principal::user(format!(
+                "fixture_user_{}",
+                slot_number(&vote.actor_slot).unwrap_or(0)
+            )),
+            Command::SubmitVote {
+                game,
+                actor_slot: vote.actor_slot.clone(),
+                target: VoteTarget::Slot(vote.target_slot.clone()),
+            },
+        )
+        .await
+        {
+            return Err(failed(
+                FailureClass::Command,
+                format!(
+                    "submit vote {} -> {} in {} failed: {err}",
+                    vote.actor_slot, vote.target_slot, phase.phase
+                ),
+                game,
+            ));
+        }
+    }
+
+    if let Err(err) = handle(
+        pool,
+        host,
+        Command::ResolvePhase {
+            game,
+            seed: phase.seed,
+        },
+    )
+    .await
+    {
+        return Err(failed(
+            FailureClass::Resolve,
+            format!("resolve {} failed: {err}", phase.phase),
+            game,
+        ));
+    }
+
+    if let Some(decision) = &phase.host_prompt_decision {
+        if let Err(err) = handle(
+            pool,
+            host,
+            Command::ResolveHostPrompt {
+                game,
+                prompt_id: decision.prompt_id.clone(),
+                decision: HostPromptDecision::SelectSlot {
+                    slot: decision.selected_slot.clone(),
+                },
+            },
+        )
+        .await
+        {
+            return Err(failed(
+                FailureClass::Resolve,
+                format!(
+                    "resolve host prompt {} selecting {} in {} failed: {err}",
+                    decision.prompt_id, decision.selected_slot, phase.phase
+                ),
+                game,
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_semantic_expectations(
@@ -1005,6 +1120,7 @@ mod tests {
                     targets: vec!["slot_1".to_string()],
                 },
             ],
+            setup_phases: Vec::new(),
             host_prompt_decision: None,
             expectations: FixtureExpectations::default(),
         };
@@ -1021,6 +1137,45 @@ mod tests {
             })
             .collect();
         assert!(pruned.is_empty());
+    }
+
+    #[test]
+    fn setup_phase_fixture_prunes_dependent_actions() {
+        let mut fixture: NightFixture = serde_json::from_str(
+            r#"{
+              "seed": 2,
+              "phase": "N02",
+              "roster": [
+                {"slot": "slot_1", "role": "hunter"},
+                {"slot": "slot_2", "role": "mafia_goon"},
+                {"slot": "slot_3", "role": "mafia_goon"}
+              ],
+              "setup_phases": [{
+                "phase": "N01",
+                "seed": 1,
+                "actions": [{
+                  "actor_slot": "slot_1",
+                  "template_id": "hunter_retaliate",
+                  "action_id": "hunt_n01",
+                  "targets": ["slot_2"]
+                }]
+              }],
+              "actions": [{
+                "actor_slot": "slot_3",
+                "template_id": "factional_kill",
+                "action_id": "kill_hunter_n02",
+                "targets": ["slot_1"]
+              }]
+            }"#,
+        )
+        .expect("setup phase fixture parses");
+        assert_eq!(fixture.setup_phases.len(), 1);
+        assert_eq!(fixture_action_len(&fixture), 2);
+
+        prune_slot_references(&mut fixture, "slot_2");
+        assert!(fixture.setup_phases[0].actions.is_empty());
+        assert_eq!(fixture.actions.len(), 1);
+        assert_eq!(fixture_action_len(&fixture), 1);
     }
 
     #[test]
@@ -1100,6 +1255,7 @@ mod tests {
             roster: Vec::new(),
             votes: Vec::new(),
             actions: Vec::new(),
+            setup_phases: Vec::new(),
             host_prompt_decision: None,
             expectations: FixtureExpectations {
                 inner_events: vec![ExpectedInnerEvent {

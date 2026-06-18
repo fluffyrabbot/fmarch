@@ -12981,6 +12981,62 @@ async fn generated_chinese_structured_night_fixtures_replay_semantic_expectation
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn chinese_folded_state_cascade_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    for (stem, fixture_json) in [
+        (
+            "chinese-folded-wolf-beauty-drag-semantic-expectations",
+            chinese_folded_wolf_beauty_drag_fixture_json(),
+        ),
+        (
+            "chinese-folded-cupid-lover-suicide-semantic-expectations",
+            chinese_folded_cupid_lover_suicide_fixture_json(),
+        ),
+        (
+            "chinese-folded-hunter-retaliation-semantic-expectations",
+            chinese_folded_hunter_retaliation_fixture_json(),
+        ),
+        (
+            "chinese-folded-hunter-poison-suppression-semantic-expectations",
+            chinese_folded_hunter_poison_suppression_fixture_json(),
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(&fixture_json).expect("Chinese folded-state fixture JSON parses");
+        assert_eq!(
+            fixture["setup_phases"].as_array().map_or(0, Vec::len),
+            1,
+            "{stem} should seed one folded setup phase"
+        );
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= 3,
+            "{stem} should preserve multiple folded-state semantic expectations"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(stem);
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "{stem} should replay");
+        assert_eq!(report["original"]["resolution_audited"], 2);
+        assert_eq!(report["original"]["trace_count"], 2);
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} should check every folded-state expectation"
+        );
+        assert_eq!(report["reduction"]["replay_success"], true);
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"], true,
+            "{stem} should promote the reduced success fixture"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
     pool: PgPool,
 ) {
@@ -17282,6 +17338,296 @@ fn generated_epicmafia_pk_case_fixture_json(
     });
     fixture["expectations"] = generated_epicmafia_pk_expectations_json(case);
     serde_json::to_string_pretty(&fixture).expect("generated Epicmafia PK fixture serializes")
+}
+
+fn chinese_folded_wolf_beauty_drag_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 930202,
+        "pack": "chinese_structured",
+        "phase": "N02",
+        "roster": [
+            {"slot": "slot_1", "role": "wolf_beauty"},
+            {"slot": "slot_2", "role": "villager"},
+            {"slot": "slot_3", "role": "witch"},
+            {"slot": "slot_4", "role": "wolf"},
+            {"slot": "slot_5", "role": "villager"}
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 930201,
+            "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "beauty_mark",
+                "action_id": "beauty_001",
+                "targets": ["slot_2"]
+            }]
+        }],
+        "actions": [{
+            "actor_slot": "slot_3",
+            "template_id": "poison_potion",
+            "action_id": "poison_001",
+            "targets": ["slot_1"]
+        }],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "ActionUseCounted",
+                    "payload": {
+                        "actor": "slot_3",
+                        "template_id": "poison_potion",
+                        "consumed_action": "poison_001",
+                        "counter_id": "x_shot:poison_potion",
+                        "phase_id": "N02"
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "poison_potion",
+                        "attackers": ["slot_3"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "WolfBeautyDragged",
+                    "payload": {
+                        "beauty_id": "slot_1",
+                        "dragged_ids": ["slot_2"],
+                        "cause": "trigger:wolf_beauty_drag",
+                        "phase_id": "N02"
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "trigger:wolf_beauty_drag",
+                        "attackers": ["slot_1"],
+                        "unstoppable": true
+                    }
+                }
+            ],
+            "trace_decisions": [{
+                "stage": "death:cascade",
+                "source": "action:beauty_001",
+                "outcome": "wolf_beauty_dragged",
+                "detail": {
+                    "beauty_id": "slot_1",
+                    "dragged_id": "slot_2",
+                    "mark_source_action": "beauty_001",
+                    "trigger_cause": "poison_potion",
+                    "cause": "trigger:wolf_beauty_drag"
+                }
+            }]
+        }
+    }))
+    .expect("Chinese folded Wolf Beauty fixture serializes")
+}
+
+fn chinese_folded_cupid_lover_suicide_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 930502,
+        "pack": "chinese_structured",
+        "phase": "N02",
+        "roster": [
+            {"slot": "slot_1", "role": "cupid"},
+            {"slot": "slot_2", "role": "villager"},
+            {"slot": "slot_3", "role": "villager"},
+            {"slot": "slot_4", "role": "wolf"},
+            {"slot": "slot_5", "role": "villager"}
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 930501,
+            "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "link_lovers",
+                "action_id": "link_lovers_n01",
+                "targets": ["slot_2", "slot_3"]
+            }]
+        }],
+        "actions": [{
+            "actor_slot": "slot_4",
+            "template_id": "wolf_night_kill",
+            "action_id": "kill_lover_n02",
+            "targets": ["slot_2"]
+        }],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "wolf_night_kill",
+                        "attackers": ["slot_4"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_3",
+                        "cause": "lover_suicide",
+                        "attackers": ["slot_2"],
+                        "unstoppable": true
+                    }
+                }
+            ],
+            "trace_decisions": [{
+                "stage": "death:cascade",
+                "source": "link:link_lovers_n01",
+                "outcome": "lover_suicide",
+                "detail": {
+                    "link_id": "link_lovers_n01",
+                    "link_source": "slot_1",
+                    "source_dead": "slot_2",
+                    "target": "slot_3",
+                    "cause": "lover_suicide"
+                }
+            }]
+        }
+    }))
+    .expect("Chinese folded Cupid fixture serializes")
+}
+
+fn chinese_folded_hunter_retaliation_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 930207,
+        "pack": "chinese_structured",
+        "phase": "N02",
+        "roster": [
+            {"slot": "slot_1", "role": "hunter"},
+            {"slot": "slot_2", "role": "wolf"},
+            {"slot": "slot_3", "role": "wolf"},
+            {"slot": "slot_4", "role": "villager"},
+            {"slot": "slot_5", "role": "villager"}
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 930206,
+            "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "hunter_retaliate",
+                "action_id": "hunt_001",
+                "targets": ["slot_2"]
+            }]
+        }],
+        "actions": [{
+            "actor_slot": "slot_3",
+            "template_id": "wolf_night_kill",
+            "action_id": "wolfkill_001",
+            "targets": ["slot_1"]
+        }],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "wolf_night_kill",
+                        "attackers": ["slot_3"],
+                        "unstoppable": false
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_2",
+                        "cause": "hunter_retaliate",
+                        "attackers": ["slot_1"],
+                        "unstoppable": false
+                    }
+                }
+            ],
+            "trace_decisions": [{
+                "stage": "death:cascade",
+                "source": "retaliation:hunt_001",
+                "outcome": "chosen_retaliation",
+                "detail": {
+                    "retaliation_id": "hunt_001",
+                    "actor": "slot_1",
+                    "target": "slot_2",
+                    "source_action": "hunter_retaliate",
+                    "source_death_cause": "wolf_night_kill",
+                    "cause": "hunter_retaliate",
+                    "unstoppable": false,
+                    "timing": "ImmediateBeforePhaseAnnouncement"
+                }
+            }]
+        }
+    }))
+    .expect("Chinese folded Hunter retaliation fixture serializes")
+}
+
+fn chinese_folded_hunter_poison_suppression_fixture_json() -> String {
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": 930208,
+        "pack": "chinese_structured",
+        "phase": "N02",
+        "roster": [
+            {"slot": "slot_1", "role": "hunter"},
+            {"slot": "slot_2", "role": "wolf"},
+            {"slot": "slot_3", "role": "witch"},
+            {"slot": "slot_4", "role": "wolf"},
+            {"slot": "slot_5", "role": "villager"},
+            {"slot": "slot_6", "role": "villager"}
+        ],
+        "setup_phases": [{
+            "phase": "N01",
+            "seed": 930206,
+            "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "hunter_retaliate",
+                "action_id": "hunt_001",
+                "targets": ["slot_2"]
+            }]
+        }],
+        "actions": [{
+            "actor_slot": "slot_3",
+            "template_id": "poison_potion",
+            "action_id": "poison_001",
+            "targets": ["slot_1"]
+        }],
+        "expectations": {
+            "inner_events": [
+                {
+                    "kind": "ActionUseCounted",
+                    "payload": {
+                        "actor": "slot_3",
+                        "template_id": "poison_potion",
+                        "consumed_action": "poison_001",
+                        "counter_id": "x_shot:poison_potion",
+                        "phase_id": "N02"
+                    }
+                },
+                {
+                    "kind": "PlayerKilled",
+                    "payload": {
+                        "slot_id": "slot_1",
+                        "cause": "poison_potion",
+                        "attackers": ["slot_3"],
+                        "unstoppable": false
+                    }
+                }
+            ],
+            "trace_decisions": [{
+                "stage": "death:cascade",
+                "source": "retaliation:hunt_001",
+                "outcome": "chosen_retaliation_suppressed",
+                "detail": {
+                    "policy": "death_retaliation",
+                    "reason": "suppressed_death_cause",
+                    "retaliation_id": "hunt_001",
+                    "actor": "slot_1",
+                    "target": "slot_2",
+                    "source_action": "hunter_retaliate",
+                    "source_death_cause": "poison_potion"
+                }
+            }]
+        }
+    }))
+    .expect("Chinese folded Hunter suppression fixture serializes")
 }
 
 fn generated_default_open_day_case_summary(

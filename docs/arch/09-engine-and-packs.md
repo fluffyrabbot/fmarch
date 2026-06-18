@@ -1381,8 +1381,13 @@ the generated graph produces them, Cupid lover links plus private lover notices,
 `RetaliationArmed`, and Wolf Beauty persistent mark rows. This was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_night_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across all six fixed seeds and checked every generated
-Chinese N01 semantic expectation through `minimize_night_fixture`. That one-phase minimizer proof
-does not cover Wolf Beauty drag because night drag reads a prior folded mark from snapshot state. A second Chinese
+Chinese N01 semantic expectation through `minimize_night_fixture`. `minimize_night_fixture` now also
+accepts real command-submitted `setup_phases`, so folded-state Chinese cascade fixtures can seed an
+N01 setup phase before minimizing the target N02. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands chinese_folded_state_cascade_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`,
+which passed one filtered pipeline test covering Wolf Beauty drag after prior mark, Cupid
+lover-suicide after prior link, Hunter retaliation after prior target choice, and Hunter poison
+suppression after prior target choice. A second Chinese
 Structured generated lane covers six D01 cases from fixed seeds with legal command
 submissions for sheriff election, Knight duel, White Wolf self-destruct, and ordinary votes, then
 requires replay audit, trace inspection, and projection rebuild. This manifest-listed Chinese
