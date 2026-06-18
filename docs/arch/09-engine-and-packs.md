@@ -1352,8 +1352,13 @@ Bomb trigger extraction, Cult/Loyal event extraction, audit, trace-count, trace 
 anchored generated-row, anchored trace-decision, and projection-rebuild failures through the same
 saved shrink report path. The `default_open` N01/D01 generated replay lanes now use that same artifact-backed
 minimizer path for setup, action/vote submission, resolve, result validation, event extraction,
-audit, trace-count, exact anchored trace decisions, and projection-rebuild failures. A
-non-mafiascum generated
+audit, trace-count, exact anchored trace decisions, and projection-rebuild failures. Their
+minimizer fixtures now also preserve lane-specific semantic expectations: N01 requires the
+Guardian save, Seer scum result, and anchored save/investigation trace rows, while D01 requires the
+lynch outcome, day-vote kill, town win, and anchored day-vote trace row. This was rerun locally with
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`,
+which passed one filtered pipeline test and checked four semantic expectations for each generated
+default_open fixture through `minimize_night_fixture`. A non-mafiascum generated
 replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This

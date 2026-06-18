@@ -2458,7 +2458,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    shrink report path. The `default_open` N01/D01 generated replay lanes now use the same saved
    artifact/minimizer report path for setup, action/vote submission, resolve, result validation,
    event extraction, audit, trace-count, exact anchored trace decisions, and projection-rebuild
-   failures. This is a reusable artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
+   failures. Their minimizer fixtures now also preserve lane-specific semantic expectations: N01
+   requires the Guardian save, Seer scum result, and anchored save/investigation trace rows, while
+   D01 requires the lynch outcome, day-vote kill, town win, and anchored day-vote trace row. This
+   was rerun locally with
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_fixtures_replay_semantic_expectations_through_minimizer --test pipeline -- --nocapture`
+   and passed one filtered pipeline test, checking four semantic expectations for each generated
+   default_open fixture through `minimize_night_fixture`. This is a reusable artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2775,7 +2781,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by adding semantic minimizer
-expectations to the generated culture-pack fixtures that are now shrink-routable, starting with
-`default_open` N01/D01. Preserve each lane's lane-specific assertions inside the fixture-driven
-minimizer path before adding the next generated-action semantic.
+Continue Phase 4 persistent and generated-action systems by extending semantic minimizer
+expectations into the richer shrink-routable Epicmafia generated fixtures. Start with the N01
+Bomb/Cult fixture so the minimizer preserves Bomb trigger extraction, Cult/Loyal conversion rows,
+and anchored trace notes/decisions before moving to the D01 PK prompt fixture.

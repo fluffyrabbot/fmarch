@@ -12910,6 +12910,57 @@ async fn generated_epicmafia_pk_fixture_replays_prompt_through_minimizer(pool: P
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_default_open_fixtures_replay_semantic_expectations_through_minimizer(
+    pool: PgPool,
+) {
+    let night_case = generated_default_open_night_case(97_777);
+    let night_fixture_json =
+        generated_night_case_fixture_json(&night_case, "default_open", night_case.seed + 49_000);
+    let night_fixture: serde_json::Value = serde_json::from_str(&night_fixture_json)
+        .expect("generated default_open N01 fixture JSON parses");
+    assert_eq!(
+        generated_expectation_count(&night_fixture["expectations"]),
+        4,
+        "default_open N01 fixture should preserve save, investigation, and trace expectations"
+    );
+
+    let night_artifacts =
+        GeneratedShrinkArtifacts::new("generated-default-open-n01-semantic-expectations");
+    night_artifacts.remove_existing();
+    night_artifacts.write_fixture(&night_fixture_json);
+    let night_report = night_artifacts.run_minimizer(&pool).await;
+    assert_eq!(night_report["original"]["ok"], true);
+    assert_eq!(
+        night_report["original"]["semantic_expectations_checked"],
+        serde_json::json!(4)
+    );
+    assert_eq!(night_report["reduction"]["replay_success"], true);
+
+    let day_case = generated_default_open_day_case(97_777);
+    let day_fixture_json =
+        generated_default_open_day_case_fixture_json(&day_case, day_case.seed + 50_000);
+    let day_fixture: serde_json::Value = serde_json::from_str(&day_fixture_json)
+        .expect("generated default_open D01 fixture JSON parses");
+    assert_eq!(
+        generated_expectation_count(&day_fixture["expectations"]),
+        4,
+        "default_open D01 fixture should preserve vote, kill, win, and trace expectations"
+    );
+
+    let day_artifacts =
+        GeneratedShrinkArtifacts::new("generated-default-open-d01-semantic-expectations");
+    day_artifacts.remove_existing();
+    day_artifacts.write_fixture(&day_fixture_json);
+    let day_report = day_artifacts.run_minimizer(&pool).await;
+    assert_eq!(day_report["original"]["ok"], true);
+    assert_eq!(
+        day_report["original"]["semantic_expectations_checked"],
+        serde_json::json!(4)
+    );
+    assert_eq!(day_report["reduction"]["replay_success"], true);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_deterministically(
     pool: PgPool,
 ) {
@@ -17176,7 +17227,7 @@ fn generated_default_open_day_case_fixture_json(
     case: &GeneratedDefaultOpenDayCase,
     resolver_seed: u64,
 ) -> String {
-    serde_json::to_string_pretty(&serde_json::json!({
+    let mut fixture = serde_json::json!({
         "seed": resolver_seed,
         "pack": "default_open",
         "phase": "D01",
@@ -17194,8 +17245,9 @@ fn generated_default_open_day_case_fixture_json(
             })
         }).collect::<Vec<_>>(),
         "lynched_slot": case.lynched_slot,
-    }))
-    .expect("generated default_open D01 fixture serializes")
+    });
+    fixture["expectations"] = generated_default_open_day_expectations_json(case);
+    serde_json::to_string_pretty(&fixture).expect("generated default_open D01 fixture serializes")
 }
 
 fn generated_night_case_fixture_json(
@@ -17407,7 +17459,17 @@ fn generated_case_expectations_json(
     pack: &str,
     phase: &str,
 ) -> Option<serde_json::Value> {
-    if pack != "mafiascum" || phase != "N01" || has_generated_target_mutator(case) {
+    match (pack, phase) {
+        ("mafiascum", "N01") => generated_mafiascum_night_expectations_json(case),
+        ("default_open", "N01") => generated_default_open_night_expectations_json(case),
+        _ => None,
+    }
+}
+
+fn generated_mafiascum_night_expectations_json(
+    case: &GeneratedNightCase,
+) -> Option<serde_json::Value> {
+    if has_generated_target_mutator(case) {
         return None;
     }
 
@@ -17543,6 +17605,115 @@ fn generated_case_expectations_json(
             "generated_actions": generated_actions,
         }))
     }
+}
+
+fn generated_default_open_night_expectations_json(
+    case: &GeneratedNightCase,
+) -> Option<serde_json::Value> {
+    let seer_check = generated_action_by_template(case, "seer_check")?;
+    let guardian_protect = generated_action_by_template(case, "guardian_protect")?;
+    let agent_kill = generated_action_by_template(case, "agent_kill")?;
+    let saved_target = guardian_protect.targets.first()?;
+    if agent_kill.targets.first() != Some(saved_target) {
+        return None;
+    }
+    let investigation_target = seer_check.targets.first()?;
+
+    Some(serde_json::json!({
+        "inner_events": [
+            {
+                "kind": "PlayerSaved",
+                "payload": {
+                    "slot_id": saved_target,
+                    "reasons": ["protected"],
+                    "sources": [guardian_protect.actor_slot],
+                }
+            },
+            {
+                "kind": "InvestigationResult",
+                "payload": {
+                    "mode": "Parity",
+                    "investigator": seer_check.actor_slot,
+                    "target": investigation_target,
+                    "result": "scum",
+                }
+            }
+        ],
+        "trace_decisions": [
+            {
+                "stage": "inner_event",
+                "source": "event_index:0",
+                "outcome": "player_saved",
+                "detail": serde_json::Value::Null,
+            },
+            {
+                "stage": "inner_event",
+                "source": "event_index:1",
+                "outcome": "investigation_result",
+                "detail": serde_json::Value::Null,
+            }
+        ]
+    }))
+}
+
+fn generated_default_open_day_expectations_json(
+    case: &GeneratedDefaultOpenDayCase,
+) -> serde_json::Value {
+    serde_json::json!({
+        "inner_events": [
+            {
+                "kind": "DayVoteOutcome",
+                "payload": {
+                    "status": "Lynch",
+                    "winner": case.lynched_slot,
+                }
+            },
+            {
+                "kind": "PlayerKilled",
+                "payload": {
+                    "slot_id": case.lynched_slot,
+                    "cause": "day_vote",
+                    "attackers": [],
+                    "unstoppable": true,
+                }
+            },
+            {
+                "kind": "WinReached",
+                "payload": {
+                    "winner": "town",
+                }
+            }
+        ],
+        "trace_decisions": [
+            {
+                "stage": "inner_event",
+                "source": "event_index:3",
+                "outcome": "day_vote_outcome",
+                "detail": serde_json::Value::Null,
+            }
+        ]
+    })
+}
+
+fn generated_action_by_template<'a>(
+    case: &'a GeneratedNightCase,
+    template_id: &str,
+) -> Option<&'a GeneratedNightAction> {
+    case.actions
+        .iter()
+        .find(|action| action.template_id == template_id)
+}
+
+fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
+    [
+        "inner_events",
+        "trace_decisions",
+        "trace_notes",
+        "generated_actions",
+    ]
+    .into_iter()
+    .map(|key| expectations[key].as_array().map_or(0, Vec::len))
+    .sum()
 }
 
 fn generated_role_for<'a>(case: &'a GeneratedNightCase, slot: &str) -> Option<&'a str> {
