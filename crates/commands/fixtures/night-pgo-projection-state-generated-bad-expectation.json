@@ -1,0 +1,101 @@
+{
+  "seed": 138191,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "Trigger",
+        "payload": {
+          "payload": {
+            "on": "Visit",
+            "produced_actor": "slot_2",
+            "produced_target": "slot_1",
+            "source_actor": "slot_1",
+            "source_cause": "roleblocker_block",
+            "source_target": "slot_2"
+          },
+          "trigger_id": "pgo_shoots_visitor"
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_2"
+          ],
+          "cause": "pgo_shoots_visitor",
+          "slot_id": "slot_1",
+          "unstoppable": false
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "inner_event",
+        "source": "event_index:0",
+        "outcome": "trigger"
+      }
+    ],
+    "trace_notes": [
+      "trigger pgo_shoots_visitor emitted at event_index 0"
+    ],
+    "generated_actions": [
+      {
+        "action_id": "pgo_shoots_wrong_visitor",
+        "source": "Trigger",
+        "actor": "slot_2",
+        "targets": [
+          "slot_1"
+        ],
+        "detail": {
+          "on": "Visit",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_1",
+          "source_actor": "slot_1",
+          "source_cause": "roleblocker_block",
+          "source_target": "slot_2"
+        }
+      }
+    ],
+    "generated_action_counts": [
+      {
+        "action_id": "pgo_shoots_visitor",
+        "source": "Trigger",
+        "count": 1
+      }
+    ],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_1"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_5"
+        }
+      }
+    ]
+  }
+}

@@ -1474,7 +1474,18 @@ death entry. The matching checked-in negative artifact,
 `crates/commands/fixtures/night-ignite-generated-bad-expectation.json`, is covered by
 `checked_in_ignite_generated_fixtures_replay_semantic_expectations`, which proves the success
 fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
-failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+failure class without success promotion.
+`crates/commands/fixtures/night-pgo-projection-state-generated-minimized.json` now promotes the
+PgoProjectionState row into a checked-in Mafiascum N01 trigger replay with three slots, one action,
+one audited resolution envelope, and one anchored trace. It checks nine semantic expectations: the
+PGO `Trigger` inner event, the generated PGO `PlayerKilled` inner event, one trigger trace decision,
+one trigger trace note, one generated action, one generated-action count, and three rebuilt
+`slot_state` rows proving the visitor dies while the PGO and untouched slot survive. The matching
+checked-in negative artifact,
+`crates/commands/fixtures/night-pgo-projection-state-generated-bad-expectation.json`, is covered by
+`checked_in_pgo_projection_state_generated_fixtures_replay_semantic_expectations`, which proves the
+success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.
