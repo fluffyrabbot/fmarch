@@ -254,6 +254,7 @@ const pages = [
     checks: [
       "Resolution Trace Inspection",
       "D01",
+      "Trace Graph",
       "Decisions",
       "Redirect Edges",
       "JSON detail",

@@ -4286,7 +4286,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(controls[0].prompt_kind.as_deref(), Some("skip_next_day"));
     assert_eq!(
         controls[0].prompt_reason.as_deref(),
-        Some("beloved_princess_lynched")
+        Some("beloved_princess_death")
     );
     assert_eq!(controls[0].source_phase_id, "D01");
     assert_eq!(controls[0].target_phase_id, "N02");
@@ -4312,7 +4312,7 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     assert!(html.contains("Host Phase-Control Audit"));
     assert!(html.contains("D01:skip_next_day:slot_1"));
     assert!(html.contains("skip_next_day"));
-    assert!(html.contains("beloved_princess_lynched"));
+    assert!(html.contains("beloved_princess_death"));
     assert!(html.contains("D01"));
     assert!(html.contains("N02"));
     assert!(html.contains("D02"));
@@ -4604,6 +4604,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
     assert!(html.contains("Resolution Trace Inspection"));
     assert!(html.contains(&run.run_id));
     assert!(html.contains("player_killed"));
+    assert!(html.contains("Trace Graph"));
     assert!(html.contains("Redirect Edges"));
     assert!(html.contains("mafia_kill_n01:target:0:slot_1"));
     assert!(html.contains("mafia_kill_n01:target:0:slot_2"));
@@ -4622,6 +4623,7 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
         })
         .collect();
     for section in [
+        "graph",
         "decisions",
         "redirect-edges",
         "generated-actions",
@@ -4653,6 +4655,8 @@ async fn vertical_resolution_traces_are_host_audit_only(pool: sqlx::PgPool) {
         .row_index;
     let edge_row_id = format!("trace-edge-row-{run_anchor}-{edge_row}");
     let edge_detail_id = format!("trace-edge-detail-{run_anchor}-{edge_row}");
+    assert!(html.contains(&format!("href=\"#{edge_row_id}\">row</a>")));
+    assert!(html.contains(&format!("href=\"#{edge_detail_id}\">JSON detail</a>")));
     assert!(html.contains(&format!("id=\"{edge_row_id}\"")));
     assert!(html.contains(&format!("href=\"#{edge_row_id}\"")));
     assert!(html.contains(&format!("id=\"{edge_detail_id}\"")));
@@ -5662,6 +5666,7 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
             vec![
                 "Resolution Trace Inspection",
                 "D01",
+                "Trace Graph",
                 "Decisions",
                 "Redirect Edges",
                 "JSON detail",

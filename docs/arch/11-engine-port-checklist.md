@@ -2356,7 +2356,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    audited/matched/drift counts, first drift path, phase status, and expected/actual values. Richer
    visual diff editing is non-blocking UX debt outside this row's replay/diff exit proof]
 2. Host/admin trace inspection.
-   [partly proven: host-prompt phase-control decisions now fold into rebuildable
+   [done: host-prompt phase-control decisions now fold into rebuildable
    `host_phase_control` audit rows and are exposed through host/cohost-only
    `/games/{game}/host-phase-controls` JSON plus `/games/{game}/host-phase-controls/view` HTML with
    prompt id, reason, source phase, target phase, skipped phase, and resolver identity; stored
@@ -2389,7 +2389,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    report fixtures, and trace inspection report fixtures, and writes
    `target/operator-browser-smoke/playwright-dom-proof.json` plus one screenshot per page; the
    browser artifact derives selectors from `docs/ops/proof-runs.json` and checks every rendered
-   `#proof-run-{id}` row anchor. Trace run
+   `#proof-run-{id}` row anchor. The trace HTML now includes a per-run Trace Graph table that links
+   decisions, redirect edges, generated actions, effect changes, visibility rows, and notes back to
+   stable row anchors and JSON detail anchors; both the API vertical and Playwright browser smoke
+   assert the graph navigation renders. Trace run
    summaries now link to anchored Decisions, Redirect Edges, Generated Actions, Effect Changes,
    Visibility, and Notes sections; decision and redirect-edge rows now have stable row anchors plus
    links to anchored JSON detail blocks; the trace vertical proves the section, row, and detail
@@ -2397,9 +2400,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin inspect_trace -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
    was rerun against the same freshly seeded fixture game and returned one anchored `N01` trace
    with four decisions: result-contract validation, protected kill resolution, and the two emitted
-   inner events. A first-class scheduler principal for automated skipped day/night cadence remains
-   future operational work; today `AdvancePhaseByDeadline` stores inert deadline evidence and is
-   still host-gated. Interactive trace graph navigation remains future work]
+   inner events. The `audit_trace_inspection_artifact` binary is covered end-to-end for a
+   run-id-filtered trace-bearing game and an empty-trace game, proving exit code, stdout/file JSON
+   parity, artifact path, game id, trace/decision counts, normalized fields, phase/run anchoring,
+   and the non-zero no-stored-traces boundary. A first-class scheduler principal for automated
+   skipped day/night cadence is future operational work outside this trace-inspection row; today
+   `AdvancePhaseByDeadline` stores inert deadline evidence and is still host-gated]
 3. Projection rebuild and audit commands.
    [partly proven: `cargo run -p projections --bin audit_rebuild -- <game_uuid>` snapshots
    every rebuildable projection table, replays the game stream inside a rollback-only
@@ -3259,7 +3265,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 7 by auditing host/admin trace inspection against its operator-review proof surfaces.
-Separate already-proven `inspect_trace`, `/games/{game}/resolution-traces` JSON/HTML, host
-phase-control audit, and operator index/proof-run links from any remaining interactive trace graph or
-scheduler-principal work, and promote only the trace-inspection claims that current evidence proves.
+Continue Phase 7 by auditing projection rebuild/audit commands against their stored-game replay
+proof surfaces. Separate the already-proven rollback-only `audit_rebuild` library/CLI behavior and
+host/cohost projection-audit JSON/HTML from any remaining saved-artifact binary, browser-smoke, or
+operator proof-run gaps, and promote only the projection rebuild claims that current evidence proves.

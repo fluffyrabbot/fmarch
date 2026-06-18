@@ -10455,6 +10455,109 @@ async fn audit_resolution_diff_artifact_cli_writes_matched_and_drift_reports(poo
     assert_eq!(drift_file["phases"][0]["diffs"][0]["actual"], "slot_2");
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn audit_trace_inspection_artifact_cli_writes_filtered_and_empty_reports(pool: PgPool) {
+    let traced_game = setup_resolved_audit_drift_game(&pool, "trace_artifact", 785).await;
+    let trace_report = inspect_resolution_traces(&pool, traced_game, None)
+        .await
+        .expect("resolved setup has inspectable traces");
+    assert_eq!(trace_report.traces.len(), 1);
+    let run_id = trace_report.traces[0].run_id.clone();
+    let decision_count = trace_report.traces[0].decisions.len();
+    let trace_path = test_operator_proof_artifact_path("trace-inspection", traced_game);
+    let _ = fs::remove_file(&trace_path);
+
+    let traced_output =
+        run_audit_trace_inspection_artifact_cli(&pool, traced_game, Some(&run_id), &trace_path)
+            .await;
+    assert!(
+        traced_output.status.success(),
+        "trace inspection artifact should exit zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&traced_output.stdout),
+        String::from_utf8_lossy(&traced_output.stderr)
+    );
+    assert!(
+        traced_output.stderr.is_empty(),
+        "trace inspection artifact should not write stderr: {}",
+        String::from_utf8_lossy(&traced_output.stderr)
+    );
+    let traced_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&trace_path).expect("trace artifact report exists"))
+            .expect("trace artifact report is JSON");
+    let traced_stdout: serde_json::Value =
+        serde_json::from_slice(&traced_output.stdout).expect("trace artifact stdout is JSON");
+    assert_eq!(traced_stdout, traced_file);
+    assert_eq!(traced_file["ok"], true);
+    assert_eq!(traced_file["artifact_version"], 1);
+    assert_eq!(
+        traced_file["artifact_path"].as_str(),
+        Some(trace_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(traced_file["game_id"], traced_game.to_string());
+    assert_eq!(traced_file["trace_count"], 1);
+    assert_eq!(
+        traced_file["decision_count"],
+        serde_json::json!(decision_count)
+    );
+    assert_eq!(traced_file["traces"][0]["run_id"], run_id);
+    assert_eq!(traced_file["traces"][0]["phase_id"], "D01");
+    assert!(traced_file["traces"][0]["applied_stream_seq"].is_number());
+    assert!(traced_file["traces"][0]["trace_stream_seq"].is_number());
+    assert!(traced_file["normalized_fields"]
+        .as_array()
+        .expect("trace artifact normalized fields")
+        .iter()
+        .any(|field| field == "$.traces[*].decisions[*].applied_stream_seq"));
+
+    let empty_game = Uuid::new_v4();
+    let empty_host = user("trace_empty_host");
+    handle(
+        &pool,
+        &empty_host,
+        Command::CreateGame {
+            game: empty_game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .expect("create empty trace artifact game");
+    let empty_path = test_operator_proof_artifact_path("trace-inspection-empty", empty_game);
+    let _ = fs::remove_file(&empty_path);
+
+    let empty_output =
+        run_audit_trace_inspection_artifact_cli(&pool, empty_game, None, &empty_path).await;
+    assert!(
+        !empty_output.status.success(),
+        "empty trace inspection artifact should exit non-zero\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&empty_output.stdout),
+        String::from_utf8_lossy(&empty_output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&empty_output.stderr)
+            .contains("trace inspection artifact found no stored traces"),
+        "empty trace artifact stderr should name missing traces\nstderr:\n{}",
+        String::from_utf8_lossy(&empty_output.stderr)
+    );
+    let empty_file: serde_json::Value =
+        serde_json::from_slice(&fs::read(&empty_path).expect("empty trace artifact report exists"))
+            .expect("empty trace artifact report is JSON");
+    let empty_stdout: serde_json::Value =
+        serde_json::from_slice(&empty_output.stdout).expect("empty trace artifact stdout is JSON");
+    assert_eq!(empty_stdout, empty_file);
+    assert_eq!(empty_file["ok"], false);
+    assert_eq!(
+        empty_file["artifact_path"].as_str(),
+        Some(empty_path.to_string_lossy().as_ref())
+    );
+    assert_eq!(empty_file["game_id"], empty_game.to_string());
+    assert_eq!(empty_file["trace_count"], 0);
+    assert_eq!(empty_file["decision_count"], 0);
+    assert!(empty_file["traces"]
+        .as_array()
+        .expect("empty trace artifact traces")
+        .is_empty());
+}
+
 async fn setup_resolved_audit_drift_game(pool: &PgPool, user_prefix: &str, seed: u64) -> Uuid {
     let host = format!("{user_prefix}_host");
     let game = Uuid::new_v4();
@@ -10640,6 +10743,27 @@ async fn run_audit_resolution_diff_artifact_cli(
         .env("DATABASE_URL", database_url)
         .output()
         .expect("run audit_resolution_diff_artifact binary")
+}
+
+async fn run_audit_trace_inspection_artifact_cli(
+    pool: &PgPool,
+    game: Uuid,
+    run_id: Option<&str>,
+    output_path: &Path,
+) -> std::process::Output {
+    let database_url = database_url_for_pool(pool).await;
+    let bin = std::env::var("CARGO_BIN_EXE_audit_trace_inspection_artifact")
+        .unwrap_or_else(|_| env!("CARGO_BIN_EXE_audit_trace_inspection_artifact").to_string());
+    let mut command = ProcessCommand::new(bin);
+    command.arg("--output").arg(output_path);
+    if let Some(run_id) = run_id {
+        command.arg("--run-id").arg(run_id);
+    }
+    command
+        .arg(game.to_string())
+        .env("DATABASE_URL", database_url)
+        .output()
+        .expect("run audit_trace_inspection_artifact binary")
 }
 
 fn test_operator_proof_artifact_path(label: &str, game: Uuid) -> PathBuf {

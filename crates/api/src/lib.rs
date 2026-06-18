@@ -3810,6 +3810,7 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
          .trace-nav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;}\
          .trace-nav a{color:#0f5e9c;font-size:13px;font-weight:650;text-decoration:none;background:#fff;border:1px solid #d8dee8;border-radius:6px;padding:6px 8px;}\
          .trace-nav a:hover{text-decoration:underline;}\
+         .trace-graph td:first-child{font-weight:650;color:#334155;}\
          .row-link,.detail-link{color:#0f5e9c;font-weight:650;text-decoration:none;}\
          .row-link:hover,.detail-link:hover{text-decoration:underline;}\
          .detail-link{display:inline-block;margin:0 0 6px;}\
@@ -3882,6 +3883,7 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
 
         html.push_str("<nav class=\"trace-nav\" aria-label=\"Trace sections\">");
         for (label, section) in [
+            ("Trace Graph", "graph"),
             ("Decisions", "decisions"),
             ("Redirect Edges", "redirect-edges"),
             ("Generated Actions", "generated-actions"),
@@ -3896,6 +3898,7 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
             html.push_str("</a>");
         }
         html.push_str("</nav>");
+        render_trace_graph_navigation(&mut html, &run_anchor, run);
 
         html.push_str("<h3 id=\"");
         html_escape_into(&mut html, &trace_section_id(&run_anchor, "decisions"));
@@ -3972,9 +3975,15 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
         } else {
             html.push_str("<table><thead><tr><th>#</th><th>Action</th><th>Source</th><th>Actor</th><th>Targets</th><th>Detail</th></tr></thead><tbody>");
             for row in &run.generated {
-                html.push_str("<tr><td>");
+                let row_id = trace_row_id(&run_anchor, "generated", row.row_index);
+                let detail_id = trace_detail_id(&run_anchor, "generated", row.row_index);
+                html.push_str("<tr id=\"");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\"><td><a class=\"row-link\" href=\"#");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\">");
                 html_escape_into(&mut html, &row.row_index.to_string());
-                html.push_str("</td><td><code>");
+                html.push_str("</a></td><td><code>");
                 html_escape_into(&mut html, &row.action_id);
                 html.push_str("</code></td><td><code>");
                 html_escape_into(&mut html, &row.source);
@@ -3982,8 +3991,10 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
                 html_escape_into(&mut html, &row.actor);
                 html.push_str("</td><td>");
                 html_escape_into(&mut html, &row.targets.join(", "));
-                html.push_str("</td><td>");
-                json_pre(&mut html, &row.detail);
+                html.push_str("</td><td><a class=\"detail-link\" href=\"#");
+                html_escape_into(&mut html, &detail_id);
+                html.push_str("\">JSON detail</a>");
+                json_pre_with_id(&mut html, &detail_id, &row.detail);
                 html.push_str("</td></tr>");
             }
             html.push_str("</tbody></table>");
@@ -3997,16 +4008,24 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
         } else {
             html.push_str("<table><thead><tr><th>#</th><th>Effect</th><th>Target</th><th>Operation</th><th>Detail</th></tr></thead><tbody>");
             for row in &run.effect_changes {
-                html.push_str("<tr><td>");
+                let row_id = trace_row_id(&run_anchor, "effect", row.row_index);
+                let detail_id = trace_detail_id(&run_anchor, "effect", row.row_index);
+                html.push_str("<tr id=\"");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\"><td><a class=\"row-link\" href=\"#");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\">");
                 html_escape_into(&mut html, &row.row_index.to_string());
-                html.push_str("</td><td>");
+                html.push_str("</a></td><td>");
                 html_escape_into(&mut html, &row.effect);
                 html.push_str("</td><td>");
                 html_escape_into(&mut html, &row.target);
                 html.push_str("</td><td>");
                 html_escape_into(&mut html, &row.operation);
-                html.push_str("</td><td>");
-                json_pre(&mut html, &row.detail);
+                html.push_str("</td><td><a class=\"detail-link\" href=\"#");
+                html_escape_into(&mut html, &detail_id);
+                html.push_str("\">JSON detail</a>");
+                json_pre_with_id(&mut html, &detail_id, &row.detail);
                 html.push_str("</td></tr>");
             }
             html.push_str("</tbody></table>");
@@ -4020,16 +4039,24 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
         } else {
             html.push_str("<table><thead><tr><th>#</th><th>Event</th><th>Audience</th><th>Policy</th><th>Detail</th></tr></thead><tbody>");
             for row in &run.visibility {
-                html.push_str("<tr><td>");
+                let row_id = trace_row_id(&run_anchor, "visibility", row.row_index);
+                let detail_id = trace_detail_id(&run_anchor, "visibility", row.row_index);
+                html.push_str("<tr id=\"");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\"><td><a class=\"row-link\" href=\"#");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\">");
                 html_escape_into(&mut html, &row.row_index.to_string());
-                html.push_str("</td><td>");
+                html.push_str("</a></td><td>");
                 html_escape_into(&mut html, &row.event_index.to_string());
                 html.push_str("</td><td>");
                 html_escape_into(&mut html, &row.audience.join(", "));
                 html.push_str("</td><td>");
                 html_escape_into(&mut html, &row.policy);
-                html.push_str("</td><td>");
-                json_pre(&mut html, &row.detail);
+                html.push_str("</td><td><a class=\"detail-link\" href=\"#");
+                html_escape_into(&mut html, &detail_id);
+                html.push_str("\">JSON detail</a>");
+                json_pre_with_id(&mut html, &detail_id, &row.detail);
                 html.push_str("</td></tr>");
             }
             html.push_str("</tbody></table>");
@@ -4043,9 +4070,14 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
         } else {
             html.push_str("<table><thead><tr><th>#</th><th>Note</th></tr></thead><tbody>");
             for row in &run.notes {
-                html.push_str("<tr><td>");
+                let row_id = trace_row_id(&run_anchor, "note", row.row_index);
+                html.push_str("<tr id=\"");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\"><td><a class=\"row-link\" href=\"#");
+                html_escape_into(&mut html, &row_id);
+                html.push_str("\">");
                 html_escape_into(&mut html, &row.row_index.to_string());
-                html.push_str("</td><td>");
+                html.push_str("</a></td><td>");
                 html_escape_into(&mut html, &row.note);
                 html.push_str("</td></tr>");
             }
@@ -4056,6 +4088,114 @@ fn render_resolution_trace_html(report: &commands::ResolutionTraceInspectionRepo
 
     html.push_str("</main></body></html>");
     html
+}
+
+fn render_trace_graph_navigation(
+    html: &mut String,
+    run_anchor: &str,
+    run: &commands::ResolutionTraceInspectionRun,
+) {
+    html.push_str("<h3 id=\"");
+    html_escape_into(html, &trace_section_id(run_anchor, "graph"));
+    html.push_str("\">Trace Graph</h3>");
+    if run.decisions.is_empty()
+        && run.edges.is_empty()
+        && run.generated.is_empty()
+        && run.effect_changes.is_empty()
+        && run.visibility.is_empty()
+        && run.notes.is_empty()
+    {
+        html.push_str("<p class=\"empty\">No graph rows.</p>");
+        return;
+    }
+
+    html.push_str("<table class=\"trace-graph\"><thead><tr><th>Kind</th><th>From</th><th>To</th><th>Row</th><th>Detail</th></tr></thead><tbody>");
+    for row in &run.decisions {
+        let row_id = trace_row_id(run_anchor, "decision", row.row_index);
+        let detail_id = trace_detail_id(run_anchor, "decision", row.row_index);
+        render_trace_graph_row(
+            html,
+            "decision",
+            &optional_usize(row.event_index),
+            &row.outcome,
+            &row_id,
+            Some(&detail_id),
+        );
+    }
+    for row in &run.edges {
+        let row_id = trace_row_id(run_anchor, "edge", row.row_index);
+        let detail_id = trace_detail_id(run_anchor, "edge", row.row_index);
+        render_trace_graph_row(
+            html,
+            &row.kind,
+            &row.from,
+            &row.to,
+            &row_id,
+            Some(&detail_id),
+        );
+    }
+    for row in &run.generated {
+        let row_id = trace_row_id(run_anchor, "generated", row.row_index);
+        let detail_id = trace_detail_id(run_anchor, "generated", row.row_index);
+        render_trace_graph_row(
+            html,
+            "generated",
+            &row.source,
+            &row.action_id,
+            &row_id,
+            Some(&detail_id),
+        );
+    }
+    for row in &run.effect_changes {
+        let row_id = trace_row_id(run_anchor, "effect", row.row_index);
+        let detail_id = trace_detail_id(run_anchor, "effect", row.row_index);
+        let to = format!("{}:{}", row.operation, row.effect);
+        render_trace_graph_row(html, "effect", &row.target, &to, &row_id, Some(&detail_id));
+    }
+    for row in &run.visibility {
+        let row_id = trace_row_id(run_anchor, "visibility", row.row_index);
+        let detail_id = trace_detail_id(run_anchor, "visibility", row.row_index);
+        render_trace_graph_row(
+            html,
+            "visibility",
+            &format!("event:{}", row.event_index),
+            &row.audience.join(", "),
+            &row_id,
+            Some(&detail_id),
+        );
+    }
+    for row in &run.notes {
+        let row_id = trace_row_id(run_anchor, "note", row.row_index);
+        render_trace_graph_row(html, "note", "trace", &row.note, &row_id, None);
+    }
+    html.push_str("</tbody></table>");
+}
+
+fn render_trace_graph_row(
+    html: &mut String,
+    kind: &str,
+    from: &str,
+    to: &str,
+    row_id: &str,
+    detail_id: Option<&str>,
+) {
+    html.push_str("<tr><td>");
+    html_escape_into(html, kind);
+    html.push_str("</td><td><code>");
+    html_escape_into(html, from);
+    html.push_str("</code></td><td><code>");
+    html_escape_into(html, to);
+    html.push_str("</code></td><td><a class=\"row-link\" href=\"#");
+    html_escape_into(html, row_id);
+    html.push_str("\">row</a></td><td>");
+    if let Some(detail_id) = detail_id {
+        html.push_str("<a class=\"detail-link\" href=\"#");
+        html_escape_into(html, detail_id);
+        html.push_str("\">JSON detail</a>");
+    } else {
+        html.push_str("<span class=\"empty\">No JSON detail.</span>");
+    }
+    html.push_str("</td></tr>");
 }
 
 fn metric(html: &mut String, label: &str, value: &str, class: Option<&str>) {
@@ -4120,12 +4260,6 @@ fn json_label<T: Serialize>(value: &T) -> String {
 
 fn pretty_json(value: &serde_json::Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
-}
-
-fn json_pre(html: &mut String, value: &serde_json::Value) {
-    html.push_str("<pre>");
-    html_escape_into(html, &pretty_json(value));
-    html.push_str("</pre>");
 }
 
 fn json_pre_with_id(html: &mut String, id: &str, value: &serde_json::Value) {
