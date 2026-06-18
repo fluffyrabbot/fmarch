@@ -11518,31 +11518,7 @@ async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_repla
 
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(pool: PgPool) {
-    let mut found: BTreeMap<&'static str, (u64, GeneratedNightCase, String, usize)> =
-        BTreeMap::new();
-    for seed in 91_001_u64..=92_600 {
-        let case = generated_night_case(seed);
-        let fixture_json = generated_night_case_fixture_json(&case, "mafiascum", seed + 43_000);
-        let fixture: serde_json::Value =
-            serde_json::from_str(&fixture_json).expect("generated trigger fixture should parse");
-        let expectation_count = generated_expectation_count(&fixture["expectations"]);
-        if expectation_count == 0 {
-            continue;
-        }
-
-        for family in generated_mafiascum_trigger_dependency_families(&fixture) {
-            found
-                .entry(family)
-                .or_insert_with(|| (seed, case.clone(), fixture_json.clone(), expectation_count));
-        }
-
-        if ["babysitter", "hider", "pgo"]
-            .into_iter()
-            .all(|family| found.contains_key(family))
-        {
-            break;
-        }
-    }
+    let found = generated_trigger_dependency_search_fixtures();
 
     for family in ["babysitter", "hider", "pgo"] {
         assert!(
@@ -11552,90 +11528,107 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
     }
 
     for family in ["babysitter", "hider", "pgo"] {
-        let (seed, case, fixture_json, expectation_count) = found
+        let generated = found
             .get(family)
             .unwrap_or_else(|| panic!("generated search found {family}"));
         let fixture: serde_json::Value =
-            serde_json::from_str(fixture_json).expect("generated fixture should parse");
+            serde_json::from_str(&generated.fixture_json).expect("generated fixture should parse");
         assert!(
             generated_mafiascum_trigger_dependency_families(&fixture).contains(family),
-            "seed {seed} should carry {family} expectations"
+            "seed {} should carry {family} expectations",
+            generated.seed
         );
         assert_eq!(
-            *expectation_count,
+            generated.expectation_count,
             generated_expectation_count(&fixture["expectations"]),
-            "seed {seed} {family} expectation count should be stable"
+            "seed {} {family} expectation count should be stable",
+            generated.seed
         );
         assert!(
-            case.roster.len() >= 12,
-            "seed {seed} {family} should come from the generated night case builder"
+            generated.case.roster.len() >= 12,
+            "seed {} {family} should come from the generated night case builder",
+            generated.seed
         );
 
         let artifacts = GeneratedShrinkArtifacts::new(&format!(
-            "generated-mafiascum-{family}-search-seed-{seed}-success-shrink"
+            "generated-mafiascum-{family}-search-seed-{}-success-shrink",
+            generated.seed
         ));
         artifacts.remove_existing();
-        artifacts.write_fixture(fixture_json);
+        artifacts.write_fixture(&generated.fixture_json);
         let report = artifacts.run_minimizer(&pool).await;
 
         assert_eq!(
             report["original"]["ok"], true,
-            "seed {seed} {family} original replay"
+            "seed {} {family} original replay",
+            generated.seed
         );
         assert_eq!(
             report["original"]["resolution_audited"],
             serde_json::json!(1),
-            "seed {seed} {family} original resolution audit"
+            "seed {} {family} original resolution audit",
+            generated.seed
         );
         assert_eq!(
             report["original"]["projection_audit_ok"],
             serde_json::json!(true),
-            "seed {seed} {family} original projection audit"
+            "seed {} {family} original projection audit",
+            generated.seed
         );
         assert_eq!(
             report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "seed {seed} {family} original semantic expectations"
+            serde_json::json!(generated.expectation_count),
+            "seed {} {family} original semantic expectations",
+            generated.seed
         );
         assert_eq!(
             report["minimized"]["ok"], true,
-            "seed {seed} {family} minimized replay"
+            "seed {} {family} minimized replay",
+            generated.seed
         );
         assert_eq!(
             report["minimized"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "seed {seed} {family} minimized semantic expectations"
+            serde_json::json!(generated.expectation_count),
+            "seed {} {family} minimized semantic expectations",
+            generated.seed
         );
         assert_eq!(
             report["reduction"]["replay_success"],
             serde_json::json!(true),
-            "seed {seed} {family} reduction replay"
+            "seed {} {family} reduction replay",
+            generated.seed
         );
         assert_eq!(
             report["reduction"]["success_invariant_preserved"],
             serde_json::json!(true),
-            "seed {seed} {family} success invariant"
+            "seed {} {family} success invariant",
+            generated.seed
         );
         assert_eq!(
             report["write_reduced"]["promoted_success_fixture"],
             serde_json::json!(true),
-            "seed {seed} {family} reduced artifact promotion"
+            "seed {} {family} reduced artifact promotion",
+            generated.seed
         );
         assert!(
             report["reduction_steps"]
                 .as_array()
                 .is_some_and(|steps| !steps.is_empty()),
-            "seed {seed} {family} generated fixture should shrink"
+            "seed {} {family} generated fixture should shrink",
+            generated.seed
         );
 
-        let reduced_fixture_json = fs::read_to_string(&artifacts.reduced_path)
-            .unwrap_or_else(|err| panic!("seed {seed} {family} reduced fixture: {err}"));
+        let reduced_fixture_json =
+            fs::read_to_string(&artifacts.reduced_path).unwrap_or_else(|err| {
+                panic!("seed {} {family} reduced fixture: {err}", generated.seed)
+            });
         let reduced_fixture: serde_json::Value =
             serde_json::from_str(&reduced_fixture_json).expect("generated reduced fixture parses");
         assert_eq!(
             generated_expectation_count(&reduced_fixture["expectations"]),
-            *expectation_count,
-            "seed {seed} {family} reduced expectations"
+            generated.expectation_count,
+            "seed {} {family} reduced expectations",
+            generated.seed
         );
         let original_roster = fixture["roster"].as_array().map_or(0, Vec::len);
         let reduced_roster = reduced_fixture["roster"].as_array().map_or(0, Vec::len);
@@ -11643,28 +11636,146 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
         let reduced_actions = reduced_fixture["actions"].as_array().map_or(0, Vec::len);
         assert!(
             reduced_roster < original_roster || reduced_actions < original_actions,
-            "seed {seed} {family} should remove generated roster or action noise"
+            "seed {} {family} should remove generated roster or action noise",
+            generated.seed
         );
 
         let replay_artifacts = GeneratedShrinkArtifacts::new(&format!(
-            "generated-mafiascum-{family}-search-seed-{seed}-reduced-replay"
+            "generated-mafiascum-{family}-search-seed-{}-reduced-replay",
+            generated.seed
         ));
         replay_artifacts.remove_existing();
         replay_artifacts.write_fixture(&reduced_fixture_json);
         let replay_report = replay_artifacts.run_minimizer(&pool).await;
         assert_eq!(
             replay_report["original"]["ok"], true,
-            "seed {seed} {family} reduced artifact replay"
+            "seed {} {family} reduced artifact replay",
+            generated.seed
         );
         assert_eq!(
             replay_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(expectation_count),
-            "seed {seed} {family} reduced artifact expectations"
+            serde_json::json!(generated.expectation_count),
+            "seed {} {family} reduced artifact expectations",
+            generated.seed
         );
         assert_eq!(
             replay_report["original"]["projection_audit_ok"],
             serde_json::json!(true),
-            "seed {seed} {family} reduced artifact projection audit"
+            "seed {} {family} reduced artifact projection audit",
+            generated.seed
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts(pool: PgPool) {
+    let found = generated_trigger_dependency_search_fixtures();
+
+    for family in ["babysitter", "hider", "pgo"] {
+        let generated = found
+            .get(family)
+            .unwrap_or_else(|| panic!("generated search found {family}"));
+        let bad_fixture_json = generated_trigger_dependency_bad_expectation_fixture_json(
+            family,
+            &generated.fixture_json,
+        );
+        let bad_artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "generated-mafiascum-{family}-search-seed-{}-bad-expectation",
+            generated.seed
+        ));
+        bad_artifacts.remove_existing();
+        bad_artifacts.write_fixture(&bad_fixture_json);
+        let bad_report = bad_artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(
+            bad_report["original"]["ok"], false,
+            "seed {} {family} bad original should fail",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["original"]["failure_class"], "semantic_expectation",
+            "seed {} {family} bad original failure class",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["minimized"]["ok"], false,
+            "seed {} {family} bad minimized should fail",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["minimized"]["failure_class"], "semantic_expectation",
+            "seed {} {family} bad minimized failure class",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["reduction"]["replay_success"],
+            serde_json::json!(false),
+            "seed {} {family} bad reduction should remain failing",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["reduction"]["failure_class_preserved"],
+            serde_json::json!(true),
+            "seed {} {family} bad reduction should preserve semantic failure",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["wrote"],
+            serde_json::json!(true),
+            "seed {} {family} bad reduced artifact should be written",
+            generated.seed
+        );
+        assert_eq!(
+            bad_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(false),
+            "seed {} {family} bad reduced artifact should not be promoted",
+            generated.seed
+        );
+        assert!(
+            bad_artifacts.fixture_path.exists(),
+            "seed {} {family} bad fixture artifact should be saved",
+            generated.seed
+        );
+        assert!(
+            bad_artifacts.reduced_path.exists(),
+            "seed {} {family} bad reduced artifact should be saved",
+            generated.seed
+        );
+        assert!(
+            bad_artifacts.report_path.exists(),
+            "seed {} {family} bad report artifact should be saved",
+            generated.seed
+        );
+
+        let success_artifacts = GeneratedShrinkArtifacts::new(&format!(
+            "generated-mafiascum-{family}-search-seed-{}-success-after-bad-expectation",
+            generated.seed
+        ));
+        success_artifacts.remove_existing();
+        success_artifacts.write_fixture(&generated.fixture_json);
+        let success_report = success_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            success_report["original"]["ok"], true,
+            "seed {} {family} success replay after bad expectation",
+            generated.seed
+        );
+        assert_eq!(
+            success_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(generated.expectation_count),
+            "seed {} {family} success expectation count after bad expectation",
+            generated.seed
+        );
+        assert_eq!(
+            success_report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "seed {} {family} success projection audit after bad expectation",
+            generated.seed
+        );
+        assert_eq!(
+            success_report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "seed {} {family} success reduced artifact should still be promoted",
+            generated.seed
         );
     }
 }
@@ -13053,6 +13164,14 @@ struct GeneratedNightCase {
     seed: u64,
     roster: Vec<(String, String)>,
     actions: Vec<GeneratedNightAction>,
+}
+
+#[derive(Debug, Clone)]
+struct GeneratedTriggerDependencyFixture {
+    seed: u64,
+    case: GeneratedNightCase,
+    fixture_json: String,
+    expectation_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -22036,6 +22155,87 @@ fn generated_expectation_count(expectations: &serde_json::Value) -> usize {
     .into_iter()
     .map(|key| expectations[key].as_array().map_or(0, Vec::len))
     .sum()
+}
+
+fn generated_trigger_dependency_search_fixtures(
+) -> BTreeMap<&'static str, GeneratedTriggerDependencyFixture> {
+    let mut found = BTreeMap::new();
+    for seed in 91_001_u64..=92_600 {
+        let case = generated_night_case(seed);
+        let fixture_json = generated_night_case_fixture_json(&case, "mafiascum", seed + 43_000);
+        let fixture: serde_json::Value =
+            serde_json::from_str(&fixture_json).expect("generated trigger fixture should parse");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        if expectation_count == 0 {
+            continue;
+        }
+
+        for family in generated_mafiascum_trigger_dependency_families(&fixture) {
+            found
+                .entry(family)
+                .or_insert_with(|| GeneratedTriggerDependencyFixture {
+                    seed,
+                    case: case.clone(),
+                    fixture_json: fixture_json.clone(),
+                    expectation_count,
+                });
+        }
+
+        if ["babysitter", "hider", "pgo"]
+            .into_iter()
+            .all(|family| found.contains_key(family))
+        {
+            break;
+        }
+    }
+    found
+}
+
+fn generated_trigger_dependency_bad_expectation_fixture_json(
+    family: &str,
+    fixture_json: &str,
+) -> String {
+    let mut fixture: serde_json::Value =
+        serde_json::from_str(fixture_json).expect("generated trigger fixture parses");
+    match family {
+        "pgo" => {
+            let event = fixture["expectations"]["inner_events"]
+                .as_array_mut()
+                .and_then(|events| {
+                    events.iter_mut().find(|event| {
+                        event["kind"] == "Trigger"
+                            && event["payload"]["trigger_id"] == "pgo_shoots_visitor"
+                    })
+                })
+                .expect("generated PGO fixture carries trigger expectation");
+            event["payload"]["trigger_id"] = serde_json::json!("pgo_shoots_wrong_visitor");
+        }
+        "babysitter" => {
+            let event = fixture["expectations"]["inner_events"]
+                .as_array_mut()
+                .and_then(|events| {
+                    events.iter_mut().find(|event| {
+                        event["kind"] == "PlayerKilled" && event["payload"]["cause"] == "babysit"
+                    })
+                })
+                .expect("generated Babysitter fixture carries dependency death expectation");
+            event["payload"]["cause"] = serde_json::json!("babysit_wrong");
+        }
+        "hider" => {
+            let event = fixture["expectations"]["inner_events"]
+                .as_array_mut()
+                .and_then(|events| {
+                    events.iter_mut().find(|event| {
+                        event["kind"] == "PlayerKilled" && event["payload"]["cause"] == "hide"
+                    })
+                })
+                .expect("generated Hider fixture carries dependency death expectation");
+            event["payload"]["cause"] = serde_json::json!("hide_wrong");
+        }
+        _ => unreachable!("unknown generated trigger/dependency family"),
+    }
+    serde_json::to_string_pretty(&fixture)
+        .expect("generated trigger/dependency bad-expectation fixture serializes")
 }
 
 fn generated_mafiascum_trigger_dependency_families(

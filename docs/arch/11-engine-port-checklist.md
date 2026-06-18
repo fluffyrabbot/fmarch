@@ -2499,6 +2499,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    emitted semantic expectations, writes each generated fixture through `GeneratedShrinkArtifacts`,
    reduces it with `minimize_night_fixture --reduce --write-reduced --write-report`, and replays the
    reduced JSON artifact with the same expectation counts and clean projection rebuilds.
+   `generated_trigger_dependency_bad_expectations_shrink_to_failing_artifacts` now covers the
+   matching generated failure path for those discovered PGO, Babysitter, and Hider cases: each
+   fixture receives one intentionally wrong semantic expectation, the minimizer preserves the
+   `semantic_expectation` failure class, writes a reduced failing artifact with
+   `promoted_success_fixture: false`, and then replays the original generated success fixture so the
+   negative lane cannot hide resolver drift.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
    `promoted_success_fixture: false`. `--write-report <path>` now persists the minimizer JSON
@@ -2940,8 +2946,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
    required needle set. The bounded generated trigger/dependency shrink lanes cover representative
    PGO/Babysitter/Hider successes plus representative persistent Hunter/Lovers/Bomb success and
-   failure cases; broader randomized shrink breadth and PGO/Babysitter/Hider generated failure-case
-   breadth remain future work. The local-Postgres
+   failure cases, and they now cover representative generated PGO/Babysitter/Hider failure cases;
+   broader randomized shrink breadth remains future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
@@ -2953,8 +2959,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by completing the generated failure-case breadth for the earlier
-PGO/Babysitter/Hider trigger/dependency search lane. Reuse the bounded generated search fixtures,
-inject one wrong semantic expectation per discovered family, assert the minimizer preserves the
-`semantic_expectation` failure class and writes a reduced non-promoted artifact, then replay the
-original generated success fixtures so negative shrink evidence cannot mask resolver drift.
+Continue Phase 4 by turning the representative generated shrink lanes into a deterministic
+multi-seed shrink matrix. Start with PGO/Babysitter/Hider/Hunter/Lovers/Bomb: collect more than one
+generated seed per family where possible, run success and bad-expectation shrink checks for each,
+and emit a compact saved report under `target/operator-proof` so breadth is visible without
+claiming exhaustive randomized coverage.
