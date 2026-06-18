@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use domain::pack::PhaseKind;
 use domain::{
     load_pack_from_json, night_ability_order, upcast_pack_json, validate_pack, IrAbility, Pack,
 };
@@ -1323,6 +1324,14 @@ fn guard_witch_killtarget_fixture_is_valid_and_non_legacy() {
     validate_pack(&pack).unwrap();
     assert_eq!(pack.ir_version, 46);
     assert!(pack.guard_policy.enabled);
+}
+
+#[test]
+fn skip_next_day_day_only_fixture_is_valid_and_non_legacy() {
+    let pack = load_pack_named("test_skip_next_day_day_only");
+    validate_pack(&pack).unwrap();
+    assert_eq!(pack.ir_version, 46);
+    assert_eq!(pack.phases.cadence, vec![PhaseKind::Day]);
 }
 
 #[test]

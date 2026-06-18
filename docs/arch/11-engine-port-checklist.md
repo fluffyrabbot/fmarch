@@ -2151,7 +2151,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    with `Reject::VoteNotAllowed` before append, and official later vote tallies give that
    slot zero vote weight.]
 7. PK/revote/no-majority host prompts as events, not UI-only state.
-   [partly done: `HostPromptIssued` is now a closed inner event folded into the rebuildable
+   [done: `HostPromptIssued` is now a closed inner event folded into the rebuildable
    `host_prompt` projection, proven for the Beloved Princess skip-next-day prompt and mafiascum
    no-majority revote prompts with helper-enforced trace detail; epicmafia HostDecides plurality
    ties now emit PK prompts with golden, helper-enforced issue/resolution traces,
@@ -2171,8 +2171,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    proof;
    resolving a Beloved Princess skip-next-day prompt records `HostPromptResolved`, appends durable
    `PhaseAdvanced { phase_id: "N02", skipped_phase_id: "D02" }`, rejects voting in that night
-   window, and rebuild-preserves prompt, phase, and slot state. Automated host scheduling around
-   skipped day/night cadence remains unimplemented]
+   window, and rebuild-preserves prompt, phase, and slot state.]
 
 Exit proof: official `DayVoteOutcome` and day substep events can drive a host console
 without recomputing rules client-side.
@@ -2392,7 +2391,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -p commands --bin inspect_trace -- 08d8a45f-6c3b-4401-8e31-8d7637f36a82`
    was rerun against the same freshly seeded fixture game and returned one anchored `N01` trace
    with four decisions: result-contract validation, protected kill resolution, and the two emitted
-   inner events. Interactive trace graph navigation remains future work]
+   inner events. A first-class scheduler principal for automated skipped day/night cadence remains
+   future operational work; today `AdvancePhaseByDeadline` stores inert deadline evidence and is
+   still host-gated. Interactive trace graph navigation remains future work]
 3. Projection rebuild and audit commands.
    [partly proven: `cargo run -p projections --bin audit_rebuild -- <game_uuid>` snapshots
    every rebuildable projection table, replays the game stream inside a rollback-only
@@ -3252,8 +3253,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 by auditing the PK/revote/no-majority host prompts row against its focused proof
-surfaces. Keep the skipped day/night scheduling sentence as real open work unless current command
-and projection evidence proves automated scheduling now exists; otherwise split completed prompt
-resolution mechanics from that remaining operational scheduler gap without promoting the whole
-Phase 5 claim.
+Continue Phase 6 by auditing the Mafia Universe culture-pack row against its focused proof
+surfaces. Separate already-proven ITA/day-note/prompt/default proof from remaining culture-policy
+breadth, and promote only the pack, linter, parity-matrix, golden, result-schema, and playable
+vertical claims that current evidence proves.
