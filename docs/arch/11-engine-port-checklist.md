@@ -2471,13 +2471,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    `minimized_trigger_dependency_fixtures_replay_semantic_expectations` now proves the checked-in
    Babysitter, Hider, and PGO minimized fixtures through command replay, `audit_resolution`,
    anchored `inspect_trace`, `audit_rebuild`, and their declared semantic expectation counts.
-   `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` proves the success-shrinking path:
-   `--reduce` removes the irrelevant extra slot while preserving all four declared PGO
-   expectations. `--write-reduced <path>` now writes the post-reduction fixture; the non-minimal
-   PGO replay was reduced into `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and then
-   replayed from that written artifact with one audited resolution, one trace, clean projection
-   rebuild, and all four semantic expectations checked by
-   `nonminimal_pgo_trigger_fixture_shrinks_to_checked_semantic_replay`. The report now distinguishes replay
+   `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
+   `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
+   `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
+   `--reduce` removes each irrelevant extra slot while preserving all declared semantic
+   expectations. `--write-reduced <path>` now writes each post-reduction fixture; the non-minimal
+   PGO, Babysitter, and Hider replays are reduced into `target/operator-proof/*.reduced.tmp.json`
+   artifacts and then replayed from those written artifacts with one audited resolution, one trace,
+   clean projection rebuild, and all semantic expectations checked by
+   `nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays`. The report now distinguishes replay
    success, failure-class preservation, and success-invariant preservation.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
@@ -2930,9 +2932,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by turning the trigger/dependency seeded proof lane from fixed-seed replay into
-real shrinkable evidence for one family. Start with the existing PGO/Babysitter/Hider generated
-night cases: make the shrinker persist the minimized failing or representative case with the same
-semantic expectations used by `minimized_trigger_dependency_fixtures_replay_semantic_expectations`,
-rerun the command/projection replay audit from that minimized artifact, and only then update the
-trigger-row wording about the remaining true-shrinking gap.
+Continue Phase 4 by turning the artifact-backed trigger/dependency shrink lane into true
+property-test shrinking. Start with the existing PGO/Babysitter/Hider generated night case builder:
+run a bounded seeded search that automatically emits the minimizer fixture on failure, shrinks it
+with the same semantic expectations, and asserts the reduced artifact still reproduces the
+failure or representative success without relying on a hand-authored nonminimal fixture.

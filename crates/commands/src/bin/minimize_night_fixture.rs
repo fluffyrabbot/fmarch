@@ -1239,6 +1239,7 @@ mod tests {
                 },
             ],
             votes: Vec::new(),
+            ita_session_controls: Vec::new(),
             actions: vec![
                 FixtureAction {
                     actor_slot: "slot_1".to_string(),
@@ -1371,6 +1372,20 @@ mod tests {
         assert_eq!(pgo_nonminimal.roster.len(), 3);
         assert_eq!(pgo_nonminimal.expectations.count(), 4);
 
+        let babysitter_nonminimal: NightFixture = serde_json::from_str(include_str!(
+            "../../fixtures/night-babysitter-dependency-nonminimal.json"
+        ))
+        .expect("nonminimal babysitter fixture parses");
+        assert_eq!(babysitter_nonminimal.roster.len(), 5);
+        assert_eq!(babysitter_nonminimal.expectations.count(), 3);
+
+        let hider_nonminimal: NightFixture = serde_json::from_str(include_str!(
+            "../../fixtures/night-hider-dependency-nonminimal.json"
+        ))
+        .expect("nonminimal hider fixture parses");
+        assert_eq!(hider_nonminimal.roster.len(), 4);
+        assert_eq!(hider_nonminimal.expectations.count(), 3);
+
         let pgo_bad_expectation: NightFixture = serde_json::from_str(include_str!(
             "../../fixtures/night-pgo-trigger-bad-expectation.json"
         ))
@@ -1387,6 +1402,7 @@ mod tests {
             phase: default_phase(),
             roster: Vec::new(),
             votes: Vec::new(),
+            ita_session_controls: Vec::new(),
             actions: Vec::new(),
             setup_phases: Vec::new(),
             host_prompt_decision: None,

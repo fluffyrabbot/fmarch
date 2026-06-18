@@ -11356,90 +11356,164 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn nonminimal_pgo_trigger_fixture_shrinks_to_checked_semantic_replay(pool: PgPool) {
-    let fixture_json = include_str!("../fixtures/night-pgo-trigger-nonminimal.json");
-    let fixture: serde_json::Value =
-        serde_json::from_str(fixture_json).expect("nonminimal PGO fixture should parse");
-    assert_eq!(fixture["roster"].as_array().map_or(0, Vec::len), 3);
-    assert_eq!(fixture["actions"].as_array().map_or(0, Vec::len), 1);
-    assert_eq!(generated_expectation_count(&fixture["expectations"]), 4);
+async fn nonminimal_trigger_dependency_fixtures_shrink_to_checked_semantic_replays(pool: PgPool) {
+    for (
+        stem,
+        fixture_json,
+        original_roster,
+        reduced_roster,
+        action_count,
+        expectation_count,
+        removed_slot,
+    ) in [
+        (
+            "night-babysitter-dependency",
+            include_str!("../fixtures/night-babysitter-dependency-nonminimal.json"),
+            5,
+            4,
+            3,
+            3,
+            "slot_5",
+        ),
+        (
+            "night-hider-dependency",
+            include_str!("../fixtures/night-hider-dependency-nonminimal.json"),
+            4,
+            3,
+            2,
+            3,
+            "slot_4",
+        ),
+        (
+            "night-pgo-trigger",
+            include_str!("../fixtures/night-pgo-trigger-nonminimal.json"),
+            3,
+            2,
+            1,
+            4,
+            "slot_3",
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(fixture_json).expect("nonminimal fixture should parse");
+        assert_eq!(
+            fixture["roster"].as_array().map_or(0, Vec::len),
+            original_roster,
+            "{stem} original roster size"
+        );
+        assert_eq!(
+            fixture["actions"].as_array().map_or(0, Vec::len),
+            action_count,
+            "{stem} action count"
+        );
+        assert_eq!(
+            generated_expectation_count(&fixture["expectations"]),
+            expectation_count,
+            "{stem} semantic expectation count"
+        );
 
-    let artifacts = GeneratedShrinkArtifacts::new("night-pgo-trigger-nonminimal-success-shrink");
-    artifacts.remove_existing();
-    artifacts.write_fixture(fixture_json);
-    let report = artifacts.run_minimizer(&pool).await;
+        let artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-nonminimal-success-shrink"));
+        artifacts.remove_existing();
+        artifacts.write_fixture(fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
 
-    assert_eq!(report["original"]["ok"], true);
-    assert_eq!(
-        report["original"]["resolution_audited"],
-        serde_json::json!(1)
-    );
-    assert_eq!(report["original"]["trace_count"], serde_json::json!(1));
-    assert_eq!(
-        report["original"]["projection_audit_ok"],
-        serde_json::json!(true)
-    );
-    assert_eq!(
-        report["original"]["semantic_expectations_checked"],
-        serde_json::json!(4)
-    );
-    assert_eq!(report["minimized"]["ok"], true);
-    assert_eq!(
-        report["minimized"]["semantic_expectations_checked"],
-        serde_json::json!(4)
-    );
-    assert_eq!(
-        report["reduction"]["replay_success"],
-        serde_json::json!(true)
-    );
-    assert_eq!(
-        report["reduction"]["success_invariant_preserved"],
-        serde_json::json!(true)
-    );
-    assert_eq!(
-        report["write_reduced"]["promoted_success_fixture"],
-        serde_json::json!(true)
-    );
-    assert!(
-        report["reduction_steps"]
-            .as_array()
-            .is_some_and(|steps| !steps.is_empty()),
-        "nonminimal PGO fixture should shrink at least one item"
-    );
+        assert_eq!(report["original"]["ok"], true, "{stem} original replay");
+        assert_eq!(
+            report["original"]["resolution_audited"],
+            serde_json::json!(1),
+            "{stem} original resolution audit"
+        );
+        assert_eq!(
+            report["original"]["trace_count"],
+            serde_json::json!(1),
+            "{stem} original trace count"
+        );
+        assert_eq!(
+            report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} original projection audit"
+        );
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} original semantic expectation count"
+        );
+        assert_eq!(report["minimized"]["ok"], true, "{stem} minimized replay");
+        assert_eq!(
+            report["minimized"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} minimized semantic expectation count"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"],
+            serde_json::json!(true),
+            "{stem} reduction replay"
+        );
+        assert_eq!(
+            report["reduction"]["success_invariant_preserved"],
+            serde_json::json!(true),
+            "{stem} success invariant"
+        );
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "{stem} promoted success fixture"
+        );
+        assert!(
+            report["reduction_steps"]
+                .as_array()
+                .is_some_and(|steps| !steps.is_empty()),
+            "{stem} fixture should shrink at least one item"
+        );
 
-    let reduced_fixture_json =
-        fs::read_to_string(&artifacts.reduced_path).expect("reduced PGO fixture should be written");
-    let reduced_fixture: serde_json::Value =
-        serde_json::from_str(&reduced_fixture_json).expect("reduced PGO fixture should parse");
-    assert_eq!(reduced_fixture["roster"].as_array().map_or(0, Vec::len), 2);
-    assert_eq!(reduced_fixture["actions"].as_array().map_or(0, Vec::len), 1);
-    assert!(
-        !reduced_fixture["roster"]
-            .as_array()
-            .expect("reduced fixture carries roster")
-            .iter()
-            .any(|slot| slot["slot"] == "slot_3"),
-        "the irrelevant extra slot should be removed"
-    );
-    assert_eq!(
-        generated_expectation_count(&reduced_fixture["expectations"]),
-        4
-    );
+        let reduced_fixture_json = fs::read_to_string(&artifacts.reduced_path)
+            .unwrap_or_else(|err| panic!("{stem} reduced fixture should be written: {err}"));
+        let reduced_fixture: serde_json::Value =
+            serde_json::from_str(&reduced_fixture_json).expect("reduced fixture should parse");
+        assert_eq!(
+            reduced_fixture["roster"].as_array().map_or(0, Vec::len),
+            reduced_roster,
+            "{stem} reduced roster size"
+        );
+        assert_eq!(
+            reduced_fixture["actions"].as_array().map_or(0, Vec::len),
+            action_count,
+            "{stem} reduced action count"
+        );
+        assert!(
+            !reduced_fixture["roster"]
+                .as_array()
+                .expect("reduced fixture carries roster")
+                .iter()
+                .any(|slot| slot["slot"] == removed_slot),
+            "{stem} irrelevant extra slot should be removed"
+        );
+        assert_eq!(
+            generated_expectation_count(&reduced_fixture["expectations"]),
+            expectation_count,
+            "{stem} reduced semantic expectation count"
+        );
 
-    let replay_artifacts =
-        GeneratedShrinkArtifacts::new("night-pgo-trigger-reduced-written-replay");
-    replay_artifacts.remove_existing();
-    replay_artifacts.write_fixture(&reduced_fixture_json);
-    let replay_report = replay_artifacts.run_minimizer(&pool).await;
-    assert_eq!(replay_report["original"]["ok"], true);
-    assert_eq!(
-        replay_report["original"]["semantic_expectations_checked"],
-        serde_json::json!(4)
-    );
-    assert_eq!(
-        replay_report["original"]["projection_audit_ok"],
-        serde_json::json!(true)
-    );
+        let replay_artifacts =
+            GeneratedShrinkArtifacts::new(&format!("{stem}-reduced-written-replay"));
+        replay_artifacts.remove_existing();
+        replay_artifacts.write_fixture(&reduced_fixture_json);
+        let replay_report = replay_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            replay_report["original"]["ok"], true,
+            "{stem} reduced replay"
+        );
+        assert_eq!(
+            replay_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} reduced replay semantic expectation count"
+        );
+        assert_eq!(
+            replay_report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} reduced replay projection audit"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

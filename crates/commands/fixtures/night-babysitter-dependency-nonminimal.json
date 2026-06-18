@@ -1,0 +1,82 @@
+{
+  "seed": 7202,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_2",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_3",
+      "role": "babysitter"
+    },
+    {
+      "slot": "slot_4",
+      "role": "vanilla_townie"
+    },
+    {
+      "slot": "slot_5",
+      "role": "vanilla_townie"
+    }
+  ],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "factional_kill",
+      "action_id": "nonminimal_mafia_kills_ward",
+      "targets": ["slot_4"]
+    },
+    {
+      "actor_slot": "slot_2",
+      "template_id": "factional_kill",
+      "action_id": "nonminimal_mafia_kills_babysitter",
+      "targets": ["slot_3"]
+    },
+    {
+      "actor_slot": "slot_3",
+      "template_id": "babysit",
+      "action_id": "nonminimal_babysitter_guards_ward",
+      "targets": ["slot_4"]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerSaved",
+        "payload": {
+          "slot_id": "slot_4",
+          "sources": ["slot_3"]
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "slot_id": "slot_4",
+          "cause": "babysit",
+          "attackers": ["slot_3"],
+          "unstoppable": true
+        }
+      }
+    ],
+    "trace_decisions": [
+      {
+        "stage": "night:dependency_death",
+        "source": "action:nonminimal_babysitter_guards_ward",
+        "outcome": "babysitter_dependency_death",
+        "detail": {
+          "action_id": "nonminimal_babysitter_guards_ward",
+          "template_id": "babysit",
+          "protector": "slot_3",
+          "ward": "slot_4",
+          "cause": "babysit",
+          "attackers": ["slot_3"]
+        }
+      }
+    ]
+  }
+}
