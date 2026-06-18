@@ -2589,15 +2589,17 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 "non-draftable im-human helper role represented as "
                 "lover_policy.source_helper_role metadata, not a pack.roles entry"
             )
-        elif scoped_name == "mafia_universe:lover":
-            mu_golden_names = fmarch["golden_names_by_pack"].get(
-                "mafia_universe",
-                set(),
-            )
+        elif scoped_name in {"mafiascum:lover", "mafia_universe:lover"}:
+            pack_name = scoped_name.split(":", 1)[0]
+            pack_label = {
+                "mafiascum": "Mafiascum",
+                "mafia_universe": "Mafia Universe",
+            }.get(pack_name, pack_name)
+            pack_golden_names = fmarch["golden_names_by_pack"].get(pack_name, set())
             canonical = "lover"
             modeled = (
-                "mafia_universe:lover" in fmarch["pack_roles"]
-                and "mafia_universe:lover_policy" in fmarch["pack_policies"]
+                scoped_name in fmarch["pack_roles"]
+                and f"{pack_name}:lover_policy" in fmarch["pack_policies"]
                 and '"lovers_link"' in fmarch["pack_text"]
                 and '"suicide_cause": "lover_suicide"' in fmarch["pack_text"]
             )
@@ -2607,14 +2609,23 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 and "input.state.linked_slots" in resolver
                 and "lover_suicide" in resolver
             )
-            golden = modeled and "lover_suicide_on_partner_death" in mu_golden_names
-            integrated = (
-                implemented
-                and "host_resolve_phase_carries_mafia_universe_lover_setup_cascade"
-                in command_tests
+            golden = modeled and "lover_suicide_on_partner_death" in pack_golden_names
+            if pack_name == "mafia_universe":
+                integrated = (
+                    implemented
+                    and "host_resolve_phase_carries_mafia_universe_lover_setup_cascade"
+                    in command_tests
+                )
+            else:
+                integrated = (
+                    implemented
+                    and "host_resolve_phase_carries_lover_link_and_suicide"
+                    in command_tests
+                    and "host_resolve_phase_stacks_lover_suicide_with_direct_death"
+                    in command_tests
             )
             notes = (
-                "Passive Lover role from the Mafia Universe catalog; fmarch keeps "
+                f"Passive Lover role from the {pack_label} catalog; fmarch keeps "
                 "the setup pair as folded PlayersLinked state and uses lover_policy "
                 "for the linked-death cascade."
             )

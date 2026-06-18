@@ -32,15 +32,13 @@
         },
         {
           "slot_id": "slot_2",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
+          "role_key": "lover",
           "status": "alive",
           "effects": []
         },
         {
           "slot_id": "slot_3",
-          "role_key": "vanilla_townie",
-          "alignment": "town",
+          "role_key": "lover",
           "status": "alive",
           "effects": []
         },

@@ -394,6 +394,10 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("death_marker"));
     assert!(pack.roles.contains_key("phase_end_doomed_townie"));
     assert!(pack.roles.contains_key("win_witness_townie"));
+    let lover = pack.roles.get("lover").expect("Mafiascum Lover role");
+    assert_eq!(lover.alignment.as_deref(), None);
+    assert!(lover.actions.is_empty());
+    assert!(lover.effects.is_empty());
     assert!(role_action(&pack, "vigilante", "night_kill")
         .source_ids
         .iter()

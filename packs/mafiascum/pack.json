@@ -2715,6 +2715,10 @@
         }
       ]
     },
+    "lover": {
+      "description": "Lover. Passive role bound to another lover by setup state; if either dies by any means, the linked partner dies too.",
+      "actions": []
+    },
     "hunter": {
       "description": "Hunter. Chooses a target; if the Hunter dies in a later resolution, that target is killed by the armed retaliation.",
       "alignment": "town",

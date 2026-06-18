@@ -516,7 +516,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:lawyer` | `lawyer` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:lightning_rod` | `lightning_rod` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:loved` | `loved` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:lover` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:lover` | `lover` | 1 | no | yes | yes | yes | yes | Passive Lover role from the Mafiascum catalog; fmarch keeps the setup pair as folded PlayersLinked state and uses lover_policy for the linked-death cascade. |
 | role_id | `mafiascum:mafia_goon` | `mafia_goon` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:mafia_janitor` | `mafia_janitor` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:mafia_ninja` | `ninja` | 1 | no | yes | yes | yes | yes | source alias |

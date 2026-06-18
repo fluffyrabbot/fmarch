@@ -49845,8 +49845,8 @@ async fn host_resolve_phase_carries_lover_link_and_suicide(pool: PgPool) {
     .unwrap();
     for (slot, role) in [
         ("slot_1", "cupid"),
-        ("slot_2", "vanilla_townie"),
-        ("slot_3", "vanilla_townie"),
+        ("slot_2", "lover"),
+        ("slot_3", "lover"),
         ("slot_4", "mafia_goon"),
         ("slot_5", "vanilla_townie"),
     ] {
@@ -50039,8 +50039,8 @@ async fn host_resolve_phase_stacks_lover_suicide_with_direct_death(pool: PgPool)
     .unwrap();
     for (slot, role) in [
         ("slot_1", "cupid"),
-        ("slot_2", "vanilla_townie"),
-        ("slot_3", "vanilla_townie"),
+        ("slot_2", "lover"),
+        ("slot_3", "lover"),
         ("slot_4", "mafia_goon"),
         ("slot_5", "mafia_goon"),
         ("slot_6", "vanilla_townie"),
