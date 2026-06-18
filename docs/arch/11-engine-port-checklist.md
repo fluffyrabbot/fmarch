@@ -2439,8 +2439,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-proof/generated-chinese-n01-bad-prophet-expectation.fixture.tmp.json`, shrink it,
    and verify the saved report preserves `semantic_expectation` failure class without promoting the
    fixture as a success.
-   This is a reusable artifact-backed minimized replay promotion path, not true property-test
-   shrinking. A first non-mafiascum lane
+   The Mafiascum and Chinese Structured N01 generated replay lanes now route their resolve,
+   result validation, event-count, representative-event, audit, trace-count, and projection-rebuild
+   failures through the shrink helper before panicking; the panic message includes the saved report
+   path, reduced fixture path, preservation booleans, and reduction step count. Setup/submit
+   failures and shared trace assertion helper panics remain direct failures. This is a reusable
+   artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2757,8 +2761,7 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by moving deterministic shrinking into
-ordinary generated failure panic paths. Start with the Mafiascum and Chinese Structured generated
-N01 replay lanes: when a seed fails after fixture construction, save the generated fixture, run
-`minimize_night_fixture --reduce --write-reduced --write-report`, and include the saved report path
-and preservation summary in the panic message.
+Continue Phase 4 persistent and generated-action systems by finishing generated panic-path shrink
+coverage for the N01 replay lanes. Start by routing setup/submit failures and shared trace
+assertion helper failures through the same saved artifact/minimizer report path, then reuse that
+wrapper for the Chinese Structured D01 and later culture-pack generated replay lanes.

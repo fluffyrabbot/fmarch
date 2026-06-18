@@ -12317,7 +12317,10 @@ struct GeneratedEpicmafiaPkCase {
 async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for seed in [91_001_u64, 91_113, 91_227, 91_331, 91_447, 91_559] {
         let case = generated_night_case(seed);
-        let summary = generated_night_case_summary(&case);
+        let resolver_seed = seed + 43_000;
+        let summary = generated_pack_night_case_summary(&case, "mafiascum", resolver_seed);
+        let fixture_json = generated_night_case_fixture_json(&case, "mafiascum", resolver_seed);
+        let shrink_stem = format!("generated-mafiascum-n01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
@@ -12401,72 +12404,192 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             });
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
                 game,
-                seed: seed + 43_000,
+                seed: resolver_seed,
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve generated graph failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\ngenerated resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve generated graph failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "generated resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "N01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        assert!(
-            applied.events.len() < 200,
-            "{summary}\ngenerated graph event count should stay bounded: {}",
-            applied.events.len()
-        );
-        let representative_event = applied
-            .events
-            .iter()
-            .find_map(|indexed| {
-                let outcome = match &indexed.event {
-                    domain::InnerEvent::InvestigationResult { .. } => "investigation_result",
-                    domain::InnerEvent::PlayerKilled { .. } => "player_killed",
-                    domain::InnerEvent::PlayerSaved { .. } => "player_saved",
-                    domain::InnerEvent::EffectsMarked { .. } => "effects_marked",
-                    domain::InnerEvent::EffectsCleared { .. } => "effects_cleared",
-                    domain::InnerEvent::DelayedDeathQueued { .. } => "delayed_death_queued",
-                    domain::InnerEvent::DelayedDeathResolved { .. } => "delayed_death_resolved",
-                    domain::InnerEvent::RetaliationArmed { .. } => "retaliation_armed",
-                    domain::InnerEvent::BackupTargeted { .. } => "backup_targeted",
-                    domain::InnerEvent::PhaseAnnouncement(_) => return None,
-                    _ => return None,
-                };
-                Some((indexed.index, outcome))
-            })
-            .expect("generated Mafiascum night should emit a traceable inner event");
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if applied.events.len() >= 200 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "generated graph event count should stay bounded: {}",
+                        applied.events.len()
+                    ),
+                )
+                .await
+            );
+        }
+        let representative_event = match applied.events.iter().find_map(|indexed| {
+            let outcome = match &indexed.event {
+                domain::InnerEvent::InvestigationResult { .. } => "investigation_result",
+                domain::InnerEvent::PlayerKilled { .. } => "player_killed",
+                domain::InnerEvent::PlayerSaved { .. } => "player_saved",
+                domain::InnerEvent::EffectsMarked { .. } => "effects_marked",
+                domain::InnerEvent::EffectsCleared { .. } => "effects_cleared",
+                domain::InnerEvent::DelayedDeathQueued { .. } => "delayed_death_queued",
+                domain::InnerEvent::DelayedDeathResolved { .. } => "delayed_death_resolved",
+                domain::InnerEvent::RetaliationArmed { .. } => "retaliation_armed",
+                domain::InnerEvent::BackupTargeted { .. } => "backup_targeted",
+                domain::InnerEvent::PhaseAnnouncement(_) => return None,
+                _ => return None,
+            };
+            Some((indexed.index, outcome))
+        }) {
+            Some(event) => event,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "generated Mafiascum night should emit a traceable inner event".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\ngenerated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(audit.audited, 1, "{summary}\none generated phase audited");
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped generated envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited generated phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none generated trace"
-        );
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one generated trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
         let result_contract_source =
             format!("domain::resolve/result_version:{}", applied.result_version);
         let result_contract_outcome = format!("{} inner events validated", applied.counts.events);
@@ -12497,13 +12620,35 @@ async fn generated_night_action_graphs_replay_audit_and_rebuild_deterministicall
             &summary,
         );
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\ngenerated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("generated projection rebuild audit drifted: {projection_audit:?}"),
+                )
+                .await
+            );
+        }
     }
 }
 
@@ -12559,6 +12704,49 @@ async fn generated_mafiascum_failure_fixture_shrinks_to_saved_artifacts(pool: Pg
         artifacts.report_path.exists(),
         "generated shrink report artifact should be saved"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_failure_message_includes_saved_shrink_summary(pool: PgPool) {
+    let case = GeneratedNightCase {
+        seed: 91_778,
+        roster: vec![
+            ("slot_1".to_string(), "roleblocker".to_string()),
+            ("slot_2".to_string(), "paranoid_gun_owner".to_string()),
+            ("slot_3".to_string(), "vanilla_townie".to_string()),
+        ],
+        actions: vec![GeneratedNightAction {
+            actor_slot: "slot_1".to_string(),
+            template_id: "roleblocker_block".to_string(),
+            action_id: "generated_seed_91778_slot_1_roleblocker_block".to_string(),
+            targets: vec!["slot_2".to_string()],
+        }],
+    };
+    let mut fixture: serde_json::Value = serde_json::from_str(&generated_night_case_fixture_json(
+        &case,
+        "mafiascum",
+        case.seed + 43_000,
+    ))
+    .expect("generated Mafiascum fixture serializes");
+    fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
+        serde_json::json!("pgo_shoots_wrong_visitor");
+    let fixture_json =
+        serde_json::to_string_pretty(&fixture).expect("generated failure fixture serializes");
+
+    let message = generated_shrink_failure_message(
+        &pool,
+        "generated-mafiascum-n01-panic-message-contract",
+        &fixture_json,
+        "generated N01 case generator_seed=91778",
+        "forced generated replay failure".to_string(),
+    )
+    .await;
+
+    assert!(message.contains("forced generated replay failure"));
+    assert!(message.contains("generated shrink report: path="));
+    assert!(message.contains("generated-mafiascum-n01-panic-message-contract.report.tmp.json"));
+    assert!(message.contains("failure_class_preserved=true"));
+    assert!(message.contains("promoted_success_fixture=false"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -12631,6 +12819,9 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
         let case = generated_chinese_night_case(seed);
         let resolver_seed = seed + 44_000;
         let summary = generated_pack_night_case_summary(&case, "chinese_structured", resolver_seed);
+        let fixture_json =
+            generated_night_case_fixture_json(&case, "chinese_structured", resolver_seed);
+        let shrink_stem = format!("generated-chinese-n01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
@@ -12714,7 +12905,7 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             });
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -12723,63 +12914,180 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Chinese generated graph failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\nChinese generated resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Chinese generated graph failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese generated resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "N01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        assert!(
-            applied.events.len() < 200,
-            "{summary}\nChinese generated graph event count should stay bounded: {}",
-            applied.events.len()
-        );
-        let representative_event = applied
-            .events
-            .iter()
-            .find_map(|indexed| {
-                let outcome = match &indexed.event {
-                    domain::InnerEvent::InvestigationResult { .. } => "investigation_result",
-                    domain::InnerEvent::PlayersLinked { .. } => "players_linked",
-                    domain::InnerEvent::PlayerKilled { .. } => "player_killed",
-                    domain::InnerEvent::PlayerSaved { .. } => "player_saved",
-                    domain::InnerEvent::EffectsMarked { .. } => "effects_marked",
-                    domain::InnerEvent::RetaliationArmed { .. } => "retaliation_armed",
-                    domain::InnerEvent::PhaseAnnouncement(_) => return None,
-                    _ => return None,
-                };
-                Some((indexed.index, outcome))
-            })
-            .expect("Chinese generated night should emit a traceable inner event");
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if applied.events.len() >= 200 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese generated graph event count should stay bounded: {}",
+                        applied.events.len()
+                    ),
+                )
+                .await
+            );
+        }
+        let representative_event = match applied.events.iter().find_map(|indexed| {
+            let outcome = match &indexed.event {
+                domain::InnerEvent::InvestigationResult { .. } => "investigation_result",
+                domain::InnerEvent::PlayersLinked { .. } => "players_linked",
+                domain::InnerEvent::PlayerKilled { .. } => "player_killed",
+                domain::InnerEvent::PlayerSaved { .. } => "player_saved",
+                domain::InnerEvent::EffectsMarked { .. } => "effects_marked",
+                domain::InnerEvent::RetaliationArmed { .. } => "retaliation_armed",
+                domain::InnerEvent::PhaseAnnouncement(_) => return None,
+                _ => return None,
+            };
+            Some((indexed.index, outcome))
+        }) {
+            Some(event) => event,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Chinese generated night should emit a traceable inner event".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\nChinese generated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none Chinese generated phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped Chinese generated envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("Chinese generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited Chinese generated phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none Chinese generated trace"
-        );
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one Chinese generated trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
         let result_contract_source =
             format!("domain::resolve/result_version:{}", applied.result_version);
         let result_contract_outcome = format!("{} inner events validated", applied.counts.events);
@@ -12810,13 +13118,37 @@ async fn generated_chinese_structured_night_graphs_replay_audit_and_rebuild_dete
             &summary,
         );
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\nChinese generated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese generated projection rebuild audit drifted: {projection_audit:?}"
+                    ),
+                )
+                .await
+            );
+        }
     }
 }
 
@@ -15222,10 +15554,6 @@ fn generated_targets(
     }
 }
 
-fn generated_night_case_summary(case: &GeneratedNightCase) -> String {
-    generated_pack_night_case_summary(case, "mafiascum", case.seed + 43_000)
-}
-
 fn generated_pack_night_case_summary(
     case: &GeneratedNightCase,
     pack: &str,
@@ -15380,6 +15708,12 @@ impl GeneratedShrinkArtifacts {
     }
 
     async fn run_minimizer(&self, pool: &PgPool) -> serde_json::Value {
+        self.try_run_minimizer(pool)
+            .await
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    async fn try_run_minimizer(&self, pool: &PgPool) -> Result<serde_json::Value, String> {
         let database_url = database_url_for_pool(pool).await;
         let bin = std::env::var("CARGO_BIN_EXE_minimize_night_fixture")
             .unwrap_or_else(|_| env!("CARGO_BIN_EXE_minimize_night_fixture").to_string());
@@ -15393,24 +15727,74 @@ impl GeneratedShrinkArtifacts {
             .env("DATABASE_URL", database_url)
             .output()
             .expect("run minimize_night_fixture for generated failure fixture");
-        assert!(
-            output.status.success(),
-            "minimize_night_fixture failed\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+        if !output.status.success() {
+            return Err(format!(
+                "minimize_night_fixture failed\nstdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
         let stdout_report: serde_json::Value =
-            serde_json::from_slice(&output.stdout).expect("minimizer stdout is JSON");
+            serde_json::from_slice(&output.stdout).map_err(|err| {
+                format!(
+                    "minimizer stdout is not JSON: {err}\nstdout:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                )
+            })?;
         let saved_report: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(&self.report_path).expect("read saved minimizer report"),
+            &fs::read_to_string(&self.report_path)
+                .map_err(|err| format!("read saved minimizer report: {err}"))?,
         )
-        .expect("saved minimizer report is JSON");
-        assert_eq!(
-            stdout_report, saved_report,
-            "saved minimizer report should match stdout"
-        );
-        saved_report
+        .map_err(|err| format!("saved minimizer report is not JSON: {err}"))?;
+        if stdout_report != saved_report {
+            return Err("saved minimizer report should match stdout".to_string());
+        }
+        Ok(saved_report)
     }
+}
+
+async fn generated_shrink_failure_message(
+    pool: &PgPool,
+    stem: &str,
+    fixture_json: &str,
+    summary: &str,
+    reason: String,
+) -> String {
+    let artifacts = GeneratedShrinkArtifacts::new(stem);
+    artifacts.remove_existing();
+    artifacts.write_fixture(fixture_json);
+    match artifacts.try_run_minimizer(pool).await {
+        Ok(report) => format!(
+            "{summary}\n{reason}\n{}",
+            generated_shrink_report_summary(&artifacts, &report)
+        ),
+        Err(err) => format!(
+            "{summary}\n{reason}\ngenerated shrink report failed for fixture {}: {err}",
+            artifacts.fixture_path.display()
+        ),
+    }
+}
+
+fn generated_shrink_report_summary(
+    artifacts: &GeneratedShrinkArtifacts,
+    report: &serde_json::Value,
+) -> String {
+    format!(
+        "generated shrink report: path={} reduced={} failure_class_preserved={} success_invariant_preserved={} promoted_success_fixture={} reduction_steps={}",
+        artifacts.report_path.display(),
+        artifacts.reduced_path.display(),
+        json_bool_or_null(&report["reduction"]["failure_class_preserved"]),
+        json_bool_or_null(&report["reduction"]["success_invariant_preserved"]),
+        json_bool_or_null(&report["write_reduced"]["promoted_success_fixture"]),
+        report["reduction_steps"].as_array().map_or(0, Vec::len),
+    )
+}
+
+fn json_bool_or_null(value: &serde_json::Value) -> String {
+    value
+        .as_bool()
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "null".to_string())
 }
 
 fn generated_shrink_artifact_root() -> PathBuf {
@@ -15739,6 +16123,27 @@ fn generated_mafiascum_fixture_json_emits_trigger_dependency_expectations() {
         hider_fixture["expectations"]["trace_decisions"][0]["outcome"],
         "hider_dependency_death"
     );
+}
+
+#[test]
+fn generated_shrink_report_summary_mentions_paths_and_preservation() {
+    let artifacts = GeneratedShrinkArtifacts::new("summary-contract");
+    let report = serde_json::json!({
+        "reduction": {
+            "failure_class_preserved": true
+        },
+        "write_reduced": {
+            "promoted_success_fixture": false
+        },
+        "reduction_steps": [{}, {}]
+    });
+    let summary = generated_shrink_report_summary(&artifacts, &report);
+    assert!(summary.contains("generated shrink report: path="));
+    assert!(summary.contains("summary-contract.report.tmp.json"));
+    assert!(summary.contains("failure_class_preserved=true"));
+    assert!(summary.contains("success_invariant_preserved=null"));
+    assert!(summary.contains("promoted_success_fixture=false"));
+    assert!(summary.contains("reduction_steps=2"));
 }
 
 async fn resolution_payload(
