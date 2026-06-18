@@ -1345,7 +1345,9 @@ checks the `Trigger` inner event, generated kill, generated-action trace row, an
 diagnostic note. `--reduce` now also runs for successful fixtures that declare expectations and
 keeps a candidate only when the same semantic expectation count still passes. These minimized
 trigger/dependency fixtures replay through legal commands and require `audit_resolution`, anchored
-`inspect_trace`, and `audit_rebuild` to agree. The generated Mafiascum N01 replay helper now emits
+`inspect_trace`, and `audit_rebuild` to agree; this is covered by the
+`minimized_trigger_dependency_fixtures_replay_semantic_expectations` Postgres selector. The generated
+Mafiascum N01 replay helper now emits
 matching `expectations` metadata for unambiguous PGO visit-trigger, Babysitter dependency-death, and
 Hider host-death generated cases, avoiding raw-action inference when redirect/bus target mutation
 or obvious actor suppression is present. `crates/commands/fixtures/night-pgo-trigger-nonminimal.json`
@@ -1354,7 +1356,8 @@ preserving all four PGO semantic expectations. `--write-reduced <path>` now writ
 fixture after reduction; the non-minimal PGO replay was reduced into
 `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and replayed from that written file with
 one audited resolution, one trace, clean projection rebuild, and all four semantic expectations
-checked. The report now explicitly separates replay success, failure-class preservation, and
+checked by `nonminimal_pgo_trigger_fixture_shrinks_to_checked_semantic_replay`. The report now
+explicitly separates replay success, failure-class preservation, and
 success-invariant preservation; `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json`
 is a negative semantic-expectation fixture proving `--write-reduced` can save a reduced failing
 artifact without marking it as a promoted success fixture. `--write-report <path>` now persists the

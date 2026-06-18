@@ -11268,222 +11268,177 @@ async fn seeded_trigger_dependency_graphs_replay_audit_and_rebuild_deterministic
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn minimized_trigger_dependency_replay_audits_and_rebuilds(pool: PgPool) {
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../fixtures/night-babysitter-dependency-minimized.json"
-    ))
-    .expect("minimized babysitter dependency fixture should parse");
-    let seed = fixture["seed"]
-        .as_u64()
-        .expect("minimized fixture carries a resolver seed");
-    let pack = fixture["pack"]
-        .as_str()
-        .expect("minimized fixture carries a pack");
-    let phase = fixture["phase"]
-        .as_str()
-        .expect("minimized fixture carries a phase");
-    let roster = fixture["roster"]
-        .as_array()
-        .expect("minimized fixture carries a roster");
-    let actions = fixture["actions"]
-        .as_array()
-        .expect("minimized fixture carries actions");
-    assert_eq!(roster.len(), 4, "fixture is persisted at four slots");
-    assert_eq!(actions.len(), 3, "fixture keeps only the dependency triad");
+async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool: PgPool) {
+    for (stem, fixture_json, expected_roster, expected_actions, expected_expectations) in [
+        (
+            "night-babysitter-dependency-minimized",
+            include_str!("../fixtures/night-babysitter-dependency-minimized.json"),
+            4,
+            3,
+            3,
+        ),
+        (
+            "night-hider-dependency-minimized",
+            include_str!("../fixtures/night-hider-dependency-minimized.json"),
+            3,
+            2,
+            3,
+        ),
+        (
+            "night-pgo-trigger-minimized",
+            include_str!("../fixtures/night-pgo-trigger-minimized.json"),
+            2,
+            1,
+            4,
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(fixture_json).expect("minimized fixture should parse");
+        assert_eq!(
+            fixture["roster"].as_array().map_or(0, Vec::len),
+            expected_roster,
+            "{stem} persisted roster size"
+        );
+        assert_eq!(
+            fixture["actions"].as_array().map_or(0, Vec::len),
+            expected_actions,
+            "{stem} persisted action size"
+        );
+        assert_eq!(
+            generated_expectation_count(&fixture["expectations"]),
+            expected_expectations,
+            "{stem} semantic expectation count"
+        );
 
-    let game = Uuid::new_v4();
-    let host = user("fixture_host");
-    handle(
-        &pool,
-        &host,
-        Command::CreateGame {
-            game,
-            pack: pack.into(),
-        },
-    )
-    .await
-    .unwrap_or_else(|err| panic!("minimized fixture: create game failed: {err}"));
-    for slot in roster {
-        let slot_id = slot["slot"]
-            .as_str()
-            .expect("minimized fixture slot carries slot id");
-        let role = slot["role"]
-            .as_str()
-            .expect("minimized fixture slot carries role");
-        handle(
-            &pool,
-            &host,
-            Command::AddSlot {
-                game,
-                slot: slot_id.into(),
-            },
-        )
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: add {slot_id} failed: {err}"));
-        handle(
-            &pool,
-            &host,
-            Command::AssignSlot {
-                game,
-                slot: slot_id.into(),
-                user: format!("fixture_user_{}", slot_number(slot_id)),
-            },
-        )
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: assign {slot_id} failed: {err}"));
-        handle(
-            &pool,
-            &host,
-            Command::AssignRole {
-                game,
-                slot: slot_id.into(),
-                role_key: role.into(),
-            },
-        )
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: role {slot_id} failed: {err}"));
+        let artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-semantic-replay"));
+        artifacts.remove_existing();
+        artifacts.write_fixture(fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "{stem} should replay");
+        assert_eq!(
+            report["original"]["resolution_audited"],
+            serde_json::json!(1),
+            "{stem} should audit one resolution envelope"
+        );
+        assert_eq!(
+            report["original"]["trace_count"],
+            serde_json::json!(1),
+            "{stem} should inspect one anchored trace"
+        );
+        assert_eq!(
+            report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} projection rebuild should be drift-free"
+        );
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expected_expectations),
+            "{stem} should check every declared semantic expectation"
+        );
+        assert_eq!(report["minimized"]["ok"], true, "{stem} minimized replay");
+        assert_eq!(
+            report["minimized"]["semantic_expectations_checked"],
+            serde_json::json!(expected_expectations),
+            "{stem} minimized expectation count"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"],
+            serde_json::json!(true),
+            "{stem} success fixture should remain replayable"
+        );
+        assert_eq!(
+            report["reduction"]["success_invariant_preserved"],
+            serde_json::json!(true),
+            "{stem} success reduction should preserve semantic expectations"
+        );
     }
-    handle(
-        &pool,
-        &host,
-        Command::StartGame {
-            game,
-            phase: phase.into(),
-        },
-    )
-    .await
-    .unwrap_or_else(|err| panic!("minimized fixture: start game failed: {err}"));
+}
 
-    for action in actions {
-        let actor_slot = action["actor_slot"]
-            .as_str()
-            .expect("minimized fixture action carries actor");
-        let template_id = action["template_id"]
-            .as_str()
-            .expect("minimized fixture action carries template id");
-        let action_id = action["action_id"]
-            .as_str()
-            .expect("minimized fixture action carries action id");
-        let targets = action["targets"]
-            .as_array()
-            .expect("minimized fixture action carries targets")
-            .iter()
-            .map(|target| {
-                target
-                    .as_str()
-                    .expect("minimized fixture target is a slot id")
-                    .to_string()
-            })
-            .collect();
-        handle(
-            &pool,
-            &Principal::user(format!("fixture_user_{}", slot_number(actor_slot))),
-            Command::SubmitAction {
-                game,
-                action_id: action_id.into(),
-                actor_slot: actor_slot.into(),
-                template_id: template_id.into(),
-                targets,
-                grant_id: None,
-            },
-        )
-        .await
-        .unwrap_or_else(|err| {
-            panic!("minimized fixture: submit {action_id} for {actor_slot} failed: {err}")
-        });
-    }
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn nonminimal_pgo_trigger_fixture_shrinks_to_checked_semantic_replay(pool: PgPool) {
+    let fixture_json = include_str!("../fixtures/night-pgo-trigger-nonminimal.json");
+    let fixture: serde_json::Value =
+        serde_json::from_str(fixture_json).expect("nonminimal PGO fixture should parse");
+    assert_eq!(fixture["roster"].as_array().map_or(0, Vec::len), 3);
+    assert_eq!(fixture["actions"].as_array().map_or(0, Vec::len), 1);
+    assert_eq!(generated_expectation_count(&fixture["expectations"]), 4);
 
-    let ack = handle(&pool, &host, Command::ResolvePhase { game, seed })
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: resolve failed: {err}"));
+    let artifacts = GeneratedShrinkArtifacts::new("night-pgo-trigger-nonminimal-success-shrink");
+    artifacts.remove_existing();
+    artifacts.write_fixture(fixture_json);
+    let report = artifacts.run_minimizer(&pool).await;
+
+    assert_eq!(report["original"]["ok"], true);
     assert_eq!(
-        ack.stream_seqs.len(),
-        3,
-        "minimized fixture resolve appends applied/trace/phase-lock events"
+        report["original"]["resolution_audited"],
+        serde_json::json!(1)
     );
-
-    let applied_payload = resolution_payload(&pool, game, phase, seed).await;
-    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-        .unwrap_or_else(|err| panic!("minimized fixture ResolutionApplied invalid: {err}"));
+    assert_eq!(report["original"]["trace_count"], serde_json::json!(1));
+    assert_eq!(
+        report["original"]["projection_audit_ok"],
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        report["original"]["semantic_expectations_checked"],
+        serde_json::json!(4)
+    );
+    assert_eq!(report["minimized"]["ok"], true);
+    assert_eq!(
+        report["minimized"]["semantic_expectations_checked"],
+        serde_json::json!(4)
+    );
+    assert_eq!(
+        report["reduction"]["replay_success"],
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        report["reduction"]["success_invariant_preserved"],
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        report["write_reduced"]["promoted_success_fixture"],
+        serde_json::json!(true)
+    );
     assert!(
-        applied.events.iter().any(|event| {
-            matches!(&event.event, domain::InnerEvent::PlayerSaved { slot_id, sources, .. }
-                if slot_id == "slot_4" && sources == &vec!["slot_3".to_string()])
-        }),
-        "minimized fixture must preserve the Babysitter save edge"
+        report["reduction_steps"]
+            .as_array()
+            .is_some_and(|steps| !steps.is_empty()),
+        "nonminimal PGO fixture should shrink at least one item"
     );
-    let generated_death_index = applied
-        .events
-        .iter()
-        .find_map(|event| match &event.event {
-            domain::InnerEvent::PlayerKilled {
-                slot_id,
-                cause,
-                attackers,
-                unstoppable,
-                ..
-            } if slot_id == "slot_4"
-                && cause == "babysit"
-                && attackers == &vec!["slot_3".to_string()]
-                && *unstoppable =>
-            {
-                Some(event.index)
-            }
-            _ => None,
-        })
-        .expect("minimized fixture must preserve the generated ward death");
 
-    let audit = audit_resolution_envelopes(&pool, game)
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: audit_resolution failed: {err}"));
+    let reduced_fixture_json =
+        fs::read_to_string(&artifacts.reduced_path).expect("reduced PGO fixture should be written");
+    let reduced_fixture: serde_json::Value =
+        serde_json::from_str(&reduced_fixture_json).expect("reduced PGO fixture should parse");
+    assert_eq!(reduced_fixture["roster"].as_array().map_or(0, Vec::len), 2);
+    assert_eq!(reduced_fixture["actions"].as_array().map_or(0, Vec::len), 1);
     assert!(
-        audit.ok,
-        "minimized fixture resolution audit drifted: {audit:?}"
+        !reduced_fixture["roster"]
+            .as_array()
+            .expect("reduced fixture carries roster")
+            .iter()
+            .any(|slot| slot["slot"] == "slot_3"),
+        "the irrelevant extra slot should be removed"
     );
-    assert_eq!(audit.audited, 1, "one minimized fixture phase audited");
-    assert_eq!(audit.skipped, 0, "no minimized fixture envelopes skipped");
-
-    let trace_report = inspect_resolution_traces(&pool, game, None)
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: inspect_trace failed: {err}"));
-    assert_eq!(trace_report.traces.len(), 1, "one minimized fixture trace");
-    assert_anchored_inspection_decision(
-        &trace_report,
-        InspectionDecisionExpectation {
-            phase_id: phase,
-            stage: "night:dependency_death",
-            source: "action:minimized_babysitter_guards_ward",
-            outcome: "babysitter_dependency_death",
-            detail: serde_json::json!({
-                "action_id": "minimized_babysitter_guards_ward",
-                "template_id": "babysit",
-                "protector": "slot_3",
-                "ward": "slot_4",
-                "cause": "babysit",
-                "attackers": ["slot_3"],
-            }),
-        },
-        "minimized babysitter dependency fixture",
-    );
-    let generated_death_source = format!("event_index:{generated_death_index}");
-    assert_anchored_inspection_decision(
-        &trace_report,
-        InspectionDecisionExpectation {
-            phase_id: phase,
-            stage: "inner_event",
-            source: &generated_death_source,
-            outcome: "player_killed",
-            detail: serde_json::Value::Null,
-        },
-        "minimized babysitter dependency fixture",
+    assert_eq!(
+        generated_expectation_count(&reduced_fixture["expectations"]),
+        4
     );
 
-    let projection_audit = audit_rebuild(&pool, game)
-        .await
-        .unwrap_or_else(|err| panic!("minimized fixture: audit_rebuild failed: {err}"));
-    assert!(
-        projection_audit.ok,
-        "minimized fixture projection rebuild audit drifted: {projection_audit:?}"
+    let replay_artifacts =
+        GeneratedShrinkArtifacts::new("night-pgo-trigger-reduced-written-replay");
+    replay_artifacts.remove_existing();
+    replay_artifacts.write_fixture(&reduced_fixture_json);
+    let replay_report = replay_artifacts.run_minimizer(&pool).await;
+    assert_eq!(replay_report["original"]["ok"], true);
+    assert_eq!(
+        replay_report["original"]["semantic_expectations_checked"],
+        serde_json::json!(4)
+    );
+    assert_eq!(
+        replay_report["original"]["projection_audit_ok"],
+        serde_json::json!(true)
     );
 }
 

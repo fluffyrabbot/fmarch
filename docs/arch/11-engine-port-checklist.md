@@ -2460,12 +2460,16 @@ coverage, and a playable vertical scenario through the command pipeline.
    helper now emits matching `expectations` metadata for unambiguous PGO visit-trigger,
    Babysitter dependency-death, and Hider host-death cases, while avoiding inference when
    redirect/bus target mutation or obvious actor suppression is present.
+   `minimized_trigger_dependency_fixtures_replay_semantic_expectations` now proves the checked-in
+   Babysitter, Hider, and PGO minimized fixtures through command replay, `audit_resolution`,
+   anchored `inspect_trace`, `audit_rebuild`, and their declared semantic expectation counts.
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` proves the success-shrinking path:
    `--reduce` removes the irrelevant extra slot while preserving all four declared PGO
    expectations. `--write-reduced <path>` now writes the post-reduction fixture; the non-minimal
    PGO replay was reduced into `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and then
    replayed from that written artifact with one audited resolution, one trace, clean projection
-   rebuild, and all four semantic expectations checked. The report now distinguishes replay
+   rebuild, and all four semantic expectations checked by
+   `nonminimal_pgo_trigger_fixture_shrinks_to_checked_semantic_replay`. The report now distinguishes replay
    success, failure-class preservation, and success-invariant preservation.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
