@@ -57,6 +57,8 @@ struct FixtureAction {
     template_id: String,
     action_id: String,
     targets: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    grant_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -896,7 +898,7 @@ async fn run_fixture_phase(
                 actor_slot: action.actor_slot.clone(),
                 template_id: action.template_id.clone(),
                 targets: action.targets.clone(),
-                grant_id: None,
+                grant_id: action.grant_id.clone(),
             },
         )
         .await
@@ -1194,6 +1196,26 @@ mod tests {
         assert_eq!(fixture.phase, "N01");
         assert_eq!(fixture.seed, 7);
         assert_eq!(fixture.expectations.count(), 0);
+        assert_eq!(fixture.actions[0].grant_id, None);
+    }
+
+    #[test]
+    fn fixture_action_accepts_explicit_grant_id() {
+        let fixture: NightFixture = serde_json::from_str(
+            r#"{
+              "seed": 8,
+              "roster": [{"slot": "slot_1", "role": "cop"}],
+              "actions": [{
+                "actor_slot": "slot_1",
+                "template_id": "cop_investigate",
+                "action_id": "extra_check",
+                "targets": ["slot_1"],
+                "grant_id": "extra_action"
+              }]
+            }"#,
+        )
+        .expect("fixture with grant id parses");
+        assert_eq!(fixture.actions[0].grant_id.as_deref(), Some("extra_action"));
     }
 
     #[test]
@@ -1246,12 +1268,14 @@ mod tests {
                     template_id: "doctor_protect".to_string(),
                     action_id: "protect".to_string(),
                     targets: vec!["slot_2".to_string()],
+                    grant_id: None,
                 },
                 FixtureAction {
                     actor_slot: "slot_2".to_string(),
                     template_id: "factional_kill".to_string(),
                     action_id: "kill".to_string(),
                     targets: vec!["slot_1".to_string()],
+                    grant_id: None,
                 },
             ],
             setup_phases: Vec::new(),

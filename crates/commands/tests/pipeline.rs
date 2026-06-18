@@ -12062,6 +12062,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
         ("ignite", [97_041, 97_042]),
+        ("extra_action", [97_051, 97_052]),
     ] {
         for seed in seeds {
             cases.push((
@@ -12174,11 +12175,12 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 7,
-        "expected_case_count": 14,
+        "expected_family_count": 8,
+        "expected_case_count": 16,
         "family_manifest_matched": family_counts == [
             ("babysitter".to_string(), 2_usize),
             ("bomb".to_string(), 2),
+            ("extra_action".to_string(), 2),
             ("hider".to_string(), 2),
             ("hunter".to_string(), 2),
             ("ignite".to_string(), 2),
@@ -12188,8 +12190,8 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(7));
-    assert_eq!(report["case_count"], serde_json::json!(14));
+    assert_eq!(report["family_count"], serde_json::json!(8));
+    assert_eq!(report["case_count"], serde_json::json!(16));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19384,6 +19386,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             seed + 48_000,
         ),
         "ignite" => generated_mafiascum_persistent_effect_fixture_json(family, seed),
+        "extra_action" => generated_mafiascum_generated_action_fixture_json(family, seed),
         _ => unreachable!("unknown generated persistent trigger family"),
     }
 }
@@ -19409,6 +19412,10 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
         "ignite" => {
             fixture["expectations"]["inner_events"][0]["payload"]["cause"] =
                 serde_json::json!("ignite_wrong");
+        }
+        "extra_action" => {
+            fixture["expectations"]["inner_events"][0]["payload"]["source_action"] =
+                serde_json::json!("motivate_wrong");
         }
         _ => unreachable!("unknown generated persistent trigger family"),
     }
@@ -19482,6 +19489,115 @@ fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -
         }))
         .expect("generated Mafiascum persistent effect fixture serializes"),
         _ => unreachable!("unknown generated persistent effect family"),
+    }
+}
+
+fn generated_mafiascum_generated_action_fixture_json(family: &str, seed: u64) -> String {
+    match family {
+        "extra_action" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 34_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "motivator" },
+                { "slot": "slot_2", "role": "cop" },
+                { "slot": "slot_3", "role": "mafia_goon" },
+                { "slot": "slot_4", "role": "vanilla_townie" },
+                { "slot": "slot_5", "role": "vanilla_townie" },
+                { "slot": "slot_6", "role": "mafia_goon" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 33_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "motivate",
+                        "action_id": format!("generated_seed_{seed}_motivate_extra_action"),
+                        "targets": ["slot_2"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "cop_investigate",
+                    "action_id": format!("generated_seed_{seed}_cop_base"),
+                    "targets": ["slot_3"]
+                },
+                {
+                    "actor_slot": "slot_2",
+                    "template_id": "cop_investigate",
+                    "action_id": format!("generated_seed_{seed}_cop_extra"),
+                    "targets": ["slot_4"],
+                    "grant_id": "extra_action"
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "ActionGrantConsumed",
+                        "payload": {
+                            "grant_id": "extra_action",
+                            "actor": "slot_2",
+                            "action_id": format!("generated_seed_{seed}_cop_extra"),
+                            "source_action": format!("generated_seed_{seed}_motivate_extra_action"),
+                            "phase_id": "N02",
+                            "phase_kind": "Night",
+                            "phase_number": 2,
+                            "remaining_uses": 0
+                        }
+                    },
+                    {
+                        "kind": "InvestigationResult",
+                        "payload": {
+                            "mode": "Parity",
+                            "investigator": "slot_2",
+                            "target": "slot_3",
+                            "result": "scum"
+                        }
+                    },
+                    {
+                        "kind": "InvestigationResult",
+                        "payload": {
+                            "mode": "Parity",
+                            "investigator": "slot_2",
+                            "target": "slot_4",
+                            "result": "town"
+                        }
+                    }
+                ],
+                "generated_actions": [
+                    {
+                        "action_id": "extra_action",
+                        "source": "ActionGranted",
+                        "actor": "slot_1",
+                        "targets": ["slot_2"],
+                        "detail": {
+                            "kind": "ExtraAction",
+                            "source_action": format!("generated_seed_{seed}_motivate_extra_action"),
+                            "uses": 1,
+                            "phase_id": "N01",
+                            "phase_kind": "Night",
+                            "phase_number": 1
+                        }
+                    },
+                    {
+                        "action_id": format!("generated_seed_{seed}_cop_extra"),
+                        "source": "ActionGrantConsumed",
+                        "actor": "slot_2",
+                        "targets": [],
+                        "detail": {
+                            "grant_id": "extra_action",
+                            "source_action": format!("generated_seed_{seed}_motivate_extra_action"),
+                            "remaining_uses": 0
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum generated-action fixture serializes"),
+        _ => unreachable!("unknown generated-action family"),
     }
 }
 
