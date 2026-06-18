@@ -2115,7 +2115,7 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    coverage for open/update/pause/resume/cancel/close, result-schema coverage for lifecycle
    payloads, and command/projection, audit/rebuild, and minimizer proof for a host-recorded
    pause control.]
-5. Last words and day announcements. [partly done: `DayNotePolicy` emits
+5. Last words and day announcements. [done: `DayNotePolicy` emits
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; v63 adds pack-declared night-victim `template_id`, `audience`, and role payload
    policy (`RoleKey` or `Hidden`) plus last-word `template_id`, `audience`, and `window`.
@@ -3252,8 +3252,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 by auditing the Last words and day announcements row against its focused proof
-surfaces. Separate stale `[partly done]` wording from true open day-note/day-death work, check the
-Mafia Universe, EpicMafia, Chinese structured, and Mafiascum metadata claims against goldens plus
-command/projection/minimizer evidence, and refresh only the checklist/parity truth surfaces that
-those tests actually prove.
+Continue Phase 5 by auditing the Wolf self-destruct / day-death culture mechanics row against its
+focused proof surfaces. Separate stale `[partly done]` wording from true open Chinese
+self-destruct, carry, Wolf Beauty, Guard/Witch, Hunter, and Idiot policy work, then refresh only
+the checklist/parity truth surfaces backed by current goldens, command/projection proof, and
+completion-audit evidence.
