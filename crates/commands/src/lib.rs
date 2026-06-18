@@ -2319,6 +2319,8 @@ fn build_pk_prompt_resolution(
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: prompt.phase_id.clone(),
+                    template_id: None,
+                    audience: None,
                     deaths: vec![domain::Death {
                         slot_id: selected.clone(),
                         cause: "pk".to_string(),

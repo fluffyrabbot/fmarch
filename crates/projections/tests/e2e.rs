@@ -46,6 +46,8 @@ fn empty_phase_announcement(index: usize, phase_id: &str) -> IndexedEvent {
         index,
         event: InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
             phase_id: phase_id.into(),
+            template_id: None,
+            audience: None,
             deaths: Vec::new(),
         }),
     }
@@ -162,6 +164,7 @@ fn scenario_events(pack: &Pack) -> Vec<EventInput> {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let subs = vec![submission(
         "sub_001",

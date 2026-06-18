@@ -15,7 +15,7 @@ use domain::resolver::{resolve, DayPhaseInputs, ResolutionInput};
 use domain::state::{StateSnapshot, Submission};
 use domain::{InvestigateMode, IrAbility};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 fn repo_root() -> PathBuf {
     // crates/domain -> repo root is two parents up.
@@ -42,6 +42,22 @@ fn load_pack_for_golden(name: &str, golden: &Value) -> Pack {
         .unwrap_or_else(|e| panic!("apply {name} golden overrides: {e}"));
     let raw = serde_json::to_string(&pack_json).expect("encode overridden pack");
     domain::load_pack_from_json(&raw).unwrap_or_else(|e| panic!("load {name}/pack.json: {e}"))
+}
+
+fn load_pack_with_day_death_announcements(name: &str) -> Pack {
+    let p = repo_root().join("packs").join(name).join("pack.json");
+    let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p:?}: {e}"));
+    let mut pack_json: Value =
+        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse {name}/pack.json: {e}"));
+    pack_json["ir_version"] = json!(66);
+    pack_json["day_notes"]["day_deaths"] = json!({
+        "enabled": true,
+        "template_id": "test_day_death_v1",
+        "audience": "public"
+    });
+    let raw = serde_json::to_string(&pack_json).expect("encode day-death announcement pack");
+    domain::load_pack_from_json(&raw)
+        .unwrap_or_else(|e| panic!("load {name}/pack.json with day-death announcements: {e}"))
 }
 
 fn load_pack() -> Pack {
@@ -249,6 +265,12 @@ fn assert_event_order(scenario: &str, events: &[Value], labels: &[(&str, usize)]
             "{scenario}: expected {left_label} at {left_index} before {right_label} at {right_index}; events: {events:#?}"
         );
     }
+}
+
+fn assert_phase_announcement_metadata(events: &[Value], template_id: &str, audience: &str) {
+    let phase_announcement = &events[first_event_index(events, "PhaseAnnouncement")]["payload"];
+    assert_eq!(phase_announcement["template_id"], template_id);
+    assert_eq!(phase_announcement["audience"], audience);
 }
 
 #[test]
@@ -8894,6 +8916,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
+    assert_phase_announcement_metadata(&day_notes, "mafia_universe_day_death_v1", "public");
 
     let reveal = {
         let golden = load_golden_in("mafia_universe", "reveal_town_day.json");
@@ -8944,10 +8967,14 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
+    assert_phase_announcement_metadata(&ita, "mafia_universe_day_death_v1", "public");
 
     let knight = {
         let golden = load_golden_in("chinese_structured", "knight_duel_success.json");
-        run(&golden["input"], load_pack_named("chinese_structured"))
+        run(
+            &golden["input"],
+            load_pack_with_day_death_announcements("chinese_structured"),
+        )
     };
     assert_event_order(
         "knight duel",
@@ -8970,10 +8997,14 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
+    assert_phase_announcement_metadata(&knight, "test_day_death_v1", "public");
 
     let self_destruct = {
         let golden = load_golden_in("chinese_structured", "wolf_self_destruct_trade.json");
-        run(&golden["input"], load_pack_named("chinese_structured"))
+        run(
+            &golden["input"],
+            load_pack_with_day_death_announcements("chinese_structured"),
+        )
     };
     assert_event_order(
         "wolf self-destruct",
@@ -9003,6 +9034,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
+    assert_phase_announcement_metadata(&self_destruct, "test_day_death_v1", "public");
 
     let day_vigilante = {
         let golden = load_golden_in(
@@ -9031,6 +9063,7 @@ fn day_substep_goldens_expose_canonical_host_console_ordering() {
             ),
         ],
     );
+    assert_phase_announcement_metadata(&day_vigilante, "mafia_universe_day_death_v1", "public");
 
     let wolf_beauty = {
         let golden = load_golden_in("chinese_structured", "wolf_beauty_drag_lynch.json");

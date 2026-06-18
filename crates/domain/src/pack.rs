@@ -16,7 +16,7 @@ pub type Tag = String;
 
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
-pub const SUPPORTED_IR_VERSION: u16 = 65;
+pub const SUPPORTED_IR_VERSION: u16 = 66;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {
@@ -1301,6 +1301,8 @@ pub struct DayNotePolicy {
     pub announcements: DayAnnouncementPolicy,
     #[serde(default)]
     pub last_words: LastWordsPolicy,
+    #[serde(default)]
+    pub day_deaths: DayDeathAnnouncementPolicy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1348,6 +1350,16 @@ pub enum DayNoteRolePayload {
 
 fn is_default_day_note_role_payload(value: &DayNoteRolePayload) -> bool {
     *value == DayNoteRolePayload::default()
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DayDeathAnnouncementPolicy {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -3363,7 +3375,8 @@ fn validate_day_note_policy(
     policy: &DayNotePolicy,
     cadence: &BTreeSet<PhaseKind>,
 ) {
-    let needs_day = policy.announcements.enabled || policy.last_words.day_deaths;
+    let needs_day =
+        policy.announcements.enabled || policy.last_words.day_deaths || policy.day_deaths.enabled;
     if needs_day && !cadence.contains(&PhaseKind::Day) {
         issue(
             issues,
@@ -3429,6 +3442,43 @@ fn validate_day_note_policy(
             format!("{path}.last_words"),
             "last words metadata requires day_deaths",
         );
+    }
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.day_deaths.template_id"),
+        policy.day_deaths.template_id.as_deref(),
+        "day-death announcement template_id",
+    );
+    validate_optional_nonempty(
+        issues,
+        &format!("{path}.day_deaths.audience"),
+        policy.day_deaths.audience.as_deref(),
+        "day-death announcement audience",
+    );
+    let day_death_metadata_declared =
+        policy.day_deaths.template_id.is_some() || policy.day_deaths.audience.is_some();
+    if day_death_metadata_declared && !policy.day_deaths.enabled {
+        issue(
+            issues,
+            format!("{path}.day_deaths"),
+            "day-death announcement metadata requires enabled day_deaths",
+        );
+    }
+    if policy.day_deaths.enabled {
+        if policy.day_deaths.template_id.is_none() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.template_id"),
+                "enabled day-death announcements require template_id",
+            );
+        }
+        if policy.day_deaths.audience.is_none() {
+            issue(
+                issues,
+                format!("{path}.day_deaths.audience"),
+                "enabled day-death announcements require audience",
+            );
+        }
     }
 }
 
@@ -9380,6 +9430,17 @@ fn pack_required_ir_version(pack: &Pack) -> (u16, BTreeSet<&'static str>) {
     {
         require_ir(&mut required, &mut reasons, 63, "day_notes.templates");
     }
+    if pack.day_notes.day_deaths.enabled
+        || pack.day_notes.day_deaths.template_id.is_some()
+        || pack.day_notes.day_deaths.audience.is_some()
+    {
+        require_ir(
+            &mut required,
+            &mut reasons,
+            66,
+            "day_notes.day_death_announcements",
+        );
+    }
     if pack
         .ita
         .sessions
@@ -10170,6 +10231,16 @@ mod tests {
             "source_event": "win.survivor"
         }]);
         assert_versioned_pack_feature(value, 63, "win.survival_awards");
+
+        let mut value = test_pack_value();
+        value["day_notes"] = json!({
+            "day_deaths": {
+                "enabled": true,
+                "template_id": "day_death",
+                "audience": "public"
+            }
+        });
+        assert_versioned_pack_feature(value, 66, "day_notes.day_death_announcements");
 
         let mut value = test_pack_value();
         value["standard_nar"] = json!({

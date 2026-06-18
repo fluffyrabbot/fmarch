@@ -1,112 +1,15 @@
 {
   "description": "Mafia Universe Day Vigilante: town and mafia variants resolve as ordinary day kills before the vote outcome.",
-  "input": {
-    "game_id": "game_mu_day_vigilante_001",
-    "phase_id": "D01",
-    "state": {
-      "phase_kind": "Day",
-      "phase_number": 1,
-      "phase_id": "D01",
-      "phase_deadline": null,
-      "phase_policy": {
-        "cadence": ["Day", "Night"],
-        "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
-        },
-        "twilight": false
-      },
-      "slots": [
-        {
-          "slot_id": "slot_1",
-          "role_key": "town_day_vigilante",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_2",
-          "role_key": "mafia_day_vigilante",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_3",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_4",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_5",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_6",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_7",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_8",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        }
-      ]
-    },
-    "submissions": [
-      {
-        "action_id": "mu_town_day_vigilante_001",
-        "actor": "slot_1",
-        "template_id": "day_vigilante_kill",
-        "targets": ["slot_4"],
-        "phase_id": "D01",
-        "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
-      },
-      {
-        "action_id": "mu_mafia_day_vigilante_001",
-        "actor": "slot_2",
-        "template_id": "day_vigilante_kill",
-        "targets": ["slot_3"],
-        "phase_id": "D01",
-        "submitted_at": 2,
-        "withdrawn": false,
-        "metadata": {}
-      }
-    ],
-    "pack": "mafia_universe",
-    "seed": 718001
-  },
   "expected_events": [
     {
       "index": 0,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_4",
+        "attackers": [
+          "slot_1"
+        ],
         "cause": "day_vigilante_kill",
-        "attackers": ["slot_1"],
+        "slot_id": "slot_4",
         "unstoppable": false
       }
     },
@@ -114,9 +17,11 @@
       "index": 1,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_3",
+        "attackers": [
+          "slot_2"
+        ],
         "cause": "day_vigilante_kill",
-        "attackers": ["slot_2"],
+        "slot_id": "slot_3",
         "unstoppable": false
       }
     },
@@ -124,49 +29,160 @@
       "index": 2,
       "kind": "DayVoteOutcome",
       "payload": {
-        "status": "NoLynch",
-        "winner": null,
         "contenders": [],
+        "majority": 4,
+        "status": "NoLynch",
         "tallies": {},
+        "thresholds": {
+          "slot_1": 4,
+          "slot_2": 4,
+          "slot_5": 4,
+          "slot_6": 4,
+          "slot_7": 4,
+          "slot_8": 4
+        },
+        "tiebreak": null,
+        "total_weight": 6,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_5": 1.0,
-          "slot_6": 1.0,
-          "slot_7": 1.0,
-          "slot_8": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_5": 1,
+          "slot_6": 1,
+          "slot_7": 1,
+          "slot_8": 1
         },
-        "majority": 4.0,
-        "thresholds": {
-          "slot_1": 4.0,
-          "slot_2": 4.0,
-          "slot_5": 4.0,
-          "slot_6": 4.0,
-          "slot_7": 4.0,
-          "slot_8": 4.0
-        },
-        "total_weight": 6.0,
-        "tiebreak": null,
-        "reason": null
+        "winner": null
       }
     },
     {
       "index": 3,
       "kind": "PhaseAnnouncement",
       "payload": {
-        "phase_id": "D01",
+        "audience": "public",
         "deaths": [
           {
-            "slot_id": "slot_4",
-            "cause": "day_vigilante_kill"
+            "cause": "day_vigilante_kill",
+            "slot_id": "slot_4"
           },
           {
-            "slot_id": "slot_3",
-            "cause": "day_vigilante_kill"
+            "cause": "day_vigilante_kill",
+            "slot_id": "slot_3"
           }
-        ]
+        ],
+        "phase_id": "D01",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
-  ]
+  ],
+  "input": {
+    "game_id": "game_mu_day_vigilante_001",
+    "pack": "mafia_universe",
+    "phase_id": "D01",
+    "seed": 718001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_day_vigilante",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_day_vigilante",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_6",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_7",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_8",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_day_vigilante_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_4"
+        ],
+        "template_id": "day_vigilante_kill",
+        "withdrawn": false
+      },
+      {
+        "action_id": "mu_mafia_day_vigilante_001",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_3"
+        ],
+        "template_id": "day_vigilante_kill",
+        "withdrawn": false
+      }
+    ]
+  }
 }

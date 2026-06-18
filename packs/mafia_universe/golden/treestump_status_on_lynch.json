@@ -94,11 +94,13 @@
       "index": 6,
       "kind": "LastWordsRecorded",
       "payload": {
+        "audience": "public",
         "day": 1,
         "phase_id": "D01",
         "player_id": "slot_1",
         "reason": "lynch",
         "sequence": 0,
+        "template_id": "mafia_universe_last_words_v1",
         "vote": {
           "majority": 4,
           "status": "Lynch",
@@ -107,7 +109,8 @@
           },
           "total_weight": 6,
           "winner": "slot_1"
-        }
+        },
+        "window": "post_lynch"
       }
     },
     {
@@ -123,13 +126,15 @@
       "index": 8,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
             "cause": "lynch",
             "slot_id": "slot_1"
           }
         ],
-        "phase_id": "D01"
+        "phase_id": "D01",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
   ],

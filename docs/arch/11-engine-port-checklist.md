@@ -2105,10 +2105,13 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    `DayAnnouncement` from `DayPhaseInputs.night_victims` and `LastWordsRecorded` after a
    lynch; v63 adds pack-declared night-victim `template_id`, `audience`, and role payload
    policy (`RoleKey` or `Hidden`) plus last-word `template_id`, `audience`, and `window`.
-   Mafia Universe opts into revealed-role public notes and post-lynch last words; pure
-   goldens prove revealed and hidden role payloads plus multiple-death ordering, while
-   Postgres command/projection and minimizer proof covers the revealed-role template/audience/window
-   path through replay audit, thread projection, and rebuild.]
+   v66 adds pack-declared day-death `PhaseAnnouncement` `template_id` and `audience` metadata.
+   Mafia Universe opts into revealed-role public notes, post-lynch last words, and public
+   day-death trailer metadata; pure goldens prove revealed and hidden role payloads,
+   multiple-death ordering, and lynch/day-action/ITA/Knight/self-destruct day-death ordering,
+   while Postgres command/projection and minimizer proof covers the revealed-role
+   template/audience/window path plus day-death trailer metadata through replay audit, thread
+   projection, and rebuild.]
 6. Wolf self-destruct / day-death culture mechanics. [partly done: v10 `SelfDestruct`
    emits `WolfSelfDestructed` plus paired `PlayerKilled` events for Chinese structured White
    Wolf King; v11 `WolfCarryQueued`/`WolfCarryUsed` queues the White Wolf carry token and
@@ -2570,11 +2573,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    and passed one filtered pipeline test across all three sheriff fixtures. Dedicated Phase 5
    announcement/prompt fixtures now also prove that minimization preserves Mafia Universe
    prior-night `DayAnnouncement` template/audience/role payload metadata, lynch
-   `LastWordsRecorded` template/audience/window metadata, trailing `PhaseAnnouncement`, and
-   Mafiascum NoMajority revote `HostPromptIssued` plus prompt trace decisions. The direct Mafia
-   Universe command proof now covers two prior-night deaths in source order with revealed role
-   payloads, thread projection, replay audit, and projection rebuild; pure golden
-   `day_notes_hidden_role_multiple_deaths` covers the hidden-role payload path.
+   `LastWordsRecorded` template/audience/window metadata, trailing `PhaseAnnouncement`
+   template/audience metadata, and Mafiascum NoMajority revote `HostPromptIssued` plus prompt
+   trace decisions. The direct Mafia Universe command proof now covers two prior-night deaths in
+   source order with revealed role payloads, public day-death trailer metadata, thread projection,
+   replay audit, and projection rebuild; pure golden `day_notes_hidden_role_multiple_deaths`
+   covers the hidden-role payload path, and the canonical day-substep golden assertion covers
+   lynch, day-action kill, ITA kill, Knight duel, and self-destruct ordering through the
+   day-death trailer metadata path.
    `minimize_night_fixture` prompt fixtures now carry the command-native `HostPromptDecision`
    shape and can assert stream-level prompt resolution effects; the Mafiascum NoMajority fixture
    now acknowledges the prompt and checks `HostPromptResolved` plus prompt-driven
@@ -2897,8 +2903,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by finishing day-death announcement metadata. Add pack-declared
-template/audience fields to the trailing day-death `PhaseAnnouncement` surface or an explicit
-day-death announcement event, prove lynch, day-action kill, ITA kill, Knight duel, and
-self-destruct death ordering through pure goldens, then add command/projection audit/rebuild and
-semantic minimizer coverage before updating the checklist again.
+Continue Phase 5 rich day systems by closing the remaining wolf self-destruct and day-death culture
+breadth. Add pack-declared cause/source templates for White Wolf self-destruct, Wolf Beauty drag,
+Hunter retaliation, and lover-suicide day cascades where culture packs need distinct public text;
+prove ordinary lynch, direct day action, generated day cascade, and prompt-driven PK death ordering
+through pure goldens, then add one command/projection audit/rebuild and semantic minimizer fixture
+before updating this checklist again.

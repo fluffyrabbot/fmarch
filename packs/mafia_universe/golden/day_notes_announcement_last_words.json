@@ -124,13 +124,15 @@
       "index": 7,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
             "cause": "lynch",
             "slot_id": "slot_3"
           }
         ],
-        "phase_id": "D02"
+        "phase_id": "D02",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
   ],

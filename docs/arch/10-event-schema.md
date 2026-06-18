@@ -351,10 +351,13 @@ last words are derived from a day lynch. They are emitted before the single trai
 struct DayAnnouncement {
     player_id: SlotId,
     cause: String,
+    template_id: Option<String>,    // v63 pack-declared public note template
+    audience: Option<String>,       // v63 pack-declared audience, e.g. "public"
     source_action_id: Option<String>,
     attackers: Vec<SlotId>,
     unstoppable: bool,
     role_key: Option<RoleKey>,
+    role_payload: Option<DayNoteRolePayload>, // v63 RoleKey or Hidden
     recorded_at: Option<LogicalTime>,
     sequence: u32,
     day: u32,
@@ -365,6 +368,9 @@ struct DayAnnouncement {
 struct LastWordsRecorded {
     player_id: SlotId,
     reason: String,                 // v1: "lynch"
+    template_id: Option<String>,    // v63 pack-declared public note template
+    audience: Option<String>,       // v63 pack-declared audience, e.g. "public"
+    window: Option<String>,         // v63 pack-declared speaking window
     sequence: u32,
     day: u32,
     phase_id: PhaseId,
@@ -459,6 +465,8 @@ struct WolfBeautyDragged {
 ```rust
 struct PhaseAnnouncement {
     phase_id: PhaseId,
+    template_id: Option<String>,    // v66 day-death public trailer template
+    audience: Option<String>,       // v66 day-death public trailer audience
     deaths: Vec<Death>,             // empty if no one died this resolution
 }
 
@@ -470,8 +478,10 @@ It lists the deaths produced in that resolution — for a night, the slots that 
 `PlayerKilled` (each `{ slot_id, cause: "night_kill" }`, in event order); for a day, pre-vote
 day-action deaths use their action cause such as `"knight_duel"` / `"ita_shot"` /
 `"self_destruct"`, a lynched slot uses `cause: "lynch"`, and generated day-death policy such
-as lover suicide uses its generated cause such as `"lover_suicide"` — and is `deaths: []`
-when no one died. This single canonical death-reveal signal always fires, even on a
+as Wolf Beauty or lover-suicide uses the generated cause. It is `deaths: []` when no one died.
+v66 packs may attach `template_id`/`audience` to day/twilight `PhaseAnnouncement` events with at
+least one death; night and no-death trailers omit that metadata. This single canonical
+death-reveal signal always fires, even on a
 resolution that produces only saves, interferences, or a tie. `Death.cause` is the semantic
 death-reveal tag, distinct from `PlayerKilled.cause` when the layer needs that distinction.
 

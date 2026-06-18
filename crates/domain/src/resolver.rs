@@ -833,10 +833,10 @@ fn apply_win_triggers_before_final(
             announced_deaths.push(death);
         }
     }
-    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-        phase_id: input.phase_id.clone(),
-        deaths: announced_deaths,
-    }));
+    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
+        input,
+        announced_deaths,
+    )));
 }
 
 fn apply_trigger_fixpoint(
@@ -4587,10 +4587,9 @@ pub fn resolve_instant(input: ResolutionInput) -> ResolutionOutput {
     resolve_instant_self_destruct_actions(&input, &mut events);
     resolve_beloved_princess_prompts(&input, &mut events, &mut trace_decisions);
     let deaths = deaths_from_events(&events);
-    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-        phase_id: input.phase_id.clone(),
-        deaths,
-    }));
+    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
+        &input, deaths,
+    )));
     let inner = InnerResolution {
         events,
         trace_edges: Vec::new(),
@@ -7859,10 +7858,9 @@ fn resolve_night(input: &ResolutionInput) -> InnerResolution {
     let deaths = deaths_from_events(&events);
     // Trace diagnostics are not inner events because the game-result event stream
     // is a closed domain contract.
-    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-        phase_id: input.phase_id.clone(),
-        deaths,
-    }));
+    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
+        input, deaths,
+    )));
 
     InnerResolution {
         events,
@@ -9043,10 +9041,9 @@ fn resolve_twilight(input: &ResolutionInput) -> InnerResolution {
     resolve_self_destruct_actions(input, &mut events);
     resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
     let deaths = deaths_from_events(&events);
-    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-        phase_id: input.phase_id.clone(),
-        deaths,
-    }));
+    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
+        input, deaths,
+    )));
     InnerResolution {
         events,
         trace_edges: Vec::new(),
@@ -9444,10 +9441,9 @@ fn resolve_day(input: &ResolutionInput) -> InnerResolution {
     }
     apply_effect_source_death_reveals(input, &killed, &mut events, &mut trace_decisions);
     resolve_beloved_princess_prompts(input, &mut events, &mut trace_decisions);
-    events.push(InnerEvent::PhaseAnnouncement(PhaseAnnouncement {
-        phase_id: input.phase_id.clone(),
-        deaths,
-    }));
+    events.push(InnerEvent::PhaseAnnouncement(phase_announcement(
+        input, deaths,
+    )));
     if let Some(winner) = winner.as_ref() {
         resolve_self_lynch_wins(input, winner, &mut events, &mut trace_decisions);
         if !has_win_reached(&events) {
@@ -11649,6 +11645,23 @@ fn deaths_from_events(events: &[InnerEvent]) -> Vec<Death> {
             _ => None,
         })
         .collect()
+}
+
+fn phase_announcement(input: &ResolutionInput, deaths: Vec<Death>) -> PhaseAnnouncement {
+    let day_death_policy = &input.pack.day_notes.day_deaths;
+    let include_day_death_metadata = day_death_policy.enabled
+        && !deaths.is_empty()
+        && matches!(input.state.phase_kind, PhaseKind::Day | PhaseKind::Twilight);
+    PhaseAnnouncement {
+        phase_id: input.phase_id.clone(),
+        template_id: include_day_death_metadata
+            .then(|| day_death_policy.template_id.clone())
+            .flatten(),
+        audience: include_day_death_metadata
+            .then(|| day_death_policy.audience.clone())
+            .flatten(),
+        deaths,
+    }
 }
 
 fn tally_votes(

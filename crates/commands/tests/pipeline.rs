@@ -20204,6 +20204,8 @@ fn mafia_universe_day_notes_fixture_json() -> String {
                     "kind": "PhaseAnnouncement",
                     "payload": {
                         "phase_id": "D02",
+                        "template_id": "mafia_universe_day_death_v1",
+                        "audience": "public",
                         "deaths": [{ "slot_id": "slot_3", "cause": "lynch" }]
                     }
                 }
@@ -25722,6 +25724,8 @@ async fn host_resolve_phase_consumes_passive_white_wolf_carry_on_next_wolf_kill(
                 index: 2,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: "D01".into(),
+                    template_id: None,
+                    audience: None,
                     deaths: vec![domain::Death {
                         slot_id: "slot_1".into(),
                         cause: "white_wolf_carry".into(),
@@ -28856,6 +28860,8 @@ async fn host_resolve_phase_refunds_ita_shot_at_already_dead_target(pool: PgPool
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: "N00".into(),
+                    template_id: None,
+                    audience: None,
                     deaths: vec![domain::Death {
                         slot_id: "slot_4".into(),
                         cause: "test_prior_death".into(),
@@ -29992,6 +29998,8 @@ async fn host_resolve_phase_refunds_buffered_ita_shot_when_target_dies_before_re
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: "D01K".into(),
+                    template_id: None,
+                    audience: None,
                     deaths: vec![domain::Death {
                         slot_id: "slot_4".into(),
                         cause: "test_intervening_death".into(),
@@ -40812,6 +40820,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
         ("slot_3", "user_3", "town_vanilla"),
         ("slot_4", "user_4", "mafia_goon"),
         ("slot_5", "user_5", "mafia_goon"),
+        ("slot_6", "user_6", "mafia_goon"),
     ] {
         handle(
             &pool,
@@ -40999,7 +41008,7 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
                 && note.audience.as_deref() == Some("public")
                 && note.window.as_deref() == Some("post_lynch")
                 && note.vote.winner.as_deref() == Some("slot_3")
-                && (note.vote.total_weight - 3.0).abs() < f64::EPSILON
+                && (note.vote.total_weight - 4.0).abs() < f64::EPSILON
     )));
     assert!(d02.events.iter().any(|indexed| matches!(
         &indexed.event,
@@ -41009,6 +41018,17 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
             unstoppable,
             ..
         } if slot_id == "slot_3" && cause == "day_vote" && *unstoppable
+    )));
+    assert!(d02.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PhaseAnnouncement(announcement)
+            if announcement.phase_id == "D02"
+                && announcement.template_id.as_deref() == Some("mafia_universe_day_death_v1")
+                && announcement.audience.as_deref() == Some("public")
+                && announcement.deaths == vec![domain::Death {
+                    slot_id: "slot_3".to_string(),
+                    cause: "lynch".to_string(),
+                }]
     )));
 
     let thread = projections::thread_view(&pool, game, None, 50)
@@ -41052,8 +41072,8 @@ async fn host_resolve_phase_carries_day_announcements_and_last_words(pool: PgPoo
     assert!(
         d02_post
             .body
-            .contains("Phase D02 announcement: slot_3 (lynch)."),
-        "thread projection publishes the trailing phase announcement"
+            .contains("Phase D02 announcement: slot_3 (lynch); template: mafia_universe_day_death_v1; audience: public."),
+        "thread projection publishes the trailing phase announcement metadata"
     );
 
     let slots = slot_state(&pool, game).await.unwrap();
@@ -59415,6 +59435,8 @@ async fn host_resolve_phase_carries_mafia_universe_lover_setup_cascade(pool: PgP
                 index: 1,
                 event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
                     phase_id: "N01".into(),
+                    template_id: None,
+                    audience: None,
                     deaths: Vec::new(),
                 }),
             },

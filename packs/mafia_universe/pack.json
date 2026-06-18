@@ -1,7 +1,7 @@
 {
   "name": "mafia_universe",
   "version": 1,
-  "ir_version": 63,
+  "ir_version": 66,
   "item_actions": {
     "parity_scanner_item": {
       "id": "parity_scanner_item",
@@ -2745,6 +2745,11 @@
       "template_id": "mafia_universe_last_words_v1",
       "audience": "public",
       "window": "post_lynch"
+    },
+    "day_deaths": {
+      "enabled": true,
+      "template_id": "mafia_universe_day_death_v1",
+      "audience": "public"
     }
   },
   "treestump_policy": {

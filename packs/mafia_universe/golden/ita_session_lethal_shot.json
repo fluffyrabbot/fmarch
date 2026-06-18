@@ -143,24 +143,23 @@
       "kind": "DayVoteOutcome",
       "payload": {
         "contenders": [],
-        "majority": 3.0,
-        "reason": null,
+        "majority": 3,
         "status": "NoLynch",
         "tallies": {},
         "thresholds": {
-          "slot_1": 3.0,
-          "slot_2": 3.0,
-          "slot_3": 3.0,
-          "slot_5": 3.0
+          "slot_1": 3,
+          "slot_2": 3,
+          "slot_3": 3,
+          "slot_5": 3
         },
         "tiebreak": null,
-        "total_weight": 4.0,
+        "total_weight": 4,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_3": 1.0,
-          "slot_5": 1.0
+          "slot_1": 1,
+          "slot_2": 1,
+          "slot_3": 1,
+          "slot_5": 1
         },
         "winner": null
       }
@@ -169,13 +168,15 @@
       "index": 8,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
             "cause": "ita_shot",
             "slot_id": "slot_4"
           }
         ],
-        "phase_id": "D01"
+        "phase_id": "D01",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
   ],

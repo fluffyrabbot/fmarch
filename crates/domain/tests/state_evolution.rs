@@ -86,6 +86,7 @@ fn apply_player_killed_marks_dead() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -162,6 +163,7 @@ fn apply_wolf_carry_queue_and_use_updates_pending_tokens() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let queued = apply_events(
@@ -224,6 +226,7 @@ fn apply_wolf_beauty_mark_upserts_owner_target_relation() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let marked = apply_events(
@@ -282,6 +285,7 @@ fn apply_player_saved_is_a_noop() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -319,6 +323,7 @@ fn apply_effects_mark_then_clear() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let marked = apply_events(
         &state,
@@ -398,6 +403,7 @@ fn apply_resolution_duration_effect_expires_without_durable_state() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let marked = apply_events(
@@ -450,6 +456,7 @@ fn apply_delayed_death_queue_then_resolve() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let queued = apply_events(
         &state,
@@ -510,6 +517,7 @@ fn apply_visit_recorded_appends_history() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -557,6 +565,7 @@ fn apply_player_converted_changes_role() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -611,6 +620,7 @@ fn apply_player_converted_keeps_first_origin() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let next = apply_events(
         &state,
@@ -655,6 +665,7 @@ fn apply_events_is_a_pure_fold() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let events = vec![
         InnerEvent::PlayerKilled {
@@ -666,6 +677,8 @@ fn apply_events_is_a_pure_fold() {
         },
         InnerEvent::PhaseAnnouncement(domain::events::PhaseAnnouncement {
             phase_id: "N01".to_string(),
+            template_id: None,
+            audience: None,
             deaths: vec![],
         }),
     ];
@@ -708,6 +721,7 @@ fn apply_action_recorded_extends_history() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -753,6 +767,7 @@ fn apply_action_granted_extends_grants() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -831,6 +846,7 @@ fn apply_action_grant_consumed_decrements_explicitly_sourced_grant() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -877,6 +893,7 @@ fn apply_action_use_counted_upserts_counter_state() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -939,6 +956,7 @@ fn apply_players_linked_extends_links() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -991,6 +1009,7 @@ fn apply_retaliation_armed_upserts_choice() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -1045,6 +1064,7 @@ fn apply_backup_targeted_upserts_choice() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -1106,6 +1126,7 @@ fn apply_target_lynch_win_targeted_upserts_by_policy_and_owner() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let next = apply_events(
@@ -1188,6 +1209,7 @@ fn resolve_returns_applied_trace_and_post_state() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let output = resolve(ResolutionInput {
@@ -1254,6 +1276,7 @@ fn random_day_vote_tiebreak_is_seeded_and_deterministic() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let resolve_winner = |seed| {
@@ -1330,6 +1353,7 @@ fn day_vote_ballots_are_last_write_wins_per_actor() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let output = resolve(ResolutionInput {
@@ -1419,6 +1443,7 @@ fn no_lynch_votes_produce_no_lynch_outcome_without_death() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let output = resolve(ResolutionInput {
@@ -1491,6 +1516,7 @@ fn day_vote_statuses_distinguish_no_lynch_no_majority_and_tie() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let resolve_status = |pack: Pack, submissions: Vec<Submission>, label: &str| {
         let output = resolve(ResolutionInput {
@@ -1588,6 +1614,7 @@ fn day_vote_policy_matrix_covers_methods_and_tie_breakers() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     let resolve_outcome =
@@ -1749,6 +1776,7 @@ fn check_win_town_when_mafia_eliminated() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
@@ -1785,6 +1813,7 @@ fn check_win_mafia_at_parity() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "mafia"),
@@ -1822,6 +1851,7 @@ fn check_win_none_when_game_continues() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     assert!(check_win(&state, &pack).is_none());
 }
@@ -1860,6 +1890,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     // town(2) vs others(1 cult): town AllOthers? no. mafia parity? 0 -> no.
     // cult parity? 1 >= 2? no. So no win while the cult survives.
@@ -1894,6 +1925,7 @@ fn epicmafia_town_wins_only_when_both_mafia_and_cult_eliminated() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     match check_win(&both_dead, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "town"),
@@ -1931,6 +1963,7 @@ fn epicmafia_cult_wins_at_parity() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     match check_win(&state, &pack) {
         Some(InnerEvent::WinReached { winner, .. }) => assert_eq!(winner, "cult"),
@@ -1975,6 +2008,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let night_events = resolve_events(ResolutionInput {
         game_id: "mp".to_string(),
@@ -2042,6 +2076,7 @@ fn multi_phase_state_carries_forward_and_win_fires_at_the_right_point() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
     let night_safe = resolve_events(ResolutionInput {
         game_id: "mp".to_string(),
@@ -2162,6 +2197,7 @@ fn arsonist_persistent_effect_carries_across_phases() {
         wolf_carry_tokens: Vec::new(),
         wolf_beauty_marks: Vec::new(),
         badges: Vec::new(),
+        buffered_ita_shots: Vec::new(),
     };
 
     // N01: douse slot_2.

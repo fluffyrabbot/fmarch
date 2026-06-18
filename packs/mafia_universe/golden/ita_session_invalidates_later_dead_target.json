@@ -230,13 +230,15 @@
       "index": 11,
       "kind": "PhaseAnnouncement",
       "payload": {
+        "audience": "public",
         "deaths": [
           {
             "cause": "ita_shot",
             "slot_id": "slot_4"
           }
         ],
-        "phase_id": "D01"
+        "phase_id": "D01",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
   ],

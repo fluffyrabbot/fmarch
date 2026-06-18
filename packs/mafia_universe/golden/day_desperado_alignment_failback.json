@@ -1,153 +1,15 @@
 {
   "description": "Mafia Universe Day Desperado: town and mafia variants kill hostile targets, while same-alignment targets cause alignment-failback self-death before the vote outcome.",
-  "input": {
-    "game_id": "game_mu_day_desperado_001",
-    "phase_id": "D01",
-    "state": {
-      "phase_kind": "Day",
-      "phase_number": 1,
-      "phase_id": "D01",
-      "phase_deadline": null,
-      "phase_policy": {
-        "cadence": ["Day", "Night"],
-        "subsegments": {
-          "Day": ["ita_sessions", "main", "eod"]
-        },
-        "twilight": false
-      },
-      "slots": [
-        {
-          "slot_id": "slot_1",
-          "role_key": "town_day_desperado",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_2",
-          "role_key": "mafia_day_desperado",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_3",
-          "role_key": "town_day_desperado",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_4",
-          "role_key": "mafia_day_desperado",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_5",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_6",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_7",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_8",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_9",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_10",
-          "role_key": "town_vanilla",
-          "alignment": "town",
-          "status": "alive",
-          "effects": []
-        },
-        {
-          "slot_id": "slot_11",
-          "role_key": "mafia_goon",
-          "alignment": "mafia",
-          "status": "alive",
-          "effects": []
-        }
-      ]
-    },
-    "submissions": [
-      {
-        "action_id": "mu_town_day_desperado_success_001",
-        "actor": "slot_1",
-        "template_id": "day_desperado",
-        "targets": ["slot_5"],
-        "phase_id": "D01",
-        "submitted_at": 1,
-        "withdrawn": false,
-        "metadata": {}
-      },
-      {
-        "action_id": "mu_mafia_day_desperado_success_001",
-        "actor": "slot_2",
-        "template_id": "day_desperado",
-        "targets": ["slot_6"],
-        "phase_id": "D01",
-        "submitted_at": 2,
-        "withdrawn": false,
-        "metadata": {}
-      },
-      {
-        "action_id": "mu_town_day_desperado_fail_001",
-        "actor": "slot_3",
-        "template_id": "day_desperado",
-        "targets": ["slot_7"],
-        "phase_id": "D01",
-        "submitted_at": 3,
-        "withdrawn": false,
-        "metadata": {}
-      },
-      {
-        "action_id": "mu_mafia_day_desperado_fail_001",
-        "actor": "slot_4",
-        "template_id": "day_desperado",
-        "targets": ["slot_8"],
-        "phase_id": "D01",
-        "submitted_at": 4,
-        "withdrawn": false,
-        "metadata": {}
-      }
-    ],
-    "pack": "mafia_universe",
-    "seed": 719001
-  },
   "expected_events": [
     {
       "index": 0,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_5",
+        "attackers": [
+          "slot_1"
+        ],
         "cause": "day_desperado",
-        "attackers": ["slot_1"],
+        "slot_id": "slot_5",
         "unstoppable": false
       }
     },
@@ -155,9 +17,11 @@
       "index": 1,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_6",
+        "attackers": [
+          "slot_2"
+        ],
         "cause": "day_desperado",
-        "attackers": ["slot_2"],
+        "slot_id": "slot_6",
         "unstoppable": false
       }
     },
@@ -165,9 +29,11 @@
       "index": 2,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_3",
+        "attackers": [
+          "slot_3"
+        ],
         "cause": "day_desperado",
-        "attackers": ["slot_3"],
+        "slot_id": "slot_3",
         "unstoppable": false
       }
     },
@@ -175,9 +41,11 @@
       "index": 3,
       "kind": "PlayerKilled",
       "payload": {
-        "slot_id": "slot_4",
+        "attackers": [
+          "slot_4"
+        ],
         "cause": "day_desperado",
-        "attackers": ["slot_4"],
+        "slot_id": "slot_4",
         "unstoppable": false
       }
     },
@@ -185,59 +53,215 @@
       "index": 4,
       "kind": "DayVoteOutcome",
       "payload": {
-        "status": "NoLynch",
-        "winner": null,
         "contenders": [],
+        "majority": 4,
+        "status": "NoLynch",
         "tallies": {},
+        "thresholds": {
+          "slot_1": 4,
+          "slot_10": 4,
+          "slot_11": 4,
+          "slot_2": 4,
+          "slot_7": 4,
+          "slot_8": 4,
+          "slot_9": 4
+        },
+        "tiebreak": null,
+        "total_weight": 7,
         "votes": {},
         "weights": {
-          "slot_1": 1.0,
-          "slot_2": 1.0,
-          "slot_7": 1.0,
-          "slot_8": 1.0,
-          "slot_9": 1.0,
-          "slot_10": 1.0,
-          "slot_11": 1.0
+          "slot_1": 1,
+          "slot_10": 1,
+          "slot_11": 1,
+          "slot_2": 1,
+          "slot_7": 1,
+          "slot_8": 1,
+          "slot_9": 1
         },
-        "majority": 4.0,
-        "thresholds": {
-          "slot_1": 4.0,
-          "slot_2": 4.0,
-          "slot_7": 4.0,
-          "slot_8": 4.0,
-          "slot_9": 4.0,
-          "slot_10": 4.0,
-          "slot_11": 4.0
-        },
-        "total_weight": 7.0,
-        "tiebreak": null,
-        "reason": null
+        "winner": null
       }
     },
     {
       "index": 5,
       "kind": "PhaseAnnouncement",
       "payload": {
-        "phase_id": "D01",
+        "audience": "public",
         "deaths": [
           {
-            "slot_id": "slot_5",
-            "cause": "day_desperado"
+            "cause": "day_desperado",
+            "slot_id": "slot_5"
           },
           {
-            "slot_id": "slot_6",
-            "cause": "day_desperado"
+            "cause": "day_desperado",
+            "slot_id": "slot_6"
           },
           {
-            "slot_id": "slot_3",
-            "cause": "day_desperado"
+            "cause": "day_desperado",
+            "slot_id": "slot_3"
           },
           {
-            "slot_id": "slot_4",
-            "cause": "day_desperado"
+            "cause": "day_desperado",
+            "slot_id": "slot_4"
           }
-        ]
+        ],
+        "phase_id": "D01",
+        "template_id": "mafia_universe_day_death_v1"
       }
     }
-  ]
+  ],
+  "input": {
+    "game_id": "game_mu_day_desperado_001",
+    "pack": "mafia_universe",
+    "phase_id": "D01",
+    "seed": 719001,
+    "state": {
+      "phase_deadline": null,
+      "phase_id": "D01",
+      "phase_kind": "Day",
+      "phase_number": 1,
+      "phase_policy": {
+        "cadence": [
+          "Day",
+          "Night"
+        ],
+        "subsegments": {
+          "Day": [
+            "ita_sessions",
+            "main",
+            "eod"
+          ]
+        },
+        "twilight": false
+      },
+      "slots": [
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_day_desperado",
+          "slot_id": "slot_1",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_day_desperado",
+          "slot_id": "slot_2",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_day_desperado",
+          "slot_id": "slot_3",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_day_desperado",
+          "slot_id": "slot_4",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_5",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_6",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_7",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_8",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_9",
+          "status": "alive"
+        },
+        {
+          "alignment": "town",
+          "effects": [],
+          "role_key": "town_vanilla",
+          "slot_id": "slot_10",
+          "status": "alive"
+        },
+        {
+          "alignment": "mafia",
+          "effects": [],
+          "role_key": "mafia_goon",
+          "slot_id": "slot_11",
+          "status": "alive"
+        }
+      ]
+    },
+    "submissions": [
+      {
+        "action_id": "mu_town_day_desperado_success_001",
+        "actor": "slot_1",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 1,
+        "targets": [
+          "slot_5"
+        ],
+        "template_id": "day_desperado",
+        "withdrawn": false
+      },
+      {
+        "action_id": "mu_mafia_day_desperado_success_001",
+        "actor": "slot_2",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 2,
+        "targets": [
+          "slot_6"
+        ],
+        "template_id": "day_desperado",
+        "withdrawn": false
+      },
+      {
+        "action_id": "mu_town_day_desperado_fail_001",
+        "actor": "slot_3",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 3,
+        "targets": [
+          "slot_7"
+        ],
+        "template_id": "day_desperado",
+        "withdrawn": false
+      },
+      {
+        "action_id": "mu_mafia_day_desperado_fail_001",
+        "actor": "slot_4",
+        "metadata": {},
+        "phase_id": "D01",
+        "submitted_at": 4,
+        "targets": [
+          "slot_8"
+        ],
+        "template_id": "day_desperado",
+        "withdrawn": false
+      }
+    ]
+  }
 }

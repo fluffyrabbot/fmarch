@@ -1347,7 +1347,7 @@ fn unsupported_version_fixture_is_rejected_by_pack_linter() {
     let pack = load_pack_named("test_unsupported_ir_version");
     let err = validate_pack(&pack).unwrap_err();
     assert_issue(&err, "version", "unsupported pack version 2");
-    assert_issue(&err, "ir_version", "unsupported IR version 66");
+    assert_issue(&err, "ir_version", "unsupported IR version 67");
 }
 
 #[test]
@@ -6416,6 +6416,66 @@ fn day_note_templates_audiences_windows_require_v63_and_enabled_policies() {
     value["day_notes"]["announcements"]["template_id"] = json!("night_death");
     value["day_notes"]["last_words"]["day_deaths"] = json!(true);
     value["day_notes"]["last_words"]["audience"] = json!("public");
+    validate_pack(&pack_from_value(value)).unwrap();
+}
+
+#[test]
+fn day_death_announcement_metadata_requires_v66_and_complete_policy() {
+    let mut value = valid_pack_value();
+    value["ir_version"] = json!(65);
+    value["phases"]["cadence"] = json!(["Night"]);
+    value["visibility_families"] = json!(["EffectAudiences"]);
+    value["win_families"] = json!(["FactionElimination", "FactionParity"]);
+    value["day_notes"] = json!({
+        "day_deaths": {
+            "enabled": true
+        }
+    });
+
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "ir_version",
+        "pack declares features requiring ir_version >= 66",
+    );
+    assert_issue(&err, "ir_version", "day_notes.day_death_announcements");
+    assert_issue(&err, "day_notes", "requires Day in phases.cadence");
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.template_id",
+        "enabled day-death announcements require template_id",
+    );
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.audience",
+        "enabled day-death announcements require audience",
+    );
+
+    value["ir_version"] = json!(66);
+    value["phases"]["cadence"] = json!(["Night", "Day"]);
+    value["day_notes"]["day_deaths"] = json!({
+        "enabled": false,
+        "template_id": "",
+        "audience": ""
+    });
+    let err = validate_pack(&pack_from_value(value.clone())).unwrap_err();
+    assert_issue(
+        &err,
+        "day_notes.day_deaths.template_id",
+        "must not be empty",
+    );
+    assert_issue(&err, "day_notes.day_deaths.audience", "must not be empty");
+    assert_issue(
+        &err,
+        "day_notes.day_deaths",
+        "metadata requires enabled day_deaths",
+    );
+
+    value["day_notes"]["day_deaths"] = json!({
+        "enabled": true,
+        "template_id": "day_death",
+        "audience": "public"
+    });
     validate_pack(&pack_from_value(value)).unwrap();
 }
 

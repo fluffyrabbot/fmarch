@@ -598,6 +598,10 @@ pub struct HostPromptIssued {
 #[serde(deny_unknown_fields)]
 pub struct PhaseAnnouncement {
     pub phase_id: PhaseId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
     pub deaths: Vec<Death>,
 }
 
@@ -1089,6 +1093,24 @@ fn validate_phase_announcement_invariant(
             "PhaseAnnouncement.phase_id `{}` must match envelope phase_id `{}`",
             announcement.phase_id, applied.phase_id
         )));
+    }
+    if announcement
+        .template_id
+        .as_deref()
+        .is_some_and(|template_id| template_id.trim().is_empty())
+    {
+        return Err(ResultValidationError::PhaseAnnouncementInvariant(
+            "PhaseAnnouncement.template_id must not be empty".to_string(),
+        ));
+    }
+    if announcement
+        .audience
+        .as_deref()
+        .is_some_and(|audience| audience.trim().is_empty())
+    {
+        return Err(ResultValidationError::PhaseAnnouncementInvariant(
+            "PhaseAnnouncement.audience must not be empty".to_string(),
+        ));
     }
 
     Ok(())

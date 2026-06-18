@@ -2965,10 +2965,20 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                 ));
             }
             domain::InnerEvent::PhaseAnnouncement(announcement) => {
+                let template = announcement
+                    .template_id
+                    .as_deref()
+                    .map(|template| format!("; template: {template}"))
+                    .unwrap_or_default();
+                let audience = announcement
+                    .audience
+                    .as_deref()
+                    .map(|audience| format!("; audience: {audience}"))
+                    .unwrap_or_default();
                 if announcement.deaths.is_empty() {
                     lines.push(format!(
-                        "Phase {} announcement: no deaths.",
-                        announcement.phase_id
+                        "Phase {} announcement: no deaths{}{}.",
+                        announcement.phase_id, template, audience
                     ));
                 } else {
                     let deaths = announcement
@@ -2978,7 +2988,7 @@ fn resolution_thread_announcement_body(applied: &domain::ResolutionApplied) -> O
                         .collect::<Vec<_>>()
                         .join(", ");
                     lines.push(format!(
-                        "Phase {} announcement: {deaths}.",
+                        "Phase {} announcement: {deaths}{template}{audience}.",
                         announcement.phase_id
                     ));
                 }
