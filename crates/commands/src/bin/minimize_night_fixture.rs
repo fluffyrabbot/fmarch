@@ -7,6 +7,7 @@ use commands::{
 };
 use projections::{
     audit_rebuild, delayed_death_queues, player_notifications, sheriff_badges, slot_effects,
+    slot_state,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -107,6 +108,8 @@ struct FixtureExpectations {
     player_notifications: Vec<ExpectedProjectionRow>,
     #[serde(default)]
     sheriff_badges: Vec<ExpectedProjectionRow>,
+    #[serde(default)]
+    slot_states: Vec<ExpectedProjectionRow>,
 }
 
 impl FixtureExpectations {
@@ -122,6 +125,7 @@ impl FixtureExpectations {
             + self.absent_slot_effects.len()
             + self.player_notifications.len()
             + self.sheriff_badges.len()
+            + self.slot_states.len()
     }
 }
 
@@ -1232,6 +1236,19 @@ async fn validate_semantic_expectations(
         }
     }
 
+    if !expectations.slot_states.is_empty() {
+        let rows = slot_state(pool, game)
+            .await
+            .map_err(|err| format!("fetch slot_state failed: {err}"))?
+            .into_iter()
+            .map(|row| {
+                serde_json::to_value(row)
+                    .expect("slot state projection row should serialize for fixture matching")
+            })
+            .collect::<Vec<_>>();
+        validate_projection_rows_present("slot_state", &rows, &expectations.slot_states)?;
+    }
+
     Ok(())
 }
 
@@ -1586,6 +1603,7 @@ mod tests {
                 absent_slot_effects: Vec::new(),
                 player_notifications: Vec::new(),
                 sheriff_badges: Vec::new(),
+                slot_states: Vec::new(),
             },
         };
         let report = RunReport {
