@@ -2515,6 +2515,15 @@ coverage, and a playable vertical scenario through the command pipeline.
    `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 29
    families, 58 cases, and the proof boundary that it is bounded local-Postgres coverage rather
    than exhaustive randomized coverage.
+   `tools/check_generated_shrink_matrix_gap_audit.py --check` now adds the matching
+   no-Postgres gap audit for that compact matrix: it derives the expected 29 Phase 4
+   persistent/generated-action families from the checked checklist buckets plus source/test
+   evidence needles, compares them to `generated_shrink_matrix_expected_families()`, and writes
+   `target/operator-proof/current-generated-shrink-gap-audit-report.json` with `ok: true`, 29
+   expected/manifest families, 58 expected/manifest cases, no missing families, no unexpected
+   families, no count mismatches, and no evidence failures. That audit does not execute resolver
+   cases; it proves the matrix is not missing a named Phase 4 family before new generated cases are
+   added.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
    `promoted_success_fixture: false`. `--write-report <path>` now persists the minimizer JSON
@@ -2982,9 +2991,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by adding a mechanical generated-shrink gap audit for persistent/generated-action
-families. Derive the expected matrix family set from the Phase 4 checklist bullets and shipped
-pack/result primitives, compare it to the 29-family generated matrix manifest, and let that report
-name the next implementation slice before adding more cases. Prove the audit as a small no-Postgres
-unit/check command first, then promote the next concrete matrix family only after the audit exposes
-a real missing proof row.
+Continue Phase 4 by wiring the new generated-shrink gap audit into the operator proof manifest and
+browser/status truth surfaces. Add the report as a saved proof artifact, expose its `ok`, family,
+case, missing/unexpected/count-mismatch, and evidence-failure fields in the status/go-no-go path, and
+prove that a stale or failing gap audit blocks the same local truth surface as the generated-shrink
+matrix report without rerunning Postgres-backed resolver cases.
