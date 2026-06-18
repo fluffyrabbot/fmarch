@@ -1,0 +1,134 @@
+{
+  "seed": 137181,
+  "pack": "mafiascum",
+  "phase": "N01",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "mafia_goon"
+    },
+    {
+      "slot": "slot_2",
+      "role": "bomb"
+    },
+    {
+      "slot": "slot_5",
+      "role": "mafia_goon"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "factional_kill",
+      "action_id": "generated_seed_97181_bomb_kill",
+      "targets": [
+        "slot_2"
+      ]
+    }
+  ],
+  "setup_phases": [],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_1"
+          ],
+          "cause": "factional_kill",
+          "slot_id": "slot_2",
+          "unstoppable": false
+        }
+      },
+      {
+        "kind": "Trigger",
+        "payload": {
+          "payload": {
+            "on": "Kill",
+            "produced_actor": "slot_2",
+            "produced_target": "slot_1",
+            "source_actor": "slot_1",
+            "source_cause": "factional_kill",
+            "source_target": "slot_2"
+          },
+          "trigger_id": "bomb_retaliates"
+        }
+      },
+      {
+        "kind": "PlayerKilled",
+        "payload": {
+          "attackers": [
+            "slot_2"
+          ],
+          "cause": "bomb_retaliates",
+          "slot_id": "slot_1",
+          "unstoppable": false
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "inner_event",
+        "source": "event_index:1",
+        "outcome": "trigger"
+      }
+    ],
+    "trace_notes": [
+      "trigger bomb_retaliates emitted at event_index 1"
+    ],
+    "generated_actions": [
+      {
+        "action_id": "bomb_retaliates",
+        "source": "Trigger",
+        "actor": "slot_2",
+        "targets": [
+          "slot_1"
+        ],
+        "detail": {
+          "on": "Kill",
+          "produced_actor": "slot_2",
+          "produced_target": "slot_1",
+          "source_actor": "slot_1",
+          "source_cause": "factional_kill",
+          "source_target": "slot_2"
+        }
+      }
+    ],
+    "generated_action_counts": [
+      {
+        "action_id": "bomb_retaliates",
+        "source": "Trigger",
+        "count": 1
+      }
+    ],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": [
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_1"
+        }
+      },
+      {
+        "payload": {
+          "alive": false,
+          "slot_id": "slot_2"
+        }
+      },
+      {
+        "payload": {
+          "alive": true,
+          "slot_id": "slot_5"
+        }
+      }
+    ]
+  }
+}
