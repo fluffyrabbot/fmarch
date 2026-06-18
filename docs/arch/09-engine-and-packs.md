@@ -524,11 +524,14 @@ Day/Twilight resolution actually produced deaths. v67 adds per-death `cause_temp
 pack-declared death cause. Mafia Universe opts into revealed-role night-victim notes, post-lynch
 last words, public day-death trailer metadata, and per-cause public text for lynch, day-action,
 ITA, and lover-suicide deaths. EpicMafia opts into public PK prompt-death text for
-`host_prompt:pk`, while Chinese structured and Mafiascum opt into culture-pack day-death trailer
-metadata plus per-cause Hunter retaliation, lover-suicide, and lynch text where those causes are
-shipped. Pure goldens also prove hidden-role multiple-death ordering plus lynch, day-action kill,
-ITA kill, Knight duel, White Wolf self-destruct, Wolf Beauty drag, Chinese lover-suicide, and
-Chinese Hunter lynch-retaliation ordering through the trailer/per-death metadata path. The first
+`host_prompt:pk`, while Chinese structured opts into culture-pack day-death trailer metadata plus
+per-cause Hunter retaliation, lover-suicide, and lynch text where those causes are shipped.
+Mafiascum opts into public trailer metadata plus per-cause lynch, Hunter retaliation,
+lover-suicide, day-vigilante, self-destruct, Hero/VoteDuel retaliation, and Super-Saint
+retaliation text. Pure goldens also prove hidden-role multiple-death ordering plus lynch,
+day-action kill, ITA kill, Knight duel, White Wolf self-destruct, Wolf Beauty drag, Chinese
+lover-suicide, Chinese Hunter lynch-retaliation, and Mafiascum day-action/retaliation ordering
+through the trailer/per-death metadata path. The first
 vertical is `mafia_universe`, with pure goldens plus Postgres command/projection rebuild and
 semantic minimizer proof.
 

@@ -2109,10 +2109,11 @@ Exit proof: multi-phase goldens show effects carrying forward only through state
    v67 adds per-death cause templates on `PhaseAnnouncement.deaths[]`.
    Mafia Universe opts into revealed-role public notes, post-lynch last words, and public
    day-death trailer/per-cause metadata; EpicMafia, Chinese structured, and Mafiascum now ship
-   v67 day-death metadata for their PK, Hunter-retaliation, lover-suicide, and lynch culture
+   v67 day-death metadata for their PK, Hunter-retaliation, lover-suicide, lynch, Mafiascum
+   day-vigilante, self-destruct, Hero/VoteDuel retaliation, and Super-Saint retaliation culture
    causes where exposed. Pure goldens prove revealed and hidden role payloads, multiple-death
-   ordering, and lynch/day-action/ITA/Knight/self-destruct/Wolf Beauty/lover-suicide/Hunter
-   retaliation day-death ordering,
+   ordering, and lynch/day-action/ITA/Knight/self-destruct/Wolf Beauty/lover-suicide/Hunter/
+   Super-Saint/Hero retaliation day-death ordering,
    while Postgres command/projection and minimizer proof covers the revealed-role
    template/audience/window path plus day-death trailer/per-cause metadata through replay audit,
    thread projection, and rebuild.]
@@ -2586,7 +2587,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    `day_notes_hidden_role_multiple_deaths` covers the hidden-role payload path, and the canonical
    day-substep golden assertion covers lynch, day-action kill, ITA kill, Knight duel, White Wolf
    self-destruct, Wolf Beauty drag, Chinese lover suicide, and Chinese Hunter lynch retaliation
-   ordering through the day-death trailer/per-cause metadata path.
+   ordering through the day-death trailer/per-cause metadata path. Mafiascum now adds shipped-pack
+   per-cause templates, regenerated goldens, pure ordering assertions, and Postgres
+   command/projection assertions for day-vigilante kills, day self-destruct trades, Hero/VoteDuel
+   deaths, and Super-Saint lynch retaliation deaths.
    `minimize_night_fixture` prompt fixtures now carry the command-native `HostPromptDecision`
    shape and can assert stream-level prompt resolution effects; the Mafiascum NoMajority fixture
    now acknowledges the prompt and checks `HostPromptResolved` plus prompt-driven
@@ -2911,9 +2915,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 5 rich day systems by closing the remaining culture-specific day-death policy
-breadth around generated and prompt-adjacent cascades. Add shipped-pack per-cause coverage and
-golden assertions for Super-Saint/vengeful day retaliation, Gladiator/VoteDuel deaths, and any
-remaining day-action causes that still receive only trailer-level metadata; then add one
-command/projection audit/rebuild and semantic minimizer fixture before updating this checklist
-again.
+Begin Phase 6 culture-pack policy breadth by promoting one non-Mafiascum culture pack from
+feature coverage to a playable vertical. Inventory the chosen shipped pack's parity matrix rows
+against its linter, result-schema coverage, goldens, command/projection integration, and one
+end-to-end scenario; fill the smallest missing vertical gap first, then update this checklist only
+after the scenario runs through replay/rebuild without projection drift.

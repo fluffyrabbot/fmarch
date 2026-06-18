@@ -129,8 +129,10 @@
             "template_id": "mafiascum_lynch_death_v1"
           },
           {
+            "audience": "public",
             "cause": "hero_instigator_kill",
-            "slot_id": "slot_1"
+            "slot_id": "slot_1",
+            "template_id": "mafiascum_hero_instigator_death_v1"
           }
         ],
         "phase_id": "D01",

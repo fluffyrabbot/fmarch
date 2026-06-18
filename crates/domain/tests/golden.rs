@@ -7381,6 +7381,143 @@ fn golden_white_wolf_king_day_self_destruct() {
 }
 
 #[test]
+fn mafiascum_day_death_cause_templates_cover_day_action_and_retaliation_breadth() {
+    let day_vigilante = {
+        let golden = load_golden("day_vigilante_kill_before_vote.json");
+        run(&golden["input"], load_pack())
+    };
+    assert_event_order(
+        "Mafiascum day vigilante death metadata",
+        &day_vigilante,
+        &[
+            (
+                "day_vigilante_kill",
+                first_event_index_where(&day_vigilante, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vigilante_kill"
+                }),
+            ),
+            (
+                "resolve_votes",
+                first_event_index(&day_vigilante, "DayVoteOutcome"),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&day_vigilante, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &day_vigilante,
+        "day_vigilante_kill",
+        "mafiascum_day_vigilante_death_v1",
+        "public",
+    );
+
+    let self_destruct = {
+        let golden = load_golden("day_self_destruct_trade.json");
+        run(&golden["input"], load_pack())
+    };
+    assert_event_order(
+        "Mafiascum day self-destruct metadata",
+        &self_destruct,
+        &[
+            (
+                "self_destruct",
+                first_event_index(&self_destruct, "WolfSelfDestructed"),
+            ),
+            (
+                "self_destruct_death",
+                first_event_index_where(&self_destruct, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "self_destruct"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&self_destruct, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &self_destruct,
+        "self_destruct",
+        "mafiascum_self_destruct_death_v1",
+        "public",
+    );
+
+    let hero_instigator = {
+        let golden = load_golden("hero_instigator_kill_on_vote_duel.json");
+        run(&golden["input"], load_pack())
+    };
+    assert_event_order(
+        "Mafiascum Hero VoteDuel retaliation metadata",
+        &hero_instigator,
+        &[
+            (
+                "vote_duel",
+                first_event_index(&hero_instigator, "VoteDuelDeclared"),
+            ),
+            (
+                "hero_trigger",
+                first_event_index(&hero_instigator, "Trigger"),
+            ),
+            (
+                "hero_death",
+                first_event_index_where(&hero_instigator, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "hero_instigator_kill"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&hero_instigator, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &hero_instigator,
+        "hero_instigator_kill",
+        "mafiascum_hero_instigator_death_v1",
+        "public",
+    );
+
+    let super_saint = {
+        let golden = load_golden("super_saint_retaliates_on_lynch.json");
+        run(&golden["input"], load_pack())
+    };
+    assert_event_order(
+        "Mafiascum Super-Saint retaliation metadata",
+        &super_saint,
+        &[
+            (
+                "lynch",
+                first_event_index_where(&super_saint, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "day_vote"
+                }),
+            ),
+            (
+                "super_saint_trigger",
+                first_event_index(&super_saint, "Trigger"),
+            ),
+            (
+                "super_saint_death",
+                first_event_index_where(&super_saint, "PlayerKilled", |event| {
+                    event["payload"]["cause"] == "super_saint_retaliates"
+                }),
+            ),
+            (
+                "phase_announcement",
+                first_event_index(&super_saint, "PhaseAnnouncement"),
+            ),
+        ],
+    );
+    assert_death_metadata(
+        &super_saint,
+        "super_saint_retaliates",
+        "mafiascum_super_saint_retaliation_death_v1",
+        "public",
+    );
+}
+
+#[test]
 fn golden_twilight_self_destruct_window() {
     let golden = load_golden_in("test_twilight_window", "twilight_self_destruct.json");
     let got = run(&golden["input"], load_pack_named("test_twilight_window"));

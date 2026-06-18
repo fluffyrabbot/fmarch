@@ -3925,6 +3925,14 @@
       "template_id": "mafiascum_day_death_v1",
       "audience": "public",
       "cause_templates": {
+        "day_vigilante_kill": {
+          "template_id": "mafiascum_day_vigilante_death_v1",
+          "audience": "public"
+        },
+        "hero_instigator_kill": {
+          "template_id": "mafiascum_hero_instigator_death_v1",
+          "audience": "public"
+        },
         "hunter_retaliate": {
           "template_id": "mafiascum_hunter_retaliation_death_v1",
           "audience": "public"
@@ -3935,6 +3943,14 @@
         },
         "lynch": {
           "template_id": "mafiascum_lynch_death_v1",
+          "audience": "public"
+        },
+        "self_destruct": {
+          "template_id": "mafiascum_self_destruct_death_v1",
+          "audience": "public"
+        },
+        "super_saint_retaliates": {
+          "template_id": "mafiascum_super_saint_retaliation_death_v1",
           "audience": "public"
         }
       }

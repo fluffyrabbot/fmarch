@@ -132,8 +132,10 @@
             "template_id": "mafiascum_lynch_death_v1"
           },
           {
+            "audience": "public",
             "cause": "super_saint_retaliates",
-            "slot_id": "slot_2"
+            "slot_id": "slot_2",
+            "template_id": "mafiascum_super_saint_retaliation_death_v1"
           }
         ],
         "phase_id": "D01",

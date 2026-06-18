@@ -5599,6 +5599,23 @@ async fn host_resolve_phase_projects_hero_instigator_kill_on_vote_duel(pool: PgP
         )),
         "Hero trigger should kill the instigating challenger"
     );
+    let announcement = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::PhaseAnnouncement(announcement) => Some(announcement),
+            _ => None,
+        })
+        .expect("Hero vote duel should emit a trailing PhaseAnnouncement");
+    assert_eq!(
+        announcement.template_id.as_deref(),
+        Some("mafiascum_day_death_v1")
+    );
+    assert!(announcement.deaths.iter().any(|death| {
+        death.cause == "hero_instigator_kill"
+            && death.template_id.as_deref() == Some("mafiascum_hero_instigator_death_v1")
+            && death.audience.as_deref() == Some("public")
+    }));
 
     let slots = slot_state(&pool, game).await.unwrap();
     for slot_id in ["slot_1", "slot_2"] {
@@ -6191,7 +6208,7 @@ async fn host_resolve_phase_carries_mafiascum_day_self_destruct_trade(pool: PgPo
             post.phase_id == "D01"
                 && post.author_user.as_deref() == Some("system")
                 && post.body.contains(
-                    "Phase D01 announcement: slot_2 (self_destruct), slot_1 (self_destruct).",
+                    "Phase D01 announcement: slot_2 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public), slot_1 (self_destruct; template: mafiascum_self_destruct_death_v1; audience: public); template: mafiascum_day_death_v1; audience: public.",
                 )
         }),
         "thread projection should publish target death plus self-sacrifice"
@@ -6801,7 +6818,7 @@ async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
                     == vec![domain::Death {
                         slot_id: "slot_2".to_string(),
                         cause: "day_vigilante_kill".to_string(),
-                        template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                        template_id: Some("mafiascum_day_vigilante_death_v1".to_string()),
                         audience: Some("public".to_string()),
                     }]
     )));
@@ -6833,7 +6850,7 @@ async fn host_resolve_phase_carries_mafiascum_day_vigilante_kill(pool: PgPool) {
                 && post.author_user.as_deref() == Some("system")
                 && post
                     .body
-                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill).")
+                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill; template: mafiascum_day_vigilante_death_v1; audience: public); template: mafiascum_day_death_v1; audience: public.")
         }),
         "thread projection should publish the day-shot death"
     );
@@ -21552,7 +21569,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
         trace
             .notes
             .iter()
-            .any(|note| note == "trigger super_saint_retaliates emitted at event_index 2"),
+            .any(|note| note == "trigger super_saint_retaliates emitted at event_index 6"),
         "Super-Saint day trigger should persist trace note"
     );
     assert_trigger_generated_trace(
@@ -21566,7 +21583,7 @@ async fn host_resolve_phase_carries_super_saint_lynch_trigger(pool: PgPool) {
             produced_actor: "slot_1",
             produced_target: "slot_2",
             actor_filter: None,
-            event_index: 2,
+            event_index: 6,
         },
     );
 

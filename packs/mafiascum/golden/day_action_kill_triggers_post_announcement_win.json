@@ -42,8 +42,10 @@
         "audience": "public",
         "deaths": [
           {
+            "audience": "public",
             "cause": "day_vigilante_kill",
-            "slot_id": "slot_2"
+            "slot_id": "slot_2",
+            "template_id": "mafiascum_day_vigilante_death_v1"
           }
         ],
         "phase_id": "D01",
