@@ -2470,19 +2470,28 @@ coverage, and a playable vertical scenario through the command pipeline.
    persists a four-slot, three-action Babysitter generated-death replay, and
    `crates/commands/fixtures/night-hider-dependency-minimized.json` promotes a three-slot,
    two-action Hider host-death dependency replay. `crates/commands/fixtures/night-pgo-trigger-minimized.json`
-   covers the remaining trigger-note side with a two-slot, one-action PGO replay. `minimize_night_fixture`
+   covers the remaining trigger-note side with a two-slot, one-action PGO replay.
+   `crates/commands/fixtures/night-extra-action-generated-minimized.json` now promotes the first
+   generated-action matrix row into a checked-in four-slot, two-action ExtraAction replay with
+   two audited resolution envelopes, two anchored traces, and five checked semantic expectations.
+   `minimize_night_fixture`
    now asserts fixture metadata for expected inner events, anchored trace decisions, trace notes,
    and generated-action rows; the Babysitter and Hider minimized replays each pass with three
    checked semantic expectations, while the PGO replay passes with four checked semantic
    expectations including the `Trigger` inner event, generated kill, generated-action trace row,
-   and anchored diagnostic note. `--reduce` now also reduces successful fixtures with expectations
-   only while the same expectation count remains green. The generated Mafiascum N01 fixture JSON
+   and anchored diagnostic note; the ExtraAction replay checks the grant-consumption inner event
+   and generated-action rows across setup plus N02. `--reduce` now also reduces successful fixtures
+   with expectations only while the same expectation count remains green. The generated Mafiascum N01 fixture JSON
    helper now emits matching `expectations` metadata for unambiguous PGO visit-trigger,
    Babysitter dependency-death, and Hider host-death cases, while avoiding inference when
    redirect/bus target mutation or obvious actor suppression is present.
    `minimized_trigger_dependency_fixtures_replay_semantic_expectations` now proves the checked-in
-   Babysitter, Hider, and PGO minimized fixtures through command replay, `audit_resolution`,
+   Babysitter, Hider, PGO, and ExtraAction minimized fixtures through command replay, `audit_resolution`,
    anchored `inspect_trace`, `audit_rebuild`, and their declared semantic expectation counts.
+   `crates/commands/fixtures/night-extra-action-generated-bad-expectation.json` is the first
+   checked-in generated-action bad-expectation artifact; the
+   `checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure` selector proves
+   its reduced fixture remains a `semantic_expectation` failure and is not promoted as a success.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3004,9 +3013,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by turning one remaining generated-shrink proof family into the next
-artifact-backed semantic minimizer promotion: pick the narrowest Phase 4 family whose generated
-matrix case still lacks a checked-in minimized fixture, commit the reduced success and
-bad-expectation artifacts, and prove it through `minimize_night_fixture`, the focused pipeline
-test, the generated-shrink matrix, and the gap audit without claiming exhaustive randomized
-coverage.
+Continue Phase 4 by promoting the next generated-action matrix row, preferably `item_grant` unless
+the current gap audit points to a smaller fixture: commit its reduced success and bad-expectation
+artifacts under `crates/commands/fixtures`, prove both through `minimize_night_fixture`, the focused
+pipeline replay selectors, the generated-shrink matrix, and the gap audit, and keep the proof
+boundary bounded to deterministic generated fixtures rather than exhaustive randomized coverage.

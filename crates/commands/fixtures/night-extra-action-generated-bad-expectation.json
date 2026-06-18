@@ -1,0 +1,93 @@
+{
+  "seed": 131051,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 130051,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": []
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "ActionGrantConsumed",
+        "payload": {
+          "action_id": "generated_seed_97051_cop_extra",
+          "actor": "slot_2",
+          "grant_id": "extra_action",
+          "phase_id": "N02",
+          "phase_kind": "Night",
+          "phase_number": 2,
+          "remaining_uses": 0,
+          "source_action": "motivate_wrong"
+        }
+      },
+      {
+        "kind": "InvestigationResult",
+        "payload": {
+          "investigator": "slot_2",
+          "mode": "Parity",
+          "result": "scum",
+          "target": "slot_3"
+        }
+      },
+      {
+        "kind": "InvestigationResult",
+        "payload": {
+          "investigator": "slot_2",
+          "mode": "Parity",
+          "result": "town",
+          "target": "slot_4"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [],
+    "trace_notes": [],
+    "generated_actions": [
+      {
+        "action_id": "extra_action",
+        "source": "ActionGranted",
+        "actor": "slot_1",
+        "targets": [
+          "slot_2"
+        ],
+        "detail": {
+          "kind": "ExtraAction",
+          "phase_id": "N01",
+          "phase_kind": "Night",
+          "phase_number": 1,
+          "source_action": "generated_seed_97051_motivate_extra_action",
+          "uses": 1
+        }
+      },
+      {
+        "action_id": "generated_seed_97051_cop_extra",
+        "source": "ActionGrantConsumed",
+        "actor": "slot_2",
+        "targets": [],
+        "detail": {
+          "grant_id": "extra_action",
+          "remaining_uses": 0,
+          "source_action": "generated_seed_97051_motivate_extra_action"
+        }
+      }
+    ],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}
