@@ -2144,19 +2144,19 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     assert_eq!(generated_shrink_status_row["artifact"]["diff_count"], 0);
     assert_eq!(
         generated_shrink_status_row["artifact"]["trusted_metadata"]["family_count"],
-        6
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
     );
     assert_eq!(
         generated_shrink_status_row["artifact"]["trusted_metadata"]["case_count"],
-        12
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
     );
     assert_eq!(
         generated_shrink_status_row["artifact"]["trusted_metadata"]["expected_family_count"],
-        6
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
     );
     assert_eq!(
         generated_shrink_status_row["artifact"]["trusted_metadata"]["expected_case_count"],
-        12
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
     );
     assert_eq!(
         generated_shrink_status_row["artifact"]["trusted_metadata"]["family_manifest_matched"],
@@ -2466,19 +2466,19 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
     );
     assert_eq!(
         go_no_go_generated_shrink_row["trusted_metadata"]["family_count"],
-        6
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
     );
     assert_eq!(
         go_no_go_generated_shrink_row["trusted_metadata"]["case_count"],
-        12
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
     );
     assert_eq!(
         go_no_go_generated_shrink_row["trusted_metadata"]["expected_family_count"],
-        6
+        GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
     );
     assert_eq!(
         go_no_go_generated_shrink_row["trusted_metadata"]["expected_case_count"],
-        12
+        GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
     );
     assert_eq!(
         go_no_go_generated_shrink_row["trusted_metadata"]["family_manifest_matched"],
@@ -2533,10 +2533,10 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         &go_no_go_html,
         "proof-run-operator-proof-generated-shrink-matrix",
     );
-    assert!(generated_shrink_go_no_go_html.contains("family_count: 6"));
-    assert!(generated_shrink_go_no_go_html.contains("case_count: 12"));
-    assert!(generated_shrink_go_no_go_html.contains("expected_family_count: 6"));
-    assert!(generated_shrink_go_no_go_html.contains("expected_case_count: 12"));
+    assert!(generated_shrink_go_no_go_html.contains("family_count: 7"));
+    assert!(generated_shrink_go_no_go_html.contains("case_count: 14"));
+    assert!(generated_shrink_go_no_go_html.contains("expected_family_count: 7"));
+    assert!(generated_shrink_go_no_go_html.contains("expected_case_count: 14"));
     assert!(generated_shrink_go_no_go_html.contains("family_manifest_matched: true"));
 
     let response = app
@@ -5242,8 +5242,8 @@ async fn vertical_operator_html_surfaces_render_from_seeded_http_server(pool: sq
                 "expected_family_count: 12",
                 "expected_seed_count: 57",
                 "family_manifest_matched: true",
-                "case_count: 12",
-                "expected_case_count: 12",
+                "case_count: 14",
+                "expected_case_count: 14",
                 "audit_operator_proof_artifacts",
             ],
         ),

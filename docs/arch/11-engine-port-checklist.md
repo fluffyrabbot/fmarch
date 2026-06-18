@@ -2507,12 +2507,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    negative lane cannot hide resolver drift.
    `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
    in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
-   generated seeds plus two deterministic Hunter, Lovers, and Bomb persistent/generated-action
-   seeds, runs each of the 12 cases through success and bad-expectation reductions, asserts success
+   generated seeds plus two deterministic Hunter, Ignite, Lovers, and Bomb persistent/generated-action
+   seeds, runs each of the 14 cases through success and bad-expectation reductions, asserts success
    invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
    report artifacts under `target/operator-proof`, and saves
-   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, six
-   families, 12 cases, and the proof boundary that it is bounded local-Postgres coverage rather
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, seven
+   families, 14 cases, and the proof boundary that it is bounded local-Postgres coverage rather
    than exhaustive randomized coverage.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
@@ -2900,10 +2900,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, Babysitter, Hider, Hunter,
-   Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
+   Ignite, Lovers, and Bomb against local Postgres, writes a versioned report with two cases per family
    plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive
    randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
-   `family_count: 6`, `case_count: 12`, `expected_family_count: 6`, `expected_case_count: 12`,
+   `family_count: 7`, `case_count: 14`, `expected_family_count: 7`, `expected_case_count: 14`,
    and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
@@ -2966,7 +2966,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    a manifest/status trusted command/projection proof row that has not yet been promoted into the
    browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
-   `ok: true`, six families, 12 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Lovers/Bomb
+   `ok: true`, seven families, 14 cases, two representative seeds per PGO/Babysitter/Hider/Hunter/Ignite/Lovers/Bomb
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
    breadth remains future work. The local-Postgres
@@ -2981,9 +2981,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by moving from proof-surface promotion back into generated-action semantics:
-extend the generated shrink matrix to cover one additional persistent/generated-action family with
-a real reduced replay, preferably poison/douse/ignite or motivator/extra-action because those still
-exercise state that carries across phases. Start with one deterministic success fixture plus one
-bad-expectation fixture, prove the minimizer preserves both success and failure semantics, then add
-the family to the matrix only after the reduced replay is green.
+Continue Phase 4 by extending the generated shrink matrix to the next generated-action family:
+motivator/extra-action. Build a two-phase fixture where `motivate` grants an `extra_action`, a later
+target consumes that grant through a real extra submitted action, and the reduced replay preserves
+both the `ActionGranted` and `ActionGrantConsumed` expectations. Add a bad-expectation variant that
+mutates the consumed grant/source action, prove the minimizer preserves `semantic_expectation`, and
+only then raise the matrix manifest from 7/14 to 8/16.

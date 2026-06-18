@@ -20,8 +20,8 @@ pub const TRACE_INSPECTION_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const DETERMINISM_FUZZ_REPORT_ARTIFACT_VERSION: u16 = 1;
 pub const GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION: u16 = 1;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 6;
-pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 12;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT: usize = 7;
+pub const GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT: usize = 14;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2211,6 +2211,7 @@ pub fn generated_shrink_matrix_expected_families() -> BTreeMap<String, usize> {
         ("bomb", 2),
         ("hider", 2),
         ("hunter", 2),
+        ("ignite", 2),
         ("lovers", 2),
         ("pgo", 2),
     ]
@@ -3846,10 +3847,10 @@ mod tests {
             "target/generated-shrink-matrix.json",
             ProofRunArtifactState::GeneratedShrinkMatrixReportPresent {
                 artifact_version: GENERATED_SHRINK_MATRIX_REPORT_ARTIFACT_VERSION,
-                family_count: 6,
-                case_count: 12,
-                expected_family_count: 6,
-                expected_case_count: 12,
+                family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+                case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
+                expected_family_count: GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT,
+                expected_case_count: GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT,
                 family_manifest_matched: true,
                 freshness: ProofRunArtifactFreshness {
                     modified_at_unix_seconds: 23,
@@ -3860,15 +3861,21 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(generated_matrix["state"], "trusted");
-        assert_eq!(generated_matrix["trusted_metadata"]["family_count"], 6);
-        assert_eq!(generated_matrix["trusted_metadata"]["case_count"], 12);
+        assert_eq!(
+            generated_matrix["trusted_metadata"]["family_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
+        );
+        assert_eq!(
+            generated_matrix["trusted_metadata"]["case_count"],
+            GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
+        );
         assert_eq!(
             generated_matrix["trusted_metadata"]["expected_family_count"],
-            6
+            GENERATED_SHRINK_MATRIX_EXPECTED_FAMILY_COUNT
         );
         assert_eq!(
             generated_matrix["trusted_metadata"]["expected_case_count"],
-            12
+            GENERATED_SHRINK_MATRIX_EXPECTED_CASE_COUNT
         );
         assert_eq!(
             generated_matrix["trusted_metadata"]["family_manifest_matched"],

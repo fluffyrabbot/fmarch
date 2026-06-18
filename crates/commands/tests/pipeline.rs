@@ -12061,6 +12061,7 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         ("hunter", [97_021_u64, 97_022]),
         ("lovers", [97_031, 97_032]),
         ("bomb", [96_777, 96_778]),
+        ("ignite", [97_041, 97_042]),
     ] {
         for seed in seeds {
             cases.push((
@@ -12173,21 +12174,22 @@ async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
         "proof_boundary": "Local-Postgres-only generated shrink matrix: runs bounded deterministic generated fixtures through minimize_night_fixture success and bad-expectation reductions, writes per-case reduced/report artifacts under target/operator-proof, and does not prove exhaustive randomized coverage.",
         "family_count": family_counts.len(),
         "case_count": entries.len(),
-        "expected_family_count": 6,
-        "expected_case_count": 12,
+        "expected_family_count": 7,
+        "expected_case_count": 14,
         "family_manifest_matched": family_counts == [
             ("babysitter".to_string(), 2_usize),
             ("bomb".to_string(), 2),
             ("hider".to_string(), 2),
             ("hunter".to_string(), 2),
+            ("ignite".to_string(), 2),
             ("lovers".to_string(), 2),
             ("pgo".to_string(), 2),
         ].into_iter().collect::<BTreeMap<_, _>>(),
         "families": family_counts,
         "entries": entries,
     });
-    assert_eq!(report["family_count"], serde_json::json!(6));
-    assert_eq!(report["case_count"], serde_json::json!(12));
+    assert_eq!(report["family_count"], serde_json::json!(7));
+    assert_eq!(report["case_count"], serde_json::json!(14));
     assert_eq!(report["family_manifest_matched"], serde_json::json!(true));
 
     write_generated_shrink_artifact(
@@ -19381,6 +19383,7 @@ fn generated_persistent_trigger_success_fixture_json(family: &str, seed: u64) ->
             "epicmafia",
             seed + 48_000,
         ),
+        "ignite" => generated_mafiascum_persistent_effect_fixture_json(family, seed),
         _ => unreachable!("unknown generated persistent trigger family"),
     }
 }
@@ -19403,10 +19406,83 @@ fn generated_persistent_trigger_bad_expectation_fixture_json(family: &str, seed:
             fixture["expectations"]["inner_events"][0]["payload"]["trigger_id"] =
                 serde_json::json!("bomb_retaliates_wrong");
         }
+        "ignite" => {
+            fixture["expectations"]["inner_events"][0]["payload"]["cause"] =
+                serde_json::json!("ignite_wrong");
+        }
         _ => unreachable!("unknown generated persistent trigger family"),
     }
     serde_json::to_string_pretty(&fixture)
         .expect("generated persistent bad-expectation fixture serializes")
+}
+
+fn generated_mafiascum_persistent_effect_fixture_json(family: &str, seed: u64) -> String {
+    match family {
+        "ignite" => serde_json::to_string_pretty(&serde_json::json!({
+            "seed": seed + 33_000,
+            "pack": "mafiascum",
+            "phase": "N02",
+            "roster": [
+                { "slot": "slot_1", "role": "arsonist" },
+                { "slot": "slot_2", "role": "vanilla_townie" },
+                { "slot": "slot_3", "role": "vanilla_townie" },
+                { "slot": "slot_4", "role": "vanilla_townie" },
+                { "slot": "slot_5", "role": "mafia_goon" },
+                { "slot": "slot_6", "role": "vanilla_townie" }
+            ],
+            "setup_phases": [
+                {
+                    "phase": "N01",
+                    "seed": seed + 32_000,
+                    "actions": [{
+                        "actor_slot": "slot_1",
+                        "template_id": "douse",
+                        "action_id": format!("generated_seed_{seed}_douse_for_later_ignite"),
+                        "targets": ["slot_2"]
+                    }]
+                }
+            ],
+            "actions": [
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "ignite",
+                    "action_id": format!("generated_seed_{seed}_ignite_carried_douse"),
+                    "targets": []
+                },
+                {
+                    "actor_slot": "slot_1",
+                    "template_id": "douse",
+                    "action_id": format!("generated_seed_{seed}_fresh_douse_noise"),
+                    "targets": ["slot_3"]
+                }
+            ],
+            "expectations": {
+                "inner_events": [
+                    {
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_2",
+                            "cause": "ignite",
+                            "attackers": ["slot_1"],
+                            "unstoppable": false
+                        }
+                    },
+                    {
+                        "kind": "PhaseAnnouncement",
+                        "payload": {
+                            "phase_id": "N02",
+                            "deaths": [{
+                                "slot_id": "slot_2",
+                                "cause": "ignite"
+                            }]
+                        }
+                    }
+                ]
+            }
+        }))
+        .expect("generated Mafiascum persistent effect fixture serializes"),
+        _ => unreachable!("unknown generated persistent effect family"),
+    }
 }
 
 fn generated_case_fixture_json(
