@@ -8105,6 +8105,7 @@ fn mafia_universe_pack_deserializes() {
 #[test]
 fn default_open_pack_deserializes() {
     let pack = load_pack_named("default_open");
+    assert_eq!(domain::DEFAULT_SHIPPED_PACK, "default_open");
     assert_eq!(pack.name, "default_open");
     assert_eq!(pack.ir_version, 46);
     assert!(pack.roles.contains_key("citizen"));

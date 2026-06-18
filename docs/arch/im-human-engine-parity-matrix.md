@@ -210,11 +210,11 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | day_step | `sheriff_badge` | `BadgeChanged` | 1 | no | yes | yes | yes | yes |  |
 | day_step | `vote` | `DayVoteOutcome` | 1 | no | yes | yes | yes | yes |  |
 | day_step | `wolf_self_destruct` | `WolfSelfDestructed` | 1 | no | yes | yes | yes | yes |  |
-| fmarch_default_action | `default_open:agent_kill` | `Kill` | 0 | no | yes | yes | yes | yes | Copyright-free default candidate action; not sourced from im-human. |
-| fmarch_default_action | `default_open:guardian_protect` | `Protect` | 0 | no | yes | yes | yes | yes | Copyright-free default candidate action; not sourced from im-human. |
-| fmarch_default_action | `default_open:seer_check` | `Investigate` | 0 | no | yes | yes | yes | yes | Copyright-free default candidate action; not sourced from im-human. |
-| fmarch_default_day_policy | `default_open:majority_day_vote` | `DayVoteOutcome` | 0 | no | yes | yes | yes | yes | Copyright-free default candidate D01 majority-elimination path; not sourced from im-human. |
-| fmarch_default_pack | `default_open` | `default_open` | 0 | no | yes | yes | yes | yes | Copyright-free default candidate; not sourced from im-human. |
+| fmarch_default_action | `default_open:agent_kill` | `Kill` | 0 | no | yes | yes | yes | yes | Copyright-free shipped default action; not sourced from im-human. |
+| fmarch_default_action | `default_open:guardian_protect` | `Protect` | 0 | no | yes | yes | yes | yes | Copyright-free shipped default action; not sourced from im-human. |
+| fmarch_default_action | `default_open:seer_check` | `Investigate` | 0 | no | yes | yes | yes | yes | Copyright-free shipped default action; not sourced from im-human. |
+| fmarch_default_day_policy | `default_open:majority_day_vote` | `DayVoteOutcome` | 0 | no | yes | yes | yes | yes | Copyright-free shipped default D01 majority-elimination path; not sourced from im-human. |
+| fmarch_default_pack | `default_open` | `default_open` | 0 | no | yes | yes | yes | yes | Copyright-free shipped default pack; not sourced from im-human. |
 | modifier:action | `activated` | `active_from` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `announcing` | `Announcing` | 1 | no | yes | yes | yes | yes |  |
 | modifier:action | `backup` | `backup_policy` | 1 | no | yes | yes | yes | yes |  |

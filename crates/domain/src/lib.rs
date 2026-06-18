@@ -33,8 +33,8 @@ pub use pack::{
     HostPromptResolutionEffectPolicy, IdiotPolicy, InvestigationResultPolicy, ItaLifecyclePolicy,
     ItaSessionControlKind, LastWordsPolicy, Pack, PackLoadError, PackMigrationError,
     PackValidationError, PackValidationIssue, ParityResultPolicy, RoleModifier, SelfDestructSpec,
-    WinCondition, WinPolicy, WinRule, WolfBeautyPolicy, WolfCarryPolicy, MIN_SUPPORTED_IR_VERSION,
-    SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
+    WinCondition, WinPolicy, WinRule, WolfBeautyPolicy, WolfCarryPolicy, DEFAULT_SHIPPED_PACK,
+    MIN_SUPPORTED_IR_VERSION, SUPPORTED_IR_VERSION, SUPPORTED_PACK_VERSION,
 };
 pub use resolver::{
     check_win, resolve, resolve_events, resolve_instant, DayAnnouncementInput, DayPhaseInputs,

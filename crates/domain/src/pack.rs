@@ -17,6 +17,7 @@ pub type Tag = String;
 pub const SUPPORTED_PACK_VERSION: u32 = 1;
 pub const MIN_SUPPORTED_IR_VERSION: u16 = 1;
 pub const SUPPORTED_IR_VERSION: u16 = 68;
+pub const DEFAULT_SHIPPED_PACK: &str = "default_open";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Pack {

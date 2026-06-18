@@ -1787,7 +1787,7 @@ requiring replay audit, trace inspection, and projection rebuild. This manifest-
 lane was rerun locally with
 `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_epicmafia_pk_bomb_cult_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its six fixed generated seeds. `default_open` is the
-first copyright-free default candidate: a deliberately small Citizen/Guardian/Seer/Agent pack with a
+copyright-free shipped default pack: a deliberately small Citizen/Guardian/Seer/Agent pack with a
 guardian-save plus seer-check N01 golden, majority-elimination D01 golden, command/projection
 verticals for both paths, parity-matrix rows for its actions and day-vote policy, and three-seed
 N01/D01 generated replay lanes under the same audit trio. The manifest-listed `default_open` N01

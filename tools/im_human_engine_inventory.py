@@ -3538,6 +3538,11 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
         "agent_kill": "Kill",
     }
     modeled_pack = all(f"{default_pack}:{role}" in fmarch["pack_roles"] for role in default_roles)
+    implemented_pack = (
+        modeled_pack
+        and f'pub const DEFAULT_SHIPPED_PACK: &str = "{default_pack}";'
+        in fmarch["pack_src_text"]
+    )
     golden_pack = default_pack in fmarch["golden_text_by_pack"]
     integrated_pack = default_pack in command_tests
     rows.append(
@@ -3547,10 +3552,10 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             default_pack,
             0,
             modeled_pack,
-            modeled_pack,
+            implemented_pack,
             golden_pack,
             integrated_pack,
-            "Copyright-free default candidate; not sourced from im-human.",
+            "Copyright-free shipped default pack; not sourced from im-human.",
         )
     )
     for action_id, ability in default_actions.items():
@@ -3568,7 +3573,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
                 implemented,
                 golden,
                 integrated,
-                "Copyright-free default candidate action; not sourced from im-human.",
+                "Copyright-free shipped default action; not sourced from im-human.",
             )
         )
     modeled_day_vote = fmarch["pack_vote_methods"].get(default_pack) == "Majority"
@@ -3598,7 +3603,7 @@ def build_matrix(inventory: dict[str, Any], fmarch: dict[str, Any]) -> list[dict
             implemented_day_vote,
             golden_day_vote,
             integrated_day_vote,
-            "Copyright-free default candidate D01 majority-elimination path; not sourced from im-human.",
+            "Copyright-free shipped default D01 majority-elimination path; not sourced from im-human.",
         )
     )
 

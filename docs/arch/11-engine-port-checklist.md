@@ -2313,13 +2313,13 @@ without recomputing rules client-side.
    graphs with `audit_resolution`, exact anchored PK prompt issue/resolution and Cult/Loyal
    conversion detail in `inspect_trace`, and `audit_rebuild`]
 4. Any copyright-free/default social-deduction pack fmarch wants to ship.
-   [partly done: `default_open` is the first copyright-free default candidate with
-   Citizen/Guardian/Seer/Agent roles, linter coverage through `shipped_packs_validate`,
+   [done: `DEFAULT_SHIPPED_PACK` designates `default_open` as the copyright-free shipped default
+   pack with Citizen/Guardian/Seer/Agent roles, linter coverage through `shipped_packs_validate`,
    parity-matrix rows for the pack, actions, and majority day-vote policy, N01
-   guardian-save/seer-check plus D01 majority-elimination goldens, command/projection rebuild
-   verticals for both paths, and three-seed N01/D01 replay lanes under `audit_resolution`,
-   exact anchored `inspect_trace` inner-event decisions, and `audit_rebuild`; it is not yet claimed
-   as the final default pack]
+   guardian-save/seer-check plus D01 majority-elimination goldens, result-schema coverage through
+   validated command envelopes, command/projection rebuild verticals for both paths, and three-seed
+   N01/D01 replay lanes under `audit_resolution`, exact anchored `inspect_trace` inner-event
+   decisions, and `audit_rebuild`]
 
 Exit proof: each culture pack has a green linter, parity matrix, goldens, result schema
 coverage, and a playable vertical scenario through the command pipeline.
@@ -2940,8 +2940,8 @@ coverage, and a playable vertical scenario through the command pipeline.
    non-mafiascum lane now generates three
    `default_open` N01 Guardian/Seer/Agent cases and three `default_open` D01
    majority-elimination cases from fixed seeds, proving the same audit trio plus exact anchored
-   N01 investigation and D01 day-vote inner-event trace decisions for the first copyright-free
-   default candidate. The `default_open` N01 lane was rerun locally with
+   N01 investigation and D01 day-vote inner-event trace decisions for the copyright-free shipped
+   default pack. The `default_open` N01 lane was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_default_open_night_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its three fixed generated seeds. The `default_open`
    D01 lane was rerun locally with
@@ -2955,7 +2955,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    trace rows and was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands host_resolve_phase_carries_default_open_day_majority`,
    passing one filtered pipeline test. This remains local command/projection proof for the
-   copyright-free default candidate. `audit_resolution` now treats
+   copyright-free shipped default pack. `audit_resolution` now treats
    tiny `jsonb` floating-point rendering differences as numeric equality while keeping the replayed
    JSON structure exact. The manifest-listed fixture minimizer lane was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo run -q -p commands --bin minimize_night_fixture -- crates/commands/fixtures/night-passing.json`
@@ -3256,7 +3256,6 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 6 by auditing the copyright-free/default pack row against its focused proof surfaces.
-Separate the already-proven `default_open` linter, parity, N01/D01 goldens, command/projection
-verticals, and three-seed replay lanes from the unresolved product decision of whether it is the final
-default pack, and promote only the claims that current evidence proves.
+Continue Phase 7 by auditing replay tooling and resolution diff UI against the stored-game replay
+exit proof. Separate already-proven `audit_resolution` CLI drift checks from any remaining diff UI or
+operator-facing replay gaps, and promote only the audit/tooling claims that current evidence proves.
