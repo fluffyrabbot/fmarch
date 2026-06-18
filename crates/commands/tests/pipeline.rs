@@ -322,7 +322,15 @@ fn assert_anchored_inspection_generated(
     expected: InspectionGeneratedExpectation<'_>,
     context: &str,
 ) {
-    let generated = report
+    check_anchored_inspection_generated(report, expected)
+        .unwrap_or_else(|reason| panic!("{context}\n{reason}"));
+}
+
+fn check_anchored_inspection_generated(
+    report: &commands::ResolutionTraceInspectionReport,
+    expected: InspectionGeneratedExpectation<'_>,
+) -> Result<(), String> {
+    let generated = match report
         .traces
         .iter()
         .filter(|trace| trace.phase_id == expected.phase_id && trace.applied_stream_seq.is_some())
@@ -333,18 +341,22 @@ fn assert_anchored_inspection_generated(
                 && generated.source == expected.source
                 && generated.actor == expected.actor
                 && generated.targets == expected.targets
-        })
-        .unwrap_or_else(|| {
-            panic!(
-                "{context}\ntrace inspection should expose anchored generated row {} from {}",
+        }) {
+        Some(generated) => generated,
+        None => {
+            return Err(format!(
+                "trace inspection should expose anchored generated row {} from {}",
                 expected.action_id, expected.source
-            )
-        });
-    assert_eq!(
-        generated.detail, expected.detail,
-        "{context}\ninspected generated row {} detail",
-        expected.action_id
-    );
+            ));
+        }
+    };
+    if generated.detail != expected.detail {
+        return Err(format!(
+            "inspected generated row {} detail expected {} got {}",
+            expected.action_id, expected.detail, generated.detail
+        ));
+    }
+    Ok(())
 }
 
 fn assert_anchored_inspection_note(
@@ -13249,31 +13261,40 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
         let resolver_seed = seed + 45_000;
         let summary =
             generated_pack_case_summary(&case, "chinese_structured", "D01", resolver_seed);
+        let fixture_json =
+            generated_case_fixture_json(&case, "chinese_structured", "D01", resolver_seed);
+        let shrink_stem = format!("generated-chinese-d01-seed-{seed}");
         let game = Uuid::new_v4();
         let host = user("host_h");
 
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::CreateGame {
                 game,
                 pack: "chinese_structured".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "create Chinese D01 generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\ncreate Chinese D01 generated game failed: {err}"));
+        .await;
         for (slot, role) in &case.roster {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AddSlot {
                     game,
                     slot: slot.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("add {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nadd {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignSlot {
@@ -13281,10 +13302,13 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     slot: slot.clone(),
                     user: format!("chinese_day_seed_{seed}_user_{}", slot_number(slot)),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("assign {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nassign {slot} failed: {err}"));
-            handle(
+            .await;
+            generated_handle_or_shrink(
                 &pool,
                 &host,
                 Command::AssignRole {
@@ -13292,23 +13316,29 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     slot: slot.clone(),
                     role_key: role.clone(),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("role {slot} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nrole {slot} failed: {err}"));
+            .await;
         }
-        handle(
+        generated_handle_or_shrink(
             &pool,
             &host,
             Command::StartGame {
                 game,
                 phase: "D01".into(),
             },
+            &shrink_stem,
+            &fixture_json,
+            &summary,
+            "start Chinese D01 generated game failed",
         )
-        .await
-        .unwrap_or_else(|err| panic!("{summary}\nstart Chinese D01 generated game failed: {err}"));
+        .await;
 
         for action in &case.actions {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "chinese_day_seed_{seed}_user_{}",
@@ -13322,19 +13352,20 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     targets: action.targets.clone(),
                     grant_id: None,
                 },
-            )
-            .await
-            .unwrap_or_else(|err| {
-                panic!(
-                    "{summary}\nsubmit {} for {} failed: {err}",
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!(
+                    "submit {} for {} failed",
                     action.template_id, action.actor_slot
-                )
-            });
+                ),
+            )
+            .await;
         }
 
         let vote_target = if seed % 3 == 0 { "slot_4" } else { "slot_5" };
         for voter in ["slot_1", "slot_6", "slot_7"] {
-            handle(
+            generated_handle_or_shrink(
                 &pool,
                 &Principal::user(format!(
                     "chinese_day_seed_{seed}_user_{}",
@@ -13345,12 +13376,15 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     actor_slot: voter.into(),
                     target: VoteTarget::Slot(vote_target.into()),
                 },
+                &shrink_stem,
+                &fixture_json,
+                &summary,
+                format!("submit D01 vote from {voter} failed"),
             )
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\nsubmit D01 vote from {voter} failed: {err}"));
+            .await;
         }
 
-        let ack = handle(
+        let ack = match handle(
             &pool,
             &host,
             Command::ResolvePhase {
@@ -13359,22 +13393,74 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
             },
         )
         .await
-        .unwrap_or_else(|err| panic!("{summary}\nresolve Chinese D01 graph failed: {err}"));
-        assert_eq!(
-            ack.stream_seqs.len(),
-            3,
-            "{summary}\nChinese D01 generated resolve events plus phase lock"
-        );
+        {
+            Ok(ack) => ack,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("resolve Chinese D01 graph failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if ack.stream_seqs.len() != 3 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese D01 generated resolve events plus phase lock expected 3 stream seqs, got {}",
+                        ack.stream_seqs.len()
+                    ),
+                )
+                .await
+            );
+        }
 
         let applied_payload = resolution_payload(&pool, game, "D01", seed).await;
-        let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
-            .unwrap_or_else(|err| panic!("{summary}\nResolutionApplied invalid: {err}"));
-        assert!(
-            applied.events.len() < 200,
-            "{summary}\nChinese D01 generated graph event count should stay bounded: {}",
-            applied.events.len()
-        );
-        let badge = applied
+        let applied =
+            match domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION) {
+                Ok(applied) => applied,
+                Err(err) => {
+                    panic!(
+                        "{}",
+                        generated_shrink_failure_message(
+                            &pool,
+                            &shrink_stem,
+                            &fixture_json,
+                            &summary,
+                            format!("ResolutionApplied invalid: {err}"),
+                        )
+                        .await
+                    )
+                }
+            };
+        if applied.events.len() >= 200 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese D01 generated graph event count should stay bounded: {}",
+                        applied.events.len()
+                    ),
+                )
+                .await
+            );
+        }
+        let badge = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -13400,9 +13486,23 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     *destroyed,
                 )),
                 _ => None,
-            })
-            .expect("Chinese D01 generated graph should exercise sheriff badge");
-        let duel = applied
+            }) {
+            Some(badge) => badge,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Chinese D01 generated graph should exercise sheriff badge".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        let duel = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -13427,9 +13527,23 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     *phase_number,
                 )),
                 _ => None,
-            })
-            .expect("Chinese D01 generated graph should exercise knight duel");
-        let self_destruct = applied
+            }) {
+            Some(duel) => duel,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Chinese D01 generated graph should exercise knight duel".to_string(),
+                    )
+                    .await
+                )
+            }
+        };
+        let self_destruct = match applied
             .events
             .iter()
             .find_map(|indexed| match &indexed.event {
@@ -13454,34 +13568,103 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     *phase_number,
                 )),
                 _ => None,
-            })
-            .expect("Chinese D01 generated graph should exercise White Wolf self-destruct");
+            }) {
+            Some(self_destruct) => self_destruct,
+            None => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        "Chinese D01 generated graph should exercise White Wolf self-destruct"
+                            .to_string(),
+                    )
+                    .await
+                )
+            }
+        };
 
-        let audit = audit_resolution_envelopes(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_resolution failed: {err}"));
-        assert!(
-            audit.ok,
-            "{summary}\nChinese D01 generated resolution audit drifted: {audit:?}"
-        );
-        assert_eq!(
-            audit.audited, 1,
-            "{summary}\none Chinese D01 generated phase audited"
-        );
-        assert_eq!(
-            audit.skipped, 0,
-            "{summary}\nno skipped Chinese D01 generated envelopes"
-        );
+        let audit = match audit_resolution_envelopes(&pool, game).await {
+            Ok(audit) => audit,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_resolution failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!("Chinese D01 generated resolution audit drifted: {audit:?}"),
+                )
+                .await
+            );
+        }
+        if audit.audited != 1 || audit.skipped != 0 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one audited Chinese D01 generated phase and no skipped envelopes, got audited={} skipped={}",
+                        audit.audited, audit.skipped
+                    ),
+                )
+                .await
+            );
+        }
 
-        let trace_report = inspect_resolution_traces(&pool, game, None)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\ninspect_trace failed: {err}"));
-        assert_eq!(
-            trace_report.traces.len(),
-            1,
-            "{summary}\none Chinese D01 generated trace"
-        );
-        assert_anchored_inspection_generated(
+        let trace_report = match inspect_resolution_traces(&pool, game, None).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("inspect_trace failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if trace_report.traces.len() != 1 {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "expected one Chinese D01 generated trace, got {}",
+                        trace_report.traces.len()
+                    ),
+                )
+                .await
+            );
+        }
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "D01",
@@ -13498,9 +13681,20 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     "event_index": badge.0,
                 }),
             },
-            &summary,
-        );
-        assert_anchored_inspection_generated(
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "D01",
@@ -13517,9 +13711,20 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     "event_index": duel.0,
                 }),
             },
-            &summary,
-        );
-        assert_anchored_inspection_generated(
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
+        if let Err(reason) = check_anchored_inspection_generated(
             &trace_report,
             InspectionGeneratedExpectation {
                 phase_id: "D01",
@@ -13536,16 +13741,51 @@ async fn generated_chinese_structured_day_graphs_replay_audit_and_rebuild_determ
                     "event_index": self_destruct.0,
                 }),
             },
-            &summary,
-        );
+        ) {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    reason,
+                )
+                .await
+            );
+        }
 
-        let projection_audit = audit_rebuild(&pool, game)
-            .await
-            .unwrap_or_else(|err| panic!("{summary}\naudit_rebuild failed: {err}"));
-        assert!(
-            projection_audit.ok,
-            "{summary}\nChinese D01 generated projection rebuild audit drifted: {projection_audit:?}"
-        );
+        let projection_audit = match audit_rebuild(&pool, game).await {
+            Ok(report) => report,
+            Err(err) => {
+                panic!(
+                    "{}",
+                    generated_shrink_failure_message(
+                        &pool,
+                        &shrink_stem,
+                        &fixture_json,
+                        &summary,
+                        format!("audit_rebuild failed: {err}"),
+                    )
+                    .await
+                )
+            }
+        };
+        if !projection_audit.ok {
+            panic!(
+                "{}",
+                generated_shrink_failure_message(
+                    &pool,
+                    &shrink_stem,
+                    &fixture_json,
+                    &summary,
+                    format!(
+                        "Chinese D01 generated projection rebuild audit drifted: {projection_audit:?}"
+                    ),
+                )
+                .await
+            );
+        }
     }
 }
 

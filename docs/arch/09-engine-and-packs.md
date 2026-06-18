@@ -1338,8 +1338,11 @@ Structured N01 generated replay lanes now route their resolve, result validation
 representative-event, audit, trace-count, anchored trace-decision, and projection-rebuild failures
 through the shrink helper before panicking; the panic message includes the saved report path,
 reduced fixture path, preservation booleans, and reduction step count. Setup and legal action
-submission failures in those N01 replay lanes use the same shrink-backed wrapper. D01 and later
-culture-pack generated replay lanes have not yet adopted this wrapper. A non-mafiascum generated
+submission failures in those N01 replay lanes use the same shrink-backed wrapper. The Chinese
+Structured D01 generated replay lane now uses the same saved artifact/minimizer report path for
+setup, action/vote submission, resolve, result validation, event extraction, audit, trace-count,
+anchored generated-row, and projection-rebuild failures. Later culture-pack generated replay lanes
+have not yet adopted this wrapper. A non-mafiascum generated
 replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
@@ -1350,7 +1353,7 @@ Structured generated lane covers six D01 cases from fixed seeds with legal comma
 submissions for sheriff election, Knight duel, White Wolf self-destruct, and ordinary votes, then
 requires replay audit, trace inspection, and projection rebuild. This manifest-listed Chinese
 Structured D01 lane was rerun locally with
-`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically`,
+`DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`,
 which passed one filtered pipeline test across its six fixed generated seeds. A Mafia Universe
 generated lane now covers six fixed-seed D01 ITA sessions with legal command submissions, several
 queued shots, mixed deterministic hit/miss outcomes under the pack's 50 percent session policy,

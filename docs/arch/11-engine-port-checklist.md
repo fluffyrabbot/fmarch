@@ -2444,7 +2444,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    and projection-rebuild failures through the shrink helper before panicking; the panic message
    includes the saved report path, reduced fixture path, preservation booleans, and reduction step count.
    Setup and legal action submission failures in those N01 replay lanes use the same shrink-backed
-   wrapper; D01 and later culture-pack generated replay lanes have not yet adopted it. This is a reusable
+   wrapper. The Chinese Structured D01 generated replay lane now uses the same saved artifact/minimizer
+   report path for setup, action/vote submission, resolve, result validation, event extraction, audit,
+   trace-count, anchored generated-row, and projection-rebuild failures; later culture-pack generated
+   replay lanes have not yet adopted it. This is a reusable
    artifact-backed minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
@@ -2457,7 +2460,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    sheriff election, Knight duel, White Wolf self-destruct, and ordinary vote submissions, then
    proves the same audit trio plus exact anchored BadgeChanged, DuelResolved, and
    WolfSelfDestructed generated rows. This Chinese Structured D01 lane was rerun locally with
-   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically`
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands generated_chinese_structured_day_graphs_replay_audit_and_rebuild_deterministically --test pipeline -- --nocapture`
    and passed one filtered pipeline test across its six fixed generated seeds. A third
    non-mafiascum lane now generates six Mafia Universe D01 ITA sessions from fixed seeds with
    legal command submissions, four queued shots, mixed deterministic hit/miss outcomes under the
@@ -2763,6 +2766,6 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 persistent and generated-action systems by reusing the shrink-backed generated
-command/trace wrapper outside the N01 night lanes. Start with the Chinese Structured D01 generated
-day replay lane, then carry the same saved artifact/minimizer report path into the Epicmafia and
-default_open generated replay lanes before adding new generated-action semantics.
+command/trace wrapper in the remaining generated culture-pack lanes. Start with the Epicmafia D01
+PK and Mafia Universe ITA generated replay lanes, then carry the same saved artifact/minimizer
+report path into `default_open` N01/D01 before adding new generated-action semantics.
