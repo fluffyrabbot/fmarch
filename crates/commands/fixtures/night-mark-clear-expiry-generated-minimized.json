@@ -1,0 +1,114 @@
+{
+  "seed": 130121,
+  "pack": "mafiascum",
+  "phase": "N02",
+  "roster": [
+    {
+      "slot": "slot_1",
+      "role": "fruit_vendor"
+    },
+    {
+      "slot": "slot_2",
+      "role": "vanilla_townie"
+    },
+    {
+      "slot": "slot_3",
+      "role": "vanilla_townie"
+    }
+  ],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [
+    {
+      "actor_slot": "slot_1",
+      "template_id": "send_fruit",
+      "action_id": "generated_seed_97121_send_fruit_expiring_target",
+      "targets": [
+        "slot_3"
+      ]
+    }
+  ],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 129121,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": [
+        {
+          "actor_slot": "slot_1",
+          "template_id": "send_fruit",
+          "action_id": "generated_seed_97121_send_fruit_expiring_setup",
+          "targets": [
+            "slot_2"
+          ]
+        }
+      ]
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "EffectNotification",
+        "payload": {
+          "audience": [
+            "slot_3"
+          ],
+          "effect": "fruit_received",
+          "status": "marked"
+        }
+      },
+      {
+        "kind": "PhaseAnnouncement",
+        "payload": {
+          "deaths": [],
+          "phase_id": "N02"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [
+      {
+        "payload": {
+          "effect": "fruit_received",
+          "slot_id": "slot_2",
+          "source_action": "generated_seed_97121_send_fruit_expiring_setup"
+        }
+      },
+      {
+        "payload": {
+          "effect": "fruit_received",
+          "slot_id": "slot_3",
+          "source_action": "generated_seed_97121_send_fruit_expiring_target"
+        }
+      }
+    ],
+    "player_notifications": [
+      {
+        "payload": {
+          "audience_slot": "slot_2",
+          "effect": "fruit_received",
+          "phase_id": "N01",
+          "status": "marked"
+        }
+      },
+      {
+        "payload": {
+          "audience_slot": "slot_3",
+          "effect": "fruit_received",
+          "phase_id": "N02",
+          "status": "marked"
+        }
+      }
+    ],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}

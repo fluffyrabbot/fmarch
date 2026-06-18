@@ -1442,7 +1442,18 @@ clear blocks the later `ignite`. The matching checked-in negative artifact,
 `crates/commands/fixtures/night-mark-clear-visibility-generated-bad-expectation.json`, is covered by
 `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations`, which proves the success
 fixture remains promotable while the reduced negative fixture preserves `semantic_expectation`
-failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+failure class without success promotion.
+`crates/commands/fixtures/night-mark-clear-expiry-generated-minimized.json` now promotes the
+MarkClearExpiry row into a checked-in Mafiascum N02 expiring mark replay with three slots, one
+action, one setup phase, two audited resolution envelopes, and two anchored traces. It checks six
+semantic expectations: two inner events for the target-visible `fruit_received` mark and empty phase
+announcement, two player notifications covering the setup-phase and current-phase marks, and two
+absent slot-effect assertions proving both expiring marks are removed from rebuilt slot state. The
+matching checked-in negative artifact,
+`crates/commands/fixtures/night-mark-clear-expiry-generated-bad-expectation.json`, is covered by the
+same `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations` selector, which proves
+the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.

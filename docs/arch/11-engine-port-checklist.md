@@ -2535,6 +2535,17 @@ coverage, and a playable vertical scenario through the command pipeline.
    by `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations`, which proves the
    success fixture remains promotable while the reduced negative fixture preserves
    `semantic_expectation` failure class without success promotion.
+   `crates/commands/fixtures/night-mark-clear-expiry-generated-minimized.json` now promotes the
+   MarkClearExpiry row into a checked-in Mafiascum N02 expiring mark replay with three slots, one
+   action, one setup phase, two audited resolution envelopes, and two anchored traces. It checks six
+   semantic expectations: two inner events for the target-visible `fruit_received` mark and empty
+   phase announcement, two player notifications covering the setup-phase and current-phase marks,
+   and two absent slot-effect assertions proving both expiring marks are removed from rebuilt slot
+   state. Its matching checked-in negative artifact,
+   `crates/commands/fixtures/night-mark-clear-expiry-generated-bad-expectation.json`, is covered by
+   the same `checked_in_mark_clear_generated_fixtures_replay_semantic_expectations` selector, which
+   proves the success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3056,8 +3067,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by moving the artifact-backed promotion path into the next persistent Mark/Clear
-row: promote `mark_clear_expiry`, commit its reduced
+Continue Phase 4 by moving the artifact-backed promotion path into the next persistent poison/cure
+row: promote `poison_cure`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures
