@@ -1419,7 +1419,16 @@ negative artifacts,
 `crates/commands/fixtures/night-backup-projection-state-generated-bad-expectation.json`, are covered
 by `checked_in_backup_generated_fixtures_replay_semantic_expectations`, which proves both success
 fixtures remain promotable while both reduced negative fixtures preserve `semantic_expectation`
-failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
+failure class without success promotion.
+`crates/commands/fixtures/night-conversion-deprogramming-generated-minimized.json` now promotes the
+ConversionDeprogramming row into a checked-in cult recruit plus deprogram replay with four slots,
+one N03 action, two setup phases, three audited resolution envelopes, three anchored traces, and
+three semantic expectations for the restored Cop check plus both conversion trace decisions.
+`crates/commands/fixtures/night-conversion-deprogramming-generated-bad-expectation.json` is the
+matching checked-in negative artifact; the
+`checked_in_conversion_deprogramming_generated_fixtures_replay_semantic_expectations` selector
+proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report
 preserves `semantic_expectation` failure class while keeping `promoted_success_fixture: false`.

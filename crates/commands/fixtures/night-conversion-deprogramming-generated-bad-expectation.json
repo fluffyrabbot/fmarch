@@ -1,0 +1,85 @@
+{
+  "seed": 133081,
+  "pack": "mafiascum",
+  "phase": "N03",
+  "roster": [],
+  "votes": [],
+  "ita_session_controls": [],
+  "actions": [],
+  "setup_phases": [
+    {
+      "phase": "N01",
+      "seed": 130081,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": []
+    },
+    {
+      "phase": "N02",
+      "seed": 131081,
+      "votes": [],
+      "ita_session_controls": [],
+      "actions": []
+    }
+  ],
+  "expectations": {
+    "inner_events": [
+      {
+        "kind": "InvestigationResult",
+        "payload": {
+          "investigator": "slot_3",
+          "mode": "Parity",
+          "result": "scum",
+          "target": "slot_4"
+        }
+      }
+    ],
+    "stream_events": [],
+    "trace_decisions": [
+      {
+        "stage": "night:conversion",
+        "source": "action:generated_seed_97081_cult_recruit_cop",
+        "outcome": "conversion_assigned_role",
+        "detail": {
+          "action_id": "generated_seed_97081_cult_recruit_cop",
+          "actor": "slot_1",
+          "mode": "AssignRole",
+          "new_alignment": "cult",
+          "new_role": "cultist",
+          "origin_source": null,
+          "original_alignment": "town",
+          "original_role": "cop",
+          "target": "slot_3",
+          "template_id": "cult_recruit"
+        }
+      },
+      {
+        "stage": "night:conversion",
+        "source": "action:generated_seed_97081_deprogram_cop",
+        "outcome": "conversion_restored_original",
+        "detail": {
+          "action_id": "generated_seed_97081_deprogram_cop",
+          "actor": "slot_2",
+          "mode": "RestoreOriginal",
+          "new_alignment": "town",
+          "new_role": "cop",
+          "origin_source": "slot_wrong",
+          "original_alignment": "cult",
+          "original_role": "cultist",
+          "target": "slot_3",
+          "template_id": "deprogram"
+        }
+      }
+    ],
+    "trace_notes": [],
+    "generated_actions": [],
+    "generated_action_counts": [],
+    "delayed_death_queues": [],
+    "absent_delayed_death_queues": [],
+    "slot_effects": [],
+    "absent_slot_effects": [],
+    "player_notifications": [],
+    "sheriff_badges": [],
+    "slot_states": []
+  }
+}
