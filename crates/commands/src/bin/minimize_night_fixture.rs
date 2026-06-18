@@ -97,7 +97,35 @@ struct ToolReport {
     original: RunReport,
     minimized: RunReport,
     reduction_steps: Vec<ReductionStep>,
+    reduction: ReductionReport,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    write_reduced: Option<WriteReducedReport>,
     fixture: NightFixture,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct ReductionReport {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target: Option<ReductionTargetReport>,
+    replay_success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure_class_preserved: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    success_invariant_preserved: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+enum ReductionTargetReport {
+    FailureClass { failure_class: Option<FailureClass> },
+    SuccessExpectations { expectation_count: usize },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct WriteReducedReport {
+    path: String,
+    wrote: bool,
+    promoted_success_fixture: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -156,9 +184,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         (fixture, Vec::new(), original.clone())
     };
-    if let Some(write_reduced_path) = &args.write_reduced_path {
+    let reduction = ReductionReport::new(reduction_target, &minimized);
+    let write_reduced = if let Some(write_reduced_path) = &args.write_reduced_path {
         write_fixture(write_reduced_path, &fixture)?;
-    }
+        Some(WriteReducedReport::new(write_reduced_path, &reduction))
+    } else {
+        None
+    };
 
     println!(
         "{}",
@@ -166,6 +198,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             original,
             minimized,
             reduction_steps: steps,
+            reduction,
+            write_reduced,
             fixture,
         })?
     );
@@ -313,6 +347,52 @@ impl ReductionTarget {
             ReductionTarget::SuccessExpectations { expectation_count } => {
                 report.ok && report.semantic_expectations_checked == expectation_count
             }
+        }
+    }
+}
+
+impl ReductionReport {
+    fn new(target: Option<ReductionTarget>, minimized: &RunReport) -> Self {
+        let failure_class_preserved = match target {
+            Some(ReductionTarget::FailureClass(failure_class)) => {
+                Some(!minimized.ok && minimized.failure_class == failure_class)
+            }
+            _ => None,
+        };
+        let success_invariant_preserved = match target {
+            Some(ReductionTarget::SuccessExpectations { expectation_count }) => {
+                Some(minimized.ok && minimized.semantic_expectations_checked == expectation_count)
+            }
+            _ => None,
+        };
+        ReductionReport {
+            target: target.map(ReductionTargetReport::from),
+            replay_success: minimized.ok,
+            failure_class_preserved,
+            success_invariant_preserved,
+        }
+    }
+}
+
+impl From<ReductionTarget> for ReductionTargetReport {
+    fn from(target: ReductionTarget) -> Self {
+        match target {
+            ReductionTarget::FailureClass(failure_class) => {
+                ReductionTargetReport::FailureClass { failure_class }
+            }
+            ReductionTarget::SuccessExpectations { expectation_count } => {
+                ReductionTargetReport::SuccessExpectations { expectation_count }
+            }
+        }
+    }
+}
+
+impl WriteReducedReport {
+    fn new(path: &str, reduction: &ReductionReport) -> Self {
+        WriteReducedReport {
+            path: path.to_string(),
+            wrote: true,
+            promoted_success_fixture: reduction.success_invariant_preserved == Some(true),
         }
     }
 }
@@ -862,6 +942,13 @@ mod tests {
         .expect("nonminimal pgo fixture parses");
         assert_eq!(pgo_nonminimal.roster.len(), 3);
         assert_eq!(pgo_nonminimal.expectations.count(), 4);
+
+        let pgo_bad_expectation: NightFixture = serde_json::from_str(include_str!(
+            "../../fixtures/night-pgo-trigger-bad-expectation.json"
+        ))
+        .expect("bad-expectation pgo fixture parses");
+        assert_eq!(pgo_bad_expectation.roster.len(), 3);
+        assert_eq!(pgo_bad_expectation.expectations.count(), 4);
     }
 
     #[test]
@@ -909,5 +996,29 @@ mod tests {
             ..report
         };
         assert!(!target.is_preserved_by(&failed_report));
+    }
+
+    #[test]
+    fn write_reduced_report_does_not_bless_semantic_expectation_failure() {
+        let target = ReductionTarget::FailureClass(Some(FailureClass::SemanticExpectation));
+        let minimized = RunReport {
+            ok: false,
+            failure_class: Some(FailureClass::SemanticExpectation),
+            reason: Some("missing expected Trigger".to_string()),
+            game_id: None,
+            resolution_audited: Some(1),
+            trace_count: Some(1),
+            projection_audit_ok: None,
+            semantic_expectations_checked: 0,
+        };
+
+        let reduction = ReductionReport::new(Some(target), &minimized);
+        assert!(!reduction.replay_success);
+        assert_eq!(reduction.failure_class_preserved, Some(true));
+        assert_eq!(reduction.success_invariant_preserved, None);
+
+        let write_reduced = WriteReducedReport::new("reduced.json", &reduction);
+        assert!(write_reduced.wrote);
+        assert!(!write_reduced.promoted_success_fixture);
     }
 }

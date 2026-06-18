@@ -2426,8 +2426,12 @@ coverage, and a playable vertical scenario through the command pipeline.
    expectations. `--write-reduced <path>` now writes the post-reduction fixture; the non-minimal
    PGO replay was reduced into `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and then
    replayed from that written artifact with one audited resolution, one trace, clean projection
-   rebuild, and all four semantic expectations checked. This is a reusable artifact-backed
-   minimized replay promotion path, not true property-test shrinking. A first non-mafiascum lane
+   rebuild, and all four semantic expectations checked. The report now distinguishes replay
+   success, failure-class preservation, and success-invariant preservation.
+   `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
+   semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
+   `promoted_success_fixture: false`. This is a reusable artifact-backed minimized replay
+   promotion path, not true property-test shrinking. A first non-mafiascum lane
    now generates six Chinese Structured N01 cases
    from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter, Wolf Beauty, and passive
    roles, then proves `audit_resolution`, exact anchored result-contract plus representative
@@ -2744,8 +2748,9 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 persistent and generated-action systems by hardening the minimizer's failure-mode
-surface. Add a negative fixture or unit test proving `--write-reduced` does not silently bless a
-fixture when semantic expectations fail, then extend the saved report to distinguish replay
-success, failure-class preservation, and success-invariant preservation before moving to randomized
-property-test shrinking.
+Continue Phase 4 persistent and generated-action systems by moving from hand-run minimized
+promotion toward deterministic generated-case shrinking. Start by extracting the generated
+Mafiascum N01 failure fixture emission into a reusable saved artifact path, then have the failure
+path invoke `minimize_night_fixture --reduce --write-reduced` and assert the saved report preserves
+either failure class or success invariants before widening that shrinker to Chinese Structured
+generated cases.

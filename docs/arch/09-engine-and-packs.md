@@ -1320,9 +1320,12 @@ preserving all four PGO semantic expectations. `--write-reduced <path>` now writ
 fixture after reduction; the non-minimal PGO replay was reduced into
 `target/operator-proof/night-pgo-trigger-reduced.tmp.json` and replayed from that written file with
 one audited resolution, one trace, clean projection rebuild, and all four semantic expectations
-checked. This proves a reusable artifact-backed promotion path for hand-minimized
-trigger/dependency replays and metadata-rich generated failure output, not automatic property-test
-shrinking across generated families. A non-mafiascum generated replay lane now covers six
+checked. The report now explicitly separates replay success, failure-class preservation, and
+success-invariant preservation; `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json`
+is a negative semantic-expectation fixture proving `--write-reduced` can save a reduced failing
+artifact without marking it as a promoted success fixture. This proves a reusable artifact-backed
+promotion path for hand-minimized trigger/dependency replays and metadata-rich generated failure
+output, not automatic property-test shrinking across generated families. A non-mafiascum generated replay lane now covers six
 Chinese Structured N01 cases from fixed seeds across Wolf, Witch, Guard, Prophet, Cupid, Hunter,
 Wolf Beauty, and passive roles using legal command submissions and the same audit trio. This
 manifest-listed Chinese Structured N01 lane was rerun locally with
