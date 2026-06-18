@@ -44,6 +44,14 @@
       "alignment": "town",
       "actions": []
     },
+    "bomb": {
+      "description": "Bomb. Town-aligned hidden passive role: when killed at night, retaliates against the killing actor.",
+      "alignment": "town",
+      "actions": [],
+      "effects": [
+        "bomb"
+      ]
+    },
     "doublevoter": {
       "description": "Doublevoter. Town-aligned role whose ballot contributes two votes under the pack vote policy.",
       "alignment": "town",
@@ -2828,6 +2836,7 @@
     ],
     "strongman_bypasses_protect": true,
     "kill_cause_ids": [
+      "bomb_retaliates",
       "death_curse_retaliates",
       "death_mark_detonates",
       "factional_kill",
@@ -2871,6 +2880,12 @@
       }
     },
     "generated_kill_cause_policy": {
+      "bomb_retaliates": {
+        "on": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "strongman_bypasses_protect": false
+      },
       "death_curse_retaliates": {
         "on": "Death",
         "actor": "Target",
@@ -2921,6 +2936,12 @@
       }
     },
     "trigger_fixpoint_policy": {
+      "bomb_retaliates": {
+        "on": "Kill",
+        "produced_kill_reenters": true,
+        "loop_cap": "RedirectLoopCap",
+        "trace": true
+      },
       "death_curse_retaliates": {
         "on": "Death",
         "produced_kill_reenters": true,
@@ -2973,6 +2994,7 @@
     "protection_cause_policy": {
       "doctor_protect": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -2993,6 +3015,7 @@
       },
       "faith_healer_protect": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3013,6 +3036,7 @@
       },
       "babysit": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3033,6 +3057,7 @@
       },
       "bodyguard": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3053,6 +3078,7 @@
       },
       "martyr_protect": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3073,6 +3099,7 @@
       },
       "cpr_protect": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3093,6 +3120,7 @@
       },
       "jail": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3115,6 +3143,7 @@
     "target_state_save_policy": {
       "bulletproof": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3135,6 +3164,7 @@
       },
       "bulletproof_vest": {
         "blocks": [
+          "bomb_retaliates",
           "death_curse_retaliates",
           "death_mark_detonates",
           "factional_kill",
@@ -3504,6 +3534,19 @@
   },
   "triggers": [
     {
+      "id": "bomb_retaliates",
+      "on": "Kill",
+      "if_target_has": [
+        "bomb"
+      ],
+      "produces": {
+        "ability": "Kill",
+        "actor": "Target",
+        "target": "Killer",
+        "modifiers": []
+      }
+    },
+    {
       "id": "vengeful_retaliates",
       "on": "Kill",
       "if_target_has": [
@@ -3724,6 +3767,10 @@
     "ascetic": {
       "duration": "Persistent",
       "visibility": "Public"
+    },
+    "bomb": {
+      "duration": "Persistent",
+      "visibility": "Hidden"
     },
     "commuted": {
       "duration": "Resolution",

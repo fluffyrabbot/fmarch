@@ -256,6 +256,10 @@ fn pack_deserializes() {
     let pack = load_pack();
     assert_eq!(pack.name, "mafiascum");
     assert_eq!(pack.ir_version, 58);
+    let bomb = pack.roles.get("bomb").expect("Mafiascum Bomb role");
+    assert_eq!(bomb.alignment.as_deref(), Some("town"));
+    assert!(bomb.actions.is_empty());
+    assert_eq!(bomb.effects, vec!["bomb".to_string()]);
     assert!(pack.roles.contains_key("cop"));
     assert!(pack.roles.contains_key("vanilla_cop"));
     assert!(pack.roles.contains_key("neapolitan"));
@@ -394,6 +398,7 @@ fn pack_deserializes() {
     assert_eq!(
         kill_cause_ids,
         vec![
+            "bomb_retaliates",
             "death_curse_retaliates",
             "death_mark_detonates",
             "factional_kill",
@@ -430,6 +435,35 @@ fn pack_deserializes() {
         target_state_gate_tags,
         vec!["ascetic", "commuted", "untargetable"]
     );
+    assert_eq!(
+        pack.standard_nar
+            .generated_kill_cause_policy
+            .get("bomb_retaliates")
+            .map(|policy| policy.strongman_bypasses_protect),
+        Some(false)
+    );
+    let bomb_generated_policy = pack
+        .standard_nar
+        .generated_kill_cause_policy
+        .get("bomb_retaliates")
+        .expect("bomb generated kill policy");
+    assert_eq!(
+        bomb_generated_policy.on,
+        Some(TriggerOn::Ability(IrAbility::Kill))
+    );
+    assert_eq!(bomb_generated_policy.actor, Some(ActorRef::Target));
+    assert_eq!(bomb_generated_policy.target, Some(TargetRef::Killer));
+    let bomb_trigger = pack
+        .triggers
+        .iter()
+        .find(|trigger| trigger.id == "bomb_retaliates")
+        .expect("bomb trigger");
+    assert_eq!(bomb_trigger.on, TriggerOn::Ability(IrAbility::Kill));
+    assert_eq!(bomb_trigger.if_target_has, vec!["bomb".to_string()]);
+    assert_eq!(bomb_trigger.produces.ability, IrAbility::Kill);
+    assert_eq!(bomb_trigger.produces.actor, ActorRef::Target);
+    assert_eq!(bomb_trigger.produces.target, TargetRef::Killer);
+    assert!(pack.effects.contains_key("bomb"));
     assert_eq!(
         pack.standard_nar
             .generated_kill_cause_policy
@@ -513,6 +547,21 @@ fn pack_deserializes() {
     );
     assert_eq!(super_saint_policy.actor, Some(ActorRef::Target));
     assert_eq!(super_saint_policy.target, Some(TargetRef::Actor));
+    let bomb_fixpoint_policy = pack
+        .standard_nar
+        .trigger_fixpoint_policy
+        .get("bomb_retaliates")
+        .expect("bomb trigger fixpoint policy");
+    assert_eq!(
+        bomb_fixpoint_policy.on,
+        Some(TriggerOn::Ability(IrAbility::Kill))
+    );
+    assert!(bomb_fixpoint_policy.produced_kill_reenters);
+    assert_eq!(
+        bomb_fixpoint_policy.loop_cap,
+        Some(TriggerLoopCapPolicy::RedirectLoopCap)
+    );
+    assert!(bomb_fixpoint_policy.trace);
     let pgo_fixpoint_policy = pack
         .standard_nar
         .trigger_fixpoint_policy
@@ -5124,6 +5173,17 @@ fn golden_death_curse_retaliates_on_death() {
 }
 
 #[test]
+fn golden_bomb_retaliates_on_night_kill() {
+    let golden = load_golden("bomb_retaliates_on_night_kill.json");
+    let got = run(&golden["input"], load_pack());
+    assert_events_eq(
+        &got,
+        &expected_events(&golden),
+        "bomb_retaliates_on_night_kill",
+    );
+}
+
+#[test]
 fn golden_death_mark_detonates_on_effect_marked() {
     let golden = load_golden("death_mark_detonates_on_effect_marked.json");
     let got = run(&golden["input"], load_pack());
@@ -5301,6 +5361,7 @@ fn trigger_generated_trace_rows_mirror_trigger_payloads() {
     let cases = [
         ("mafiascum", "death_curse_retaliates_on_death.json"),
         ("mafiascum", "death_mark_detonates_on_effect_marked.json"),
+        ("mafiascum", "bomb_retaliates_on_night_kill.json"),
         ("mafiascum", "phase_end_doom_claims_on_phase_end.json"),
         ("mafiascum", "win_witness_observes_on_win.json"),
         ("mafiascum", "pgo_shoots_visitor.json"),

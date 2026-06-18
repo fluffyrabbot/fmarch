@@ -49954,6 +49954,227 @@ async fn host_resolve_phase_projects_mafia_universe_bomber_triggers(pool: PgPool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_resolve_phase_projects_mafiascum_bomb_trigger(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, role) in [
+        ("slot_1", "mafia_goon"),
+        ("slot_2", "bomb"),
+        ("slot_3", "vanilla_townie"),
+        ("slot_4", "vanilla_townie"),
+        ("slot_5", "mafia_goon"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let effects = slot_effects(&pool, game).await.unwrap();
+    assert!(
+        effects.iter().any(|effect| {
+            effect.slot_id == "slot_2"
+                && effect.effect == "bomb"
+                && effect.source_action.as_deref() == Some("role:bomb")
+                && effect.visibility == "Hidden"
+        }),
+        "Bomb role assignment should fold the hidden bomb effect into projections"
+    );
+
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+    projections::append_and_project(
+        &pool,
+        game,
+        &[eventstore::EventInput::new(
+            "ActionSubmitted",
+            1,
+            serde_json::json!({
+                "action_id": "mafiascum_bomb_kill_n01",
+                "template_id": "factional_kill",
+                "actor": "slot_1",
+                "targets": ["slot_2"],
+                "phase_id": "N01"
+            }),
+            eventstore::ActorId::Slot("slot_1".into()),
+            0,
+        )],
+    )
+    .await
+    .unwrap();
+    handle(&pool, &h, Command::ResolvePhase { game, seed: 770101 })
+        .await
+        .expect("host resolves Mafiascum Bomb trigger");
+
+    let applied_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let applied = domain::validate_resolution_json(&applied_payload, domain::RESULT_VERSION)
+        .expect("valid Mafiascum Bomb result");
+    let trigger_index = applied
+        .events
+        .iter()
+        .find_map(|indexed| match &indexed.event {
+            domain::InnerEvent::Trigger {
+                trigger_id,
+                payload,
+            } if trigger_id == "bomb_retaliates"
+                && payload["on"] == "Kill"
+                && payload["source_target"] == "slot_2"
+                && payload["source_actor"] == "slot_1"
+                && payload["source_cause"] == "factional_kill"
+                && payload["produced_actor"] == "slot_2"
+                && payload["produced_target"] == "slot_1" =>
+            {
+                Some(indexed.index)
+            }
+            _ => None,
+        })
+        .expect("Mafiascum Bomb should emit bomb_retaliates");
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_2"
+                && cause == "factional_kill"
+                && attackers == &vec!["slot_1".to_string()]
+                && !*unstoppable
+    )));
+    assert!(applied.events.iter().any(|indexed| matches!(
+        &indexed.event,
+        domain::InnerEvent::PlayerKilled { slot_id, cause, attackers, unstoppable, .. }
+            if slot_id == "slot_1"
+                && cause == "bomb_retaliates"
+                && attackers == &vec!["slot_2".to_string()]
+                && !*unstoppable
+    )));
+    assert!(
+        !applied
+            .events
+            .iter()
+            .any(|indexed| matches!(indexed.event, domain::InnerEvent::WinReached { .. })),
+        "second mafia slot should keep the Bomb trigger vertical win-free"
+    );
+
+    let trace_payload = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let trace = domain::validate_trace_json(&trace_payload, domain::TRACE_VERSION)
+        .expect("valid Mafiascum Bomb trace");
+    assert!(
+        trace.notes.iter().any(|note| {
+            note == &format!("trigger bomb_retaliates emitted at event_index {trigger_index}")
+        }),
+        "Mafiascum Bomb trigger note should persist in ResolutionTrace"
+    );
+    assert_trigger_generated_trace(
+        &trace,
+        TriggerGeneratedTraceExpectation {
+            action_id: "bomb_retaliates",
+            on: "Kill",
+            source_target: "slot_2",
+            source_actor: "slot_1",
+            source_cause: "factional_kill",
+            produced_actor: "slot_2",
+            produced_target: "slot_1",
+            actor_filter: None,
+            event_index: trigger_index as i64,
+        },
+    );
+
+    let slots = slot_state(&pool, game).await.unwrap();
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_1")
+            .unwrap()
+            .alive,
+        "Bomb retaliation should kill the original killer"
+    );
+    assert!(
+        !slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_2")
+            .unwrap()
+            .alive,
+        "Bomb should die to the submitted kill"
+    );
+    assert!(
+        slots
+            .iter()
+            .find(|slot| slot.slot_id == "slot_5")
+            .unwrap()
+            .alive,
+        "second mafia should survive and keep the test focused on the trigger"
+    );
+
+    let slots_before = serde_json::to_string(&slots).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        slots_before,
+        serde_json::to_string(&slot_state(&pool, game).await.unwrap()).unwrap(),
+        "slot_state rebuild must preserve Mafiascum Bomb trigger deaths"
+    );
+    let trace_after_rebuild = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'ResolutionTrace' \
+         AND payload->>'phase_id' = 'N01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        trace_payload, trace_after_rebuild,
+        "projection rebuild must not rewrite persisted Mafiascum Bomb trace envelope"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_carries_hunter_retaliation(pool: PgPool) {
     let host = "host_h";
     let game = Uuid::new_v4();

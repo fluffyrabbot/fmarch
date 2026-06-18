@@ -476,7 +476,7 @@ Inventory source: `docs/arch/im-human-engine-inventory.json`.
 | role_id | `mafiascum:babysitter` | `babysitter` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:beloved_princess` | `beloved_princess` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:bodyguard` | `bodyguard` | 1 | no | yes | yes | yes | yes |  |
-| role_id | `mafiascum:bomb` |  | 1 | yes | no | no | no | no |  |
+| role_id | `mafiascum:bomb` | `bomb` | 1 | no | yes | yes | yes | yes | Passive night_retribution role from the Mafiascum catalog; fmarch folds it as a hidden bomb role effect consumed by the bomb_retaliates Kill trigger. |
 | role_id | `mafiascum:bulletproof` | `bulletproof` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:bus_driver` | `bus_driver` | 1 | no | yes | yes | yes | yes |  |
 | role_id | `mafiascum:commuter` | `commuter` | 1 | no | yes | yes | yes | yes |  |
