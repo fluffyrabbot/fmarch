@@ -1373,11 +1373,14 @@ case at four slots and three actions, while
 dependency to three slots and two actions. `crates/commands/fixtures/night-pgo-trigger-minimized.json`
 adds the trigger-note side of the lane with a two-slot, one-action PGO visit trigger replay that
 checks the `Trigger` inner event, generated kill, generated-action trace row, and anchored
-diagnostic note. `crates/commands/fixtures/night-extra-action-generated-minimized.json` and
-`crates/commands/fixtures/night-item-grant-generated-minimized.json` promote the first generated-action
-matrix rows into checked-in replays: ExtraAction stays at four slots and two actions, while ItemGrant
-shrinks to two slots and one action. Both replay setup plus N02 with two audited resolution
-envelopes, two anchored traces, and five checked semantic expectations.
+diagnostic note. `crates/commands/fixtures/night-extra-action-generated-minimized.json`,
+`crates/commands/fixtures/night-item-grant-generated-minimized.json`, and
+`crates/commands/fixtures/night-private-notification-generated-minimized.json` promote the
+generated-action matrix rows into checked-in replays: ExtraAction stays at four slots and two
+actions, while ItemGrant and PrivateNotification shrink to two slots and one action. All three
+replay setup plus N02 with two audited resolution envelopes and two anchored traces; ExtraAction
+and ItemGrant check five semantic expectations, while PrivateNotification checks six including the
+private target notification.
 `--reduce` now also runs for successful fixtures that declare expectations and
 keeps a candidate only when the same semantic expectation count still passes. These minimized
 trigger/dependency and generated-action fixtures replay through legal commands and require
@@ -1398,11 +1401,12 @@ success-invariant preservation; `crates/commands/fixtures/night-pgo-trigger-bad-
 is a negative semantic-expectation fixture proving `--write-reduced` can save a reduced failing
 artifact without marking it as a promoted success fixture. `--write-report <path>` now persists the
 same JSON report that is printed to stdout. The generated-action failure-artifact lane now writes
-`crates/commands/fixtures/night-extra-action-generated-bad-expectation.json` and
-`crates/commands/fixtures/night-item-grant-generated-bad-expectation.json` as checked-in negative
-artifacts and proves, through
-`checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure`, that both reduced
-fixtures preserve `semantic_expectation` failure class while keeping
+`crates/commands/fixtures/night-extra-action-generated-bad-expectation.json`,
+`crates/commands/fixtures/night-item-grant-generated-bad-expectation.json`, and
+`crates/commands/fixtures/night-private-notification-generated-bad-expectation.json` as checked-in
+negative artifacts and proves, through
+`checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure`, that all three
+reduced fixtures preserve `semantic_expectation` failure class while keeping
 `promoted_success_fixture: false`. The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report

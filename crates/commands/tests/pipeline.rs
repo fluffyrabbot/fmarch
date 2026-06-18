@@ -11323,6 +11323,15 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
             2,
             5,
         ),
+        (
+            "night-private-notification-generated-minimized",
+            include_str!("../fixtures/night-private-notification-generated-minimized.json"),
+            2,
+            1,
+            2,
+            2,
+            6,
+        ),
     ] {
         let fixture: serde_json::Value =
             serde_json::from_str(fixture_json).expect("minimized fixture should parse");
@@ -11391,25 +11400,34 @@ async fn minimized_trigger_dependency_fixtures_replay_semantic_expectations(pool
 async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_failure(
     pool: PgPool,
 ) {
-    for (family, bad_stem, bad_fixture_json, success_fixture_json) in [
+    for (family, bad_stem, bad_fixture_json, success_fixture_json, expected_expectations) in [
         (
             "extra-action",
             "night-extra-action-generated-bad-expectation",
             include_str!("../fixtures/night-extra-action-generated-bad-expectation.json"),
             include_str!("../fixtures/night-extra-action-generated-minimized.json"),
+            5,
         ),
         (
             "item-grant",
             "night-item-grant-generated-bad-expectation",
             include_str!("../fixtures/night-item-grant-generated-bad-expectation.json"),
             include_str!("../fixtures/night-item-grant-generated-minimized.json"),
+            5,
+        ),
+        (
+            "private-notification",
+            "night-private-notification-generated-bad-expectation",
+            include_str!("../fixtures/night-private-notification-generated-bad-expectation.json"),
+            include_str!("../fixtures/night-private-notification-generated-minimized.json"),
+            6,
         ),
     ] {
         let bad_fixture: serde_json::Value =
             serde_json::from_str(bad_fixture_json).expect("bad generated-action fixture parses");
         assert_eq!(
             generated_expectation_count(&bad_fixture["expectations"]),
-            5,
+            expected_expectations,
             "{bad_stem} should keep semantic expectation metadata"
         );
 
@@ -11467,7 +11485,7 @@ async fn checked_in_generated_action_bad_expectation_fixture_preserves_semantic_
         );
         assert_eq!(
             success_report["original"]["semantic_expectations_checked"],
-            serde_json::json!(5),
+            serde_json::json!(expected_expectations),
             "{family} success fixture expectation count"
         );
         assert_eq!(
