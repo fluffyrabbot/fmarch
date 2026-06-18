@@ -1596,6 +1596,19 @@ is covered by
 which proves the success fixture remains promotable while the reduced negative fixture preserves
 `semantic_expectation` failure class without success promotion.
 
+`crates/commands/fixtures/night-vengeful-fixpoint-generated-minimized.json` now promotes the
+VengefulFixpoint row into a checked-in Mafiascum N01 generated-kill fixpoint replay with two slots,
+one night action, one audited resolution envelope, and one anchored trace. It checks nine semantic
+expectations: the initial factional `PlayerKilled` inner event for the vengeful slot, the `Trigger`
+inner event for `vengeful_retaliates`, the generated retaliatory
+`PlayerKilled(cause = vengeful_retaliates)` inner event for the attacker, one trigger trace
+decision, one trigger trace note, one generated action, one generated-action count, and two rebuilt
+`slot_state` rows proving both slots die through the fixpoint. The matching checked-in negative
+artifact, `crates/commands/fixtures/night-vengeful-fixpoint-generated-bad-expectation.json`, is
+covered by `checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations`, which
+proves the success fixture remains promotable while the reduced negative fixture preserves
+`semantic_expectation` failure class without success promotion.
+
 The generated Mafiascum N01 failure-artifact proof
 writes `target/operator-proof/generated-mafiascum-n01-bad-pgo-expectation.fixture.tmp.json`, invokes
 `minimize_night_fixture --reduce --write-reduced --write-report`, and verifies the saved report

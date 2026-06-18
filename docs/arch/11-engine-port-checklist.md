@@ -2682,6 +2682,18 @@ coverage, and a playable vertical scenario through the command pipeline.
    `checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations`,
    which proves the success fixture remains promotable while the reduced negative fixture preserves
    `semantic_expectation` failure class without success promotion.
+   `crates/commands/fixtures/night-vengeful-fixpoint-generated-minimized.json` now promotes the
+   VengefulFixpoint row into a checked-in Mafiascum N01 generated-kill fixpoint replay with two
+   slots, one night action, one audited resolution envelope, and one anchored trace. It checks nine
+   semantic expectations: the initial factional `PlayerKilled` inner event for the vengeful slot,
+   the `Trigger` inner event for `vengeful_retaliates`, the generated retaliatory
+   `PlayerKilled(cause = vengeful_retaliates)` inner event for the attacker, one trigger trace
+   decision, one trigger trace note, one generated action, one generated-action count, and two
+   rebuilt `slot_state` rows proving both slots die through the fixpoint. Its matching checked-in
+   negative artifact, `crates/commands/fixtures/night-vengeful-fixpoint-generated-bad-expectation.json`,
+   is covered by `checked_in_vengeful_fixpoint_generated_fixtures_replay_semantic_expectations`,
+   which proves the success fixture remains promotable while the reduced negative fixture preserves
+   `semantic_expectation` failure class without success promotion.
    `crates/commands/fixtures/night-babysitter-dependency-nonminimal.json`,
    `crates/commands/fixtures/night-hider-dependency-nonminimal.json`, and
    `crates/commands/fixtures/night-pgo-trigger-nonminimal.json` prove the success-shrinking path:
@@ -3204,7 +3216,7 @@ resolution envelopes and projections.
 ## Recommended next slice
 
 Continue Phase 4 by moving the artifact-backed promotion path into the unpromoted trigger fixpoint
-rows: start with `vengeful_fixpoint`, commit its reduced
+rows: continue with `strongman_vengeful_fixpoint`, commit its reduced
 success and bad-expectation generated-shrink artifacts under `crates/commands/fixtures`, prove both
 through `minimize_night_fixture`, the focused pipeline replay selectors, the generated-shrink
 matrix, and the gap audit, and keep the proof boundary bounded to deterministic generated fixtures
