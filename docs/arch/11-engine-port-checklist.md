@@ -2438,7 +2438,14 @@ coverage, and a playable vertical scenario through the command pipeline.
    state-production and N02 cascade-consumption trace decisions. This fourth lane was rerun
    locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically`
-   and passed one filtered pipeline test across its four deterministic seeds. The large-action-graph
+   and passed one filtered pipeline test across its four deterministic seeds.
+   `generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts` now gives those
+   persistent trigger/fixpoint cases the same generated shrink-and-replay proof shape: generated
+   Mafiascum Hunter and Cupid/Lovers two-phase fixtures seed N01 folded state, resolve N02 cascade
+   consumption, reduce via `minimize_night_fixture --reduce --write-reduced --write-report`, and
+   replay the reduced JSON artifact with the same semantic expectation counts, while the generated
+   Epicmafia Bomb fixture proves the Bomb trigger/generated-action side through the same reduced
+   artifact replay path. The large-action-graph
    lane adds a fixed dense scenario with exact anchored trace assertions for its representative
    generated rows plus explicit event/trace/duration ceilings and was rerun locally with
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -q -p commands large_action_graph_resolves_and_audits_within_regression_ceiling`,
@@ -2926,9 +2933,9 @@ coverage, and a playable vertical scenario through the command pipeline.
    browser-fetched JSON surface, all 10 existing browser-smoke-required go/no-go metadata needles
    present, trusted metadata rows for large-action and determinism proof rows, and a manifest/status
    trusted command/projection proof row that has not yet been promoted into the browser-smoke
-   required needle set. The bounded generated trigger/dependency shrink lane covers representative
-   PGO/Babysitter/Hider successes; broader randomized shrink breadth and persistent-trigger
-   generated shrinking remain future work. The local-Postgres
+   required needle set. The bounded generated trigger/dependency shrink lanes cover representative
+   PGO/Babysitter/Hider successes plus representative persistent Hunter/Lovers/Bomb successes;
+   broader randomized shrink breadth and generated failure-case shrinking remain future work. The local-Postgres
    command/projection artifact reports `ok: true`, one matched `Command::ResolvePhase` resolution
    envelope, 20 matched projection tables, zero drifted tables, zero drifted phases, and zero
    diffs, with proof boundary limited to a scratch database on the local Postgres service. Broader
@@ -2940,8 +2947,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by extending generated shrink evidence from representative
-PGO/Babysitter/Hider successes into persistent-trigger fixpoint cases. Start with the existing
-Hunter/Lovers/Bomb-style generated lanes: have the generated case builder emit minimizer-ready
-fixtures with semantic expectations, shrink the generated artifact, and replay the reduced JSON
-through command/projection audit before updating the trigger-fixpoint wording again.
+Continue Phase 4 by turning the representative generated shrink lanes into generated failure-case
+shrinking. Start with the Hunter/Lovers/Bomb fixtures: inject one wrong semantic expectation per
+family, assert the minimizer preserves the `semantic_expectation` failure class, writes a reduced
+failing artifact, and does not promote it as a success fixture, then replay the original success
+fixture again so the negative lane cannot mask a real resolver regression.

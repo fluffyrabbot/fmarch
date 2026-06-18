@@ -11670,6 +11670,148 @@ async fn generated_trigger_dependency_search_shrinks_to_replayable_artifacts(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn generated_persistent_trigger_fixtures_shrink_to_replayable_artifacts(pool: PgPool) {
+    for (stem, fixture_json, expected_audited, expected_traces, min_expectations) in [
+        (
+            "generated-mafiascum-hunter-persistent-trigger",
+            generated_mafiascum_persistent_trigger_fixture_json("hunter", 97_001),
+            2,
+            2,
+            3,
+        ),
+        (
+            "generated-mafiascum-lovers-persistent-trigger",
+            generated_mafiascum_persistent_trigger_fixture_json("lovers", 97_002),
+            2,
+            2,
+            3,
+        ),
+        (
+            "generated-epicmafia-bomb-trigger",
+            generated_night_case_fixture_json(
+                &generated_epicmafia_night_case(96_777),
+                "epicmafia",
+                144_777,
+            ),
+            1,
+            1,
+            8,
+        ),
+    ] {
+        let fixture: serde_json::Value =
+            serde_json::from_str(&fixture_json).expect("generated persistent fixture parses");
+        let expectation_count = generated_expectation_count(&fixture["expectations"]);
+        assert!(
+            expectation_count >= min_expectations,
+            "{stem} should carry persistent-trigger semantic expectations"
+        );
+
+        let artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-success-shrink"));
+        artifacts.remove_existing();
+        artifacts.write_fixture(&fixture_json);
+        let report = artifacts.run_minimizer(&pool).await;
+
+        assert_eq!(report["original"]["ok"], true, "{stem} original replay");
+        assert_eq!(
+            report["original"]["resolution_audited"],
+            serde_json::json!(expected_audited),
+            "{stem} audited resolution count"
+        );
+        assert_eq!(
+            report["original"]["trace_count"],
+            serde_json::json!(expected_traces),
+            "{stem} trace count"
+        );
+        assert_eq!(
+            report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} projection audit"
+        );
+        assert_eq!(
+            report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} original semantic expectations"
+        );
+        assert_eq!(report["minimized"]["ok"], true, "{stem} minimized replay");
+        assert_eq!(
+            report["minimized"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} minimized semantic expectations"
+        );
+        assert_eq!(
+            report["reduction"]["replay_success"],
+            serde_json::json!(true),
+            "{stem} reduction replay"
+        );
+        assert_eq!(
+            report["reduction"]["success_invariant_preserved"],
+            serde_json::json!(true),
+            "{stem} success invariant"
+        );
+        assert_eq!(
+            report["write_reduced"]["promoted_success_fixture"],
+            serde_json::json!(true),
+            "{stem} reduced artifact promotion"
+        );
+        assert!(
+            report["reduction_steps"]
+                .as_array()
+                .is_some_and(|steps| !steps.is_empty()),
+            "{stem} generated fixture should shrink"
+        );
+
+        let reduced_fixture_json = fs::read_to_string(&artifacts.reduced_path)
+            .unwrap_or_else(|err| panic!("{stem} reduced fixture should be written: {err}"));
+        let reduced_fixture: serde_json::Value =
+            serde_json::from_str(&reduced_fixture_json).expect("reduced fixture parses");
+        assert_eq!(
+            generated_expectation_count(&reduced_fixture["expectations"]),
+            expectation_count,
+            "{stem} reduced expectation count"
+        );
+        let original_roster = fixture["roster"].as_array().map_or(0, Vec::len);
+        let reduced_roster = reduced_fixture["roster"].as_array().map_or(0, Vec::len);
+        let original_actions = fixture["actions"].as_array().map_or(0, Vec::len)
+            + fixture["setup_phases"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|phase| phase["actions"].as_array().map_or(0, Vec::len))
+                .sum::<usize>();
+        let reduced_actions = reduced_fixture["actions"].as_array().map_or(0, Vec::len)
+            + reduced_fixture["setup_phases"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|phase| phase["actions"].as_array().map_or(0, Vec::len))
+                .sum::<usize>();
+        assert!(
+            reduced_roster < original_roster || reduced_actions < original_actions,
+            "{stem} should remove generated roster or action noise"
+        );
+
+        let replay_artifacts = GeneratedShrinkArtifacts::new(&format!("{stem}-reduced-replay"));
+        replay_artifacts.remove_existing();
+        replay_artifacts.write_fixture(&reduced_fixture_json);
+        let replay_report = replay_artifacts.run_minimizer(&pool).await;
+        assert_eq!(
+            replay_report["original"]["ok"], true,
+            "{stem} reduced artifact replay"
+        );
+        assert_eq!(
+            replay_report["original"]["semantic_expectations_checked"],
+            serde_json::json!(expectation_count),
+            "{stem} reduced artifact expectations"
+        );
+        assert_eq!(
+            replay_report["original"]["projection_audit_ok"],
+            serde_json::json!(true),
+            "{stem} reduced artifact projection audit"
+        );
+    }
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn seeded_persistent_trigger_state_replay_audit_and_rebuild_deterministically(pool: PgPool) {
     for (seed, case_name) in [
         (8101_u64, "hunter"),
@@ -18699,6 +18841,138 @@ fn generated_night_case_fixture_json(
     resolver_seed: u64,
 ) -> String {
     generated_case_fixture_json(case, pack, "N01", resolver_seed)
+}
+
+fn generated_mafiascum_persistent_trigger_fixture_json(family: &str, seed: u64) -> String {
+    let (setup_action, target_action, expectations) = match family {
+        "hunter" => (
+            serde_json::json!({
+                "actor_slot": "slot_1",
+                "template_id": "hunter_retaliate",
+                "action_id": format!("generated_seed_{seed}_hunter_arms_retaliation"),
+                "targets": ["slot_2"]
+            }),
+            serde_json::json!({
+                "actor_slot": "slot_3",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_mafia_kills_hunter"),
+                "targets": ["slot_1"]
+            }),
+            serde_json::json!({
+                "inner_events": [
+                    {
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_1",
+                            "cause": "factional_kill",
+                            "attackers": ["slot_3"]
+                        }
+                    },
+                    {
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_2",
+                            "cause": "hunter_retaliate",
+                            "attackers": ["slot_1"],
+                            "unstoppable": false
+                        }
+                    }
+                ],
+                "trace_decisions": [
+                    {
+                        "stage": "death:cascade",
+                        "source": format!("retaliation:generated_seed_{seed}_hunter_arms_retaliation"),
+                        "outcome": "chosen_retaliation",
+                        "detail": {
+                            "retaliation_id": format!("generated_seed_{seed}_hunter_arms_retaliation"),
+                            "actor": "slot_1",
+                            "target": "slot_2",
+                            "source_action": "hunter_retaliate",
+                            "source_death_cause": "factional_kill",
+                            "cause": "hunter_retaliate",
+                            "unstoppable": false,
+                            "timing": "ImmediateBeforePhaseAnnouncement"
+                        }
+                    }
+                ]
+            }),
+        ),
+        "lovers" => (
+            serde_json::json!({
+                "actor_slot": "slot_1",
+                "template_id": "link_lovers",
+                "action_id": format!("generated_seed_{seed}_cupid_links_lovers"),
+                "targets": ["slot_2", "slot_4"]
+            }),
+            serde_json::json!({
+                "actor_slot": "slot_3",
+                "template_id": "factional_kill",
+                "action_id": format!("generated_seed_{seed}_mafia_kills_lover"),
+                "targets": ["slot_2"]
+            }),
+            serde_json::json!({
+                "inner_events": [
+                    {
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_2",
+                            "cause": "factional_kill",
+                            "attackers": ["slot_3"]
+                        }
+                    },
+                    {
+                        "kind": "PlayerKilled",
+                        "payload": {
+                            "slot_id": "slot_4",
+                            "cause": "lover_suicide",
+                            "attackers": ["slot_2"],
+                            "unstoppable": true
+                        }
+                    }
+                ],
+                "trace_decisions": [
+                    {
+                        "stage": "death:cascade",
+                        "source": format!("link:generated_seed_{seed}_cupid_links_lovers"),
+                        "outcome": "lover_suicide",
+                        "detail": {
+                            "link_id": format!("generated_seed_{seed}_cupid_links_lovers"),
+                            "link_source": "slot_1",
+                            "linked_slots": ["slot_2", "slot_4"],
+                            "source_dead": "slot_2",
+                            "target": "slot_4",
+                            "cause": "lover_suicide"
+                        }
+                    }
+                ]
+            }),
+        ),
+        _ => unreachable!("unknown generated persistent trigger family"),
+    };
+
+    serde_json::to_string_pretty(&serde_json::json!({
+        "seed": seed + 32_000,
+        "pack": "mafiascum",
+        "phase": "N02",
+        "roster": [
+            { "slot": "slot_1", "role": if family == "hunter" { "hunter" } else { "cupid" } },
+            { "slot": "slot_2", "role": "vanilla_townie" },
+            { "slot": "slot_3", "role": "mafia_goon" },
+            { "slot": "slot_4", "role": "vanilla_townie" },
+            { "slot": "slot_5", "role": "mafia_goon" },
+            { "slot": "slot_6", "role": "vanilla_townie" }
+        ],
+        "setup_phases": [
+            {
+                "phase": "N01",
+                "seed": seed + 31_000,
+                "actions": [setup_action]
+            }
+        ],
+        "actions": [target_action],
+        "expectations": expectations
+    }))
+    .expect("generated Mafiascum persistent trigger fixture serializes")
 }
 
 fn generated_case_fixture_json(
