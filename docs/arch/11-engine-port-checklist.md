@@ -2507,13 +2507,13 @@ coverage, and a playable vertical scenario through the command pipeline.
    negative lane cannot hide resolver drift.
    `generated_shrink_matrix_writes_compact_operator_report` now makes that shrink breadth visible
    in a compact local-Postgres report: it collects two deterministic PGO, Babysitter, and Hider
-   generated seeds plus two deterministic Hunter, VengefulFixpoint, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, PgoProjectionState, HiderProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming,
+   generated seeds plus two deterministic Hunter, VengefulFixpoint, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, PgoProjectionState, HiderProjectionState, BabysitterProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming,
    ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, Bomb, and BombProjectionState persistent/generated-action
-   seeds, runs each of the 46 cases through success and bad-expectation reductions, asserts success
+   seeds, runs each of the 48 cases through success and bad-expectation reductions, asserts success
    invariants and `semantic_expectation` failure preservation, writes per-case reduced fixture and
    report artifacts under `target/operator-proof`, and saves
-   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 23
-   families, 46 cases, and the proof boundary that it is bounded local-Postgres coverage rather
+   `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with `ok: true`, 24
+   families, 48 cases, and the proof boundary that it is bounded local-Postgres coverage rather
    than exhaustive randomized coverage.
    `crates/commands/fixtures/night-pgo-trigger-bad-expectation.json` proves the negative
    semantic-expectation path: `--write-reduced` can save a reduced failing artifact while reporting
@@ -2901,10 +2901,10 @@ coverage, and a playable vertical scenario through the command pipeline.
    pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f
    target/operator-proof/current-generated-shrink-matrix-report.tmp.json`, and proof boundary
    `Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter,
-   Hider, HiderProjectionState, Hunter, VengefulFixpoint, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family
+   BabysitterProjectionState, Hider, HiderProjectionState, Hunter, VengefulFixpoint, StrongmanVengefulFixpoint, BodyguardStrongmanVengefulFixpoint, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family
    plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive
    randomized coverage.` This row is trusted through the artifact classifier with `ok: true`,
-   `family_count: 23`, `case_count: 46`, `expected_family_count: 23`, `expected_case_count: 46`,
+   `family_count: 24`, `case_count: 48`, `expected_family_count: 24`, `expected_case_count: 48`,
    and `family_manifest_matched: true`.
    `operator-proof-command-projection-resolution` currently has artifact state `trusted`, artifact
    path `target/operator-proof/current-command-projection-resolution-report.json`, rendered command
@@ -2967,7 +2967,7 @@ coverage, and a playable vertical scenario through the command pipeline.
    a manifest/status trusted command/projection proof row that has not yet been promoted into the
    browser-smoke required needle set. The bounded generated shrink lanes now include a deterministic multi-seed
    matrix report at `target/operator-proof/current-generated-shrink-matrix-report.tmp.json` with
-   `ok: true`, 23 families, 46 cases, two representative seeds per PGO/PgoProjectionState/Babysitter/Hider/HiderProjectionState/Hunter/VengefulFixpoint/StrongmanVengefulFixpoint/BodyguardStrongmanVengefulFixpoint/BackupInheritance/BackupProjectionState/ConversionDeprogramming/ConversionProjectionState/MarkClearVisibility/MarkClearExpiry/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/Bomb/BombProjectionState
+   `ok: true`, 24 families, 48 cases, two representative seeds per PGO/PgoProjectionState/Babysitter/BabysitterProjectionState/Hider/HiderProjectionState/Hunter/VengefulFixpoint/StrongmanVengefulFixpoint/BodyguardStrongmanVengefulFixpoint/BackupInheritance/BackupProjectionState/ConversionDeprogramming/ConversionProjectionState/MarkClearVisibility/MarkClearExpiry/PoisonCure/Ignite/ExtraAction/ItemGrant/PrivateNotification/Lovers/Bomb/BombProjectionState
    family, success reductions, bad-expectation reductions, per-case reduced/report artifact paths,
    and an explicit local-Postgres-only/non-exhaustive proof boundary; exhaustive randomized shrink
    breadth remains future work. The local-Postgres
@@ -2982,8 +2982,8 @@ resolution envelopes and projections.
 
 ## Recommended next slice
 
-Continue Phase 4 by extending generated dependency breadth to Babysitter projection-state deaths.
-Build a deterministic fixture where a Babysitter protects a player killed at night, folds both the
-ward death and `babysit` dependency death into `slot_state`, and uses a bad-expectation variant that
-mutates the dependency cause or babysitter slot state. Prove the minimizer preserves
-`semantic_expectation`, then raise the matrix manifest from 23/46 to 24/48.
+Continue Phase 4 by extending generated trigger breadth to lover projection-state deaths. Build a
+deterministic fixture where one Lover dies and the paired lover suicide folds into `slot_state`,
+assert the exact trigger/dependency trace shape already used by the Lovers family, and use a
+bad-expectation variant that mutates the lover-suicide cause or surviving paired slot state. Prove
+the minimizer preserves `semantic_expectation`, then raise the matrix manifest from 24/48 to 25/50.
