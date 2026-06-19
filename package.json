@@ -4,6 +4,7 @@
   "scripts": {
     "operator:browser-smoke": "node tools/operator_browser_smoke.mjs",
     "test:host-console-tablet-smoke": "node tools/host_console_tablet_smoke.mjs",
+    "test:host-console-route": "node \"frontend/src/routes/g/[game]/host/host-route-model.test.mjs\" && node frontend/src/lib/server/session-capabilities.test.mjs",
     "test:frontend-contract": "node --test frontend/src/lib/components/host-action/*.test.mjs",
     "frontend:dev": "npm --prefix frontend run dev"
   },

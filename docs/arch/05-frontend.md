@@ -43,7 +43,8 @@ checklist before they are called done:
 - **Viewport proof** — exercise the changed surface at 1024x768, 1180x820, 1280x900, and
   one desktop width once the surface has a real shell. The tablet widths are the design
   baseline; desktop is the scale-up case. The first host-console critical path is guarded by
-  `npm run test:host-console-tablet-smoke` at 1024x768 through `/g/[game]/host`.
+  `npm run test:host-console-tablet-smoke` at 1024x768 through `/g/[game]/host`, covering
+  the irreversible `extend_deadline` and `process_replacement` frontend actions.
 - **Touch target floor** — primary controls, destructive actions, channel switches, vote
   controls, and host console actions have at least a 44x44 CSS pixel hit area with visible
   spacing between neighboring actions.
@@ -53,7 +54,7 @@ checklist before they are called done:
 - **Hover independence** — every action, menu, status detail, and affordance needed to play
   or host is available by tap, focus, or visible control state. Hover may add polish, never
   capability.
-- **Confirmation shape** — irreversible host actions require an explicit confirmation that
+- **Confirmation shape** — irreversible host actions require explicit confirmation text that
   names the affected game object and intended outcome; gestures can open the confirmation but
   cannot complete the action alone.
 - **Stable live layout** — votecount deltas, deadline changes, post edits, channel updates,

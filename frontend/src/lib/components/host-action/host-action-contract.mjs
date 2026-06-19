@@ -133,6 +133,7 @@ function normalizeHostActionConfig(config) {
     label: requiredString(config.label, "label"),
     objectLabel: optionalString(config.objectLabel),
     outcomeLabel: optionalString(config.outcomeLabel),
+    confirmationText: optionalString(config.confirmationText),
     payload: Object.hasOwn(config, "payload") ? config.payload : null,
     requiresConfirmation:
       config.requiresConfirmation === true || config.irreversible === true,
@@ -150,6 +151,21 @@ function normalizeHostActionConfig(config) {
         "irreversible host actions must name the intended outcome",
       );
     }
+    if (normalized.confirmationText === null) {
+      throw new TypeError(
+        "irreversible host actions must provide explicit confirmation text",
+      );
+    }
+    if (!normalized.confirmationText.includes(normalized.objectLabel)) {
+      throw new TypeError(
+        "irreversible host action confirmation text must name the affected object",
+      );
+    }
+    if (!normalized.confirmationText.includes(normalized.outcomeLabel)) {
+      throw new TypeError(
+        "irreversible host action confirmation text must name the intended outcome",
+      );
+    }
   }
 
   return Object.freeze(normalized);
@@ -160,7 +176,7 @@ function buildConfirmation(config) {
     actionId: config.id,
     objectLabel: config.objectLabel,
     outcomeLabel: config.outcomeLabel,
-    message: `${config.label}: ${config.outcomeLabel} for ${config.objectLabel}?`,
+    message: config.confirmationText,
   });
 }
 

@@ -7,6 +7,7 @@ import {
   buildHostActionViewModel,
   createHostActionController,
 } from "./host-action-contract.mjs";
+import { HOST_CONSOLE_CRITICAL_ACTIONS } from "./host-console-critical-action.mjs";
 
 test("touch-control CSS exposes the minimum target and spacing variables", async () => {
   const css = await readFile(
@@ -100,6 +101,8 @@ test("irreversible host actions open a named confirmation before dispatch", () =
       label: "Modkill",
       objectLabel: "Slot 7 / Mira",
       outcomeLabel: "mark dead and lock voting power",
+      confirmationText:
+        "Modkill Slot 7 / Mira: mark dead and lock voting power.",
       irreversible: true,
       payload: { slotId: "slot-7" },
     },
@@ -121,6 +124,10 @@ test("irreversible host actions open a named confirmation before dispatch", () =
   assert.equal(view.confirmation.role, HOST_ACTION_CONTRACT.confirmationRole);
   assert.match(view.confirmation.message, /Slot 7 \/ Mira/);
   assert.match(view.confirmation.message, /mark dead and lock voting power/);
+  assert.equal(
+    view.confirmation.message,
+    "Modkill Slot 7 / Mira: mark dead and lock voting power.",
+  );
 
   action.confirm();
 
@@ -141,10 +148,12 @@ test("canceling a confirmation does not dispatch", () => {
   const dispatched = [];
   const action = createHostActionController(
     {
-      id: "advance-phase",
-      label: "Advance phase",
-      objectLabel: "Day 2",
-      outcomeLabel: "close thread and enter night",
+      id: "extend_deadline",
+      label: "Extend deadline",
+      objectLabel: "Day 2 deadline",
+      outcomeLabel: "move the deadline to June 19, 2026 at 9:00 PM PT",
+      confirmationText:
+        "Extend Day 2 deadline: move the deadline to June 19, 2026 at 9:00 PM PT for Day 2 deadline.",
       requiresConfirmation: true,
     },
     (event) => dispatched.push(event),
@@ -181,8 +190,8 @@ test("irreversible host actions must name the object and outcome", () => {
     () =>
       createHostActionController(
         {
-          id: "advance-phase",
-          label: "Advance phase",
+          id: "extend_deadline",
+          label: "Extend deadline",
           outcomeLabel: "enter night",
           irreversible: true,
         },
@@ -195,8 +204,8 @@ test("irreversible host actions must name the object and outcome", () => {
     () =>
       createHostActionController(
         {
-          id: "advance-phase",
-          label: "Advance phase",
+          id: "extend_deadline",
+          label: "Extend deadline",
           objectLabel: "Day 2",
           irreversible: true,
         },
@@ -204,6 +213,87 @@ test("irreversible host actions must name the object and outcome", () => {
       ),
     /intended outcome/,
   );
+
+  assert.throws(
+    () =>
+      createHostActionController(
+        {
+          id: "extend_deadline",
+          label: "Extend deadline",
+          objectLabel: "Day 2",
+          outcomeLabel: "enter night",
+          irreversible: true,
+        },
+        () => {},
+      ),
+    /confirmation text/,
+  );
+
+  assert.throws(
+    () =>
+      createHostActionController(
+        {
+          id: "extend_deadline",
+          label: "Extend deadline",
+          objectLabel: "Day 2",
+          outcomeLabel: "enter night",
+          confirmationText: "Advance now: enter night.",
+          irreversible: true,
+        },
+        () => {},
+      ),
+    /affected object/,
+  );
+
+  assert.throws(
+    () =>
+      createHostActionController(
+        {
+          id: "extend_deadline",
+          label: "Extend deadline",
+          objectLabel: "Day 2",
+          outcomeLabel: "enter night",
+          confirmationText: "Advance Day 2 now.",
+          irreversible: true,
+        },
+        () => {},
+      ),
+    /intended outcome/,
+  );
+});
+
+test("host console proof actions cover the roadmap-critical irreversible actions", () => {
+  assert.deepEqual(
+    HOST_CONSOLE_CRITICAL_ACTIONS.map((action) => action.id),
+    ["extend_deadline", "process_replacement"],
+  );
+
+  for (const actionConfig of HOST_CONSOLE_CRITICAL_ACTIONS) {
+    const dispatched = [];
+    const action = createHostActionController(actionConfig, (event) =>
+      dispatched.push(event),
+    );
+
+    action.activate();
+
+    assert.equal(action.state.confirmationOpen, true);
+    assert.equal(action.state.confirmation.message, actionConfig.confirmationText);
+    assert.match(
+      action.state.confirmation.message,
+      new RegExp(escapeRegExp(actionConfig.objectLabel)),
+    );
+    assert.match(
+      action.state.confirmation.message,
+      new RegExp(escapeRegExp(actionConfig.outcomeLabel)),
+    );
+    assert.equal(actionConfig.payload.kind, actionConfig.id);
+
+    action.confirm();
+
+    assert.equal(dispatched.length, 1);
+    assert.equal(dispatched[0].actionId, actionConfig.id);
+    assert.deepEqual(dispatched[0].payload, actionConfig.payload);
+  }
 });
 
 function escapeRegExp(value) {
