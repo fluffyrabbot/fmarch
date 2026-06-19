@@ -36,6 +36,11 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
      posts, and role. **This is the design call that's unfixable if wrong**
      ([01](01-domain-model.md)), so we exercise it immediately, not in a later milestone.
    Proves: capability resolution at the boundary, User≠Slot, history preservation.
+   Current proof: `host_action_commands_are_capability_gated_and_projected` posts both
+   commands through `/commands`, verifies host/cohost rejection and acceptance at the API
+   boundary, then reads `host-console-state` from committed projections to prove the deadline
+   update and stable slot-history attribution. `npm run test:host-console-tablet-smoke` covers
+   the tablet route's typed command adapter and post-ACK projection rendering.
 
 If steps 1–4 feel clean, the architecture is sound. Everything after is breadth on a proven
 spine.

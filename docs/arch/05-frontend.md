@@ -44,7 +44,8 @@ checklist before they are called done:
   one desktop width once the surface has a real shell. The tablet widths are the design
   baseline; desktop is the scale-up case. The first host-console critical path is guarded by
   `npm run test:host-console-tablet-smoke` at 1024x768 through `/g/[game]/host`, covering
-  the irreversible `extend_deadline` and `process_replacement` frontend actions.
+  the irreversible `extend_deadline` and `process_replacement` actions, their typed
+  `/commands` envelopes, and post-ACK projection rendering.
 - **Touch target floor** — primary controls, destructive actions, channel switches, vote
   controls, and host console actions have at least a 44x44 CSS pixel hit area with visible
   spacing between neighboring actions.
