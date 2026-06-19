@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildHostCommandEnvelope,
+  buildHostConsoleStateEndpoint,
   mapHostActionToWireCommand,
+  projectHostConsoleState,
   sendHostActionCommand,
 } from "./host-command-boundary.mjs";
 
@@ -122,8 +124,79 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
   assert.match(reject.message, /unknown slot/);
 });
 
+test("host command sender can refresh projected host console state after ack", async () => {
+  const sent = [];
+  const ack = await sendHostActionCommand({
+    actionEvent: REPLACEMENT_EVENT,
+    principalUserId: "host_h",
+    endpoint: "/commands",
+    stateEndpoint:
+      "/games/00000000-0000-0000-0000-000000000001/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+    commandIdFactory: () => "33333333-3333-4333-8333-333333333333",
+    envelopeIdFactory: () => 9,
+    fetchImpl: async (url, init = {}) => {
+      sent.push({ url, init });
+      if (url === "/commands") {
+        return jsonResponse({
+          v: 1,
+          id: 9,
+          body: { kind: "Ack", body: { stream_seqs: [201] } },
+        });
+      }
+      return jsonResponse({
+        phase: { phase_id: "day-2", locked: false, deadline: 1781928000 },
+        slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+        thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
+      });
+    },
+  });
+
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].url, "/commands");
+  assert.match(sent[1].url, /host-console-state/);
+  assert.equal(ack.state, "ack");
+  assert.equal(ack.projectionState.slots[0].occupant_user_id, "player-rowan");
+});
+
+test("host console projection maps deadline and stable slot history to labels", () => {
+  const projection = projectHostConsoleState(
+    {
+      phase: { phase_id: "day-2", locked: false, deadline: 1781928000 },
+      slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+      thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
+    },
+    {
+      phase: { id: "day-2", deadlineLabel: "No deadline extension committed" },
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+        historyLabel: "Waiting for replacement command proof",
+      },
+    },
+  );
+
+  assert.equal(projection.phase.deadlineLabel, "Jun 19, 2026, 9:00 PM");
+  assert.equal(projection.replacement.occupantLabel, "player-rowan");
+  assert.equal(
+    projection.replacement.historyLabel,
+    "Slot history remains attached to slot-7",
+  );
+});
+
+test("host console state endpoint is scoped by principal and slot", () => {
+  assert.equal(
+    buildHostConsoleStateEndpoint({
+      gameId: "00000000-0000-0000-0000-000000000001",
+      principalUserId: "host_h",
+      slotId: "slot-7",
+    }),
+    "/games/00000000-0000-0000-0000-000000000001/host-console-state?principal_user_id=host_h&slot_id=slot-7",
+  );
+});
+
 function jsonResponse(body) {
   return {
+    ok: true,
     status: 200,
     async json() {
       return body;

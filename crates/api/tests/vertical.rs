@@ -1081,6 +1081,13 @@ fn expect_ack(envelope: ServerEnvelope) -> Vec<i64> {
     }
 }
 
+fn expect_reject(envelope: ServerEnvelope, expected: RejectCode) {
+    match envelope.body {
+        ServerMsg::Reject(reject) => assert_eq!(reject.error, expected),
+        other => panic!("expected Reject({expected:?}), got {other:?}"),
+    }
+}
+
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn vertical_command_boundary_updates_votecount(pool: sqlx::PgPool) {
     let app = router(pool);
@@ -3717,6 +3724,206 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
     assert_eq!(older.posts.len(), 1);
     assert_eq!(older.posts[0].body, "one");
     assert_eq!(older.next_before_seq, None);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
+    let app = router(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    for (id, slot, user, role) in [
+        (2, "slot_7", "player_mira", "vanilla_townie"),
+        (5, "slot_target", "player_target", "vanilla_townie"),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                id,
+                "host_h",
+                Command::AddSlot {
+                    game,
+                    slot: slot.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 1,
+                "host_h",
+                Command::AssignSlot {
+                    game,
+                    slot: slot.into(),
+                    user: user.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 2,
+                "host_h",
+                Command::AssignRole {
+                    game,
+                    slot: slot.into(),
+                    role_key: role.into(),
+                },
+            )
+            .await,
+        );
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            8,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            9,
+            "player_mira",
+            Command::SubmitPost {
+                game,
+                actor_slot: "slot_7".into(),
+                body: "Slot 7 check-in before replacement".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            10,
+            "host_h",
+            Command::AddCohost {
+                game,
+                user: "cohost_c".into(),
+            },
+        )
+        .await,
+    );
+
+    expect_reject(
+        post_command(
+            app.clone(),
+            11,
+            "player_mira",
+            Command::ExtendDeadline {
+                game,
+                phase: "D01".into(),
+                at: 1_781_928_000,
+            },
+        )
+        .await,
+        RejectCode::NotHost,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            12,
+            "cohost_c",
+            Command::ExtendDeadline {
+                game,
+                phase: "D01".into(),
+                at: 1_781_928_000,
+            },
+        )
+        .await,
+    );
+
+    expect_reject(
+        post_command(
+            app.clone(),
+            13,
+            "cohost_c",
+            Command::ProcessReplacement {
+                game,
+                slot: "slot_7".into(),
+                outgoing_user: "player_mira".into(),
+                incoming_user: "player_rowan".into(),
+            },
+        )
+        .await,
+        RejectCode::NotHost,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            14,
+            "host_h",
+            Command::ProcessReplacement {
+                game,
+                slot: "slot_7".into(),
+                outgoing_user: "player_mira".into(),
+                incoming_user: "player_rowan".into(),
+            },
+        )
+        .await,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/host-console-state?principal_user_id=host_h&slot_id=slot_7"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(state["phase"]["phase_id"], "D01");
+    assert_eq!(state["phase"]["deadline"], 1_781_928_000);
+    assert_eq!(state["slots"][0]["slot_id"], "slot_7");
+    assert_eq!(state["slots"][0]["occupant_user_id"], "player_rowan");
+    assert_eq!(state["thread_posts"][0]["author_slot"], "slot_7");
+    assert_eq!(
+        state["thread_posts"][0]["body"],
+        "Slot 7 check-in before replacement"
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/host-console-state?principal_user_id=player_mira&slot_id=slot_7"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(reject.error, RejectCode::NotAuthorized);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

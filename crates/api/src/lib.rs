@@ -94,6 +94,7 @@ pub fn router_with_state(state: ApiState) -> Router {
             "/games/{game}/host-phase-controls/view",
             get(host_phase_controls_view),
         )
+        .route("/games/{game}/host-console-state", get(host_console_state))
         .route("/games/{game}/operator", get(operator_index))
         .route(
             "/games/{game}/operator/proof-runs",
@@ -363,6 +364,45 @@ async fn player_investigation_results(
 #[derive(Debug, Clone, Deserialize)]
 struct HostPhaseControlQuery {
     principal_user_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct HostConsoleStateQuery {
+    principal_user_id: String,
+    #[serde(default)]
+    slot_id: Option<String>,
+    #[serde(default)]
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostConsoleStateResponse {
+    pub game: Uuid,
+    pub phase: Option<HostConsolePhaseState>,
+    pub slots: Vec<HostConsoleSlotOccupancy>,
+    pub thread_posts: Vec<HostConsoleThreadPost>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostConsolePhaseState {
+    pub phase_id: String,
+    pub locked: bool,
+    pub deadline: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostConsoleSlotOccupancy {
+    pub slot_id: String,
+    pub occupant_user_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostConsoleThreadPost {
+    pub stream_seq: i64,
+    pub author_slot: Option<String>,
+    pub author_user: Option<String>,
+    pub phase_id: String,
+    pub body: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -975,6 +1015,69 @@ async fn host_phase_controls_view(
         .map(HostPhaseControl::from)
         .collect();
     Ok(Html(render_host_phase_controls_html(game, &controls)))
+}
+
+async fn host_console_state(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+    Query(query): Query<HostConsoleStateQuery>,
+) -> Result<Json<HostConsoleStateResponse>, ApiError> {
+    require_host_audit_access(
+        &state.pool,
+        game,
+        query.principal_user_id.as_str(),
+        "principal cannot read host console state for this game",
+    )
+    .await?;
+
+    let phase = projections::phase_state(&state.pool, game)
+        .await?
+        .map(|row| HostConsolePhaseState {
+            phase_id: row.phase_id,
+            locked: row.locked,
+            deadline: row.deadline,
+        });
+
+    let slots = projections::slot_occupancy(&state.pool, game)
+        .await?
+        .into_iter()
+        .filter(|row| {
+            query
+                .slot_id
+                .as_deref()
+                .map_or(true, |slot_id| row.slot_id == slot_id)
+        })
+        .map(|row| HostConsoleSlotOccupancy {
+            slot_id: row.slot_id,
+            occupant_user_id: row.occupant_user_id,
+        })
+        .collect();
+
+    let thread_posts = projections::thread_view(&state.pool, game, None, query.limit.unwrap_or(25))
+        .await?
+        .posts
+        .into_iter()
+        .filter(|post| {
+            query
+                .slot_id
+                .as_deref()
+                .map_or(true, |slot_id| post.author_slot.as_deref() == Some(slot_id))
+        })
+        .map(|post| HostConsoleThreadPost {
+            stream_seq: post.stream_seq,
+            author_slot: post.author_slot,
+            author_user: post.author_user,
+            phase_id: post.phase_id,
+            body: post.body,
+        })
+        .collect();
+
+    Ok(Json(HostConsoleStateResponse {
+        game,
+        phase,
+        slots,
+        thread_posts,
+    }))
 }
 
 #[derive(Debug, Clone, Deserialize)]

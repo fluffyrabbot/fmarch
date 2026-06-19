@@ -24,7 +24,7 @@ const criticalActions = Object.freeze([
     objectLabel: "Slot 7 / Mira",
     outcomeLabel: "replace Mira with Rowan and preserve slot history",
     commandVariant: "ProcessReplacement",
-    expectedResult: "reject",
+    expectedResult: "ack",
   }),
 ]);
 
@@ -70,8 +70,11 @@ try {
     );
   }
   const unauthorizedText = await unauthorizedPage.textContent("body");
-  if (!unauthorizedText?.includes(`Host console for ${smokeGame} requires`)) {
-    throw new Error(`403 page did not explain host capability requirement`);
+  if (
+    !unauthorizedText?.includes("authenticated host session") &&
+    !unauthorizedText?.includes(`Host console for ${smokeGame} requires`)
+  ) {
+    throw new Error(`403 page did not explain host auth or capability requirement`);
   }
   await unauthorizedPage.close();
 
@@ -80,22 +83,29 @@ try {
     "x-fmarch-smoke-host-game": smokeGame,
   });
   const commandRequests = [];
+  const committedState = {
+    phase: null,
+    slot: { slot_id: "slot-7", occupant_user_id: "player-mira" },
+  };
   await page.route("**/commands", async (route) => {
     const envelope = route.request().postDataJSON();
     commandRequests.push(envelope);
     const command = envelope.body.body.command;
     const variant = Object.keys(command)[0];
-    const body =
-      variant === "ExtendDeadline"
-        ? { kind: "Ack", body: { stream_seqs: [101, 102] } }
-        : {
-            kind: "Reject",
-            body: {
-              error: "UnknownSlot",
-              retryable: false,
-              message: "unknown replacement slot",
-            },
-          };
+    if (variant === "ExtendDeadline") {
+      committedState.phase = {
+        phase_id: command.ExtendDeadline.phase,
+        locked: false,
+        deadline: command.ExtendDeadline.at,
+      };
+    }
+    if (variant === "ProcessReplacement") {
+      committedState.slot = {
+        slot_id: command.ProcessReplacement.slot,
+        occupant_user_id: command.ProcessReplacement.incoming_user,
+      };
+    }
+    const streamSeq = 100 + commandRequests.length;
 
     await route.fulfill({
       status: 200,
@@ -103,7 +113,27 @@ try {
       body: JSON.stringify({
         v: 1,
         id: envelope.id,
-        body,
+        body: { kind: "Ack", body: { stream_seqs: [streamSeq] } },
+      }),
+    });
+  });
+  await page.route("**/host-console-state?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        game: smokeGame,
+        phase: committedState.phase,
+        slots: [committedState.slot],
+        thread_posts: [
+          {
+            stream_seq: 9,
+            author_slot: "slot-7",
+            author_user: null,
+            phase_id: "day-2",
+            body: "Slot 7 history before replacement",
+          },
+        ],
       }),
     });
   });
@@ -199,15 +229,9 @@ try {
     }
     if (
       expectedAction.expectedResult === "ack" &&
-      !statusMessage.includes("101, 102")
+      !statusMessage.includes(String(101 + index))
     ) {
       throw new Error(`${expectedAction.id} ack did not render stream seqs`);
-    }
-    if (
-      expectedAction.expectedResult === "reject" &&
-      !statusMessage.includes("UnknownSlot")
-    ) {
-      throw new Error(`${expectedAction.id} reject did not render server error`);
     }
 
     const commandEnvelope = commandRequests[index];
@@ -225,6 +249,21 @@ try {
     });
   }
 
+  const deadlineLabel = await page.getByTestId("host-console-deadline").innerText();
+  if (!deadlineLabel.includes("Jun 19, 2026") || !deadlineLabel.includes("9:00 PM")) {
+    throw new Error(`deadline label did not update from projection: ${deadlineLabel}`);
+  }
+  const occupantLabel = await page
+    .getByTestId("host-console-slot-occupant")
+    .innerText();
+  if (occupantLabel !== "player-rowan") {
+    throw new Error(`replacement occupant did not update: ${occupantLabel}`);
+  }
+  const historyLabel = await page.getByTestId("host-console-history").innerText();
+  if (!historyLabel.includes("slot-7")) {
+    throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
+  }
+
   const dispatchEvents = await page.evaluate(
     () => window.__fmarchHostActionEvents,
   );
@@ -238,6 +277,11 @@ try {
     actions: actionEvidence,
     dispatchedActions: dispatchEvents,
     commandRequests,
+    projectionLabels: {
+      deadlineLabel,
+      occupantLabel,
+      historyLabel,
+    },
   };
   await mkdir(artifactDir, { recursive: true });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

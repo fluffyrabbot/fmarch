@@ -6,8 +6,6 @@ export const HOST_CONSOLE_REQUIRED_CAPABILITIES = Object.freeze([
   "CohostOf",
 ]);
 
-export const HOST_CONSOLE_TABLET_SMOKE_GAME = "tablet-smoke";
-
 export function buildHostConsoleRouteData({
   game,
   capabilities = [],
@@ -98,16 +96,6 @@ export function resolveHostRouteCapabilities({ game, locals = {} }) {
     return locals.capabilities;
   }
 
-  if (game === HOST_CONSOLE_TABLET_SMOKE_GAME) {
-    return [
-      Object.freeze({
-        kind: "HostOf",
-        game,
-        source: "tablet-smoke-fixture",
-      }),
-    ];
-  }
-
   return [];
 }
 
@@ -117,10 +105,6 @@ export function resolveHostRoutePrincipal({ game, locals = {} }) {
     locals.principalUserId.trim() !== ""
   ) {
     return locals.principalUserId;
-  }
-
-  if (game === HOST_CONSOLE_TABLET_SMOKE_GAME) {
-    return "host_h";
   }
 
   return "";
