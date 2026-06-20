@@ -1618,7 +1618,7 @@ async fn vertical_operator_index_is_host_audit_only(pool: sqlx::PgPool) {
         "cargo run -q -p commands --bin audit_determinism_fuzz_artifact -- --output target/operator-proof/current-determinism-fuzz-report.json"
     ));
     assert!(proof_html.contains(
-        "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture"
+        "cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture"
     ));
     assert!(proof_html.contains(
         "check_generated_shrink_matrix_gap_audit.py --output target/operator-proof/current-generated-shrink-gap-audit-report.json --check"

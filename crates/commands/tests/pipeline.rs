@@ -16078,6 +16078,7 @@ async fn generated_persistent_trigger_bad_expectations_shrink_to_failing_artifac
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+#[ignore = "heavy operator proof lane; run explicitly with --ignored"]
 async fn generated_shrink_matrix_writes_compact_operator_report(pool: PgPool) {
     let mut cases = Vec::new();
     let trigger_fixtures = generated_trigger_dependency_search_fixture_matrix(2);

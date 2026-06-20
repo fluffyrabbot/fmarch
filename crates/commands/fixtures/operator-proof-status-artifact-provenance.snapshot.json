@@ -436,7 +436,7 @@
           "family": "Operator proof generated shrink matrix",
           "scope": "Local-only",
           "fixture": false,
-          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --nocapture && test -f target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
+          "command": "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch cargo test -p commands --test pipeline generated_shrink_matrix_writes_compact_operator_report -- --ignored --nocapture && test -f target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
           "artifact": {
             "path": "target/operator-proof/current-generated-shrink-matrix-report.tmp.json",
             "state": "trusted",
@@ -454,7 +454,7 @@
               "expected_case_count": 58
             }
           },
-          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, and does not prove exhaustive randomized coverage."
+          "proof_boundary": "Runs the bounded deterministic generated shrink matrix for PGO, PgoProjectionState, Babysitter, BabysitterProjectionState, Hider, HiderProjectionState, Hunter, HunterProjectionState, VengefulFixpoint, VengefulProjectionState, StrongmanVengefulFixpoint, StrongmanVengefulProjectionState, BodyguardStrongmanVengefulFixpoint, BodyguardStrongmanVengefulProjectionState, BackupInheritance, BackupProjectionState, ConversionDeprogramming, ConversionProjectionState, MarkClearVisibility, MarkClearExpiry, PoisonCure, Ignite, ExtraAction, ItemGrant, PrivateNotification, Lovers, LoversProjectionState, Bomb, and BombProjectionState against local Postgres, writes a versioned report with two cases per family plus success and bad-expectation shrink preservation metadata, is ignored in the default command pipeline and run explicitly with --ignored, and does not prove exhaustive randomized coverage."
         },
         {
           "id": "operator-proof-generated-shrink-gap-audit",
