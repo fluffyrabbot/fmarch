@@ -1,7 +1,7 @@
 {
   "name": "test_precedence_order_contract",
   "version": 1,
-  "ir_version": 1,
+  "ir_version": 46,
   "roles": {
     "fast_killer": {
       "description": "Test role whose Kill is ordered before Protect by pack precedence.",
@@ -90,5 +90,6 @@
         "when": { "FactionReachesParity": "mafia" }
       }
     ]
-  }
+  },
+  "win_families": ["FactionElimination", "FactionParity"]
 }

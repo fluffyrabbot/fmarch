@@ -108,6 +108,31 @@ async fn setup_game_with_pack(
     game
 }
 
+async fn add_vanilla_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str) {
+    let h = user(host);
+    handle(
+        pool,
+        &h,
+        Command::AddSlot {
+            game,
+            slot: slot.into(),
+        },
+    )
+    .await
+    .expect("add slot");
+    handle(
+        pool,
+        &h,
+        Command::AssignRole {
+            game,
+            slot: slot.into(),
+            role_key: "vanilla_townie".into(),
+        },
+    )
+    .await
+    .expect("assign vanilla role");
+}
+
 /// Count of current ballots targeting `target` in `phase`.
 async fn tally_for(pool: &PgPool, game: Uuid, phase: &str, target: &str) -> i64 {
     votecount(pool, game)
@@ -1556,7 +1581,7 @@ async fn resolve_phase_rejects_invalid_action_contract_before_append(pool: PgPoo
         matches!(
             err,
             Reject::Internal(ref message)
-                if message.contains("validate pack test_invalid_action_contract")
+                if message.contains("load pack test_invalid_action_contract")
                     && message.contains("roles.malformed_investigator.actions[0].mode")
                     && message.contains("Investigate actions must declare mode")
                     && message.contains("roles.malformed_investigator.actions[1].mode")
@@ -1618,7 +1643,7 @@ async fn resolve_phase_rejects_invalid_effect_contract_before_append(pool: PgPoo
         matches!(
             err,
             Reject::Internal(ref message)
-                if message.contains("validate pack test_invalid_effect_contract")
+                if message.contains("load pack test_invalid_effect_contract")
                     && message.contains("roles.malformed_effect_user.actions[0].effect")
                     && message.contains("Mark/Clear actions must declare effect")
                     && message.contains("roles.malformed_effect_user.actions[1].effect")
@@ -1682,7 +1707,7 @@ async fn resolve_phase_rejects_invalid_target_window_contract_before_append(pool
         matches!(
             err,
             Reject::Internal(ref message)
-                if message.contains("validate pack test_invalid_target_window_contract")
+                if message.contains("load pack test_invalid_target_window_contract")
                     && message.contains("roles.malformed_target_window_user.actions[0].window")
                     && message.contains("action window Night is absent from phases.cadence")
                     && message.contains("roles.malformed_target_window_user.actions[1].constraints.max_targets")
@@ -1888,7 +1913,7 @@ async fn resolve_phase_rejects_invalid_reference_contract_before_append(pool: Pg
         matches!(
             err,
             Reject::Internal(ref message)
-                if message.contains("validate pack test_invalid_reference_contract")
+                if message.contains("load pack test_invalid_reference_contract")
                     && message.contains("roles.malformed_reference_user.actions[0].reads_effect")
                     && message.contains("unknown effect tag `missing_effect`")
                     && message.contains("investigation_results.parity.alignment_results.missing_alignment")
@@ -2714,16 +2739,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
 
     let game = setup_game(&pool, host, slot, a).await;
     // A second slot to serve as the vote target.
-    handle(
-        &pool,
-        &user(host),
-        Command::AddSlot {
-            game,
-            slot: target.into(),
-        },
-    )
-    .await
-    .unwrap();
+    add_vanilla_slot(&pool, game, host, target).await;
 
     // A acts as S: votes T and posts.
     handle(
@@ -5410,7 +5426,7 @@ async fn host_resolve_phase_applies_gladiator_vote_duel(pool: PgPool) {
         .await
         .expect("vote-duel resolution audit");
     assert!(audit.ok, "vote-duel audit drifted: {audit:?}");
-    assert_eq!(audit.audited, 2);
+    assert_eq!(audit.audited, 1);
     assert_eq!(audit.skipped, 0);
 
     let slots_before = serde_json::to_string(&slots).unwrap();
@@ -7314,7 +7330,7 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
                         && announcement.deaths == vec![domain::Death {
                             slot_id: "slot_2".to_string(),
                             cause: "day_vigilante_kill".to_string(),
-                            template_id: Some("mafia_universe_day_action_death_v1".to_string()),
+                            template_id: Some("mafiascum_day_vigilante_death_v1".to_string()),
                             audience: Some("public".to_string()),
                         }]
             )
@@ -7390,7 +7406,7 @@ async fn host_resolve_phase_day_action_win_runs_after_announcement(pool: PgPool)
                 && post.author_user.as_deref() == Some("system")
                 && post
                     .body
-                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill).")
+                    .contains("Phase D01 announcement: slot_2 (day_vigilante_kill; template: mafiascum_day_vigilante_death_v1; audience: public); template: mafiascum_day_death_v1; audience: public.")
         }),
         "thread projection should publish the canonical day-action announcement"
     );
@@ -58982,6 +58998,7 @@ async fn host_resolve_phase_protects_generated_pgo_trigger_kill(pool: PgPool) {
                         "template_id": "doctor_protect",
                         "intercepts": false,
                         "intercept_cause": null,
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -59420,6 +59437,7 @@ async fn host_resolve_phase_bodyguard_intercepts_generated_pgo_trigger_kill(pool
                         "template_id": "bodyguard",
                         "intercepts": true,
                         "intercept_cause": "bodyguard_intercept",
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -60042,6 +60060,7 @@ async fn host_resolve_phase_bypasses_protection_for_strongman_trigger_kill(pool:
                         "template_id": "doctor_protect",
                         "intercepts": false,
                         "intercept_cause": null,
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -60988,6 +61007,7 @@ async fn host_resolve_phase_protects_ordinary_vengeful_trigger_kill(pool: PgPool
                         "template_id": "doctor_protect",
                         "intercepts": false,
                         "intercept_cause": null,
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -61234,6 +61254,7 @@ async fn host_resolve_phase_bypasses_bodyguard_for_strongman_trigger_kill(pool: 
                         "template_id": "bodyguard",
                         "intercepts": true,
                         "intercept_cause": "bodyguard_intercept",
+                        "guard_retaliation_cause": null,
                         "cpr_harm_cause": null
                     }]),
                 ),
@@ -61900,6 +61921,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                             "template_id": "doctor_protect",
                             "intercepts": false,
                             "intercept_cause": null,
+                            "guard_retaliation_cause": null,
                             "cpr_harm_cause": null
                         },
                         {
@@ -61908,6 +61930,7 @@ async fn host_resolve_phase_persists_suppression_and_conflict_trace_decisions(po
                             "template_id": "bodyguard",
                             "intercepts": true,
                             "intercept_cause": "bodyguard_intercept",
+                            "guard_retaliation_cause": null,
                             "cpr_harm_cause": null
                         }
                     ]),
@@ -63347,6 +63370,7 @@ async fn host_resolve_phase_persists_combined_trace_audit_branches(pool: PgPool)
                             "template_id": "doctor_protect",
                             "intercepts": false,
                             "intercept_cause": null,
+                            "guard_retaliation_cause": null,
                             "cpr_harm_cause": null
                         }
                     ]),
@@ -64258,7 +64282,8 @@ async fn host_resolve_phase_persists_target_state_trace_decisions(pool: PgPool) 
                     "Kill",
                     "Convert",
                     "Investigate",
-                    "Visit"
+                    "Visit",
+                    "Info"
                 ]),
             )],
         },
@@ -69669,16 +69694,7 @@ async fn non_occupant_voting_as_slot_is_not_your_slot(pool: PgPool) {
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn vote_in_locked_phase_is_phase_locked(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::AddSlot {
-            game,
-            slot: "slot_2".into(),
-        },
-    )
-    .await
-    .unwrap();
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
 
     // Host locks the thread.
     handle(&pool, &user("host_h"), Command::LockThread { game })
@@ -69725,16 +69741,7 @@ async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
         "test_no_lynch_forbidden",
     )
     .await;
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::AddSlot {
-            game,
-            slot: "slot_2".into(),
-        },
-    )
-    .await
-    .unwrap();
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
 
     let self_vote_err = handle(
         &pool,
@@ -70059,16 +70066,7 @@ async fn host_resolve_phase_emits_hammer_vote_outcome(pool: PgPool) {
 #[sqlx::test(migrations = "../projections/migrations")]
 async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
-    handle(
-        &pool,
-        &user("host_h"),
-        Command::AddSlot {
-            game,
-            slot: "slot_2".into(),
-        },
-    )
-    .await
-    .unwrap();
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
 
     // Kill slot_1 via a ResolutionApplied envelope (the engine's seam).
     let applied = domain::events::ResolutionApplied {
@@ -70079,20 +70077,36 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
         result_version: domain::RESULT_VERSION,
         seed: 1,
         counts: domain::events::ResolutionCounts {
-            events: 1,
+            events: 2,
             kills: 1,
             saves: 0,
         },
-        events: vec![domain::events::IndexedEvent {
-            index: 0,
-            event: domain::InnerEvent::PlayerKilled {
-                slot_id: "slot_1".into(),
-                cause: "factional_kill".into(),
-                attackers: vec![],
-                unstoppable: false,
-                death_reveal: domain::DeathRevealMode::Full,
+        events: vec![
+            domain::events::IndexedEvent {
+                index: 0,
+                event: domain::InnerEvent::PlayerKilled {
+                    slot_id: "slot_1".into(),
+                    cause: "factional_kill".into(),
+                    attackers: vec![],
+                    unstoppable: false,
+                    death_reveal: domain::DeathRevealMode::Full,
+                },
             },
-        }],
+            domain::events::IndexedEvent {
+                index: 1,
+                event: domain::InnerEvent::PhaseAnnouncement(domain::PhaseAnnouncement {
+                    phase_id: "N01".into(),
+                    template_id: None,
+                    audience: None,
+                    deaths: vec![domain::Death {
+                        slot_id: "slot_1".into(),
+                        cause: "factional_kill".into(),
+                        template_id: None,
+                        audience: None,
+                    }],
+                }),
+            },
+        ],
         started_at: 1,
         finished_at: 2,
     };
@@ -70130,16 +70144,7 @@ async fn dead_slot_voting_is_slot_not_alive(pool: PgPool) {
 async fn changing_vote_overwrites_and_withdraw_removes(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     for s in ["slot_2", "slot_3"] {
-        handle(
-            &pool,
-            &user("host_h"),
-            Command::AddSlot {
-                game,
-                slot: s.into(),
-            },
-        )
-        .await
-        .unwrap();
+        add_vanilla_slot(&pool, game, "host_h", s).await;
     }
 
     // A votes slot_2, then changes to slot_3 → only ONE ballot counts (overwrite).

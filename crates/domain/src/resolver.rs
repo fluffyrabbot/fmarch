@@ -5809,6 +5809,12 @@ fn require_win_families(pack: &Pack) {
     if declared.len() != pack.win_families.len() {
         panic!("invalid win families: win_families must not contain duplicates");
     }
+    if pack.ir_version < 46 {
+        if !declared.is_empty() {
+            panic!("invalid win families: win_families requires ir_version >= 46");
+        }
+        return;
+    }
     let required = win_required_families(pack);
     if !required.is_empty() && declared.is_empty() {
         panic!("invalid win families: packs with win policy surfaces must declare win_families");
