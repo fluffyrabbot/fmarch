@@ -1,3 +1,11 @@
+import {
+  CONFIRMATION_ACTION_CONTRACT,
+  buildConfirmationActionViewModel,
+} from "../../app/confirmation-action-model.mjs";
+import {
+  buildConfirmationCommandTrace,
+} from "../../app/confirmation-command-trace-model.mjs";
+
 export const TOUCH_CONTROL_CONTRACT = Object.freeze({
   className: "touch-control",
   minTargetVar: "--fm-touch-target-min",
@@ -13,7 +21,17 @@ export const HOST_ACTION_CONTRACT = Object.freeze({
   confirmationActionsClassName: "host-action__confirmation-actions",
   componentName: "host-action",
   triggerRole: "button",
-  confirmationRole: "alertdialog",
+  confirmationRole: CONFIRMATION_ACTION_CONTRACT.role,
+  confirmationAriaModal: CONFIRMATION_ACTION_CONTRACT.ariaModal,
+  triggerTestId: "critical-host-action-trigger",
+  confirmationTestId: "critical-host-action-confirmation",
+  confirmationMessageTestId: "critical-host-action-confirmation-message",
+  confirmTestId: "critical-host-action-confirm",
+  cancelTestId: "critical-host-action-cancel",
+  initialFocusTestId: "critical-host-action-confirm",
+  returnFocusTestId: "critical-host-action-trigger",
+  escapeCancels: CONFIRMATION_ACTION_CONTRACT.escapeCancels,
+  tabContainment: "confirm-cancel",
 });
 
 export function createHostActionController(config, dispatch) {
@@ -32,6 +50,9 @@ export function createHostActionController(config, dispatch) {
       objectLabel: normalized.objectLabel,
       outcomeLabel: normalized.outcomeLabel,
       payload: normalized.payload,
+      confirmationTrace: normalized.requiresConfirmation
+        ? hostConfirmationCommandTrace(normalized)
+        : null,
     });
   }
 
@@ -82,6 +103,16 @@ export function createHostActionController(config, dispatch) {
   };
 }
 
+export function hostConfirmationCommandTrace(action) {
+  const normalized = normalizeHostActionConfig(action);
+  return buildConfirmationCommandTrace({
+    surface: "moderator-host",
+    actionId: normalized.id,
+    statusKey: normalized.id,
+    dispatchKind: normalized.payload?.kind ?? normalized.id,
+  });
+}
+
 export function buildHostActionViewModel(config, confirmation = null) {
   const normalized = normalizeHostActionConfig(config);
   return {
@@ -113,11 +144,26 @@ export function buildHostActionViewModel(config, confirmation = null) {
       confirmation === null
         ? null
         : {
+            ...buildConfirmationActionViewModel({
+              surface: "moderator-host",
+              actionId: normalized.id,
+              label: normalized.label,
+              message: confirmation.message,
+              messageIdPrefix: "host-action-confirmation-message",
+              confirmTestId: HOST_ACTION_CONTRACT.confirmTestId,
+              cancelTestId: HOST_ACTION_CONTRACT.cancelTestId,
+              triggerTestId: HOST_ACTION_CONTRACT.triggerTestId,
+              messageTestId: HOST_ACTION_CONTRACT.confirmationMessageTestId,
+              confirmationTestId: HOST_ACTION_CONTRACT.confirmationTestId,
+              className: HOST_ACTION_CONTRACT.confirmationClassName,
+              actionsClassName: HOST_ACTION_CONTRACT.confirmationActionsClassName,
+              objectLabel: confirmation.objectLabel,
+              outcomeLabel: confirmation.outcomeLabel,
+              tabContainment: HOST_ACTION_CONTRACT.tabContainment,
+            }),
             className: HOST_ACTION_CONTRACT.confirmationClassName,
-            role: HOST_ACTION_CONTRACT.confirmationRole,
             objectLabel: confirmation.objectLabel,
             outcomeLabel: confirmation.outcomeLabel,
-            message: confirmation.message,
             actionsClassName: HOST_ACTION_CONTRACT.confirmationActionsClassName,
           },
   };

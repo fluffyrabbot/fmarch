@@ -19,7 +19,7 @@ body {
   display: grid;
   gap: 24px;
   grid-template-rows: auto auto 1fr auto;
-  min-block-size: 100svh;
+  min-block-size: calc(100svh - 73px);
   padding: 24px;
 }
 
@@ -92,7 +92,7 @@ body {
 .host-console-critical-path__facts {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: 20px 0 0;
 }
 
@@ -125,6 +125,228 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.host-console-critical-path__votecount {
+  border-block-start: 4px solid #53606f;
+  display: grid;
+  gap: 14px;
+  min-inline-size: 0;
+  padding-block-start: 14px;
+}
+
+.host-console-critical-path__votecount header {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.host-console-critical-path__votecount header span {
+  align-items: center;
+  background: #eef2f5;
+  border: 1px solid #9aa7b1;
+  border-radius: 8px;
+  color: #425063;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  min-block-size: 36px;
+  padding-inline: 12px;
+}
+
+.host-console-critical-path__vote-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.host-console-critical-path__vote-row {
+  align-items: center;
+  border-block-start: 1px solid #bdc7c1;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 44px;
+  padding-block-start: 8px;
+}
+
+.host-console-critical-path__vote-row span {
+  overflow-wrap: anywhere;
+}
+
+.host-console-critical-path__vote-row strong {
+  color: #17212b;
+  font-size: 18px;
+}
+
+.host-console-critical-path__empty {
+  color: #425063;
+  font-size: 16px;
+  margin: 0;
+}
+
+.host-console-critical-path__moderator-controls {
+  align-self: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-block-size: calc(
+    100svh - var(--fm-app-topbar-block-size) - var(--fm-app-sticky-rail-gap) -
+      env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: sticky;
+  top: calc(
+    var(--fm-app-topbar-block-size) + var(--fm-app-sticky-rail-gap) +
+      env(safe-area-inset-top)
+  );
+}
+
+.host-console-critical-path__command-context {
+  background: #f7f2ea;
+  border: 1px solid #d6c7ad;
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  grid-column: 1 / -1;
+  min-block-size: 58px;
+  padding: 10px 12px;
+}
+
+.host-console-critical-path__command-context span,
+.host-console-critical-path__command-context small {
+  color: #53606f;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
+}
+
+.host-console-critical-path__command-context strong {
+  color: #17212b;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.host-console-critical-path__control-bay {
+  border-block-start: 4px solid #557f68;
+  display: grid;
+  gap: 12px;
+  min-block-size: 188px;
+  min-inline-size: 0;
+  padding-block-start: 14px;
+}
+
+.host-console-critical-path__control-bay header {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.host-console-critical-path__control-bay header span {
+  align-items: center;
+  background: #eef2f5;
+  border: 1px solid #9aa7b1;
+  border-radius: 8px;
+  color: #425063;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  min-block-size: 36px;
+  padding-inline: 10px;
+}
+
+.host-console-critical-path__control-bay p:not(.host-console-critical-path__eyebrow) {
+  color: #425063;
+  font-size: 16px;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.host-console-critical-path__boundary,
+.host-console-critical-path__empty-action {
+  background: #eef2f5;
+  border: 1px solid #a8b4bd;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.host-console-critical-path__empty-action {
+  color: #586574;
+  min-block-size: 44px;
+}
+
+.host-console-critical-path__command-activity {
+  border-block-start: 4px solid #53606f;
+  display: grid;
+  gap: 10px;
+  min-inline-size: 0;
+  padding-block-start: 14px;
+}
+
+.host-console-critical-path__command-activity header {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.host-console-critical-path__command-activity header span {
+  align-items: center;
+  background: #eef2f5;
+  border: 1px solid #9aa7b1;
+  border-radius: 8px;
+  color: #425063;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  justify-content: center;
+  min-block-size: 36px;
+  min-inline-size: 36px;
+  padding-inline: 10px;
+}
+
+.host-console-critical-path__command-activity p {
+  color: #425063;
+  font-size: 16px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.host-console-critical-path__command-activity-empty,
+.host-console-critical-path__command-activity-item {
+  background: #eef2f5;
+  border: 1px solid #a8b4bd;
+  border-radius: 8px;
+  min-block-size: 44px;
+  padding: 10px 12px;
+}
+
+.host-console-critical-path__command-activity-list {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.host-console-critical-path__command-activity-item {
+  display: grid;
+  gap: 8px;
+}
+
+.host-console-critical-path__command-activity-item strong {
+  color: #17212b;
+  font-size: 16px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.host-console-critical-path__command-activity-status {
+  margin: 0;
+}
+
 .host-console-critical-path__queue {
   border-block-start: 4px solid #53606f;
   display: grid;
@@ -140,40 +362,37 @@ body {
   margin: 0;
 }
 
-.host-console-critical-path__actions {
+.host-console-critical-path__action-bay {
   align-items: start;
-  background: rgba(248, 250, 248, 0.96);
-  border: 1px solid #9aa7b1;
-  border-radius: 8px;
-  bottom: 16px;
   display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 16px;
-  position: sticky;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
 }
 
-.host-console-critical-path__actions .host-action {
+.host-console-critical-path__action-bay .host-action {
   justify-items: stretch;
 }
 
-.host-console-critical-path__actions .host-action__trigger {
+.host-console-critical-path__action-bay .host-action__trigger {
   inline-size: 100%;
 }
 
+.host-console-critical-path__action-tile {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  grid-template-rows: auto minmax(44px, auto);
+  min-inline-size: 0;
+}
+
+.host-console-critical-path__command-status-floor {
+  align-items: start;
+  display: grid;
+  min-block-size: 44px;
+}
+
 .host-console-critical-path__command-status {
-  color: #425063;
-  font-size: 14px;
-  line-height: 1.35;
-  margin: 8px 0 0;
-}
-
-.host-console-critical-path__command-status[data-state="ack"] {
-  color: #1f6b43;
-}
-
-.host-console-critical-path__command-status[data-state="reject"] {
-  color: #9d2d22;
+  margin: 0;
 }
 
 @media (max-width: 760px) {
@@ -182,7 +401,7 @@ body {
   }
 
   .host-console-critical-path__masthead,
-  .host-console-critical-path__actions {
+  .host-console-critical-path__control-bay header {
     grid-template-columns: 1fr;
   }
 
@@ -190,8 +409,35 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .host-console-critical-path__command-activity header {
+    grid-template-columns: 1fr;
+  }
+
+  .host-console-critical-path__command-activity-list {
+    grid-template-columns: 1fr;
+  }
+
+  .host-console-critical-path__moderator-controls {
+    grid-template-columns: 1fr;
+    max-block-size: none;
+    overflow: visible;
+    position: static;
+  }
+
+  .host-console-critical-path__votecount header {
+    grid-template-columns: 1fr;
+  }
+
   .host-console-critical-path__facts {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1359px) {
+  .host-console-critical-path__moderator-controls {
+    max-block-size: none;
+    overflow: visible;
+    position: static;
   }
 }
 
@@ -203,8 +449,11 @@ body {
     padding: 32px;
   }
 
-  .host-console-critical-path__masthead,
-  .host-console-critical-path__actions {
+  .host-console-critical-path__masthead {
+    grid-column: 1 / -1;
+  }
+
+  .host-console-critical-path__operations {
     grid-column: 1 / -1;
   }
 
@@ -214,5 +463,13 @@ body {
 
   .host-console-critical-path__queues {
     grid-template-columns: 1fr;
+  }
+
+  .host-console-critical-path__votecount {
+    align-self: start;
+  }
+
+  .host-console-critical-path__moderator-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

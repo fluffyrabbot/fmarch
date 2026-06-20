@@ -1,0 +1,501 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { actions, load } from "./+page.server.js";
+import {
+  ADMIN_ROUTE_CONTRACT,
+  adminForbiddenMessage,
+  buildAdminAuditDetailData,
+  buildAdminRouteData,
+  summarizeRecoveryGate,
+} from "./admin-route-model.mjs";
+
+test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+  });
+
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.operator.capabilityLabel, "GlobalAdmin");
+  assert.deepEqual(data.surfaceHeader, {
+    component: "fm-surface-header",
+    surface: "admin",
+    className: "fm-surface__masthead",
+    eyebrowClassName: "fm-eyebrow",
+    statusStackClassName: "fm-status-stack",
+    eyebrow: "Admin",
+    title: "Operations",
+    summary:
+      "Game setup, scoped session grants, audit reports, and recovery queues.",
+    capability: {
+      visible: true,
+      label: "GlobalAdmin",
+      testId: "admin-capability",
+      className: "fm-capability-pill",
+      minTouchTargetPx: 44,
+    },
+    liveStatus: { visible: false },
+  });
+  assert.deepEqual(ADMIN_ROUTE_CONTRACT, {
+    surfaceTestId: "admin-surface",
+    capabilityTestId: "admin-capability",
+    requiredText: "Operations",
+  });
+  assert.deepEqual(data.command.createGame, {
+    action: "create_game",
+    game: "midsummer",
+    pack: "mafiascum",
+  });
+  assert.deepEqual(data.command.cohost, {
+    action: "add_cohost",
+    game: "midsummer",
+    user: "cohost_c",
+  });
+  assert.deepEqual(data.command.sessionGrant, {
+    action: "grant_session",
+    token: "session-grant-midsummer",
+    principalUserId: "mod_a",
+    expiresAt: 4102444800,
+    globalCapabilities: ["GlobalMod"],
+  });
+  assert.deepEqual(
+    data.gameSetup.map((item) => item.id),
+    ["create-game", "session-grants", "cohost"],
+  );
+  assert.equal(data.gameSetup[0].commandAction, "create_game");
+  assert.equal(data.gameSetup[1].commandAction, "grant_session");
+  assert.equal(data.gameSetup[2].commandAction, "add_cohost");
+  assert.equal(data.gameSetup[0].boundary, "Command pipeline");
+  assert.equal(data.gameSetup[1].boundary, "Authenticated session grant");
+  assert.match(data.gameSetup[1].boundaryDetail, /GlobalAdmin session/);
+  assert.match(data.gameSetup[2].boundaryDetail, /host-gated/);
+  assert.equal(data.gameSetup[1].confirmLabel, "Grant GlobalMod");
+  assert.equal(data.gameSetup[2].confirmLabel, "Delegate cohost_c");
+  assert.equal(
+    data.audit[0].href,
+    "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+  );
+  assert.equal(data.audit[0].inspectHref, "/admin/audit/proof-runs?game=midsummer");
+  assert.equal(
+    data.audit[2].href,
+    "/games/midsummer/operator/proof-runs/go-no-go/view?principal_user_id=admin_a",
+  );
+  assert.equal(data.audit[2].inspectHref, "/admin/audit/recovery?game=midsummer");
+  assert.deepEqual(data.recoveryTasks.map((item) => item.id), ["recovery-gate"]);
+  assert.equal(data.recoveryTasks[0].action, "check_recovery_gate");
+  assert.equal(
+    data.recoveryTasks[0].endpoint,
+    "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+  );
+  assert.match(data.recoveryTasks[0].boundaryDetail, /go-no-go/);
+});
+
+test("admin recovery gate summary fails closed", () => {
+  assert.deepEqual(summarizeRecoveryGate(null), {
+    state: "reject",
+    message: "Recovery gate returned malformed proof data",
+  });
+  assert.deepEqual(
+    summarizeRecoveryGate({
+      ok: false,
+      production: {
+        trusted: 2,
+        total_artifact_rows: 3,
+        non_trusted: 1,
+      },
+    }),
+    {
+      state: "reject",
+      message: "Recovery gate blocked: 1/3 production artifacts need review",
+      trusted: 2,
+      total: 3,
+      nonTrusted: 1,
+    },
+  );
+  assert.deepEqual(
+    summarizeRecoveryGate({
+      ok: true,
+      production: {
+        trusted: 3,
+        total_artifact_rows: 3,
+        non_trusted: 0,
+      },
+    }),
+    {
+      state: "ack",
+      message: "Recovery gate trusted: 3/3 production artifacts trusted",
+      trusted: 3,
+      total: 3,
+      nonTrusted: 0,
+    },
+  );
+});
+
+test("admin audit detail data stays inside the admin SPA shell", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "proof-runs",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+  });
+
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.shell.activeSurface, "admin");
+  assert.deepEqual(data.surfaceHeader, {
+    component: "fm-surface-header",
+    surface: "admin",
+    className: "fm-surface__masthead",
+    eyebrowClassName: "fm-eyebrow",
+    statusStackClassName: "fm-status-stack",
+    eyebrow: "Admin audit",
+    title: "Proof runs",
+    summary: "/operator/proof-runs machine-readable report",
+    capability: {
+      visible: true,
+      label: "GlobalAdmin",
+      testId: "admin-audit-detail-capability",
+      className: "fm-capability-pill",
+      minTouchTargetPx: 44,
+    },
+    liveStatus: { visible: false },
+  });
+  assert.equal(data.status, "available");
+  assert.equal(data.overviewHref, "/admin?game=midsummer");
+  assert.equal(data.audit.id, "proof-runs");
+  assert.equal(data.audit.inspectHref, "/admin/audit/proof-runs?game=midsummer");
+  assert.equal(
+    data.audit.href,
+    "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+  );
+});
+
+test("admin audit detail overview href preserves the inspected game", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "proof-runs",
+    game: "solstice",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+  });
+
+  assert.equal(data.overviewHref, "/admin?game=solstice");
+  assert.equal(data.audit.inspectHref, "/admin/audit/proof-runs?game=solstice");
+  assert.equal(
+    data.audit.href,
+    "/games/solstice/operator/proof-runs?principal_user_id=admin_a",
+  );
+});
+
+test("admin audit detail data fails closed for unknown audit rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "missing-proof",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+  });
+
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.status, "missing");
+  assert.equal(data.audit, null);
+  assert.equal(data.auditId, "missing-proof");
+});
+
+test("admin recovery gate action reads the machine operator report", async () => {
+  let observedUrl = null;
+  const result = await actions.checkRecoveryGate({
+    fetch: async (url, init) => {
+      observedUrl = { url, accept: init.headers.accept };
+      return jsonResponse({
+        ok: true,
+        production: {
+          trusted: 4,
+          total_artifact_rows: 4,
+          non_trusted: 0,
+        },
+      });
+    },
+    locals: {
+      principalUserId: "admin_a",
+      resolvedCapabilities: [{ kind: "GlobalMod" }],
+    },
+    request: formRequest({
+      game: "midsummer",
+      principalUserId: "ignored_form_user",
+    }),
+  });
+
+  assert.deepEqual(observedUrl, {
+    url: "/games/midsummer/operator/proof-runs/go-no-go?principal_user_id=admin_a",
+    accept: "application/json",
+  });
+  assert.equal(result.id, "recovery-gate");
+  assert.equal(result.state, "ack");
+  assert.equal(result.message, "Recovery gate trusted: 4/4 production artifacts trusted");
+});
+
+test("admin recovery gate action surfaces backend rejection", async () => {
+  const result = await actions.checkRecoveryGate({
+    fetch: async () =>
+      jsonResponse(
+        { message: "principal cannot read operator proof artifact go/no-go for this game" },
+        { ok: false, status: 403 },
+      ),
+    locals: {
+      principalUserId: "admin_a",
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      game: "midsummer",
+      principalUserId: "admin_a",
+    }),
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(result.data.id, "recovery-gate");
+  assert.equal(result.data.state, "reject");
+  assert.equal(
+    result.data.message,
+    "principal cannot read operator proof artifact go/no-go for this game",
+  );
+});
+
+test("admin recovery gate action requires admin surface authority", async () => {
+  const result = await actions.checkRecoveryGate({
+    fetch: async () => {
+      throw new Error("unauthorized recovery check must not call backend");
+    },
+    locals: {
+      principalUserId: "host_h",
+      resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+    },
+    request: formRequest({
+      game: "midsummer",
+      principalUserId: "host_h",
+    }),
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(result.data.id, "recovery-gate");
+  assert.equal(result.data.message, "Recovery gate checks require GlobalAdmin or GlobalMod");
+});
+
+test("admin session grant action requires GlobalAdmin", async () => {
+  const result = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () => {
+      throw new Error("GlobalMod must not call the session grant API");
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalMod" }],
+    },
+    request: formRequest({
+      token: "session-grant-midsummer",
+      principalUserId: "mod_a",
+      expiresAt: "4102444800",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(result.data.id, "session-grants");
+  assert.equal(result.data.state, "reject");
+  assert.equal(result.data.message, "Session grants require GlobalAdmin");
+});
+
+test("admin session grant action posts the authenticated API request", async () => {
+  let observedRequest = null;
+  const result = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async (url, init) => {
+      observedRequest = {
+        url,
+        method: init.method,
+        authorization: init.headers.authorization,
+        contentType: init.headers["content-type"],
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        principal_user_id: "mod_a",
+        capabilities: [{ kind: "GlobalMod" }],
+      });
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      token: "session-grant-midsummer",
+      principalUserId: "mod_a",
+      expiresAt: "4102444800",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.deepEqual(observedRequest, {
+    url: "/auth/session-grants",
+    method: "POST",
+    authorization: "Bearer admin-session",
+    contentType: "application/json",
+    body: {
+      token: "session-grant-midsummer",
+      principal_user_id: "mod_a",
+      expires_at: 4102444800,
+      global_capabilities: ["GlobalMod"],
+    },
+  });
+  assert.equal(result.id, "session-grants");
+  assert.equal(result.state, "ack");
+  assert.equal(result.message, "Granted GlobalMod to mod_a");
+});
+
+test("admin session grant action rejects malformed grant payloads before the API", async () => {
+  const invalidExpiry = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () => {
+      throw new Error("invalid session grant expiry must not call the API");
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      token: "session-grant-midsummer",
+      principalUserId: "mod_a",
+      expiresAt: "later",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.equal(invalidExpiry.status, 400);
+  assert.equal(invalidExpiry.data.id, "session-grants");
+  assert.equal(invalidExpiry.data.state, "reject");
+  assert.equal(
+    invalidExpiry.data.message,
+    "Session grant expiry must be a positive Unix timestamp",
+  );
+
+  const unsupportedCapability = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () => {
+      throw new Error("unsupported session grant capability must not call the API");
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      token: "session-grant-midsummer",
+      principalUserId: "mod_a",
+      expiresAt: "4102444800",
+      globalCapability: ["GlobalMod", "GlobalAdmin"],
+    }),
+  });
+
+  assert.equal(unsupportedCapability.status, 400);
+  assert.equal(unsupportedCapability.data.id, "session-grants");
+  assert.equal(unsupportedCapability.data.state, "reject");
+  assert.equal(
+    unsupportedCapability.data.message,
+    "Session grant form can only request the explicit GlobalMod capability",
+  );
+});
+
+test("admin session grant action surfaces API rejection", async () => {
+  const result = await actions.grantSession({
+    cookies: { get: () => "admin-session" },
+    fetch: async () =>
+      jsonResponse(
+        { message: "session grants require GlobalAdmin" },
+        { ok: false, status: 403 },
+      ),
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      token: "session-grant-midsummer",
+      principalUserId: "mod_a",
+      expiresAt: "4102444800",
+      globalCapability: "GlobalMod",
+    }),
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(result.data.id, "session-grants");
+  assert.equal(result.data.state, "reject");
+  assert.equal(result.data.message, "session grants require GlobalAdmin");
+});
+
+test("admin route data uses operator proof status when available", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    fetchImpl: async () =>
+      jsonResponse({
+        rows: [{ id: "proof-a", label: "Proof A", status: "green" }],
+      }),
+  });
+
+  assert.deepEqual(data.audit, [
+    {
+      id: "proof-a",
+      label: "Proof A",
+      status: "green",
+      authority: "GlobalAdmin or GlobalMod",
+      boundary: "Read-only operator proof",
+      boundaryDetail: "/operator/proof-runs machine-readable report",
+      href: "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",
+      inspectHref: "/admin/audit/proof-a?game=midsummer",
+    },
+  ]);
+});
+
+test("admin load accepts GlobalMod escalation authority", async () => {
+  const data = await load({
+    locals: {
+      principalUserId: "mod_a",
+      resolvedCapabilities: [{ kind: "GlobalMod" }],
+    },
+    url: new URL("http://localhost/admin?game=midsummer"),
+    fetch: async () => ({ ok: false }),
+  });
+
+  assert.equal(data.access.capabilityLabel, "GlobalMod");
+  assert.equal(data.shell.activeSurface, "admin");
+  assert.equal(data.shellOwner, "layout");
+});
+
+test("admin load rejects game-scoped host authority", async () => {
+  await assert.rejects(
+    async () =>
+      await load({
+        locals: {
+          principalUserId: "host_h",
+          resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+        },
+        url: new URL("http://localhost/admin?game=midsummer"),
+        fetch: async () => ({ ok: false }),
+      }),
+    (err) => err.status === 403 && err.body.message === adminForbiddenMessage(),
+  );
+});
+
+function jsonResponse(body, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    async json() {
+      return body;
+    },
+  };
+}
+
+function formRequest(fields) {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        formData.append(key, item);
+      }
+    } else {
+      formData.append(key, value);
+    }
+  }
+  return new Request("http://localhost/admin?/grantSession", {
+    method: "POST",
+    body: formData,
+  });
+}

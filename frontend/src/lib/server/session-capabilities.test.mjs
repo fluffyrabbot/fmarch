@@ -1,68 +1,224 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  FIXTURE_SESSION_COOKIE_NAME,
   SESSION_COOKIE_NAME,
-  SMOKE_AUTH_ENV,
-  SMOKE_HOST_GAME_HEADER,
+  hostGameFromRequest,
   resolveAuthenticatedSession,
+  resolveFixtureSession,
+  sessionContextFromRequest,
 } from "./session-capabilities.mjs";
 
-test("authenticated session cookie populates principal and scoped host capabilities", () => {
-  const cookie = encodeURIComponent(
-    JSON.stringify({
-      principal_user_id: "host_h",
-      capabilities: [
-        { kind: "HostOf", body: { game: "00000000-0000-0000-0000-000000000001" } },
-        { kind: "SlotOccupant", body: { slot: "slot_1" } },
-      ],
-    }),
-  );
-  const session = resolveAuthenticatedSession({
-    cookies: cookieJar(cookie),
-    request: requestWithHeaders({}),
-    env: {},
+test("opaque session cookie resolves principal and scoped host capabilities through the API", async () => {
+  const seen = [];
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("opaque-token"),
+    request: requestFor("/g/00000000-0000-0000-0000-000000000001/host"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async (url, options) => {
+      seen.push({ url, options });
+      return jsonResponse({
+        principal_user_id: "host_h",
+        capabilities: [
+          {
+            kind: "HostOf",
+            body: { game: "00000000-0000-0000-0000-000000000001" },
+          },
+          { kind: "SlotOccupant", body: { slot: "slot_1" } },
+        ],
+      });
+    },
   });
 
+  assert.equal(
+    seen[0].url,
+    "http://127.0.0.1:4017/auth/session?game=00000000-0000-0000-0000-000000000001",
+  );
+  assert.equal(seen[0].options.headers.authorization, "Bearer opaque-token");
   assert.equal(session.principalUserId, "host_h");
   assert.deepEqual(session.resolvedCapabilities, [
     {
       kind: "HostOf",
       game: "00000000-0000-0000-0000-000000000001",
-      source: "session-cookie",
+      source: "auth-session",
     },
-  ]);
-});
-
-test("smoke auth is unavailable unless the explicit test env is enabled", () => {
-  const session = resolveAuthenticatedSession({
-    cookies: cookieJar(),
-    request: requestWithHeaders({
-      [SMOKE_HOST_GAME_HEADER]: "00000000-0000-0000-0000-000000000002",
-    }),
-    env: {},
-  });
-
-  assert.equal(session.principalUserId, null);
-  assert.deepEqual(session.resolvedCapabilities, []);
-});
-
-test("smoke auth grants HostOf only through the explicit test hook", () => {
-  const session = resolveAuthenticatedSession({
-    cookies: cookieJar(),
-    request: requestWithHeaders({
-      [SMOKE_HOST_GAME_HEADER]: "00000000-0000-0000-0000-000000000002",
-    }),
-    env: { [SMOKE_AUTH_ENV]: "1" },
-  });
-
-  assert.equal(session.principalUserId, "host-smoke");
-  assert.deepEqual(session.resolvedCapabilities, [
     {
-      kind: "HostOf",
-      game: "00000000-0000-0000-0000-000000000002",
-      source: "smoke-test-hook",
+      kind: "SlotOccupant",
+      game: "00000000-0000-0000-0000-000000000001",
+      slot: "slot_1",
+      source: "auth-session",
     },
   ]);
+});
+
+test("missing cookie, non-host route, or rejected lookup leaves locals unauthenticated", async () => {
+  assert.deepEqual(
+    await resolveAuthenticatedSession({
+      cookies: cookieJar(),
+      request: requestFor("/g/00000000-0000-0000-0000-000000000001/host"),
+      fetchImpl: unreachableFetch,
+      env: {},
+    }),
+    { principalUserId: null, resolvedCapabilities: [] },
+  );
+
+  assert.deepEqual(
+    await resolveAuthenticatedSession({
+      cookies: cookieJar("opaque-token"),
+      request: requestFor("/g/00000000-0000-0000-0000-000000000001/player"),
+      fetchImpl: async (url) => {
+        assert.equal(
+          url,
+          "/auth/session?game=00000000-0000-0000-0000-000000000001",
+        );
+        return jsonResponse({
+          principal_user_id: "player_a",
+          capabilities: [
+            {
+              kind: "ChannelMember",
+              body: {
+                game: "00000000-0000-0000-0000-000000000001",
+                channel: "main",
+              },
+            },
+          ],
+        });
+      },
+      env: {},
+    }),
+    {
+      principalUserId: "player_a",
+      resolvedCapabilities: [
+        {
+          kind: "ChannelMember",
+          game: "00000000-0000-0000-0000-000000000001",
+          channel: "main",
+          source: "auth-session",
+        },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    await resolveAuthenticatedSession({
+      cookies: cookieJar("opaque-token"),
+      request: requestFor("/g/00000000-0000-0000-0000-000000000001/host"),
+      fetchImpl: async () => ({ ok: false }),
+      env: {},
+    }),
+    { principalUserId: null, resolvedCapabilities: [] },
+  );
+});
+
+test("host game is derived only from the tablet host route shape", () => {
+  assert.equal(
+    hostGameFromRequest(requestFor("/g/00000000-0000-0000-0000-000000000002/host")),
+    "00000000-0000-0000-0000-000000000002",
+  );
+  assert.equal(hostGameFromRequest(requestFor("/g/demo/player")), null);
+});
+
+test("session context covers game and admin surfaces", () => {
+  assert.deepEqual(sessionContextFromRequest(requestFor("/g/demo")), {
+    kind: "game",
+    game: "demo",
+  });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/g/demo/host")), {
+    kind: "game",
+    game: "demo",
+  });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/admin")), {
+    kind: "admin",
+  });
+  assert.deepEqual(sessionContextFromRequest(requestFor("/admin/audit/proof-runs")), {
+    kind: "admin",
+  });
+  assert.equal(sessionContextFromRequest(requestFor("/")), null);
+});
+
+test("fixture sessions exercise admin, player, and host role routes", async () => {
+  const board = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-player"),
+    request: requestFor("/"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(board.principalUserId, "player_mira");
+  assert.deepEqual(
+    board.resolvedCapabilities.map((capability) => capability.game),
+    ["midsummer", "midsummer"],
+  );
+
+  const admin = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-admin"),
+    request: requestFor("/admin"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(admin.principalUserId, "admin_a");
+  assert.equal(admin.resolvedCapabilities[0].kind, "GlobalAdmin");
+
+  const player = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-player"),
+    request: requestFor("/g/midsummer"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(player.principalUserId, "player_mira");
+  assert.deepEqual(
+    player.resolvedCapabilities.map((capability) => capability.kind),
+    ["SlotOccupant", "ChannelMember"],
+  );
+
+  const host = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-host"),
+    request: requestFor("/g/midsummer/host"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(host.principalUserId, "host_h");
+  assert.equal(host.resolvedCapabilities[0].kind, "HostOf");
+});
+
+test("fixture session helper exposes the same game-scoped proof capabilities", () => {
+  const player = resolveFixtureSession({
+    token: "fixture-player",
+    game: "midsummer",
+  });
+
+  assert.equal(player.principalUserId, "player_mira");
+  assert.deepEqual(
+    player.resolvedCapabilities.map((capability) => [
+      capability.kind,
+      capability.game,
+    ]),
+    [
+      ["SlotOccupant", "midsummer"],
+      ["ChannelMember", "midsummer"],
+    ],
+  );
+});
+
+test("admin route accepts API-returned global capabilities", async () => {
+  const session = await resolveAuthenticatedSession({
+    cookies: cookieJar("admin-token"),
+    request: requestFor("/admin?game=midsummer"),
+    env: { FMARCH_API_BASE_URL: "http://127.0.0.1:4017/" },
+    fetchImpl: async (url, options) => {
+      assert.equal(url, "http://127.0.0.1:4017/auth/session");
+      assert.equal(options.headers.authorization, "Bearer admin-token");
+      return jsonResponse({
+        principal_user_id: "admin_a",
+        capabilities: [{ kind: "GlobalAdmin" }],
+      });
+    },
+  });
+
+  assert.deepEqual(session, {
+    principalUserId: "admin_a",
+    resolvedCapabilities: [
+      {
+        kind: "GlobalAdmin",
+        source: "auth-session",
+      },
+    ],
+  });
 });
 
 function cookieJar(value = undefined) {
@@ -73,8 +229,32 @@ function cookieJar(value = undefined) {
   };
 }
 
-function requestWithHeaders(headers) {
+function fixtureCookieJar(value) {
   return {
-    headers: new Headers(headers),
+    get(name) {
+      if (name === FIXTURE_SESSION_COOKIE_NAME) {
+        return value;
+      }
+      return undefined;
+    },
   };
+}
+
+function requestFor(pathname) {
+  return {
+    url: `http://localhost${pathname}`,
+  };
+}
+
+function jsonResponse(body) {
+  return {
+    ok: true,
+    async json() {
+      return body;
+    },
+  };
+}
+
+async function unreachableFetch() {
+  throw new Error("session lookup should not fetch");
 }

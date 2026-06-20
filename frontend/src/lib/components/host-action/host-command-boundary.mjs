@@ -111,6 +111,53 @@ export function mapHostActionToWireCommand(actionEvent) {
           ),
         }),
       });
+    case "lock_thread":
+      return Object.freeze({
+        LockThread: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+        }),
+      });
+    case "unlock_thread":
+      return Object.freeze({
+        UnlockThread: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+        }),
+      });
+    case "advance_phase":
+      return Object.freeze({
+        AdvancePhase: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+        }),
+      });
+    case "publish_votecount":
+      return Object.freeze({
+        PublishVotecount: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+        }),
+      });
+    case "mark_dead":
+    case "modkill_slot":
+      return Object.freeze({
+        SetSlotStatus: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          slot: requiredString(payload.slotId, "payload.slotId"),
+          status: requiredSlotLifecycle(payload.status),
+        }),
+      });
+    case "complete_game":
+      return Object.freeze({
+        CompleteGame: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+        }),
+      });
+    case "resolve_host_prompt":
+      return Object.freeze({
+        ResolveHostPrompt: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          prompt_id: requiredString(payload.promptId, "payload.promptId"),
+          decision: mapHostPromptDecision(payload.decision),
+        }),
+      });
     default:
       throw new TypeError(`unsupported host action payload kind: ${payload.kind}`);
   }
@@ -189,6 +236,12 @@ export function projectHostConsoleState(state, fallback) {
     phase: Object.freeze({
       ...fallback.phase,
       id: phase?.phase_id ?? fallback.phase.id,
+      lockedLabel:
+        typeof phase?.locked === "boolean"
+          ? phase.locked
+            ? "Thread locked"
+            : "Thread open"
+          : fallback.phase.lockedLabel,
       deadlineLabel:
         typeof phase?.deadline === "number"
           ? formatDeadline(phase.deadline)
@@ -198,6 +251,10 @@ export function projectHostConsoleState(state, fallback) {
       ...fallback.replacement,
       slotId: slot?.slot_id ?? fallback.replacement.slotId,
       occupantLabel: slot?.occupant_user_id ?? fallback.replacement.occupantLabel,
+      lifecycleLabel:
+        typeof slot?.status === "string"
+          ? lifecycleLabel(slot.status, slot.alive)
+          : fallback.replacement.lifecycleLabel,
       historyLabel: preservedSlotHistory
         ? `Slot history remains attached to ${slot.slot_id}`
         : fallback.replacement.historyLabel,
@@ -210,6 +267,34 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function requiredSlotLifecycle(value) {
+  switch (value) {
+    case "alive":
+    case "dead":
+    case "modkilled":
+      return value;
+    default:
+      throw new TypeError("payload.status must be alive, dead, or modkilled");
+  }
+}
+
+function mapHostPromptDecision(decision) {
+  if (decision === "Acknowledge") {
+    return "Acknowledge";
+  }
+  if (decision?.kind === "acknowledge") {
+    return "Acknowledge";
+  }
+  if (decision?.kind === "select_slot") {
+    return Object.freeze({
+      SelectSlot: Object.freeze({
+        slot: requiredString(decision.slot, "payload.decision.slot"),
+      }),
+    });
+  }
+  throw new TypeError("payload.decision must be acknowledge or select_slot");
 }
 
 function secondsSinceEpoch(isoString) {
@@ -226,6 +311,19 @@ function formatDeadline(unixSeconds) {
     timeStyle: "short",
     timeZone: "America/Los_Angeles",
   });
+}
+
+function lifecycleLabel(status, alive) {
+  if (status === "modkilled") {
+    return "Modkilled";
+  }
+  if (status === "dead") {
+    return "Dead";
+  }
+  if (alive === false) {
+    return "Not alive";
+  }
+  return "Alive";
 }
 
 function defaultCommandId() {

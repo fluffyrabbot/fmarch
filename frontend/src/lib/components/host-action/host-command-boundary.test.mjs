@@ -29,6 +29,86 @@ const REPLACEMENT_EVENT = Object.freeze({
   }),
 });
 
+const LOCK_THREAD_EVENT = Object.freeze({
+  actionId: "lock_thread",
+  payload: Object.freeze({
+    kind: "lock_thread",
+    gameId: "00000000-0000-0000-0000-000000000001",
+  }),
+});
+
+const UNLOCK_THREAD_EVENT = Object.freeze({
+  actionId: "unlock_thread",
+  payload: Object.freeze({
+    kind: "unlock_thread",
+    gameId: "00000000-0000-0000-0000-000000000001",
+  }),
+});
+
+const ADVANCE_PHASE_EVENT = Object.freeze({
+  actionId: "advance_phase",
+  payload: Object.freeze({
+    kind: "advance_phase",
+    gameId: "00000000-0000-0000-0000-000000000001",
+  }),
+});
+
+const PUBLISH_VOTECOUNT_EVENT = Object.freeze({
+  actionId: "publish_votecount",
+  payload: Object.freeze({
+    kind: "publish_votecount",
+    gameId: "00000000-0000-0000-0000-000000000001",
+  }),
+});
+
+const MARK_DEAD_EVENT = Object.freeze({
+  actionId: "mark_dead",
+  payload: Object.freeze({
+    kind: "mark_dead",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    slotId: "slot-7",
+    status: "dead",
+  }),
+});
+
+const MODKILL_EVENT = Object.freeze({
+  actionId: "modkill_slot",
+  payload: Object.freeze({
+    kind: "modkill_slot",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    slotId: "slot-7",
+    status: "modkilled",
+  }),
+});
+
+const COMPLETE_GAME_EVENT = Object.freeze({
+  actionId: "complete_game",
+  payload: Object.freeze({
+    kind: "complete_game",
+    gameId: "00000000-0000-0000-0000-000000000001",
+  }),
+});
+
+const RESOLVE_PROMPT_ACK_EVENT = Object.freeze({
+  actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
+  payload: Object.freeze({
+    kind: "resolve_host_prompt",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    promptId: "D01:skip_next_day:slot_1",
+    decision: Object.freeze({ kind: "acknowledge" }),
+  }),
+});
+
+const RESOLVE_PROMPT_SELECT_SLOT_EVENT = Object.freeze({
+  actionId: "resolve_host_prompt-D01-tie-slot_2",
+  payload: Object.freeze({
+    kind: "resolve_host_prompt",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    promptId: "D01:tie:slot_2",
+    decision: Object.freeze({ kind: "select_slot", slot: "slot_2" }),
+  }),
+});
+
 test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(EXTEND_EVENT), {
     ExtendDeadline: {
@@ -43,6 +123,59 @@ test("host actions map to generated wire command variants", () => {
       slot: "slot-7",
       outgoing_user: "player-mira",
       incoming_user: "player-rowan",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(LOCK_THREAD_EVENT), {
+    LockThread: {
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(UNLOCK_THREAD_EVENT), {
+    UnlockThread: {
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(ADVANCE_PHASE_EVENT), {
+    AdvancePhase: {
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(PUBLISH_VOTECOUNT_EVENT), {
+    PublishVotecount: {
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(MARK_DEAD_EVENT), {
+    SetSlotStatus: {
+      game: "00000000-0000-0000-0000-000000000001",
+      slot: "slot-7",
+      status: "dead",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(MODKILL_EVENT), {
+    SetSlotStatus: {
+      game: "00000000-0000-0000-0000-000000000001",
+      slot: "slot-7",
+      status: "modkilled",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(COMPLETE_GAME_EVENT), {
+    CompleteGame: {
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(RESOLVE_PROMPT_ACK_EVENT), {
+    ResolveHostPrompt: {
+      game: "00000000-0000-0000-0000-000000000001",
+      prompt_id: "D01:skip_next_day:slot_1",
+      decision: "Acknowledge",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(RESOLVE_PROMPT_SELECT_SLOT_EVENT), {
+    ResolveHostPrompt: {
+      game: "00000000-0000-0000-0000-000000000001",
+      prompt_id: "D01:tie:slot_2",
+      decision: { SelectSlot: { slot: "slot_2" } },
     },
   });
 });
@@ -145,7 +278,14 @@ test("host command sender can refresh projected host console state after ack", a
       }
       return jsonResponse({
         phase: { phase_id: "day-2", locked: false, deadline: 1781928000 },
-        slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+        slots: [
+          {
+            slot_id: "slot-7",
+            occupant_user_id: "player-rowan",
+            alive: false,
+            status: "modkilled",
+          },
+        ],
         thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
       });
     },
@@ -161,22 +301,36 @@ test("host command sender can refresh projected host console state after ack", a
 test("host console projection maps deadline and stable slot history to labels", () => {
   const projection = projectHostConsoleState(
     {
-      phase: { phase_id: "day-2", locked: false, deadline: 1781928000 },
-      slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+      phase: { phase_id: "day-2", locked: true, deadline: 1781928000 },
+      slots: [
+        {
+          slot_id: "slot-7",
+          occupant_user_id: "player-rowan",
+          alive: false,
+          status: "modkilled",
+        },
+      ],
       thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
     },
     {
-      phase: { id: "day-2", deadlineLabel: "No deadline extension committed" },
+      phase: {
+        id: "day-2",
+        deadlineLabel: "No deadline extension committed",
+        lockedLabel: "Thread open",
+      },
       replacement: {
         slotId: "slot-7",
         occupantLabel: "player-mira",
+        lifecycleLabel: "Alive",
         historyLabel: "Waiting for replacement command proof",
       },
     },
   );
 
   assert.equal(projection.phase.deadlineLabel, "Jun 19, 2026, 9:00 PM");
+  assert.equal(projection.phase.lockedLabel, "Thread locked");
   assert.equal(projection.replacement.occupantLabel, "player-rowan");
+  assert.equal(projection.replacement.lifecycleLabel, "Modkilled");
   assert.equal(
     projection.replacement.historyLabel,
     "Slot history remains attached to slot-7",

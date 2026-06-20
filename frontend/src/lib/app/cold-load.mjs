@@ -1,0 +1,435 @@
+export async function loadPlayerColdData({
+  game,
+  activeChannel = "main",
+  principalUserId,
+  fetchImpl,
+  apiBaseUrl = "",
+  fallback,
+}) {
+  const canLoadPrivate =
+    typeof principalUserId === "string" && principalUserId.trim() !== "";
+  const [thread, votecount, notifications, investigationResults] = await Promise.all([
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.thread,
+      url: playerThreadUrl({
+        apiBaseUrl,
+        game,
+        channel: activeChannel,
+        principalUserId,
+        limit: 50,
+      }),
+    }),
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.votecount,
+      url: playerVotecountUrl({ apiBaseUrl, game }),
+    }),
+    canLoadPrivate
+      ? fetchJson({
+          fetchImpl,
+          fallback: fallback.notifications ?? [],
+          url: principalScopedGameUrl({
+            apiBaseUrl,
+            game,
+            path: "notifications",
+            principalUserId,
+          }),
+        })
+      : [],
+    canLoadPrivate
+      ? fetchJson({
+          fetchImpl,
+          fallback: fallback.investigationResults ?? [],
+          url: principalScopedGameUrl({
+            apiBaseUrl,
+            game,
+            path: "investigation-results",
+            principalUserId,
+          }),
+        })
+      : [],
+  ]);
+
+  return Object.freeze({
+    thread: normalizeThreadPage(thread, fallback.thread),
+    votecount: normalizeVotecount(votecount, fallback.votecount),
+    notifications: Object.freeze(
+      Array.isArray(notifications) ? notifications : [],
+    ),
+    investigationResults: Object.freeze(
+      Array.isArray(investigationResults) ? investigationResults : [],
+    ),
+  });
+}
+
+export async function loadAdminColdData({
+  game,
+  principalUserId,
+  fetchImpl,
+  apiBaseUrl = "",
+  fallback,
+}) {
+  const proofStatus = await fetchJson({
+    fetchImpl,
+    fallback: null,
+    url: principalScopedGameUrl({
+      apiBaseUrl,
+      game,
+      path: "operator/proof-runs/status",
+      principalUserId,
+    }),
+  });
+
+  return Object.freeze({
+    audit: normalizeAdminAudit(proofStatus, fallback.audit, {
+      game,
+      principalUserId,
+    }),
+  });
+}
+
+export async function loadHostColdData({
+  game,
+  principalUserId,
+  fetchImpl,
+  apiBaseUrl = "",
+  fallback,
+}) {
+  const [hostPrompts, votecount] = await Promise.all([
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.hostPrompts,
+      url: hostPromptsUrl({
+        apiBaseUrl,
+        game,
+        principalUserId,
+      }),
+    }),
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.votecount,
+      url: hostVotecountUrl({ apiBaseUrl, game }),
+    }),
+  ]);
+
+  return Object.freeze({
+    hostPrompts: normalizeHostPrompts(hostPrompts, fallback.hostPrompts),
+    votecount: normalizeVotecount(votecount, fallback.votecount),
+  });
+}
+
+export async function fetchJson({ fetchImpl, url, fallback }) {
+  if (typeof fetchImpl !== "function") {
+    return fallback;
+  }
+
+  try {
+    const response = await fetchImpl(url, {
+      headers: { accept: "application/json" },
+    });
+    if (!response?.ok) {
+      return fallback;
+    }
+    return await response.json();
+  } catch {
+    return fallback;
+  }
+}
+
+export function normalizeHostPrompts(rows, fallback) {
+  if (!Array.isArray(rows)) {
+    return fallback;
+  }
+
+  return Object.freeze(
+    rows.map((row, index) =>
+      Object.freeze({
+        id: String(
+          row.prompt_id ?? row.promptId ?? row.id ?? `prompt-${index + 1}`,
+        ),
+        label: String(row.kind ?? row.label ?? "Host prompt"),
+        value: String(row.reason ?? row.value ?? "Awaiting host decision"),
+        status: String(row.status ?? "pending"),
+        phaseId: String(row.phase_id ?? row.phaseId ?? ""),
+        subjectSlot: row.subject_slot ?? row.subjectSlot ?? null,
+        decisionKind: decisionKindForPrompt(row),
+      }),
+    ),
+  );
+}
+
+export function normalizeThreadPage(page, fallback) {
+  if (page === null || typeof page !== "object" || !Array.isArray(page.posts)) {
+    return fallback;
+  }
+
+  return Object.freeze({
+    nextBeforeSeq: page.next_before_seq ?? page.nextBeforeSeq ?? null,
+    posts: Object.freeze(page.posts.map((post) => normalizeThreadPost(post))),
+  });
+}
+
+export function normalizeThreadPost(post, { fallbackMeta = "cold load" } = {}) {
+  const media = normalizeThreadPostMedia(post?.media ?? post?.attachments ?? post?.images);
+  return Object.freeze({
+    seq: post?.source_seq ?? post?.sourceSeq ?? post?.seq ?? null,
+    streamSeq: post?.stream_seq ?? post?.streamSeq ?? null,
+    authorSlot: post?.author_slot ?? post?.authorSlot ?? null,
+    authorLabel:
+      post?.author_user ??
+      post?.authorUser ??
+      post?.authorLabel ??
+      post?.author_slot ??
+      post?.authorSlot ??
+      "Unknown",
+    body: typeof post?.body === "string" ? post.body : "",
+    meta:
+      post?.meta ??
+      formatOccurredAt(post?.occurred_at ?? post?.occurredAt, {
+        fallback: fallbackMeta,
+      }),
+    ...(media.length === 0 ? {} : { media }),
+  });
+}
+
+export function normalizeThreadPostMedia(value) {
+  if (!Array.isArray(value)) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    value
+      .map((item, index) => normalizeThreadMediaItem(item, index))
+      .filter(Boolean),
+  );
+}
+
+function normalizeThreadMediaItem(item, index) {
+  if (item === null || typeof item !== "object") {
+    return null;
+  }
+  const variants = normalizeThreadMediaVariants(item.variants ?? item.sources ?? {});
+  if (Object.keys(variants).length === 0) {
+    return null;
+  }
+  return Object.freeze({
+    id: String(item.id ?? item.media_id ?? item.mediaId ?? `media-${index + 1}`),
+    kind: String(item.kind ?? item.type ?? "image"),
+    alt: String(item.alt ?? item.alt_text ?? item.altText ?? "Thread image"),
+    variants,
+  });
+}
+
+function normalizeThreadMediaVariants(value) {
+  if (Array.isArray(value)) {
+    return Object.freeze(
+      Object.fromEntries(
+        value
+          .map((variant) => [
+            variant?.name ?? variant?.variant ?? variant?.id,
+            normalizeThreadMediaVariant(variant),
+          ])
+          .filter(([name, variant]) => typeof name === "string" && variant !== null),
+      ),
+    );
+  }
+  if (value === null || typeof value !== "object") {
+    return Object.freeze({});
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(value)
+        .map(([name, variant]) => [name, normalizeThreadMediaVariant(variant)])
+        .filter(([, variant]) => variant !== null),
+    ),
+  );
+}
+
+function normalizeThreadMediaVariant(variant) {
+  if (typeof variant === "string") {
+    return Object.freeze({ url: variant, width: null, height: null });
+  }
+  if (variant === null || typeof variant !== "object") {
+    return null;
+  }
+  const url = variant.url ?? variant.href ?? variant.src;
+  if (typeof url !== "string" || url.trim() === "") {
+    return null;
+  }
+  return Object.freeze({
+    url,
+    width: normalizePositiveNumber(variant.width ?? variant.w),
+    height: normalizePositiveNumber(variant.height ?? variant.h),
+  });
+}
+
+function normalizePositiveNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+export function normalizeVotecount(deltas, fallback) {
+  if (!Array.isArray(deltas)) {
+    return fallback;
+  }
+
+  const rows = deltas
+    .map((delta) => {
+      if (delta?.kind === "VoteCountChanged") {
+        return delta.body;
+      }
+      return delta?.VoteCountChanged ?? delta?.body?.VoteCountChanged ?? null;
+    })
+    .filter(Boolean)
+    .map((delta) =>
+      Object.freeze({
+        target: delta.candidate_slot ?? delta.candidateSlot ?? "unknown",
+        count: Number(delta.count ?? 0),
+        needed: Number(delta.majority ?? 7),
+      }),
+    );
+
+  return Object.freeze(rows.length === 0 ? fallback : rows);
+}
+
+export function normalizeAdminAudit(proofStatus, fallback, context = {}) {
+  if (proofStatus === null || typeof proofStatus !== "object") {
+    return fallback;
+  }
+
+  const rows = Array.isArray(proofStatus.rows)
+    ? proofStatus.rows
+    : Array.isArray(proofStatus.proof_runs)
+      ? proofStatus.proof_runs
+      : Array.isArray(proofStatus.required)
+        ? proofStatus.required
+        : operatorStatusRows(proofStatus);
+  if (rows.length === 0) {
+    return fallback;
+  }
+
+  return Object.freeze(
+    rows.slice(0, 4).map((row, index) =>
+      Object.freeze({
+        id: String(row.id ?? row.name ?? row.proof_id ?? `proof-${index + 1}`),
+        label: String(row.label ?? row.name ?? row.id ?? `Proof ${index + 1}`),
+        status: String(row.status ?? row.state ?? row.summary ?? "Available"),
+        authority: String(row.authority ?? "GlobalAdmin or GlobalMod"),
+        boundary: String(row.boundary ?? "Read-only operator proof"),
+        boundaryDetail: String(
+          row.boundaryDetail ??
+            row.boundary_detail ??
+            "/operator/proof-runs machine-readable report",
+        ),
+        href:
+          typeof row.href === "string" && row.href.trim() !== ""
+            ? row.href
+            : operatorProofRunUrl({
+                game: context.game,
+                principalUserId: context.principalUserId,
+              }),
+      }),
+    ),
+  );
+}
+
+function operatorStatusRows(proofStatus) {
+  if (!Array.isArray(proofStatus.families)) {
+    return [];
+  }
+  return proofStatus.families.flatMap((family) => {
+    if (!Array.isArray(family?.runs)) {
+      return [];
+    }
+    return family.runs.map((run) => ({
+      id: run.id ?? run.row_id,
+      label: run.id ?? run.row_id,
+      status: run.artifact?.state ?? run.scope ?? family.heading,
+    }));
+  });
+}
+
+export function operatorProofRunUrl({
+  apiBaseUrl = "",
+  game,
+  principalUserId,
+  path = "operator/proof-runs",
+}) {
+  return principalScopedGameUrl({
+    apiBaseUrl,
+    game,
+    principalUserId,
+    path,
+  });
+}
+
+export function playerThreadUrl({
+  apiBaseUrl = "",
+  game,
+  channel = "main",
+  principalUserId = null,
+  limit = 50,
+  beforeSeq = null,
+}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (beforeSeq !== null && beforeSeq !== undefined) {
+    params.set("before_seq", String(beforeSeq));
+  }
+  if (channel !== "main") {
+    if (typeof principalUserId === "string" && principalUserId.trim() !== "") {
+      params.set("principal_user_id", principalUserId);
+    }
+    return `${apiBaseUrl}/games/${encodeURIComponent(game)}/channels/${encodeURIComponent(channel)}/thread?${params.toString()}`;
+  }
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/thread?${params.toString()}`;
+}
+
+export function playerVotecountUrl({ apiBaseUrl = "", game }) {
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/votecount`;
+}
+
+export function hostVotecountUrl({ apiBaseUrl = "", game }) {
+  return playerVotecountUrl({ apiBaseUrl, game });
+}
+
+export function principalScopedGameUrl({
+  apiBaseUrl = "",
+  game,
+  path,
+  principalUserId,
+}) {
+  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
+    throw new TypeError("principalUserId is required for principal-scoped game URLs");
+  }
+  const params = new URLSearchParams({
+    principal_user_id: principalUserId,
+  });
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/${path}?${params.toString()}`;
+}
+
+export function hostPromptsUrl({ apiBaseUrl = "", game, principalUserId }) {
+  return principalScopedGameUrl({
+    apiBaseUrl,
+    game,
+    path: "host-prompts",
+    principalUserId,
+  });
+}
+
+function formatOccurredAt(value, { fallback = "cold load" } = {}) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return new Date(value * 1000).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Los_Angeles",
+  });
+}
+
+function decisionKindForPrompt(row) {
+  if (row?.decision_kind === "select_slot" || row?.decisionKind === "select_slot") {
+    return "select_slot";
+  }
+  return "acknowledge";
+}

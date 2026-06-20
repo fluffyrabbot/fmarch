@@ -7,7 +7,11 @@ import {
   buildHostActionViewModel,
   createHostActionController,
 } from "./host-action-contract.mjs";
-import { HOST_CONSOLE_CRITICAL_ACTIONS } from "./host-console-critical-action.mjs";
+import {
+  buildHostConsoleActionGroups,
+  HOST_CONSOLE_CRITICAL_ACTIONS,
+  buildHostConsoleCriticalActions,
+} from "./host-console-critical-action.mjs";
 
 test("touch-control CSS exposes the minimum target and spacing variables", async () => {
   const css = await readFile(
@@ -89,6 +93,7 @@ test("reversible host actions dispatch immediately", () => {
       objectLabel: null,
       outcomeLabel: null,
       payload: { gameId: "g-1" },
+      confirmationTrace: null,
     },
   ]);
 });
@@ -121,12 +126,45 @@ test("irreversible host actions open a named confirmation before dispatch", () =
 
   const view = action.viewModel();
   assert.equal(view.trigger.ariaExpanded, "true");
+  assert.equal(view.confirmation.kind, "confirmation-action");
+  assert.equal(view.confirmation.surface, "moderator-host");
+  assert.equal(view.confirmation.actionId, "modkill-slot");
   assert.equal(view.confirmation.role, HOST_ACTION_CONTRACT.confirmationRole);
+  assert.equal(view.confirmation.ariaModal, HOST_ACTION_CONTRACT.confirmationAriaModal);
+  assert.equal(view.confirmation.ariaLabel, "Confirm Modkill");
+  assert.equal(
+    view.confirmation.messageId,
+    "host-action-confirmation-message-modkill-slot",
+  );
   assert.match(view.confirmation.message, /Slot 7 \/ Mira/);
   assert.match(view.confirmation.message, /mark dead and lock voting power/);
   assert.equal(
     view.confirmation.message,
     "Modkill Slot 7 / Mira: mark dead and lock voting power.",
+  );
+  assert.deepEqual(
+    {
+      triggerTestId: view.confirmation.triggerTestId,
+      confirmationTestId: view.confirmation.confirmationTestId,
+      messageTestId: view.confirmation.messageTestId,
+      confirmTestId: view.confirmation.confirmTestId,
+      cancelTestId: view.confirmation.cancelTestId,
+      initialFocusTestId: view.confirmation.initialFocusTestId,
+      returnFocusTestId: view.confirmation.returnFocusTestId,
+      escapeCancels: view.confirmation.escapeCancels,
+      tabContainment: view.confirmation.tabContainment,
+    },
+    {
+      triggerTestId: HOST_ACTION_CONTRACT.triggerTestId,
+      confirmationTestId: HOST_ACTION_CONTRACT.confirmationTestId,
+      messageTestId: HOST_ACTION_CONTRACT.confirmationMessageTestId,
+      confirmTestId: HOST_ACTION_CONTRACT.confirmTestId,
+      cancelTestId: HOST_ACTION_CONTRACT.cancelTestId,
+      initialFocusTestId: HOST_ACTION_CONTRACT.initialFocusTestId,
+      returnFocusTestId: HOST_ACTION_CONTRACT.returnFocusTestId,
+      escapeCancels: true,
+      tabContainment: "confirm-cancel",
+    },
   );
 
   action.confirm();
@@ -140,6 +178,14 @@ test("irreversible host actions open a named confirmation before dispatch", () =
       objectLabel: "Slot 7 / Mira",
       outcomeLabel: "mark dead and lock voting power",
       payload: { slotId: "slot-7" },
+      confirmationTrace: {
+        kind: "confirmation-command-trace",
+        confirmationKind: "confirmation-action",
+        surface: "moderator-host",
+        actionId: "modkill-slot",
+        statusKey: "modkill-slot",
+        dispatchKind: "modkill-slot",
+      },
     },
   ]);
 });
@@ -265,7 +311,17 @@ test("irreversible host actions must name the object and outcome", () => {
 test("host console proof actions cover the roadmap-critical irreversible actions", () => {
   assert.deepEqual(
     HOST_CONSOLE_CRITICAL_ACTIONS.map((action) => action.id),
-    ["extend_deadline", "process_replacement"],
+    [
+      "extend_deadline",
+      "process_replacement",
+      "lock_thread",
+      "unlock_thread",
+      "advance_phase",
+      "publish_votecount",
+      "mark_dead",
+      "modkill_slot",
+      "complete_game",
+    ],
   );
 
   for (const actionConfig of HOST_CONSOLE_CRITICAL_ACTIONS) {
@@ -294,6 +350,104 @@ test("host console proof actions cover the roadmap-critical irreversible actions
     assert.equal(dispatched[0].actionId, actionConfig.id);
     assert.deepEqual(dispatched[0].payload, actionConfig.payload);
   }
+});
+
+test("host console action groups turn typed commands into moderator control bays", () => {
+  const actions = buildHostConsoleCriticalActions("midsummer", {
+    hostPrompts: [
+      {
+        id: "D01:tie:slot_2",
+        label: "tie",
+        value: "host_decides_tie",
+        status: "pending",
+        phaseId: "D01",
+        subjectSlot: "slot_2",
+        decisionKind: "acknowledge",
+      },
+    ],
+  });
+  const groups = buildHostConsoleActionGroups({
+    actions,
+    pendingPromptCount: 1,
+    votecountCount: 2,
+  });
+
+  assert.deepEqual(
+    groups.map((group) => group.id),
+    [
+      "deadline",
+      "phase",
+      "votecount",
+      "replacement",
+      "host-prompts",
+      "slot-lifecycle",
+      "roles",
+    ],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.id === "deadline")
+      .actions.map((action) => action.id),
+    ["extend_deadline"],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.id === "phase")
+      .actions.map((action) => action.id),
+    ["lock_thread", "unlock_thread", "advance_phase"],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.id === "host-prompts")
+      .actions.map((action) => action.payload.promptId),
+    ["D01:tie:slot_2"],
+  );
+  assert.equal(
+    groups.find((group) => group.id === "votecount").boundary,
+    "Typed command",
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.id === "votecount")
+      .actions.map((action) => action.id),
+    ["publish_votecount"],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.id === "roles")
+      .actions.map((action) => action.id),
+    ["complete_game"],
+  );
+  assert.match(
+    groups.find((group) => group.id === "roles").boundaryDetail,
+    /CompleteGame/,
+  );
+});
+
+test("host console prompt rows become confirmable typed host actions", () => {
+  const actions = buildHostConsoleCriticalActions("game-a", {
+    hostPrompts: [
+      {
+        id: "D01:skip_next_day:slot_1",
+        label: "skip_next_day",
+        value: "beloved_princess_death",
+        status: "pending",
+        subjectSlot: "slot_1",
+        decisionKind: "acknowledge",
+      },
+    ],
+  });
+
+  const promptAction = actions.find((action) =>
+    action.id.startsWith("resolve_host_prompt-"),
+  );
+
+  assert.equal(promptAction.label, "Resolve prompt");
+  assert.equal(promptAction.payload.kind, "resolve_host_prompt");
+  assert.equal(promptAction.payload.promptId, "D01:skip_next_day:slot_1");
+  assert.deepEqual(promptAction.payload.decision, { kind: "acknowledge" });
+  assert.match(promptAction.confirmationText, /skip_next_day/);
+  assert.match(promptAction.confirmationText, /acknowledge prompt/);
 });
 
 function escapeRegExp(value) {

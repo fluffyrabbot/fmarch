@@ -1,8 +1,9 @@
 import { resolveAuthenticatedSession } from "$lib/server/session-capabilities.mjs";
 
 export async function handle({ event, resolve }) {
-  const session = resolveAuthenticatedSession({
+  const session = await resolveAuthenticatedSession({
     cookies: event.cookies,
+    fetchImpl: event.fetch,
     request: event.request,
   });
 

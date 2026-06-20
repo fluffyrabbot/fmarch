@@ -1,0 +1,180 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  buildAdminCommand,
+  buildCommandEnvelope,
+  buildPlayerCommand,
+  sendCommand,
+} from "./command-boundary.mjs";
+
+test("player actions map to Rust wire command variants", () => {
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      target: "slot-2",
+    }),
+    {
+      SubmitVote: {
+        game: "00000000-0000-0000-0000-000000000001",
+        actor_slot: "slot-7",
+        target: { Slot: "slot-2" },
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "##vote slot-2",
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "main",
+        actor_slot: "slot-7",
+        body: "##vote slot-2",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      channelId: "role-pm",
+      actorSlot: "slot-7",
+      body: "private note",
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "role-pm",
+        actor_slot: "slot-7",
+        body: "private note",
+      },
+    },
+  );
+});
+
+test("generic command envelope uses the Rust ClientEnvelope shape", () => {
+  const envelope = buildCommandEnvelope({
+    principalUserId: "player_mira",
+    commandId: "11111111-1111-4111-8111-111111111111",
+    envelopeId: 10,
+    command: buildPlayerCommand({
+      action: "withdraw_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+    }),
+  });
+
+  assert.deepEqual(envelope, {
+    v: 1,
+    id: 10,
+    body: {
+      kind: "Command",
+      body: {
+        command_id: "11111111-1111-4111-8111-111111111111",
+        principal_user_id: "player_mira",
+        command: {
+          WithdrawVote: {
+            game: "00000000-0000-0000-0000-000000000001",
+            actor_slot: "slot-7",
+          },
+        },
+      },
+    },
+  });
+});
+
+test("admin actions map to bootstrap wire command variants", () => {
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "create_game",
+      game: "00000000-0000-0000-0000-000000000123",
+      pack: "mafiascum",
+    }),
+    {
+      CreateGame: {
+        game: "00000000-0000-0000-0000-000000000123",
+        pack: "mafiascum",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "add_cohost",
+      game: "00000000-0000-0000-0000-000000000123",
+      user: "cohost_c",
+    }),
+    {
+      AddCohost: {
+        game: "00000000-0000-0000-0000-000000000123",
+        user: "cohost_c",
+      },
+    },
+  );
+});
+
+test("generic command sender normalizes ack and reject outcomes", async () => {
+  const ack = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "submit_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      target: "slot-2",
+    }),
+    commandIdFactory: () => "22222222-2222-4222-8222-222222222222",
+    envelopeIdFactory: () => 11,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 11,
+        body: { kind: "Ack", body: { stream_seqs: [44] } },
+      }),
+  });
+  assert.equal(ack.state, "ack");
+  assert.deepEqual(ack.streamSeqs, [44]);
+
+  const reject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "withdraw_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+    }),
+    commandIdFactory: () => "33333333-3333-4333-8333-333333333333",
+    envelopeIdFactory: () => 12,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 12,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "PhaseLocked",
+            retryable: false,
+            message: "phase locked",
+          },
+        },
+      }),
+  });
+  assert.equal(reject.state, "reject");
+  assert.equal(reject.message, "Reject PhaseLocked: phase locked");
+});
+
+function jsonResponse(body) {
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return body;
+    },
+  };
+}

@@ -1,9 +1,45 @@
 <script>
-  import HostAction from "$lib/components/host-action/HostAction.svelte";
+  import { onMount } from "svelte";
+  import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
+  import RouteState from "$lib/app/RouteState.svelte";
   import {
-    projectHostConsoleState,
-    sendHostActionCommand,
-  } from "$lib/components/host-action/host-command-boundary.mjs";
+    buildRouteStateViewModel,
+    isModeratorRouteEmpty,
+  } from "$lib/app/app-route-state-model.mjs";
+  import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
+  import HostControlSurface from "$lib/components/host-action/HostControlSurface.svelte";
+  import HostOperationsStrip from "$lib/components/host-action/HostOperationsStrip.svelte";
+  import HostPhaseSummary from "$lib/components/host-action/HostPhaseSummary.svelte";
+  import HostVotecountPanel from "$lib/components/host-action/HostVotecountPanel.svelte";
+  import HostWorkQueueStrip from "$lib/components/host-action/HostWorkQueueStrip.svelte";
+  import {
+    connectLiveProjection,
+    LIVE_PROJECTION_CONNECTING_STATUS,
+  } from "$lib/app/live-transport.mjs";
+  import {
+    dispatchHostCommandResult,
+    exposeHostCommandDispatchBridgePlan,
+    exposeHostLiveProjectionEndpoint,
+    exposeHostRouteWindowState,
+    recordHostLiveProjectionEvent,
+    triggerHostLiveProjectionResync,
+  } from "./host-route-browser-bridge.mjs";
+  import {
+    appendHostActionEvent,
+    appendHostCommandOutcome,
+    attachEventConfirmationTrace,
+    buildHostDerivedState,
+    buildHostCommandDispatchBridgePlan,
+    buildHostProjectionColdLoads,
+    buildHostProjectionInitialSnapshot,
+    hostCommandErrorOutcome,
+    hostCommandPendingStatus,
+    hostProjectionResyncKeys,
+    recordHostCommandStatus,
+    sendHostRouteAction,
+  } from "./host-route-controller.mjs";
+  import { HOST_CONSOLE_ROUTE_CONTRACT } from "./host-route-model.mjs";
+  import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
 
   export let data;
@@ -15,64 +51,150 @@
     phase: data.phase,
     replacement: data.replacement,
   };
+  let votecount = data.votecount;
+  let hostPrompts = data.hostPrompts;
+  let moderatorActionGroups = data.moderatorActionGroups;
+  let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
+  $: moderatorSurfaceEmpty = isModeratorRouteEmpty({
+    workQueues: data.workQueues,
+    votecount,
+    hostPrompts,
+    moderatorActionGroups,
+  });
+  $: moderatorForcedRouteState = data.routeState
+    ? buildRouteStateViewModel(data.routeState)
+    : null;
+  $: moderatorEmptyState = buildRouteStateViewModel({
+    surface: "moderator",
+    state: "empty",
+  });
+  const resyncKeys = hostProjectionResyncKeys();
+  const projectionStore = createProjectionStore({
+    initialSnapshot: buildHostProjectionInitialSnapshot(data),
+    coldLoads: buildHostProjectionColdLoads(data),
+    liveTransport: data.projectionBoundary,
+  });
+
+  projectionStore.subscribe((snapshot) => {
+    const derived = buildHostDerivedState({
+      gameId: data.game.id,
+      snapshot,
+    });
+    projection = derived.projection;
+    votecount = derived.votecount;
+    hostPrompts = derived.hostPrompts;
+    moderatorActionGroups = derived.moderatorActionGroups;
+  });
 
   $: if (typeof window !== "undefined") {
-    window.__fmarchHostActionEvents = dispatched;
-    window.__fmarchHostCommandOutcomes = commandOutcomes;
-    window.__fmarchHostCommandStatuses = commandStatuses;
-    window.__fmarchHostProjection = projection;
+    exposeHostRouteWindowState({
+      windowRef: window,
+      dispatched,
+      commandOutcomes,
+      commandStatuses,
+      projection,
+      votecount,
+      hostPrompts,
+    });
   }
 
-  async function handleDispatch(event) {
-    dispatched = [...dispatched, event];
-    recordCommandStatus(event.actionId, {
-      state: "pending",
-      message: "Sending command",
+  onMount(() => {
+    exposeHostLiveProjectionEndpoint({
+      windowRef: window,
+      endpoint: data.liveProjection.endpoint,
     });
+    const connection = connectLiveProjection({
+      url: data.liveProjection.endpoint,
+      projectionStore,
+      fetchImpl: fetch,
+      resyncKeys,
+      onEvent(message, snapshot) {
+        liveStatus = recordHostLiveProjectionEvent({
+          windowRef: window,
+          message,
+          snapshot,
+          currentStatus: liveStatus,
+        });
+      },
+    });
+    window.__fmarchTriggerHostResync = async (fromSeq = 0) => {
+      const recovery = await triggerHostLiveProjectionResync({
+        windowRef: window,
+        projectionStore,
+        resyncKeys,
+        fetchImpl: fetch,
+        fromSeq,
+        currentStatus: liveStatus,
+      });
+      liveStatus = recovery.liveStatus;
+      return recovery.snapshot;
+    };
+    return () => connection?.close();
+  });
+
+  async function handleDispatch(event) {
+    dispatched = appendHostActionEvent(dispatched, event);
+    const optimisticStatus = hostCommandPendingStatus(event);
+    recordCommandStatus(event.actionId, optimisticStatus);
 
     try {
-      const outcome = await sendHostActionCommand({
-        actionEvent: event,
-        principalUserId: data.session.principalUserId,
-        endpoint: data.commandEndpoint,
-        stateEndpoint: data.hostConsoleStateEndpoint,
+      const result = await sendHostRouteAction({
+        event,
+        data,
         fetchImpl: fetch,
+        projectionStore,
       });
-      commandOutcomes = [...commandOutcomes, outcome];
-      if (outcome.projectionState) {
-        projection = projectHostConsoleState(outcome.projectionState, projection);
+      const outcome = result.outcome;
+      const tracedOutcome = attachEventConfirmationTrace(outcome, event);
+      commandOutcomes = appendHostCommandOutcome(commandOutcomes, tracedOutcome);
+      recordCommandStatus(event.actionId, tracedOutcome);
+      if (
+        typeof window !== "undefined" &&
+        event.confirmationTrace !== undefined &&
+        event.confirmationTrace !== null
+      ) {
+        exposeHostCommandDispatchBridgePlan({
+          windowRef: window,
+          plan: buildHostCommandDispatchBridgePlan({
+            event,
+            data,
+            optimisticStatus,
+            finalStatus: tracedOutcome,
+          }),
+        });
       }
-      recordCommandStatus(event.actionId, outcome);
-      window.dispatchEvent(
-        new CustomEvent("host-command-result", {
-          detail: outcome,
-        }),
-      );
+      dispatchHostCommandResult({
+        windowRef: window,
+        outcome,
+      });
     } catch (error) {
-      const outcome = {
-        state: "reject",
+      const outcome = hostCommandErrorOutcome({
         actionId: event.actionId,
-        error: "Internal",
-        retryable: false,
-        message: error.message,
-      };
-      commandOutcomes = [...commandOutcomes, outcome];
+        error,
+        event,
+      });
+      commandOutcomes = appendHostCommandOutcome(commandOutcomes, outcome);
       recordCommandStatus(event.actionId, outcome);
+      if (
+        typeof window !== "undefined" &&
+        event.confirmationTrace !== undefined &&
+        event.confirmationTrace !== null
+      ) {
+        exposeHostCommandDispatchBridgePlan({
+          windowRef: window,
+          plan: buildHostCommandDispatchBridgePlan({
+            event,
+            data,
+            optimisticStatus,
+            finalStatus: outcome,
+          }),
+        });
+      }
     }
   }
 
   function recordCommandStatus(actionId, status) {
-    commandStatuses = {
-      ...commandStatuses,
-      [actionId]: status,
-    };
-  }
-
-  function commandStatusMessage(status) {
-    if (status === undefined) {
-      return "";
-    }
-    return status.message;
+    commandStatuses = recordHostCommandStatus(commandStatuses, actionId, status);
   }
 </script>
 
@@ -84,73 +206,43 @@
   class="host-console-critical-path"
   data-component="host-console-route"
   data-game={data.game.id}
+  data-testid={HOST_CONSOLE_ROUTE_CONTRACT.surfaceTestId}
 >
-  <header class="host-console-critical-path__masthead">
-    <div>
-      <p class="host-console-critical-path__eyebrow">{data.game.label}</p>
-      <h1>Host console</h1>
-    </div>
-    <span
-      class="host-console-critical-path__capability"
-      data-testid="host-console-capability"
-    >
-      {data.access.capabilityLabel}
-    </span>
-  </header>
+  <AppSurfaceHeader header={data.surfaceHeader} {liveStatus} />
 
-  <section class="host-console-critical-path__phase" aria-labelledby="phase-heading">
-    <p class="host-console-critical-path__eyebrow">{data.phase.state}</p>
-    <h2 id="phase-heading">{data.phase.label}</h2>
-    <p class="host-console-critical-path__status">{data.phase.summary}</p>
-    <dl class="host-console-critical-path__facts">
-      <div>
-        <dt>Deadline</dt>
-        <dd data-testid="host-console-deadline">
-          {projection.phase.deadlineLabel}
-        </dd>
-      </div>
-      <div>
-        <dt>Slot 7 occupant</dt>
-        <dd data-testid="host-console-slot-occupant">
-          {projection.replacement.occupantLabel}
-        </dd>
-      </div>
-      <div>
-        <dt>Slot history</dt>
-        <dd data-testid="host-console-history">
-          {projection.replacement.historyLabel}
-        </dd>
-      </div>
-    </dl>
-  </section>
+  {#if moderatorForcedRouteState}
+    <RouteState view={moderatorForcedRouteState} />
+  {:else if moderatorSurfaceEmpty}
+    <RouteState view={moderatorEmptyState} />
+  {:else}
+    <HostOperationsStrip
+      access={data.access}
+      phase={data.phase}
+      {projection}
+      votecountBoundary={data.votecountBoundary}
+      {votecount}
+      {hostPrompts}
+    />
 
-  <section class="host-console-critical-path__queues" aria-label="Host queues">
-    {#each data.workQueues as queue}
-      <article class="host-console-critical-path__queue">
-        <h2>{queue.label}</h2>
-        <p>{queue.value}</p>
-      </article>
-    {/each}
-  </section>
+    <HostControlSurface
+      groups={moderatorActionGroups}
+      {commandStatuses}
+      commandContext={data.commandContext}
+      onDispatch={handleDispatch}
+    />
 
-  <section
-    class="host-console-critical-path__actions"
-    data-testid="critical-host-actions"
-    aria-label="Critical host actions"
-  >
-    {#each data.criticalActions as action}
-      <div data-testid={`critical-host-action-${action.id}`}>
-        <HostAction {action} onDispatch={handleDispatch} />
-        {#if commandStatuses[action.id]}
-          <p
-            class="host-console-critical-path__command-status"
-            data-state={commandStatuses[action.id].state}
-            data-testid={`host-command-status-${action.id}`}
-          >
-            {commandStatusMessage(commandStatuses[action.id])}
-          </p>
-        {/if}
-      </div>
-    {/each}
-  </section>
+    <HostCommandActivity
+      {commandStatuses}
+      {commandOutcomes}
+    />
+
+    <HostPhaseSummary phase={data.phase} {projection} />
+
+    <HostWorkQueueStrip queues={data.workQueues} />
+
+    <HostVotecountPanel
+      boundary={data.votecountBoundary}
+      rows={votecount}
+    />
+  {/if}
 </main>

@@ -1,17 +1,31 @@
 <script>
+  import { tick } from "svelte";
+  import ConfirmationShell from "$lib/app/ConfirmationShell.svelte";
+  import {
+    containTabWithinConfirmation,
+  } from "$lib/app/confirmation-focus.mjs";
   import { createHostActionController } from "./host-action-contract.mjs";
   import "./touch-control.css";
 
   export let action;
   export let onDispatch = () => {};
+  export let initialConfirmationOpen = false;
 
   let controller;
   let controllerAction;
   let view;
+  let triggerElement;
+  let confirmElement;
 
   $: if (action !== controllerAction) {
     controllerAction = action;
     controller = createHostActionController(action, onDispatch);
+    if (
+      initialConfirmationOpen === true &&
+      (action?.requiresConfirmation === true || action?.irreversible === true)
+    ) {
+      controller.activate();
+    }
     view = controller.viewModel();
   }
 
@@ -19,19 +33,41 @@
     view = controller.viewModel();
   }
 
-  function activate() {
+  async function activate() {
     controller.activate();
     refresh();
+    if (view.confirmation) {
+      await tick();
+      confirmElement?.focus();
+    }
   }
 
-  function confirm() {
+  async function confirm() {
     controller.confirm();
     refresh();
+    await tick();
+    triggerElement?.focus();
   }
 
-  function cancel() {
+  async function cancel() {
     controller.cancel();
     refresh();
+    await tick();
+    triggerElement?.focus();
+  }
+
+  function onConfirmationKeydown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    containTabWithinConfirmation(event);
   }
 </script>
 
@@ -45,31 +81,36 @@
     <button
       type="button"
       class={view.trigger.className}
-      data-testid="critical-host-action-trigger"
+      data-testid={view.confirmation?.triggerTestId ?? "critical-host-action-trigger"}
       data-danger={view.trigger.data.danger}
       disabled={view.trigger.disabled}
       aria-disabled={view.trigger.ariaDisabled}
       aria-expanded={view.trigger.ariaExpanded}
+      bind:this={triggerElement}
       on:click={activate}
     >
       {view.trigger.label}
     </button>
 
     {#if view.confirmation}
-      <div
-        class={view.confirmation.className}
-        role={view.confirmation.role}
-        data-testid="critical-host-action-confirmation"
-        aria-label="Confirm host action"
+      <ConfirmationShell
+        className={view.confirmation.className}
+        confirmation={view.confirmation}
+        testId={view.confirmation.confirmationTestId}
+        onKeydown={onConfirmationKeydown}
       >
-        <p data-testid="critical-host-action-confirmation-message">
+        <p
+          id={view.confirmation.messageId}
+          data-testid={view.confirmation.messageTestId}
+        >
           {view.confirmation.message}
         </p>
         <div class={view.confirmation.actionsClassName}>
           <button
             type="button"
             class="touch-control"
-            data-testid="critical-host-action-confirm"
+            data-testid={view.confirmation.confirmTestId}
+            bind:this={confirmElement}
             on:click={confirm}
           >
             Confirm
@@ -77,13 +118,13 @@
           <button
             type="button"
             class="touch-control"
-            data-testid="critical-host-action-cancel"
+            data-testid={view.confirmation.cancelTestId}
             on:click={cancel}
           >
             Cancel
           </button>
         </div>
-      </div>
+      </ConfirmationShell>
     {/if}
   </section>
 {/if}

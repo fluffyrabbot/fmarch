@@ -1,0 +1,176 @@
+export const WIRE_PROTOCOL_VERSION = 1;
+
+export function buildCommandEnvelope({
+  principalUserId,
+  command,
+  commandId,
+  envelopeId,
+}) {
+  return Object.freeze({
+    v: WIRE_PROTOCOL_VERSION,
+    id: envelopeId,
+    body: Object.freeze({
+      kind: "Command",
+      body: Object.freeze({
+        command_id: requiredString(commandId, "commandId"),
+        principal_user_id: requiredString(principalUserId, "principalUserId"),
+        command,
+      }),
+    }),
+  });
+}
+
+export function buildPlayerCommand({
+  action,
+  game,
+  channelId = "main",
+  actorSlot,
+  body,
+  target,
+}) {
+  switch (action) {
+    case "submit_post":
+      return Object.freeze({
+        SubmitPost: Object.freeze({
+          game: requiredString(game, "game"),
+          channel_id: requiredString(channelId, "channelId"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+          body: requiredString(body, "body"),
+        }),
+      });
+    case "submit_vote":
+      return Object.freeze({
+        SubmitVote: Object.freeze({
+          game: requiredString(game, "game"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+          target: Object.freeze({
+            Slot: requiredString(target, "target"),
+          }),
+        }),
+      });
+    case "withdraw_vote":
+      return Object.freeze({
+        WithdrawVote: Object.freeze({
+          game: requiredString(game, "game"),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+        }),
+      });
+    default:
+      throw new TypeError(`unsupported player command action: ${action}`);
+  }
+}
+
+export function buildAdminCommand({
+  action,
+  game,
+  pack = "mafiascum",
+  user,
+}) {
+  switch (action) {
+    case "create_game":
+      return Object.freeze({
+        CreateGame: Object.freeze({
+          game: requiredString(game, "game"),
+          pack: requiredString(pack, "pack"),
+        }),
+      });
+    case "add_cohost":
+      return Object.freeze({
+        AddCohost: Object.freeze({
+          game: requiredString(game, "game"),
+          user: requiredString(user, "user"),
+        }),
+      });
+    default:
+      throw new TypeError(`unsupported admin command action: ${action}`);
+  }
+}
+
+export async function sendCommand({
+  principalUserId,
+  command,
+  endpoint = "/commands",
+  fetchImpl = fetch,
+  commandIdFactory = defaultCommandId,
+  envelopeIdFactory = defaultEnvelopeId,
+}) {
+  const commandId = commandIdFactory();
+  const envelopeId = envelopeIdFactory();
+  const requestEnvelope = buildCommandEnvelope({
+    principalUserId,
+    command,
+    commandId,
+    envelopeId,
+  });
+
+  const response = await fetchImpl(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(requestEnvelope),
+  });
+  const serverEnvelope = await response.json();
+  return normalizeCommandResponse({
+    commandId,
+    requestEnvelope,
+    response,
+    serverEnvelope,
+  });
+}
+
+export function normalizeCommandResponse({
+  commandId,
+  requestEnvelope,
+  response,
+  serverEnvelope,
+}) {
+  const body = serverEnvelope?.body;
+  if (body?.kind === "Ack") {
+    const streamSeqs = body.body?.stream_seqs ?? [];
+    return Object.freeze({
+      state: "ack",
+      commandId,
+      envelopeId: requestEnvelope.id,
+      httpStatus: response.status,
+      streamSeqs: Object.freeze(streamSeqs),
+      message: `Ack: stream seqs ${streamSeqs.join(", ")}`,
+      requestEnvelope,
+      serverEnvelope,
+    });
+  }
+
+  if (body?.kind === "Reject") {
+    const reject = body.body;
+    return Object.freeze({
+      state: "reject",
+      commandId,
+      envelopeId: requestEnvelope.id,
+      httpStatus: response.status,
+      error: reject.error,
+      retryable: reject.retryable === true,
+      message: `Reject ${reject.error}: ${reject.message}`,
+      requestEnvelope,
+      serverEnvelope,
+    });
+  }
+
+  throw new TypeError("server response must be a wire Ack or Reject envelope");
+}
+
+function requiredString(value, field) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TypeError(`${field} must be a non-empty string`);
+  }
+  return value;
+}
+
+function defaultCommandId() {
+  return crypto.randomUUID();
+}
+
+let nextEnvelopeId = 1;
+
+function defaultEnvelopeId() {
+  const id = nextEnvelopeId;
+  nextEnvelopeId += 1;
+  return id;
+}
