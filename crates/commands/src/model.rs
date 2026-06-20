@@ -91,6 +91,8 @@ pub enum Command {
     ResolvePhase { game: Uuid, seed: u64 },
     /// Mark the game complete and reveal final role/alignment facts. Host-gated.
     CompleteGame { game: Uuid },
+    /// Publish an official current-phase votecount post derived from projections. Host-gated.
+    PublishVotecount { game: Uuid },
     /// Resolve a durable host/admin prompt emitted by the engine. Host-gated.
     ResolveHostPrompt {
         game: Uuid,
@@ -131,9 +133,11 @@ pub enum Command {
         action_id: String,
         actor_slot: String,
     },
-    /// Post as `actor_slot` (attributed to the slot). Requires `SlotOccupant`.
+    /// Post as `actor_slot` into `channel_id` (attributed to the slot). Requires
+    /// `SlotOccupant` and, for non-main channels, `ChannelMember(channel_id)`.
     SubmitPost {
         game: Uuid,
+        channel_id: String,
         actor_slot: String,
         body: String,
     },

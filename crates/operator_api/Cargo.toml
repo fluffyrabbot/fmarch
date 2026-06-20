@@ -1,5 +1,5 @@
 [package]
-name = "api"
+name = "operator_api"
 version = "0.1.0"
 edition.workspace = true
 
@@ -8,20 +8,15 @@ caps = { path = "../caps" }
 commands = { path = "../commands" }
 projections = { path = "../projections" }
 wire = { path = "../wire" }
-axum = { version = "0.8", features = ["ws"] }
+axum = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
 sqlx = { version = "0.8", default-features = false, features = [
     "runtime-tokio",
     "postgres",
 ] }
-tokio = { version = "1", features = ["sync"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [dev-dependencies]
-futures-util = "0.3"
-operator_api = { path = "../operator_api" }
-tokio-tungstenite = "0.29"
 tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

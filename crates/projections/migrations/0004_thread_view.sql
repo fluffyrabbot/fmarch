@@ -1,4 +1,4 @@
--- 0004_thread_view.sql -- main-thread read model.
+-- 0004_thread_view.sql -- channel-thread read model.
 --
 -- `thread_view` is derived from PostSubmitted events. Rows are keyed by the
 -- source event order, making the projection rebuildable and giving cold-load

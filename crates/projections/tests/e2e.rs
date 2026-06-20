@@ -1327,6 +1327,18 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
     assert_eq!(older.posts.len(), 1);
     assert_eq!(older.posts[0].body, "first visible post");
     assert_eq!(older.next_before_seq, None);
+
+    let private = projections::thread_view_for_channel(&pool, game, "scum_chat", None, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        private
+            .posts
+            .iter()
+            .map(|post| (post.channel_id.as_str(), post.body.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("scum_chat", "private post")]
+    );
 }
 
 /// `append_and_project` is one transaction: a conflicting concurrent append

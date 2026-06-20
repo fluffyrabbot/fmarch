@@ -177,10 +177,29 @@ pub async fn resolve(
         }
     }
 
+    let occupied_slots: BTreeSet<_> = projections::slot_occupancy(pool, game)
+        .await?
+        .into_iter()
+        .filter_map(|occ| {
+            if occ.occupant_user_id == user {
+                Some(occ.slot_id)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     // SlotOccupant for every slot this user CURRENTLY occupies (live mapping).
-    for occ in projections::slot_occupancy(pool, game).await? {
-        if occ.occupant_user_id == user {
-            set.insert(Capability::SlotOccupant(occ.slot_id));
+    for slot_id in &occupied_slots {
+        set.insert(Capability::SlotOccupant(slot_id.clone()));
+    }
+
+    // ChannelMember from private channel membership projections for the
+    // principal's current slot(s). This keeps private channel authority derived
+    // from committed game state, not client-selected channel ids.
+    for member in projections::private_channel_members(pool, game).await? {
+        if occupied_slots.contains(&member.slot_id) {
+            set.insert(Capability::ChannelMember(member.channel_id));
         }
     }
 

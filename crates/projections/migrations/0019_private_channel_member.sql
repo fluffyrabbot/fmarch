@@ -2,7 +2,7 @@
 --
 -- Rebuildable private channel membership folded from PrivateChannelDeclared.
 -- This table stores metadata only; private post bodies remain outside the
--- public thread_view projection.
+-- channel-scoped thread_view projection.
 
 CREATE TABLE IF NOT EXISTS private_channel_member (
     game_id           UUID NOT NULL,

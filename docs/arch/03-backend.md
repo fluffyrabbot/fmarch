@@ -114,7 +114,8 @@ crates/
   domain/        # pure: entities, events, folds, validation. No IO, no tokio, no sqlx.
   eventstore/    # append + load streams over Postgres; upcaster pipeline.
   projections/   # fold functions + projection tables; sync + async runners.
-  api/           # axum app: HTTP routes, WS handler, framing, session auth.
+  api/           # public axum app: gameplay HTTP routes, WS handler, framing, session auth.
+  operator_api/  # host/operator audit routes, proof-run status pages, HTML report views.
   caps/          # capability types + resolution at the boundary.
   media/         # blob ingest, transcode, addressing.
   wire/          # serde types shared with TS export (ts-rs/specta).
@@ -123,6 +124,9 @@ crates/
 
 - `domain` is **pure and IO-free** so it's exhaustively testable and so folds are
   deterministic (a hard requirement for replay, [02](02-event-sourcing.md)).
+- `operator_api` keeps proof-run status, projection/resolution audits, and HTML inspection
+  pages out of the gameplay transport surface while still deriving authority from the same
+  committed projections and `commands::operator_proof` service code.
 - `wire` is the **only** place types crossing the network are defined; TS is generated from
   it ([04](04-wire-protocol.md)). Domain events and wire frames are deliberately *separate*
   types — the wire is a projection of the domain, not the domain itself.

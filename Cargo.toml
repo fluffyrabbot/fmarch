@@ -8,6 +8,7 @@ members = [
     "crates/commands",
     "crates/wire",
     "crates/api",
+    "crates/operator_api",
     "crates/server",
 ]
 

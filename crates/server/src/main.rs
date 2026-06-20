@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .run(&pool)
         .await?;
 
-    let app = api::router(pool);
+    let app = api::router(pool.clone()).merge(operator_api::router(pool));
     let listener = tokio::net::TcpListener::bind(config.bind).await?;
     tracing::info!(addr = %config.bind, "fmarch server listening");
     axum::serve(listener, app).await?;

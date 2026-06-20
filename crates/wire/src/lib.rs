@@ -164,6 +164,24 @@ impl From<HostPromptDecision> for commands::HostPromptDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum SlotLifecycle {
+    Alive,
+    Dead,
+    Modkilled,
+}
+
+impl From<SlotLifecycle> for domain::SlotLifecycle {
+    fn from(status: SlotLifecycle) -> Self {
+        match status {
+            SlotLifecycle::Alive => domain::SlotLifecycle::Alive,
+            SlotLifecycle::Dead => domain::SlotLifecycle::Dead,
+            SlotLifecycle::Modkilled => domain::SlotLifecycle::Modkilled,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub enum Command {
     CreateGame {
@@ -183,6 +201,11 @@ pub enum Command {
         game: Uuid,
         slot: String,
         role_key: String,
+    },
+    SetSlotStatus {
+        game: Uuid,
+        slot: String,
+        status: SlotLifecycle,
     },
     AddCohost {
         game: Uuid,
@@ -217,6 +240,9 @@ pub enum Command {
     CompleteGame {
         game: Uuid,
     },
+    PublishVotecount {
+        game: Uuid,
+    },
     ResolveHostPrompt {
         game: Uuid,
         prompt_id: String,
@@ -247,6 +273,7 @@ pub enum Command {
     },
     SubmitPost {
         game: Uuid,
+        channel_id: String,
         actor_slot: String,
         body: String,
     },
@@ -280,6 +307,11 @@ impl From<Command> for commands::Command {
                 slot,
                 role_key,
             },
+            Command::SetSlotStatus { game, slot, status } => commands::Command::SetSlotStatus {
+                game,
+                slot,
+                status: status.into(),
+            },
             Command::AddCohost { game, user } => commands::Command::AddCohost { game, user },
             Command::StartGame { game, phase } => commands::Command::StartGame { game, phase },
             Command::OpenDayPhase { game, phase } => {
@@ -299,6 +331,7 @@ impl From<Command> for commands::Command {
             Command::UnlockThread { game } => commands::Command::UnlockThread { game },
             Command::ResolvePhase { game, seed } => commands::Command::ResolvePhase { game, seed },
             Command::CompleteGame { game } => commands::Command::CompleteGame { game },
+            Command::PublishVotecount { game } => commands::Command::PublishVotecount { game },
             Command::ResolveHostPrompt {
                 game,
                 prompt_id,
@@ -346,10 +379,12 @@ impl From<Command> for commands::Command {
             },
             Command::SubmitPost {
                 game,
+                channel_id,
                 actor_slot,
                 body,
             } => commands::Command::SubmitPost {
                 game,
+                channel_id,
                 actor_slot,
                 body,
             },
@@ -448,6 +483,12 @@ impl From<&commands::Reject> for RejectCode {
 #[serde(tag = "kind", content = "body")]
 pub enum ProjectionDelta {
     VoteCountChanged(VoteCountDelta),
+    VoteCountCleared(VoteCountClearedDelta),
+    ThreadPostsChanged(ThreadPostsDelta),
+    HostConsoleStateChanged(HostConsoleStateDelta),
+    HostPromptsChanged(HostPromptsDelta),
+    PlayerNotificationsChanged(PlayerNotificationsDelta),
+    PlayerInvestigationResultsChanged(PlayerInvestigationResultsDelta),
     DayVoteOutcomeApplied(DayVoteOutcomeDelta),
     ResyncRequired { from_seq: i64 },
 }
@@ -469,6 +510,29 @@ impl From<projections::VoteCountRow> for VoteCountDelta {
             count: row.count,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct VoteCountClearedDelta {
+    pub game: Uuid,
+    pub phase_id: String,
+    pub candidate_slot: String,
+}
+
+impl From<VoteCountDelta> for VoteCountClearedDelta {
+    fn from(delta: VoteCountDelta) -> Self {
+        VoteCountClearedDelta {
+            game: delta.game,
+            phase_id: delta.phase_id,
+            candidate_slot: delta.candidate_slot,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct ThreadPostsDelta {
+    pub game: Uuid,
+    pub posts: Vec<ThreadPost>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -493,6 +557,86 @@ pub struct DayVoteOutcomeDelta {
     pub total_weight: f64,
     pub tiebreak: Option<String>,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostConsoleStateDelta {
+    pub game: Uuid,
+    pub phase: Option<HostConsolePhaseStateDelta>,
+    pub slots: Vec<HostConsoleSlotOccupancyDelta>,
+    pub thread_posts: Vec<HostConsoleThreadPostDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsolePhaseStateDelta {
+    pub phase_id: String,
+    pub locked: bool,
+    pub deadline: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleSlotOccupancyDelta {
+    pub slot_id: String,
+    pub occupant_user_id: String,
+    pub alive: bool,
+    pub status: String,
+    pub status_tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct HostConsoleThreadPostDelta {
+    pub stream_seq: i64,
+    pub author_slot: Option<String>,
+    pub author_user: Option<String>,
+    pub phase_id: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostPromptsDelta {
+    pub game: Uuid,
+    pub prompts: Vec<HostPromptDelta>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostPromptDelta {
+    pub game: Uuid,
+    pub phase_id: String,
+    pub event_index: i32,
+    pub prompt_id: String,
+    pub kind: String,
+    pub subject_slot: Option<String>,
+    pub reason: String,
+    pub phase_kind: String,
+    pub phase_number: i32,
+    #[ts(type = "unknown")]
+    pub metadata: serde_json::Value,
+    pub status: String,
+    #[ts(type = "unknown")]
+    pub decision: Option<serde_json::Value>,
+    pub resolved_by: Option<String>,
+    pub resolved_at: Option<i64>,
+}
+
+impl From<projections::HostPromptRow> for HostPromptDelta {
+    fn from(row: projections::HostPromptRow) -> Self {
+        HostPromptDelta {
+            game: row.game_id,
+            phase_id: row.phase_id,
+            event_index: row.event_index,
+            prompt_id: row.prompt_id,
+            kind: row.kind,
+            subject_slot: row.subject_slot,
+            reason: row.reason,
+            phase_kind: row.phase_kind,
+            phase_number: row.phase_number,
+            metadata: row.metadata,
+            status: row.status,
+            decision: row.decision,
+            resolved_by: row.resolved_by,
+            resolved_at: row.resolved_at,
+        }
+    }
 }
 
 impl From<projections::DayVoteOutcomeRow> for DayVoteOutcomeDelta {
@@ -572,6 +716,12 @@ pub struct PlayerNotification {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PlayerNotificationsDelta {
+    pub game: Uuid,
+    pub notifications: Vec<PlayerNotification>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct PlayerInvestigationResult {
     pub game: Uuid,
     pub phase_id: String,
@@ -581,6 +731,12 @@ pub struct PlayerInvestigationResult {
     pub target_slot: String,
     #[ts(type = "unknown")]
     pub result: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct PlayerInvestigationResultsDelta {
+    pub game: Uuid,
+    pub results: Vec<PlayerInvestigationResult>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -853,12 +1009,14 @@ pub mod typescript {
 
     use crate::{
         AckMsg, CapabilityGrant, ClientEnvelope, ClientMsg, Command, CommandMsg,
-        DayVoteOutcomeDelta, Hello, HostPhaseControl, HostPromptDecision,
-        PlayerInvestigationResult, PlayerNotification, ProjectionDelta, RejectCode, RejectMsg,
-        ResolutionTraceDecisionRow, ResolutionTraceEdgeRow, ResolutionTraceEffectChangeRow,
-        ResolutionTraceGeneratedRow, ResolutionTraceInspectionReport, ResolutionTraceInspectionRun,
-        ResolutionTraceNoteRow, ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg,
-        ThreadPage, ThreadPost, VoteCountDelta, VoteTarget,
+        DayVoteOutcomeDelta, Hello, HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta,
+        HostConsoleStateDelta, HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDecision,
+        HostPromptDelta, HostPromptsDelta, PlayerInvestigationResult, PlayerNotification,
+        ProjectionDelta, RejectCode, RejectMsg, ResolutionTraceDecisionRow, ResolutionTraceEdgeRow,
+        ResolutionTraceEffectChangeRow, ResolutionTraceGeneratedRow,
+        ResolutionTraceInspectionReport, ResolutionTraceInspectionRun, ResolutionTraceNoteRow,
+        ResolutionTraceVisibilityRow, ServerEnvelope, ServerMsg, SlotLifecycle, ThreadPage,
+        ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta, VoteTarget,
     };
 
     const HEADER: &str = "// This file is @generated by wire::typescript::render.\n// Run `cargo run -p wire --bin export_types` to regenerate.\n\n";
@@ -867,6 +1025,7 @@ pub mod typescript {
         let mut out = String::from(HEADER);
         push::<VoteTarget>(&mut out);
         push::<HostPromptDecision>(&mut out);
+        push::<SlotLifecycle>(&mut out);
         push::<Command>(&mut out);
         push::<CommandMsg>(&mut out);
         push::<ClientMsg>(&mut out);
@@ -875,7 +1034,15 @@ pub mod typescript {
         push::<RejectCode>(&mut out);
         push::<RejectMsg>(&mut out);
         push::<VoteCountDelta>(&mut out);
+        push::<VoteCountClearedDelta>(&mut out);
+        push::<ThreadPostsDelta>(&mut out);
         push::<DayVoteOutcomeDelta>(&mut out);
+        push::<HostConsolePhaseStateDelta>(&mut out);
+        push::<HostConsoleSlotOccupancyDelta>(&mut out);
+        push::<HostConsoleThreadPostDelta>(&mut out);
+        push::<HostConsoleStateDelta>(&mut out);
+        push::<HostPromptDelta>(&mut out);
+        push::<HostPromptsDelta>(&mut out);
         push::<ThreadPost>(&mut out);
         push::<ThreadPage>(&mut out);
         push::<PlayerNotification>(&mut out);

@@ -46,7 +46,7 @@
 //! - `phase_state`    — current phase, lock, deadline (`GameStarted`/
 //!   `PhaseAdvanced`, `DeadlineSet`/`DeadlineExtended`, `ThreadLocked`/
 //!   `ThreadUnlocked`). Backs command validation (phase open/unlocked).
-//! - `thread_view`    — stable, paginated main-thread posts folded from
+//! - `thread_view`    — stable, paginated channel-thread posts folded from
 //!   `PostSubmitted` plus public engine announcements in `ResolutionApplied`.
 //!
 //! The centerpiece is [`append_and_project`]: it appends events AND folds them
@@ -361,7 +361,7 @@ pub struct ThreadPostRow {
     pub occurred_at: i64,
 }
 
-/// A cold-load page of main-thread posts, returned oldest-to-newest.
+/// A cold-load page of channel-thread posts, returned oldest-to-newest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadViewPage {
     pub posts: Vec<ThreadPostRow>,
@@ -588,30 +588,28 @@ async fn fold_event(
         "ThreadLocked" => set_locked(tx, game_id, true).await?,
         "ThreadUnlocked" => set_locked(tx, game_id, false).await?,
 
-        // ── thread_view (main thread, cold-load pagination) ──
+        // ── thread_view (channel-scoped cold-load pagination) ──
         "PostSubmitted" => {
             let p = &ev.payload;
             let channel_id = str_field(p, "channel_id", &ev.kind)?;
-            if channel_id == "main" {
-                let (author_slot, author_user) = author_from_payload(p, &ev.kind)?;
-                let phase_id = str_field(p, "phase_id", &ev.kind)?;
-                let body = str_field(p, "body", &ev.kind)?;
-                insert_thread_post(
-                    tx,
-                    ThreadPostInsert {
-                        game_id,
-                        source_seq: ev.seq,
-                        stream_seq: ev.stream_seq,
-                        channel_id,
-                        author_slot,
-                        author_user,
-                        phase_id,
-                        body,
-                        occurred_at: ev.occurred_at,
-                    },
-                )
-                .await?;
-            }
+            let (author_slot, author_user) = author_from_payload(p, &ev.kind)?;
+            let phase_id = str_field(p, "phase_id", &ev.kind)?;
+            let body = str_field(p, "body", &ev.kind)?;
+            insert_thread_post(
+                tx,
+                ThreadPostInsert {
+                    game_id,
+                    source_seq: ev.seq,
+                    stream_seq: ev.stream_seq,
+                    channel_id,
+                    author_slot,
+                    author_user,
+                    phase_id,
+                    body,
+                    occurred_at: ev.occurred_at,
+                },
+            )
+            .await?;
         }
         "PrivateChannelDeclared" => {
             let p = &ev.payload;
@@ -2326,6 +2324,19 @@ pub async fn thread_view(
     before_seq: Option<i64>,
     limit: i64,
 ) -> Result<ThreadViewPage, ProjectionError> {
+    thread_view_for_channel(pool, game_id, "main", before_seq, limit).await
+}
+
+/// Read one channel's thread as a stable cold-load page. Results are returned
+/// oldest-to-newest for direct rendering. To page older, pass the previous
+/// response's `next_before_seq` as `before_seq`.
+pub async fn thread_view_for_channel(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+    before_seq: Option<i64>,
+    limit: i64,
+) -> Result<ThreadViewPage, ProjectionError> {
     let limit = limit.clamp(1, 100);
     let fetch_limit = limit + 1;
     let rows = sqlx::query(
@@ -2334,13 +2345,14 @@ pub async fn thread_view(
                author_user, phase_id, body, occurred_at
         FROM thread_view
         WHERE game_id = $1
-          AND channel_id = 'main'
-          AND ($2::BIGINT IS NULL OR source_seq < $2)
+          AND channel_id = $2
+          AND ($3::BIGINT IS NULL OR source_seq < $3)
         ORDER BY source_seq DESC
-        LIMIT $3
+        LIMIT $4
         "#,
     )
     .bind(game_id)
+    .bind(channel_id)
     .bind(before_seq)
     .bind(fetch_limit)
     .fetch_all(pool)

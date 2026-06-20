@@ -2742,6 +2742,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
         &user(a),
         Command::SubmitPost {
             game,
+            channel_id: "main".into(),
             actor_slot: slot.into(),
             body: "I am slot 7".into(),
         },
@@ -3560,6 +3561,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
         &user("user_treestump"),
         Command::SubmitPost {
             game,
+            channel_id: "main".into(),
             actor_slot: "slot_1".into(),
             body: "still here, no vote".into(),
         },
@@ -14570,14 +14572,46 @@ async fn checked_in_strongman_vengeful_projection_state_generated_fixtures_repla
 async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixtures_replay_semantic_expectations(
     pool: PgPool,
 ) {
-    let success_stem = "night-bodyguard-strongman-vengeful-projection-state-generated-minimized";
-    let success_fixture_json = include_str!(
-        "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-minimized.json"
-    );
-    let bad_stem = "night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation";
-    let bad_fixture_json = include_str!(
-        "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation.json"
-    );
+    for (success_stem, success_fixture_json, bad_stem, bad_fixture_json) in [
+        (
+            "night-bodyguard-strongman-vengeful-projection-state-generated-minimized",
+            include_str!(
+                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-minimized.json"
+            ),
+            "night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation",
+            include_str!(
+                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-bad-expectation.json"
+            ),
+        ),
+        (
+            "night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-minimized",
+            include_str!(
+                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-minimized.json"
+            ),
+            "night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-bad-expectation",
+            include_str!(
+                "../fixtures/night-bodyguard-strongman-vengeful-projection-state-generated-seed-97262-bad-expectation.json"
+            ),
+        ),
+    ] {
+        checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixture_replays(
+            &pool,
+            success_stem,
+            success_fixture_json,
+            bad_stem,
+            bad_fixture_json,
+        )
+        .await;
+    }
+}
+
+async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixture_replays(
+    pool: &PgPool,
+    success_stem: &str,
+    success_fixture_json: &str,
+    bad_stem: &str,
+    bad_fixture_json: &str,
+) {
     let expected_expectations = 11;
 
     let success_fixture: serde_json::Value = serde_json::from_str(success_fixture_json)
@@ -14651,7 +14685,7 @@ async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixt
         GeneratedShrinkArtifacts::new(&format!("{success_stem}-semantic-replay"));
     success_artifacts.remove_existing();
     success_artifacts.write_fixture(success_fixture_json);
-    let success_report = success_artifacts.run_minimizer(&pool).await;
+    let success_report = success_artifacts.run_minimizer(pool).await;
 
     assert_eq!(
         success_report["original"]["ok"], true,
@@ -14723,7 +14757,7 @@ async fn checked_in_bodyguard_strongman_vengeful_projection_state_generated_fixt
     let bad_artifacts = GeneratedShrinkArtifacts::new(&format!("{bad_stem}-semantic-replay"));
     bad_artifacts.remove_existing();
     bad_artifacts.write_fixture(bad_fixture_json);
-    let bad_report = bad_artifacts.run_minimizer(&pool).await;
+    let bad_report = bad_artifacts.run_minimizer(pool).await;
 
     assert_eq!(
         bad_report["original"]["ok"], false,

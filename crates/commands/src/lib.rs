@@ -590,6 +590,9 @@ async fn handle_inner(
             )
             .await
         }
+        Command::PublishVotecount { game } => {
+            publish_votecount(pool, principal, game, receipt).await
+        }
         Command::ResolveHostPrompt {
             game,
             prompt_id,
@@ -641,9 +644,10 @@ async fn handle_inner(
         } => withdraw_action(pool, principal, game, action_id, actor_slot, receipt).await,
         Command::SubmitPost {
             game,
+            channel_id,
             actor_slot,
             body,
-        } => submit_post(pool, principal, game, actor_slot, body, receipt).await,
+        } => submit_post(pool, principal, game, channel_id, actor_slot, body, receipt).await,
         Command::ExtendDeadline { game, phase, at } => {
             extend_deadline(pool, principal, game, phase, at, receipt).await
         }
@@ -1187,6 +1191,7 @@ async fn submit_post(
     pool: &PgPool,
     principal: &Principal,
     game: Uuid,
+    channel_id: String,
     actor_slot: String,
     body: String,
     receipt: Option<&ReceiptClaim>,
@@ -1194,6 +1199,7 @@ async fn submit_post(
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
+    require_channel_post_access(game, &channel_id, &caps)?;
     require_slot_can_post(pool, game, &actor_slot).await?;
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user). `slot_or_user` carries the slot id so authorship
@@ -1203,7 +1209,7 @@ async fn submit_post(
         "PostSubmitted",
         1,
         serde_json::json!({
-            "channel_id": "main",
+            "channel_id": channel_id,
             "slot_or_user": { "slot": actor_slot.clone() },
             "body": body,
             "phase_id": phase,
@@ -1212,6 +1218,51 @@ async fn submit_post(
         0,
     );
     persist(pool, game, &[ev], receipt).await
+}
+
+async fn publish_votecount(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    let phase = current_phase(pool, game)
+        .await?
+        .ok_or(Reject::PhaseLocked)?;
+    let rows = projections::votecount(pool, game)
+        .await?
+        .into_iter()
+        .filter(|row| row.phase_id == phase)
+        .collect::<Vec<_>>();
+    let ev = EventInput::new(
+        "PostSubmitted",
+        1,
+        serde_json::json!({
+            "channel_id": "main",
+            "slot_or_user": { "user": "host" },
+            "body": official_votecount_body(&phase, &rows),
+            "phase_id": phase,
+        }),
+        ActorId::Host,
+        0,
+    );
+    persist(pool, game, &[ev], receipt).await
+}
+
+fn official_votecount_body(phase: &str, rows: &[projections::VoteCountRow]) -> String {
+    let mut body = format!("Official votecount for {phase}");
+    if rows.is_empty() {
+        body.push_str("\n\nNo active ballots.");
+        return body;
+    }
+
+    for row in rows {
+        body.push_str(&format!("\n- {}: {}", row.candidate_slot, row.count));
+    }
+    body
 }
 
 async fn extend_deadline(
@@ -3760,6 +3811,22 @@ async fn require_slot_occupant(
     }
 }
 
+fn require_channel_post_access(
+    game: Uuid,
+    channel_id: &str,
+    caps: &CapabilitySet,
+) -> Result<(), Reject> {
+    if channel_id == "main"
+        || caps.grants(&Capability::HostOf(game))
+        || caps.grants(&Capability::CohostOf(game))
+        || caps.grants(&Capability::ChannelMember(channel_id.to_string()))
+    {
+        Ok(())
+    } else {
+        Err(Reject::NotAuthorized)
+    }
+}
+
 /// The current phase must exist and be UNLOCKED. Returns the phase id.
 async fn require_open_phase(pool: &PgPool, game: Uuid) -> Result<String, Reject> {
     match projections::phase_state(pool, game).await? {
@@ -4611,6 +4678,33 @@ impl From<caps::CapError> for Reject {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn official_votecount_body_is_projection_derived_and_deterministic() {
+        let rows = vec![
+            projections::VoteCountRow {
+                game_id: Uuid::nil(),
+                phase_id: "D01".to_string(),
+                candidate_slot: "slot_2".to_string(),
+                count: 4,
+            },
+            projections::VoteCountRow {
+                game_id: Uuid::nil(),
+                phase_id: "D01".to_string(),
+                candidate_slot: "no_lynch".to_string(),
+                count: 1,
+            },
+        ];
+
+        assert_eq!(
+            official_votecount_body("D01", &rows),
+            "Official votecount for D01\n- slot_2: 4\n- no_lynch: 1"
+        );
+        assert_eq!(
+            official_votecount_body("D02", &[]),
+            "Official votecount for D02\n\nNo active ballots."
+        );
+    }
 
     fn prompt(
         kind: &str,
