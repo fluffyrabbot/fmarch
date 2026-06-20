@@ -41,6 +41,55 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    boundary, then reads `host-console-state` from committed projections to prove the deadline
    update and stable slot-history attribution. `npm run test:host-console-tablet-smoke` covers
    the tablet route's typed command adapter and post-ACK projection rendering.
+   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run
+   test:host-console-live-stack-smoke` starts the Rust API and SvelteKit together against a
+   temporary database, seeds through `/commands`, drives the tablet browser route without
+   route-level command or state mocks, and verifies the browser reads the post-action state
+   from the real API. `npm run test:frontend-role-proof:browser` is the full browser role
+   proof for environments that allow localhost bind; it runs the Chromium smoke and then
+   verifies the generated artifact shape. `npm run test:frontend-role-proof` is the
+   restricted-sandbox proof lane: it does not bind localhost, but it does build the admin,
+   player, and moderator route/component contracts, checks capability gating and forbidden
+   messages, verifies 44px-modeled touch targets, exercises representative admin/player
+   reject and moderator ack plus post-ACK projection paths, including the admin audit native
+   inspect-route affordance plus principal-scoped operator-proof evidence endpoint and
+   host-prompt ACK projection-patch and
+   hydrated-refresh removal paths, and verifies that the role-smoke fallback artifact embeds
+   the same static nav/focus contract, admin setup/recovery
+   confirmation coverage, moderator critical-action confirmation coverage, and modeled
+   confirmation initial-focus/focus-return/Escape/tab-containment semantics, plus
+   fixture-routable empty/loading/reject route-state scenarios. It also runs
+   `npm run test:frontend-route-state-render`, which build-mode SSR renders those forced
+   states through the actual role pages and checks the shared shell, route-state root,
+   model-owned 44px nav metadata, live-region status, and recovery action markup, plus the
+   normal admin readiness/setup/audit/recovery surface including audit authority, boundary,
+   and evidence targets, the native admin audit detail surface with its machine evidence
+   link, the normal player projected deadline/votecount panel, player private disclosure
+   collapsed/expanded markup without host-only copy, the normal moderator
+   operations/critical-action/host-prompt surface, and already-open admin/moderator
+   confirmation alertdialog markup including host-prompt resolution.
+   The saved
+   `target/frontend-static-role-contract/role-contract.json` and
+   `target/frontend-route-state-render/route-state-render.json` and
+   `target/frontend-role-smoke/role-smoke.json` artifacts record that boundary explicitly;
+   they are not a substitute for the Chromium smoke's rendered route-state, pixel, overlap,
+   focus, or browser-interaction proof. When Chromium can run, browser-passed role-smoke
+   artifacts must include screenshot pixel metrics proving the saved board, role, forbidden,
+   and route-state screenshots are nonblank at the exercised viewports. In sandboxes that
+   reject localhost binds, the browser smokes write structured `EPERM` artifacts and stay
+   nonzero unless
+   `FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1` explicitly opts into that static fallback. The
+   browser-passed role smoke must also record real admin/moderator confirmation focus
+   evidence for initial confirm focus, Escape return-to-trigger behavior, and local
+   Tab/Shift-Tab containment, including the editable session-grant form fields. It must also
+   record click-through from the admin audit list to the native inspect route, the
+   principal-scoped operator-proof evidence endpoint, a nonblank detail screenshot,
+   moderator host-prompt resolution evidence for typed
+   `ResolveHostPrompt` ACK, refreshed prompt projection, and resolved prompt action removal,
+   plus player private disclosure evidence before and after expansion with nonblank
+   screenshots. The
+   command-by-command proof matrix lives in
+   [05](05-frontend.md#current-frontend-proof-commands).
 
 If steps 1–4 feel clean, the architecture is sound. Everything after is breadth on a proven
 spine.

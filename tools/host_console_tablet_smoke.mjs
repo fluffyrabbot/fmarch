@@ -1,6 +1,10 @@
+import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { createServer as createNetServer } from "node:net";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
@@ -9,7 +13,11 @@ const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "host-console-tablet-smoke");
 const evidencePath = path.join(artifactDir, "tablet-host-actions.json");
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
-const smokeGame = "00000000-0000-0000-0000-000000000123";
+const smokeGame = randomUUID();
+const hostPrincipal = "host_h";
+const sessionToken = `host-tablet-smoke-${randomUUID()}`;
+const databaseUrl =
+  process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 const criticalActions = Object.freeze([
   Object.freeze({
@@ -26,38 +34,62 @@ const criticalActions = Object.freeze([
     commandVariant: "ProcessReplacement",
     expectedResult: "ack",
   }),
+  Object.freeze({
+    id: "modkill_slot",
+    objectLabel: "Slot 7",
+    outcomeLabel: "set lifecycle to modkilled",
+    commandVariant: "SetSlotStatus",
+    expectedStatus: "modkilled",
+    expectedResult: "ack",
+  }),
 ]);
 
-const previousSmokeAuth = process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
-process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH = "1";
+const apiPort = await freePort();
+const apiBaseUrl = `http://127.0.0.1:${apiPort}`;
+const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
+process.env.FMARCH_API_BASE_URL = apiBaseUrl;
 
 process.chdir(frontendRoot);
 
-const { createServer: createViteServer } = await import(
-  frontendRequire.resolve("vite")
-);
-
-const server = await createViteServer({
-  root: frontendRoot,
-  server: {
-    host: "127.0.0.1",
-    port: 0,
-    strictPort: false,
-  },
-  logLevel: "error",
-});
-
-await server.listen();
-const address = server.httpServer?.address();
-if (address === null || typeof address !== "object") {
-  throw new Error("SvelteKit smoke server did not expose a TCP address");
-}
-const { port } = address;
-const baseUrl = `http://127.0.0.1:${port}`;
-const pageUrl = `${baseUrl}/g/${smokeGame}/host`;
-
+let rustServer;
+let viteServer;
 let browser;
+let smokeDatabase;
+let serverOutput = "";
+
 try {
+  await mkdir(artifactDir, { recursive: true });
+  smokeDatabase = await createSmokeDatabase(databaseUrl);
+  rustServer = startRustServer(apiPort);
+  await waitForHealth(`${apiBaseUrl}/healthz`);
+  await seedLiveHostGame();
+
+  const { createServer: createViteServer } = await import(
+    frontendRequire.resolve("vite")
+  );
+  viteServer = await createViteServer({
+    root: frontendRoot,
+    server: {
+      host: "127.0.0.1",
+      port: 0,
+      strictPort: false,
+      proxy: {
+        "/auth": apiBaseUrl,
+        "/commands": apiBaseUrl,
+        "/games": apiBaseUrl,
+      },
+    },
+    logLevel: "error",
+  });
+  await viteServer.listen();
+
+  const address = viteServer.httpServer?.address();
+  if (address === null || typeof address !== "object") {
+    throw new Error("SvelteKit smoke server did not expose a TCP address");
+  }
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const pageUrl = `${baseUrl}/g/${smokeGame}/host`;
+
   browser = await chromium.launch();
 
   const unauthorizedPage = await browser.newPage({ viewport: smokeViewport });
@@ -78,67 +110,32 @@ try {
   }
   await unauthorizedPage.close();
 
-  const page = await browser.newPage({ viewport: smokeViewport });
-  await page.setExtraHTTPHeaders({
-    "x-fmarch-smoke-host-game": smokeGame,
-  });
-  const commandRequests = [];
-  const committedState = {
-    phase: null,
-    slot: { slot_id: "slot-7", occupant_user_id: "player-mira" },
-  };
-  await page.route("**/commands", async (route) => {
-    const envelope = route.request().postDataJSON();
-    commandRequests.push(envelope);
-    const command = envelope.body.body.command;
-    const variant = Object.keys(command)[0];
-    if (variant === "ExtendDeadline") {
-      committedState.phase = {
-        phase_id: command.ExtendDeadline.phase,
-        locked: false,
-        deadline: command.ExtendDeadline.at,
-      };
-    }
-    if (variant === "ProcessReplacement") {
-      committedState.slot = {
-        slot_id: command.ProcessReplacement.slot,
-        occupant_user_id: command.ProcessReplacement.incoming_user,
-      };
-    }
-    const streamSeq = 100 + commandRequests.length;
-
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        v: 1,
-        id: envelope.id,
-        body: { kind: "Ack", body: { stream_seqs: [streamSeq] } },
-      }),
-    });
-  });
-  await page.route("**/host-console-state?*", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        game: smokeGame,
-        phase: committedState.phase,
-        slots: [committedState.slot],
-        thread_posts: [
-          {
-            stream_seq: 9,
-            author_slot: "slot-7",
-            author_user: null,
-            phase_id: "day-2",
-            body: "Slot 7 history before replacement",
-          },
-        ],
-      }),
-    });
-  });
-
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: sessionToken,
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
   await page.goto(pageUrl, { waitUntil: "networkidle" });
+  const votecountRow = page.getByTestId("host-console-votecount-row-slot-target");
+  await votecountRow.waitFor({ state: "visible" });
+  assertHitTarget(await votecountRow.boundingBox(), "host votecount row");
+  const initialVotecountLabel = await votecountRow.innerText();
+  if (!initialVotecountLabel.includes("slot-target") || !initialVotecountLabel.includes("1/")) {
+    throw new Error(`host votecount row did not render projected ballot: ${initialVotecountLabel}`);
+  }
+  const votecountBoundary = await page
+    .getByTestId("host-console-votecount-boundary")
+    .innerText();
+  if (votecountBoundary !== "official-votecount-live-ws") {
+    throw new Error(`host votecount boundary drifted: ${votecountBoundary}`);
+  }
 
   const actionEvidence = [];
 
@@ -204,6 +201,7 @@ try {
         `${expectedAction.id} dispatched with payload kind ${dispatchedAction.payload.kind}`,
       );
     }
+
     const commandStatus = page.getByTestId(
       `host-command-status-${expectedAction.id}`,
     );
@@ -229,13 +227,16 @@ try {
     }
     if (
       expectedAction.expectedResult === "ack" &&
-      !statusMessage.includes(String(101 + index))
+      !/Ack: stream seqs \d+/.test(statusMessage)
     ) {
       throw new Error(`${expectedAction.id} ack did not render stream seqs`);
     }
 
-    const commandEnvelope = commandRequests[index];
-    assertCommandEnvelope(commandEnvelope, expectedAction);
+    const commandOutcomes = await page.evaluate(
+      () => window.__fmarchHostCommandOutcomes,
+    );
+    const commandOutcome = commandOutcomes[index];
+    assertCommandEnvelope(commandOutcome.requestEnvelope, expectedAction);
 
     actionEvidence.push({
       ...expectedAction,
@@ -243,10 +244,24 @@ try {
       confirmBox,
       confirmationMessage,
       dispatchedAction,
-      commandEnvelope,
+      commandEnvelope: commandOutcome.requestEnvelope,
+      serverEnvelope: commandOutcome.serverEnvelope,
+      streamSeqs: commandOutcome.streamSeqs,
       statusState,
       statusMessage,
     });
+  }
+
+  const duplicateAck = await postJson(
+    `${apiBaseUrl}/commands`,
+    actionEvidence[0].commandEnvelope,
+  );
+  const duplicateStreamSeqs = duplicateAck.body?.body?.stream_seqs ?? [];
+  if (
+    JSON.stringify(duplicateStreamSeqs) !==
+    JSON.stringify(actionEvidence[0].streamSeqs)
+  ) {
+    throw new Error("durable command receipt did not return the original ack");
   }
 
   const deadlineLabel = await page.getByTestId("host-console-deadline").innerText();
@@ -259,6 +274,12 @@ try {
   if (occupantLabel !== "player-rowan") {
     throw new Error(`replacement occupant did not update: ${occupantLabel}`);
   }
+  const lifecycleLabel = await page
+    .getByTestId("host-console-slot-lifecycle")
+    .innerText();
+  if (lifecycleLabel !== "Modkilled") {
+    throw new Error(`slot lifecycle did not update: ${lifecycleLabel}`);
+  }
   const historyLabel = await page.getByTestId("host-console-history").innerText();
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
@@ -267,35 +288,271 @@ try {
   const dispatchEvents = await page.evaluate(
     () => window.__fmarchHostActionEvents,
   );
+  const commandOutcomes = await page.evaluate(
+    () => window.__fmarchHostCommandOutcomes,
+  );
   const evidence = {
     status: "passed",
     url: pageUrl,
+    apiBaseUrl,
+    game: smokeGame,
     viewport: smokeViewport,
     unauthorized: {
       status: 403,
     },
     actions: actionEvidence,
     dispatchedActions: dispatchEvents,
-    commandRequests,
+    commandOutcomes,
+    duplicateReceiptProof: {
+      commandId: actionEvidence[0].commandEnvelope.body.body.command_id,
+      streamSeqs: duplicateStreamSeqs,
+    },
     projectionLabels: {
       deadlineLabel,
       occupantLabel,
+      lifecycleLabel,
       historyLabel,
+      initialVotecountLabel,
+      votecountBoundary,
     },
   };
-  await mkdir(artifactDir, { recursive: true });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
+} catch (error) {
+  error.serverOutput = serverOutput.slice(-4000);
+  throw error;
 } finally {
   if (browser !== undefined) {
     await browser.close();
   }
-  await server.close();
-  if (previousSmokeAuth === undefined) {
-    delete process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
-  } else {
-    process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH = previousSmokeAuth;
+  if (viteServer !== undefined) {
+    await viteServer.close();
   }
+  if (rustServer !== undefined) {
+    await stopChild(rustServer);
+  }
+  if (smokeDatabase !== undefined) {
+    await dropSmokeDatabase(smokeDatabase);
+  }
+  if (previousApiBaseUrl === undefined) {
+    delete process.env.FMARCH_API_BASE_URL;
+  } else {
+    process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
+  }
+}
+
+function startRustServer(port) {
+  const child = spawn("cargo", ["run", "-p", "server"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      DATABASE_URL: smokeDatabase.url,
+      FMARCH_BIND: `127.0.0.1:${port}`,
+      FMARCH_DEV_AUTH: "1",
+      RUST_LOG: process.env.RUST_LOG ?? "warn",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout.on("data", (chunk) => {
+    serverOutput += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    serverOutput += chunk.toString();
+  });
+  return child;
+}
+
+async function createSmokeDatabase(sourceDatabaseUrl) {
+  const source = new URL(sourceDatabaseUrl);
+  const admin = new URL(sourceDatabaseUrl);
+  admin.pathname = "/postgres";
+  const smoke = new URL(sourceDatabaseUrl);
+  const sourceName = source.pathname.replace(/^\/+/, "") || "fmarch";
+  const name = `${sanitizeDatabaseName(sourceName)}_tablet_${process.pid}_${Date.now()}`;
+  smoke.pathname = `/${name}`;
+
+  await runProcess("psql", [
+    admin.toString(),
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `CREATE DATABASE "${name}"`,
+  ]);
+
+  return { name, adminUrl: admin.toString(), url: smoke.toString() };
+}
+
+async function dropSmokeDatabase({ adminUrl, name }) {
+  await runProcess("psql", [
+    adminUrl,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${name}'`,
+  ]);
+  await runProcess("psql", [
+    adminUrl,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    `DROP DATABASE IF EXISTS "${name}"`,
+  ]);
+}
+
+async function runProcess(command, args) {
+  const child = spawn(command, args, {
+    cwd: repoRoot,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  const code = await new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", resolve);
+  });
+  if (code !== 0) {
+    throw new Error(`${command} ${args[0]} failed with exit ${code}:\n${output}`);
+  }
+  return output;
+}
+
+async function stopChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  child.kill("SIGINT");
+  const stopped = await Promise.race([
+    new Promise((resolve) => child.once("exit", resolve)),
+    delay(5000).then(() => "timeout"),
+  ]);
+  if (stopped === "timeout") {
+    child.kill("SIGKILL");
+    await new Promise((resolve) => child.once("exit", resolve));
+  }
+}
+
+function sanitizeDatabaseName(name) {
+  const sanitized = name.replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase();
+  const prefix = sanitized === "" ? "fmarch" : sanitized;
+  return prefix.slice(0, 24);
+}
+
+async function seedLiveHostGame() {
+  await postJson(`${apiBaseUrl}/auth/dev-session`, {
+    token: sessionToken,
+    principal_user_id: hostPrincipal,
+    expires_at: 4_102_444_800,
+  });
+  await postCommand(1, hostPrincipal, {
+    CreateGame: { game: smokeGame, pack: "mafiascum" },
+  });
+  await postCommand(2, hostPrincipal, {
+    AddSlot: { game: smokeGame, slot: "slot-7" },
+  });
+  await postCommand(3, hostPrincipal, {
+    AssignSlot: { game: smokeGame, slot: "slot-7", user: "player-mira" },
+  });
+  await postCommand(4, hostPrincipal, {
+    AssignRole: {
+      game: smokeGame,
+      slot: "slot-7",
+      role_key: "vanilla_townie",
+    },
+  });
+  await postCommand(5, hostPrincipal, {
+    AddSlot: { game: smokeGame, slot: "slot-target" },
+  });
+  await postCommand(6, hostPrincipal, {
+    AssignSlot: {
+      game: smokeGame,
+      slot: "slot-target",
+      user: "player-target",
+    },
+  });
+  await postCommand(7, hostPrincipal, {
+    AssignRole: {
+      game: smokeGame,
+      slot: "slot-target",
+      role_key: "vanilla_townie",
+    },
+  });
+  await postCommand(8, hostPrincipal, {
+    StartGame: { game: smokeGame, phase: "D01" },
+  });
+  await postCommand(9, "player-mira", {
+    SubmitPost: {
+      game: smokeGame,
+      channel_id: "main",
+      actor_slot: "slot-7",
+      body: "Slot 7 history before replacement",
+    },
+  });
+  await postCommand(10, "player-mira", {
+    SubmitVote: {
+      game: smokeGame,
+      actor_slot: "slot-7",
+      target: {
+        Slot: "slot-target",
+      },
+    },
+  });
+}
+
+async function postCommand(id, principalUserId, command) {
+  const envelope = {
+    v: 1,
+    id,
+    body: {
+      kind: "Command",
+      body: {
+        command_id: randomUUID(),
+        principal_user_id: principalUserId,
+        command,
+      },
+    },
+  };
+  const response = await postJson(`${apiBaseUrl}/commands`, envelope);
+  if (response.body?.kind !== "Ack") {
+    throw new Error(`seed command ${Object.keys(command)[0]} rejected`);
+  }
+  return response;
+}
+
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(`${url} returned ${response.status}: ${JSON.stringify(payload)}`);
+  }
+  return payload;
+}
+
+async function waitForHealth(url) {
+  const deadline = Date.now() + 30_000;
+  let lastError;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        return;
+      }
+      lastError = new Error(`${url} returned ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw lastError ?? new Error(`timed out waiting for ${url}`);
 }
 
 function assertHitTarget(box, label) {
@@ -317,7 +574,7 @@ function assertCommandEnvelope(envelope, expectedAction) {
     throw new Error(`${expectedAction.id} did not send a Command frame`);
   }
   const commandBody = envelope.body.body;
-  if (commandBody.principal_user_id !== "host-smoke") {
+  if (commandBody.principal_user_id !== hostPrincipal) {
     throw new Error(
       `${expectedAction.id} command principal was ${commandBody.principal_user_id}`,
     );
@@ -336,10 +593,35 @@ function assertCommandEnvelope(envelope, expectedAction) {
   if (commandPayload.game !== smokeGame) {
     throw new Error(`${expectedAction.id} command game was ${commandPayload.game}`);
   }
+  if (
+    expectedAction.expectedStatus !== undefined &&
+    commandPayload.status !== expectedAction.expectedStatus
+  ) {
+    throw new Error(
+      `${expectedAction.id} command status was ${commandPayload.status}, expected ${expectedAction.expectedStatus}`,
+    );
+  }
 }
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+async function freePort() {
+  return await new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (!address || typeof address === "string") {
+          reject(new Error("could not allocate a free TCP port"));
+          return;
+        }
+        resolve(address.port);
+      });
+    });
+  });
 }
