@@ -45,14 +45,14 @@ use uuid::Uuid;
 use wire::{HostPhaseControl, RejectCode, RejectMsg, ResolutionTraceInspectionReport};
 
 #[derive(Clone)]
-pub struct ApiState {
+pub struct OperatorApiState {
     pool: PgPool,
     dev_auth_enabled: bool,
 }
 
-impl ApiState {
+impl OperatorApiState {
     pub fn new(pool: PgPool) -> Self {
-        ApiState {
+        OperatorApiState {
             pool,
             dev_auth_enabled: std::env::var("FMARCH_DEV_AUTH").ok().as_deref() == Some("1"),
         }
@@ -65,10 +65,10 @@ impl ApiState {
 }
 
 pub fn router(pool: PgPool) -> Router {
-    router_with_state(ApiState::new(pool))
+    router_with_state(OperatorApiState::new(pool))
 }
 
-pub fn router_with_state(state: ApiState) -> Router {
+pub fn router_with_state(state: OperatorApiState) -> Router {
     Router::new()
         .route(
             "/games/{game}/host-phase-controls/view",
@@ -371,7 +371,7 @@ struct OperatorProofDeterminismFuzzResponse {
 }
 
 async fn operator_index(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorIndexQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -390,7 +390,7 @@ async fn operator_index(
 }
 
 async fn operator_proof_runs(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofRunsQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -410,7 +410,7 @@ async fn operator_proof_runs(
 }
 
 async fn operator_proof_runs_status(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofRunsQuery>,
 ) -> Result<Json<SharedOperatorProofRunStatus>, ApiError> {
@@ -429,7 +429,7 @@ async fn operator_proof_runs_status(
 }
 
 async fn operator_proof_run_status_audit(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofStatusAuditQuery>,
 ) -> Result<Json<OperatorProofStatusAuditResponse>, ApiError> {
@@ -447,7 +447,7 @@ async fn operator_proof_run_status_audit(
 }
 
 async fn operator_proof_run_status_audit_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofStatusAuditQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -469,7 +469,7 @@ async fn operator_proof_run_status_audit_view(
 }
 
 async fn operator_proof_run_go_no_go(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofGoNoGoQuery>,
 ) -> Result<Json<OperatorProofGoNoGoResponse>, ApiError> {
@@ -485,7 +485,7 @@ async fn operator_proof_run_go_no_go(
 }
 
 async fn operator_proof_run_go_no_go_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofGoNoGoQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -506,7 +506,7 @@ async fn operator_proof_run_go_no_go_view(
 }
 
 async fn operator_proof_run_retention(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofRetentionQuery>,
 ) -> Result<Json<OperatorProofRetentionResponse>, ApiError> {
@@ -522,7 +522,7 @@ async fn operator_proof_run_retention(
 }
 
 async fn operator_proof_run_retention_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofRetentionQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -543,7 +543,7 @@ async fn operator_proof_run_retention_view(
 }
 
 async fn operator_proof_run_projection_rebuild(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofProjectionRebuildQuery>,
 ) -> Result<Json<OperatorProofProjectionRebuildResponse>, ApiError> {
@@ -561,7 +561,7 @@ async fn operator_proof_run_projection_rebuild(
 }
 
 async fn operator_proof_run_projection_rebuild_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofProjectionRebuildQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -582,7 +582,7 @@ async fn operator_proof_run_projection_rebuild_view(
 }
 
 async fn operator_proof_run_resolution_diff(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofResolutionDiffQuery>,
 ) -> Result<Json<OperatorProofResolutionDiffResponse>, ApiError> {
@@ -600,7 +600,7 @@ async fn operator_proof_run_resolution_diff(
 }
 
 async fn operator_proof_run_resolution_diff_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofResolutionDiffQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -621,7 +621,7 @@ async fn operator_proof_run_resolution_diff_view(
 }
 
 async fn operator_proof_run_trace_inspection(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofTraceInspectionQuery>,
 ) -> Result<Json<OperatorProofTraceInspectionResponse>, ApiError> {
@@ -639,7 +639,7 @@ async fn operator_proof_run_trace_inspection(
 }
 
 async fn operator_proof_run_trace_inspection_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofTraceInspectionQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -660,7 +660,7 @@ async fn operator_proof_run_trace_inspection_view(
 }
 
 async fn operator_proof_run_large_action_graph_performance(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofLargeActionGraphPerformanceQuery>,
 ) -> Result<Json<OperatorProofLargeActionGraphPerformanceResponse>, ApiError> {
@@ -678,7 +678,7 @@ async fn operator_proof_run_large_action_graph_performance(
 }
 
 async fn operator_proof_run_large_action_graph_performance_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofLargeActionGraphPerformanceQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -701,7 +701,7 @@ async fn operator_proof_run_large_action_graph_performance_view(
 }
 
 async fn operator_proof_run_determinism_fuzz(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofDeterminismFuzzQuery>,
 ) -> Result<Json<OperatorProofDeterminismFuzzResponse>, ApiError> {
@@ -719,7 +719,7 @@ async fn operator_proof_run_determinism_fuzz(
 }
 
 async fn operator_proof_run_determinism_fuzz_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<OperatorProofDeterminismFuzzQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -740,7 +740,7 @@ async fn operator_proof_run_determinism_fuzz_view(
 }
 
 async fn host_phase_controls_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<HostPhaseControlQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -766,7 +766,7 @@ struct ProjectionAuditQuery {
 }
 
 async fn projection_audit(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ProjectionAuditQuery>,
 ) -> Result<Json<projections::ProjectionAuditReport>, ApiError> {
@@ -782,7 +782,7 @@ async fn projection_audit(
 }
 
 async fn projection_audit_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ProjectionAuditQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -804,7 +804,7 @@ struct ResolutionAuditQuery {
 }
 
 async fn resolution_audit(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ResolutionAuditQuery>,
 ) -> Result<Json<commands::ResolutionEnvelopeAuditReport>, ApiError> {
@@ -824,7 +824,7 @@ async fn resolution_audit(
 }
 
 async fn resolution_audit_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ResolutionAuditQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -849,7 +849,7 @@ struct ResolutionTraceQuery {
 }
 
 async fn resolution_traces(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ResolutionTraceQuery>,
 ) -> Result<Json<ResolutionTraceInspectionReport>, ApiError> {
@@ -870,7 +870,7 @@ async fn resolution_traces(
 }
 
 async fn resolution_traces_view(
-    State(state): State<ApiState>,
+    State(state): State<OperatorApiState>,
     Path(game): Path<Uuid>,
     Query(query): Query<ResolutionTraceQuery>,
 ) -> Result<Html<String>, ApiError> {
@@ -889,7 +889,7 @@ async fn resolution_traces_view(
 }
 
 async fn require_host_audit_access(
-    state: &ApiState,
+    state: &OperatorApiState,
     game: Uuid,
     principal_user_id: &str,
     message: &'static str,

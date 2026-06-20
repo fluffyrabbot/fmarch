@@ -39,7 +39,9 @@ fn router(pool: sqlx::PgPool) -> axum::Router {
 
 fn router_with_dev_auth(pool: sqlx::PgPool) -> axum::Router {
     api::router_with_state(ApiState::new(pool.clone()).with_dev_auth(true)).merge(
-        operator_api::router_with_state(operator_api::ApiState::new(pool).with_dev_auth(true)),
+        operator_api::router_with_state(
+            operator_api::OperatorApiState::new(pool).with_dev_auth(true),
+        ),
     )
 }
 
