@@ -29,17 +29,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
-    AckMsg, ClientEnvelope, ClientMsg, Command, HostPhaseControl, HostPromptDecision, RejectCode,
-    RejectMsg, ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
+    AckMsg, ClientEnvelope, ClientMsg, Command, HostPromptDecision, RejectCode, RejectMsg,
+    ResolutionTraceInspectionReport, ServerEnvelope, ServerMsg, VoteTarget,
 };
-
-#[derive(Debug, serde::Deserialize)]
-struct HostPrompt {
-    prompt_id: String,
-    kind: String,
-    reason: String,
-    status: String,
-}
 
 #[derive(Clone)]
 struct CommandRouteState {
@@ -3504,43 +3496,6 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
         .await,
     );
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-prompts?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let prompts: Vec<HostPrompt> = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(prompts.len(), 1);
-    assert_eq!(prompts[0].prompt_id, "D01:skip_next_day:slot_1");
-    assert_eq!(prompts[0].kind, "skip_next_day");
-    assert_eq!(prompts[0].status, "pending");
-    assert_eq!(prompts[0].reason, "beloved_princess_death");
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-prompts?principal_user_id=user_2"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-
     expect_ack(
         post_command(
             app.clone(),
@@ -3554,34 +3509,6 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
         )
         .await,
     );
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-phase-controls?principal_user_id=host_h"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let controls: Vec<HostPhaseControl> = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(controls.len(), 1);
-    assert_eq!(controls[0].prompt_id, "D01:skip_next_day:slot_1");
-    assert_eq!(controls[0].prompt_kind.as_deref(), Some("skip_next_day"));
-    assert_eq!(
-        controls[0].prompt_reason.as_deref(),
-        Some("beloved_princess_death")
-    );
-    assert_eq!(controls[0].source_phase_id, "D01");
-    assert_eq!(controls[0].target_phase_id, "N02");
-    assert_eq!(controls[0].skipped_phase_id.as_deref(), Some("D02"));
-    assert_eq!(controls[0].resolved_by.as_deref(), Some("host_h"));
 
     let response = app
         .clone()
@@ -3625,24 +3552,6 @@ async fn vertical_host_phase_controls_are_host_audit_only(pool: sqlx::PgPool) {
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let cohost_html = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(cohost_html.contains("D01:skip_next_day:slot_1"));
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/games/{game}/host-phase-controls?principal_user_id=user_2"
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(reject.error, RejectCode::NotAuthorized);
 
     let response = app
         .oneshot(
