@@ -31,7 +31,6 @@ dependencies = [
  "caps",
  "commands",
  "futures-util",
- "operator_api",
  "projections",
  "serde",
  "serde_json",

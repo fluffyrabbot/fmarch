@@ -80,3 +80,48 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
         assert_eq!(reject.error, RejectCode::NotAuthorized);
     }
 }
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn dev_global_operator_can_read_status_only_when_dev_auth_enabled(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO auth_session \
+         (token_hash, principal_user_id, created_at, expires_at, global_capabilities) \
+         VALUES ('dev-admin-token-hash', 'admin_a', 0, 4102444800, ARRAY['GlobalAdmin']::TEXT[])",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert dev global operator session");
+
+    let enabled = operator_api::router_with_state(
+        operator_api::OperatorApiState::new(pool.clone()).with_dev_auth(true),
+    );
+    let response = enabled
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/operator/proof-runs/status?principal_user_id=admin_a"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let disabled = app(pool);
+    let response = disabled
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/operator/proof-runs/status?principal_user_id=admin_a"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
