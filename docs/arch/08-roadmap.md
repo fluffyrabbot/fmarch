@@ -45,8 +45,9 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    test:host-console-live-stack-smoke` starts the Rust API and SvelteKit together against a
    temporary database, seeds through `/commands`, drives the tablet browser route without
    route-level command or state mocks, and verifies the browser reads the post-action state
-   from the real API. `npm run test:frontend-role-proof:browser` is the full browser role
-   proof for environments that allow localhost bind; it runs the Chromium smoke and then
+   from the real API. `npm run test:frontend-role-proof:browser` is the current full browser
+   role proof; the latest local run passed and refreshed the browser-acceptance boundary,
+   completion audit, and readiness summary to complete. It runs the Chromium smoke and then
    verifies the generated artifact shape. `npm run test:frontend-role-proof` is the
    restricted-sandbox proof lane: it does not bind localhost, but it does build the admin,
    player, and moderator route/component contracts, checks capability gating and forbidden
@@ -70,10 +71,13 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    confirmation alertdialog markup including host-prompt resolution.
    The saved
    `target/frontend-static-role-contract/role-contract.json` and
-   `target/frontend-route-state-render/route-state-render.json` and
-   `target/frontend-role-smoke/role-smoke.json` artifacts record that boundary explicitly;
-   they are not a substitute for the Chromium smoke's rendered route-state, pixel, overlap,
-   focus, or browser-interaction proof. When Chromium can run, browser-passed role-smoke
+   `target/frontend-route-state-render/route-state-render.json` artifacts record the
+   restricted fallback boundary explicitly; they are supporting evidence, not a substitute
+   for the Chromium smoke's rendered route-state, pixel, overlap, focus, or browser-interaction
+   proof. The current `target/frontend-role-smoke/role-smoke.json`,
+   `target/frontend-completion-audit/completion-audit.json`, and
+   `target/frontend-readiness-summary/readiness-summary.json` artifacts come from the passed
+   browser lane. Browser-passed role-smoke
    artifacts must include screenshot pixel metrics proving the saved board, role, forbidden,
    and route-state screenshots are nonblank at the exercised viewports. In sandboxes that
    reject localhost binds, the browser smokes write structured `EPERM` artifacts and stay

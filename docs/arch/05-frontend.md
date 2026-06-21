@@ -129,8 +129,8 @@ checklist before they are called done:
   and player thread media request evidence proving the browser requested only tablet/small
   image variants from the mocked media route while original/full/desktop URLs stayed out of
   rendered image attributes and request logs. Use
-  `npm run test:frontend-role-proof:browser` in environments that allow localhost bind; it
-  runs the Chromium smoke and then verifies the generated artifact shape.
+  `npm run test:frontend-role-proof:browser` as the browser acceptance command; it runs the
+  Chromium smoke and then verifies the generated artifact shape.
   In restricted sandboxes that deny localhost binds, the browser smokes write a structured
   `EPERM` artifact and remain nonzero by default; setting
   `FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1` runs the static role contract, no-browser DOM smoke,
