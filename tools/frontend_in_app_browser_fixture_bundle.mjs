@@ -18,6 +18,7 @@ const localhostDir = path.join(
   "target",
   "frontend-in-app-browser-localhost",
 );
+const roleSmokeDir = path.join(repoRoot, "target", "frontend-role-smoke");
 
 const requiredSources = [
   "target/frontend-in-app-browser-interactions/interaction-page.html",
@@ -27,6 +28,8 @@ const requiredSources = [
   "target/frontend-in-app-browser-interactions/browser-run.json",
   "target/frontend-in-app-browser-localhost/browser-run.json",
   "target/frontend-in-app-browser-imported-run/imported-run.json",
+  "target/frontend-role-smoke/role-smoke.json",
+  "target/frontend-role-smoke-imported/imported-role-smoke.json",
 ];
 
 const manifest = await readJson(
@@ -44,11 +47,25 @@ const localhostBrowserRun = await readJson(
 const importedRun = await readJson(
   "target/frontend-in-app-browser-imported-run/imported-run.json",
 );
+const roleSmoke = await readJson("target/frontend-role-smoke/role-smoke.json");
+const importedRoleSmoke = await readJson(
+  "target/frontend-role-smoke-imported/imported-role-smoke.json",
+);
 assert.equal(manifest.status, "page-generated");
 assert.equal(handoff.status, "handoff-ready");
 assert.equal(browserRun.proof, "in-app-browser-file-fixture-smoke");
 assert.equal(localhostBrowserRun.proof, "in-app-browser-localhost-fixture-smoke");
 assert.equal(importedRun.proof, "in-app-browser-imported-run-contract");
+assert.equal(
+  [
+    "passed",
+    "static-dom-fallback-passed",
+    "static-fallback-passed",
+    "static-render-fallback-passed",
+  ].includes(roleSmoke.status),
+  true,
+);
+assert.equal(importedRoleSmoke.proof, "frontend-role-smoke-imported-contract");
 assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
 assert.equal(handoff.fixture.stabilityCheckTileCount, 14);
 
@@ -60,11 +77,16 @@ const optionalLocalhostScreenshots = (await readdir(localhostDir))
   .filter((entry) => /^browser-run-.+\.png$/u.test(entry))
   .sort()
   .map((entry) => `target/frontend-in-app-browser-localhost/${entry}`);
+const optionalRoleSmokeScreenshots = (await readdir(roleSmokeDir))
+  .filter((entry) => /^.+\.png$/u.test(entry))
+  .sort()
+  .map((entry) => `target/frontend-role-smoke/${entry}`);
 
 const sourcePaths = [
   ...requiredSources,
   ...optionalScreenshots,
   ...optionalLocalhostScreenshots,
+  ...optionalRoleSmokeScreenshots,
 ];
 const entries = [];
 for (const source of sourcePaths) {
@@ -87,7 +109,7 @@ const bundleManifest = {
   status: "bundle-ready",
   proof: "in-app-browser-fixture-replay-bundle",
   boundary:
-    "Deterministic tar bundle for carrying the generated in-app browser fixture to a Chromium-capable environment and returning file-backed or localhost-served browser-run evidence for local import validation. The bundle includes the fixture HTML, manifest, replay handoff, latest file and localhost browser-run statuses, imported-run status, and any browser-run screenshot PNGs that exist. It does not prove browser behavior by itself, Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
+    "Deterministic tar bundle for carrying the generated in-app browser fixture to a Chromium-capable environment and returning file-backed, localhost-served, and full role-smoke browser evidence for local import validation. The bundle includes the fixture HTML, manifest, replay handoff, latest file and localhost browser-run statuses, imported-run status, latest role-smoke/import status, and any browser-run or role-smoke screenshot PNGs that exist. It does not prove browser behavior by itself, Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
   generatedFrom: {
     manifest: "target/frontend-in-app-browser-interactions/interaction-page-manifest.json",
     replayHandoff: "target/frontend-in-app-browser-interactions/replay-handoff.json",
@@ -95,6 +117,9 @@ const bundleManifest = {
     localhostBrowserRun:
       "target/frontend-in-app-browser-localhost/browser-run.json",
     importedRun: "target/frontend-in-app-browser-imported-run/imported-run.json",
+    roleSmoke: "target/frontend-role-smoke/role-smoke.json",
+    importedRoleSmoke:
+      "target/frontend-role-smoke-imported/imported-role-smoke.json",
   },
   archive: "target/frontend-in-app-browser-bundle/fixture-replay-bundle.tar",
   archiveFormat: "ustar",
@@ -119,6 +144,7 @@ const bundleManifest = {
     plannedStabilityChecks: handoff.fixture.plannedStabilityChecks,
     screenshotCount: optionalScreenshots.length,
     localhostScreenshotCount: optionalLocalhostScreenshots.length,
+    roleSmokeScreenshotCount: optionalRoleSmokeScreenshots.length,
   },
   commands: {
     freshen: [
@@ -128,14 +154,20 @@ const bundleManifest = {
     ],
     replay: "npm run test:frontend-iab-fixture-replay",
     replayLocalhost: "npm run test:frontend-iab-localhost-fixture-smoke",
+    replayRoleSmoke: "npm run test:frontend-role-smoke",
     import:
       "FMARCH_IAB_BROWSER_RUN_IMPORT=<returned>/target/frontend-in-app-browser-interactions/browser-run.json npm run test:frontend-iab-imported-run",
+    importRoleSmoke:
+      "FMARCH_ROLE_SMOKE_IMPORT=<returned>/target/frontend-role-smoke/role-smoke.json npm run test:frontend-role-smoke-import",
   },
   latest: {
     browserRunStatus: browserRun.status,
     localhostBrowserRunStatus: localhostBrowserRun.status,
     importedRunStatus: importedRun.status,
     importedPromotionEligible: importedRun.promotionEligible,
+    roleSmokeStatus: roleSmoke.status,
+    importedRoleSmokeStatus: importedRoleSmoke.status,
+    importedRoleSmokePromotionEligible: importedRoleSmoke.promotionEligible,
   },
 };
 

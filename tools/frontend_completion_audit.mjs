@@ -44,6 +44,9 @@ const artifacts = {
   inAppBrowserImportedRun: await readArtifact(
     "target/frontend-in-app-browser-imported-run/imported-run.json",
   ),
+  importedRoleSmoke: await readArtifact(
+    "target/frontend-role-smoke-imported/imported-role-smoke.json",
+  ),
   browserAcceptanceBoundary: await readArtifact(
     "target/frontend-browser-acceptance-boundary/browser-acceptance-boundary.json",
   ),
@@ -184,10 +187,22 @@ assert.equal(
   ),
   true,
 );
-assert.equal(artifacts.browserAcceptanceBoundary.status, "incomplete");
+assert.equal(
+  ["imported-passed", "source-blocked"].includes(
+    artifacts.importedRoleSmoke.status,
+  ),
+  true,
+);
+assert.equal(["passed", "incomplete"].includes(artifacts.browserAcceptanceBoundary.status), true);
 assert.equal(
   artifacts.browserAcceptanceBoundary.proof,
   "frontend-browser-acceptance-boundary",
+);
+const fullBrowserProof =
+  browserRoleSmokeEvidenceComplete() || importedRoleSmokeEvidenceComplete();
+assert.equal(
+  artifacts.browserAcceptanceBoundary.status,
+  fullBrowserProof ? "passed" : "incomplete",
 );
 
 const commandPaths = Object.fromEntries(
@@ -244,7 +259,7 @@ for (const state of ["empty", "loading", "reject"]) {
 }
 
 const audit = {
-  status: "incomplete",
+  status: fullBrowserProof ? "passed" : "incomplete",
   proof: "frontend-completion-audit",
   generatedFrom: {
     staticContract: "target/frontend-static-role-contract/role-contract.json",
@@ -278,21 +293,24 @@ const audit = {
       "target/frontend-in-app-browser-localhost/browser-run.json",
     inAppBrowserImportedRun:
       "target/frontend-in-app-browser-imported-run/imported-run.json",
+    importedRoleSmoke:
+      "target/frontend-role-smoke-imported/imported-role-smoke.json",
     browserAcceptanceBoundary:
       "target/frontend-browser-acceptance-boundary/browser-acceptance-boundary.json",
   },
   boundary:
     "This audit summarizes current frontend proof artifacts against the requested tablet-first admin/player/moderator SPA objective. It records what is proven by model, SSR, and no-browser DOM evidence, and keeps browser/runtime acceptance incomplete when localhost or Chromium is blocked.",
   overall: {
-    state: "not_complete",
-    reason:
-      "Core route models, SSR markup, DOM contracts, command envelopes, and fallback artifacts are proven, but full hydrated browser acceptance remains blocked in this sandbox.",
+    state: fullBrowserProof ? "complete" : "not_complete",
+    reason: fullBrowserProof
+      ? "Core route models, SSR markup, DOM contracts, command envelopes, tablet posture, forbidden access, overlap-checked browser screenshots, and full admin/player/moderator dev-server role smoke are proven."
+      : "Core route models, SSR markup, DOM contracts, command envelopes, and fallback artifacts are proven, but full hydrated browser acceptance remains blocked in this sandbox.",
   },
   requirements: [
     requirement({
       id: "shared-app-shell",
       label: "Shared capability-gated app shell",
-      state: "dom_proven_browser_blocked",
+      state: fullBrowserProof ? "browser_proven" : "dom_proven_browser_blocked",
       proven: [
         "Board/admin/player/moderator nav order and 44px touch metadata are model-owned.",
         "Board/admin/admin-audit/player/moderator first-viewport headers render from the shared surface header contract with model-owned capability touch metadata and live-status slots where applicable.",
@@ -306,6 +324,9 @@ const audit = {
         "No-browser static DOM proof verifies the generated file-backed fixture owns every command target inside its scenario root before browser execution.",
         ...noBindKeyboardProof(
           "real no-localhost Chromium Tab traversal and visible focus outlines for shared shell surfaces",
+        ),
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves board/admin/player/moderator shell screenshots, route-state screenshots, forbidden-route screenshots, overlap-checked targets, focus traversal, and screenshot pixel evidence across tablet and desktop viewports.",
         ),
       ],
       evidence: [
@@ -324,15 +345,19 @@ const audit = {
         "inAppBrowserPage.surfaces[board/admin/player/moderator]",
         "inAppBrowserStaticDom.scenarios",
       ],
-      missing: [
-        ...noBindKeyboardMissing(),
-        "Pointer behavior, overlap proof, and dev-server browser focus traversal remain blocked when localhost or Chromium is denied.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindKeyboardMissing(),
+            "Pointer behavior, overlap proof, and dev-server browser focus traversal remain blocked when localhost or Chromium is denied.",
+          ],
     }),
     requirement({
       id: "tablet-native-interaction-posture",
       label: "Tablet-native interaction posture",
-      state: "source_css_ssr_proven_browser_blocked",
+      state: fullBrowserProof
+        ? "browser_proven"
+        : "source_css_ssr_proven_browser_blocked",
       proven: [
         `The tablet interaction contract scanned ${tabletInteractionSourceSummary()} and found no ${tabletInteractionForbiddenSummary()}.`,
         "Shared app CSS proves edge-to-edge safe-area shell padding, a sticky safe-area role/session topbar, controlled overscroll, visible focus outlines, skip-link focus reveal, 44px app-shell/touch-button floors, touch-action: manipulation, wrapping touch rows, overflow-wrap guardrails, and 4/2/1 scan-strip columns.",
@@ -341,6 +366,9 @@ const audit = {
         "Moderator route CSS proves a safe-area-aware sticky host control rail for the primary moderator action zone, offset below the shared app topbar with internal scroll containment, narrow fallback, and route order before status readouts.",
         "Host touch-control CSS proves the 44px target variable, 8px minimum gaps, touch-action: manipulation, visible focus outline, and wrapping confirmation actions used by moderator/admin-style destructive confirmations.",
         "Build-mode SSR proves admin setup/recovery, player vote/post, and all 10 moderator critical host actions are descendants of explicit thumb-zone containers.",
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves touch target geometry, thumb-zone target counts, overlap-checked visible targets, nonblank screenshots, and focus traversal across 1024, 1180, 1280, and desktop viewports.",
+        ),
       ],
       evidence: [
         "tabletInteraction.forbiddenMatches",
@@ -351,9 +379,11 @@ const audit = {
         "tabletInteraction.hostTouchCss",
         "tabletInteraction.thumbZones",
       ],
-      missing: [
-        "Real Chromium proof is still required for physical thumb reach, pointer delivery, pixel overlap, visible focus rings, and actual Tab traversal.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            "Real Chromium proof is still required for physical thumb reach, pointer delivery, pixel overlap, visible focus rings, and actual Tab traversal.",
+          ],
     }),
     requirement({
       id: "single-root-shell-architecture",
@@ -375,7 +405,7 @@ const audit = {
     requirement({
       id: "player-surface",
       label: "Player thread, channel, command, votecount, and private queue",
-      state: "dom_and_model_proven_browser_blocked",
+      state: fullBrowserProof ? "browser_proven" : "dom_and_model_proven_browser_blocked",
       proven: [
         "Player route model covers thread paging, capability-scoped channels, vote command envelope, live projection store, votecount/deadline, and private projection boundaries.",
         "Static model and SSR proof expose the player thread pager as a first-class touch control with ready/pending/complete state, cursor metadata, duplicate-load disabling, and a 44px target floor.",
@@ -395,6 +425,9 @@ const audit = {
           "player command and private-channel click hit-testing and focus landing",
         ),
         ...noBindKeyboardProof("player surface Tab traversal, visible focus outlines, and denied-control exclusion"),
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves player screenshots, focus traversal, vote/post ACK refresh evidence, role-PM SubmitPost evidence, private disclosure expansion, tablet-safe media request evidence, overlap-checked targets, and thumb-zone geometry.",
+        ),
       ],
       evidence: [
         "staticContract.roles[player]",
@@ -423,16 +456,18 @@ const audit = {
         "inAppBrowserStaticDom.hydratedSurfaceScenarios[player].threadPager",
         "domSmoke.surfaces[player/player-private-review/player-private-channel]",
       ],
-      missing: [
-        ...noBindInteractionMissing(),
-        ...noBindKeyboardMissing(),
-        "Hydrated browser proof for Svelte event scheduling, command side effects, focus retention, nonblank screenshots, and dev-server pointer behavior remains blocked.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindInteractionMissing(),
+            ...noBindKeyboardMissing(),
+            "Hydrated browser proof for Svelte event scheduling, command side effects, focus retention, nonblank screenshots, and dev-server pointer behavior remains blocked.",
+          ],
     }),
     requirement({
       id: "moderator-host-surface",
       label: "Moderator/host touch control surface",
-      state: "dom_and_model_proven_browser_blocked",
+      state: fullBrowserProof ? "browser_proven" : "dom_and_model_proven_browser_blocked",
       proven: [
         "Host route model exposes deadline, votecount, replacement, phase/thread lock, host prompts, slot lifecycle, and role controls.",
         "Command model covers moderator ACK, host-prompt resolution, post-ACK projection patching, and hydrated refresh removal path.",
@@ -449,6 +484,9 @@ const audit = {
         ...noBindInteractionProof("moderator", "all 10 moderator critical host confirmation click hit-testing and focus landing"),
         ...noBindKeyboardProof("moderator surface Tab traversal, visible focus outlines, and denied-control exclusion"),
         "SSR and DOM proof render host console, host operations, command activity rail, votecount panel, critical actions, host-prompt action controls, and DOM-visible confirmation focus/escape/tab metadata.",
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves moderator screenshots, focus traversal, all 10 critical host action confirmations, SetSlotStatus ACK with refreshed slot lifecycle projection, overlap-checked targets, and moderator thumb-zone geometry.",
+        ),
       ],
       evidence: [
         "staticContract.roles[moderator]",
@@ -472,16 +510,18 @@ const audit = {
         "routeStateRender.confirmationMarkup.moderatorHostPrompt",
         "domSmoke.surfaces[moderator]",
       ],
-      missing: [
-        ...noBindInteractionMissing(),
-        ...noBindKeyboardMissing(),
-        "Real tablet Chromium proof for focus trap, visible focus rings, overlap, Svelte client scheduling, and hydrated command dispatch remains blocked.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindInteractionMissing(),
+            ...noBindKeyboardMissing(),
+            "Real tablet Chromium proof for focus trap, visible focus rings, overlap, Svelte client scheduling, and hydrated command dispatch remains blocked.",
+          ],
     }),
     requirement({
       id: "admin-operator-surface",
       label: "Admin/operator setup, audit, and recovery",
-      state: "dom_and_model_proven_browser_blocked",
+      state: fullBrowserProof ? "browser_proven" : "dom_and_model_proven_browser_blocked",
       proven: [
         "Admin route model exposes setup, readiness, audit, recovery, session grant, and recovery-gate actions without ambient superuser checks.",
         "Admin audit list links to native SvelteKit detail route with principal-scoped machine evidence endpoint.",
@@ -497,6 +537,9 @@ const audit = {
         ...noBindKeyboardProof("admin surface Tab traversal, visible focus outlines, and denied-control exclusion"),
         "SSR and DOM proof render admin setup/recovery confirmations with DOM-visible focus/escape/tab metadata plus a single admin command activity rail for setup/recovery command feedback.",
         "Static command proof records admin create_game reject handling.",
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves admin screenshots, audit-detail click-through evidence, session-grant and recovery-gate ACK evidence, setup/recovery thumb zones, overlap-checked targets, and focus traversal.",
+        ),
       ],
       evidence: [
         "staticContract.roles[admin]",
@@ -517,21 +560,26 @@ const audit = {
         "routeStateRender.adminAuditDetailSurface",
         "domSmoke.surfaces[admin/admin-audit-detail]",
       ],
-      missing: [
-        ...noBindInteractionMissing(),
-        ...noBindKeyboardMissing(),
-        "Hydrated browser proof for admin Svelte confirmation scheduling, focus traversal, and audit click-through screenshots remains blocked.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindInteractionMissing(),
+            ...noBindKeyboardMissing(),
+            "Hydrated browser proof for admin Svelte confirmation scheduling, focus traversal, and audit click-through screenshots remains blocked.",
+          ],
     }),
     requirement({
       id: "route-states",
       label: "Empty/loading/reject route states",
-      state: "ssr_and_dom_proven",
+      state: fullBrowserProof ? "browser_proven" : "ssr_and_dom_proven",
       proven: [
         "Admin, player, and moderator empty/loading/reject route-state scenarios render in build-mode SSR.",
         "DOM proof verifies root, status, action, state, aria-live, and touch metadata for all route-state pages.",
         "Static SSR focusability proof verifies every route-state recovery action is keyboard-focusable and denied nav ids remain inert.",
         ...noBindKeyboardProof("route-state Tab traversal, visible focus outlines, and route-state action reachability"),
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves every forced empty/loading/reject route-state surface renders nonblank screenshots across proof viewports.",
+        ),
       ],
       evidence: [
         "routeStateRender.scenarios",
@@ -539,29 +587,36 @@ const audit = {
         "staticFocusability.routeStates",
         "keyboardTraversal.routeStates",
       ],
-      missing: [
-        ...noBindKeyboardMissing(),
-        "Browser pixel layout and dev-server route-state focus traversal remain blocked.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindKeyboardMissing(),
+            "Browser pixel layout and dev-server route-state focus traversal remain blocked.",
+          ],
     }),
     requirement({
       id: "route-error-shell",
       label: "Route error shell and session context",
-      state: "ssr_and_dom_proven",
+      state: fullBrowserProof ? "browser_proven" : "ssr_and_dom_proven",
       proven: [
         "The real SvelteKit error page renders in build-mode SSR through the shared app shell.",
         "A player private-channel 403 keeps the failed /g/midsummer/c/role-pm path inside the player surface.",
         "SSR and DOM proof preserve the principal and capability summary from root layout session context.",
         "DOM proof verifies the error surface owns shell touch metadata and the active player nav.",
+        ...fullBrowserProofLines(
+          "Dev-server role smoke proves forbidden admin, moderator, and signed-out player routes render expected reject/error screenshots with overlap-checked targets.",
+        ),
       ],
       evidence: [
         "routeStateRender.errorSurface",
         "domSmoke.errorSurface",
       ],
-      missing: [
-        ...noBindKeyboardMissing(),
-        "Browser pixel layout, visible focus, pointer behavior, and dev-server error navigation remain blocked.",
-      ],
+      missing: fullBrowserProof
+        ? []
+        : [
+            ...noBindKeyboardMissing(),
+            "Browser pixel layout, visible focus, pointer behavior, and dev-server error navigation remain blocked.",
+          ],
     }),
     requirement({
       id: "browser-acceptance",
@@ -601,7 +656,10 @@ const audit = {
         "inAppBrowserLocalhostRun.pageUrl",
         "inAppBrowserImportedRun.status",
         "inAppBrowserImportedRun.validated",
+        "importedRoleSmoke.status",
+        "importedRoleSmoke.validated",
         "browserAcceptanceBoundary.lanes",
+        "browserAcceptanceBoundary.lanes[imported-localhost-role-smoke]",
         "browserAcceptanceBoundary.lanes[in-app-localhost-fixture-browser-run]",
         "browserAcceptanceBoundary.lanes[in-app-file-imported-browser-run]",
       ],
@@ -642,8 +700,12 @@ function requirement({ id, label, state, proven, evidence, missing }) {
   };
 }
 
+function fullBrowserProofLines(...lines) {
+  return fullBrowserProof ? lines : [];
+}
+
 function browserAcceptanceState() {
-  if (browserRoleSmokeEvidenceComplete()) {
+  if (browserRoleSmokeEvidenceComplete() || importedRoleSmokeEvidenceComplete()) {
     return "browser_proven";
   }
   if (inAppBrowserImportedRunEvidenceComplete()) {
@@ -673,6 +735,28 @@ function inAppBrowserImportedRunEvidenceComplete() {
     validated.moderatorCriticalConfirmationCount === 10 &&
     Array.isArray(validated.screenshotChecks) &&
     validated.screenshotChecks.length >= validated.viewportCount &&
+    validated.screenshotChecks.every((check) =>
+      check.screenshotPixels?.uniqueColorBuckets >= 8 &&
+      check.screenshotPixels?.changedPixelRatio >= 0.005
+    )
+  );
+}
+
+function importedRoleSmokeEvidenceComplete() {
+  if (artifacts.importedRoleSmoke.status !== "imported-passed") {
+    return false;
+  }
+  const validated = artifacts.importedRoleSmoke.validated ?? {};
+  return (
+    validated.viewportCount > 0 &&
+    validated.boardCount >= validated.viewportCount &&
+    validated.roleCount >= validated.viewportCount * 3 &&
+    validated.playerPrivateChannelCount >= validated.viewportCount &&
+    validated.routeStateCount > 0 &&
+    validated.forbiddenRouteCount > 0 &&
+    validated.screenshotCheckCount > 0 &&
+    Array.isArray(validated.screenshotChecks) &&
+    validated.screenshotChecks.length === validated.screenshotCheckCount &&
     validated.screenshotChecks.every((check) =>
       check.screenshotPixels?.uniqueColorBuckets >= 8 &&
       check.screenshotPixels?.changedPixelRatio >= 0.005
@@ -711,6 +795,7 @@ function browserRoleSmokeEvidenceComplete() {
     roleSmokeThumbZoneEvidenceComplete() &&
     adminBrowserOperationalEvidenceComplete() &&
     playerBrowserPostEvidenceComplete() &&
+    playerPrivateChannelBrowserPostEvidenceComplete() &&
     playerBrowserMediaEvidenceComplete() &&
     moderatorBrowserSlotLifecycleEvidenceComplete()
   );
@@ -824,6 +909,25 @@ function playerBrowserMediaEvidenceComplete() {
     entry.commandResult.media.requested.every((request) =>
       ["tablet", "small", "thumb", "thumbnail"].includes(request.variant),
     ),
+  );
+}
+
+function playerPrivateChannelBrowserPostEvidenceComplete() {
+  const viewportCount = artifacts.roleSmoke.viewports?.length ?? 0;
+  const entries = artifacts.roleSmoke.playerPrivateChannel ?? [];
+  if (viewportCount === 0 || entries.length < viewportCount) {
+    return false;
+  }
+  return entries.every((entry) =>
+    entry.path === "/g/midsummer/c/role-pm" &&
+    entry.activeChannelTestId === "player-channel-role-pm" &&
+    entry.privateReviewHref === "/g/midsummer/c/role-pm?private=notification-1" &&
+    entry.commandResult?.requestCommand?.game === "midsummer" &&
+    entry.commandResult?.requestCommand?.channel_id === "role-pm" &&
+    entry.commandResult?.requestCommand?.actor_slot === "slot-7" &&
+    entry.commandResult?.requestCommand?.body === "Browser smoke role-pm post" &&
+    entry.commandResult?.refreshedPostTestId === "thread-post-446" &&
+    entry.screenshotPixels !== undefined,
   );
 }
 

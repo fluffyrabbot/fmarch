@@ -66,6 +66,12 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   assert.equal(data.gameSetup[1].commandAction, "grant_session");
   assert.equal(data.gameSetup[2].commandAction, "add_cohost");
   assert.equal(data.gameSetup[0].boundary, "Command pipeline");
+  assert.equal(data.gameSetup[0].buttonLabel, "Review");
+  assert.equal(data.gameSetup[0].confirmLabel, "Create game");
+  assert.equal(
+    data.gameSetup[0].confirmMessage,
+    "Create game midsummer from pack mafiascum",
+  );
   assert.equal(data.gameSetup[1].boundary, "Authenticated session grant");
   assert.match(data.gameSetup[1].boundaryDetail, /GlobalAdmin session/);
   assert.match(data.gameSetup[2].boundaryDetail, /host-gated/);

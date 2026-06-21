@@ -65,6 +65,8 @@ const localFreshenCommand = [
   "npm run test:frontend-iab-static-dom",
   "npm run test:frontend-iab-localhost-fixture-smoke",
   "npm run test:frontend-iab-fixture-handoff",
+  "FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1 npm run test:frontend-role-smoke",
+  "npm run test:frontend-role-smoke-import",
   "npm run test:frontend-iab-fixture-bundle",
   "npm run test:frontend-iab-operator-runbook",
 ].join(" && ");
@@ -72,6 +74,8 @@ const chromiumReplayCommand = [
   "tar -xf target/frontend-in-app-browser-bundle/fixture-replay-bundle.tar",
   "npm run test:frontend-iab-fixture-replay",
   "npm run test:frontend-iab-localhost-fixture-smoke",
+  "npm run test:frontend-role-smoke",
+  "npm run test:frontend-role-smoke-import",
   "npm run test:frontend-iab-fixture-bundle",
 ].join(" && ");
 const importReturnedCommand = [
@@ -89,7 +93,7 @@ const replayHelp = {
     : "ready-for-external-replay",
   proof: "in-app-browser-external-replay-help",
   boundary:
-    "Condensed operator helper for replaying the generated in-app browser fixture outside the sandbox and importing returned evidence. It records exact commands, route-error promotion requirements, returned files, and current proof status for file-backed and localhost-served fixture browser runs. It does not prove browser behavior by itself, Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
+    "Condensed operator helper for replaying the generated in-app browser fixture plus full role-smoke outside the sandbox and importing the returned bundle. It records exact commands, route-error promotion requirements, returned files, and current proof status for file-backed fixture, localhost-served fixture, and role-smoke browser runs. It does not prove browser behavior by itself, Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
   generatedFrom: sources,
   fixture: {
     page: manifest.page,
@@ -129,6 +133,8 @@ const replayHelp = {
     "target/frontend-in-app-browser-interactions/browser-run-*.png",
     "target/frontend-in-app-browser-localhost/browser-run.json",
     "target/frontend-in-app-browser-localhost/browser-run-*.png",
+    "target/frontend-role-smoke/role-smoke.json",
+    "target/frontend-role-smoke/*.png",
     "target/frontend-in-app-browser-bundle/fixture-replay-bundle.tar",
   ],
   promotionChecks: [
@@ -140,11 +146,14 @@ const replayHelp = {
     "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",
     "returned bundle includes localhost browser-run-*.png screenshot files for every proof viewport when localhost fixture browser-run passed",
+    "returned role-smoke.json has status passed with referenced role-smoke screenshots",
     "bundle import writes bundle-imported-passed",
+    "bundle import writes imported role-smoke as imported-passed",
     "browser acceptance boundary marks in-app-file-browser-run proven",
     "browser acceptance boundary marks in-app-localhost-fixture-browser-run proven when restored localhost fixture browser-run passed",
+    "browser acceptance boundary marks imported-localhost-role-smoke proven when returned role-smoke passed",
     "completion audit records imported browser evidence before readiness is summarized",
-    "localhost app acceptance still requires npm run test:frontend-role-proof:browser in an environment that allows localhost and Chromium",
+    "full localhost app acceptance is tracked by the localhost dev-server role-smoke lane; fixture replay lanes are diagnostic browser evidence, not a replacement for that full app lane",
   ],
   currentStatus: runbook.currentStatus,
   blocking: runbook.blocking,

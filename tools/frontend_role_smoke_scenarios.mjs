@@ -495,7 +495,9 @@ function boardActionScenario({ testId, action }) {
   return Object.freeze({
     testId,
     navigation: action.navigation,
-    ...(action.navigation === "link" ? { hrefPath: action.href } : {}),
+    ...(action.navigation === "link"
+      ? { hrefPath: action.href }
+      : { blockedReason: action.blockedReason }),
   });
 }
 

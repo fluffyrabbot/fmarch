@@ -80,6 +80,7 @@ export function buildPlayerPrivateQueueViewModel({
           reviewTestId: `player-private-review-${item.id}`,
           reviewLinkTestId: `player-private-link-${item.id}`,
           reviewHref: item.reviewHref ?? null,
+          reviewLinkLabel: `Open ${item.label} review`,
           reviewLabel:
             expandedItems[item.id] === true
               ? `Hide ${item.label}`

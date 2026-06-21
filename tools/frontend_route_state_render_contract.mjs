@@ -111,6 +111,7 @@ try {
   const adminSurface = await proveRenderedAdminSurface(bundle);
   const adminAuditDetailSurface = await proveRenderedAdminAuditDetailSurface(bundle);
   const playerSurface = await proveRenderedPlayerSurface(bundle);
+  const playerThreadPagerStates = await proveRenderedPlayerThreadPagerStates(bundle);
   const playerPrivateReviewRoute = await proveRenderedPlayerPrivateReviewRoute(bundle);
   const playerPrivateChannelRoute = await proveRenderedPlayerPrivateChannelRoute(bundle);
   const moderatorSurface = await proveRenderedModeratorSurface(bundle);
@@ -154,6 +155,7 @@ try {
     adminSurface,
     adminAuditDetailSurface,
     playerSurface,
+    playerThreadPagerStates,
     playerPrivateReviewRoute,
     playerPrivateChannelRoute,
     moderatorSurface,
@@ -435,6 +437,11 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
   );
   assertIncludes(
     collapsedHtml,
+    "Open Commuted review",
+    "player private notification review link label",
+  );
+  assertIncludes(
+    collapsedHtml,
     'aria-expanded="false"',
     "collapsed player private disclosure state",
   );
@@ -480,6 +487,7 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
       reviewTestId: "player-private-review-notification-1",
       reviewLinkTestId: "player-private-link-notification-1",
       reviewHref: "/g/midsummer?private=notification-1",
+      reviewLinkLabel: "Open Commuted review",
       detailTestId: "player-private-detail-notification-1",
       ariaExpanded: "false",
       detailRendered: false,
@@ -489,6 +497,7 @@ async function proveRenderedPlayerPrivateDisclosure(bundle) {
       reviewTestId: "player-private-review-notification-1",
       reviewLinkTestId: "player-private-link-notification-1",
       reviewHref: "/g/midsummer?private=notification-1",
+      reviewLinkLabel: "Open Commuted review",
       detailTestId: "player-private-detail-notification-1",
       ariaExpanded: "true",
       detailRendered: true,
@@ -521,6 +530,7 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
     'href="/g/midsummer?private=notification-1"',
     "player private review href",
   );
+  assertIncludes(html, "Open Commuted review", "player private review link label");
   assertIncludes(
     html,
     'aria-expanded="true"',
@@ -544,6 +554,7 @@ async function proveRenderedPlayerPrivateReviewRoute(bundle) {
     reviewTestId: "player-private-review-notification-1",
     reviewLinkTestId: "player-private-link-notification-1",
     reviewHref: "/g/midsummer?private=notification-1",
+    reviewLinkLabel: "Open Commuted review",
     detailTestId: "player-private-detail-notification-1",
     ariaExpanded: "true",
     detailRendered: true,
@@ -604,6 +615,11 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
   );
   assertIncludes(
     html,
+    "Open Commuted review",
+    "player private channel review link label",
+  );
+  assertIncludes(
+    html,
     'data-boundary-status="principal-scoped-private-projections"',
     "player private channel principal scoped private boundary",
   );
@@ -638,6 +654,7 @@ async function proveRenderedPlayerPrivateChannelRoute(bundle) {
     },
     privateReviewLinkTestId: "player-private-link-notification-1",
     privateReviewHref: "/g/midsummer/c/role-pm?private=notification-1",
+    privateReviewLinkLabel: "Open Commuted review",
     privateBoundaryStatus: "principal-scoped-private-projections",
     mediaVariant: "tablet",
     hostOnlyCopyExcluded: true,
@@ -1531,6 +1548,7 @@ async function proveRenderedPlayerSurface(bundle) {
       buttonTestId: PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,
       buttonLabel: "Load older",
       buttonDisabled: false,
+      buttonDisabledReason: null,
       minTouchTargetPx: PLAYER_THREAD_PAGER_CONTRACT.minTouchTargetPx,
       nextBeforeSeq: 441,
     },
@@ -1544,6 +1562,99 @@ async function proveRenderedPlayerSurface(bundle) {
       preferredVariants: PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants,
       forbiddenVariants: PLAYER_THREAD_MEDIA_CONTRACT.forbiddenVariants,
     },
+    htmlBytes: Buffer.byteLength(html),
+  };
+}
+
+async function proveRenderedPlayerThreadPagerStates(bundle) {
+  const pending = await assertRenderedPlayerThreadPagerState({
+    bundle,
+    state: "pending",
+    label: "Loading older",
+    reason: "Loading older posts",
+    busy: "true",
+  });
+  const complete = await assertRenderedPlayerThreadPagerState({
+    bundle,
+    state: "complete",
+    label: "No older posts",
+    reason: "At oldest loaded post",
+    busy: "false",
+  });
+
+  return {
+    boundary:
+      "Build-mode Svelte SSR renders player thread pager disabled states with visible button reasons for pending duplicate-load prevention and complete oldest-page state. This proves the touch control does not rely on hidden title text; browser focus and pointer behavior remain covered by browser lanes.",
+    states: [pending, complete],
+  };
+}
+
+async function assertRenderedPlayerThreadPagerState({
+  bundle,
+  state,
+  label,
+  reason,
+  busy,
+}) {
+  const rendered = await bundle.renderPlayerThreadPagerState(state);
+  const html = rendered.html;
+  assertIncludes(
+    html,
+    `data-component="${PLAYER_THREAD_PAGER_CONTRACT.component}"`,
+    `player thread pager ${state} component`,
+  );
+  assertIncludes(
+    html,
+    `data-state="${state}"`,
+    `player thread pager ${state} state`,
+  );
+  assertIncludes(
+    html,
+    `aria-busy="${busy}"`,
+    `player thread pager ${state} busy`,
+  );
+  assertIncludes(
+    html,
+    `data-testid="${PLAYER_THREAD_PAGER_CONTRACT.buttonTestId}"`,
+    `player thread pager ${state} button`,
+  );
+  assertIncludes(
+    html,
+    "fm-touch-button__label",
+    `player thread pager ${state} label class`,
+  );
+  assertIncludes(
+    html,
+    label,
+    `player thread pager ${state} label text`,
+  );
+  assertIncludes(
+    html,
+    "fm-touch-button__reason",
+    `player thread pager ${state} reason class`,
+  );
+  assertIncludes(
+    html,
+    reason,
+    `player thread pager ${state} reason text`,
+  );
+  assertIncludes(
+    html,
+    'aria-disabled="true"',
+    `player thread pager ${state} aria disabled`,
+  );
+  assertExcludes(
+    html,
+    "title=",
+    `player thread pager ${state} tooltip dependency`,
+  );
+
+  return {
+    state,
+    label,
+    reason,
+    busy,
+    buttonTestId: PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,
     htmlBytes: Buffer.byteLength(html),
   };
 }
@@ -1851,6 +1962,11 @@ function assertRenderedRoleNav({ html, scenario }) {
         'aria-disabled="true"',
         `${scenario.id} blocked role aria-disabled`,
       );
+      assertIncludes(
+        html,
+        'class="fm-app-shell__nav-reason"',
+        `${scenario.id} blocked role visible reason class`,
+      );
     }
   }
 }
@@ -1877,6 +1993,18 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
       expectedNav[surface],
       `${id} ${surface} shell nav mismatch`,
     );
+    if (rendered.navigation === "blocked") {
+      assertIncludes(
+        html,
+        `<small class="fm-app-shell__nav-reason">${rendered.blockedReason}</small>`,
+        `${id} ${surface} shell nav visible blocked reason`,
+      );
+      assertExcludes(
+        tag,
+        "title=",
+        `${id} ${surface} shell nav tooltip dependency`,
+      );
+    }
     return {
       surface,
       testId,
@@ -1884,6 +2012,9 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
       rendered: rendered.navigation,
       tagName: rendered.tagName,
       ...(rendered.href === null ? {} : { href: rendered.href }),
+      ...(rendered.blockedReason === null
+        ? {}
+        : { blockedReason: rendered.blockedReason }),
     };
   });
 
@@ -1899,14 +2030,52 @@ function assertRenderedShellNav({ id, render, html, expectedNav }) {
     blockedNavTestIds: navItems
       .filter((item) => item.rendered === "blocked")
       .map((item) => item.testId),
+    blockedNavReasons: navItems
+      .filter((item) => item.rendered === "blocked")
+      .map((item) => ({
+        testId: item.testId,
+        blockedReason: item.blockedReason,
+      })),
     sessionTestId: APP_SHELL_CONTRACT.sessionTestId,
     sessionPrincipalTestId: APP_SHELL_CONTRACT.sessionPrincipalTestId,
     sessionCapabilityTestId: APP_SHELL_CONTRACT.sessionCapabilityTestId,
     sessionGameTestId: APP_SHELL_CONTRACT.sessionGameTestId,
     shellComponentCount,
     navItems,
+    ...(id === boardScenario.id
+      ? { blockedActionReasons: assertBoardBlockedActionReasons({ id, html }) }
+      : {}),
     htmlBytes: Buffer.byteLength(html),
   };
+}
+
+function assertBoardBlockedActionReasons({ id, html }) {
+  return boardScenario.actions
+    .filter((action) => action.navigation === "blocked")
+    .map((action) => {
+      const tag = tagWithTestId(html, action.testId);
+      assert.notEqual(tag, null, `${id} blocked board action ${action.testId} missing`);
+      assertIncludes(
+        tag,
+        `data-blocked-reason="${action.blockedReason}"`,
+        `${id} blocked board action ${action.testId} reason attribute`,
+      );
+      assertIncludes(
+        html,
+        `>${action.blockedReason}</small>`,
+        `${id} blocked board action ${action.testId} visible reason`,
+      );
+      assertExcludes(
+        tag,
+        "title=",
+        `${id} blocked board action ${action.testId} tooltip dependency`,
+      );
+      return {
+        testId: action.testId,
+        blockedReason: action.blockedReason,
+        titleAttribute: false,
+      };
+    });
 }
 
 function countOccurrences(value, needle) {
@@ -1928,7 +2097,13 @@ function renderedShellNavigation(tag) {
       true,
       `blocked shell nav item missing aria-disabled: ${tag}`,
     );
-    return { tagName, href, navigation: "blocked" };
+    const blockedReason = attributeValue(tag, "data-blocked-reason");
+    assert.notEqual(
+      blockedReason,
+      null,
+      `blocked shell nav item missing blocked reason: ${tag}`,
+    );
+    return { tagName, href, navigation: "blocked", blockedReason };
   }
   throw new Error(`unknown shell nav allowed state in ${tag}`);
 }
@@ -2060,6 +2235,7 @@ import HostAction from "../src/lib/components/host-action/HostAction.svelte";
 import HostCommandActivity from "../src/lib/components/host-action/HostCommandActivity.svelte";
 import PlayerCommandReceipt from "../src/lib/components/player-command/PlayerCommandReceipt.svelte";
 import PlayerPrivateQueue from "../src/lib/components/player-private-queue/PlayerPrivateQueue.svelte";
+import PlayerThread from "../src/lib/components/player-thread/PlayerThread.svelte";
 import {
   buildAdminAuditDetailData,
   buildAdminRouteData,
@@ -2292,6 +2468,29 @@ export async function renderScenario(role, state) {
 	  });
 	  return renderWithRootLayout({ page: "player", data, url: "http://localhost/g/midsummer" });
 	}
+
+export async function renderPlayerThreadPagerState(state) {
+	  const data = await buildGameRouteData({
+	    game: "midsummer",
+	    ...fixtureRouteInputForRole("player"),
+	  });
+  const thread = state === "complete"
+    ? { ...data.thread, nextBeforeSeq: null }
+    : data.thread;
+  const threadPageStatus = state === "pending"
+    ? { state: "pending", message: "Loading older posts" }
+    : state === "complete"
+      ? { state: "ack", message: "Loaded 2 older posts" }
+      : null;
+  return render(PlayerThread, {
+    props: {
+      phase: data.phase,
+      thread,
+      liveOfficialPost: null,
+      threadPageStatus,
+    },
+  });
+}
 
 export async function renderPlayerPrivateReviewRoute() {
 	  const data = await buildGameRouteData({

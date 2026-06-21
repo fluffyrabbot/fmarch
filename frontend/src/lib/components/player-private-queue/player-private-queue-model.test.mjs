@@ -67,6 +67,7 @@ test("player private queue model builds disclosure view state without host leaka
   assert.equal(view.items[0].reviewTestId, "player-private-review-notification-1");
   assert.equal(view.items[0].reviewLinkTestId, "player-private-link-notification-1");
   assert.equal(view.items[0].reviewHref, "/g/midsummer?private=notification-1");
+  assert.equal(view.items[0].reviewLinkLabel, "Open Private notification review");
   assert.equal(view.items[0].detailTestId, "player-private-detail-notification-1");
   assert.equal(view.items[0].reviewLabel, "Hide Private notification");
   assert.equal(view.items[0].ariaExpanded, "true");
@@ -90,6 +91,7 @@ test("player private queue disclosure buttons name the private row without leaki
     view.items.map((item) => ({
       id: item.id,
       reviewLabel: item.reviewLabel,
+      reviewLinkLabel: item.reviewLinkLabel,
       ariaExpanded: item.ariaExpanded,
       detailTestId: item.detailTestId,
     })),
@@ -97,12 +99,14 @@ test("player private queue disclosure buttons name the private row without leaki
       {
         id: "notification-1",
         reviewLabel: "Review Commuted",
+        reviewLinkLabel: "Open Commuted review",
         ariaExpanded: "false",
         detailTestId: "player-private-detail-notification-1",
       },
       {
         id: "investigation-1",
         reviewLabel: "Review tracker",
+        reviewLinkLabel: "Open tracker review",
         ariaExpanded: "false",
         detailTestId: "player-private-detail-investigation-1",
       },

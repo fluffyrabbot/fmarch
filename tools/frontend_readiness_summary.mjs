@@ -42,6 +42,8 @@ const sources = {
     "target/frontend-in-app-browser-localhost/browser-run.json",
   inAppBrowserImportedRun:
     "target/frontend-in-app-browser-imported-run/imported-run.json",
+  importedRoleSmoke:
+    "target/frontend-role-smoke-imported/imported-role-smoke.json",
   browserAcceptanceBoundary:
     "target/frontend-browser-acceptance-boundary/browser-acceptance-boundary.json",
 };
@@ -55,7 +57,10 @@ const artifacts = Object.fromEntries(
   ),
 );
 
-const localhostProofState = localhostState(artifacts.roleSmoke);
+const localhostProofState = localhostState(
+  artifacts.roleSmoke,
+  artifacts.importedRoleSmoke,
+);
 const noBindProofState = noBindState(artifacts.renderSmoke);
 const noBindInteractionProofState = noBindInteractionState(
   artifacts.noBindInteractions,
@@ -72,7 +77,7 @@ const noBindKeyboardPromotionFailures = noBindKeyboardFailureReasons(
   artifacts.keyboardTraversal,
 );
 
-assert.equal(artifacts.completionAudit.status, "incomplete");
+assert.equal(["passed", "incomplete"].includes(artifacts.completionAudit.status), true);
 assert.equal(artifacts.routeStateRender.status, "passed");
 assert.equal(artifacts.dispatchBridge.status, "passed");
 assert.equal(artifacts.hydratedHandlers.status, "passed");
@@ -149,7 +154,16 @@ assert.equal(
   ),
   true,
 );
-assert.equal(artifacts.browserAcceptanceBoundary.status, "incomplete");
+assert.equal(
+  ["imported-passed", "source-blocked"].includes(
+    artifacts.importedRoleSmoke.status,
+  ),
+  true,
+);
+assert.equal(
+  ["passed", "incomplete"].includes(artifacts.browserAcceptanceBoundary.status),
+  true,
+);
 assert.equal(
   artifacts.browserAcceptanceBoundary.proof,
   "frontend-browser-acceptance-boundary",
@@ -163,11 +177,11 @@ const requirements = Object.fromEntries(
 );
 
 const summary = {
-  status: "incomplete",
+  status: artifacts.completionAudit.status,
   proof: "frontend-readiness-summary",
   generatedFrom: sources,
   boundary:
-    "Generated operator-readable summary of current frontend proof artifacts. It reports model/SSR/DOM readiness separately from Chromium no-bind and localhost browser acceptance, and does not promote blocked browser proof to completion.",
+    "Generated operator-readable summary of current frontend proof artifacts. It reports model/SSR/DOM readiness separately from diagnostic Chromium no-bind lanes and promotes completion only when the full localhost dev-server role smoke is proven.",
   promotionRules: {
     roleReadinessOrder: [
       "model_ssr_dom_proven_browser_blocked",
@@ -247,6 +261,14 @@ const summary = {
       "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 22 fixture interactions",
       "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 10",
       "inAppBrowserImportedRun.validated.screenshotChecks re-read nonblank PNG evidence",
+    ],
+    importedRoleSmokeRequires: [
+      "importedRoleSmoke.status == imported-passed",
+      "importedRoleSmoke.validated.boardCount covers every proof viewport",
+      "importedRoleSmoke.validated.roleCount covers admin, player, and moderator for every proof viewport",
+      "importedRoleSmoke.validated.playerPrivateChannelCount covers every proof viewport",
+      "importedRoleSmoke.validated.routeStateCount and forbiddenRouteCount are nonempty",
+      "importedRoleSmoke.validated.screenshotChecks re-read nonblank PNG evidence",
     ],
   },
   overall: artifacts.completionAudit.overall,
@@ -414,6 +436,7 @@ const summary = {
     inAppBrowserImportedRun: inAppBrowserImportedRunSummary(
       artifacts.inAppBrowserImportedRun,
     ),
+    importedRoleSmoke: importedRoleSmokeSummary(artifacts.importedRoleSmoke),
     boundaryArtifact: {
       status: artifacts.browserAcceptanceBoundary.status,
       proof: artifacts.browserAcceptanceBoundary.proof,
@@ -424,6 +447,8 @@ const summary = {
         promotionEligible: lane.promotionEligible,
       })),
       blockers: artifacts.browserAcceptanceBoundary.overall.blockers,
+      diagnosticBlockers:
+        artifacts.browserAcceptanceBoundary.overall.diagnosticBlockers ?? [],
     },
   },
 };
@@ -685,6 +710,32 @@ function inAppBrowserImportedRunSummary(inAppBrowserImportedRun) {
   };
 }
 
+function importedRoleSmokeSummary(importedRoleSmoke) {
+  const proven = importedRoleSmokeEvidenceComplete(importedRoleSmoke);
+  return {
+    status: proven ? "imported_role_smoke_proven" : "source_blocked",
+    artifactStatus: importedRoleSmoke.status,
+    boundary: importedRoleSmoke.boundary,
+    promotionEligible: importedRoleSmoke.promotionEligible === true,
+    sourceRoleSmoke: importedRoleSmoke.sourceRoleSmoke ?? null,
+    validated: {
+      viewportCount: importedRoleSmoke.validated?.viewportCount ?? 0,
+      boardCount: importedRoleSmoke.validated?.boardCount ?? 0,
+      roleCount: importedRoleSmoke.validated?.roleCount ?? 0,
+      playerPrivateChannelCount:
+        importedRoleSmoke.validated?.playerPrivateChannelCount ?? 0,
+      routeStateCount: importedRoleSmoke.validated?.routeStateCount ?? 0,
+      forbiddenRouteCount: importedRoleSmoke.validated?.forbiddenRouteCount ?? 0,
+      screenshotCheckCount:
+        importedRoleSmoke.validated?.screenshotChecks?.length ?? 0,
+    },
+    blocking: importedRoleSmoke.blocking ?? [],
+    blockedReason: proven
+      ? null
+      : "No passed external localhost role-smoke artifact has been imported.",
+  };
+}
+
 function stabilityCheckSummaries(checks = []) {
   return checks.map((check) => ({
     id: check.id,
@@ -696,11 +747,17 @@ function stabilityCheckSummaries(checks = []) {
   }));
 }
 
-function localhostState(roleSmoke) {
+function localhostState(roleSmoke, importedRoleSmoke) {
+  if (browserRoleSmokeEvidenceComplete(roleSmoke)) {
+    return "browser_proven";
+  }
+  if (importedRoleSmokeEvidenceComplete(importedRoleSmoke)) {
+    return "imported_browser_proven";
+  }
   if (roleSmoke.status !== "passed") {
     return "blocked";
   }
-  return browserRoleSmokeEvidenceComplete(roleSmoke) ? "browser_proven" : "incomplete";
+  return "incomplete";
 }
 
 function noBindState(renderSmoke) {
@@ -929,6 +986,28 @@ function inAppBrowserImportedRunEvidenceComplete(inAppBrowserImportedRun) {
   );
 }
 
+function importedRoleSmokeEvidenceComplete(importedRoleSmoke) {
+  if (importedRoleSmoke.status !== "imported-passed") {
+    return false;
+  }
+  const validated = importedRoleSmoke.validated ?? {};
+  return (
+    validated.viewportCount > 0 &&
+    validated.boardCount >= validated.viewportCount &&
+    validated.roleCount >= validated.viewportCount * 3 &&
+    validated.playerPrivateChannelCount >= validated.viewportCount &&
+    validated.routeStateCount > 0 &&
+    validated.forbiddenRouteCount > 0 &&
+    validated.screenshotCheckCount > 0 &&
+    Array.isArray(validated.screenshotChecks) &&
+    validated.screenshotChecks.length === validated.screenshotCheckCount &&
+    validated.screenshotChecks.every((check) =>
+      check.screenshotPixels?.uniqueColorBuckets >= 8 &&
+      check.screenshotPixels?.changedPixelRatio >= 0.005
+    )
+  );
+}
+
 function inAppBrowserCommandScenarioIds() {
   return [
     "admin-cohost-confirm-click",
@@ -984,7 +1063,10 @@ function hasModeratorBrowserConfirmationEvidence(entry) {
 }
 
 function promotedReadiness(surfaces) {
-  if (surfaces.localhostBrowser === "browser_proven") {
+  if (
+    surfaces.localhostBrowser === "browser_proven" ||
+    surfaces.localhostBrowser === "imported_browser_proven"
+  ) {
     return "browser_proven";
   }
   if (surfaces.noBindInteraction === "chromium_no_bind_interactions_proven") {
@@ -1007,7 +1089,10 @@ function promotedReadiness(surfaces) {
 }
 
 function blockedReasonsForSurfaces(surfaces, fallbackMissing) {
-  if (surfaces.localhostBrowser === "browser_proven") {
+  if (
+    surfaces.localhostBrowser === "browser_proven" ||
+    surfaces.localhostBrowser === "imported_browser_proven"
+  ) {
     return [];
   }
   if (surfaces.noBindChromium === "chromium_no_bind_proven") {
@@ -1029,7 +1114,10 @@ function blockedReasonsForSurfaces(surfaces, fallbackMissing) {
 }
 
 function promotionFailuresForSurfaces(surfaces) {
-  if (surfaces.localhostBrowser === "browser_proven") {
+  if (
+    surfaces.localhostBrowser === "browser_proven" ||
+    surfaces.localhostBrowser === "imported_browser_proven"
+  ) {
     return [];
   }
   return [
@@ -1669,6 +1757,9 @@ function renderConsole(summary) {
   lines.push(
     `in-app imported browser-run | ${summary.browserAcceptance.inAppBrowserImportedRun.status}`,
   );
+  lines.push(
+    `imported role smoke | ${summary.browserAcceptance.importedRoleSmoke.status}`,
+  );
   return lines.join("\n");
 }
 
@@ -1707,6 +1798,7 @@ function renderMarkdown(summary) {
     `- In-app file browser-run: \`${summary.browserAcceptance.inAppBrowserRun.status}\``,
     `- In-app localhost browser-run: \`${summary.browserAcceptance.inAppBrowserLocalhostRun.status}\``,
     `- In-app imported browser-run: \`${summary.browserAcceptance.inAppBrowserImportedRun.status}\``,
+    `- Imported role smoke: \`${summary.browserAcceptance.importedRoleSmoke.status}\``,
     "",
     "## Shared Proof",
     "",

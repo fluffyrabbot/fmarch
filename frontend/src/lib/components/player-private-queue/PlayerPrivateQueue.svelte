@@ -64,7 +64,7 @@
             data-min-touch-target-px={item.minTouchTargetPx}
             href={item.reviewHref}
           >
-            Open review
+            {item.reviewLinkLabel}
           </a>
         {/if}
         {#if item.expanded}

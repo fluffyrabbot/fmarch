@@ -22,6 +22,8 @@ const expectedPayload = [
   "target/frontend-in-app-browser-interactions/replay-handoff.json",
   "target/frontend-in-app-browser-interactions/replay-handoff.md",
   "target/frontend-in-app-browser-localhost/browser-run.json",
+  "target/frontend-role-smoke-imported/imported-role-smoke.json",
+  "target/frontend-role-smoke/role-smoke.json",
 ];
 
 assert.deepEqual(
@@ -46,10 +48,23 @@ const extractedBrowserRunPath = path.join(
   "browser-run.json",
 );
 await runImportedRunContract(extractedBrowserRunPath);
+const extractedRoleSmokePath = path.join(
+  extractedRoot,
+  "target",
+  "frontend-role-smoke",
+  "role-smoke.json",
+);
+await runImportedRoleSmokeContract(extractedRoleSmokePath);
 
 const importedRun = JSON.parse(
   await readFile(
     path.join(repoRoot, "target", "frontend-in-app-browser-imported-run", "imported-run.json"),
+    "utf8",
+  ),
+);
+const importedRoleSmoke = JSON.parse(
+  await readFile(
+    path.join(repoRoot, "target", "frontend-role-smoke-imported", "imported-role-smoke.json"),
     "utf8",
   ),
 );
@@ -59,10 +74,12 @@ const bundleImport = {
     : "bundle-source-blocked",
   proof: "in-app-browser-fixture-bundle-import",
   boundary:
-    "Validates a returned deterministic in-app browser fixture bundle without launching Chromium. It parses the tar payload, verifies required fixture/replay/import files, extracts the bundle into a local proof directory, restores returned localhost fixture browser-run artifacts, then runs the imported browser-run contract against the extracted file-backed browser-run.json. It promotes imported file evidence only when that imported-run contract is imported-passed, and it lets the browser-acceptance boundary separately evaluate the restored localhost fixture artifact. It does not prove Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
+    "Validates a returned deterministic in-app browser fixture bundle without launching Chromium. It parses the tar payload, verifies required fixture/replay/import/role-smoke files, extracts the bundle into a local proof directory, restores returned localhost fixture browser-run artifacts, then runs the imported browser-run contract against the extracted file-backed browser-run.json and the imported role-smoke contract against the extracted role-smoke.json. It promotes imported file evidence only when that imported-run contract is imported-passed, and it lets the browser-acceptance boundary separately evaluate the restored localhost fixture artifact and imported full role-smoke artifact. It does not prove Svelte hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or full localhost app acceptance.",
   generatedFrom: {
     sourceArchive: relativeOrAbsolute(sourceArchive),
     importedRun: "target/frontend-in-app-browser-imported-run/imported-run.json",
+    importedRoleSmoke:
+      "target/frontend-role-smoke-imported/imported-role-smoke.json",
     restoredLocalhostBrowserRun:
       "target/frontend-in-app-browser-localhost/browser-run.json",
   },
@@ -78,6 +95,8 @@ const bundleImport = {
       "target/frontend-in-app-browser-bundle-import/extracted/target/frontend-in-app-browser-interactions/browser-run.json",
     localhostBrowserRun:
       "target/frontend-in-app-browser-bundle-import/extracted/target/frontend-in-app-browser-localhost/browser-run.json",
+    roleSmoke:
+      "target/frontend-in-app-browser-bundle-import/extracted/target/frontend-role-smoke/role-smoke.json",
   },
   restored: {
     localhostArtifacts: restoredLocalhostArtifacts,
@@ -87,6 +106,12 @@ const bundleImport = {
     promotionEligible: importedRun.promotionEligible,
     validated: importedRun.validated,
     blocking: importedRun.blocking,
+  },
+  importedRoleSmoke: {
+    status: importedRoleSmoke.status,
+    promotionEligible: importedRoleSmoke.promotionEligible,
+    validated: importedRoleSmoke.validated,
+    blocking: importedRoleSmoke.blocking,
   },
   promotionEligible: importedRun.status === "imported-passed",
 };
@@ -181,6 +206,28 @@ async function runImportedRunContract(extractedBrowserRunPath) {
   });
   if (code !== 0) {
     throw new Error(`frontend imported browser-run contract failed with exit ${code}`);
+  }
+}
+
+async function runImportedRoleSmokeContract(extractedRoleSmokePath) {
+  const code = await new Promise((resolve, reject) => {
+    const child = spawn(
+      process.execPath,
+      [
+        "tools/frontend_role_smoke_imported_contract.mjs",
+        "--source",
+        extractedRoleSmokePath,
+      ],
+      {
+        cwd: repoRoot,
+        stdio: "inherit",
+      },
+    );
+    child.once("error", reject);
+    child.once("exit", resolve);
+  });
+  if (code !== 0) {
+    throw new Error(`frontend imported role-smoke contract failed with exit ${code}`);
   }
 }
 

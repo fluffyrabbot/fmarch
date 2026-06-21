@@ -239,6 +239,10 @@ test("shared app CSS makes disabled touch actions visibly inert", async () => {
   assert.match(css, /opacity:\s*0\.[0-9]+/);
   assert.match(css, /touch-action:\s*manipulation/);
   assert.match(css, /text-decoration:\s*none/);
+  assert.match(css, /\.fm-app-shell__nav-reason\s*\{/);
+  assert.match(css, /font-weight:\s*800/);
+  assert.match(css, /\.fm-touch-button__reason\s*\{/);
+  assert.match(css, /\.fm-touch-button__label,\s*\.fm-touch-button__reason\s*\{[^}]*overflow-wrap:\s*anywhere/s);
   assert.match(css, /\.fm-navigation-pending\s*\{/);
   assert.match(css, /position:\s*sticky/);
   assert.match(css, /min-block-size:\s*52px/);

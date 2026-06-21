@@ -41,7 +41,6 @@ export function recordAdminFormStatus({
 export function adminSetupActionMode(item) {
   switch (item.commandAction) {
     case "create_game":
-      return "send";
     case "add_cohost":
     case "grant_session":
       return "confirm";

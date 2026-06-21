@@ -53,6 +53,11 @@ export function buildPlayerThreadPagerViewModel({
   const hasOlder = nextBeforeSeq !== null;
   const state = pending ? "pending" : hasOlder ? "ready" : "complete";
   const disabled = pending || !hasOlder;
+  const disabledReason = pagerDisabledReason({
+    pending,
+    hasOlder,
+    threadPageStatus,
+  });
 
   return Object.freeze({
     root: Object.freeze({
@@ -68,13 +73,24 @@ export function buildPlayerThreadPagerViewModel({
     }),
     button: Object.freeze({
       testId: PLAYER_THREAD_PAGER_CONTRACT.buttonTestId,
-      label: pending ? "Loading older" : "Load older",
+      label: pending ? "Loading older" : hasOlder ? "Load older" : "No older posts",
       disabled,
       ariaDisabled: disabled ? "true" : "false",
+      disabledReason,
       minTouchTargetPx: PLAYER_THREAD_PAGER_CONTRACT.minTouchTargetPx,
       nextBeforeSeq,
     }),
   });
+}
+
+function pagerDisabledReason({ pending, hasOlder, threadPageStatus }) {
+  if (pending) {
+    return String(threadPageStatus?.message ?? "Loading older posts");
+  }
+  if (!hasOlder) {
+    return "At oldest loaded post";
+  }
+  return null;
 }
 
 export function buildPlayerThreadPostViewModel(post = {}) {

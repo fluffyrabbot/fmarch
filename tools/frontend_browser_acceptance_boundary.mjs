@@ -23,6 +23,8 @@ const sources = {
     "target/frontend-in-app-browser-localhost/browser-run.json",
   inAppBrowserImportedRun:
     "target/frontend-in-app-browser-imported-run/imported-run.json",
+  importedRoleSmoke:
+    "target/frontend-role-smoke-imported/imported-role-smoke.json",
 };
 
 const artifacts = Object.fromEntries(
@@ -80,6 +82,12 @@ assert.equal(
   ),
   true,
 );
+assert.equal(
+  ["imported-passed", "source-blocked"].includes(
+    artifacts.importedRoleSmoke.status,
+  ),
+  true,
+);
 
 const lanes = [
   localhostLane(artifacts.roleSmoke),
@@ -94,28 +102,36 @@ const lanes = [
   ),
   inAppLocalhostBrowserRunLane(artifacts.inAppBrowserLocalhostRun),
   inAppImportedBrowserRunLane(artifacts.inAppBrowserImportedRun),
+  importedRoleSmokeLane(artifacts.importedRoleSmoke),
 ];
+const fullAppLane = lanes.find((lane) => lane.id === "localhost-dev-server-role-smoke");
+const importedFullAppLane = lanes.find((lane) => lane.id === "imported-localhost-role-smoke");
+const fullAppBrowserProven =
+  fullAppLane?.status === "proven" || importedFullAppLane?.status === "proven";
+const diagnosticBlockers = lanes
+  .filter((lane) => lane.status !== "proven")
+  .flatMap((lane) =>
+    lane.missing.map((missing) => `${lane.id}: ${missing}`),
+  );
+const completionBlockers = fullAppBrowserProven
+  ? []
+  : fullAppLane?.missing.map((missing) => `${fullAppLane.id}: ${missing}`) ?? [
+      "localhost-dev-server-role-smoke: full app browser smoke is missing",
+    ];
 
 const boundary = {
-  status: lanes.every((lane) => lane.status === "proven")
-    ? "passed"
-    : "incomplete",
+  status: fullAppBrowserProven ? "passed" : "incomplete",
   proof: "frontend-browser-acceptance-boundary",
   generatedFrom: sources,
   boundary:
     "Generated browser acceptance boundary over the current frontend proof artifacts. It distinguishes proven browser evidence from blocked or prepared-only lanes, and does not promote model/SSR/DOM evidence to hydrated browser acceptance.",
   promotionRule:
-    "Full app browser acceptance is proven only when the localhost role smoke passes with board, admin, player, moderator, route-state screenshots, screenshot pixel evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote only their fixture lanes; prepared fixtures, bind blocks, and Chromium launch blocks do not promote acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   lanes,
   overall: {
-    state: lanes.every((lane) => lane.status === "proven")
-      ? "browser_proven"
-      : "not_complete",
-    blockers: lanes
-      .filter((lane) => lane.status !== "proven")
-      .flatMap((lane) =>
-        lane.missing.map((missing) => `${lane.id}: ${missing}`),
-      ),
+    state: fullAppBrowserProven ? "browser_proven" : "not_complete",
+    blockers: completionBlockers,
+    diagnosticBlockers,
   },
 };
 
@@ -390,6 +406,36 @@ function inAppImportedBrowserRunLane(inAppBrowserImportedRun) {
   };
 }
 
+function importedRoleSmokeLane(importedRoleSmoke) {
+  const proven = importedRoleSmokeEvidenceComplete(importedRoleSmoke);
+  return {
+    id: "imported-localhost-role-smoke",
+    label: "Imported localhost dev-server role smoke",
+    artifact: sources.importedRoleSmoke,
+    artifactStatus: importedRoleSmoke.status,
+    status: proven ? "proven" : "blocked",
+    attemptKind: "external-full-app-browser-smoke-import",
+    promotionEligible: true,
+    evidence: proven
+      ? [
+          "importedRoleSmoke.status == imported-passed",
+          "imported role-smoke evidence was validated without relaunching Chromium locally",
+          "imported role-smoke includes board/admin/player/moderator, forbidden-route, and route-state screenshots",
+          "imported role-smoke includes admin session-grant/recovery-gate, player SubmitPost/private-channel/media, and moderator SetSlotStatus evidence",
+          "referenced role-smoke screenshots were re-read as PNGs and matched nonblank pixel evidence",
+        ]
+      : [],
+    missing: proven
+      ? []
+      : [
+          "no imported passed localhost role-smoke artifact has been validated",
+          "external role-smoke import requires role-smoke.json with status passed plus referenced screenshots",
+        ],
+    sourceRoleSmoke: importedRoleSmoke.sourceRoleSmoke ?? null,
+    validated: importedRoleSmoke.validated ?? null,
+  };
+}
+
 function browserRoleSmokeEvidenceComplete(roleSmoke) {
   if (roleSmoke.status !== "passed") {
     return false;
@@ -412,6 +458,28 @@ function browserRoleSmokeEvidenceComplete(roleSmoke) {
     playerPrivateChannelBrowserPostEvidenceComplete(roleSmoke) &&
     playerBrowserMediaEvidenceComplete(roleSmoke) &&
     moderatorBrowserSlotLifecycleEvidenceComplete(roleSmoke)
+  );
+}
+
+function importedRoleSmokeEvidenceComplete(importedRoleSmoke) {
+  if (importedRoleSmoke.status !== "imported-passed") {
+    return false;
+  }
+  const validated = importedRoleSmoke.validated ?? {};
+  return (
+    validated.viewportCount > 0 &&
+    validated.boardCount >= validated.viewportCount &&
+    validated.roleCount >= validated.viewportCount * 3 &&
+    validated.playerPrivateChannelCount >= validated.viewportCount &&
+    validated.routeStateCount > 0 &&
+    validated.forbiddenRouteCount > 0 &&
+    validated.screenshotCheckCount > 0 &&
+    Array.isArray(validated.screenshotChecks) &&
+    validated.screenshotChecks.length === validated.screenshotCheckCount &&
+    validated.screenshotChecks.every((check) =>
+      check.screenshotPixels?.uniqueColorBuckets >= 8 &&
+      check.screenshotPixels?.changedPixelRatio >= 0.005
+    )
   );
 }
 

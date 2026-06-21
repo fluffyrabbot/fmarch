@@ -56,7 +56,10 @@
       data-testid={threadView.pager.button.testId}
       on:click={onLoadOlder}
     >
-      {threadView.pager.button.label}
+      <span class="fm-touch-button__label">{threadView.pager.button.label}</span>
+      {#if threadView.pager.button.disabledReason !== null}
+        <small class="fm-touch-button__reason">{threadView.pager.button.disabledReason}</small>
+      {/if}
     </button>
   </div>
   {#if threadPageStatus}

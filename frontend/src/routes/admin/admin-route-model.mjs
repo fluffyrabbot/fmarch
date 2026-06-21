@@ -82,7 +82,9 @@ export async function buildAdminRouteData({
         boundary: "Command pipeline",
         boundaryDetail: "/commands CreateGame Ack/Reject",
         commandAction: "create_game",
-        buttonLabel: "Create",
+        confirmLabel: "Create game",
+        confirmMessage: "Create game midsummer from pack mafiascum",
+        buttonLabel: "Review",
       }),
       Object.freeze({
         id: "session-grants",

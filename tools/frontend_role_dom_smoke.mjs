@@ -267,6 +267,35 @@ function surfaceScenarios() {
       forbiddenText: [],
     },
     {
+      id: "board-player-blocked-actions",
+      role: "board",
+      path: "/",
+      render: "renderBoardPlayerSurface",
+      surfaceTestId: "board-surface",
+      requiredText: [
+        "Active games",
+        "Midsummer Invitational",
+        "Requires HostOf(midsummer) or CohostOf(midsummer)",
+        "Requires GlobalAdmin or GlobalMod",
+      ],
+      requiredTestIds: [
+        "workbench-action-moderator",
+        "workbench-action-admin",
+        "game-action-midsummer-moderator",
+      ],
+      links: [
+        {
+          testId: "game-action-midsummer-player",
+          href: "/g/midsummer",
+        },
+      ],
+      requiredAttributes: [
+        'data-blocked-reason="Requires HostOf(midsummer) or CohostOf(midsummer)"',
+        'data-blocked-reason="Requires GlobalAdmin or GlobalMod"',
+      ],
+      forbiddenText: [],
+    },
+    {
       id: "admin",
       role: "admin",
       path: "/admin",

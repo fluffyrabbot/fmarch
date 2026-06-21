@@ -312,6 +312,60 @@ test("admin setup grid view model binds command status and confirmation metadata
   assert.equal(view.items[1].status, null);
 });
 
+test("admin setup grid treats create-game as an explicit confirmation action", () => {
+  const view = buildAdminSetupGridViewModel({
+    items: [
+      {
+        id: "create-game",
+        label: "Create game",
+        authority: "GlobalAdmin",
+        boundary: "Command pipeline",
+        boundaryDetail: "/commands CreateGame Ack/Reject",
+        commandAction: "create_game",
+        buttonLabel: "Review",
+        confirmLabel: "Create game",
+        confirmMessage: "Create game midsummer from pack mafiascum",
+      },
+    ],
+    commandStatuses: {
+      "create-game": {
+        state: "confirm",
+        message: "Create game midsummer from pack mafiascum",
+      },
+    },
+  });
+
+  assert.equal(view.items[0].buttonLabel, "Review");
+  assert.equal(view.items[0].confirmTestId, "admin-command-confirm-create-game");
+  assert.equal(view.items[0].cancelTestId, "admin-command-cancel-create-game");
+  assert.equal(view.items[0].triggerTestId, "admin-command-trigger-create-game");
+  assert.equal(view.items[0].isSessionGrant, false);
+  assert.deepEqual(view.items[0].confirmation, {
+    kind: "confirmation-action",
+    surface: "admin-setup",
+    actionId: "create-game",
+    role: ADMIN_CONFIRMATION_CONTRACT.role,
+    ariaModal: ADMIN_CONFIRMATION_CONTRACT.ariaModal,
+    ariaLabel: "Confirm Create game",
+    label: "Create game",
+    message: "Create game midsummer from pack mafiascum",
+    messageId: "admin-command-confirmation-message-create-game",
+    messageTestId: "admin-command-confirmation-message-create-game",
+    confirmationTestId: null,
+    confirmTestId: "admin-command-confirm-create-game",
+    cancelTestId: "admin-command-cancel-create-game",
+    triggerTestId: "admin-command-trigger-create-game",
+    initialFocusTestId: "admin-command-confirm-create-game",
+    returnFocusTestId: "admin-command-trigger-create-game",
+    escapeCancels: true,
+    tabContainment: "local-confirmation-controls",
+    className: null,
+    actionsClassName: null,
+    objectLabel: null,
+    outcomeLabel: null,
+  });
+});
+
 test("admin audit and escalation models expose stable test ids", () => {
   assert.deepEqual(
     buildAdminAuditPanelViewModel({

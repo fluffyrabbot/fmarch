@@ -47,9 +47,9 @@
                 data-blocked-reason={item.action.blockedReason}
                 aria-disabled={item.action.ariaDisabled}
                 disabled
-                title={item.action.blockedReason}
               >
-                {item.action.label}
+                <span class="fm-touch-button__label">{item.action.label}</span>
+                <small class="fm-touch-button__reason">{item.action.blockedReason}</small>
               </button>
             {/if}
           </article>
@@ -81,9 +81,9 @@
                     data-blocked-reason={action.blockedReason}
                     aria-disabled={action.ariaDisabled}
                     disabled
-                    title={action.blockedReason}
                   >
-                    {action.label}
+                    <span class="fm-touch-button__label">{action.label}</span>
+                    <small class="fm-touch-button__reason">{action.blockedReason}</small>
                   </button>
                 {/if}
               {/each}

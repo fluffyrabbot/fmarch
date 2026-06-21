@@ -396,6 +396,7 @@ async function provePlayerThreadPagerLifecycle() {
   assert.equal(pending.root.busy, "true");
   assert.equal(pending.button.disabled, true);
   assert.equal(pending.button.ariaDisabled, "true");
+  assert.equal(pending.button.disabledReason, "Loading older posts");
 
   const ackStore = fakeProjectionStore({
     thread: playerData.thread,
@@ -420,6 +421,8 @@ async function provePlayerThreadPagerLifecycle() {
   assert.equal(ack.threadPageStatus.message, "Loaded 2 older posts");
   assert.equal(ackPager.root.state, "complete");
   assert.equal(ackPager.button.disabled, true);
+  assert.equal(ackPager.button.label, "No older posts");
+  assert.equal(ackPager.button.disabledReason, "At oldest loaded post");
 
   let rejectedStatus;
   try {
@@ -442,6 +445,7 @@ async function provePlayerThreadPagerLifecycle() {
   }).pager;
   assert.equal(rejectedPager.root.state, "ready");
   assert.equal(rejectedPager.button.disabled, false);
+  assert.equal(rejectedPager.button.disabledReason, null);
 
   return {
     pending: {
@@ -450,6 +454,7 @@ async function provePlayerThreadPagerLifecycle() {
       busy: pending.root.busy,
       buttonLabel: pending.button.label,
       buttonDisabled: pending.button.disabled,
+      buttonDisabledReason: pending.button.disabledReason,
       ariaDisabled: pending.button.ariaDisabled,
       minTouchTargetPx: pending.button.minTouchTargetPx,
       nextBeforeSeq: pending.button.nextBeforeSeq,
@@ -458,7 +463,9 @@ async function provePlayerThreadPagerLifecycle() {
       status: ack.threadPageStatus,
       rootState: ackPager.root.state,
       busy: ackPager.root.busy,
+      buttonLabel: ackPager.button.label,
       buttonDisabled: ackPager.button.disabled,
+      buttonDisabledReason: ackPager.button.disabledReason,
       postCount: ack.snapshot.thread.posts.length,
       nextBeforeSeq: ack.snapshot.thread.nextBeforeSeq,
     },
@@ -466,7 +473,9 @@ async function provePlayerThreadPagerLifecycle() {
       status: rejectedStatus,
       rootState: rejectedPager.root.state,
       busy: rejectedPager.root.busy,
+      buttonLabel: rejectedPager.button.label,
       buttonDisabled: rejectedPager.button.disabled,
+      buttonDisabledReason: rejectedPager.button.disabledReason,
       nextBeforeSeq: rejectedPager.button.nextBeforeSeq,
     },
   };

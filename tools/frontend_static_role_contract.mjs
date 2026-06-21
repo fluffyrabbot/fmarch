@@ -309,6 +309,7 @@ async function proveAppShellContract() {
   assert.match(css, /\.fm-skip-link\s*\{/);
   assert.match(css, /\.fm-skip-link:focus-visible\s*\{/);
   assert.match(css, /\.fm-app-shell__nav-item\[data-allowed="false"\]/);
+  assert.match(css, /\.fm-app-shell__nav-reason\s*\{/);
   assert.match(css, /\.fm-app-shell__session small\s*\{/);
   assert.match(css, /overflow-wrap:\s*anywhere/);
 
@@ -336,6 +337,7 @@ async function proveAppShellContract() {
     minTouchTargetPx: APP_SHELL_CONTRACT.minTouchTargetPx,
     responsiveColumns: "4/1",
     deniedNavVisibleInert: true,
+    deniedNavVisibleReason: true,
   };
 }
 
@@ -1282,6 +1284,7 @@ async function proveAdminSurface() {
   assert.equal(auditDetailData.surfaceHeader.title, "Proof runs");
 
   const commandStatuses = {
+    "create-game": adminConfirmStatus(data.gameSetup[0]),
     "session-grants": adminConfirmStatus(data.gameSetup[1]),
     cohost: adminConfirmStatus(data.gameSetup[2]),
     "recovery-gate": adminConfirmStatus(data.recoveryTasks[0]),
@@ -1338,13 +1341,14 @@ async function proveAdminSurface() {
   assert.equal(setup.items.find((item) => item.id === "session-grants").isSessionGrant, true);
   assert.equal(recovery.items[0].form.action, "?/checkRecoveryGate");
   assert.equal(activity.root.data.component, "admin-command-activity");
-  assert.equal(activity.summary, "3 recent admin command events");
+  assert.equal(activity.summary, "4 recent admin command events");
   assert.deepEqual(
     activity.items.map((item) => item.statusTestId),
     [
       "admin-command-activity-status-recovery-gate",
       "admin-command-activity-status-cohost",
       "admin-command-activity-status-session-grants",
+      "admin-command-activity-status-create-game",
     ],
   );
   const confirmationCoverage = proveAdminConfirmationCoverage({
@@ -1502,6 +1506,7 @@ async function provePlayerSurface() {
     label: "Load older",
     disabled: false,
     ariaDisabled: "false",
+    disabledReason: null,
     minTouchTargetPx: PLAYER_THREAD_PAGER_CONTRACT.minTouchTargetPx,
     nextBeforeSeq: 441,
   });
@@ -1577,6 +1582,7 @@ async function provePlayerSurface() {
   assert.equal(privateQueue.items.every((item) => item.minTouchTargetPx >= 44), true);
   assert.equal(privateDisclosure.items[0].ariaExpanded, "false");
   assert.equal(privateDisclosure.items[0].reviewLabel, "Review Commuted");
+  assert.equal(privateDisclosure.items[0].reviewLinkLabel, "Open Commuted review");
   assert.equal(
     privateDisclosure.items[0].reviewLinkTestId,
     "player-private-link-notification-1",
@@ -1688,6 +1694,7 @@ async function provePlayerSurface() {
         buttonTestId: threadView.pager.button.testId,
         buttonLabel: threadView.pager.button.label,
         buttonDisabled: threadView.pager.button.disabled,
+        buttonDisabledReason: threadView.pager.button.disabledReason,
         minTouchTargetPx: threadView.pager.button.minTouchTargetPx,
         nextBeforeSeq: threadView.pager.button.nextBeforeSeq,
       },
@@ -1710,10 +1717,11 @@ async function provePlayerSurface() {
         state: commandPanel.deadline.state,
       },
       privateBoundary: privateQueue.root.data.boundaryStatus,
-      privateDisclosure: {
-        reviewLabel: privateDisclosure.items[0].reviewLabel,
-        reviewLinkTestId: privateDisclosure.items[0].reviewLinkTestId,
-        reviewHref: privateDisclosure.items[0].reviewHref,
+        privateDisclosure: {
+          reviewLabel: privateDisclosure.items[0].reviewLabel,
+          reviewLinkLabel: privateDisclosure.items[0].reviewLinkLabel,
+          reviewLinkTestId: privateDisclosure.items[0].reviewLinkTestId,
+          reviewHref: privateDisclosure.items[0].reviewHref,
         ariaExpanded: privateDisclosure.items[0].ariaExpanded,
         detailTestId: privateDisclosure.items[0].detailTestId,
       },
@@ -2046,7 +2054,7 @@ async function proveModeratorSurface() {
 }
 
 function proveConfirmationCoverage({ admin, moderator }) {
-  assert.equal(admin.setup.length, 2);
+  assert.equal(admin.setup.length, 3);
   assert.equal(admin.recovery.length, 1);
   assert.equal(moderator.actions.length >= 9, true);
   assert.equal(
@@ -2085,7 +2093,7 @@ function proveAdminConfirmationCoverage({ data, setup, recovery }) {
   );
   assert.deepEqual(
     confirmableSetup.map((item) => item.id),
-    ["session-grants", "cohost"],
+    ["create-game", "session-grants", "cohost"],
   );
 
   const setupCoverage = confirmableSetup.map((source) => {

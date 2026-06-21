@@ -127,7 +127,7 @@ const handoff = {
     "all reserved status floors advertise and render at least 44px before promotion.",
     "all 10 moderator critical host confirmation interactions include alertdialog focus metadata and object/outcome text.",
     "fixture screenshots include nonblank pixel evidence.",
-    "Treat this as file-backed fixture proof only; localhost app acceptance still requires npm run test:frontend-role-proof:browser.",
+    "Treat this as file-backed fixture proof only; full localhost app acceptance is tracked by the localhost dev-server role-smoke lane.",
   ],
 };
 

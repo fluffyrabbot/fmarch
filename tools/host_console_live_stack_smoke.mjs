@@ -555,6 +555,12 @@ async function driveAdminBrowser(frontendBaseUrl) {
   await createButton.click();
   const createStatus = page.getByTestId("admin-command-status-create-game");
   await createStatus.waitFor({ state: "visible" });
+  if ((await createStatus.getAttribute("data-state")) !== "confirm") {
+    throw new Error("admin create game did not render confirmation");
+  }
+  const createConfirm = page.getByTestId("admin-command-confirm-create-game");
+  assertHitTarget(await createConfirm.boundingBox(), "admin create game confirm");
+  await createConfirm.click();
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="admin-command-status-create-game"]',

@@ -60,6 +60,22 @@ test("board smoke scenario keeps allowed and blocked navigation explicit", () =>
       .map((action) => action.hrefPath),
     ["/g/midsummer", "/g/midsummer"],
   );
+  assert.deepEqual(
+    boardScenario.actions
+      .filter((action) => action.navigation === "blocked")
+      .map((action) => [action.testId, action.blockedReason]),
+    [
+      [
+        "workbench-action-moderator",
+        "Requires HostOf(midsummer) or CohostOf(midsummer)",
+      ],
+      ["workbench-action-admin", "Requires GlobalAdmin or GlobalMod"],
+      [
+        "game-action-midsummer-moderator",
+        "Requires HostOf(midsummer) or CohostOf(midsummer)",
+      ],
+    ],
+  );
   assertFocusScenario(boardScenario.focus, "board");
   assertFocusMatchesNav(boardScenario.focus, boardScenario.nav, "board");
 });

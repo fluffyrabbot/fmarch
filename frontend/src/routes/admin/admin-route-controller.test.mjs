@@ -53,11 +53,30 @@ test("admin route controller records server form results once per status key", (
 });
 
 test("admin route controller maps setup actions to send confirm or readonly modes", () => {
-  assert.equal(adminSetupActionMode({ commandAction: "create_game" }), "send");
+  assert.equal(adminSetupActionMode({ commandAction: "create_game" }), "confirm");
   assert.equal(adminSetupActionMode({ commandAction: "add_cohost" }), "confirm");
   assert.equal(adminSetupActionMode({ commandAction: "grant_session" }), "confirm");
   assert.equal(adminSetupActionMode({ commandAction: "audit_only" }), "readonly");
 
+  assert.deepEqual(
+    adminConfirmStatus({
+      id: "create-game",
+      commandAction: "create_game",
+      confirmMessage: "Create game midsummer from pack mafiascum",
+    }),
+    {
+      state: "confirm",
+      message: "Create game midsummer from pack mafiascum",
+      confirmationTrace: {
+        kind: "confirmation-command-trace",
+        confirmationKind: "confirmation-action",
+        surface: "admin-setup",
+        actionId: "create-game",
+        statusKey: "create-game",
+        dispatchKind: "create_game",
+      },
+    },
+  );
   assert.deepEqual(
     adminConfirmStatus({
       id: "cohost",

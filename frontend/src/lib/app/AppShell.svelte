@@ -32,8 +32,8 @@
             data-min-touch-target-px={surface.minTouchTargetPx}
             data-testid={surface.testId}
           >
-            <span>{surface.label}</span>
-            <small>{surface.capabilityLabel}</small>
+            <span class="fm-app-shell__nav-label">{surface.label}</span>
+            <small class="fm-app-shell__nav-capability">{surface.capabilityLabel}</small>
           </a>
         {:else}
           <button
@@ -46,10 +46,9 @@
             data-testid={surface.testId}
             data-blocked-reason={surface.blockedReason}
             disabled
-            title={surface.blockedReason}
           >
-            <span>{surface.label}</span>
-            <small>{surface.capabilityLabel}</small>
+            <span class="fm-app-shell__nav-label">{surface.label}</span>
+            <small class="fm-app-shell__nav-reason">{surface.blockedReason}</small>
           </button>
         {/if}
       {/each}
