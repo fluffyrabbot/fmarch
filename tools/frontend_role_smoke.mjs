@@ -80,6 +80,7 @@ try {
     },
     board: [],
     roles: [],
+    forbidden: [],
     playerPrivateChannel: [],
     routeStates: [],
   };
@@ -668,7 +669,7 @@ try {
         label: `${forbidden.id} ${viewport.name}`,
         viewport,
       });
-      evidence.roles.push({
+      evidence.forbidden.push({
         role: "forbidden",
         scenario: forbidden.id,
         viewport,
@@ -2429,6 +2430,7 @@ async function assertFocusTraversal(
   return {
     expectedOrder,
     forbiddenTestIds,
+    focusedTestIds,
     sequence: sequence.map((item) => item.label),
   };
 }
