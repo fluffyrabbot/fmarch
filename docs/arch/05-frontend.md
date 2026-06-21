@@ -39,7 +39,11 @@ checklist before they are called done:
 - **Cheap proof first** — shared touch controls and host actions start from
   `frontend/src/lib/components/host-action/`: the CSS variables/classes define the target
   floor, and the host-action contract tests prove confirmation and dispatch behavior without
-  a browser. `npm run test:frontend-role-proof` is the current no-bind proof lane for
+  a browser. `npm run test:frontend-role-proof:browser` is the current frontend acceptance
+  lane when localhost bind and Chromium are available; it runs the full admin/player/moderator
+  dev-server role smoke and then verifies the generated artifact shape, browser-acceptance
+  boundary, completion audit, readiness summary, operator runbook, replay helper, and artifact
+  contracts. `npm run test:frontend-role-proof` remains the no-bind fallback lane for
   restricted environments: it builds the admin, player, and moderator route data plus
   component view models, checks capability gating, 44px touch metadata, forbidden-route
   messages, representative admin/player/moderator command ack/reject paths, the shared
@@ -76,7 +80,7 @@ checklist before they are called done:
   shared skip-link-first order for board, role, and route-state surfaces. The role-smoke
   fallback artifact embeds the same static contract, the DOM result, and the no-bind render
   result.
-  The saved artifacts live at
+  The fallback artifacts live at
   `target/frontend-static-role-contract/role-contract.json` and
   `target/frontend-route-state-render/route-state-render.json` and
   `target/frontend-static-focusability/focusability.json` and
@@ -84,7 +88,7 @@ checklist before they are called done:
   `target/frontend-role-dom-smoke/dom-smoke.json` and
   `target/frontend-role-render-smoke/render-smoke.json` and
   `target/frontend-role-smoke/role-smoke.json` and
-  `target/frontend-completion-audit/completion-audit.json`. This is deliberately weaker than
+  `target/frontend-completion-audit/completion-audit.json`. That fallback is deliberately weaker than
   dev-server browser proof; it proves Svelte markup for the page/component seam, verifies a
   no-browser DOM manifest, records a static tablet-first first-viewport layout contract for
   admin/player/moderator scan strips, and may prove no-bind Chromium render pixels and
@@ -100,11 +104,11 @@ checklist before they are called done:
   Postgres database, starts the Rust API and SvelteKit dev server together, seeds the game
   through `/commands`, resolves the host session through `/auth/session`, drives both actions
   in Chromium, and verifies the UI refreshes from the real `host-console-state` API. The
-  multi-role browser smoke remains the acceptance gate for nonblank admin/player/moderator
+  multi-role browser smoke is the acceptance gate for nonblank admin/player/moderator
   rendering, touch target floor, obvious-overlap checks, first-viewport scan-strip tile fit,
   forbidden access behavior, keyboard focus order with disabled controls skipped, visible
   focus rings, rendered empty/loading/reject route states, player private-disclosure
-  toggling, and a command reject path when localhost binding is available. Browser-passed
+  toggling, and a command reject path. Browser-passed
   role-smoke artifacts must include screenshot pixel metrics that prove every saved board,
   role, forbidden, and route-state screenshot is viewport-width, viewport-height-or-taller,
   and nonblank. They also must record real admin/moderator confirmation focus evidence:
@@ -185,13 +189,13 @@ promotion gate for direct or imported fixture evidence.
 
 ### Current completion audit
 
-The generated completion audit reports `status: passed` and
-`overall.state: complete` only when the localhost dev-server role-smoke artifact
-is actually `passed` locally or when `test:frontend-role-smoke-import` validates
-a returned passed role-smoke artifact and its referenced screenshots. In
-restricted environments where localhost or Chromium is blocked and
-`FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1` regenerates fallback role-smoke artifacts,
-the same audit reports `status: incomplete` and `overall.state: not_complete`.
+The latest local browser proof ran `npm run test:frontend-role-proof:browser`;
+the generated completion audit reports `status: passed` and
+`overall.state: complete` because the localhost dev-server role-smoke artifact is
+`passed` and its screenshots/import contract validate. The audit only reports
+`status: incomplete` and `overall.state: not_complete` in restricted environments
+where localhost or Chromium is blocked and
+`FMARCH_ALLOW_STATIC_ROLE_FALLBACK=1` regenerates fallback role-smoke artifacts.
 It is intentionally a proof claim over the current admin/player/moderator
 frontend objective, not a beta/release-management claim; the readiness summary
 keeps diagnostic no-bind and fixture boundaries visible.
