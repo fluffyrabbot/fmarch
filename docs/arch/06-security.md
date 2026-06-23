@@ -79,12 +79,22 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
 ## Encryption at rest
 
 - **Private channel bodies and role assignments** are encrypted at the column level with a
-  server-held key (managed via env/KMS, rotatable). A leaked database or backup does not
-  hand over scumchat logs or the role list in plaintext.
+  server-held key (managed via env today; KMS-backed rotation is future hardening). A leaked
+  database or backup does not hand over scumchat logs or the role list in plaintext.
 - The event log's *sensitive payloads* (e.g. `RoleAssigned`, private `PostSubmitted`
   bodies) are stored encrypted; non-sensitive event metadata stays queryable.
-- Key rotation is supported by versioning the encryption key id alongside the ciphertext
-  (additive, like everything else — [02](02-event-sourcing.md)).
+- Current implemented slice: `RoleAssigned` stores plaintext `slot_id` and an authenticated
+  ciphertext envelope for `role_key`, `alignment`, and `role_effects`; non-`main`
+  `PostSubmitted` stores plaintext `channel_id`, `slot_or_user`, `phase_id`, and media metadata
+  with `body` in an authenticated ciphertext envelope. `eventstore::load_stream` and projection
+  rebuild decode those envelopes at the durable read boundary.
+- Local dev falls back to a deterministic `local-dev` key if `FMARCH_EVENT_ENCRYPTION_KEY` is
+  unset so tests and scratch stacks stay runnable. Production/staged deployments must provide
+  `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a
+  secrets manager.
+- The ciphertext envelope records an encryption key id alongside the ciphertext; multi-key
+  rotation lookup remains future hardening (additive, like everything else —
+  [02](02-event-sourcing.md)).
 - Transport is TLS end-to-end; the at-rest layer is in addition to, not instead of, TLS.
 
 ## Operational hygiene

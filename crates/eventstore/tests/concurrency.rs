@@ -19,6 +19,36 @@ fn vote(target: &str, phase: &str) -> EventInput {
     )
 }
 
+fn role_assigned(slot: &str, role_key: &str) -> EventInput {
+    EventInput::new(
+        "RoleAssigned",
+        1,
+        serde_json::json!({
+            "slot_id": slot,
+            "role_key": role_key,
+            "alignment": "mafia",
+            "role_effects": ["godfather"],
+        }),
+        ActorId::Host,
+        1,
+    )
+}
+
+fn private_post(channel: &str, body: &str) -> EventInput {
+    EventInput::new(
+        "PostSubmitted",
+        1,
+        serde_json::json!({
+            "channel_id": channel,
+            "slot_or_user": { "slot": "slot_1" },
+            "body": body,
+            "phase_id": "D01",
+        }),
+        ActorId::Slot("slot_1".into()),
+        1,
+    )
+}
+
 #[sqlx::test(migrations = "./migrations")]
 async fn append_assigns_sequential_stream_seq(pool: sqlx::PgPool) {
     let g = Uuid::new_v4();
@@ -36,6 +66,50 @@ async fn append_assigns_sequential_stream_seq(pool: sqlx::PgPool) {
     assert_eq!(loaded.len(), 3);
     let seqs: Vec<i64> = loaded.iter().map(|e| e.stream_seq).collect();
     assert_eq!(seqs, vec![1, 2, 3], "load_stream is ordered");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool: sqlx::PgPool) {
+    let g = Uuid::new_v4();
+    append(
+        &pool,
+        g,
+        &[
+            role_assigned("slot_1", "godfather"),
+            private_post("private:mafia_day_chat", "shoot slot_2 tonight"),
+        ],
+    )
+    .await
+    .expect("append encrypted private events");
+
+    let raw_rows =
+        sqlx::query("SELECT kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq")
+            .bind(g)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let raw_role: serde_json::Value = raw_rows[0].get("payload");
+    assert_eq!(raw_rows[0].get::<String, _>("kind"), "RoleAssigned");
+    assert_eq!(raw_role["slot_id"], "slot_1");
+    assert!(raw_role.get("role_key").is_none());
+    assert!(raw_role["private"]["ciphertext"].is_string());
+
+    let raw_post: serde_json::Value = raw_rows[1].get("payload");
+    assert_eq!(raw_rows[1].get::<String, _>("kind"), "PostSubmitted");
+    assert_eq!(raw_post["channel_id"], "private:mafia_day_chat");
+    assert_eq!(raw_post["slot_or_user"]["slot"], "slot_1");
+    assert_eq!(raw_post["phase_id"], "D01");
+    assert!(raw_post.get("body").is_none());
+    assert!(raw_post["body_private"]["ciphertext"].is_string());
+
+    let loaded = load_stream(&pool, g).await.unwrap();
+    assert_eq!(loaded[0].payload["role_key"], "godfather");
+    assert_eq!(loaded[0].payload["alignment"], "mafia");
+    assert_eq!(
+        loaded[0].payload["role_effects"],
+        serde_json::json!(["godfather"])
+    );
+    assert_eq!(loaded[1].payload["body"], "shoot slot_2 tonight");
 }
 
 /// Optimistic concurrency: two transactions both try to append at the SAME

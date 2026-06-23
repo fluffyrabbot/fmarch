@@ -198,13 +198,14 @@ The only identity that crosses into the engine is `SlotId`.
   `stored_game_stream_loads_slot_lifecycle_and_pack_visible_status_tags` proves lynch death,
   modkill, treestump, limited-vote snapshot state, and projection rebuild surfaces]
 - [x] Include role key, alignment, public/private reveal state, and role-level effects.
-  [`RoleAssigned` is now self-describing with `role_key`, pack-derived `alignment`, and
-  `role_effects`; `StateSnapshot` carries resolver-private role/alignment facts plus explicit
-  `role_reveal` and `alignment_reveal` visibility states; `current_snapshot` folds role effects and
-  reveal transitions from stored events; `CompleteGame` and inner `WinReached` reveal final roles;
+  [`RoleAssigned` stores only queryable `slot_id` plus an encrypted private envelope at rest, then
+  `eventstore::load_stream` restores `role_key`, pack-derived `alignment`, and `role_effects`;
+  `StateSnapshot` carries resolver-private role/alignment facts plus explicit `role_reveal` and
+  `alignment_reveal` visibility states; `current_snapshot` folds role effects and reveal
+  transitions from loaded events; `CompleteGame` and inner `WinReached` reveal final roles;
   Postgres test `stored_game_stream_loads_role_alignment_reveal_state_and_role_effects` proves the
-  event payload, private pre-completion snapshot, projected alignment/effects, public completion
-  reveal, and projection rebuild contract]
+  encrypted-at-rest payload, private pre-completion snapshot, projected alignment/effects, public
+  completion reveal, and projection rebuild contract]
 - [x] Include persistent effects with source, target, phase, expiry, and visibility metadata
   when those fields matter. [`EffectsMarked` now carries `source_action`, phase id/kind/number,
   `duration`, and `visibility`; `StateSnapshot.effect_records` preserves the active structured

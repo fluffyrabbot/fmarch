@@ -1368,6 +1368,84 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
     );
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
+    let game = Uuid::new_v4();
+    let events = vec![
+        EventInput::new(
+            "RoleAssigned",
+            1,
+            serde_json::json!({
+                "slot_id": "slot_1",
+                "role_key": "godfather",
+                "alignment": "mafia",
+                "role_effects": ["godfather"],
+            }),
+            ActorId::Host,
+            30,
+        ),
+        EventInput::new(
+            "PostSubmitted",
+            1,
+            serde_json::json!({
+                "channel_id": "private:mafia_day_chat",
+                "slot_or_user": { "slot": "slot_1" },
+                "body": "private night plan",
+                "phase_id": "D01",
+            }),
+            ActorId::Slot("slot_1".into()),
+            31,
+        ),
+    ];
+
+    append_and_project(&pool, game, &events).await.unwrap();
+
+    let raw_role: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(raw_role["slot_id"], "slot_1");
+    assert!(raw_role.get("role_key").is_none());
+    assert!(raw_role["private"]["ciphertext"].is_string());
+
+    let raw_post: serde_json::Value = sqlx::query_scalar(
+        "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(raw_post["channel_id"], "private:mafia_day_chat");
+    assert_eq!(raw_post["phase_id"], "D01");
+    assert!(raw_post.get("body").is_none());
+    assert!(raw_post["body_private"]["ciphertext"].is_string());
+
+    let projected_role = slot_state(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|slot| slot.slot_id == "slot_1")
+        .expect("slot role projection");
+    assert_eq!(projected_role.role_key.as_deref(), Some("godfather"));
+    assert_eq!(projected_role.alignment.as_deref(), Some("mafia"));
+
+    let private_thread =
+        projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
+            .await
+            .unwrap();
+    assert_eq!(private_thread.posts[0].body, "private night plan");
+
+    projections::rebuild(&pool, game).await.unwrap();
+    let rebuilt_thread =
+        projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
+            .await
+            .unwrap();
+    assert_eq!(rebuilt_thread.posts[0].body, "private night plan");
+}
+
 /// `append_and_project` is one transaction: a conflicting concurrent append
 /// rolls back the projection updates too (no partial write).
 #[sqlx::test(migrations = "../projections/migrations")]

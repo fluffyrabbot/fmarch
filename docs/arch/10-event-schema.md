@@ -70,10 +70,10 @@ enum EventKind {
     SlotModkilled,          // host removes a seat from play (becomes an engine submission)
 
     // ── Roles ──
-    RoleAssigned,           // { slot_id, role_key }  payload ENCRYPTED at rest (06)
+    RoleAssigned,           // storage: { slot_id, private }; load_stream: { slot_id, role_key, alignment, role_effects } (06)
 
     // ── Posting ──
-    PostSubmitted,          // { channel_id, slot_or_user, body_ref, attachments, phase_id }
+    PostSubmitted,          // public storage: { channel_id, slot_or_user, body, media, phase_id }; private storage encrypts body as { body_private } (06)
     PostEdited,             // { post_id, new_body_ref }   original recoverable
     PostRetracted,          // { post_id }
 

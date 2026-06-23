@@ -1391,6 +1391,30 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     .await
     .unwrap();
     assert_eq!(payload["channel_id"], "role-pm");
+    assert_eq!(payload["slot_or_user"]["slot"], "slot_1");
+    assert_eq!(payload["phase_id"], "D01");
+    assert!(payload.get("body").is_none());
+    assert!(payload["body_private"]["ciphertext"].is_string());
+
+    let private_thread = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/role-pm/thread?principal_user_id=user_a&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(private_thread.status(), StatusCode::OK);
+    let bytes = to_bytes(private_thread.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let private_page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(private_page.posts[0].body, "private role confirmation");
 
     let denied = post_command(
         app,

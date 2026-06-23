@@ -1416,7 +1416,7 @@ async fn rebuild_in_tx(
             causation_id: row.try_get("causation_id")?,
             meta: row.try_get("meta")?,
         };
-        let stored = eventstore::upcast(stored);
+        let stored = eventstore::upcast(eventstore::decode_stored_payload(stored)?);
         fold_event(tx, game_id, &stored).await?;
     }
 

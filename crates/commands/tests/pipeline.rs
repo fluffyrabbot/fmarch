@@ -3688,7 +3688,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     .await
     .unwrap();
 
-    let role_payload = sqlx::query_scalar::<_, serde_json::Value>(
+    let raw_role_payload = sqlx::query_scalar::<_, serde_json::Value>(
         "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'RoleAssigned' \
          AND payload->>'slot_id' = 'slot_1'",
     )
@@ -3696,12 +3696,11 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert_eq!(role_payload["role_key"], "godfather");
-    assert_eq!(role_payload["alignment"], "mafia");
-    assert_eq!(
-        role_payload["role_effects"],
-        serde_json::json!(["godfather"])
-    );
+    assert_eq!(raw_role_payload["slot_id"], "slot_1");
+    assert!(raw_role_payload.get("role_key").is_none());
+    assert!(raw_role_payload.get("alignment").is_none());
+    assert!(raw_role_payload.get("role_effects").is_none());
+    assert!(raw_role_payload["private"]["ciphertext"].is_string());
 
     let snapshot = load_engine_snapshot(&pool, game, "D01")
         .await

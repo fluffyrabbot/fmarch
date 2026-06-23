@@ -1,8 +1,9 @@
 -- 0019_private_channel_member.sql -- setup private channel metadata.
 --
 -- Rebuildable private channel membership folded from PrivateChannelDeclared.
--- This table stores metadata only; private post bodies remain outside the
--- channel-scoped thread_view projection.
+-- This table stores metadata only; private post bodies are decrypted from the
+-- event log at the projection boundary and remain access-controlled by channel
+-- membership at API read time.
 
 CREATE TABLE IF NOT EXISTS private_channel_member (
     game_id           UUID NOT NULL,
