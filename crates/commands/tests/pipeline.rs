@@ -25,11 +25,19 @@ use projections::{
 };
 use sqlx::{Acquire, PgPool};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command as ProcessCommand;
+use std::process::{Command as ProcessCommand, Output};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
+
+#[derive(Debug, PartialEq, Eq)]
+struct ProcessInvocation {
+    program: OsString,
+    current_dir: Option<PathBuf>,
+    fixed_args: Vec<OsString>,
+}
 
 // ───────────────────────── helpers ─────────────────────────
 
@@ -25570,18 +25578,16 @@ impl GeneratedShrinkArtifacts {
 
     async fn try_run_minimizer(&self, pool: &PgPool) -> Result<serde_json::Value, String> {
         let database_url = database_url_for_pool(pool).await;
-        let bin = std::env::var("CARGO_BIN_EXE_minimize_night_fixture")
-            .unwrap_or_else(|_| env!("CARGO_BIN_EXE_minimize_night_fixture").to_string());
-        let output = ProcessCommand::new(bin)
-            .arg("--reduce")
-            .arg("--write-reduced")
-            .arg(&self.reduced_path)
-            .arg("--write-report")
-            .arg(&self.report_path)
-            .arg(&self.fixture_path)
-            .env("DATABASE_URL", database_url)
-            .output()
-            .expect("run minimize_night_fixture for generated failure fixture");
+        let args = vec![
+            OsString::from("--reduce"),
+            OsString::from("--write-reduced"),
+            self.reduced_path.clone().into_os_string(),
+            OsString::from("--write-report"),
+            self.report_path.clone().into_os_string(),
+            self.fixture_path.clone().into_os_string(),
+        ];
+        let output = run_minimize_night_fixture(&args, &database_url)
+            .map_err(|err| format!("run minimize_night_fixture for generated fixture: {err}"))?;
         if !output.status.success() {
             return Err(format!(
                 "minimize_night_fixture failed\nstdout:\n{}\nstderr:\n{}",
@@ -25606,6 +25612,61 @@ impl GeneratedShrinkArtifacts {
         }
         Ok(saved_report)
     }
+}
+
+fn run_minimize_night_fixture(args: &[OsString], database_url: &str) -> std::io::Result<Output> {
+    let cargo_bin = std::env::var_os("CARGO_BIN_EXE_minimize_night_fixture")
+        .unwrap_or_else(|| OsString::from(env!("CARGO_BIN_EXE_minimize_night_fixture")));
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    let invocation = minimize_night_fixture_invocation(cargo_bin, cargo, commands_workspace_root());
+    let mut command = ProcessCommand::new(&invocation.program);
+    if let Some(current_dir) = &invocation.current_dir {
+        command.current_dir(current_dir);
+    }
+    command
+        .args(&invocation.fixed_args)
+        .args(args)
+        .env("DATABASE_URL", database_url)
+        .output()
+}
+
+fn minimize_night_fixture_invocation(
+    cargo_bin: OsString,
+    cargo: OsString,
+    workspace_root: PathBuf,
+) -> ProcessInvocation {
+    if Path::new(&cargo_bin).is_file() {
+        return ProcessInvocation {
+            program: cargo_bin,
+            current_dir: None,
+            fixed_args: Vec::new(),
+        };
+    }
+
+    ProcessInvocation {
+        program: cargo,
+        current_dir: Some(workspace_root),
+        fixed_args: [
+            "run",
+            "-q",
+            "-p",
+            "commands",
+            "--bin",
+            "minimize_night_fixture",
+            "--",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect(),
+    }
+}
+
+fn commands_workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("commands crate lives under workspace crates/")
+        .to_path_buf()
 }
 
 async fn generated_shrink_failure_message(
@@ -28767,6 +28828,58 @@ fn generated_shrink_report_summary_mentions_paths_and_preservation() {
     assert!(summary.contains("success_invariant_preserved=null"));
     assert!(summary.contains("promoted_success_fixture=false"));
     assert!(summary.contains("reduction_steps=2"));
+}
+
+#[test]
+fn minimize_night_fixture_invocation_uses_existing_cargo_bin() {
+    let cargo_bin = commands_workspace_root()
+        .join("Cargo.toml")
+        .into_os_string();
+    let invocation = minimize_night_fixture_invocation(
+        cargo_bin.clone(),
+        OsString::from("cargo"),
+        commands_workspace_root(),
+    );
+    assert_eq!(
+        invocation,
+        ProcessInvocation {
+            program: cargo_bin,
+            current_dir: None,
+            fixed_args: Vec::new(),
+        }
+    );
+}
+
+#[test]
+fn minimize_night_fixture_invocation_falls_back_when_cargo_bin_is_missing() {
+    let workspace_root = commands_workspace_root();
+    let invocation = minimize_night_fixture_invocation(
+        workspace_root
+            .join("target")
+            .join("definitely-missing-minimize-night-fixture")
+            .into_os_string(),
+        OsString::from("cargo-test"),
+        workspace_root.clone(),
+    );
+    assert_eq!(
+        invocation,
+        ProcessInvocation {
+            program: OsString::from("cargo-test"),
+            current_dir: Some(workspace_root),
+            fixed_args: [
+                "run",
+                "-q",
+                "-p",
+                "commands",
+                "--bin",
+                "minimize_night_fixture",
+                "--",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect(),
+        }
+    );
 }
 
 async fn resolution_payload(
