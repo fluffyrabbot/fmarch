@@ -103,7 +103,16 @@ checklist before they are called done:
   test:host-console-live-stack-smoke` is the stronger boundary proof: it creates a temporary
   Postgres database, starts the Rust API and SvelteKit dev server together, seeds the game
   through `/commands`, resolves the host session through `/auth/session`, drives both actions
-  in Chromium, and verifies the UI refreshes from the real `host-console-state` API. The
+  in Chromium, verifies the UI refreshes from the real `host-console-state` API, then drives
+  the player role-PM private-channel route through the same live stack. That live-stack lane
+  now records a role-PM `SubmitPost` ACK from the real `/commands` API, proves a non-member
+  private-channel 403 can recover through the SvelteKit `Back to board` error action, and
+  records tablet media evidence from a Rust `ThreadPage` media payload served by the SvelteKit
+  smoke media endpoint. Its media evidence proves the 1024px browser requested the tablet
+  image, rendered a tablet/small `srcset`, and kept original/full/desktop URLs out of
+  rendered attributes and request logs. The role-PM channel membership/media seed rows are
+  scratch-database setup metadata; the role-PM post ACK, forbidden route, recovery navigation,
+  Rust API reads, SvelteKit rendering, and Chromium requests are live-stack proof. The
   multi-role browser smoke is the acceptance gate for nonblank admin/player/moderator
   rendering, touch target floor, obvious-overlap checks, first-viewport scan-strip tile fit,
   forbidden access behavior, keyboard focus order with disabled controls skipped, visible

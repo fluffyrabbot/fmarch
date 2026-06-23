@@ -41,7 +41,11 @@ export type HostPromptDelta = { game: string, phase_id: string, event_index: num
 
 export type HostPromptsDelta = { game: string, prompts: Array<HostPromptDelta>, };
 
-export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author_slot: string | null, author_user: string | null, phase_id: string, body: string, occurred_at: bigint, };
+export type ThreadPost = { game: string, source_seq: bigint, stream_seq: bigint, channel_id: string, author_slot: string | null, author_user: string | null, phase_id: string, body: string, media: Array<ThreadPostMedia>, occurred_at: bigint, };
+
+export type ThreadPostMedia = { id: string, kind: string, alt: string, variants: { [key in string]?: ThreadPostMediaVariant }, };
+
+export type ThreadPostMediaVariant = { url: string, width: bigint | null, height: bigint | null, };
 
 export type ThreadPage = { posts: Array<ThreadPost>, next_before_seq: bigint | null, };
 

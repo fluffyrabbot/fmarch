@@ -358,6 +358,7 @@ pub struct ThreadPostRow {
     pub author_user: Option<String>,
     pub phase_id: String,
     pub body: String,
+    pub media: serde_json::Value,
     pub occurred_at: i64,
 }
 
@@ -595,6 +596,7 @@ async fn fold_event(
             let (author_slot, author_user) = author_from_payload(p, &ev.kind)?;
             let phase_id = str_field(p, "phase_id", &ev.kind)?;
             let body = str_field(p, "body", &ev.kind)?;
+            let media = thread_media_payload(p);
             insert_thread_post(
                 tx,
                 ThreadPostInsert {
@@ -606,6 +608,7 @@ async fn fold_event(
                     author_user,
                     phase_id,
                     body,
+                    media,
                     occurred_at: ev.occurred_at,
                 },
             )
@@ -669,6 +672,7 @@ async fn fold_event(
                         author_user: Some("system".to_string()),
                         phase_id: applied.phase_id.clone(),
                         body,
+                        media: serde_json::json!([]),
                         occurred_at: ev.occurred_at,
                     },
                 )
@@ -2342,7 +2346,7 @@ pub async fn thread_view_for_channel(
     let rows = sqlx::query(
         r#"
         SELECT game_id, source_seq, stream_seq, channel_id, author_slot,
-               author_user, phase_id, body, occurred_at
+               author_user, phase_id, body, media, occurred_at
         FROM thread_view
         WHERE game_id = $1
           AND channel_id = $2
@@ -2371,6 +2375,7 @@ pub async fn thread_view_for_channel(
             author_user: r.get("author_user"),
             phase_id: r.get("phase_id"),
             body: r.get("body"),
+            media: r.get("media"),
             occurred_at: r.get("occurred_at"),
         })
         .collect();
@@ -2800,6 +2805,7 @@ struct ThreadPostInsert {
     author_user: Option<String>,
     phase_id: String,
     body: String,
+    media: serde_json::Value,
     occurred_at: i64,
 }
 
@@ -2811,9 +2817,9 @@ async fn insert_thread_post(
         r#"
         INSERT INTO thread_view (
             game_id, source_seq, stream_seq, channel_id, author_slot,
-            author_user, phase_id, body, occurred_at
+            author_user, phase_id, body, media, occurred_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT (game_id, source_seq) DO NOTHING
         "#,
     )
@@ -2825,10 +2831,20 @@ async fn insert_thread_post(
     .bind(&post.author_user)
     .bind(&post.phase_id)
     .bind(&post.body)
+    .bind(&post.media)
     .bind(post.occurred_at)
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+fn thread_media_payload(payload: &serde_json::Value) -> serde_json::Value {
+    for key in ["media", "attachments", "images"] {
+        if let Some(value) = payload.get(key) {
+            return value.clone();
+        }
+    }
+    serde_json::json!([])
 }
 
 async fn insert_private_channel_member(

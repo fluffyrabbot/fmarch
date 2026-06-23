@@ -1285,6 +1285,28 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
                 "slot_or_user": { "slot": "slot_1" },
                 "body": body,
                 "phase_id": "D01",
+                "media": [{
+                    "id": format!("receipt-{idx}"),
+                    "kind": "image",
+                    "alt": "tablet proof receipt",
+                    "variants": {
+                        "tablet": {
+                            "url": format!("/media/live/receipt-{idx}-tablet.jpg"),
+                            "width": 960,
+                            "height": 720
+                        },
+                        "small": {
+                            "url": format!("/media/live/receipt-{idx}-small.jpg"),
+                            "width": 480,
+                            "height": 360
+                        },
+                        "original": {
+                            "url": format!("/media/live/receipt-{idx}-original.jpg"),
+                            "width": 4000,
+                            "height": 3000
+                        }
+                    }
+                }],
             }),
             ActorId::Slot("slot_1".into()),
             30 + idx as i64,
@@ -1326,6 +1348,11 @@ async fn thread_view_pages_main_thread_posts(pool: sqlx::PgPool) {
         .unwrap();
     assert_eq!(older.posts.len(), 1);
     assert_eq!(older.posts[0].body, "first visible post");
+    assert_eq!(older.posts[0].media[0]["id"], "receipt-0");
+    assert_eq!(
+        older.posts[0].media[0]["variants"]["tablet"]["url"],
+        "/media/live/receipt-0-tablet.jpg"
+    );
     assert_eq!(older.next_before_seq, None);
 
     let private = projections::thread_view_for_channel(&pool, game, "scum_chat", None, 10)

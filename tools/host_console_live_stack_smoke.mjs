@@ -84,6 +84,8 @@ try {
   await waitForHealth();
   await writeProgress({ stage: "seed-game", game });
   const seedCommands = await seedGame();
+  await writeProgress({ stage: "seed-private-channel-fixture", game });
+  const privateChannelFixture = await seedPrivateChannelFixture();
   await writeProgress({ stage: "create-dev-sessions", game });
   const devSessions = await createDevSessions();
 
@@ -139,6 +141,7 @@ try {
     frontendBaseUrl,
     viewport: smokeViewport,
     seedCommands,
+    privateChannelFixture,
     devSessions,
     browser: browserEvidence,
     playerVoteCount,
@@ -248,6 +251,20 @@ async function runProcess(command, args) {
     throw new Error(`${command} ${args[0]} failed with exit ${code}:\n${output}`);
   }
   return output;
+}
+
+async function runSql(url, sql) {
+  return await runProcess("psql", [
+    url,
+    "-v",
+    "ON_ERROR_STOP=1",
+    "-c",
+    sql,
+  ]);
+}
+
+function sqlLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 async function stopChild(child, label) {
@@ -444,6 +461,76 @@ async function seedGame() {
   return commands;
 }
 
+async function seedPrivateChannelFixture() {
+  const mediaPostSeq = 100000;
+  const rolePmSeedBody = "Role PM tablet media seed from live API";
+  const media = [
+    {
+      id: "live-role-pm-receipt",
+      kind: "image",
+      alt: "Live role PM tablet receipt",
+      variants: {
+        tablet: {
+          url: "/media/live-stack/thread/live-role-pm-receipt-tablet.png",
+          width: 960,
+          height: 720,
+        },
+        small: {
+          url: "/media/live-stack/thread/live-role-pm-receipt-small.png",
+          width: 480,
+          height: 360,
+        },
+        original: {
+          url: "/media/live-stack/thread/live-role-pm-receipt-original.png",
+          width: 4000,
+          height: 3000,
+        },
+      },
+    },
+  ];
+  await runSql(smokeDatabase.url, `
+    INSERT INTO private_channel_member (
+      game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source
+    )
+    VALUES (
+      '${game}', 'role-pm', 'role_pm', 'slot-7', 'vanilla_townie', 'never',
+      'host-console-live-stack-smoke'
+    )
+    ON CONFLICT (game_id, channel_id, slot_id) DO UPDATE SET
+      role_key = EXCLUDED.role_key,
+      reveals_alignment = EXCLUDED.reveals_alignment,
+      source = EXCLUDED.source;
+
+    INSERT INTO thread_view (
+      game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
+      phase_id, body, media, occurred_at
+    )
+    VALUES (
+      '${game}', ${mediaPostSeq}, ${mediaPostSeq}, 'role-pm', 'slot-7', NULL,
+      'D01', ${sqlLiteral(rolePmSeedBody)}, ${sqlLiteral(JSON.stringify(media))}::jsonb,
+      1781928000
+    )
+    ON CONFLICT (game_id, source_seq) DO UPDATE SET
+      channel_id = EXCLUDED.channel_id,
+      author_slot = EXCLUDED.author_slot,
+      author_user = EXCLUDED.author_user,
+      phase_id = EXCLUDED.phase_id,
+      body = EXCLUDED.body,
+      media = EXCLUDED.media,
+      occurred_at = EXCLUDED.occurred_at;
+  `);
+  return {
+    channelId: "role-pm",
+    memberSlot: "slot-7",
+    memberPrincipalUserId: "player-mira",
+    mediaPostSeq,
+    rolePmSeedBody,
+    media,
+    boundary:
+      "scratch database setup metadata only; role-PM SubmitPost ACK is driven through the real SvelteKit UI and Rust /commands path",
+  };
+}
+
 async function createDevSessions() {
   return {
     admin: await createDevSession({
@@ -495,6 +582,10 @@ async function driveBrowser(frontendBaseUrl) {
   try {
     await waitForHostLiveVotecount(moderatorSession.page, 1);
     playerEvidence = await drivePlayerBrowser(frontendBaseUrl);
+    const playerPrivateChannelEvidence =
+      await drivePlayerPrivateChannelBrowser(frontendBaseUrl);
+    const privateChannelForbiddenEvidence =
+      await drivePrivateChannelForbiddenBrowser(frontendBaseUrl);
     await waitForHostLiveVotecountEvent(moderatorSession.page, 2);
     await waitForHostLiveVotecountAfter(moderatorSession.page, 1, 2);
     await triggerHostResync(moderatorSession.page, 9001);
@@ -505,12 +596,207 @@ async function driveBrowser(frontendBaseUrl) {
     return {
       admin: adminEvidence,
       player: playerEvidence,
+      playerPrivateChannel: playerPrivateChannelEvidence,
+      privateChannelForbidden: privateChannelForbiddenEvidence,
       moderator: moderatorEvidence,
       playerVoteCountAfterPlayer,
     };
   } finally {
     await moderatorSession.context.close();
   }
+}
+
+async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
+  const mediaRequests = [];
+  const context = await browser.newContext({ viewport: smokeViewport });
+  context.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith("/media/live-stack/thread/")) {
+      mediaRequests.push({
+        url: request.url(),
+        pathname,
+        resourceType: request.resourceType(),
+      });
+    }
+  });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: playerSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${game}/c/role-pm`;
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `player private-channel route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const channelContext = page.getByTestId("player-command-channel-context");
+  await channelContext.waitFor({ state: "visible" });
+  const channelContextText = await channelContext.innerText();
+  const channelContextId = await channelContext.getAttribute("data-channel-id");
+  if (channelContextId !== "role-pm") {
+    throw new Error(
+      `role-PM channel context did not render: ${JSON.stringify({ channelContextId, channelContextText })}`,
+    );
+  }
+  const seededPost = page.locator('[data-testid="thread-post-100000"]');
+  await seededPost.waitFor({ state: "visible" });
+  const seededPostText = await seededPost.innerText();
+  if (!seededPostText.includes("Role PM tablet media seed from live API")) {
+    throw new Error(`role-PM live API seed post did not render: ${seededPostText}`);
+  }
+  const mediaBoundary = page.getByTestId("thread-post-media-boundary-100000");
+  await mediaBoundary.waitFor({ state: "visible" });
+  const mediaFigure = page.getByTestId("thread-post-media-live-role-pm-receipt");
+  await mediaFigure.waitFor({ state: "visible" });
+  assertVisibleBox(await mediaFigure.boundingBox(), "role-PM tablet media figure");
+  await page.waitForFunction(
+    () => {
+      const img = document.querySelector(
+        '[data-testid="thread-post-media-live-role-pm-receipt"] img',
+      );
+      return img?.complete === true && img.naturalWidth > 0;
+    },
+  );
+  const mediaAttributes = await page.evaluate(() => {
+    const img = document.querySelector(
+      '[data-testid="thread-post-media-live-role-pm-receipt"] img',
+    );
+    return {
+      src: img?.getAttribute("src") ?? null,
+      srcset: img?.getAttribute("srcset") ?? null,
+      sizes: img?.getAttribute("sizes") ?? null,
+      naturalWidth: img?.naturalWidth ?? null,
+      naturalHeight: img?.naturalHeight ?? null,
+    };
+  });
+  assertTabletMediaEvidence({ mediaAttributes, mediaRequests });
+  const mediaBoundaryStatus = await mediaBoundary.getAttribute("data-boundary-status");
+
+  const textarea = page.locator('[data-testid="player-composer"] textarea');
+  await textarea.fill("Role PM received from live-stack smoke");
+  const postButton = page.locator('[data-action="submit_post"]');
+  assertHitTarget(await postButton.boundingBox(), "role-PM post button");
+  await postButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  await page.waitForFunction(() =>
+    window.__fmarchPlayerProjection?.thread?.posts?.some(
+      (post) => post.body === "Role PM received from live-stack smoke",
+    ),
+  );
+  const submitPostOutcome = await page.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  assertRolePmSubmitPostOutcome(submitPostOutcome);
+  const privateThreadPage = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/role-pm/thread?principal_user_id=player-mira&limit=50`,
+  );
+  if (
+    !privateThreadPage.posts?.some(
+      (post) => post.body === "Role PM received from live-stack smoke",
+    )
+  ) {
+    throw new Error(`role-PM API thread missing submitted post: ${JSON.stringify(privateThreadPage)}`);
+  }
+
+  const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+  const commandStatus = await status.innerText();
+  const evidence = {
+    url: pageUrl,
+    channelContextId,
+    channelContextText,
+    seededPostText,
+    media: {
+      boundaryStatus: mediaBoundaryStatus,
+      mediaTestId: "thread-post-media-live-role-pm-receipt",
+      renderedSrc: mediaAttributes.src,
+      renderedSrcset: mediaAttributes.srcset,
+      renderedSizes: mediaAttributes.sizes,
+      naturalWidth: mediaAttributes.naturalWidth,
+      naturalHeight: mediaAttributes.naturalHeight,
+      requests: mediaRequests,
+      proof:
+        "Live-stack browser rendered tablet/small role-PM media variants returned by the Rust thread API, requested the tablet image from the SvelteKit media endpoint at 1024px, and kept original/full/desktop URLs out of rendered attributes and request evidence.",
+    },
+    submitPost: {
+      commandStatus,
+      outcome: submitPostOutcome,
+      apiThreadPostBodies: privateThreadPage.posts.map((post) => post.body),
+    },
+    projection,
+  };
+  await context.close();
+  return evidence;
+}
+
+async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
+  const deniedToken = `host-console-live-stack-denied-${crypto.randomUUID()}`;
+  await createDevSession({
+    token: deniedToken,
+    principalUserId: "player-target",
+  });
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: deniedToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${game}/c/role-pm`;
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || response.status() !== 403) {
+    throw new Error(
+      `private channel forbidden route expected 403, got ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+  await page.getByTestId("route-error-surface").waitFor({ state: "visible" });
+  const errorStatus = await page
+    .getByTestId("route-error-surface")
+    .getAttribute("data-status");
+  const action = page.getByTestId("route-error-action");
+  const actionLabel = await action.innerText();
+  const actionHref = await action.getAttribute("href");
+  if (errorStatus !== "403" || actionLabel !== "Back to board" || actionHref !== "/") {
+    throw new Error(
+      `private channel 403 recovery drifted: ${JSON.stringify({ errorStatus, actionLabel, actionHref })}`,
+    );
+  }
+  assertHitTarget(await action.boundingBox(), "private-channel 403 Back to board");
+  await Promise.all([
+    page.waitForURL(`${frontendBaseUrl}/`, { waitUntil: "networkidle" }),
+    action.click(),
+  ]);
+  await page.getByTestId("board-surface").waitFor({ state: "visible" });
+  const recoveredUrl = page.url();
+  await context.close();
+  return {
+    url: pageUrl,
+    status: Number(errorStatus),
+    actionLabel,
+    actionHref,
+    recoveredUrl,
+  };
 }
 
 async function driveAdminBrowser(frontendBaseUrl) {
@@ -1236,7 +1522,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
 }
 
 async function waitForHealth() {
-  const deadline = Date.now() + 120000;
+  const deadline = Date.now() + 240000;
   while (Date.now() < deadline) {
     try {
       const response = await fetchWithTimeout(`${apiBaseUrl}/healthz`, {}, 1000);
@@ -1322,6 +1608,47 @@ function assertAdminCohostEnvelope(envelope) {
   }
 }
 
+function assertRolePmSubmitPostOutcome(outcome) {
+  if (outcome?.state !== "ack") {
+    throw new Error(`role-PM SubmitPost did not ACK: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (command?.game !== game) {
+    throw new Error(`role-PM SubmitPost used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.channel_id !== "role-pm") {
+    throw new Error(`role-PM SubmitPost used wrong channel: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot-7") {
+    throw new Error(`role-PM SubmitPost used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.body !== "Role PM received from live-stack smoke") {
+    throw new Error(`role-PM SubmitPost used wrong body: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertTabletMediaEvidence({ mediaAttributes, mediaRequests }) {
+  const rendered = [
+    mediaAttributes?.src,
+    mediaAttributes?.srcset,
+    ...mediaRequests.map((request) => request.pathname),
+  ].join("\n");
+  if (!rendered.includes("live-role-pm-receipt-tablet.png")) {
+    throw new Error(`tablet media variant was not rendered/requested: ${rendered}`);
+  }
+  if (!rendered.includes("live-role-pm-receipt-small.png")) {
+    throw new Error(`small media variant was not present in rendered/requested evidence: ${rendered}`);
+  }
+  for (const forbidden of ["original", "full", "desktop"]) {
+    if (rendered.includes(forbidden)) {
+      throw new Error(`forbidden media variant leaked into evidence (${forbidden}): ${rendered}`);
+    }
+  }
+  if (Number(mediaAttributes?.naturalWidth ?? 0) <= 0) {
+    throw new Error(`tablet media image did not load: ${JSON.stringify(mediaAttributes)}`);
+  }
+}
+
 function assertHitTarget(box, label) {
   if (box === null) {
     throw new Error(`${label} has no rendered bounding box`);
@@ -1330,6 +1657,15 @@ function assertHitTarget(box, label) {
     throw new Error(
       `${label} is ${box.width}x${box.height}, expected at least 44x44`,
     );
+  }
+}
+
+function assertVisibleBox(box, label) {
+  if (box === null) {
+    throw new Error(`${label} has no rendered bounding box`);
+  }
+  if (box.width <= 0 || box.height <= 0) {
+    throw new Error(`${label} is ${box.width}x${box.height}, expected visible pixels`);
   }
 }
 

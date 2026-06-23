@@ -44,8 +44,13 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run
    test:host-console-live-stack-smoke` starts the Rust API and SvelteKit together against a
    temporary database, seeds through `/commands`, drives the tablet browser route without
-   route-level command or state mocks, and verifies the browser reads the post-action state
-   from the real API. `npm run test:frontend-role-proof:browser` is the current full browser
+   route-level command or state mocks, verifies the browser reads the post-action state
+   from the real API, posts to the role-PM private channel through the hydrated player UI
+   and real `/commands` API, proves a private-channel 403 can recover through `Back to board`,
+   and records tablet media request evidence from a live Rust `ThreadPage` media payload.
+   The role-PM membership/media seed is scratch-database setup; the ACK, recovery navigation,
+   API reads, SvelteKit rendering, and Chromium request evidence are live-stack proof.
+   `npm run test:frontend-role-proof:browser` is the current full browser
    role proof; the latest local run passed and refreshed the browser-acceptance boundary,
    completion audit, and readiness summary to complete. It runs the Chromium smoke and then
    verifies the generated artifact shape. `npm run test:frontend-role-proof` is the
