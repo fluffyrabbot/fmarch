@@ -36,6 +36,7 @@ test("host browser bridge records live projection events and latest snapshot", (
   };
   const previousStatus = { state: "connected", message: "open" };
   const snapshot = {
+    host: { replacement: { lifecycleLabel: "Modkilled" } },
     votecount: [{ target: "slot-target", count: 2 }],
     hostPrompts: [{ id: "prompt-2", status: "pending" }],
   };
@@ -60,12 +61,14 @@ test("host browser bridge records live projection events and latest snapshot", (
     { kind: "delta", delta: { kind: "HostPromptsChanged" } },
   ]);
   assert.equal(windowRef.__fmarchHostLiveProjectionStatus, liveStatus);
+  assert.equal(windowRef.__fmarchHostProjection, snapshot.host);
   assert.equal(windowRef.__fmarchHostVotecountProjection, snapshot.votecount);
   assert.equal(windowRef.__fmarchHostPromptsProjection, snapshot.hostPrompts);
 });
 
 test("host browser bridge preserves previous live projections for null snapshots", () => {
   const windowRef = {
+    __fmarchHostProjection: { phase: { id: "D01" } },
     __fmarchHostVotecountProjection: [{ target: "slot-2" }],
     __fmarchHostPromptsProjection: [{ id: "prompt-1" }],
   };
@@ -78,6 +81,7 @@ test("host browser bridge preserves previous live projections for null snapshots
     statusForEvent: () => ({ state: "closed", message: "closed" }),
   });
 
+  assert.deepEqual(windowRef.__fmarchHostProjection, { phase: { id: "D01" } });
   assert.deepEqual(windowRef.__fmarchHostVotecountProjection, [
     { target: "slot-2" },
   ]);
@@ -92,6 +96,7 @@ test("host browser bridge triggers manual live resync through the store adapter"
   const projectionStore = { id: "store" };
   const fetchImpl = async () => null;
   const snapshot = {
+    host: { replacement: { occupantLabel: "player-rowan" } },
     votecount: [{ target: "slot-7" }],
     hostPrompts: [{ id: "prompt-3" }],
   };
@@ -132,6 +137,7 @@ test("host browser bridge triggers manual live resync through the store adapter"
   assert.deepEqual(windowRef.__fmarchHostLiveProjectionEvents, [
     { kind: "resync-required", fromSeq: 42, state: "recovered" },
   ]);
+  assert.equal(windowRef.__fmarchHostProjection, snapshot.host);
   assert.equal(windowRef.__fmarchHostVotecountProjection, snapshot.votecount);
 });
 

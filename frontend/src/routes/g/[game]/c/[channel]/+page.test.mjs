@@ -56,6 +56,31 @@ test("player channel route rejects missing channel capability", async () => {
   assert.deepEqual(seen, []);
 });
 
+test("player channel route rejects missing dynamic private-room capability", async () => {
+  const seen = [];
+  await assert.rejects(
+    async () =>
+      await load({
+        params: { game: "midsummer", channel: "private:mafia_day_chat" },
+        locals: {
+          principalUserId: "player_target",
+          resolvedCapabilities: [
+            { kind: "SlotOccupant", game: "midsummer", slot: "slot-2" },
+          ],
+        },
+        fetch: async (url) => {
+          seen.push(url);
+          return { ok: false };
+        },
+      }),
+    (err) =>
+      err.status === 403 &&
+      err.body.message ===
+        "Game midsummer channel private:mafia_day_chat requires scoped channel capability.",
+  );
+  assert.deepEqual(seen, []);
+});
+
 test("player channel route distinguishes unsupported channels", async () => {
   const seen = [];
   await assert.rejects(

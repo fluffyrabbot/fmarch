@@ -13,11 +13,12 @@ test("player channel rail filters channels to scoped capabilities", () => {
       game: "midsummer",
       capabilities: [
         { kind: "ChannelMember", game: "midsummer", channel: "role-pm" },
+        { kind: "ChannelMember", game: "midsummer", channel: "private:mafia_day_chat" },
         { kind: "DeadViewer", game: "midsummer" },
         { kind: "ChannelMember", game: "other", channel: "main" },
       ],
     }).map((channel) => channel.id),
-    ["role-pm", "dead"],
+    ["role-pm", "dead", "private:mafia_day_chat"],
   );
 
   assert.deepEqual(
@@ -110,4 +111,64 @@ test("player channel rail marks the active private channel and resolves access",
     channel: "scum-chat",
     capabilities,
   }).supported, false);
+  assert.deepEqual(resolvePlayerChannelAccess({
+    game: "midsummer",
+    channel: "private:mafia_day_chat",
+    capabilities,
+  }), {
+    channel: "private:mafia_day_chat",
+    supported: true,
+    allowed: false,
+    label: "Mafia day chat",
+    capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+    href: "/g/midsummer/c/private%3Amafia_day_chat",
+  });
+});
+
+test("player channel rail exposes capability-derived private rooms", () => {
+  const capabilities = [
+    { kind: "SlotOccupant", game: "midsummer", slot: "slot_1" },
+    {
+      kind: "ChannelMember",
+      game: "midsummer",
+      channel: "private:mafia_day_chat",
+    },
+  ];
+  const channels = buildPlayerChannels({
+    game: "midsummer",
+    capabilities,
+    activeChannel: "private:mafia_day_chat",
+  });
+
+  assert.deepEqual(channels, [
+    {
+      id: "main",
+      label: "Main thread",
+      href: "/g/midsummer",
+      active: false,
+      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+    },
+    {
+      id: "private:mafia_day_chat",
+      label: "Mafia day chat",
+      href: "/g/midsummer/c/private%3Amafia_day_chat",
+      active: true,
+      capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+    },
+  ]);
+  assert.deepEqual(
+    resolvePlayerChannelAccess({
+      game: "midsummer",
+      channel: "private:mafia_day_chat",
+      capabilities,
+    }),
+    {
+      channel: "private:mafia_day_chat",
+      supported: true,
+      allowed: true,
+      label: "Mafia day chat",
+      capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+      href: "/g/midsummer/c/private%3Amafia_day_chat",
+    },
+  );
 });

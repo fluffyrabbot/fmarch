@@ -25,6 +25,11 @@ const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
 const cohostSessionToken = `host-console-live-stack-cohost-${crypto.randomUUID()}`;
 const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
+const factionDayChatChannel = "private:mafia_day_chat";
+const factionDayChatRoute = encodeURIComponent(factionDayChatChannel);
+const factionDayChatPostBody = "Faction day chat received from live-stack smoke";
+const factionDayChatSeedBody = "Faction day chat tablet media seed from live API";
+const factionDayChatMediaId = "live-faction-day-chat-receipt";
 await preflightLocalhostBindOrExit({
   host,
   repoRoot,
@@ -84,8 +89,8 @@ try {
   await waitForHealth();
   await writeProgress({ stage: "seed-game", game });
   const seedCommands = await seedGame();
-  await writeProgress({ stage: "seed-private-channel-fixture", game });
-  const privateChannelFixture = await seedPrivateChannelFixture();
+  await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
+  const privateChannelFixture = await seedFactionDayChatFixture();
   await writeProgress({ stage: "create-dev-sessions", game });
   const devSessions = await createDevSessions();
 
@@ -129,6 +134,12 @@ try {
       `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
     ));
   assertApiProjection(apiState);
+  const slotLifecycleApiState =
+    browserEvidence.moderator?.slotLifecycle?.apiStateAfter ??
+    (await fetchJson(
+      `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+    ));
+  assertSlotLifecycleApiProjection(slotLifecycleApiState);
 
   const evidence = {
     status: "passed",
@@ -146,6 +157,7 @@ try {
     browser: browserEvidence,
     playerVoteCount,
     apiState,
+    slotLifecycleApiState,
   };
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   await writeProgress({ stage: "complete", evidencePath });
@@ -309,7 +321,7 @@ async function seedGame() {
         AssignRole: {
           game,
           slot: "slot-7",
-          role_key: "vanilla_townie",
+          role_key: "encryptor",
         },
       },
     ],
@@ -409,7 +421,7 @@ async function seedGame() {
         AssignRole: {
           game,
           slot: "slot_5",
-          role_key: "mafia_goon",
+          role_key: "vanilla_townie",
         },
       },
     ],
@@ -461,53 +473,55 @@ async function seedGame() {
   return commands;
 }
 
-async function seedPrivateChannelFixture() {
+async function seedFactionDayChatFixture() {
   const mediaPostSeq = 100000;
-  const rolePmSeedBody = "Role PM tablet media seed from live API";
   const media = [
     {
-      id: "live-role-pm-receipt",
+      id: factionDayChatMediaId,
       kind: "image",
-      alt: "Live role PM tablet receipt",
+      alt: "Live faction day chat tablet receipt",
       variants: {
         tablet: {
-          url: "/media/live-stack/thread/live-role-pm-receipt-tablet.png",
+          url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
           width: 960,
           height: 720,
         },
         small: {
-          url: "/media/live-stack/thread/live-role-pm-receipt-small.png",
+          url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
           width: 480,
           height: 360,
         },
         original: {
-          url: "/media/live-stack/thread/live-role-pm-receipt-original.png",
+          url: "/media/live-stack/thread/live-faction-day-chat-receipt-original.png",
           width: 4000,
           height: 3000,
         },
       },
     },
   ];
+  const memberRows = await runSql(
+    smokeDatabase.url,
+    `SELECT channel_id, kind, slot_id, role_key, source
+     FROM private_channel_member
+     WHERE game_id = '${game}' AND channel_id = '${factionDayChatChannel}'
+     ORDER BY slot_id`,
+  );
+  if (
+    !memberRows.includes("slot-7") ||
+    !memberRows.includes("encryptor") ||
+    !memberRows.includes("slot_4") ||
+    !memberRows.includes("mafia_goon")
+  ) {
+    throw new Error(`faction day chat membership was not command-declared:\n${memberRows}`);
+  }
   await runSql(smokeDatabase.url, `
-    INSERT INTO private_channel_member (
-      game_id, channel_id, kind, slot_id, role_key, reveals_alignment, source
-    )
-    VALUES (
-      '${game}', 'role-pm', 'role_pm', 'slot-7', 'vanilla_townie', 'never',
-      'host-console-live-stack-smoke'
-    )
-    ON CONFLICT (game_id, channel_id, slot_id) DO UPDATE SET
-      role_key = EXCLUDED.role_key,
-      reveals_alignment = EXCLUDED.reveals_alignment,
-      source = EXCLUDED.source;
-
     INSERT INTO thread_view (
       game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
       phase_id, body, media, occurred_at
     )
     VALUES (
-      '${game}', ${mediaPostSeq}, ${mediaPostSeq}, 'role-pm', 'slot-7', NULL,
-      'D01', ${sqlLiteral(rolePmSeedBody)}, ${sqlLiteral(JSON.stringify(media))}::jsonb,
+      '${game}', ${mediaPostSeq}, ${mediaPostSeq}, '${factionDayChatChannel}', 'slot-7', NULL,
+      'D01', ${sqlLiteral(factionDayChatSeedBody)}, ${sqlLiteral(JSON.stringify(media))}::jsonb,
       1781928000
     )
     ON CONFLICT (game_id, source_seq) DO UPDATE SET
@@ -520,14 +534,16 @@ async function seedPrivateChannelFixture() {
       occurred_at = EXCLUDED.occurred_at;
   `);
   return {
-    channelId: "role-pm",
+    channelId: factionDayChatChannel,
+    roomType: "FactionDayChat",
     memberSlot: "slot-7",
     memberPrincipalUserId: "player-mira",
+    commandDeclaredMembers: ["slot-7", "slot_4"],
     mediaPostSeq,
-    rolePmSeedBody,
+    factionDayChatSeedBody,
     media,
     boundary:
-      "scratch database setup metadata only; role-PM SubmitPost ACK is driven through the real SvelteKit UI and Rust /commands path",
+      "membership is declared by mafiascum StartGame commands; media row is scratch database setup until a media upload command exists; faction-day-chat SubmitPost ACK is driven through the real SvelteKit UI and Rust /commands path",
   };
 }
 
@@ -608,6 +624,8 @@ async function driveBrowser(frontendBaseUrl) {
 
 async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
   const mediaRequests = [];
+  const mediaResponses = [];
+  const mediaResponseTasks = [];
   const context = await browser.newContext({ viewport: smokeViewport });
   context.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
@@ -618,6 +636,29 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
         resourceType: request.resourceType(),
       });
     }
+  });
+  context.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (!pathname.startsWith("/media/live-stack/thread/")) {
+      return;
+    }
+    mediaResponseTasks.push(
+      response.body().then((body) => {
+        const headers = response.headers();
+        mediaResponses.push({
+          url: response.url(),
+          pathname,
+          status: response.status(),
+          ok: response.ok(),
+          contentType: headers["content-type"] ?? null,
+          cacheControl: headers["cache-control"] ?? null,
+          contentAddress: headers["x-fmarch-media-content-address"] ?? null,
+          variant: headers["x-fmarch-media-variant"] ?? null,
+          etag: headers.etag ?? null,
+          bodyBytes: body.byteLength,
+        });
+      }),
+    );
   });
   await context.addCookies([
     {
@@ -630,7 +671,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
     },
   ]);
   const page = await context.newPage();
-  const pageUrl = `${frontendBaseUrl}/g/${game}/c/role-pm`;
+  const pageUrl = `${frontendBaseUrl}/g/${game}/c/${factionDayChatRoute}`;
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
     throw new Error(
@@ -643,34 +684,36 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
   await channelContext.waitFor({ state: "visible" });
   const channelContextText = await channelContext.innerText();
   const channelContextId = await channelContext.getAttribute("data-channel-id");
-  if (channelContextId !== "role-pm") {
+  if (channelContextId !== factionDayChatChannel) {
     throw new Error(
-      `role-PM channel context did not render: ${JSON.stringify({ channelContextId, channelContextText })}`,
+      `faction day chat channel context did not render: ${JSON.stringify({ channelContextId, channelContextText })}`,
     );
+  }
+  const activeChannel = page.getByTestId(`player-channel-${factionDayChatChannel}`);
+  await activeChannel.waitFor({ state: "visible" });
+  if ((await activeChannel.getAttribute("aria-current")) !== "page") {
+    throw new Error("faction day chat channel rail item is not active");
   }
   const seededPost = page.locator('[data-testid="thread-post-100000"]');
   await seededPost.waitFor({ state: "visible" });
   const seededPostText = await seededPost.innerText();
-  if (!seededPostText.includes("Role PM tablet media seed from live API")) {
-    throw new Error(`role-PM live API seed post did not render: ${seededPostText}`);
+  if (!seededPostText.includes(factionDayChatSeedBody)) {
+    throw new Error(`faction day chat live API seed post did not render: ${seededPostText}`);
   }
   const mediaBoundary = page.getByTestId("thread-post-media-boundary-100000");
   await mediaBoundary.waitFor({ state: "visible" });
-  const mediaFigure = page.getByTestId("thread-post-media-live-role-pm-receipt");
+  const mediaFigure = page.getByTestId(`thread-post-media-${factionDayChatMediaId}`);
   await mediaFigure.waitFor({ state: "visible" });
-  assertVisibleBox(await mediaFigure.boundingBox(), "role-PM tablet media figure");
+  assertVisibleBox(await mediaFigure.boundingBox(), "faction day chat tablet media figure");
   await page.waitForFunction(
-    () => {
-      const img = document.querySelector(
-        '[data-testid="thread-post-media-live-role-pm-receipt"] img',
-      );
+    (mediaTestId) => {
+      const img = document.querySelector(`[data-testid="${mediaTestId}"] img`);
       return img?.complete === true && img.naturalWidth > 0;
     },
+    `thread-post-media-${factionDayChatMediaId}`,
   );
-  const mediaAttributes = await page.evaluate(() => {
-    const img = document.querySelector(
-      '[data-testid="thread-post-media-live-role-pm-receipt"] img',
-    );
+  const mediaAttributes = await page.evaluate((mediaTestId) => {
+    const img = document.querySelector(`[data-testid="${mediaTestId}"] img`);
     return {
       src: img?.getAttribute("src") ?? null,
       srcset: img?.getAttribute("srcset") ?? null,
@@ -678,14 +721,15 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
       naturalWidth: img?.naturalWidth ?? null,
       naturalHeight: img?.naturalHeight ?? null,
     };
-  });
-  assertTabletMediaEvidence({ mediaAttributes, mediaRequests });
+  }, `thread-post-media-${factionDayChatMediaId}`);
+  await Promise.allSettled(mediaResponseTasks);
+  assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses });
   const mediaBoundaryStatus = await mediaBoundary.getAttribute("data-boundary-status");
 
   const textarea = page.locator('[data-testid="player-composer"] textarea');
-  await textarea.fill("Role PM received from live-stack smoke");
+  await textarea.fill(factionDayChatPostBody);
   const postButton = page.locator('[data-action="submit_post"]');
-  assertHitTarget(await postButton.boundingBox(), "role-PM post button");
+  assertHitTarget(await postButton.boundingBox(), "faction day chat post button");
   await postButton.click();
   const status = page.getByTestId("player-command-status");
   await status.waitFor({ state: "visible" });
@@ -695,24 +739,25 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
   );
-  await page.waitForFunction(() =>
+  await page.waitForFunction((expectedBody) =>
     window.__fmarchPlayerProjection?.thread?.posts?.some(
-      (post) => post.body === "Role PM received from live-stack smoke",
+      (post) => post.body === expectedBody,
     ),
+    factionDayChatPostBody,
   );
   const submitPostOutcome = await page.evaluate(
     () => window.__fmarchPlayerCommandStatus,
   );
-  assertRolePmSubmitPostOutcome(submitPostOutcome);
+  assertFactionDayChatSubmitPostOutcome(submitPostOutcome);
   const privateThreadPage = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/role-pm/thread?principal_user_id=player-mira&limit=50`,
+    `${apiBaseUrl}/games/${game}/channels/${factionDayChatRoute}/thread?principal_user_id=player-mira&limit=50`,
   );
   if (
     !privateThreadPage.posts?.some(
-      (post) => post.body === "Role PM received from live-stack smoke",
+      (post) => post.body === factionDayChatPostBody,
     )
   ) {
-    throw new Error(`role-PM API thread missing submitted post: ${JSON.stringify(privateThreadPage)}`);
+    throw new Error(`faction day chat API thread missing submitted post: ${JSON.stringify(privateThreadPage)}`);
   }
 
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
@@ -724,15 +769,16 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
     seededPostText,
     media: {
       boundaryStatus: mediaBoundaryStatus,
-      mediaTestId: "thread-post-media-live-role-pm-receipt",
+      mediaTestId: `thread-post-media-${factionDayChatMediaId}`,
       renderedSrc: mediaAttributes.src,
       renderedSrcset: mediaAttributes.srcset,
       renderedSizes: mediaAttributes.sizes,
       naturalWidth: mediaAttributes.naturalWidth,
       naturalHeight: mediaAttributes.naturalHeight,
       requests: mediaRequests,
+      responses: mediaResponses,
       proof:
-        "Live-stack browser rendered tablet/small role-PM media variants returned by the Rust thread API, requested the tablet image from the SvelteKit media endpoint at 1024px, and kept original/full/desktop URLs out of rendered attributes and request evidence.",
+        "Live-stack browser rendered tablet/small faction-day-chat media variants returned by the Rust thread API, requested and loaded the tablet PNG from the SvelteKit media endpoint at 1024px, observed immutable/content-addressed variant headers and real response bytes, and kept original/full/desktop URLs out of rendered attributes and request/response evidence.",
     },
     submitPost: {
       commandStatus,
@@ -763,7 +809,7 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
     },
   ]);
   const page = await context.newPage();
-  const pageUrl = `${frontendBaseUrl}/g/${game}/c/role-pm`;
+  const pageUrl = `${frontendBaseUrl}/g/${game}/c/${factionDayChatRoute}`;
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || response.status() !== 403) {
     throw new Error(
@@ -1217,6 +1263,7 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   const hostPromptIssueCommands = await issueBelovedPrincessPrompt();
   await waitForHostPromptDelta(page, "pending");
   const hostPromptEvidence = await resolveHostPromptFromBrowser(page);
+  const slotLifecycleEvidence = await modkillSlotFromBrowser(page);
 
   const evidence = {
     url: pageUrl,
@@ -1225,6 +1272,7 @@ async function driveModeratorBrowser({ page, pageUrl }) {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,
     },
+    slotLifecycle: slotLifecycleEvidence,
     liveProjectionEvents: await page.evaluate(
       () => window.__fmarchHostLiveProjectionEvents,
     ),
@@ -1342,6 +1390,71 @@ async function resolveHostPromptFromBrowser(page) {
   };
 }
 
+async function modkillSlotFromBrowser(page) {
+  const actionId = "modkill_slot";
+  const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  const trigger = actionRoot.getByTestId("critical-host-action-trigger");
+  await trigger.waitFor({ state: "visible" });
+  const triggerBox = await trigger.boundingBox();
+  assertHitTarget(triggerBox, `${actionId} trigger`);
+  await trigger.click();
+
+  const confirmation = actionRoot.getByTestId("critical-host-action-confirmation");
+  await confirmation.waitFor({ state: "visible" });
+  const confirmationMessage = await actionRoot
+    .getByTestId("critical-host-action-confirmation-message")
+    .innerText();
+  if (!confirmationMessage.includes("modkilled")) {
+    throw new Error(`modkill confirmation did not name lifecycle: ${confirmationMessage}`);
+  }
+
+  const confirm = actionRoot.getByTestId("critical-host-action-confirm");
+  const confirmBox = await confirm.boundingBox();
+  assertHitTarget(confirmBox, `${actionId} confirm`);
+  await confirm.click();
+
+  const status = page.getByTestId(`host-command-status-${actionId}`);
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
+    actionId,
+  );
+  await waitForHostConsoleSlotStatusDelta(page, {
+    slotId: "slot-7",
+    status: "modkilled",
+  });
+  await page.waitForFunction(() => {
+    const replacement = window.__fmarchHostProjection?.replacement;
+    return (
+      replacement?.slotId === "slot-7" &&
+      replacement?.occupantLabel === "player-rowan" &&
+      replacement?.lifecycleLabel === "Modkilled"
+    );
+  });
+
+  const commandStatus = await page.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  assertModkillCommandStatus(commandStatus);
+  const apiStateAfter = await fetchJson(
+    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
+  );
+  assertSlotLifecycleApiProjection(apiStateAfter);
+
+  return {
+    actionId,
+    triggerBox,
+    confirmBox,
+    confirmationMessage,
+    statusMessage: await status.innerText(),
+    commandStatus,
+    hostProjection: await page.evaluate(() => window.__fmarchHostProjection),
+    apiStateAfter,
+  };
+}
+
 async function waitForHostPromptDelta(page, status) {
   await page.waitForFunction(
     (expectedStatus) =>
@@ -1364,6 +1477,23 @@ async function waitForHostPromptDelta(page, status) {
           prompt.status === expectedStatus,
       ),
     status,
+  );
+}
+
+async function waitForHostConsoleSlotStatusDelta(page, { slotId, status }) {
+  await page.waitForFunction(
+    ({ expectedSlotId, expectedStatus }) =>
+      (window.__fmarchHostLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event.delta.body?.slots?.some(
+            (slot) =>
+              slot.slot_id === expectedSlotId &&
+              slot.status === expectedStatus &&
+              slot.alive === false,
+          ),
+      ),
+    { expectedSlotId: slotId, expectedStatus: status },
   );
 }
 
@@ -1397,16 +1527,25 @@ async function waitForHostLiveVotecount(page, count) {
 }
 
 async function waitForHostLiveVotecountEvent(page, count) {
-  await page.waitForFunction(
-    (expectedCount) =>
-      window.__fmarchHostLiveProjectionEvents?.some(
-        (event) =>
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
-          event.delta.body?.count === expectedCount,
-      ),
-    count,
-  );
+  try {
+    await page.waitForFunction(
+      (expectedCount) =>
+        window.__fmarchHostLiveProjectionEvents?.some(
+          (event) =>
+            event?.delta?.kind === "VoteCountChanged" &&
+            event.delta.body?.candidate_slot === "slot-2" &&
+            event.delta.body?.count === expectedCount,
+        ),
+      count,
+    );
+  } catch (error) {
+    const debug = await page.evaluate(() => ({
+      endpoint: window.__fmarchHostLiveProjectionEndpoint,
+      events: window.__fmarchHostLiveProjectionEvents,
+      projection: window.__fmarchHostVotecountProjection,
+    }));
+    throw new Error(`host live votecount event did not include ${count}: ${JSON.stringify(debug)}`);
+  }
 }
 
 async function waitForHostLiveVotecountAfter(page, count, previousCount) {
@@ -1562,6 +1701,35 @@ function assertApiProjection(state) {
   }
 }
 
+function assertSlotLifecycleApiProjection(state) {
+  const slot = state.slots?.find((candidate) => candidate.slot_id === "slot-7");
+  if (slot === undefined) {
+    throw new Error(`API slot lifecycle projection missing slot-7: ${JSON.stringify(state.slots)}`);
+  }
+  if (slot.status !== "modkilled" || slot.alive !== false) {
+    throw new Error(`API slot lifecycle projection did not modkill slot-7: ${JSON.stringify(slot)}`);
+  }
+  if (slot.occupant_user_id !== "player-rowan") {
+    throw new Error(`API modkill projection lost replacement occupant: ${JSON.stringify(slot)}`);
+  }
+}
+
+function assertModkillCommandStatus(status) {
+  if (status?.state !== "ack") {
+    throw new Error(`modkill_slot did not ACK: ${JSON.stringify(status)}`);
+  }
+  const command = status.requestEnvelope?.body?.body?.command?.SetSlotStatus;
+  if (command?.game !== game) {
+    throw new Error(`modkill_slot used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.slot !== "slot-7") {
+    throw new Error(`modkill_slot used wrong slot: ${JSON.stringify(command)}`);
+  }
+  if (command.status !== "modkilled") {
+    throw new Error(`modkill_slot used wrong lifecycle status: ${JSON.stringify(command)}`);
+  }
+}
+
 function assertPlayerVoteProjection(deltas) {
   const vote = deltas.find(
     (delta) =>
@@ -1608,35 +1776,36 @@ function assertAdminCohostEnvelope(envelope) {
   }
 }
 
-function assertRolePmSubmitPostOutcome(outcome) {
+function assertFactionDayChatSubmitPostOutcome(outcome) {
   if (outcome?.state !== "ack") {
-    throw new Error(`role-PM SubmitPost did not ACK: ${JSON.stringify(outcome)}`);
+    throw new Error(`faction day chat SubmitPost did not ACK: ${JSON.stringify(outcome)}`);
   }
   const command = outcome.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (command?.game !== game) {
-    throw new Error(`role-PM SubmitPost used wrong game: ${JSON.stringify(command)}`);
+    throw new Error(`faction day chat SubmitPost used wrong game: ${JSON.stringify(command)}`);
   }
-  if (command.channel_id !== "role-pm") {
-    throw new Error(`role-PM SubmitPost used wrong channel: ${JSON.stringify(command)}`);
+  if (command.channel_id !== factionDayChatChannel) {
+    throw new Error(`faction day chat SubmitPost used wrong channel: ${JSON.stringify(command)}`);
   }
   if (command.actor_slot !== "slot-7") {
-    throw new Error(`role-PM SubmitPost used wrong actor slot: ${JSON.stringify(command)}`);
+    throw new Error(`faction day chat SubmitPost used wrong actor slot: ${JSON.stringify(command)}`);
   }
-  if (command.body !== "Role PM received from live-stack smoke") {
-    throw new Error(`role-PM SubmitPost used wrong body: ${JSON.stringify(command)}`);
+  if (command.body !== factionDayChatPostBody) {
+    throw new Error(`faction day chat SubmitPost used wrong body: ${JSON.stringify(command)}`);
   }
 }
 
-function assertTabletMediaEvidence({ mediaAttributes, mediaRequests }) {
+function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses }) {
   const rendered = [
     mediaAttributes?.src,
     mediaAttributes?.srcset,
     ...mediaRequests.map((request) => request.pathname),
+    ...mediaResponses.map((response) => response.pathname),
   ].join("\n");
-  if (!rendered.includes("live-role-pm-receipt-tablet.png")) {
+  if (!rendered.includes("live-faction-day-chat-receipt-tablet.png")) {
     throw new Error(`tablet media variant was not rendered/requested: ${rendered}`);
   }
-  if (!rendered.includes("live-role-pm-receipt-small.png")) {
+  if (!rendered.includes("live-faction-day-chat-receipt-small.png")) {
     throw new Error(`small media variant was not present in rendered/requested evidence: ${rendered}`);
   }
   for (const forbidden of ["original", "full", "desktop"]) {
@@ -1646,6 +1815,26 @@ function assertTabletMediaEvidence({ mediaAttributes, mediaRequests }) {
   }
   if (Number(mediaAttributes?.naturalWidth ?? 0) <= 0) {
     throw new Error(`tablet media image did not load: ${JSON.stringify(mediaAttributes)}`);
+  }
+  const tabletResponse = mediaResponses.find((response) =>
+    response.pathname.endsWith("live-faction-day-chat-receipt-tablet.png"),
+  );
+  if (tabletResponse === undefined) {
+    throw new Error(`tablet media response was not observed: ${JSON.stringify(mediaResponses)}`);
+  }
+  if (
+    tabletResponse.status !== 200 ||
+    tabletResponse.contentType !== "image/png" ||
+    tabletResponse.variant !== "tablet" ||
+    tabletResponse.contentAddress !== "live-stack-thread-faction-day-chat-receipt-canonical-raster"
+  ) {
+    throw new Error(`tablet media response metadata drifted: ${JSON.stringify(tabletResponse)}`);
+  }
+  if (tabletResponse.cacheControl !== "private, max-age=31536000, immutable") {
+    throw new Error(`tablet media cache policy drifted: ${JSON.stringify(tabletResponse)}`);
+  }
+  if (Number(tabletResponse.bodyBytes ?? 0) <= 1000) {
+    throw new Error(`tablet media response still looks like a shim: ${JSON.stringify(tabletResponse)}`);
   }
 }
 

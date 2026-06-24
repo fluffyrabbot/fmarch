@@ -1432,6 +1432,175 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: sqlx::PgPool) {
+    let app = router(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    for (id, slot, user, role) in [
+        (2, "slot_1", "encryptor_user", "encryptor"),
+        (5, "slot_2", "goon_user", "mafia_goon"),
+        (8, "slot_3", "traitor_user", "traitor"),
+        (11, "slot_4", "town_user", "vanilla_townie"),
+    ] {
+        expect_ack(
+            post_command(
+                app.clone(),
+                id,
+                "host_h",
+                Command::AddSlot {
+                    game,
+                    slot: slot.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 1,
+                "host_h",
+                Command::AssignSlot {
+                    game,
+                    slot: slot.into(),
+                    user: user.into(),
+                },
+            )
+            .await,
+        );
+        expect_ack(
+            post_command(
+                app.clone(),
+                id + 2,
+                "host_h",
+                Command::AssignRole {
+                    game,
+                    slot: slot.into(),
+                    role_key: role.into(),
+                },
+            )
+            .await,
+        );
+    }
+    expect_ack(
+        post_command(
+            app.clone(),
+            14,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+
+    let members = projections::private_channel_members(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|member| member.channel_id == "private:mafia_day_chat")
+        .map(|member| (member.slot_id, member.role_key, member.kind))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        members,
+        vec![
+            (
+                "slot_1".to_string(),
+                "encryptor".to_string(),
+                "FactionDayChat".to_string()
+            ),
+            (
+                "slot_2".to_string(),
+                "mafia_goon".to_string(),
+                "FactionDayChat".to_string()
+            ),
+        ],
+        "StartGame should declare only eligible mafia faction-day-chat members",
+    );
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            15,
+            "encryptor_user",
+            Command::SubmitPost {
+                game,
+                channel_id: "private:mafia_day_chat".into(),
+                actor_slot: "slot_1".into(),
+                body: "day chat is live".into(),
+            },
+        )
+        .await,
+    );
+
+    let allowed = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=goon_user&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(allowed.status(), StatusCode::OK);
+    let bytes = to_bytes(allowed.into_body(), usize::MAX).await.unwrap();
+    let allowed_page: ThreadPage = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        allowed_page
+            .posts
+            .iter()
+            .map(|post| (post.channel_id.as_str(), post.body.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("private:mafia_day_chat", "day chat is live")]
+    );
+
+    let denied_read = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/channels/private:mafia_day_chat/thread?principal_user_id=traitor_user&limit=10"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(denied_read.status(), StatusCode::FORBIDDEN);
+
+    let denied_post = post_command(
+        app,
+        16,
+        "traitor_user",
+        Command::SubmitPost {
+            game,
+            channel_id: "private:mafia_day_chat".into(),
+            actor_slot: "slot_3".into(),
+            body: "traitor should not enter".into(),
+        },
+    )
+    .await;
+    expect_reject(denied_post, RejectCode::NotAuthorized);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgPool) {
     let app = router(pool.clone());
     let game = Uuid::new_v4();

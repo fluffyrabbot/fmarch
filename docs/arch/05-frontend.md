@@ -104,15 +104,19 @@ checklist before they are called done:
   Postgres database, starts the Rust API and SvelteKit dev server together, seeds the game
   through `/commands`, resolves the host session through `/auth/session`, drives both actions
   in Chromium, verifies the UI refreshes from the real `host-console-state` API, then drives
-  the player role-PM private-channel route through the same live stack. That live-stack lane
-  now records a role-PM `SubmitPost` ACK from the real `/commands` API, proves a non-member
+  the player private-channel route through the same live stack. That live-stack lane now
+  records a `private:mafia_day_chat` `SubmitPost` ACK from the real `/commands` API after
+  mafiascum `StartGame` declares the Encryptor-backed faction day chat, proves a non-member
   private-channel 403 can recover through the SvelteKit `Back to board` error action, and
   records tablet media evidence from a Rust `ThreadPage` media payload served by the SvelteKit
   smoke media endpoint. Its media evidence proves the 1024px browser requested the tablet
   image, rendered a tablet/small `srcset`, and kept original/full/desktop URLs out of
-  rendered attributes and request logs. The role-PM channel membership/media seed rows are
-  scratch-database setup metadata; the role-PM post ACK, forbidden route, recovery navigation,
-  Rust API reads, SvelteKit rendering, and Chromium requests are live-stack proof. The
+  rendered attributes and request logs. The faction day chat membership is command-declared;
+  only the media seed row is scratch-database setup until a media upload command exists. The
+  post ACK, forbidden route, recovery navigation, Rust API reads, SvelteKit rendering, and
+  Chromium requests are live-stack proof. The same live moderator session now also confirms
+  `ResolveHostPrompt` ACK/removal and `modkill_slot` to typed `SetSlotStatus` ACK plus
+  `Modkilled` slot lifecycle API/projection evidence against the real Rust API. The
   multi-role browser smoke is the acceptance gate for nonblank admin/player/moderator
   rendering, touch target floor, obvious-overlap checks, first-viewport scan-strip tile fit,
   forbidden access behavior, keyboard focus order with disabled controls skipped, visible
@@ -327,13 +331,15 @@ concern from [01](01-domain-model.md) on the client side).
 Lists only channels the user's capabilities permit. The client never *requests* a channel
 it can't see, and the server wouldn't send its deltas anyway ([03](03-backend.md)) — defense
 in depth. The player route owns `/g/[game]` for the main thread and `/g/[game]/c/[channel]`
-for capability-gated role/dead channels, with unsupported channel IDs rejected before the
-surface renders. Private channel pages cold-load their active thread through the
+for capability-gated role/dead channels plus capability-derived private room ids such as
+`private:mafia_day_chat`, with unsupported channel IDs rejected before the surface renders.
+Private channel pages cold-load their active thread through the
 server-gated `/games/[game]/channels/[channel]/thread` projection endpoint and submit
 through the typed `SubmitPost.channel_id` command path, which is checked again at the
 command boundary. The private-channel route participates in the same fixture-only
 empty/loading/reject route-state lane as the main player route, and SSR/DOM proof renders
-`/g/midsummer/c/role-pm` through the actual SvelteKit channel wrapper with the active rail
+`/g/midsummer/c/role-pm` through the actual SvelteKit channel wrapper, while the live-stack
+proof now drives `/g/[game]/c/private%3Amafia_day_chat` with an active capability-derived rail
 item and channel-scoped private review links.
 Private notifications and investigation results render as principal-scoped disclosure
 items: collapsed by default, named by the visible private row, and wired with

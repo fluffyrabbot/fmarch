@@ -49,6 +49,7 @@ export function recordHostLiveProjectionEvent({
   ];
   windowRef.__fmarchHostLiveProjectionStatus = liveStatus;
   if (snapshot !== null) {
+    windowRef.__fmarchHostProjection = snapshot.host;
     windowRef.__fmarchHostVotecountProjection = snapshot.votecount;
     windowRef.__fmarchHostPromptsProjection = snapshot.hostPrompts;
   }
