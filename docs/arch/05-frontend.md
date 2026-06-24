@@ -140,8 +140,8 @@ checklist before they are called done:
   record private notification disclosure evidence before and after expansion, including
   `aria-expanded`, detail visibility, focus retention, nonblank screenshots for both states,
   and player thread media request evidence proving the browser requested only tablet/small
-  image variants from the mocked media route while original/full/desktop URLs stayed out of
-  rendered image attributes and request logs. Use
+  image variants from the SvelteKit live-stack media endpoint while original/full/desktop URLs
+  stayed out of rendered image attributes and request logs. Use
   `npm run test:frontend-role-proof:browser` as the browser acceptance command; it runs the
   Chromium smoke and then verifies the generated artifact shape.
   In restricted sandboxes that deny localhost binds, the browser smokes write a structured
