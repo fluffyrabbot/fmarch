@@ -7,7 +7,59 @@
 
 use eventstore::{append, append_in_tx, load_stream, ActorId, EventInput, StoreError};
 use sqlx::Row;
+use std::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
+
+static ENCRYPTION_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+struct EncryptionEnvGuard {
+    prior_key: Option<String>,
+    prior_kid: Option<String>,
+    prior_keys: Option<String>,
+    _lock: MutexGuard<'static, ()>,
+}
+
+impl EncryptionEnvGuard {
+    fn new() -> Self {
+        let lock = ENCRYPTION_ENV_LOCK.lock().unwrap();
+        let guard = Self {
+            prior_key: std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok(),
+            prior_kid: std::env::var("FMARCH_EVENT_ENCRYPTION_KID").ok(),
+            prior_keys: std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS").ok(),
+            _lock: lock,
+        };
+        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY");
+        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID");
+        std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS");
+        guard
+    }
+
+    fn set_active(&self, kid: &str, key: &str) {
+        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", kid);
+        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", key);
+    }
+
+    fn set_keyring(&self, keys: &str) {
+        std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", keys);
+    }
+}
+
+impl Drop for EncryptionEnvGuard {
+    fn drop(&mut self) {
+        match &self.prior_key {
+            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEY", value),
+            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEY"),
+        }
+        match &self.prior_kid {
+            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KID", value),
+            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KID"),
+        }
+        match &self.prior_keys {
+            Some(value) => std::env::set_var("FMARCH_EVENT_ENCRYPTION_KEYS", value),
+            None => std::env::remove_var("FMARCH_EVENT_ENCRYPTION_KEYS"),
+        }
+    }
+}
 
 fn vote(target: &str, phase: &str) -> EventInput {
     EventInput::new(
@@ -70,6 +122,7 @@ async fn append_assigns_sequential_stream_seq(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "./migrations")]
 async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool: sqlx::PgPool) {
+    let _env = EncryptionEnvGuard::new();
     let g = Uuid::new_v4();
     append(
         &pool,
@@ -93,6 +146,7 @@ async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool
     assert_eq!(raw_role["slot_id"], "slot_1");
     assert!(raw_role.get("role_key").is_none());
     assert!(raw_role["private"]["ciphertext"].is_string());
+    assert_eq!(raw_role["private"]["kid"], "local-dev");
 
     let raw_post: serde_json::Value = raw_rows[1].get("payload");
     assert_eq!(raw_rows[1].get::<String, _>("kind"), "PostSubmitted");
@@ -101,6 +155,7 @@ async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool
     assert_eq!(raw_post["phase_id"], "D01");
     assert!(raw_post.get("body").is_none());
     assert!(raw_post["body_private"]["ciphertext"].is_string());
+    assert_eq!(raw_post["body_private"]["kid"], "local-dev");
 
     let loaded = load_stream(&pool, g).await.unwrap();
     assert_eq!(loaded[0].payload["role_key"], "godfather");
@@ -110,6 +165,55 @@ async fn private_event_payloads_are_encrypted_at_rest_and_decrypted_on_load(pool
         serde_json::json!(["godfather"])
     );
     assert_eq!(loaded[1].payload["body"], "shoot slot_2 tonight");
+}
+
+#[sqlx::test(migrations = "./migrations")]
+async fn encrypted_payloads_resolve_by_stored_kid_after_key_rotation(pool: sqlx::PgPool) {
+    let env = EncryptionEnvGuard::new();
+    let g = Uuid::new_v4();
+
+    env.set_active("old-kid", "old private event encryption key");
+    append(&pool, g, &[role_assigned("slot_1", "godfather")])
+        .await
+        .expect("append old-key private event");
+
+    env.set_active("new-kid", "new private event encryption key");
+    append(
+        &pool,
+        g,
+        &[private_post(
+            "private:mafia_day_chat",
+            "coordinate with the new key",
+        )],
+    )
+    .await
+    .expect("append new-key private event");
+
+    let raw_rows =
+        sqlx::query("SELECT kind, payload FROM events WHERE stream_id = $1 ORDER BY stream_seq")
+            .bind(g)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let raw_role: serde_json::Value = raw_rows[0].get("payload");
+    let raw_post: serde_json::Value = raw_rows[1].get("payload");
+    assert_eq!(raw_role["private"]["kid"], "old-kid");
+    assert_eq!(raw_post["body_private"]["kid"], "new-kid");
+
+    let missing_old = load_stream(&pool, g)
+        .await
+        .expect_err("old envelope must not decrypt with only the new active key");
+    assert!(
+        missing_old.to_string().contains("old-kid"),
+        "missing-key error should name the envelope kid, got {missing_old}"
+    );
+
+    env.set_keyring("old-kid=old private event encryption key");
+    let loaded = load_stream(&pool, g)
+        .await
+        .expect("old and new encrypted envelopes should coexist");
+    assert_eq!(loaded[0].payload["role_key"], "godfather");
+    assert_eq!(loaded[1].payload["body"], "coordinate with the new key");
 }
 
 /// Optimistic concurrency: two transactions both try to append at the SAME

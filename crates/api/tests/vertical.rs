@@ -1395,6 +1395,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
     assert_eq!(payload["phase_id"], "D01");
     assert!(payload.get("body").is_none());
     assert!(payload["body_private"]["ciphertext"].is_string());
+    assert!(payload["body_private"]["kid"].is_string());
 
     let private_thread = app
         .clone()

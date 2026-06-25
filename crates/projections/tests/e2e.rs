@@ -1410,6 +1410,7 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
     assert_eq!(raw_role["slot_id"], "slot_1");
     assert!(raw_role.get("role_key").is_none());
     assert!(raw_role["private"]["ciphertext"].is_string());
+    assert!(raw_role["private"]["kid"].is_string());
 
     let raw_post: serde_json::Value = sqlx::query_scalar(
         "SELECT payload FROM events WHERE stream_id = $1 AND kind = 'PostSubmitted'",
@@ -1422,6 +1423,7 @@ async fn encrypted_private_events_still_fold_and_rebuild(pool: sqlx::PgPool) {
     assert_eq!(raw_post["phase_id"], "D01");
     assert!(raw_post.get("body").is_none());
     assert!(raw_post["body_private"]["ciphertext"].is_string());
+    assert!(raw_post["body_private"]["kid"].is_string());
 
     let projected_role = slot_state(&pool, game)
         .await

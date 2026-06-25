@@ -22,8 +22,14 @@ content (incompatible with moderation; out of scope by design).
 
 - **Passwords:** argon2id with sane params; never anything reversible. Never logged.
 - **Sessions:** opaque, rotating session tokens in an **httpOnly, Secure, SameSite** cookie.
-  Rotation on privilege change and periodically; server-side revocation list so logout and
-  compromise response are immediate.
+  Current implemented slice: `auth_session` stores token hashes and revocation/expiry data;
+  `/auth/session` resolves bearer tokens into server-derived principals/capabilities;
+  `/auth/session-grants` lets an active `GlobalAdmin` issue scoped operator tokens; and the
+  browser `/auth/login` action verifies one of those opaque tokens before writing
+  `fmarch_session`. Local HTTP development omits `Secure` only because localhost is not TLS.
+  Rotation on privilege change and periodically remains future hardening; server-side
+  revocation data is already in the table so logout and compromise response can be immediate
+  once the logout endpoint lands.
 - **Brute-force defense:** rate limiting and backoff on auth endpoints; generic failure
   messages (no "user exists" oracle).
 - **CSRF:** state-changing REST endpoints require an anti-CSRF token. The WebSocket is
@@ -92,9 +98,11 @@ Reads and live deltas are filtered server-side by capability ([03](03-backend.md
   unset so tests and scratch stacks stay runnable. Production/staged deployments must provide
   `FMARCH_EVENT_ENCRYPTION_KEY` and `FMARCH_EVENT_ENCRYPTION_KID` from the environment or a
   secrets manager.
-- The ciphertext envelope records an encryption key id alongside the ciphertext; multi-key
-  rotation lookup remains future hardening (additive, like everything else —
-  [02](02-event-sourcing.md)).
+- The ciphertext envelope records an encryption key id alongside the ciphertext. Writes use the
+  active `FMARCH_EVENT_ENCRYPTION_KEY` / `FMARCH_EVENT_ENCRYPTION_KID`; reads resolve by the
+  envelope `kid` against the active key plus historical `FMARCH_EVENT_ENCRYPTION_KEYS`
+  `kid=key` entries, so old and new encrypted payloads can coexist during manual rotation. This
+  is not yet KMS-backed rotation, automated key retirement, or log re-encryption.
 - Transport is TLS end-to-end; the at-rest layer is in addition to, not instead of, TLS.
 
 ## Operational hygiene

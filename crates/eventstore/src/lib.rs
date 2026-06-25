@@ -13,6 +13,7 @@
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPool;
 use sqlx::Row;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 pub mod upcaster;
@@ -487,7 +488,8 @@ fn decrypt_json(envelope: &serde_json::Value, aad: &[u8]) -> Result<serde_json::
     let ciphertext = STANDARD
         .decode(json_string(envelope, "ciphertext")?)
         .map_err(|err| StoreError::Crypto(format!("decode ciphertext: {err}")))?;
-    let key = event_encryption_key()?;
+    let kid = json_string(envelope, "kid")?;
+    let key = event_encryption_key_by_kid(&kid)?;
     let cipher = XChaCha20Poly1305::new((&key.bytes).into());
     let plaintext = cipher
         .decrypt(
@@ -503,33 +505,111 @@ fn decrypt_json(envelope: &serde_json::Value, aad: &[u8]) -> Result<serde_json::
 }
 
 fn event_encryption_key() -> Result<EventEncryptionKey, StoreError> {
-    use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-    use base64::Engine;
+    active_event_encryption_key()
+}
+
+fn event_encryption_key_by_kid(kid: &str) -> Result<EventEncryptionKey, StoreError> {
+    let keyring = event_encryption_keyring()?;
+    keyring
+        .get(kid)
+        .cloned()
+        .ok_or_else(|| StoreError::Crypto(format!("missing event encryption key for kid `{kid}`")))
+}
+
+fn event_encryption_keyring() -> Result<HashMap<String, EventEncryptionKey>, StoreError> {
+    let active = active_event_encryption_key()?;
+    let mut keys = HashMap::new();
+    insert_event_encryption_key(&mut keys, active)?;
+
+    if let Ok(raw) = std::env::var("FMARCH_EVENT_ENCRYPTION_KEYS") {
+        for entry in raw
+            .split(',')
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+        {
+            let (kid, raw_key) = entry.split_once('=').ok_or_else(|| {
+                StoreError::Crypto(
+                    "FMARCH_EVENT_ENCRYPTION_KEYS entries must be kid=key".to_string(),
+                )
+            })?;
+            let kid = kid.trim();
+            if kid.is_empty() {
+                return Err(StoreError::Crypto(
+                    "FMARCH_EVENT_ENCRYPTION_KEYS kid must not be empty".to_string(),
+                ));
+            }
+            let key = EventEncryptionKey {
+                kid: kid.to_string(),
+                bytes: event_encryption_key_bytes(raw_key.trim())?,
+            };
+            insert_event_encryption_key(&mut keys, key)?;
+        }
+    }
+
+    Ok(keys)
+}
+
+fn insert_event_encryption_key(
+    keys: &mut HashMap<String, EventEncryptionKey>,
+    key: EventEncryptionKey,
+) -> Result<(), StoreError> {
+    if let Some(existing) = keys.get(&key.kid) {
+        if existing.bytes != key.bytes {
+            return Err(StoreError::Crypto(format!(
+                "conflicting event encryption key material for kid `{}`",
+                key.kid
+            )));
+        }
+        return Ok(());
+    }
+    keys.insert(key.kid.clone(), key);
+    Ok(())
+}
+
+fn active_event_encryption_key() -> Result<EventEncryptionKey, StoreError> {
     use sha2::{Digest, Sha256};
 
     let kid = std::env::var("FMARCH_EVENT_ENCRYPTION_KID")
         .ok()
-        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "local-dev".to_string());
-    let bytes = match std::env::var("FMARCH_EVENT_ENCRYPTION_KEY") {
-        Ok(raw) if !raw.trim().is_empty() => {
-            let raw = raw.trim();
-            let decoded = STANDARD
-                .decode(raw)
-                .or_else(|_| URL_SAFE_NO_PAD.decode(raw))
-                .ok()
-                .filter(|bytes| bytes.len() == 32);
-            match decoded {
-                Some(bytes) => bytes,
-                None => Sha256::digest(raw.as_bytes()).to_vec(),
-            }
+    let raw_key = std::env::var("FMARCH_EVENT_ENCRYPTION_KEY").ok();
+    let bytes = match raw_key {
+        Some(raw) if !raw.trim().is_empty() => {
+            let raw = raw.trim().to_string();
+            event_encryption_key_bytes(&raw)?
         }
-        _ => Sha256::digest(b"fmarch-local-dev-event-encryption-key-v1").to_vec(),
+        _ => Sha256::digest(b"fmarch-local-dev-event-encryption-key-v1")
+            .to_vec()
+            .try_into()
+            .map_err(|_| StoreError::Crypto("event encryption key must be 32 bytes".to_string()))?,
     };
-    let bytes: [u8; 32] = bytes
-        .try_into()
-        .map_err(|_| StoreError::Crypto("event encryption key must be 32 bytes".to_string()))?;
     Ok(EventEncryptionKey { kid, bytes })
+}
+
+fn event_encryption_key_bytes(raw: &str) -> Result<[u8; 32], StoreError> {
+    use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+
+    if raw.trim().is_empty() {
+        return Err(StoreError::Crypto(
+            "event encryption key material must not be empty".to_string(),
+        ));
+    }
+    let decoded = STANDARD
+        .decode(raw)
+        .or_else(|_| URL_SAFE_NO_PAD.decode(raw))
+        .ok()
+        .filter(|bytes| bytes.len() == 32);
+    let bytes = match decoded {
+        Some(bytes) => bytes,
+        None => Sha256::digest(raw.as_bytes()).to_vec(),
+    };
+    bytes
+        .try_into()
+        .map_err(|_| StoreError::Crypto("event encryption key must be 32 bytes".to_string()))
 }
 
 fn aad(stream_id: Uuid, stream_seq: i64, kind: &str, version: i16, field: &str) -> String {
