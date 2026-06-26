@@ -1,0 +1,55 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
+const databaseUrl =
+  process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
+
+const exitCode = await run("npm", [
+  "run",
+  "dev:test-game",
+  "--",
+  "--name",
+  "live-proof",
+  "--reset",
+  "--verify",
+  "--no-keepalive",
+]);
+if (exitCode !== 0) {
+  process.exit(exitCode);
+}
+
+const session = JSON.parse(await readFile(sessionPath, "utf8"));
+assert.equal(session.status, "ready");
+assert.equal(session.name, "live-proof");
+assert.equal(session.seedMode, "seeded");
+assert.equal(session.seedCommandCount, 20);
+assert.equal(session.verification?.status, "passed");
+assert.deepEqual(session.verification.roles, ["host", "player"]);
+assert.match(session.frontendBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
+assert.match(session.apiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
+for (const role of ["admin", "cohost", "host", "player"]) {
+  assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
+  assert.match(session.sessions[role].loginUrl, /\/auth\/login\?returnTo=/);
+}
+
+console.log(`dev test-game live proof passed for ${session.game}`);
+
+async function run(command, args) {
+  const child = spawn(command, args, {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+    },
+    stdio: "inherit",
+  });
+  return await new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code) => resolve(code ?? 1));
+  });
+}

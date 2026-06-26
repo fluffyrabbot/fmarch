@@ -3,6 +3,8 @@
   "type": "module",
   "scripts": {
     "dev:test-game": "node tools/dev_test_game.mjs",
+    "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs",
+    "test:dev-test-game-live": "node tools/dev_test_game_live_proof.mjs",
     "operator:browser-smoke": "node tools/operator_browser_smoke.mjs",
     "test:frontend-live-role-smoke": "node tools/host_console_live_stack_smoke.mjs",
     "test:frontend-dispatch-bridge": "node tools/frontend_dispatch_bridge_contract.mjs",

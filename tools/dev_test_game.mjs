@@ -1,62 +1,69 @@
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
-const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
+const namedGamesPath = path.join(artifactDir, "named-games.json");
+export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
+export const defaultGameName = "local";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
-const args = parseArgs(process.argv.slice(2));
-if (args.help) {
-  printHelp();
-  process.exit(0);
-}
-
-const databaseUrl = args.databaseUrl ?? process.env.DATABASE_URL ?? defaultDatabaseUrl;
-const game = args.game ?? crypto.randomUUID();
-const tokenPrefix = args.tokenPrefix ?? `dev-test-${game}`;
-const tokens = Object.freeze({
-  rootAdmin: `${tokenPrefix}-root-admin`,
-  admin: `${tokenPrefix}-admin`,
-  host: `${tokenPrefix}-host`,
-  player: `${tokenPrefix}-player`,
-  cohost: `${tokenPrefix}-cohost`,
-});
-const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
-
 let apiServer;
 let vite;
-let apiBaseUrl = args.apiBaseUrl;
-let frontendBaseUrl = args.frontendBaseUrl;
+let args;
+let databaseUrl;
+let game;
+let gameName;
+let tokenPrefix;
+let tokens;
+let expiresAt;
+let apiBaseUrl;
+let frontendBaseUrl;
+let seedMode;
 let commandEnvelopeId = 1;
 let serverOutput = "";
 let apiServerExit;
 
-process.on("SIGINT", () => {
-  shutdown().then(() => process.exit(130));
-});
-process.on("SIGTERM", () => {
-  shutdown().then(() => process.exit(143));
-});
+export async function main(rawArgs = process.argv.slice(2), env = process.env) {
+  args = parseArgs(rawArgs);
+  if (args.help) {
+    printHelp();
+    return;
+  }
 
-try {
+  databaseUrl = args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl;
+  gameName = args.name ?? env.FMARCH_DEV_TEST_GAME_NAME ?? defaultGameName;
+  const registry = await readNamedGames();
+  const selection = selectGame({ args, gameName, registry });
+  game = selection.game;
+  seedMode = selection.seedMode;
+  tokenPrefix = args.tokenPrefix ?? `dev-test-${gameName}-${game}`;
+  tokens = createTokenSet(tokenPrefix);
+  expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
+  apiBaseUrl = args.apiBaseUrl;
+  frontendBaseUrl = args.frontendBaseUrl;
+  commandEnvelopeId = 1;
+  serverOutput = "";
+  apiServerExit = undefined;
+
   await mkdir(artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
+    await assertPostgresReachable(databaseUrl);
     apiBaseUrl = await startApi();
   } else {
     await waitForHealth(apiBaseUrl);
   }
 
-  const seedCommands = await seedGame();
+  const seedResult = await seedGame();
   const sessions = await createSessions();
 
   if (frontendBaseUrl === undefined) {
@@ -65,15 +72,26 @@ try {
 
   const card = buildSessionCard({
     game,
+    gameName,
+    seedMode: seedResult.mode,
     databaseUrl,
     apiBaseUrl,
     frontendBaseUrl,
-    seedCommands,
+    seedCommands: seedResult.commands,
     sessions,
   });
   await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
   await writeFile(sessionMdPath, markdownSessionCard(card));
+  await writeNamedGame(gameName, card);
   printSessionCard(card);
+
+  if (args.verify) {
+    const verification = await verifySessionCard(card);
+    card.verification = verification;
+    await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
+    await writeFile(sessionMdPath, markdownSessionCard(card));
+    console.log(`\nverified browser entry: ${verification.roles.join(", ")}`);
+  }
 
   if (args.noKeepalive) {
     await shutdown();
@@ -81,16 +99,30 @@ try {
     console.log("\nKeeping the API and frontend alive. Press Ctrl-C to stop.");
     await new Promise(() => {});
   }
-} catch (error) {
-  await shutdown();
-  if (serverOutput !== "") {
-    error.serverOutput = serverOutput.slice(-4000);
-  }
-  throw error;
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  process.on("SIGINT", () => {
+    shutdown().then(() => process.exit(130));
+  });
+  process.on("SIGTERM", () => {
+    shutdown().then(() => process.exit(143));
+  });
+  main().catch(async (error) => {
+    await shutdown();
+    if (serverOutput !== "") {
+      error.serverOutput = serverOutput.slice(-4000);
+    }
+    console.error(error);
+    process.exit(1);
+  });
 }
 
 async function startApi() {
-  const port = await freePort();
+  const port = args.apiPort ?? (await freePort());
+  if (args.apiPort !== undefined) {
+    await assertPortAvailable(port, "API");
+  }
   const baseUrl = `http://${host}:${port}`;
   apiServer = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
@@ -127,6 +159,9 @@ async function startApi() {
 
 async function startFrontend(currentApiBaseUrl) {
   process.env.FMARCH_API_BASE_URL = currentApiBaseUrl;
+  if (args.frontendPort !== undefined) {
+    await assertPortAvailable(args.frontendPort, "frontend");
+  }
   const previousCwd = process.cwd();
   process.chdir(frontendRoot);
   try {
@@ -161,14 +196,31 @@ async function startFrontend(currentApiBaseUrl) {
 }
 
 async function seedGame() {
-  const commands = [];
-  for (const [principalUserId, command] of seedCommandPlan()) {
-    commands.push(await sendCommand(principalUserId, command));
+  if (seedMode === "reuse") {
+    return { mode: "reused", commands: [] };
   }
-  return commands;
+  const commands = [];
+  const plan = seedCommandPlanForGame(game);
+  for (let index = 0; index < plan.length; index += 1) {
+    const [principalUserId, command] = plan[index];
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      if (index === 0 && result.body.body?.error === "UnknownGame") {
+        if (seedMode === "reuse-if-present") {
+          return { mode: "reused", commands: [] };
+        }
+        throw new Error(
+          `game ${game} already exists; rerun with --reuse to use it or --reset to create a fresh named game`,
+        );
+      }
+      throw new Error(`seed command rejected: ${JSON.stringify(result)}`);
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return { mode: "seeded", commands };
 }
 
-function seedCommandPlan() {
+export function seedCommandPlanForGame(game) {
   return [
     ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
     ["host_h", { AddSlot: { game, slot: "slot-7" } }],
@@ -243,6 +295,16 @@ async function createSessions() {
   };
 }
 
+export function createTokenSet(prefix) {
+  return Object.freeze({
+    rootAdmin: `${prefix}-root-admin`,
+    admin: `${prefix}-admin`,
+    host: `${prefix}-host`,
+    player: `${prefix}-player`,
+    cohost: `${prefix}-cohost`,
+  });
+}
+
 async function createGrantedSession({
   token,
   principalUserId,
@@ -274,7 +336,15 @@ async function createGrantedSession({
 }
 
 async function sendCommand(principalUserId, command) {
-  const response = await fetchJson(`${apiBaseUrl}/commands`, {
+  const response = await sendCommandResult(principalUserId, command);
+  if (response.body?.kind !== "Ack") {
+    throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
+  }
+  return commandSummary(principalUserId, command, response);
+}
+
+async function sendCommandResult(principalUserId, command) {
+  return await fetchJson(`${apiBaseUrl}/commands`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -290,9 +360,9 @@ async function sendCommand(principalUserId, command) {
       },
     }),
   });
-  if (response.body?.kind !== "Ack") {
-    throw new Error(`seed command rejected: ${JSON.stringify(response)}`);
-  }
+}
+
+function commandSummary(principalUserId, command, response) {
   return {
     principalUserId,
     command,
@@ -300,8 +370,10 @@ async function sendCommand(principalUserId, command) {
   };
 }
 
-function buildSessionCard({
+export function buildSessionCard({
   game,
+  gameName,
+  seedMode,
   databaseUrl,
   apiBaseUrl,
   frontendBaseUrl,
@@ -322,9 +394,11 @@ function buildSessionCard({
   );
   return {
     status: "ready",
+    name: gameName,
     game,
     pack: "mafiascum",
     phase: "D01",
+    seedMode,
     databaseUrl,
     apiBaseUrl,
     frontendBaseUrl,
@@ -339,7 +413,9 @@ function buildSessionCard({
 
 function printSessionCard(card) {
   console.log("\nfmarch dev test game is ready");
+  console.log(`name: ${card.name}`);
   console.log(`game: ${card.game}`);
+  console.log(`seed: ${card.seedMode}`);
   console.log(`frontend: ${card.frontendBaseUrl}`);
   console.log(`api: ${card.apiBaseUrl}`);
   console.log(`artifact: ${card.artifacts.markdown}`);
@@ -350,14 +426,16 @@ function printSessionCard(card) {
   }
 }
 
-function markdownSessionCard(card) {
+export function markdownSessionCard(card) {
   const lines = [
     "# fmarch Dev Test Game",
     "",
     `- status: ${card.status}`,
+    `- name: ${card.name}`,
     `- game: ${card.game}`,
     `- pack: ${card.pack}`,
     `- phase: ${card.phase}`,
+    `- seed: ${card.seedMode}`,
     `- frontend: ${card.frontendBaseUrl}`,
     `- api: ${card.apiBaseUrl}`,
     "",
@@ -367,7 +445,47 @@ function markdownSessionCard(card) {
   for (const [role, session] of Object.entries(card.sessions)) {
     lines.push(`## ${role}`, "", `URL: ${session.loginUrl}`, "", `Token: ${session.token}`, "");
   }
+  if (card.verification !== undefined) {
+    lines.push("## Verification", "", `Roles: ${card.verification.roles.join(", ")}`, "");
+  }
   return `${lines.join("\n")}\n`;
+}
+
+async function verifySessionCard(card) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  const roles = [];
+  try {
+    for (const role of ["host", "player"]) {
+      await verifyRoleEntry({ browser, session: card.sessions[role], game: card.game });
+      roles.push(role);
+    }
+  } finally {
+    await browser.close();
+  }
+  return {
+    status: "passed",
+    roles,
+  };
+}
+
+async function verifyRoleEntry({ browser, session, game }) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.goto(session.loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-token").fill(session.token);
+    await Promise.all([
+      page.waitForURL(session.directUrl, { timeout: 15000 }),
+      page.getByTestId("auth-login-submit").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    const body = await page.locator("body").innerText();
+    if (!body.includes(game)) {
+      throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
+    }
+  } finally {
+    await page.close();
+  }
 }
 
 async function waitForHealth(baseUrl, beforeRetry = () => {}) {
@@ -396,7 +514,7 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
   return body;
 }
 
-async function fetchWithTimeout(url, options, timeoutMs) {
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -422,6 +540,68 @@ async function freePort() {
           resolve(address.port);
         }
       });
+    });
+  });
+}
+
+async function assertPostgresReachable(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`DATABASE_URL is not a valid URL: ${url}`);
+  }
+  const port = Number.parseInt(parsed.port || "5432", 10);
+  const hostname = parsed.hostname || "localhost";
+  const hint =
+    "Start Postgres with `docker compose up -d postgres` or a repo-local cluster, then rerun dev:test-game.";
+  try {
+    await assertTcpReachable({
+      hostname,
+      port,
+      label: `Postgres from DATABASE_URL (${hostname}:${port})`,
+      hint,
+    });
+  } catch (error) {
+    if (hostname !== "localhost") {
+      throw error;
+    }
+    await assertTcpReachable({
+      hostname: "127.0.0.1",
+      port,
+      label: `Postgres from DATABASE_URL fallback (127.0.0.1:${port})`,
+      hint,
+    });
+  }
+}
+
+async function assertPortAvailable(port, label) {
+  await new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once("error", () => {
+      reject(new Error(`${label} port ${port} is already in use; choose another port`));
+    });
+    probe.listen(port, host, () => {
+      probe.close(resolve);
+    });
+  });
+}
+
+async function assertTcpReachable({ hostname, port, label, hint }) {
+  await new Promise((resolve, reject) => {
+    const socket = net.createConnection({ host: hostname, port });
+    const timeout = globalThis.setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`${label} is not reachable. ${hint}`));
+    }, 2000);
+    socket.once("connect", () => {
+      globalThis.clearTimeout(timeout);
+      socket.end();
+      resolve();
+    });
+    socket.once("error", () => {
+      globalThis.clearTimeout(timeout);
+      reject(new Error(`${label} is not reachable. ${hint}`));
     });
   });
 }
@@ -453,13 +633,65 @@ async function stopChild(child, label) {
   }
 }
 
-function parseArgs(values) {
+async function readNamedGames() {
+  try {
+    const body = await readFile(namedGamesPath, "utf8");
+    const parsed = JSON.parse(body);
+    return parsed !== null && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return {};
+    }
+    throw error;
+  }
+}
+
+async function writeNamedGame(name, card) {
+  const registry = await readNamedGames();
+  registry[name] = {
+    game: card.game,
+    updatedAt: new Date().toISOString(),
+    session: card.artifacts,
+  };
+  await writeFile(namedGamesPath, `${JSON.stringify(registry, null, 2)}\n`);
+}
+
+export function selectGame({
+  args,
+  gameName,
+  registry,
+  randomUuid = () => crypto.randomUUID(),
+}) {
+  if (args.reset && args.reuse) {
+    throw new Error("--reset and --reuse are mutually exclusive");
+  }
+  const registered = registry[gameName]?.game;
+  if (args.reuse) {
+    const reuseGame = args.game ?? registered;
+    if (reuseGame === undefined) {
+      throw new Error(`no named game '${gameName}' exists to reuse; run with --reset first`);
+    }
+    return { game: reuseGame, seedMode: "reuse" };
+  }
+  if (args.reset) {
+    return { game: args.game ?? randomUuid(), seedMode: "seed" };
+  }
+  if (registered !== undefined && args.game === undefined) {
+    return { game: registered, seedMode: "reuse-if-present" };
+  }
+  return { game: args.game ?? randomUuid(), seedMode: "seed" };
+}
+
+export function parseArgs(values) {
   const parsed = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     switch (value) {
       case "--api-base-url":
         parsed.apiBaseUrl = requireValue(values, ++index, value).replace(/\/$/, "");
+        break;
+      case "--api-port":
+        parsed.apiPort = parsePositiveInt(requireValue(values, ++index, value), value);
         break;
       case "--frontend-base-url":
         parsed.frontendBaseUrl = requireValue(values, ++index, value).replace(/\/$/, "");
@@ -468,16 +700,25 @@ function parseArgs(values) {
         parsed.databaseUrl = requireValue(values, ++index, value);
         break;
       case "--frontend-port":
-        parsed.frontendPort = Number.parseInt(requireValue(values, ++index, value), 10);
-        if (!Number.isInteger(parsed.frontendPort) || parsed.frontendPort <= 0) {
-          throw new Error("--frontend-port must be a positive integer");
-        }
+        parsed.frontendPort = parsePositiveInt(requireValue(values, ++index, value), value);
         break;
       case "--game":
         parsed.game = requireValue(values, ++index, value);
         break;
+      case "--name":
+        parsed.name = requireValue(values, ++index, value);
+        break;
+      case "--reset":
+        parsed.reset = true;
+        break;
+      case "--reuse":
+        parsed.reuse = true;
+        break;
       case "--token-prefix":
         parsed.tokenPrefix = requireValue(values, ++index, value);
+        break;
+      case "--verify":
+        parsed.verify = true;
         break;
       case "--no-keepalive":
         parsed.noKeepalive = true;
@@ -489,6 +730,14 @@ function parseArgs(values) {
       default:
         throw new Error(`unknown argument: ${value}`);
     }
+  }
+  return parsed;
+}
+
+function parsePositiveInt(value, flag) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${flag} must be a positive integer`);
   }
   return parsed;
 }
@@ -509,11 +758,16 @@ creates browser-login tokens, prints role URLs, and writes target/dev-test-game/
 
 Options:
   --api-base-url URL       Use an existing API instead of starting cargo run -p server
+  --api-port PORT          Port for a started API
   --frontend-base-url URL  Use an existing frontend instead of starting Vite
   --database-url URL       DATABASE_URL for a started API (default: ${defaultDatabaseUrl})
   --frontend-port PORT     Port for a started frontend
+  --name NAME              Friendly named game slot (default: ${defaultGameName})
   --game UUID              Use a specific game id
+  --reset                  Seed a fresh game for the name
+  --reuse                  Reuse the named or explicit game without reseeding
   --token-prefix TEXT      Prefix for generated opaque login tokens
+  --verify                 Verify host and player browser entry before returning
   --no-keepalive           Stop started servers after seeding and writing artifacts
   --help                   Show this help
 `);
