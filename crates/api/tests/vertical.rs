@@ -2,7 +2,7 @@ use api::ApiState;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
@@ -2701,6 +2701,58 @@ async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool)
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
+                .header("authorization", "Bearer lifecycle-admin-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let audit: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let entries = audit["entries"].as_array().expect("audit entries array");
+    let event_kinds: BTreeSet<_> = entries
+        .iter()
+        .map(|entry| entry["event_kind"].as_str().expect("audit event kind"))
+        .collect();
+    assert_eq!(
+        event_kinds,
+        BTreeSet::from(["invite_revoked", "session_revoked", "session_rotated"])
+    );
+    assert!(entries.iter().any(|entry| {
+        entry["event_kind"] == "session_rotated"
+            && entry["actor_user_id"] == "host_h"
+            && entry["principal_user_id"] == "host_h"
+    }));
+    assert!(entries.iter().any(|entry| {
+        entry["event_kind"] == "session_revoked"
+            && entry["actor_user_id"] == "admin_a"
+            && entry["principal_user_id"] == "host_h"
+    }));
+    assert!(entries.iter().any(|entry| {
+        entry["event_kind"] == "invite_revoked"
+            && entry["actor_user_id"] == "admin_a"
+            && entry["principal_user_id"] == "host_h"
+    }));
+    let audit_text = audit.to_string();
+    for raw_token in [
+        "host-session-v1",
+        "host-session-v2",
+        "revoked-host-invite",
+        "replacement-host-invite",
+    ] {
+        assert!(
+            !audit_text.contains(raw_token),
+            "audit response leaked raw token {raw_token}"
+        );
+    }
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

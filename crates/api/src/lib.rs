@@ -86,6 +86,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/invites", post(create_auth_invite))
         .route("/auth/invites/redeem", post(redeem_auth_invite))
         .route("/auth/invite-revocations", post(revoke_auth_invite))
+        .route(
+            "/auth/identity-lifecycle-audit",
+            get(identity_lifecycle_audit),
+        )
         .route("/commands", post(command))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
@@ -192,6 +196,27 @@ struct RevokeAuthInvite {
 struct AuthLifecycleResponse {
     status: String,
     principal_user_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct IdentityLifecycleAuditQuery {
+    principal_user_id: Option<String>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IdentityLifecycleAuditEntry {
+    id: i64,
+    event_at: i64,
+    event_kind: String,
+    actor_user_id: Option<String>,
+    principal_user_id: String,
+    metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IdentityLifecycleAuditResponse {
+    entries: Vec<IdentityLifecycleAuditEntry>,
 }
 
 async fn auth_session(
@@ -356,7 +381,7 @@ async fn rotate_auth_session(
         "#,
     )
     .bind(now)
-    .bind(old_hash)
+    .bind(&old_hash)
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_session)?;
@@ -374,11 +399,39 @@ async fn rotate_auth_session(
         VALUES ($1, $2, $3, $4, NULL, $5)
         "#,
     )
-    .bind(new_hash)
+    .bind(&new_hash)
     .bind(session.0.as_str())
     .bind(now)
     .bind(session.1)
     .bind(&session.2)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'session_rotated', $2, $3, $4, $5, $6::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(session.0.as_str())
+    .bind(session.0.as_str())
+    .bind(old_hash)
+    .bind(new_hash)
+    .bind(
+        serde_json::json!({
+            "session_expires_at": session.1,
+            "global_capability_count": session.2.len()
+        })
+        .to_string(),
+    )
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -394,7 +447,7 @@ async fn revoke_auth_session(
     Json(request): Json<RevokeAuthSession>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_admin(&state, caller_token, "session revocation").await?;
+    let actor_user_id = require_global_admin(&state, caller_token, "session revocation").await?;
 
     let token = request.token.trim();
     if token.is_empty() {
@@ -405,6 +458,8 @@ async fn revoke_auth_session(
         });
     }
     let now = unix_now_seconds();
+    let token_hash = hash_session_token(token);
+    let mut tx = state.pool.begin().await?;
     let principal_user_id = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_session
@@ -416,10 +471,31 @@ async fn revoke_auth_session(
         "#,
     )
     .bind(now)
-    .bind(hash_session_token(token))
-    .fetch_optional(&state.pool)
+    .bind(&token_hash)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_session)?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'session_revoked', $2, $3, $4, NULL, '{}'::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(actor_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(token_hash)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
 
     Ok(Json(AuthLifecycleResponse {
         status: "revoked".to_string(),
@@ -579,7 +655,7 @@ async fn revoke_auth_invite(
     Json(request): Json<RevokeAuthInvite>,
 ) -> Result<Json<AuthLifecycleResponse>, ApiError> {
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
-    require_global_admin(&state, caller_token, "invite revocation").await?;
+    let actor_user_id = require_global_admin(&state, caller_token, "invite revocation").await?;
 
     let invite_token = request.invite_token.trim();
     if invite_token.is_empty() {
@@ -590,6 +666,8 @@ async fn revoke_auth_invite(
         });
     }
     let now = unix_now_seconds();
+    let invite_hash = hash_session_token(invite_token);
+    let mut tx = state.pool.begin().await?;
     let principal_user_id = sqlx::query_scalar::<_, String>(
         r#"
         UPDATE auth_invite
@@ -602,15 +680,83 @@ async fn revoke_auth_invite(
         "#,
     )
     .bind(now)
-    .bind(hash_session_token(invite_token))
-    .fetch_optional(&state.pool)
+    .bind(&invite_hash)
+    .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(unauthorized_invite)?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'invite_revoked', $2, $3, $4, NULL, '{}'::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(actor_user_id.as_str())
+    .bind(principal_user_id.as_str())
+    .bind(invite_hash)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
 
     Ok(Json(AuthLifecycleResponse {
         status: "revoked".to_string(),
         principal_user_id,
     }))
+}
+
+async fn identity_lifecycle_audit(
+    State(state): State<ApiState>,
+    Query(query): Query<IdentityLifecycleAuditQuery>,
+    headers: HeaderMap,
+) -> Result<Json<IdentityLifecycleAuditResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_admin(&state, caller_token, "identity lifecycle audit").await?;
+
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let rows = sqlx::query_as::<_, (i64, i64, String, Option<String>, String, String)>(
+        r#"
+        SELECT id,
+               event_at,
+               event_kind,
+               actor_user_id,
+               principal_user_id,
+               metadata::TEXT
+        FROM identity_lifecycle_audit
+        WHERE ($1::TEXT IS NULL OR principal_user_id = $1)
+        ORDER BY id DESC
+        LIMIT $2
+        "#,
+    )
+    .bind(query.principal_user_id.as_deref())
+    .bind(limit)
+    .fetch_all(&state.pool)
+    .await?;
+
+    let entries = rows
+        .into_iter()
+        .map(
+            |(id, event_at, event_kind, actor_user_id, principal_user_id, metadata)| {
+                IdentityLifecycleAuditEntry {
+                    id,
+                    event_at,
+                    event_kind,
+                    actor_user_id,
+                    principal_user_id,
+                    metadata: serde_json::from_str(&metadata).unwrap_or(serde_json::Value::Null),
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+
+    Ok(Json(IdentityLifecycleAuditResponse { entries }))
 }
 
 async fn auth_session_response(

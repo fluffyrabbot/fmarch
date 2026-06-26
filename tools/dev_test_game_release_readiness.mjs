@@ -165,7 +165,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             id: "hosted-production-identity",
             status: "unproven",
             requiredEvidence:
-              "Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse controls, and production session-secret policy over the proven role-surface adapter",
+              "Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse controls, production session-secret policy, and hosted audit retention/export over the proven role-surface adapter",
           },
         ]),
     {
@@ -526,7 +526,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 2) {
+  if (proof?.version !== 3) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -563,7 +563,12 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     !proof.identityLifecycle?.inviteRevocation?.recoveryCapabilityKinds?.includes(
       "HostOf",
     ) ||
-    proof.identityLifecycle?.inviteRevocation?.sameRoleSurface !== true
+    proof.identityLifecycle?.inviteRevocation?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.auditTrail?.status !== "passed" ||
+    proof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked")
   ) {
     throw new Error("identity adapter proof does not prove lifecycle recovery");
   }

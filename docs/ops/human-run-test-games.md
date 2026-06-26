@@ -231,10 +231,11 @@ promotes only the local seed/demo fixture inventory. After
 `target/auth-invite-role-proof/invite-role-proof.json` and promotes only the
 local identity-adapter proof that invite-issued opaque sessions preserve the
 same role URL and capability architecture through local session rotation,
-session revocation, revoked-invite rejection, and replacement-invite recovery.
+session revocation, revoked-invite rejection, replacement-invite recovery, and
+GlobalAdmin-readable local lifecycle audit rows without raw credential echoes.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
-controls, production session-secret policy, hosted deployment, hosted demo
-fixtures and sanitized demo-data policy,
+controls, production session-secret policy, hosted audit retention/export,
+hosted deployment, hosted demo fixtures and sanitized demo-data policy,
 production-like backup storage/PITR, exhaustive race coverage, hosted
 observability/operations, and a human release runbook remain outside that local
 proof.

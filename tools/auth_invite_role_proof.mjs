@@ -93,7 +93,7 @@ try {
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 2,
+    version: 3,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
@@ -354,6 +354,27 @@ async function proveIdentityLifecycle({
     returnTo: hostReturnTo,
     expectedCapability: "HostOf",
   });
+  const auditTrail = await fetchIdentityLifecycleAudit({
+    apiBaseUrl,
+    principalUserId: "host_h",
+  });
+  const auditEventKinds = auditTrail.entries.map((entry) => entry.event_kind).sort();
+  for (const eventKind of ["invite_revoked", "session_revoked", "session_rotated"]) {
+    if (!auditEventKinds.includes(eventKind)) {
+      throw new Error(`identity lifecycle audit missing ${eventKind}`);
+    }
+  }
+  const auditText = JSON.stringify(auditTrail);
+  for (const rawToken of [
+    hostSessionToken,
+    rotatedSessionToken,
+    revokedInviteToken,
+    recoveryInviteToken,
+  ]) {
+    if (auditText.includes(rawToken)) {
+      throw new Error("identity lifecycle audit leaked a raw credential");
+    }
+  }
 
   return {
     status: "passed",
@@ -378,10 +399,24 @@ async function proveIdentityLifecycle({
       recoveryCapabilityKinds: recovery.capabilityKinds,
       sameRoleSurface: new URL(recovery.loginUrl).searchParams.get("returnTo") === hostReturnTo,
     },
+    auditTrail: {
+      status: "passed",
+      principalUserId: "host_h",
+      eventKinds: auditEventKinds,
+      actorUserIds: [
+        ...new Set(
+          auditTrail.entries
+            .map((entry) => entry.actor_user_id)
+            .filter((actorUserId) => actorUserId !== null),
+        ),
+      ].sort(),
+      rawTokensStored: false,
+    },
     nonClaims: [
       "hosted account recovery",
       "email or out-of-band invite delivery",
       "rate limiting or abuse controls",
+      "hosted audit retention or export policy",
     ],
   };
 }
@@ -421,6 +456,19 @@ async function revokeInvite({ apiBaseUrl, inviteToken }) {
       invite_token: inviteToken,
     }),
   });
+}
+
+async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalUserId }) {
+  return await fetchJson(
+    `${apiBaseUrl}/auth/identity-lifecycle-audit?principal_user_id=${encodeURIComponent(
+      principalUserId,
+    )}`,
+    {
+      headers: {
+        authorization: `Bearer ${rootAdminSessionToken}`,
+      },
+    },
+  );
 }
 
 async function assertUnauthorizedSession(apiBaseUrl, token) {
@@ -506,7 +554,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 2 ||
+    evidence.version !== 3 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -520,7 +568,12 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.status !== "passed" ||
     evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
     evidence.identityLifecycle?.sessionRevocation?.revokedSessionRejected !== true ||
-    evidence.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true
+    evidence.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true ||
+    evidence.identityLifecycle?.auditTrail?.status !== "passed" ||
+    evidence.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked")
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
   }

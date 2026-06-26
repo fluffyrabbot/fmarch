@@ -472,7 +472,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 2,
+    version: 3,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -511,10 +511,18 @@ function identityAdapterProofFixture(game) {
         recoveryCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
       },
+      auditTrail: {
+        status: "passed",
+        principalUserId: "host_h",
+        eventKinds: ["invite_revoked", "session_revoked", "session_rotated"],
+        actorUserIds: ["admin_a", "host_h"],
+        rawTokensStored: false,
+      },
       nonClaims: [
         "hosted account recovery",
         "email or out-of-band invite delivery",
         "rate limiting or abuse controls",
+        "hosted audit retention or export policy",
       ],
     },
     game,
