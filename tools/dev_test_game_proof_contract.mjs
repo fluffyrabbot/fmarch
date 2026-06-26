@@ -16,6 +16,7 @@ const requiredLaneIds = Object.freeze([
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",
+  "stale-action-conflict",
   "stale-host-control",
 ]);
 
@@ -120,6 +121,19 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentVoteRace?.actionVote?.streamSeqs,
         ) &&
         hardening.concurrentVoteRace?.apiProjection?.count === 2,
+    }),
+    lane("stale-action-conflict", "Stale player action rejects and refreshes command state", {
+      rejectError: hardening.staleActionConflict?.reject?.error ?? null,
+      stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
+      refreshedPhase: hardening.staleActionConflict?.phaseAfterReject?.phaseId ?? null,
+      actionVisibleAfterRefresh:
+        hardening.staleActionConflict?.actionVisibleAfterRefresh ?? null,
+      passed:
+        hardening.staleActionConflict?.status === "passed" &&
+        hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
+        hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
+        hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-host-control", "Stale host phase control rejects without drift", {
       rejectError: hardening.staleHostControl?.reject?.error ?? null,

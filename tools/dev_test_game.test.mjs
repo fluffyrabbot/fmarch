@@ -194,6 +194,17 @@ test("session card and markdown include role invite URLs and tokens", () => {
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
+      staleActionConflict: {
+        status: "passed",
+        staleN01Phase: { phaseId: "N01" },
+        reject: {
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+        },
+        phaseAfterReject: { phaseId: "D02" },
+        actionVisibleAfterRefresh: false,
+      },
       staleHostControl: {
         reject: {
           error: "PhaseLocked",
@@ -221,6 +232,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
+  assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -240,6 +252,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "reconnect-recovery",
       "stale-player-vote",
       "concurrent-vote-race",
+      "stale-action-conflict",
       "stale-host-control",
     ],
   );
@@ -280,7 +293,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 9);
+  assert.equal(opsArtifacts.proofRun.laneCount, 10);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,

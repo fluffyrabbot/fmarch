@@ -80,6 +80,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "reconnect-recovery",
         "stale-player-vote",
         "concurrent-vote-race",
+        "stale-action-conflict",
         "stale-host-control",
       ],
     },

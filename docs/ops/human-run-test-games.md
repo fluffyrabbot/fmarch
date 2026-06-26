@@ -186,8 +186,10 @@ verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
 lands, refreshes command state after a stale locked-phase vote reject, submits
 two concurrent D02 votes from separate role pages and verifies converged browser
-plus API votecount, and the host page sends a stale `UnlockThread` and verifies
-the `Reject PhaseLocked` recovery message while D02 remains open.
+plus API votecount, keeps a second action-player page frozen on N01 until its
+stale `factional_kill` rejects with `Reject PhaseLocked` and refreshes to D02
+without the stale action control, and the host page sends a stale `UnlockThread`
+and verifies the `Reject PhaseLocked` recovery message while D02 remains open.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -212,9 +214,9 @@ proof.
 
 This proves a local seeded browser test-game workflow for one developer, plus
 specific duplicate-command, player reconnect, concurrent vote race, stale player
-vote, stale host control recovery, local artifact-bundle, and local
-backup/restore lanes. It does not prove production account identity, hosted
-deployment, production-like backup/PITR, exhaustive race coverage, hosted
+vote, stale action conflict, stale host control recovery, local artifact-bundle,
+and local backup/restore lanes. It does not prove production account identity,
+hosted deployment, production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
 rollback/delete semantics for existing append-only games. The harness still
 uses an internal root dev session only to mint local invites; production

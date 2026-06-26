@@ -579,6 +579,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent vote race: ${card.verification.multiplayerHardening.concurrentVoteRace.targetSlot} count ${card.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count}`,
         "",
+        `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
+        "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
       );
@@ -597,6 +599,7 @@ async function verifySessionCard(card) {
   let privateChannel;
   let actionLoop;
   let multiplayerHardening;
+  let staleActionPage;
   try {
     for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
@@ -609,6 +612,7 @@ async function verifySessionCard(card) {
       sessions[role] = roleEntries[role].verification;
       roles.push(role);
     }
+    staleActionPage = await roleEntries.actionPlayer.context.newPage();
     coreLoop = await verifySeededCoreLoop({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
@@ -623,6 +627,7 @@ async function verifySessionCard(card) {
     actionLoop = await verifySeededActionLoop({
       hostPage: roleEntries.host.page,
       actionPage: roleEntries.actionPlayer.page,
+      staleActionPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
@@ -630,6 +635,7 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
+      staleActionConflict: actionLoop.staleActionConflict,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
@@ -765,7 +771,13 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
   };
 }
 
-async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }) {
+async function verifySeededActionLoop({
+  hostPage,
+  actionPage,
+  staleActionPage,
+  game,
+  apiBaseUrl,
+}) {
   await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D01", locked: true });
@@ -779,6 +791,7 @@ async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }
   const n01Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const staleActionSetup = await freezeStaleActionPage({ staleActionPage, game });
   await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').click();
   await actionPage.waitForFunction(
     () =>
@@ -821,6 +834,10 @@ async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }
   const d02Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const staleActionConflict = await submitStaleActionConflict({
+    staleActionPage,
+    staleActionSetup,
+  });
 
   return {
     status: "passed",
@@ -834,8 +851,69 @@ async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }
     advanceDay,
     d02Phase,
     d02PhaseText,
+    staleActionConflict,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02.",
+      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function freezeStaleActionPage({ staleActionPage, game }) {
+  await gotoPlayerBoard(staleActionPage, game);
+  await staleActionPage.locator('[data-action="submit_action:factional_kill"]').waitFor({
+    state: "visible",
+  });
+  await staleActionPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01",
+  );
+  const staleN01Phase = await staleActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  const actionConfig = await staleActionPage.evaluate(() =>
+    window.__fmarchPlayerProjection?.commandState?.actions?.find(
+      (action) => action.templateId === "factional_kill",
+    ),
+  );
+  await staleActionPage.waitForFunction(
+    () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+  );
+  const closedStatus = await staleActionPage.evaluate(
+    () => window.__fmarchClosePlayerLiveProjection(),
+  );
+  return {
+    staleN01Phase,
+    actionConfig,
+    closedStatus,
+  };
+}
+
+async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) {
+  await staleActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await staleActionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+  );
+  const reject = await staleActionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  if (!reject.message.includes("stale projection")) {
+    throw new Error(`stale action message drifted: ${JSON.stringify(reject)}`);
+  }
+  await staleActionPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02",
+  );
+  await staleActionPage.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  const phaseAfterReject = await staleActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  return {
+    status: "passed",
+    staleN01Phase: staleActionSetup.staleN01Phase,
+    actionConfig: staleActionSetup.actionConfig,
+    closedStatus: staleActionSetup.closedStatus,
+    reject,
+    phaseAfterReject,
+    actionVisibleAfterRefresh: false,
   };
 }
 
@@ -937,6 +1015,7 @@ async function verifySeededMultiplayerHardening({
   hostPage,
   playerPage,
   actionPage,
+  staleActionConflict,
   game,
   apiBaseUrl,
 }) {
@@ -1069,6 +1148,7 @@ async function verifySeededMultiplayerHardening({
     reconnect,
     stalePlayerVote,
     concurrentVoteRace,
+    staleActionConflict,
     staleHostControl: {
       commandId: staleCommandId,
       actionId: "unlock_thread",
@@ -1076,7 +1156,7 @@ async function verifySeededMultiplayerHardening({
       phaseAfterReject: hostStateAfterReject.phase,
     },
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
   };
 }
 
