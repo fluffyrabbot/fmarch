@@ -5,6 +5,8 @@ const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
 const DEFAULT_SEED_FIXTURE_SUMMARY = "target/dev-test-game/seed-fixture-summary.json";
 const DEFAULT_RELEASE_READINESS_CHECKLIST =
   "target/dev-test-game/release-readiness-checklist.json";
+const DEFAULT_BACKUP_RESTORE_PROOF =
+  "target/live-stack-backup-restore-drill/local-backup-restore-proof.json";
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -26,6 +28,13 @@ export async function readLocalReleaseReadinessChecklist({
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS,
     fallback: DEFAULT_RELEASE_READINESS_CHECKLIST,
+  });
+}
+
+export async function readLocalBackupRestoreProof({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF,
+    fallback: DEFAULT_BACKUP_RESTORE_PROOF,
   });
 }
 

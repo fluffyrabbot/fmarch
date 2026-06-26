@@ -86,6 +86,7 @@ target/dev-test-game/seed-admin-proof.json
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/release-admin-proof.json
+target/dev-test-game/backup-admin-proof.json
 target/dev-test-game/named-games.json
 ```
 
@@ -176,6 +177,10 @@ The local backup/restore drill for this spine is:
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-backup-restore
 ```
 
+That command also writes `target/dev-test-game/backup-admin-proof.json` by
+clicking from the seeded admin overview into the native local backup/restore
+detail route, where dump/restore checks and restored role sessions are visible.
+
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
 entry through `/auth/login`, checks that those browser sessions came from
@@ -235,8 +240,10 @@ The release-readiness checklist is intentionally not a release gate. It keeps
 backup/restore artifact, it keeps `backup-restore-drill` unproven. After
 `npm run test:dev-test-game-backup-restore`, the checklist consumes
 `target/live-stack-backup-restore-drill/local-backup-restore-proof.json` plus
-`target/live-stack-backup-restore-drill/local-live-stack.dump` and promotes only
-the local dump/restore check. After `npm run test:dev-test-game-ops`, the
+`target/live-stack-backup-restore-drill/local-live-stack.dump`, then attaches
+`target/dev-test-game/backup-admin-proof.json`, and promotes only the local
+dump/restore check with its seeded admin overview-to-detail browser proof. After
+`npm run test:dev-test-game-ops`, the
 checklist consumes `target/dev-test-game/ops-artifacts.json` plus
 `target/dev-test-game/ops-admin-proof.json` and promotes only the local ops
 artifact bundle with its seeded admin overview-to-detail browser proof. After

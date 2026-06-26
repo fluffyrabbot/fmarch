@@ -702,6 +702,72 @@ test("admin local release readiness detail data carries checks and unproven rows
   );
 });
 
+test("admin route data exposes local backup restore proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    backupRestoreProof: backupRestoreProofFixture(),
+  });
+
+  const backup = data.audit.find((item) => item.id === "local-backup-restore");
+  assert.equal(backup.label, "Local backup restore");
+  assert.equal(backup.status, "5 backup restore checks passed");
+  assert.equal(backup.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    backup.inspectHref,
+    "/admin/audit/local-backup-restore?game=midsummer",
+  );
+  assert.deepEqual(
+    backup.checks.map((check) => check.id),
+    [
+      "dump-created",
+      "event-log-restored",
+      "projection-fingerprints-restored",
+      "auth-sessions-restored",
+      "restored-api-capabilities",
+    ],
+  );
+  assert.deepEqual(
+    backup.sessions.map((session) => [session.role, session.capabilities]),
+    [
+      ["host", ["HostOf"]],
+      ["player", ["SlotOccupant", "ChannelMember"]],
+      ["admin", ["GlobalAdmin"]],
+    ],
+  );
+  assert.deepEqual(backup.artifactSummary, {
+    game: "game-a",
+    dump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    eventRows: 3,
+    restoredEventRows: 3,
+    sessionCount: 3,
+    productionReady: false,
+  });
+});
+
+test("admin local backup restore detail data carries checks and restored sessions", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-backup-restore",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    backupRestoreProof: backupRestoreProofFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local backup restore");
+  assert.equal(data.audit.id, "local-backup-restore");
+  assert.equal(data.audit.checks.length, 5);
+  assert.equal(data.audit.sessions.length, 3);
+  assert.deepEqual(
+    data.audit.sessions.map((session) => [session.role, session.capabilities]),
+    [
+      ["host", ["HostOf"]],
+      ["player", ["SlotOccupant", "ChannelMember"]],
+      ["admin", ["GlobalAdmin"]],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -894,6 +960,43 @@ function releaseReadinessChecklistFixture() {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function backupRestoreProofFixture() {
+  return {
+    version: 1,
+    status: "passed",
+    scope: "local-live-stack-backup-restore-drill",
+    productionReady: false,
+    proofBoundary: "Local disposable Postgres backup/restore proof.",
+    game: "game-a",
+    artifact: {
+      proof: "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+      dump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    },
+    checks: [
+      { id: "dump-created", status: "passed" },
+      { id: "event-log-restored", status: "passed" },
+      { id: "projection-fingerprints-restored", status: "passed" },
+      { id: "auth-sessions-restored", status: "passed" },
+      { id: "restored-api-capabilities", status: "passed" },
+    ],
+    restoredApiEvidence: {
+      restoredSessions: {
+        host: ["HostOf"],
+        player: ["SlotOccupant", "ChannelMember"],
+        admin: ["GlobalAdmin"],
+      },
+    },
+    fingerprints: {
+      source: {
+        events: { total: 3 },
+      },
+      restored: {
+        events: { total: 3 },
+      },
+    },
   };
 }
 

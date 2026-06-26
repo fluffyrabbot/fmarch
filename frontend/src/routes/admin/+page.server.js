@@ -2,6 +2,7 @@ import { error, fail } from "@sveltejs/kit";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import {
+  readLocalBackupRestoreProof,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
@@ -27,6 +28,7 @@ export async function load({ cookies, locals, fetch, url }) {
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
+    backupRestoreProof: await readLocalBackupRestoreProof(),
   });
 
   if (!data.access.allowed) {

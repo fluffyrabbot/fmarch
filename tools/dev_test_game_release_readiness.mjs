@@ -20,6 +20,7 @@ const defaultBackupRestoreDumpPath = path.join(
   "live-stack-backup-restore-drill",
   "local-live-stack.dump",
 );
+const defaultBackupAdminProofPath = path.join(artifactDir, "backup-admin-proof.json");
 const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
 const defaultOpsAdminProofPath = path.join(artifactDir, "ops-admin-proof.json");
 const defaultSeedFixtureSummaryPath = path.join(
@@ -59,6 +60,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           "target/live-stack-backup-restore-drill/local-live-stack.dump",
         proofArtifact: options.backupRestoreProofArtifact,
         dumpArtifact: options.backupRestoreDumpArtifact,
+      })
+    : undefined;
+  const backupAdminProofEvidence = options.backupAdminProof
+    ? validateDevTestGameBackupAdminProof(options.backupAdminProof, {
+        path: options.backupAdminProofPath ?? "target/dev-test-game/backup-admin-proof.json",
+        artifact: options.backupAdminProofArtifact,
       })
     : undefined;
   const opsArtifactsEvidence = options.opsArtifacts
@@ -133,6 +140,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: backupRestoreEvidence.path,
       dump: backupRestoreEvidence.dumpPath,
       proofBoundary: backupRestoreEvidence.proofBoundary,
+      ...(backupAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: backupAdminProofEvidence }),
     });
   }
   if (opsArtifactsEvidence !== undefined) {
@@ -273,6 +283,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             backupRestoreProof: backupRestoreEvidence.path,
             backupRestoreDump: backupRestoreEvidence.dumpPath,
+            ...(backupAdminProofEvidence === undefined
+              ? {}
+              : { backupAdminProof: backupAdminProofEvidence.path }),
           }),
       ...(opsArtifactsEvidence === undefined
         ? {}
@@ -305,7 +318,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             evidence: {
               ...(backupRestoreEvidence === undefined
                 ? {}
-                : { backupRestore: backupRestoreEvidence }),
+                : {
+                    backupRestore: {
+                      ...backupRestoreEvidence,
+                      ...(backupAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: backupAdminProofEvidence }),
+                    },
+                  }),
               ...(opsArtifactsEvidence === undefined
                 ? {}
                 : { opsArtifacts: opsArtifactsEvidence }),
@@ -436,6 +456,58 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
       ? {}
       : { artifact: options.proofArtifact }),
     ...(options.dumpArtifact === undefined ? {} : { dumpArtifact: options.dumpArtifact }),
+  };
+}
+
+export function validateDevTestGameBackupAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "dump-created",
+    "event-log-restored",
+    "projection-fingerprints-restored",
+    "auth-sessions-restored",
+    "restored-api-capabilities",
+  ];
+  const requiredSessions = ["host", "player", "admin"];
+  if (proof?.version !== 1) {
+    throw new Error(`backup admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-backup-admin-proof") {
+    throw new Error(`unexpected backup admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`backup admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-backup-admin-surface") {
+    throw new Error(`backup admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("backup admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("backup admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`backup admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const sessionRole of requiredSessions) {
+    if (!proof.adminRoleSurface?.visibleSessions?.includes(sessionRole)) {
+      throw new Error(`backup admin proof missing visible session: ${sessionRole}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/backup-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleSessions: proof.adminRoleSurface.visibleSessions,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
 
@@ -855,6 +927,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
   const [
     backupRestoreOptions,
+    backupAdminProofOptions,
     opsArtifactsOptions,
     seedFixtureOptions,
     identityAdapterOptions,
@@ -862,6 +935,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     seedAdminProofOptions,
   ] = await Promise.all([
       readOptionalBackupRestoreArtifacts(),
+      readOptionalBackupAdminProof(),
       readOptionalOpsArtifacts(),
       readOptionalSeedFixtureSummary(),
       readOptionalIdentityAdapterProof(),
@@ -871,6 +945,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
     ...(backupRestoreOptions ?? {}),
+    ...(backupAdminProofOptions ?? {}),
     ...(opsArtifactsOptions ?? {}),
     ...(seedFixtureOptions ?? {}),
     ...(identityAdapterOptions ?? {}),
@@ -898,6 +973,21 @@ async function readOptionalOpsArtifacts() {
     opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
     opsArtifactsPath: path.relative(repoRoot, opsPath),
     opsArtifactsArtifact: artifact,
+  };
+}
+
+async function readOptionalBackupAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultBackupAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    backupAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    backupAdminProofPath: path.relative(repoRoot, proofPath),
+    backupAdminProofArtifact: artifact,
   };
 }
 

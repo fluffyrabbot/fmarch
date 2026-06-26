@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import {
+  readLocalBackupRestoreProof,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
@@ -25,6 +26,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
+    backupRestoreProof: await readLocalBackupRestoreProof(),
   });
 
   if (!data.access.allowed) {

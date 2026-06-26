@@ -426,6 +426,8 @@ test("session card and markdown include role invite URLs and tokens", () => {
     backupRestoreProofPath:
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     backupRestoreDumpPath: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    backupAdminProofPath: "target/dev-test-game/backup-admin-proof.json",
+    backupAdminProof: backupAdminProofFixture(),
     backupRestoreProof: {
       version: 1,
       status: "passed",
@@ -461,6 +463,12 @@ test("session card and markdown include role invite URLs and tokens", () => {
     backupRestoreReadiness.localDevelopmentSpine.checks.some(
       (item) => item.id === "local-backup-restore-drill" && item.status === "passed",
     ),
+  );
+  assert.equal(
+    backupRestoreReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-backup-restore-drill",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-backup-restore?game=<seeded-game>",
   );
   assert.equal(
     backupRestoreReadiness.releaseReadiness.unproven.some(
@@ -644,6 +652,43 @@ function seedAdminProofFixture() {
         "multiplayer-hardening",
         "local-ops-readiness",
       ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function backupAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-backup-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-backup-admin-surface",
+    proofBoundary: "Local admin backup/restore proof only.",
+    generatedFrom: {
+      backupRestoreProof:
+        "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+      backupRestoreDump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-backup-restore?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-backup-restore",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "dump-created",
+        "event-log-restored",
+        "projection-fingerprints-restored",
+        "auth-sessions-restored",
+        "restored-api-capabilities",
+      ],
+      visibleSessions: ["host", "player", "admin"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

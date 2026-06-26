@@ -78,6 +78,19 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.sessions?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-sessions">
+        {#each data.audit.sessions as session}
+          <li
+            class="admin-audit-detail__entry"
+            data-testid={`admin-audit-session-${session.role}`}
+          >
+            <strong>{session.role}</strong>
+            <span>{session.capabilities.join(", ")}</span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     {#if data.audit.unproven?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-unproven">
         {#each data.audit.unproven as item}

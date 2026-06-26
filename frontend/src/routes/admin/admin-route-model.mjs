@@ -23,6 +23,7 @@ export async function buildAdminRouteData({
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
+  backupRestoreProof = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -120,13 +121,17 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalReleaseReadinessAudit(
-        appendLocalSeedFixtureAudit(
-          appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
-          seedFixtureSummary,
+      appendLocalBackupRestoreAudit(
+        appendLocalReleaseReadinessAudit(
+          appendLocalSeedFixtureAudit(
+            appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+            seedFixtureSummary,
+            { game },
+          ),
+          releaseReadinessChecklist,
           { game },
         ),
-        releaseReadinessChecklist,
+        backupRestoreProof,
         { game },
       ),
       { game },
@@ -177,6 +182,7 @@ export async function buildAdminAuditDetailData({
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
+  backupRestoreProof = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -189,6 +195,7 @@ export async function buildAdminAuditDetailData({
     opsArtifacts,
     seedFixtureSummary,
     releaseReadinessChecklist,
+    backupRestoreProof,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -488,6 +495,89 @@ export function normalizeLocalReleaseReadinessAudit(
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalBackupRestoreAudit(audit, backupRestoreProof, { game }) {
+  const row = normalizeLocalBackupRestoreAudit(backupRestoreProof, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
+  if (
+    backupRestoreProof === null ||
+    typeof backupRestoreProof !== "object" ||
+    backupRestoreProof.version !== 1 ||
+    backupRestoreProof.status !== "passed" ||
+    backupRestoreProof.scope !== "local-live-stack-backup-restore-drill" ||
+    backupRestoreProof.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(backupRestoreProof.checks)
+    ? backupRestoreProof.checks
+    : [];
+  const requiredChecks = [
+    "dump-created",
+    "event-log-restored",
+    "projection-fingerprints-restored",
+    "auth-sessions-restored",
+    "restored-api-capabilities",
+  ];
+  const checkStatus = new Map(checks.map((check) => [check.id, check.status]));
+  if (requiredChecks.some((id) => checkStatus.get(id) !== "passed")) {
+    return null;
+  }
+  const sessions = Object.entries(
+    backupRestoreProof.restoredApiEvidence?.restoredSessions ?? {},
+  ).map(([role, capabilities]) =>
+    Object.freeze({
+      role,
+      capabilities: Array.isArray(capabilities)
+        ? Object.freeze(capabilities.map((capability) => String(capability)))
+        : Object.freeze([]),
+    }),
+  );
+  return Object.freeze({
+    id: "local-backup-restore",
+    label: "Local backup restore",
+    status: `${requiredChecks.length} backup restore checks passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local backup/restore drill",
+    boundaryDetail:
+      backupRestoreProof.proofBoundary ??
+      "Local disposable Postgres backup/restore proof without production backup claims.",
+    href:
+      backupRestoreProof.artifact?.proof ??
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-backup-restore",
+    }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    sessions: Object.freeze(sessions),
+    artifactSummary: Object.freeze({
+      game: String(backupRestoreProof.game ?? ""),
+      dump:
+        backupRestoreProof.artifact?.dump ??
+        "target/live-stack-backup-restore-drill/local-live-stack.dump",
+      eventRows: Number(backupRestoreProof.fingerprints?.source?.events?.total ?? 0),
+      restoredEventRows: Number(
+        backupRestoreProof.fingerprints?.restored?.events?.total ?? 0,
+      ),
+      sessionCount: sessions.length,
+      productionReady: backupRestoreProof.productionReady === true,
     }),
   });
 }
