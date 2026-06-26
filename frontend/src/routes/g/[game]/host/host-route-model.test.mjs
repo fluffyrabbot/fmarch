@@ -72,13 +72,14 @@ test("host console route data is allowed for HostOf scoped to the current game",
   ]);
   assert.deepEqual(
     data.criticalActions.map((action) => action.payload.gameId),
-    Array(8).fill("midsummer"),
+    Array(9).fill("midsummer"),
   );
   assert.deepEqual(
     data.criticalActions.map((action) => action.id),
     [
       "extend_deadline",
       "process_replacement",
+      "resolve_phase",
       "lock_thread",
       "publish_votecount",
       "mark_dead",
@@ -107,7 +108,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
     data.moderatorActionGroups.find((group) => group.id === "phase").actions.map(
       (action) => action.id,
     ),
-    ["lock_thread"],
+    ["resolve_phase", "lock_thread"],
   );
   assert.deepEqual(
     data.moderatorActionGroups

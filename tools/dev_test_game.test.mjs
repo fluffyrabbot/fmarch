@@ -77,11 +77,11 @@ test("named game selection is idempotent by default with explicit reset and reus
 test("seed plan creates a playable mafiascum D01 game shape", () => {
   const game = "33333333-3333-4333-8333-333333333333";
   const plan = seedCommandPlanForGame(game);
-  assert.equal(plan.length, 20);
+  assert.equal(plan.length, 22);
   assert.deepEqual(plan[0], ["host_h", { CreateGame: { game, pack: "mafiascum" } }]);
   assert(plan.some(([, command]) => command.AddCohost?.user === "cohost_c"));
   assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
-  assert(plan.some(([, command]) => command.SubmitVote?.target?.Slot === "slot-2"));
+  assert(plan.some(([, command]) => command.SubmitVote?.target?.Slot === "slot_5"));
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
 });
 
@@ -133,6 +133,12 @@ test("session card and markdown include role invite URLs and tokens", () => {
       proof: "host locked D01 and player recovered from PhaseLocked",
       rejectedVote: { message: "Reject PhaseLocked: phase locked" },
     },
+    actionLoop: {
+      status: "passed",
+      proof: "host resolved N01 and action player advanced to D02",
+      invalidAction: { message: "Reject InvalidTarget: invalid target" },
+      legalAction: { message: "Ack: stream seqs 42" },
+    },
   };
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
@@ -142,4 +148,6 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Invite token: dev-test-card-player"));
   assert(markdown.includes("## Core Loop Proof"));
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
+  assert(markdown.includes("## Action Loop Proof"));
+  assert(markdown.includes("Reject InvalidTarget: invalid target"));
 });

@@ -71,17 +71,18 @@ test("host control surface model binds moderator control bays to action status",
   assert.deepEqual(
     phase.actions.map((action) => [action.config.id, action.statusMessage]),
     [
+      ["resolve_phase", ""],
       ["lock_thread", "Ack: stream seqs 42"],
       ["unlock_thread", ""],
       ["advance_phase", ""],
     ],
   );
-  assert.equal(phase.actions[0].statusTestId, "host-command-status-lock_thread");
+  assert.equal(phase.actions[1].statusTestId, "host-command-status-lock_thread");
   assert.equal(
-    phase.actions[0].statusFloorTestId,
+    phase.actions[1].statusFloorTestId,
     "host-command-status-floor-lock_thread",
   );
-  assert.equal(phase.actions[0].statusFloorMinBlockSizePx, 44);
+  assert.equal(phase.actions[1].statusFloorMinBlockSizePx, 44);
   assert.equal(phase.classes.actionTile, "host-console-critical-path__action-tile");
   assert.equal(
     phase.classes.commandStatusFloor,

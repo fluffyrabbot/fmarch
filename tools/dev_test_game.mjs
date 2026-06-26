@@ -252,7 +252,15 @@ export function seedCommandPlanForGame(game) {
     ["host_h", { StartGame: { game, phase: "D01" } }],
     [
       "player-seed",
-      { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot-2" } } },
+      { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot_5" } } },
+    ],
+    [
+      "player-target",
+      { SubmitVote: { game, actor_slot: "slot-2", target: { Slot: "slot_5" } } },
+    ],
+    [
+      "player-mira",
+      { SubmitVote: { game, actor_slot: "slot-7", target: { Slot: "slot_5" } } },
     ],
     [
       "player-mira",
@@ -300,6 +308,12 @@ async function createSessions() {
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
+    actionPlayer: await createInviteCredential({
+      inviteToken: tokens.actionPlayer,
+      principalUserId: "player-goon-a",
+      returnTo: `/g/${game}`,
+      expectedCapabilityKind: "SlotOccupant",
+    }),
     cohost: await createInviteCredential({
       inviteToken: tokens.cohost,
       principalUserId: "cohost_c",
@@ -315,6 +329,7 @@ export function createTokenSet(prefix) {
     admin: `${prefix}-admin`,
     host: `${prefix}-host`,
     player: `${prefix}-player`,
+    actionPlayer: `${prefix}-action-player`,
     cohost: `${prefix}-cohost`,
   });
 }
@@ -501,6 +516,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.actionLoop !== undefined) {
+      lines.push(
+        "## Action Loop Proof",
+        "",
+        `Status: ${card.verification.actionLoop.status}`,
+        "",
+        `Proof: ${card.verification.actionLoop.proof}`,
+        "",
+        `Invalid action: ${card.verification.actionLoop.invalidAction.message}`,
+        "",
+        `Legal action: ${card.verification.actionLoop.legalAction.message}`,
+        "",
+      );
+    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -512,8 +541,9 @@ async function verifySessionCard(card) {
   const sessions = {};
   const roleEntries = {};
   let coreLoop;
+  let actionLoop;
   try {
-    for (const role of ["host", "player"]) {
+    for (const role of ["host", "player", "actionPlayer"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
         browser,
         session: card.sessions[role],
@@ -528,6 +558,12 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
     });
+    actionLoop = await verifySeededActionLoop({
+      hostPage: roleEntries.host.page,
+      actionPage: roleEntries.actionPlayer.page,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+    });
   } finally {
     await Promise.all(
       Object.values(roleEntries).map((entry) => entry.context.close()),
@@ -539,6 +575,7 @@ async function verifySessionCard(card) {
     roles,
     sessions,
     coreLoop,
+    actionLoop,
   };
 }
 
@@ -608,7 +645,7 @@ async function openVerifiedRoleEntry({
 }
 
 async function verifySeededCoreLoop({ hostPage, playerPage }) {
-  await expectHostPhaseActions(hostPage, ["lock_thread"]);
+  await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const lock = await confirmHostAction(hostPage, "lock_thread");
   await waitForHostProjectionPhaseLocked(hostPage, true);
   await playerPage.waitForFunction(
@@ -640,9 +677,9 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
   return {
     status: "passed",
     hostActions: {
-      initial: ["lock_thread"],
+      initial: ["resolve_phase", "lock_thread"],
       locked: ["unlock_thread", "advance_phase"],
-      restored: ["lock_thread"],
+      restored: ["resolve_phase", "lock_thread"],
     },
     lock,
     rejectedVote,
@@ -655,6 +692,89 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
     proof:
       "The seeded host role URL locked D01 through the hydrated host phase control, the seeded player role URL submitted a vote while the phase was locked and rendered Reject PhaseLocked recovery, then the host role URL unlocked D01 so the human-run game remains usable.",
   };
+}
+
+async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }) {
+  await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
+  const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D01", locked: true });
+  await expectHostPhaseActions(hostPage, ["unlock_thread", "advance_phase"]);
+  const advanceNight = await confirmHostAction(hostPage, "advance_phase");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
+
+  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').waitFor({
+    state: "visible",
+  });
+  const n01Phase = await actionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').click();
+  await actionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget",
+  );
+  const invalidAction = await actionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+
+  await actionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await actionPage.waitForFunction(
+    () => window.__fmarchPlayerCommandStatus?.state === "ack",
+  );
+  const legalAction = await actionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const submittedCommand = legalAction.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (submittedCommand?.template_id !== "factional_kill") {
+    throw new Error(`expected factional_kill SubmitAction: ${JSON.stringify(submittedCommand)}`);
+  }
+  const targetSlot = submittedCommand.targets?.[0];
+  if (typeof targetSlot !== "string" || targetSlot === "slot_4") {
+    throw new Error(`expected non-self factional kill target: ${JSON.stringify(submittedCommand)}`);
+  }
+  await actionPage.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+
+  const resolveNight = await confirmHostAction(hostPage, "resolve_phase");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: true });
+  const targetState = await fetchResolvedSlotState({ apiBaseUrl, game, slot: targetSlot });
+  if (targetState?.alive !== false || targetState?.status !== "dead") {
+    throw new Error(`resolved action did not kill ${targetSlot}: ${JSON.stringify(targetState)}`);
+  }
+  const advanceDay = await confirmHostAction(hostPage, "advance_phase");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
+  await actionPage.waitForFunction(() =>
+    document
+      .querySelector('[data-testid="player-votecount-deadline"]')
+      ?.innerText.includes("Day 2"),
+  );
+  const d02PhaseText = await actionPage.getByTestId("player-votecount-deadline").innerText();
+  const d02Phase = await actionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+
+  return {
+    status: "passed",
+    resolveDay,
+    advanceNight,
+    n01Phase,
+    invalidAction,
+    legalAction,
+    resolveNight,
+    resolvedTargetSlot: targetState,
+    advanceDay,
+    d02Phase,
+    d02PhaseText,
+    proof:
+      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02.",
+  };
+}
+
+async function fetchResolvedSlotState({ apiBaseUrl, game, slot }) {
+  const state = await fetchJson(
+    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=${encodeURIComponent(
+      slot,
+    )}`,
+  );
+  return state.slots?.find((candidate) => candidate.slot_id === slot) ?? null;
 }
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
@@ -710,6 +830,15 @@ async function waitForHostProjectionPhaseLocked(page, locked) {
   await page.waitForFunction(
     (expectedLocked) => window.__fmarchHostProjection?.phase?.locked === expectedLocked,
     locked,
+  );
+}
+
+async function waitForHostProjectionPhase(page, { phaseId, locked }) {
+  await page.waitForFunction(
+    (expected) =>
+      window.__fmarchHostProjection?.phase?.id === expected.phaseId &&
+      window.__fmarchHostProjection?.phase?.locked === expected.locked,
+    { phaseId, locked },
   );
 }
 

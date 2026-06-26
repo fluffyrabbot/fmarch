@@ -45,6 +45,15 @@ const UNLOCK_THREAD_EVENT = Object.freeze({
   }),
 });
 
+const RESOLVE_PHASE_EVENT = Object.freeze({
+  actionId: "resolve_phase",
+  payload: Object.freeze({
+    kind: "resolve_phase",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    seed: 918273,
+  }),
+});
+
 const ADVANCE_PHASE_EVENT = Object.freeze({
   actionId: "advance_phase",
   payload: Object.freeze({
@@ -133,6 +142,12 @@ test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(UNLOCK_THREAD_EVENT), {
     UnlockThread: {
       game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(RESOLVE_PHASE_EVENT), {
+    ResolvePhase: {
+      game: "00000000-0000-0000-0000-000000000001",
+      seed: 918273,
     },
   });
   assert.deepEqual(mapHostActionToWireCommand(ADVANCE_PHASE_EVENT), {

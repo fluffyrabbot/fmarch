@@ -157,6 +157,20 @@ function buildPhaseActions(gameId, phase) {
   }
   return [
     freezeHostAction({
+      id: "resolve_phase",
+      label: "Resolve phase",
+      objectLabel: "Current phase",
+      outcomeLabel: "run engine resolution and lock the phase",
+      confirmationText:
+        "Resolve current phase: run engine resolution and lock the phase for Current phase.",
+      irreversible: true,
+      payload: {
+        kind: "resolve_phase",
+        gameId,
+        seed: 918273,
+      },
+    }),
+    freezeHostAction({
       id: "lock_thread",
       label: "Lock thread",
       objectLabel: "Main thread",
@@ -205,8 +219,8 @@ export function buildHostConsoleActionGroups({
       authority: "HostOf(game)",
       value: "Advance phase or lock the public thread",
       boundary: "Typed commands",
-      boundaryDetail: "LockThread, UnlockThread, AdvancePhase",
-      actionIds: ["lock_thread", "unlock_thread", "advance_phase"],
+      boundaryDetail: "ResolvePhase, LockThread, UnlockThread, AdvancePhase",
+      actionIds: ["resolve_phase", "lock_thread", "unlock_thread", "advance_phase"],
       actions: actionList,
     }),
     freezeHostActionGroup({

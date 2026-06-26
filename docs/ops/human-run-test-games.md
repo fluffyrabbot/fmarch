@@ -56,8 +56,9 @@ DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run dev:test-gam
 
 The command starts a Rust API, starts the SvelteKit frontend, seeds one
 `mafiascum` D01 game through `/commands`, creates invite-backed browser role
-credentials for `admin`, `host`, `player`, and `cohost`, prints role entry URLs
-with the invite prefilled, and keeps the servers alive until Ctrl-C.
+credentials for `admin`, `host`, `player`, `actionPlayer`, and `cohost`, prints
+role entry URLs with the invite prefilled, and keeps the servers alive until
+Ctrl-C.
 
 On a cold Rust target directory, the API step can spend a few minutes compiling
 before `/healthz` is reachable. The harness prints the selected API URL, the
@@ -132,6 +133,11 @@ The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
 locked phase and renders `Reject PhaseLocked` recovery, and the host page unlocks
 D01 again so the human-run game remains usable after verification.
+
+The action-loop proof continues in the same seeded game: the host page resolves
+D01 and advances to N01, the `actionPlayer` page renders a live `factional_kill`
+action, recovers from an invalid self-action, submits the legal action, and then
+the host page resolves N01 and advances to D02.
 
 ## Boundary
 

@@ -314,6 +314,7 @@ test("host console proof actions cover the roadmap-critical irreversible actions
     [
       "extend_deadline",
       "process_replacement",
+      "resolve_phase",
       "lock_thread",
       "unlock_thread",
       "advance_phase",
@@ -394,7 +395,7 @@ test("host console action groups turn typed commands into moderator control bays
     groups
       .find((group) => group.id === "phase")
       .actions.map((action) => action.id),
-    ["lock_thread", "unlock_thread", "advance_phase"],
+    ["resolve_phase", "lock_thread", "unlock_thread", "advance_phase"],
   );
   assert.deepEqual(
     groups

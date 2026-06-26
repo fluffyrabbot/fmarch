@@ -85,7 +85,7 @@ test("host route controller derives action groups from live host projections", (
     derived.moderatorActionGroups
       .find((group) => group.id === "phase")
       .actions.map((action) => action.id),
-    ["lock_thread"],
+    ["resolve_phase", "lock_thread"],
   );
 
   const locked = buildHostDerivedState({

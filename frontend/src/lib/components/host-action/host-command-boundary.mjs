@@ -123,6 +123,13 @@ export function mapHostActionToWireCommand(actionEvent) {
           game: requiredString(payload.gameId, "payload.gameId"),
         }),
       });
+    case "resolve_phase":
+      return Object.freeze({
+        ResolvePhase: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          seed: Number.isInteger(payload.seed) ? payload.seed : 918273,
+        }),
+      });
     case "advance_phase":
       return Object.freeze({
         AdvancePhase: Object.freeze({

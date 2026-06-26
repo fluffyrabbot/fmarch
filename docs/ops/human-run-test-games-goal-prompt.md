@@ -10,7 +10,7 @@ Completed build order:
 
 1. `npm run dev:test-game` UX is hardened with idempotent friendly names, default reuse, explicit `--reset` and `--reuse`, API/frontend port checks, and a clear Postgres reachability failure before server startup.
 2. `npm run test:dev-test-game-contract` proves argument parsing, session-card shape, seed command plan shape, and invite URL/token output without starting servers.
-3. `npm run test:dev-test-game-live` runs the harness with `--reset --verify --no-keepalive`, validates the emitted session artifact, and verifies host/player invite redemption plus capability resolution through the real API/SvelteKit boundary.
+3. `npm run test:dev-test-game-live` runs the harness with `--reset --verify --no-keepalive`, validates the emitted session artifact, verifies host/player/action-player invite redemption plus capability resolution through the real API/SvelteKit boundary, and drives host lock/reject recovery plus Day-to-Night action submission/resolution/advance in the seeded game.
 4. `docs/ops/human-run-test-games.md` records the exact human command, required Postgres assumption, generated artifact paths, reset/reuse behavior, proof commands, and proof boundary.
 5. Rerun the narrow proof set after changing the harness: `node --check tools/dev_test_game.mjs`, `node --check tools/dev_test_game_live_proof.mjs`, `npm run test:dev-test-game-contract`, `npm --prefix frontend run check`, `npm run test:frontend-contract`, `npm run test:dev-test-game-live`, and `npm run test:frontend-role-proof:browser` if frontend/browser behavior changed.
 
