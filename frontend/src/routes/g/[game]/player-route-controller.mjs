@@ -233,6 +233,7 @@ export function buildPlayerCommandDispatchBridgePlan({
 export async function submitPlayerRouteCommand({
   action,
   composerBody,
+  commandIdFactory,
   data,
   fetchImpl,
   projectionStore,
@@ -240,6 +241,7 @@ export async function submitPlayerRouteCommand({
 }) {
   const commandStatus = await sendCommandImpl({
     ...buildPlayerCommandRequest({ data, action, composerBody }),
+    commandIdFactory,
     fetchImpl,
   });
   const refreshKeys = playerRefreshKeysForCommandOutcome({

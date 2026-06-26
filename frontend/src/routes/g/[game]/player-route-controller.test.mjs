@@ -177,6 +177,7 @@ test("player route controller derives dispatch bridge plans from command request
 
 test("player route controller refreshes only projections touched by acked commands", async () => {
   const refreshed = [];
+  const commandRequests = [];
   const projectionStore = fakeProjectionStore({
     refresh: async (keys) => {
       refreshed.push(keys);
@@ -191,10 +192,15 @@ test("player route controller refreshes only projections touched by acked comman
       throw new Error("fetch should stay inside sendCommandImpl");
     },
     projectionStore,
-    sendCommandImpl: async () => ({ state: "ack", message: "ok" }),
+    commandIdFactory: () => "11111111-1111-4111-8111-111111111111",
+    sendCommandImpl: async (request) => {
+      commandRequests.push(request);
+      return { state: "ack", message: "ok" };
+    },
   });
 
   assert.deepEqual(refreshed, [["votecount"]]);
+  assert.equal(commandRequests[0].commandIdFactory(), "11111111-1111-4111-8111-111111111111");
   assert.equal(result.commandStatus.state, "ack");
   assert.deepEqual(result.snapshot, projectionStore.getSnapshot());
 

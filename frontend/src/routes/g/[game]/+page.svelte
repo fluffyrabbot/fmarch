@@ -189,6 +189,10 @@
       const result = await submitPlayerRouteCommand({
         action,
         composerBody,
+        commandIdFactory:
+          typeof window === "undefined"
+            ? undefined
+            : window.__fmarchPlayerCommandIdFactory,
         data: dispatchData,
         fetchImpl: fetch,
         projectionStore,

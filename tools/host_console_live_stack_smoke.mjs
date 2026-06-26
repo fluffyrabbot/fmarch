@@ -1687,6 +1687,10 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   assertInvalidActionRecovery(invalidOutcome);
   const stalePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
 
+  const duplicatePlayerSubmitCommandId = crypto.randomUUID();
+  await page.evaluate((commandId) => {
+    window.__fmarchPlayerCommandIdFactory = () => commandId;
+  }, duplicatePlayerSubmitCommandId);
   const legalButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await legalButton.boundingBox(), "legal player action button");
   await legalButton.click();
@@ -1700,6 +1704,33 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     () => window.__fmarchPlayerCommandStatus,
   );
   assertPlayerActionSubmitOutcome(legalOutcome);
+  assertPlayerActionCommandId({
+    outcome: legalOutcome,
+    commandId: duplicatePlayerSubmitCommandId,
+    label: "first player SubmitAction",
+  });
+
+  await legalButton.waitFor({ state: "visible" });
+  await legalButton.click();
+  await page.waitForFunction(
+    (previousEnvelopeId) =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerCommandStatus?.envelopeId > previousEnvelopeId,
+    legalOutcome.envelopeId,
+  );
+  const duplicateLegalOutcome = await page.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  assertPlayerActionSubmitOutcome(duplicateLegalOutcome);
+  const duplicatePlayerSubmit = assertDuplicatePlayerSubmitOutcome({
+    firstOutcome: legalOutcome,
+    duplicateOutcome: duplicateLegalOutcome,
+    commandId: duplicatePlayerSubmitCommandId,
+  });
+  const duplicateStatusMessage = await status.innerText();
+  await page.evaluate(() => {
+    delete window.__fmarchPlayerCommandIdFactory;
+  });
 
   const actionRows = await runSql(
     smokeDatabase.url,
@@ -1717,6 +1748,18 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   ) {
     throw new Error(`action submission audit rows drifted:\n${actionRows}`);
   }
+  assertSinglePlayerActionSubmittedRow(actionRows);
+  const duplicateReceiptRows = await runSql(
+    smokeDatabase.url,
+    `SELECT principal_user_id, command_id::text, stream_seqs
+     FROM command_receipt
+     WHERE principal_user_id = 'action-goon'
+       AND command_id = '${duplicatePlayerSubmitCommandId}'::uuid`,
+  );
+  assertDuplicatePlayerSubmitReceipt({
+    commandId: duplicatePlayerSubmitCommandId,
+    receiptRows: duplicateReceiptRows,
+  });
 
   const resolveCommand = await sendCommand("host_h", {
     ResolvePhase: { game: actionGame, seed: 918273 },
@@ -1793,6 +1836,12 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     capability,
     invalidOutcome,
     legalOutcome,
+    duplicateLegalOutcome,
+    duplicatePlayerSubmit: {
+      ...duplicatePlayerSubmit,
+      statusMessage: duplicateStatusMessage,
+      receiptRows: duplicateReceiptRows,
+    },
     staleActionRecovery,
     commandState: {
       requests: commandStateRequests,
@@ -1809,7 +1858,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, clicked the legal action again with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and left exactly one ActionSubmitted row. The host then resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 
@@ -2987,6 +3036,69 @@ function assertPlayerActionSubmitOutcome(outcome) {
   }
   if (command.targets?.[0] !== "slot-2") {
     throw new Error(`player SubmitAction used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertPlayerActionCommandId({ outcome, commandId, label }) {
+  const actual = outcome?.requestEnvelope?.body?.body?.command_id;
+  if (actual !== commandId) {
+    throw new Error(`${label} used ${actual}, expected ${commandId}: ${JSON.stringify(outcome)}`);
+  }
+  if (outcome.commandId !== commandId) {
+    throw new Error(`${label} status commandId drifted: ${JSON.stringify(outcome)}`);
+  }
+}
+
+function assertDuplicatePlayerSubmitOutcome({
+  firstOutcome,
+  duplicateOutcome,
+  commandId,
+}) {
+  assertPlayerActionCommandId({
+    outcome: duplicateOutcome,
+    commandId,
+    label: "duplicate player SubmitAction",
+  });
+  if (duplicateOutcome.envelopeId <= firstOutcome.envelopeId) {
+    throw new Error(
+      `duplicate player SubmitAction did not send a fresh envelope: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
+    );
+  }
+  if (
+    JSON.stringify(duplicateOutcome.streamSeqs) !==
+    JSON.stringify(firstOutcome.streamSeqs)
+  ) {
+    throw new Error(
+      `duplicate player SubmitAction did not return original ack stream seqs: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
+    );
+  }
+  return {
+    commandId,
+    firstEnvelopeId: firstOutcome.envelopeId,
+    duplicateEnvelopeId: duplicateOutcome.envelopeId,
+    streamSeqs: duplicateOutcome.streamSeqs,
+  };
+}
+
+function assertSinglePlayerActionSubmittedRow(actionRows) {
+  const actionSubmittedRows = actionRows.match(/ActionSubmitted/g) ?? [];
+  if (actionSubmittedRows.length !== 1) {
+    throw new Error(
+      `duplicate player SubmitAction appended ${actionSubmittedRows.length} ActionSubmitted rows:\n${actionRows}`,
+    );
+  }
+}
+
+function assertDuplicatePlayerSubmitReceipt({ commandId, receiptRows }) {
+  if (!receiptRows.includes("action-goon") || !receiptRows.includes(commandId)) {
+    throw new Error(
+      `duplicate player SubmitAction receipt missing command ${commandId}:\n${receiptRows}`,
+    );
+  }
+  if (!/\{\d+\}/.test(receiptRows)) {
+    throw new Error(
+      `duplicate player SubmitAction receipt did not persist stream seqs:\n${receiptRows}`,
+    );
   }
 }
 
