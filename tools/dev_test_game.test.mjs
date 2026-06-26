@@ -20,6 +20,10 @@ import {
   assertDevTestGameOpsArtifacts,
   buildDevTestGameOpsArtifacts,
 } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  assertDevTestGameSeedFixtureSummary,
+  buildDevTestGameSeedFixtureSummary,
+} from "./dev_test_game_seed_fixture_summary.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -322,6 +326,60 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) =>
         item.id === "hosted-observability-and-operations" &&
         item.status === "unproven",
+    ),
+  );
+  const seedFixture = buildDevTestGameSeedFixtureSummary({
+    session: card,
+    proofRun,
+    readiness: opsReadiness,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameSeedFixtureSummary(seedFixture);
+  assert.equal(seedFixture.status, "passed");
+  assert.equal(seedFixture.releaseReady, false);
+  assert.equal(seedFixture.productionReady, false);
+  assert.equal(seedFixture.fixture.game, game);
+  assert.equal(seedFixture.fixture.slots.length, 5);
+  assert.equal(
+    seedFixture.fixture.roles.host.loginUrlRedacted,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
+  );
+  assert.equal(JSON.stringify(seedFixture).includes("dev-test-card-host"), false);
+  assert.equal(JSON.stringify(seedFixture).includes("dev-test-card-player"), false);
+  assert.deepEqual(
+    seedFixture.demoScenarios.map((scenario) => scenario.id),
+    [
+      "host-phase-controls",
+      "player-vote-recovery",
+      "night-action-loop",
+      "private-channel-member",
+      "private-channel-denied",
+      "multiplayer-hardening",
+      "local-ops-readiness",
+    ],
+  );
+  const seedFixtureReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifacts,
+    seedFixtureSummaryPath: "target/dev-test-game/seed-fixture-summary.json",
+    seedFixtureSummary: seedFixture,
+  });
+  assertDevTestGameReleaseReadiness(seedFixtureReadiness);
+  assert(
+    seedFixtureReadiness.localDevelopmentSpine.checks.some(
+      (item) => item.id === "local-seed-demo-fixture" && item.status === "passed",
+    ),
+  );
+  assert.equal(
+    seedFixtureReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "seed-demo-fixtures",
+    ),
+    false,
+  );
+  assert(
+    seedFixtureReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-demo-fixtures" && item.status === "unproven",
     ),
   );
   const backupRestoreReadiness = buildDevTestGameReleaseReadiness(proofRun, {

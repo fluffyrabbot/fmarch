@@ -21,6 +21,10 @@ const defaultBackupRestoreDumpPath = path.join(
   "local-live-stack.dump",
 );
 const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
+const defaultSeedFixtureSummaryPath = path.join(
+  artifactDir,
+  "seed-fixture-summary.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -53,6 +57,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameOpsArtifacts(options.opsArtifacts, {
         path: options.opsArtifactsPath ?? "target/dev-test-game/ops-artifacts.json",
         artifact: options.opsArtifactsArtifact,
+      })
+    : undefined;
+  const seedFixtureEvidence = options.seedFixtureSummary
+    ? validateDevTestGameSeedFixtureSummary(options.seedFixtureSummary, {
+        path:
+          options.seedFixtureSummaryPath ??
+          "target/dev-test-game/seed-fixture-summary.json",
+        artifact: options.seedFixtureSummaryArtifact,
       })
     : undefined;
   const localChecks = [
@@ -104,6 +116,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofBoundary: opsArtifactsEvidence.proofBoundary,
     });
   }
+  if (seedFixtureEvidence !== undefined) {
+    localChecks.push({
+      id: "local-seed-demo-fixture",
+      label: "Local seed/demo fixture summary",
+      status: "passed",
+      evidence: seedFixtureEvidence.path,
+      proofBoundary: seedFixtureEvidence.proofBoundary,
+      scenarioCount: seedFixtureEvidence.scenarioCount,
+    });
+  }
   const unproven = [
     {
       id: "production-identity",
@@ -116,6 +138,23 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "unproven",
       requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
     },
+    ...(seedFixtureEvidence === undefined
+      ? [
+          {
+            id: "seed-demo-fixtures",
+            status: "unproven",
+            requiredEvidence:
+              "Machine-readable seeded local demo fixture and scenario inventory tied to this proof run",
+          },
+        ]
+      : [
+          {
+            id: "hosted-demo-fixtures",
+            status: "unproven",
+            requiredEvidence:
+              "Hosted/demo environment fixtures, sanitized demo data policy, and release-safe invite delivery",
+          },
+        ]),
     ...(backupRestoreEvidence === undefined
       ? [
           {
@@ -185,11 +224,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             opsArtifacts: opsArtifactsEvidence.path,
           }),
+      ...(seedFixtureEvidence === undefined
+        ? {}
+        : {
+            seedFixtureSummary: seedFixtureEvidence.path,
+          }),
     },
     localDevelopmentSpine: {
       status: "passed",
       checks: localChecks,
-      ...((backupRestoreEvidence === undefined && opsArtifactsEvidence === undefined)
+      ...((backupRestoreEvidence === undefined &&
+        opsArtifactsEvidence === undefined &&
+        seedFixtureEvidence === undefined)
         ? {}
         : {
             evidence: {
@@ -199,12 +245,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(opsArtifactsEvidence === undefined
                 ? {}
                 : { opsArtifacts: opsArtifactsEvidence }),
+              ...(seedFixtureEvidence === undefined
+                ? {}
+                : { seedFixture: seedFixtureEvidence }),
             },
           }),
     },
     releaseReadiness: {
       status: "not_ready",
-      reason: releaseReadinessReason({ backupRestoreEvidence, opsArtifactsEvidence }),
+      reason: releaseReadinessReason({
+        backupRestoreEvidence,
+        opsArtifactsEvidence,
+        seedFixtureEvidence,
+      }),
       unproven,
     },
     proofBoundary:
@@ -212,15 +265,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   };
 }
 
-function releaseReadinessReason({ backupRestoreEvidence, opsArtifactsEvidence }) {
+function releaseReadinessReason({
+  backupRestoreEvidence,
+  opsArtifactsEvidence,
+  seedFixtureEvidence,
+}) {
   const passed = [
     "the local development-spine proof",
     ...(backupRestoreEvidence === undefined ? [] : ["local backup/restore drill"]),
     ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
+    ...(seedFixtureEvidence === undefined ? [] : ["local seed/demo fixture"]),
   ];
   const missing = [
     "production identity",
     "hosted operations",
+    seedFixtureEvidence === undefined ? "seed/demo fixtures" : "hosted demo fixtures",
     backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
     "exhaustive races",
     opsArtifactsEvidence === undefined ? "observability" : "hosted observability",
@@ -345,6 +404,73 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
   };
 }
 
+export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
+  const requiredChecks = [
+    "role-entrypoints-redacted",
+    "seed-slots-enumerated",
+    "demo-scenarios-mapped",
+    "proof-lanes-carried",
+    "release-boundary-carried",
+  ];
+  const requiredScenarios = [
+    "host-phase-controls",
+    "player-vote-recovery",
+    "night-action-loop",
+    "private-channel-member",
+    "private-channel-denied",
+    "multiplayer-hardening",
+    "local-ops-readiness",
+  ];
+  if (summary?.version !== 1) {
+    throw new Error(`seed fixture summary version drifted: ${summary?.version}`);
+  }
+  if (summary.proof !== "dev-test-game-seed-fixture-summary") {
+    throw new Error(`unexpected seed fixture summary proof id: ${summary.proof}`);
+  }
+  if (summary.status !== "passed") {
+    throw new Error(`seed fixture summary status is ${summary.status}`);
+  }
+  if (summary.scope !== "local-dev-test-game-seed-fixture") {
+    throw new Error(`seed fixture summary scope drifted: ${summary.scope}`);
+  }
+  if (summary.productionReady !== false || summary.releaseReady !== false) {
+    throw new Error("seed fixture summary must not claim production or release readiness");
+  }
+  const checks = new Map((summary.checks ?? []).map((check) => [check.id, check.status]));
+  for (const id of requiredChecks) {
+    if (checks.get(id) !== "passed") {
+      throw new Error(`seed fixture summary missing passed check: ${id}`);
+    }
+  }
+  const scenarios = new Map(
+    (summary.demoScenarios ?? []).map((scenario) => [scenario.id, scenario.status]),
+  );
+  for (const id of requiredScenarios) {
+    if (scenarios.get(id) !== "available_locally") {
+      throw new Error(`seed fixture summary missing local scenario: ${id}`);
+    }
+  }
+  if ((summary.fixture?.slots ?? []).length < 5) {
+    throw new Error("seed fixture summary must enumerate seeded slots");
+  }
+  const serialized = JSON.stringify(summary);
+  if (/invite=(?!REDACTED)/.test(serialized)) {
+    throw new Error("seed fixture summary leaked an invite URL token");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/seed-fixture-summary.json",
+    checkCount: requiredChecks.length,
+    scenarioCount: requiredScenarios.length,
+    roleCount: summary.fixture?.roleCount ?? 0,
+    slotCount: summary.fixture?.slots?.length ?? 0,
+    proofBoundary: summary.proofBoundary,
+    scope: summary.scope,
+    productionReady: summary.productionReady,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -388,6 +514,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   );
   if (hasOpsCheck && hasOpsUnproven) {
     throw new Error("dev-test-game ops artifacts cannot be both passed and unproven");
+  }
+  const hasSeedFixtureCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) => check.id === "local-seed-demo-fixture" && check.status === "passed",
+  );
+  const hasSeedFixtureUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "seed-demo-fixtures",
+  );
+  if (hasSeedFixtureCheck && hasSeedFixtureUnproven) {
+    throw new Error("dev-test-game seed fixtures cannot be both passed and unproven");
   }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
@@ -441,14 +576,17 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ? path.resolve(process.cwd(), process.argv[2])
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
-  const [backupRestoreOptions, opsArtifactsOptions] = await Promise.all([
-    readOptionalBackupRestoreArtifacts(),
-    readOptionalOpsArtifacts(),
-  ]);
+  const [backupRestoreOptions, opsArtifactsOptions, seedFixtureOptions] =
+    await Promise.all([
+      readOptionalBackupRestoreArtifacts(),
+      readOptionalOpsArtifacts(),
+      readOptionalSeedFixtureSummary(),
+    ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
     ...(backupRestoreOptions ?? {}),
     ...(opsArtifactsOptions ?? {}),
+    ...(seedFixtureOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -471,6 +609,21 @@ async function readOptionalOpsArtifacts() {
     opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
     opsArtifactsPath: path.relative(repoRoot, opsPath),
     opsArtifactsArtifact: artifact,
+  };
+}
+
+async function readOptionalSeedFixtureSummary() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const fixturePath = resolveArtifactPath(override, defaultSeedFixtureSummaryPath);
+  const artifact = await readFreshArtifactMetadata(fixturePath, now);
+  return {
+    seedFixtureSummary: JSON.parse(await readFile(fixturePath, "utf8")),
+    seedFixtureSummaryPath: path.relative(repoRoot, fixturePath),
+    seedFixtureSummaryArtifact: artifact,
   };
 }
 

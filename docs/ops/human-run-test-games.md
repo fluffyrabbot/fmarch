@@ -79,6 +79,8 @@ target/dev-test-game/session.md
 target/dev-test-game/proof-run.json
 target/dev-test-game/ops-artifacts.json
 target/dev-test-game/ops-artifacts.md
+target/dev-test-game/seed-fixture-summary.json
+target/dev-test-game/seed-fixture-summary.md
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/named-games.json
@@ -145,6 +147,12 @@ The local ops artifact bundle generator is:
 npm run test:dev-test-game-ops
 ```
 
+The local seed/demo fixture summary generator is:
+
+```sh
+npm run test:dev-test-game-seed-fixture
+```
+
 The local backup/restore drill for this spine is:
 
 ```sh
@@ -161,8 +169,11 @@ against the current `session.json`. It writes
 `target/dev-test-game/release-readiness-checklist.{json,md}` from the validated
 proof run, then writes `target/dev-test-game/ops-artifacts.{json,md}` with
 redacted role entry URLs, source artifact checksums, command and lane counts,
-and a local proof boundary. The final readiness checklist pass consumes that
-ops bundle and promotes only the local ops artifact check.
+and a local proof boundary. It then writes
+`target/dev-test-game/seed-fixture-summary.{json,md}` with redacted role URLs,
+seeded slots, local demo scenarios, and proof-lane mappings. The final
+readiness checklist pass consumes the ops bundle plus the seed fixture summary
+and promotes only those local checks.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -205,7 +216,10 @@ backup/restore artifact, it keeps `backup-restore-drill` unproven. After
 `target/live-stack-backup-restore-drill/local-live-stack.dump` and promotes only
 the local dump/restore check. After `npm run test:dev-test-game-ops`, the
 checklist consumes `target/dev-test-game/ops-artifacts.json` and promotes only
-the local ops artifact bundle. Production identity, hosted deployment,
+the local ops artifact bundle. After `npm run test:dev-test-game-seed-fixture`,
+the checklist consumes `target/dev-test-game/seed-fixture-summary.json` and
+promotes only the local seed/demo fixture inventory. Production identity,
+hosted deployment, hosted demo fixtures and sanitized demo-data policy,
 production-like backup storage/PITR, exhaustive race coverage, hosted
 observability/operations, and a human release runbook remain outside that local
 proof.
@@ -215,8 +229,9 @@ proof.
 This proves a local seeded browser test-game workflow for one developer, plus
 specific duplicate-command, player reconnect, concurrent vote race, stale player
 vote, stale action conflict, stale host control recovery, local artifact-bundle,
-and local backup/restore lanes. It does not prove production account identity,
-hosted deployment, production-like backup/PITR, exhaustive race coverage, hosted
+local seed/demo fixture inventory, and local backup/restore lanes. It does not
+prove production account identity, hosted deployment, hosted demo fixtures,
+production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
 rollback/delete semantics for existing append-only games. The harness still
 uses an internal root dev session only to mint local invites; production
