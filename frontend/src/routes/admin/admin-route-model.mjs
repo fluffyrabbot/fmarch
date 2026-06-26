@@ -278,10 +278,13 @@ function withAdminAuditInspectLinks(audit, { game }) {
     audit.map((item) =>
       Object.freeze({
         ...item,
-        inspectHref: adminAuditInspectHref({
-          game,
-          audit: item.id,
-        }),
+        inspectHref:
+          typeof item.inspectHref === "string" && item.inspectHref.trim() !== ""
+            ? item.inspectHref
+            : adminAuditInspectHref({
+                game,
+                audit: item.id,
+              }),
       }),
     ),
   );

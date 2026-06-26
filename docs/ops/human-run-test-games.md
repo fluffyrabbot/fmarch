@@ -232,8 +232,8 @@ promotes only the local seed/demo fixture inventory. After
 local identity-adapter proof that invite-issued opaque sessions preserve the
 same role URL and capability architecture through local session rotation,
 session revocation, revoked-invite rejection, replacement-invite recovery, and
-the seeded GlobalAdmin role URL rendering local lifecycle audit rows without raw
-credential echoes.
+the seeded GlobalAdmin overview linking through to local lifecycle audit rows
+without raw credential echoes.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

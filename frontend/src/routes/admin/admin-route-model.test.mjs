@@ -490,7 +490,7 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
   );
   assert.equal(
     identity.inspectHref,
-    "/admin/audit/identity-lifecycle?game=midsummer",
+    "/admin/audit/identity-lifecycle?game=midsummer&principal_user_id=host_h",
   );
   assert.deepEqual(
     identity.entries.map((entry) => entry.eventKind),

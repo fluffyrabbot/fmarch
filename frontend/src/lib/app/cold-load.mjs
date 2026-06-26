@@ -490,6 +490,10 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
       game: context.game,
       principalUserId,
     }),
+    inspectHref: adminIdentityLifecycleAuditHref({
+      game: context.game,
+      principalUserId,
+    }),
     entries: Object.freeze(entries),
     eventKinds: Object.freeze(eventKinds),
     principalUserId,

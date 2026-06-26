@@ -94,14 +94,14 @@ try {
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 4,
+    version: 5,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including GlobalAdmin inspection of local identity lifecycle audit rows; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including GlobalAdmin discovery and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -490,9 +490,11 @@ async function driveAdminIdentityAuditSurface({
   rawTokens,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const auditUrl = `${frontendBaseUrl}/admin/audit/identity-lifecycle?game=${encodeURIComponent(
+  const overviewUrl = `${frontendBaseUrl}/admin?game=${encodeURIComponent(game)}`;
+  const detailPath = `/admin/audit/identity-lifecycle?game=${encodeURIComponent(
     game,
   )}&principal_user_id=host_h`;
+  const detailUrl = `${frontendBaseUrl}${detailPath}`;
   try {
     await page.context().addCookies([
       {
@@ -503,7 +505,20 @@ async function driveAdminIdentityAuditSurface({
         sameSite: "Lax",
       },
     ]);
-    await page.goto(auditUrl, { waitUntil: "networkidle" });
+    await page.goto(overviewUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page.getByTestId("admin-audit-link-identity-lifecycle").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await Promise.all([
+      page.waitForURL(detailUrl, { timeout: 15000 }),
+      page.getByTestId("admin-audit-link-identity-lifecycle").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
     await page.getByTestId("admin-audit-detail-surface").waitFor({
       state: "visible",
       timeout: 15000,
@@ -527,8 +542,12 @@ async function driveAdminIdentityAuditSurface({
     }
     return {
       status: "passed",
-      roleUrl: `/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h`,
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl:
+        "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+      linkTestId: "admin-audit-link-identity-lifecycle",
       surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
       visibleEventKinds,
       principalUserId: "host_h",
       rawTokensVisible: false,
@@ -621,7 +640,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 4 ||
+    evidence.version !== 5 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -642,6 +661,7 @@ function assertInviteProof(evidence) {
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
+    evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",
