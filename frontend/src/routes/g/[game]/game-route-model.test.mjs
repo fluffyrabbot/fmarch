@@ -105,7 +105,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     data.liveProjection.endpoint,
     "/ws?game=midsummer&principal_user_id=player_mira",
   );
-  assert.equal(data.projectionBoundary.status, "json-ws-command-projection-deltas-with-resync");
+  assert.equal(
+    data.projectionBoundary.status,
+    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+  );
   assert.match(data.composer.transportBoundary, /command-following/);
   assert.equal(data.privateQueueBoundary.status, "principal-scoped-private-projections");
   assert.equal(data.privateQueueBoundary.count, 2);

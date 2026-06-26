@@ -102,8 +102,11 @@ test("projection store can be explicitly marked with the live transport boundary
     liveTransport: LIVE_TRANSPORT_BOUNDARY,
   });
 
-  assert.equal(store.liveTransport.status, "json-ws-command-projection-deltas-with-resync");
-  assert.match(store.liveTransport.proof, /command-following/);
+  assert.equal(
+    store.liveTransport.status,
+    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+  );
+  assert.match(store.liveTransport.proof, /reconnect refresh recovery/);
 });
 
 test("projection store applies live votecount clear envelopes", () => {

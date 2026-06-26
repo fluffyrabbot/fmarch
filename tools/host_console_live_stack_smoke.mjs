@@ -1357,25 +1357,30 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         (row) => row.target === "slot-2" && row.count === 1,
       );
     });
-    playerStep = "close-live-projection";
+    playerStep = "drop-live-projection";
     await page.waitForFunction(
-      () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+      () => typeof window.__fmarchDropPlayerLiveProjection === "function",
     );
-    await page.evaluate(() => window.__fmarchClosePlayerLiveProjection());
+    await page.evaluate(() => window.__fmarchDropPlayerLiveProjection());
     await page.waitForFunction(
-      () => window.__fmarchLiveProjectionStatus?.state === "closed",
+      () => window.__fmarchLiveProjectionStatus?.state === "reconnecting",
     );
     const liveStatusBadge = page.getByTestId("player-live-status");
     await page.waitForFunction(
       () =>
         document
           .querySelector('[data-testid="player-live-status"]')
-          ?.getAttribute("data-state") === "closed",
+          ?.getAttribute("data-state") === "reconnecting",
     );
-    const closedStatus = await page.evaluate(
+    await page.waitForFunction(() =>
+      (window.__fmarchLiveProjectionEvents ?? []).some(
+        (event) => event?.kind === "close",
+      ),
+    );
+    const reconnectingStatus = await page.evaluate(
       () => window.__fmarchLiveProjectionStatus,
     );
-    const renderedClosedStatus = {
+    const renderedReconnectingStatus = {
       state: await liveStatusBadge.getAttribute("data-state"),
       message: await liveStatusBadge.innerText(),
     };
@@ -1401,9 +1406,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       coldLoadEndpoints: window.__fmarchPlayerColdLoadEndpoints,
       resyncKeys: window.__fmarchPlayerResyncKeys,
     }));
-    let browserThreadPageBeforeResync;
+    let browserThreadPageBeforeReconnect;
     try {
-      browserThreadPageBeforeResync = await page.evaluate(
+      browserThreadPageBeforeReconnect = await page.evaluate(
         async ({ endpoint, expectedBody }) => {
           try {
             const url = new URL(endpoint, window.location.href);
@@ -1439,7 +1444,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         },
       );
     } catch (error) {
-      browserThreadPageBeforeResync = {
+      browserThreadPageBeforeReconnect = {
         endpoint: playerResyncPlan.coldLoadEndpoints.threadEndpoint,
         ok: false,
         status: null,
@@ -1452,47 +1457,37 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       reconnectPostBody,
       reconnectCommand,
       apiThreadPost,
-      browserThreadPageBeforeResync,
+      browserThreadPageBeforeReconnect,
       playerResyncPlan,
     };
-    if (browserThreadPageBeforeResync.containsExpectedPost !== true) {
+    if (browserThreadPageBeforeReconnect.containsExpectedPost !== true) {
       throw new Error(
         `browser thread fetch did not include disconnected post: ${JSON.stringify(reconnectDebug)}`,
       );
     }
-    playerStep = "trigger-player-reconnect-resync";
-    const reconnectFromSeq = reconnectCommand.streamSeqs?.[0] ?? 9013;
-    const recoveredSnapshot = await page.evaluate(
-      async (fromSeq) => window.__fmarchTriggerPlayerResync(fromSeq),
-      reconnectFromSeq,
-    );
-    reconnectDebug = {
-      ...reconnectDebug,
-      reconnectFromSeq,
-      recoveredSnapshotPostBodies: recoveredSnapshot?.thread?.posts?.map(
-        (post) => post.body,
-      ),
-    };
+    playerStep = "wait-automatic-reconnect-recovery";
     await page.waitForFunction(
-      (fromSeq) => {
+      () => {
         const events = window.__fmarchLiveProjectionEvents ?? [];
         return events.some(
           (event) =>
-            event?.kind === "resync-required" &&
-            event.fromSeq === fromSeq &&
+            event?.kind === "reconnect" &&
+            event.attempt === 1 &&
             event.state === "recovered",
         );
-      },
-      reconnectFromSeq,
+      }
     );
-    await page.waitForFunction(
-      () => window.__fmarchLiveProjectionStatus?.state === "recovered",
+    const reconnectRecoveryEvent = await page.evaluate(() =>
+      (window.__fmarchLiveProjectionEvents ?? []).find(
+        (event) =>
+          event?.kind === "reconnect" &&
+          event.attempt === 1 &&
+          event.state === "recovered",
+      ),
     );
+    playerStep = "wait-post-after-automatic-reconnect";
     await page.waitForFunction(
-      () =>
-        document
-          .querySelector('[data-testid="player-live-status"]')
-          ?.getAttribute("data-state") === "recovered",
+      () => window.__fmarchLiveProjectionStatus?.state !== "reconnecting",
     );
     await page.waitForFunction(
       (expectedBody) =>
@@ -1504,22 +1499,32 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     await page.getByText(reconnectPostBody, { exact: true }).waitFor({
       state: "visible",
     });
+    const recoveredProjection = await page.evaluate(
+      () => window.__fmarchPlayerProjection,
+    );
+    reconnectDebug = {
+      ...reconnectDebug,
+      recoveredProjectionPostBodies: recoveredProjection?.thread?.posts?.map(
+        (post) => post.body,
+      ),
+    };
     playerStep = "reconnect-proof-complete";
     reconnectEvidence = {
       boundary:
-        "player route can expose a closed live-projection state, accept a server-side projection change while the socket is closed, and recover the thread snapshot through the seeded role URL resync bridge without reloading",
-      closedStatus,
-      renderedClosedStatus,
+        "player route can expose a reconnecting live-projection state, accept a server-side projection change while the socket is dropped, and automatically recover the thread snapshot through the seeded role URL reconnect path without reloading",
+      reconnectingStatus,
+      renderedReconnectingStatus,
       reconnectCommand,
-      reconnectFromSeq,
+      reconnectAttempt: 1,
       apiThreadPost,
-      browserThreadPageBeforeResync,
+      browserThreadPageBeforeReconnect,
       playerResyncPlan,
       recoveredStatus: await page.evaluate(
         () => window.__fmarchLiveProjectionStatus,
       ),
+      reconnectRecoveryEvent,
       recoveredPostBody: reconnectPostBody,
-      recoveredSnapshotContainsPost: recoveredSnapshot?.thread?.posts?.some(
+      recoveredSnapshotContainsPost: recoveredProjection?.thread?.posts?.some(
         (post) => post.body === reconnectPostBody,
       ),
     };
@@ -1537,6 +1542,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         Object.keys(window)
           .filter((key) => key.startsWith("__fmarch"))
           .sort(),
+      ),
+      liveProjectionEvents: await page.evaluate(
+        () => window.__fmarchLiveProjectionEvents,
       ),
       apiVoteCount: await fetchJson(`${apiBaseUrl}/games/${game}/votecount`),
       reconnectDebug,

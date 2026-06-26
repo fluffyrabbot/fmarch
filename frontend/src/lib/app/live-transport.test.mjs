@@ -396,6 +396,143 @@ test("websocket delta frames can refresh dependent cold-load keys", async () => 
   assert.equal(events.at(-1).snapshot.commandState.actions[0], "fresh-action");
 });
 
+test("websocket close schedules reconnect and refreshes projections on reopen", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const store = fakeProjectionStore({
+    thread: { posts: [] },
+  });
+
+  connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async () =>
+      jsonResponse({ posts: [{ seq: 30, body: "missed while disconnected" }] }),
+    resyncKeys: ["thread"],
+    reconnectDelayMs: 42,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await FakeWebSocket.instances[0].emit("close");
+
+  assert.deepEqual(events.map((event) => event.message), [
+    { kind: "close" },
+    { kind: "reconnecting", attempt: 1 },
+  ]);
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].delayMs, 42);
+
+  scheduled[0].callback();
+  assert.equal(FakeWebSocket.instances.length, 2);
+  await FakeWebSocket.instances[1].emit("open");
+
+  assert.deepEqual(events.at(-1).message, {
+    kind: "reconnect",
+    attempt: 1,
+    state: "recovered",
+  });
+  assert.deepEqual(events.at(-1).snapshot.thread, {
+    posts: [{ seq: 30, body: "missed while disconnected" }],
+  });
+  assert.deepEqual(store.refreshed, [["thread"]]);
+});
+
+test("intentional websocket close does not schedule reconnect", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: fakeProjectionStore({
+      thread: { posts: [] },
+    }),
+    WebSocketCtor: FakeWebSocket,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  connection.close();
+  await FakeWebSocket.instances[0].emit("close");
+
+  assert.equal(scheduled.length, 0);
+  assert.deepEqual(events.map((event) => event.message), [{ kind: "close" }]);
+});
+
+test("transport drop enters reconnect immediately and ignores duplicate close events", async () => {
+  FakeWebSocket.instances = [];
+  const scheduled = [];
+  const events = [];
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: fakeProjectionStore({
+      thread: { posts: [] },
+    }),
+    WebSocketCtor: FakeWebSocket,
+    reconnectDelayMs: 5,
+    scheduleReconnect(callback, delayMs) {
+      scheduled.push({ callback, delayMs });
+      return scheduled.length;
+    },
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  connection.drop();
+  await FakeWebSocket.instances[0].emit("close");
+
+  assert.deepEqual(events.map((event) => event.message), [
+    { kind: "close" },
+    { kind: "reconnecting", attempt: 1 },
+  ]);
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].delayMs, 5);
+});
+
+test("transport drop ignores late messages from the invalidated socket", async () => {
+  FakeWebSocket.instances = [];
+  const events = [];
+  const connection = connectLiveProjection({
+    url: "/ws?game=midsummer",
+    projectionStore: fakeProjectionStore({
+      thread: { posts: [] },
+    }),
+    WebSocketCtor: FakeWebSocket,
+    scheduleReconnect: () => 1,
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  const droppedSocket = FakeWebSocket.instances[0];
+  connection.drop();
+  await droppedSocket.emit("message", {
+    data: JSON.stringify({
+      v: 1,
+      id: 30,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "ThreadPostsChanged",
+          body: {
+            posts: [{ source_seq: 30, body: "late stale delta" }],
+          },
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(events.map((event) => event.message), [
+    { kind: "close" },
+    { kind: "reconnecting", attempt: 1 },
+  ]);
+});
+
 test("live projection events map to visible status copy", () => {
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "open" }), {
     state: "connected",
@@ -422,6 +559,27 @@ test("live projection events map to visible status copy", () => {
       message: "Live projection resynced from 44",
     },
   );
+  assert.deepEqual(
+    liveProjectionStatusForEvent({
+      kind: "reconnecting",
+      attempt: 1,
+    }),
+    {
+      state: "reconnecting",
+      message: "Live projection reconnecting",
+    },
+  );
+  assert.deepEqual(
+    liveProjectionStatusForEvent({
+      kind: "reconnect",
+      attempt: 1,
+      state: "recovered",
+    }),
+    {
+      state: "recovered",
+      message: "Live projection reconnected",
+    },
+  );
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "error", message: "boom" }), {
     state: "error",
     message: "Live projection error: boom",
@@ -434,11 +592,13 @@ test("live projection events map to visible status copy", () => {
 
 class FakeWebSocket {
   static last = null;
+  static instances = [];
 
   constructor(url) {
     this.url = url;
     this.listeners = new Map();
     FakeWebSocket.last = this;
+    FakeWebSocket.instances.push(this);
   }
 
   addEventListener(kind, listener) {

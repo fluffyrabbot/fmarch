@@ -127,6 +127,7 @@
       projectionStore,
       fetchImpl: fetch,
       resyncKeys: playerProjectionResyncKeys,
+      reconnectDelayMs: 1500,
       refreshKeysForEvent: (message) =>
         playerRefreshKeysForLiveDelta(data, message),
       onEvent(message, snapshot) {
@@ -162,9 +163,13 @@
       });
       return liveStatus;
     };
+    window.__fmarchDropPlayerLiveProjection = () => {
+      connection?.drop?.();
+    };
     return () => {
       delete window.__fmarchTriggerPlayerResync;
       delete window.__fmarchClosePlayerLiveProjection;
+      delete window.__fmarchDropPlayerLiveProjection;
       delete window.__fmarchPlayerColdLoadEndpoints;
       delete window.__fmarchPlayerResyncKeys;
       connection?.close();

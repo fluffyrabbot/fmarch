@@ -46,8 +46,14 @@ test("host console route data is allowed for HostOf scoped to the current game",
   });
   assert.equal(data.shell.activeSurface, "moderator");
   assert.equal(data.access.capabilityLabel, "HostOf(midsummer)");
-  assert.equal(data.projectionBoundary.status, "json-ws-command-projection-deltas-with-resync");
-  assert.equal(data.votecountBoundary.status, "json-ws-command-projection-deltas-with-resync");
+  assert.equal(
+    data.projectionBoundary.status,
+    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+  );
+  assert.equal(
+    data.votecountBoundary.status,
+    "json-ws-command-projection-deltas-with-resync-and-reconnect",
+  );
   assert.equal(data.votecountBoundary.command, "official-votecount-live-ws");
   assert.equal(data.hostVotecountEndpoint, "/games/midsummer/votecount");
   assert.deepEqual(data.commandContext, {

@@ -8,10 +8,10 @@ export const COLD_LOAD_TRANSPORT_BOUNDARY = Object.freeze({
 });
 
 export const LIVE_TRANSPORT_BOUNDARY = Object.freeze({
-  status: "json-ws-command-projection-deltas-with-resync",
+  status: "json-ws-command-projection-deltas-with-resync-and-reconnect",
   protocol: "WebSocket JSON",
   proof:
-    "Initial WebSocket Hello plus command-following projection delta and ResyncRequired recovery frames are proven over the typed JSON websocket boundary.",
+    "Initial WebSocket Hello plus command-following projection delta, ResyncRequired recovery frames, and reconnect refresh recovery are proven over the typed JSON websocket boundary.",
 });
 
 export const LIVE_PROJECTION_CONNECTING_STATUS = Object.freeze({
@@ -124,47 +124,130 @@ export function connectLiveProjection({
   resyncKeys = undefined,
   refreshKeysForEvent = () => [],
   onEvent = () => {},
+  reconnect = true,
+  reconnectDelayMs = 1000,
+  scheduleReconnect = (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
+  clearReconnect = (handle) => globalThis.clearTimeout(handle),
 }) {
   if (typeof WebSocketCtor !== "function") {
     return null;
   }
-  const socket = new WebSocketCtor(resolveWebSocketUrl(url));
-  socket.addEventListener("open", () => {
-    onEvent(Object.freeze({ kind: "open" }), projectionStore.getSnapshot());
-  });
-  socket.addEventListener("message", async (event) => {
-    try {
-      const envelope = JSON.parse(String(event.data));
-      const message = normalizeServerEnvelopeMessage(envelope);
-      if (message?.kind === "resync-required") {
+
+  let socket = null;
+  let stopped = false;
+  let reconnectHandle = null;
+  let reconnectAttempt = 0;
+  let handleSocketClose = () => {};
+  const resolvedUrl = resolveWebSocketUrl(url);
+
+  function openSocket({ recoverOnOpen = false } = {}) {
+    const openedSocket = new WebSocketCtor(resolvedUrl);
+    socket = openedSocket;
+    let closeHandled = false;
+    handleSocketClose = () => {
+      if (closeHandled) {
+        return;
+      }
+      closeHandled = true;
+      onEvent(Object.freeze({ kind: "close" }), null);
+      queueReconnect();
+    };
+    openedSocket.addEventListener("open", async () => {
+      if (openedSocket !== socket) {
+        return;
+      }
+      if (!recoverOnOpen) {
+        onEvent(Object.freeze({ kind: "open" }), projectionStore.getSnapshot());
+        return;
+      }
+      try {
         const recovery = await recoverLiveProjection({
           projectionStore,
           resyncKeys,
           fetchImpl,
-          message,
+          message: {
+            kind: "reconnect",
+            attempt: reconnectAttempt,
+          },
         });
         onEvent(recovery.message, recovery.snapshot);
+      } catch (error) {
+        onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+      }
+    });
+    openedSocket.addEventListener("message", async (event) => {
+      if (openedSocket !== socket) {
         return;
       }
-      let snapshot = projectionStore.applyLiveEnvelope(envelope);
-      const refreshKeys = normalizeRefreshKeys(refreshKeysForEvent(message, snapshot));
-      if (refreshKeys.length > 0) {
-        snapshot = await projectionStore.refresh(refreshKeys, { fetchImpl });
+      try {
+        const envelope = JSON.parse(String(event.data));
+        const message = normalizeServerEnvelopeMessage(envelope);
+        if (message?.kind === "resync-required") {
+          const recovery = await recoverLiveProjection({
+            projectionStore,
+            resyncKeys,
+            fetchImpl,
+            message,
+          });
+          onEvent(recovery.message, recovery.snapshot);
+          return;
+        }
+        let snapshot = projectionStore.applyLiveEnvelope(envelope);
+        const refreshKeys = normalizeRefreshKeys(refreshKeysForEvent(message, snapshot));
+        if (refreshKeys.length > 0) {
+          snapshot = await projectionStore.refresh(refreshKeys, { fetchImpl });
+        }
+        onEvent(message, snapshot);
+      } catch (error) {
+        onEvent(Object.freeze({ kind: "error", message: error.message }), null);
       }
-      onEvent(message, snapshot);
-    } catch (error) {
-      onEvent(Object.freeze({ kind: "error", message: error.message }), null);
+    });
+    openedSocket.addEventListener("error", () => {
+      if (openedSocket !== socket) {
+        return;
+      }
+      onEvent(Object.freeze({ kind: "error", message: "websocket error" }), null);
+    });
+    openedSocket.addEventListener("close", () => {
+      if (openedSocket !== socket) {
+        return;
+      }
+      handleSocketClose();
+    });
+    return openedSocket;
+  }
+
+  function queueReconnect() {
+    if (stopped || reconnect !== true || reconnectHandle !== null) {
+      return;
     }
-  });
-  socket.addEventListener("error", () => {
-    onEvent(Object.freeze({ kind: "error", message: "websocket error" }), null);
-  });
-  socket.addEventListener("close", () => {
-    onEvent(Object.freeze({ kind: "close" }), null);
-  });
+    reconnectAttempt += 1;
+    onEvent(
+      Object.freeze({ kind: "reconnecting", attempt: reconnectAttempt }),
+      projectionStore.getSnapshot(),
+    );
+    reconnectHandle = scheduleReconnect(() => {
+      reconnectHandle = null;
+      openSocket({ recoverOnOpen: true });
+    }, reconnectDelayMs);
+  }
+
+  openSocket();
+
   return Object.freeze({
     close() {
-      socket.close();
+      stopped = true;
+      if (reconnectHandle !== null) {
+        clearReconnect(reconnectHandle);
+        reconnectHandle = null;
+      }
+      socket?.close();
+    },
+    drop() {
+      const droppedSocket = socket;
+      handleSocketClose();
+      socket = null;
+      droppedSocket?.close();
     },
   });
 }
@@ -203,6 +286,18 @@ export function liveProjectionStatusForEvent(
     return Object.freeze({
       state: "recovered",
       message: `Live projection resynced from ${message.fromSeq}`,
+    });
+  }
+  if (message?.kind === "reconnecting") {
+    return Object.freeze({
+      state: "reconnecting",
+      message: "Live projection reconnecting",
+    });
+  }
+  if (message?.kind === "reconnect" && message.state === "recovered") {
+    return Object.freeze({
+      state: "recovered",
+      message: "Live projection reconnected",
     });
   }
   if (message?.kind === "error") {
