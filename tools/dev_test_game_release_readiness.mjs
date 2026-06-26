@@ -46,6 +46,7 @@ const defaultIdentityAdminProofPath = path.join(
   artifactDir,
   "identity-admin-proof.json",
 );
+const defaultAdminSpineProofPath = path.join(artifactDir, "admin-spine-proof.json");
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -136,6 +137,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.identityAdminProofPath ??
           "target/dev-test-game/identity-admin-proof.json",
         artifact: options.identityAdminProofArtifact,
+      })
+    : undefined;
+  const adminSpineProofEvidence = options.adminSpineProof
+    ? validateDevTestGameAdminSpineProof(options.adminSpineProof, {
+        path: options.adminSpineProofPath ?? "target/dev-test-game/admin-spine-proof.json",
+        artifact: options.adminSpineProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -359,6 +366,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { identityAdminProof: identityAdminProofEvidence.path }),
           }),
+      ...(adminSpineProofEvidence === undefined
+        ? {}
+        : { adminProofSpine: adminSpineProofEvidence.path }),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -366,7 +376,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...((backupRestoreEvidence === undefined &&
         opsArtifactsEvidence === undefined &&
         seedFixtureEvidence === undefined &&
-        identityAdapterEvidence === undefined)
+        identityAdapterEvidence === undefined &&
+        adminSpineProofEvidence === undefined)
         ? {}
         : {
             evidence: {
@@ -409,6 +420,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                         : { adminRoleSurface: identityAdminProofEvidence }),
                     },
                   }),
+              ...(adminSpineProofEvidence === undefined
+                ? {}
+                : { adminProofSpine: adminSpineProofEvidence }),
             },
           }),
     },
@@ -1015,6 +1029,107 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "local-role-url-browser-proof",
+    "local-core-loop-proof",
+    "local-hardening-proof",
+  ];
+  const requiredUnproven = ["hosted-deployment", "human-release-runbook"];
+  if (proof?.version !== 1) {
+    throw new Error(`release admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-release-admin-proof") {
+    throw new Error(`unexpected release admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`release admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-release-admin-surface") {
+    throw new Error(`release admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("release admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("release admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`release admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const itemId of requiredUnproven) {
+    if (!proof.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
+      throw new Error(`release admin proof missing visible unproven item: ${itemId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/release-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameAdminSpineProof(proof, options = {}) {
+  const requiredProofs = [
+    "core-loop",
+    "hardening",
+    "identity",
+    "backup",
+    "ops",
+    "seed",
+    "release",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`admin spine proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-admin-spine-proof") {
+    throw new Error(`unexpected admin spine proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`admin spine proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-admin-spine") {
+    throw new Error(`admin spine proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("admin spine proof must not claim production or release readiness");
+  }
+  if (/invite=(?!REDACTED)/.test(JSON.stringify(proof))) {
+    throw new Error("admin spine proof leaked an invite URL token");
+  }
+  const entries = new Map((proof.adminProofs ?? []).map((entry) => [entry.id, entry]));
+  for (const id of requiredProofs) {
+    const entry = entries.get(id);
+    if (entry?.status !== "passed") {
+      throw new Error(`admin spine proof missing passed entry: ${id}`);
+    }
+    if (typeof entry.path !== "string" || !entry.path.startsWith("target/")) {
+      throw new Error(`admin spine proof entry ${id} has invalid path`);
+    }
+    if (entry.releaseReady !== false || entry.productionReady !== false) {
+      throw new Error(`admin spine proof entry ${id} made readiness claims`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/admin-spine-proof.json",
+    proofCount: requiredProofs.length,
+    proofIds: requiredProofs,
+    proofBoundary: proof.proofBoundary,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -1140,6 +1255,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     identityAdminProofOptions,
     opsAdminProofOptions,
     seedAdminProofOptions,
+    adminSpineProofOptions,
   ] = await Promise.all([
       readOptionalCoreLoopAdminProof(),
       readOptionalHardeningAdminProof(),
@@ -1151,6 +1267,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
       readOptionalIdentityAdminProof(),
       readOptionalOpsAdminProof(),
       readOptionalSeedAdminProof(),
+      readOptionalAdminSpineProof(),
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -1164,6 +1281,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(identityAdminProofOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
     ...(seedAdminProofOptions ?? {}),
+    ...(adminSpineProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -1333,6 +1451,21 @@ async function readOptionalBackupRestoreArtifacts() {
     backupRestoreDumpPath: path.relative(repoRoot, dumpPath),
     backupRestoreProofArtifact: proofArtifact,
     backupRestoreDumpArtifact: dumpArtifact,
+  };
+}
+
+async function readOptionalAdminSpineProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultAdminSpineProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    adminSpineProof: JSON.parse(await readFile(proofPath, "utf8")),
+    adminSpineProofPath: path.relative(repoRoot, proofPath),
+    adminSpineProofArtifact: artifact,
   };
 }
 

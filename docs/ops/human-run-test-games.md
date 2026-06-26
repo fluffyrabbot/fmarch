@@ -154,6 +154,12 @@ The local release-readiness admin browser proof is:
 npm run test:dev-test-game-release-admin-proof
 ```
 
+The ordered aggregate admin-spine browser proof is:
+
+```sh
+npm run test:dev-test-game-admin-spine
+```
+
 The local ops artifact bundle generator is:
 
 ```sh
@@ -284,6 +290,10 @@ URL and capability architecture through local session rotation, session
 revocation, revoked-invite rejection, replacement-invite recovery, and a seeded
 admin overview-to-local-identity-adapter-detail browser proof without raw
 credential echoes.
+After `npm run test:dev-test-game-admin-spine`, the checklist consumes
+`target/dev-test-game/admin-spine-proof.json` and records the ordered local
+admin browser proof set as a single development-spine evidence signal while
+keeping release readiness `not_ready`.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

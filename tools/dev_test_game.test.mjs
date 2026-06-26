@@ -522,6 +522,29 @@ test("session card and markdown include role invite URLs and tokens", () => {
     ),
   );
   assert.equal(backupRestoreReadiness.releaseReadiness.status, "not_ready");
+  const adminSpineReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    adminSpineProofPath: "target/dev-test-game/admin-spine-proof.json",
+    adminSpineProof: adminSpineProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(adminSpineReadiness);
+  assert.equal(
+    adminSpineReadiness.generatedFrom.adminProofSpine,
+    "target/dev-test-game/admin-spine-proof.json",
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
+    7,
+  );
+  assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
+    "core-loop",
+    "hardening",
+    "identity",
+    "backup",
+    "ops",
+    "seed",
+    "release",
+  ]);
 });
 
 function artifactSummary(path) {
@@ -832,6 +855,81 @@ function backupAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function releaseAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-release-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-release-admin-surface",
+    proofBoundary: "Local admin release-readiness proof only.",
+    generatedFrom: {
+      releaseReadinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-release-readiness",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "local-role-url-browser-proof",
+        "local-core-loop-proof",
+        "local-hardening-proof",
+      ],
+      visibleUnproven: ["hosted-deployment", "human-release-runbook"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function adminSpineProofFixture() {
+  const fixtures = [
+    ["core-loop", coreLoopAdminProofFixture()],
+    ["hardening", hardeningAdminProofFixture()],
+    ["identity", identityAdminProofFixture()],
+    ["backup", backupAdminProofFixture()],
+    ["ops", opsAdminProofFixture()],
+    ["seed", seedAdminProofFixture()],
+    ["release", releaseAdminProofFixture()],
+  ];
+  return {
+    version: 1,
+    proof: "dev-test-game-admin-spine-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-admin-spine",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    generatedFrom: {
+      game: "00000000-0000-0000-0000-000000000001",
+      proofs: Object.fromEntries(fixtures.map(([id]) => [id, proofPathFor(id)])),
+    },
+    adminProofs: fixtures.map(([id, proof]) => ({
+      id,
+      label: `${id} admin proof`,
+      proof: proof.proof,
+      status: "passed",
+      path: proofPathFor(id),
+      game: proof.generatedFrom.game,
+      overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+      detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+      releaseReady: false,
+      productionReady: false,
+    })),
+    proofBoundary: "Local aggregate admin spine proof only.",
+  };
+}
+
+function proofPathFor(id) {
+  return `target/dev-test-game/${id === "core-loop" ? "core-loop" : id}-admin-proof.json`;
 }
 
 function identityRole({ role, loginUrl, principalUserId, capabilityKinds }) {
