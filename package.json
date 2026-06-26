@@ -2,7 +2,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game": "node tools/dev_test_game.mjs",
+    "test:dev-postgres-contract": "node --test tools/dev_postgres.test.mjs",
     "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs",
     "test:dev-test-game-live": "node tools/dev_test_game_live_proof.mjs",
     "operator:browser-smoke": "node tools/operator_browser_smoke.mjs",

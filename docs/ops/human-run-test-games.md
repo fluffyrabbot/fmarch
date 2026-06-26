@@ -17,8 +17,21 @@ With Docker running, the repo-local service is:
 docker compose up -d postgres
 ```
 
-If Docker is unavailable, a repo-local Postgres under `target/` is acceptable for
-local proof.
+If Docker is unavailable, use the repo-local helper. It initializes a Postgres
+cluster under `target/local-postgres`, starts it on `127.0.0.1:5544`, creates the
+`fmarch` database if needed, and prints the exact `DATABASE_URL`:
+
+```sh
+npm run dev:postgres -- start
+```
+
+The helper also supports:
+
+```sh
+npm run dev:postgres -- status
+npm run dev:postgres -- print-env
+npm run dev:postgres -- stop
+```
 
 ## Start A Game
 
@@ -71,6 +84,7 @@ for the friendly name, preserving the event-store invariant.
 The no-server contract gate is:
 
 ```sh
+npm run test:dev-postgres-contract
 npm run test:dev-test-game-contract
 ```
 
