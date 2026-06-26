@@ -139,6 +139,12 @@ test("session card and markdown include role invite URLs and tokens", () => {
       invalidAction: { message: "Reject InvalidTarget: invalid target" },
       legalAction: { message: "Ack: stream seqs 42" },
     },
+    privateChannel: {
+      status: "passed",
+      proof: "player posted privately and denied player recovered",
+      allowed: { submitPost: { message: "Ack: stream seqs 43" } },
+      denied: { status: 403, actionLabel: "Back to board" },
+    },
   };
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
@@ -150,4 +156,6 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
+  assert(markdown.includes("## Private Channel Proof"));
+  assert(markdown.includes("Denied route: 403 Back to board"));
 });

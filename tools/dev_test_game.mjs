@@ -15,6 +15,8 @@ const namedGamesPath = path.join(artifactDir, "named-games.json");
 export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
 export const defaultGameName = "local";
 export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
+const factionDayChatChannel = "private:mafia_day_chat";
+const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
@@ -314,6 +316,12 @@ async function createSessions() {
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
+    deniedPlayer: await createInviteCredential({
+      inviteToken: tokens.deniedPlayer,
+      principalUserId: "player-target",
+      returnTo: `/g/${game}`,
+      expectedCapabilityKind: "SlotOccupant",
+    }),
     cohost: await createInviteCredential({
       inviteToken: tokens.cohost,
       principalUserId: "cohost_c",
@@ -330,6 +338,7 @@ export function createTokenSet(prefix) {
     host: `${prefix}-host`,
     player: `${prefix}-player`,
     actionPlayer: `${prefix}-action-player`,
+    deniedPlayer: `${prefix}-denied-player`,
     cohost: `${prefix}-cohost`,
   });
 }
@@ -530,6 +539,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.privateChannel !== undefined) {
+      lines.push(
+        "## Private Channel Proof",
+        "",
+        `Status: ${card.verification.privateChannel.status}`,
+        "",
+        `Proof: ${card.verification.privateChannel.proof}`,
+        "",
+        `Allowed post: ${card.verification.privateChannel.allowed.submitPost.message}`,
+        "",
+        `Denied route: ${card.verification.privateChannel.denied.status} ${card.verification.privateChannel.denied.actionLabel}`,
+        "",
+      );
+    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -541,9 +564,10 @@ async function verifySessionCard(card) {
   const sessions = {};
   const roleEntries = {};
   let coreLoop;
+  let privateChannel;
   let actionLoop;
   try {
-    for (const role of ["host", "player", "actionPlayer"]) {
+    for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
         browser,
         session: card.sessions[role],
@@ -557,6 +581,13 @@ async function verifySessionCard(card) {
     coreLoop = await verifySeededCoreLoop({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
+    });
+    privateChannel = await verifySeededPrivateChannel({
+      playerPage: roleEntries.player.page,
+      deniedPage: roleEntries.deniedPlayer.page,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
     actionLoop = await verifySeededActionLoop({
       hostPage: roleEntries.host.page,
@@ -575,6 +606,7 @@ async function verifySessionCard(card) {
     roles,
     sessions,
     coreLoop,
+    privateChannel,
     actionLoop,
   };
 }
@@ -765,6 +797,100 @@ async function verifySeededActionLoop({ hostPage, actionPage, game, apiBaseUrl }
     d02PhaseText,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02.",
+  };
+}
+
+async function verifySeededPrivateChannel({
+  playerPage,
+  deniedPage,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const channelRoute = encodeURIComponent(factionDayChatChannel);
+  const privateUrl = `${frontendBaseUrl}/g/${game}/c/${channelRoute}`;
+  const allowedResponse = await playerPage.goto(privateUrl, { waitUntil: "networkidle" });
+  if (allowedResponse === null || !allowedResponse.ok()) {
+    throw new Error(
+      `private channel member route failed with ${allowedResponse?.status() ?? "no response"}`,
+    );
+  }
+  await playerPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const channelContext = playerPage.getByTestId("player-command-channel-context");
+  await channelContext.waitFor({ state: "visible" });
+  const channelContextId = await channelContext.getAttribute("data-channel-id");
+  if (channelContextId !== factionDayChatChannel) {
+    throw new Error(`private channel context drifted: ${channelContextId}`);
+  }
+  await playerPage.locator('[data-testid="player-composer"] textarea').fill(factionDayChatPostBody);
+  await playerPage.locator('[data-action="submit_post"]').click();
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerCommandStatus?.state === "ack",
+  );
+  await playerPage.waitForFunction((expectedBody) =>
+    window.__fmarchPlayerProjection?.thread?.posts?.some(
+      (post) => post.body === expectedBody,
+    ),
+    factionDayChatPostBody,
+  );
+  const submitPost = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const submitPostCommand = submitPost.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    submitPostCommand?.channel_id !== factionDayChatChannel ||
+    submitPostCommand?.actor_slot !== "slot-7" ||
+    submitPostCommand?.body !== factionDayChatPostBody
+  ) {
+    throw new Error(`private channel SubmitPost drifted: ${JSON.stringify(submitPostCommand)}`);
+  }
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=50`,
+  );
+  if (!apiThread.posts?.some((post) => post.body === factionDayChatPostBody)) {
+    throw new Error(`private channel API thread missing submitted post: ${JSON.stringify(apiThread)}`);
+  }
+
+  const deniedResponse = await deniedPage.goto(privateUrl, { waitUntil: "networkidle" });
+  if (deniedResponse === null || deniedResponse.status() !== 403) {
+    throw new Error(
+      `private channel denied route expected 403, got ${deniedResponse?.status() ?? "no response"}`,
+    );
+  }
+  await deniedPage.getByTestId("route-error-surface").waitFor({ state: "visible" });
+  const status = Number(
+    await deniedPage.getByTestId("route-error-surface").getAttribute("data-status"),
+  );
+  const action = deniedPage.getByTestId("route-error-action");
+  const actionLabel = await action.innerText();
+  const actionHref = await action.getAttribute("href");
+  if (status !== 403 || actionLabel !== "Back to board" || actionHref !== "/") {
+    throw new Error(
+      `private channel 403 recovery drifted: ${JSON.stringify({ status, actionLabel, actionHref })}`,
+    );
+  }
+  await Promise.all([
+    deniedPage.waitForURL(`${frontendBaseUrl}/`, { waitUntil: "networkidle" }),
+    action.click(),
+  ]);
+  await deniedPage.getByTestId("board-surface").waitFor({ state: "visible" });
+
+  return {
+    status: "passed",
+    channel: factionDayChatChannel,
+    allowed: {
+      url: privateUrl,
+      channelContextId,
+      submitPost,
+      apiThreadPostBodies: apiThread.posts.map((post) => post.body),
+    },
+    denied: {
+      url: privateUrl,
+      status,
+      actionLabel,
+      actionHref,
+      recoveredUrl: deniedPage.url(),
+    },
+    proof:
+      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, and the denied player role URL rendered the 403 Back to board recovery for the same channel.",
   };
 }
 

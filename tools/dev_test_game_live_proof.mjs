@@ -29,10 +29,15 @@ assert.equal(session.name, "live-proof");
 assert.equal(session.seedMode, "seeded");
 assert.equal(session.seedCommandCount, 22);
 assert.equal(session.verification?.status, "passed");
-assert.deepEqual(session.verification.roles, ["host", "player", "actionPlayer"]);
+assert.deepEqual(session.verification.roles, [
+  "host",
+  "player",
+  "actionPlayer",
+  "deniedPlayer",
+]);
 assert.match(session.frontendBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
 assert.match(session.apiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
-for (const role of ["admin", "cohost", "host", "player", "actionPlayer"]) {
+for (const role of ["admin", "cohost", "host", "player", "actionPlayer", "deniedPlayer"]) {
   assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
   assert.equal(session.sessions[role].credentialKind, "invite", `${role} credential kind`);
   assert.equal(session.sessions[role].inviteToken, session.sessions[role].token);
@@ -66,6 +71,22 @@ assert.equal(
   session.verification.sessions.actionPlayer.capabilityKinds.includes("SlotOccupant"),
   true,
 );
+assert.equal(session.verification.sessions.deniedPlayer.cookie.valuePrefix, "invite-session-");
+assert.equal(
+  session.verification.sessions.deniedPlayer.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(session.verification.privateChannel.status, "passed");
+assert.equal(session.verification.privateChannel.channel, "private:mafia_day_chat");
+assert.equal(session.verification.privateChannel.allowed.submitPost.state, "ack");
+assert.equal(
+  session.verification.privateChannel.allowed.submitPost.requestEnvelope.body.body.command
+    .SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(session.verification.privateChannel.denied.status, 403);
+assert.equal(session.verification.privateChannel.denied.actionLabel, "Back to board");
+assert.match(session.verification.privateChannel.denied.recoveredUrl, /\/$/);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");
