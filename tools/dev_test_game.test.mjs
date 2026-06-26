@@ -308,12 +308,20 @@ test("session card and markdown include role invite URLs and tokens", () => {
     generatedAt: "2026-06-26T00:00:00.000Z",
     opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
     opsArtifacts,
+    opsAdminProofPath: "target/dev-test-game/ops-admin-proof.json",
+    opsAdminProof: opsAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(opsReadiness);
   assert(
     opsReadiness.localDevelopmentSpine.checks.some(
       (item) => item.id === "local-ops-artifact-bundle" && item.status === "passed",
     ),
+  );
+  assert.equal(
+    opsReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-ops-artifact-bundle",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-ops-artifacts?game=<seeded-game>",
   );
   assert.equal(
     opsReadiness.releaseReadiness.unproven.some(
@@ -562,6 +570,39 @@ function identityAdapterProofFixture(game) {
         principalUserId: "player-mira",
         capabilityKinds: ["SlotOccupant"],
       }),
+    },
+  };
+}
+
+function opsAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-ops-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-ops-admin-surface",
+    proofBoundary: "Local admin ops artifact proof only.",
+    generatedFrom: {
+      opsArtifacts: "target/dev-test-game/ops-artifacts.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-ops-artifacts",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "source-artifacts-checksummed",
+        "role-entrypoints-redacted",
+        "proof-lanes-summarized",
+        "release-boundary-carried",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
     },
   };
 }

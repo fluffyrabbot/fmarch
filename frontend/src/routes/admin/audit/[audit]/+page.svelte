@@ -51,6 +51,19 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.checks?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-checks">
+        {#each data.audit.checks as check}
+          <li
+            class="admin-audit-detail__entry"
+            data-testid={`admin-audit-check-${check.id}`}
+          >
+            <strong>{check.id}</strong>
+            <span>{check.status}</span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
       data-testid={evidenceTestId}

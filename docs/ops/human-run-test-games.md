@@ -223,8 +223,10 @@ backup/restore artifact, it keeps `backup-restore-drill` unproven. After
 `target/live-stack-backup-restore-drill/local-backup-restore-proof.json` plus
 `target/live-stack-backup-restore-drill/local-live-stack.dump` and promotes only
 the local dump/restore check. After `npm run test:dev-test-game-ops`, the
-checklist consumes `target/dev-test-game/ops-artifacts.json` and promotes only
-the local ops artifact bundle. After `npm run test:dev-test-game-seed-fixture`,
+checklist consumes `target/dev-test-game/ops-artifacts.json` plus
+`target/dev-test-game/ops-admin-proof.json` and promotes only the local ops
+artifact bundle with its seeded admin overview-to-detail browser proof. After
+`npm run test:dev-test-game-seed-fixture`,
 the checklist consumes `target/dev-test-game/seed-fixture-summary.json` and
 promotes only the local seed/demo fixture inventory. After
 `npm run test:dev-test-game-identity`, the checklist consumes

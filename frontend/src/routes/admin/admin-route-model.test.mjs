@@ -531,6 +531,59 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   );
 });
 
+test("admin route data exposes local ops artifacts as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    opsArtifacts: localOpsArtifactsFixture(),
+  });
+
+  const ops = data.audit.find((item) => item.id === "local-ops-artifacts");
+  assert.equal(ops.label, "Local ops artifacts");
+  assert.equal(ops.status, "4 local ops checks passed");
+  assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(ops.inspectHref, "/admin/audit/local-ops-artifacts?game=midsummer");
+  assert.deepEqual(
+    ops.checks.map((check) => check.id),
+    [
+      "source-artifacts-checksummed",
+      "role-entrypoints-redacted",
+      "proof-lanes-summarized",
+      "release-boundary-carried",
+    ],
+  );
+  assert.deepEqual(ops.artifactSummary, {
+    game: "game-a",
+    laneCount: 10,
+    roleCount: 6,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local ops artifact detail data carries check rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-ops-artifacts",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    opsArtifacts: localOpsArtifactsFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local ops artifacts");
+  assert.equal(data.audit.id, "local-ops-artifacts");
+  assert.equal(data.audit.checks.length, 4);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["source-artifacts-checksummed", "passed"],
+      ["role-entrypoints-redacted", "passed"],
+      ["proof-lanes-summarized", "passed"],
+      ["release-boundary-carried", "passed"],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -598,6 +651,31 @@ function identityLifecycleAuditFixture() {
         principal_user_id: "host_h",
         metadata: {},
       },
+    ],
+  };
+}
+
+function localOpsArtifactsFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-ops-artifacts",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-ops-artifacts",
+    proofBoundary: "Local artifact bundle for one dev-test-game run.",
+    run: {
+      game: "game-a",
+      roleCount: 6,
+    },
+    proofRun: {
+      laneCount: 10,
+    },
+    checks: [
+      { id: "source-artifacts-checksummed", status: "passed" },
+      { id: "role-entrypoints-redacted", status: "passed" },
+      { id: "proof-lanes-summarized", status: "passed" },
+      { id: "release-boundary-carried", status: "passed" },
     ],
   };
 }

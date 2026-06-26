@@ -21,6 +21,7 @@ const defaultBackupRestoreDumpPath = path.join(
   "local-live-stack.dump",
 );
 const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
+const defaultOpsAdminProofPath = path.join(artifactDir, "ops-admin-proof.json");
 const defaultSeedFixtureSummaryPath = path.join(
   artifactDir,
   "seed-fixture-summary.json",
@@ -63,6 +64,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameOpsArtifacts(options.opsArtifacts, {
         path: options.opsArtifactsPath ?? "target/dev-test-game/ops-artifacts.json",
         artifact: options.opsArtifactsArtifact,
+      })
+    : undefined;
+  const opsAdminProofEvidence = options.opsAdminProof
+    ? validateDevTestGameOpsAdminProof(options.opsAdminProof, {
+        path: options.opsAdminProofPath ?? "target/dev-test-game/ops-admin-proof.json",
+        artifact: options.opsAdminProofArtifact,
       })
     : undefined;
   const seedFixtureEvidence = options.seedFixtureSummary
@@ -128,6 +135,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: opsArtifactsEvidence.path,
       proofBoundary: opsArtifactsEvidence.proofBoundary,
+      ...(opsAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: opsAdminProofEvidence }),
     });
   }
   if (seedFixtureEvidence !== undefined) {
@@ -453,6 +463,50 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
   };
 }
 
+export function validateDevTestGameOpsAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "source-artifacts-checksummed",
+    "role-entrypoints-redacted",
+    "proof-lanes-summarized",
+    "release-boundary-carried",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`ops admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-ops-admin-proof") {
+    throw new Error(`unexpected ops admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`ops admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-ops-admin-surface") {
+    throw new Error(`ops admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("ops admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("ops admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`ops admin proof missing visible check: ${checkId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/ops-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   const requiredChecks = [
     "role-entrypoints-redacted",
@@ -737,11 +791,13 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     opsArtifactsOptions,
     seedFixtureOptions,
     identityAdapterOptions,
+    opsAdminProofOptions,
   ] = await Promise.all([
       readOptionalBackupRestoreArtifacts(),
       readOptionalOpsArtifacts(),
       readOptionalSeedFixtureSummary(),
       readOptionalIdentityAdapterProof(),
+      readOptionalOpsAdminProof(),
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -749,6 +805,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(opsArtifactsOptions ?? {}),
     ...(seedFixtureOptions ?? {}),
     ...(identityAdapterOptions ?? {}),
+    ...(opsAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -771,6 +828,21 @@ async function readOptionalOpsArtifacts() {
     opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
     opsArtifactsPath: path.relative(repoRoot, opsPath),
     opsArtifactsArtifact: artifact,
+  };
+}
+
+async function readOptionalOpsAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultOpsAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    opsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    opsAdminProofPath: path.relative(repoRoot, proofPath),
+    opsAdminProofArtifact: artifact,
   };
 }
 

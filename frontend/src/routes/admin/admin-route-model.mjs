@@ -20,6 +20,7 @@ export async function buildAdminRouteData({
   apiBaseUrl = "",
   sessionToken = null,
   identityPrincipalUserId = "host_h",
+  opsArtifacts = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -116,7 +117,10 @@ export async function buildAdminRouteData({
       }),
     ]),
     ...coldData,
-    audit: withAdminAuditInspectLinks(coldData.audit, { game }),
+    audit: withAdminAuditInspectLinks(
+      appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+      { game },
+    ),
     recoveryTasks: Object.freeze([
       Object.freeze({
         id: "recovery-gate",
@@ -160,6 +164,7 @@ export async function buildAdminAuditDetailData({
   apiBaseUrl = "",
   sessionToken = null,
   identityPrincipalUserId = "host_h",
+  opsArtifacts = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -169,6 +174,7 @@ export async function buildAdminAuditDetailData({
     apiBaseUrl,
     sessionToken,
     identityPrincipalUserId,
+    opsArtifacts,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -288,6 +294,55 @@ function withAdminAuditInspectLinks(audit, { game }) {
       }),
     ),
   );
+}
+
+export function appendLocalOpsArtifactsAudit(audit, opsArtifacts, { game }) {
+  const row = normalizeLocalOpsArtifactsAudit(opsArtifacts, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
+  if (
+    opsArtifacts === null ||
+    typeof opsArtifacts !== "object" ||
+    opsArtifacts.version !== 1 ||
+    opsArtifacts.proof !== "dev-test-game-ops-artifacts" ||
+    opsArtifacts.status !== "passed"
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(opsArtifacts.checks) ? opsArtifacts.checks : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  return Object.freeze({
+    id: "local-ops-artifacts",
+    label: "Local ops artifacts",
+    status: `${passedChecks.length} local ops checks passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local ops artifact bundle",
+    boundaryDetail:
+      opsArtifacts.proofBoundary ??
+      "Local dev-test-game ops artifact bundle without hosted observability claims.",
+    href: "target/dev-test-game/ops-artifacts.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-ops-artifacts" }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(opsArtifacts.run?.game ?? ""),
+      laneCount: Number(opsArtifacts.proofRun?.laneCount ?? 0),
+      roleCount: Number(opsArtifacts.run?.roleCount ?? 0),
+      releaseReady: opsArtifacts.releaseReady === true,
+      productionReady: opsArtifacts.productionReady === true,
+    }),
+  });
 }
 
 export function adminAuditInspectHref({ game, audit }) {
