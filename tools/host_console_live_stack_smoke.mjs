@@ -1303,7 +1303,15 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   let staleVoteRecovery;
   let staleVoteLockCommand;
   let staleVoteUnlockCommand;
+  let duplicateVoteRetry;
+  let duplicateVoteRows;
+  let duplicateVoteReceiptRows;
+  const duplicateVoteCommandId = crypto.randomUUID();
+  const duplicateVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
   const staleVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
+  await page.evaluate((commandId) => {
+    window.__fmarchPlayerCommandIdFactory = () => commandId;
+  }, duplicateVoteCommandId);
   const voteButton = page.getByText("Vote slot-2", { exact: true });
   const voteButtonBox = await voteButton.boundingBox();
   assertHitTarget(voteButtonBox, "player vote button");
@@ -1316,6 +1324,16 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         .querySelector('[data-testid="player-command-status"]')
         ?.getAttribute("data-state") === "ack",
   );
+  const voteOutcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  assertPlayerVoteSubmitOutcome(voteOutcome);
+  assertPlayerVoteCommandId({
+    outcome: voteOutcome,
+    commandId: duplicateVoteCommandId,
+    label: "first player SubmitVote",
+  });
+  await page.evaluate(() => {
+    delete window.__fmarchPlayerCommandIdFactory;
+  });
   try {
     playerStep = "wait-live-vote-count-2";
     await page.waitForFunction(() => {
@@ -1331,6 +1349,31 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       return projection?.votecount?.some(
         (row) => row.target === "slot-2" && row.count === 2,
       );
+    });
+
+    playerStep = "duplicate-vote-retry";
+    duplicateVoteRetry = await submitDuplicatePlayerVote(duplicateVoteSession, {
+      firstOutcome: voteOutcome,
+      commandId: duplicateVoteCommandId,
+    });
+    duplicateVoteRows = await runSql(
+      smokeDatabase.url,
+      `SELECT kind, payload->>'actor' AS actor, payload->>'target' AS target, payload->>'phase_id' AS phase_id
+       FROM events
+       WHERE stream_id = '${game}' AND kind = 'VoteSubmitted' AND payload->>'actor' = 'slot-7'
+       ORDER BY stream_seq`,
+    );
+    assertSinglePlayerVoteSubmittedRow(duplicateVoteRows);
+    duplicateVoteReceiptRows = await runSql(
+      smokeDatabase.url,
+      `SELECT principal_user_id, command_id::text, stream_seqs
+       FROM command_receipt
+       WHERE principal_user_id = 'player-mira'
+         AND command_id = '${duplicateVoteCommandId}'::uuid`,
+    );
+    assertDuplicatePlayerVoteReceipt({
+      commandId: duplicateVoteCommandId,
+      receiptRows: duplicateVoteReceiptRows,
     });
 
     playerStep = "withdraw-vote";
@@ -1549,6 +1592,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   } catch (error) {
     const debug = {
       playerStep,
+      errorMessage: error?.message ?? String(error),
       statusText: await status.innerText(),
       statusState: await status.getAttribute("data-state"),
       projection: await page.evaluate(() => window.__fmarchPlayerProjection),
@@ -1575,6 +1619,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     () => window.__fmarchLiveProjectionEvents,
   );
   const commandStatus = await status.innerText();
+  await duplicateVoteSession.context.close();
   await staleVoteSession.context.close();
   await context.close();
   return {
@@ -1584,6 +1629,13 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     commandStatus,
     projection,
     liveProjectionEvents,
+    duplicateVoteRetry: {
+      ...duplicateVoteRetry,
+      voteRows: duplicateVoteRows,
+      receiptRows: duplicateVoteReceiptRows,
+      proof:
+        "A second stale seeded player page loaded /g/{game} before the live player vote, retried SubmitVote with the same command_id after the live page ACK, received the original ACK stream seqs from command_receipt through a separate browser submission, refreshed votecount to 2, and the scratch event stream retained exactly one VoteSubmitted row for slot-7.",
+    },
     reconnect: reconnectEvidence,
     staleVoteRecovery: {
       lockCommand: staleVoteLockCommand,
@@ -1592,6 +1644,46 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       proof:
         "A stale seeded player page loaded /g/{game} with live WebSocket disabled before LockThread, kept the old Vote slot-2 control, submitted it after the host locked D01, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to D01 locked for slot-7, and the host unlocked the phase before the moderator proof continued.",
     },
+  };
+}
+
+async function submitDuplicatePlayerVote(duplicateSession, { firstOutcome, commandId }) {
+  const { page } = duplicateSession;
+  await page.evaluate((fixedCommandId) => {
+    window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
+  }, commandId);
+  const staleButton = page.getByText("Vote slot-2", { exact: true });
+  assertHitTarget(await staleButton.boundingBox(), "duplicate player vote button");
+  await staleButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const duplicatePlayerSubmit = assertDuplicatePlayerVoteOutcome({
+    firstOutcome,
+    duplicateOutcome: outcome,
+    commandId,
+  });
+  const statusMessage = await status.innerText();
+  await page.evaluate(() => {
+    delete window.__fmarchPlayerCommandIdFactory;
+  });
+  await page.waitForFunction(() =>
+    window.__fmarchPlayerProjection?.votecount?.some(
+      (row) => row.target === "slot-2" && row.count === 2,
+    ),
+  );
+  return {
+    outcome,
+    duplicatePlayerSubmit,
+    statusMessage,
+    projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+    receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
   };
 }
 
@@ -3113,6 +3205,84 @@ function assertPlayerVoteProjection(deltas) {
   );
   if (vote === undefined) {
     throw new Error(`player vote did not update API votecount: ${JSON.stringify(deltas)}`);
+  }
+}
+
+function assertPlayerVoteSubmitOutcome(outcome) {
+  if (outcome?.state !== "ack") {
+    throw new Error(`player SubmitVote did not ACK: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitVote;
+  if (command?.game !== game) {
+    throw new Error(`player SubmitVote used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot-7") {
+    throw new Error(`player SubmitVote used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.target?.Slot !== "slot-2") {
+    throw new Error(`player SubmitVote used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertPlayerVoteCommandId({ outcome, commandId, label }) {
+  const actual = outcome?.requestEnvelope?.body?.body?.command_id;
+  if (actual !== commandId) {
+    throw new Error(`${label} used ${actual}, expected ${commandId}: ${JSON.stringify(outcome)}`);
+  }
+  if (outcome.commandId !== commandId) {
+    throw new Error(`${label} status commandId drifted: ${JSON.stringify(outcome)}`);
+  }
+}
+
+function assertDuplicatePlayerVoteOutcome({
+  firstOutcome,
+  duplicateOutcome,
+  commandId,
+}) {
+  assertPlayerVoteSubmitOutcome(duplicateOutcome);
+  assertPlayerVoteCommandId({
+    outcome: duplicateOutcome,
+    commandId,
+    label: "duplicate player SubmitVote",
+  });
+  if (
+    JSON.stringify(duplicateOutcome.streamSeqs) !==
+    JSON.stringify(firstOutcome.streamSeqs)
+  ) {
+    throw new Error(
+      `duplicate player SubmitVote did not return original ack stream seqs: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
+    );
+  }
+  return {
+    commandId,
+    firstEnvelopeId: firstOutcome.envelopeId,
+    duplicateEnvelopeId: duplicateOutcome.envelopeId,
+    streamSeqs: duplicateOutcome.streamSeqs,
+  };
+}
+
+function assertSinglePlayerVoteSubmittedRow(voteRows) {
+  const voteSubmittedRows = voteRows.match(/VoteSubmitted/g) ?? [];
+  if (voteSubmittedRows.length !== 1) {
+    throw new Error(
+      `duplicate player SubmitVote appended ${voteSubmittedRows.length} VoteSubmitted rows:\n${voteRows}`,
+    );
+  }
+  if (!voteRows.includes("slot-7") || !voteRows.includes("slot-2") || !voteRows.includes("D01")) {
+    throw new Error(`duplicate player SubmitVote row drifted:\n${voteRows}`);
+  }
+}
+
+function assertDuplicatePlayerVoteReceipt({ commandId, receiptRows }) {
+  if (!receiptRows.includes("player-mira") || !receiptRows.includes(commandId)) {
+    throw new Error(
+      `duplicate player SubmitVote receipt missing command ${commandId}:\n${receiptRows}`,
+    );
+  }
+  if (!/\{\d+\}/.test(receiptRows)) {
+    throw new Error(
+      `duplicate player SubmitVote receipt did not persist stream seqs:\n${receiptRows}`,
+    );
   }
 }
 
