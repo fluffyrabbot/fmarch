@@ -86,6 +86,7 @@ target/dev-test-game/seed-admin-proof.json
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/release-admin-proof.json
+target/dev-test-game/core-loop-admin-proof.json
 target/dev-test-game/hardening-admin-proof.json
 target/dev-test-game/backup-admin-proof.json
 target/dev-test-game/identity-admin-proof.json
@@ -223,6 +224,10 @@ The private-channel proof uses the same invite-backed role surfaces: the player
 page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
 board` recovery for that same channel.
+The same core game-loop evidence is inspectable from the seeded admin role:
+`target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
+the admin overview into the native local core-loop detail route and verifying
+the `core-loop`, `action-loop`, and `private-channel` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the
@@ -249,6 +254,10 @@ production/release readiness.
 The release-readiness checklist is intentionally not a release gate. It keeps
 `releaseReady: false` and `productionReady: false`. Without an explicit
 backup/restore artifact, it keeps `backup-restore-drill` unproven. After
+`npm run test:dev-test-game-core-loop-admin-proof`, the checklist consumes
+`target/dev-test-game/core-loop-admin-proof.json` and attaches only the seeded
+admin overview-to-local-core-loop-detail browser proof to the existing local
+core-loop lane. After
 `npm run test:dev-test-game-hardening-admin-proof`, the checklist consumes
 `target/dev-test-game/hardening-admin-proof.json` and attaches only the seeded
 admin overview-to-local-hardening-detail browser proof to the existing local

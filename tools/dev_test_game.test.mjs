@@ -278,6 +278,22 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) => item.id === "backup-restore-drill" && item.status === "unproven",
     ),
   );
+  const coreLoopReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    coreLoopAdminProofPath: "target/dev-test-game/core-loop-admin-proof.json",
+    coreLoopAdminProof: coreLoopAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(coreLoopReadiness);
+  assert.equal(
+    coreLoopReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-core-loop-proof",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-core-loop?game=<seeded-game>",
+  );
+  assert.equal(
+    coreLoopReadiness.generatedFrom.coreLoopAdminProof,
+    "target/dev-test-game/core-loop-admin-proof.json",
+  );
   const hardeningReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     hardeningAdminProofPath: "target/dev-test-game/hardening-admin-proof.json",
@@ -642,6 +658,34 @@ function identityAdminProofFixture() {
         "admin-audit-surface",
       ],
       visibleSessions: ["admin", "host", "player"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function coreLoopAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-core-loop-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-core-loop-admin-surface",
+    proofBoundary: "Local admin core-loop proof only.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-core-loop",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: ["core-loop", "action-loop", "private-channel"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

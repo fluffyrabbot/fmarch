@@ -593,6 +593,53 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   });
 });
 
+test("admin route data exposes local core loop proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
+  assert.equal(coreLoop.label, "Local core loop");
+  assert.equal(coreLoop.status, "3 core loop lanes passed");
+  assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
+  assert.deepEqual(
+    coreLoop.checks.map((check) => check.id),
+    ["core-loop", "action-loop", "private-channel"],
+  );
+  assert.deepEqual(coreLoop.artifactSummary, {
+    game: "game-a",
+    roleCount: 4,
+    laneCount: 10,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local core loop detail data carries lane rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-core-loop",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local core loop");
+  assert.equal(data.audit.id, "local-core-loop");
+  assert.equal(data.audit.checks.length, 3);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["core-loop", "passed"],
+      ["action-loop", "passed"],
+      ["private-channel", "passed"],
+    ],
+  );
+});
+
 test("admin local hardening detail data carries lane rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: "local-hardening",

@@ -128,7 +128,11 @@ export async function buildAdminRouteData({
           appendLocalReleaseReadinessAudit(
             appendLocalSeedFixtureAudit(
               appendLocalOpsArtifactsAudit(
-                appendLocalHardeningAudit(coldData.audit, proofRun, { game }),
+                appendLocalHardeningAudit(
+                  appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                  proofRun,
+                  { game },
+                ),
                 opsArtifacts,
                 { game },
               ),
@@ -509,6 +513,71 @@ export function normalizeLocalReleaseReadinessAudit(
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalCoreLoopAudit(audit, proofRun, { game }) {
+  const row = normalizeLocalCoreLoopAudit(proofRun, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
+  if (
+    proofRun === null ||
+    typeof proofRun !== "object" ||
+    proofRun.version !== 1 ||
+    proofRun.proof !== "dev-test-game-proof-run" ||
+    proofRun.status !== "passed" ||
+    proofRun.scope !== "local-dev-test-game-harness" ||
+    proofRun.releaseReady !== false ||
+    proofRun.productionReady !== false
+  ) {
+    return null;
+  }
+  const requiredLaneIds = ["core-loop", "action-loop", "private-channel"];
+  const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
+  const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+  if (
+    requiredLaneIds.some((id) => laneById.get(id)?.status !== "passed") ||
+    proofRun.session?.verificationStatus !== "passed"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: "local-core-loop",
+    label: "Local core loop",
+    status: `${requiredLaneIds.length} core loop lanes passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local core-loop proof",
+    boundaryDetail:
+      proofRun.proofBoundary ??
+      "Local dev-test-game proof-run core loop lanes without hosted release claims.",
+    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-core-loop",
+    }),
+    checks: Object.freeze(
+      requiredLaneIds.map((id) => {
+        const lane = laneById.get(id);
+        return Object.freeze({
+          id,
+          status: String(lane.status),
+        });
+      }),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(proofRun.session?.game ?? ""),
+      roleCount: Array.isArray(proofRun.session?.roles)
+        ? proofRun.session.roles.length
+        : 0,
+      laneCount: lanes.length,
+      releaseReady: proofRun.releaseReady === true,
+      productionReady: proofRun.productionReady === true,
     }),
   });
 }

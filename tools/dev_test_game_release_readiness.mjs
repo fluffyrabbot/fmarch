@@ -8,6 +8,10 @@ export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultProofPath = path.join(artifactDir, "proof-run.json");
+const defaultCoreLoopAdminProofPath = path.join(
+  artifactDir,
+  "core-loop-admin-proof.json",
+);
 const defaultHardeningAdminProofPath = path.join(
   artifactDir,
   "hardening-admin-proof.json",
@@ -58,6 +62,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
+  const coreLoopAdminProofEvidence = options.coreLoopAdminProof
+    ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
+        path:
+          options.coreLoopAdminProofPath ??
+          "target/dev-test-game/core-loop-admin-proof.json",
+        artifact: options.coreLoopAdminProofArtifact,
+      })
+    : undefined;
   const hardeningAdminProofEvidence = options.hardeningAdminProof
     ? validateDevTestGameHardeningAdminProof(options.hardeningAdminProof, {
         path:
@@ -140,6 +152,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: sourcePath,
       laneIds: ["core-loop", "action-loop", "private-channel"],
+      ...(coreLoopAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: coreLoopAdminProofEvidence }),
     },
     {
       id: "local-hardening-proof",
@@ -308,6 +323,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofRun: sourcePath,
       proofGeneratedAt: proof.generatedAt,
       game: proof.session.game,
+      ...(coreLoopAdminProofEvidence === undefined
+        ? {}
+        : { coreLoopAdminProof: coreLoopAdminProofEvidence.path }),
       ...(hardeningAdminProofEvidence === undefined
         ? {}
         : { hardeningAdminProof: hardeningAdminProofEvidence.path }),
@@ -352,6 +370,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             evidence: {
+              ...(coreLoopAdminProofEvidence === undefined
+                ? {}
+                : { coreLoop: { adminRoleSurface: coreLoopAdminProofEvidence } }),
               ...(hardeningAdminProofEvidence === undefined
                 ? {}
                 : { hardening: { adminRoleSurface: hardeningAdminProofEvidence } }),
@@ -502,6 +523,45 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
       ? {}
       : { artifact: options.proofArtifact }),
     ...(options.dumpArtifact === undefined ? {} : { dumpArtifact: options.dumpArtifact }),
+  };
+}
+
+export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
+  const requiredChecks = ["core-loop", "action-loop", "private-channel"];
+  if (proof?.version !== 1) {
+    throw new Error(`core-loop admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-core-loop-admin-proof") {
+    throw new Error(`unexpected core-loop admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`core-loop admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-core-loop-admin-surface") {
+    throw new Error(`core-loop admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("core-loop admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("core-loop admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`core-loop admin proof missing visible check: ${checkId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/core-loop-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
 
@@ -1070,6 +1130,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
   const [
+    coreLoopAdminProofOptions,
     hardeningAdminProofOptions,
     backupRestoreOptions,
     backupAdminProofOptions,
@@ -1080,6 +1141,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     opsAdminProofOptions,
     seedAdminProofOptions,
   ] = await Promise.all([
+      readOptionalCoreLoopAdminProof(),
       readOptionalHardeningAdminProof(),
       readOptionalBackupRestoreArtifacts(),
       readOptionalBackupAdminProof(),
@@ -1092,6 +1154,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
+    ...(coreLoopAdminProofOptions ?? {}),
     ...(hardeningAdminProofOptions ?? {}),
     ...(backupRestoreOptions ?? {}),
     ...(backupAdminProofOptions ?? {}),
@@ -1109,6 +1172,21 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   console.log(
     `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
   );
+}
+
+async function readOptionalCoreLoopAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultCoreLoopAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    coreLoopAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    coreLoopAdminProofPath: path.relative(repoRoot, proofPath),
+    coreLoopAdminProofArtifact: artifact,
+  };
 }
 
 async function readOptionalHardeningAdminProof() {
