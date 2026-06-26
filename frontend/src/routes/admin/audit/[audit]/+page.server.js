@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import {
   readLocalBackupRestoreProof,
+  readLocalDevTestGameProofRun,
   readLocalIdentityAdapterProof,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
@@ -24,6 +25,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     apiBaseUrl,
     sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
     identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
+    proofRun: await readLocalDevTestGameProofRun(),
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),

@@ -561,6 +561,63 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   });
 });
 
+test("admin route data exposes local hardening proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  const hardening = data.audit.find((item) => item.id === "local-hardening");
+  assert.equal(hardening.label, "Local multiplayer hardening");
+  assert.equal(hardening.status, "6 hardening lanes passed");
+  assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
+  assert.deepEqual(
+    hardening.checks.map((check) => check.id),
+    [
+      "idempotent-retry",
+      "reconnect-recovery",
+      "stale-player-vote",
+      "concurrent-vote-race",
+      "stale-action-conflict",
+      "stale-host-control",
+    ],
+  );
+  assert.deepEqual(hardening.artifactSummary, {
+    game: "game-a",
+    roleCount: 4,
+    laneCount: 10,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local hardening detail data carries lane rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-hardening",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
+  assert.equal(data.audit.id, "local-hardening");
+  assert.equal(data.audit.checks.length, 6);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["idempotent-retry", "passed"],
+      ["reconnect-recovery", "passed"],
+      ["stale-player-vote", "passed"],
+      ["concurrent-vote-race", "passed"],
+      ["stale-action-conflict", "passed"],
+      ["stale-host-control", "passed"],
+    ],
+  );
+});
+
 test("admin local ops artifact detail data carries check rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: "local-ops-artifacts",
@@ -907,6 +964,39 @@ function identityLifecycleAuditFixture() {
         metadata: {},
       },
     ],
+  };
+}
+
+function proofRunFixture() {
+  const lanes = [
+    "browser-entry",
+    "core-loop",
+    "action-loop",
+    "private-channel",
+    "idempotent-retry",
+    "reconnect-recovery",
+    "stale-player-vote",
+    "concurrent-vote-race",
+    "stale-action-conflict",
+    "stale-host-control",
+  ].map((id) => ({ id, label: id, status: "passed", evidence: {} }));
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-run",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-harness",
+    proofBoundary: "Local dev-test-game proof-run.",
+    artifacts: {
+      proofRun: "target/dev-test-game/proof-run.json",
+    },
+    session: {
+      game: "game-a",
+      verificationStatus: "passed",
+      roles: ["host", "player", "actionPlayer", "deniedPlayer"],
+    },
+    lanes,
   };
 }
 

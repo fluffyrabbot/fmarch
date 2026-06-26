@@ -8,6 +8,10 @@ export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultProofPath = path.join(artifactDir, "proof-run.json");
+const defaultHardeningAdminProofPath = path.join(
+  artifactDir,
+  "hardening-admin-proof.json",
+);
 const defaultBackupRestoreProofPath = path.join(
   repoRoot,
   "target",
@@ -54,6 +58,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
+  const hardeningAdminProofEvidence = options.hardeningAdminProof
+    ? validateDevTestGameHardeningAdminProof(options.hardeningAdminProof, {
+        path:
+          options.hardeningAdminProofPath ??
+          "target/dev-test-game/hardening-admin-proof.json",
+        artifact: options.hardeningAdminProofArtifact,
+      })
+    : undefined;
   const backupRestoreEvidence = options.backupRestoreProof
     ? validateDevTestGameBackupRestoreProof(options.backupRestoreProof, {
         proofPath:
@@ -142,6 +154,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-action-conflict",
         "stale-host-control",
       ],
+      ...(hardeningAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: hardeningAdminProofEvidence }),
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -293,6 +308,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofRun: sourcePath,
       proofGeneratedAt: proof.generatedAt,
       game: proof.session.game,
+      ...(hardeningAdminProofEvidence === undefined
+        ? {}
+        : { hardeningAdminProof: hardeningAdminProofEvidence.path }),
       ...(backupRestoreEvidence === undefined
         ? {}
         : {
@@ -334,6 +352,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             evidence: {
+              ...(hardeningAdminProofEvidence === undefined
+                ? {}
+                : { hardening: { adminRoleSurface: hardeningAdminProofEvidence } }),
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -481,6 +502,52 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
       ? {}
       : { artifact: options.proofArtifact }),
     ...(options.dumpArtifact === undefined ? {} : { dumpArtifact: options.dumpArtifact }),
+  };
+}
+
+export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "idempotent-retry",
+    "reconnect-recovery",
+    "stale-player-vote",
+    "concurrent-vote-race",
+    "stale-action-conflict",
+    "stale-host-control",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`hardening admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-hardening-admin-proof") {
+    throw new Error(`unexpected hardening admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`hardening admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-hardening-admin-surface") {
+    throw new Error(`hardening admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("hardening admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("hardening admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`hardening admin proof missing visible check: ${checkId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/hardening-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
 
@@ -1003,6 +1070,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
   const [
+    hardeningAdminProofOptions,
     backupRestoreOptions,
     backupAdminProofOptions,
     opsArtifactsOptions,
@@ -1012,6 +1080,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     opsAdminProofOptions,
     seedAdminProofOptions,
   ] = await Promise.all([
+      readOptionalHardeningAdminProof(),
       readOptionalBackupRestoreArtifacts(),
       readOptionalBackupAdminProof(),
       readOptionalOpsArtifacts(),
@@ -1023,6 +1092,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
+    ...(hardeningAdminProofOptions ?? {}),
     ...(backupRestoreOptions ?? {}),
     ...(backupAdminProofOptions ?? {}),
     ...(opsArtifactsOptions ?? {}),
@@ -1039,6 +1109,21 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   console.log(
     `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
   );
+}
+
+async function readOptionalHardeningAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultHardeningAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hardeningAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    hardeningAdminProofPath: path.relative(repoRoot, proofPath),
+    hardeningAdminProofArtifact: artifact,
+  };
 }
 
 async function readOptionalOpsArtifacts() {

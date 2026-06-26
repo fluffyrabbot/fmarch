@@ -86,6 +86,7 @@ target/dev-test-game/seed-admin-proof.json
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/release-admin-proof.json
+target/dev-test-game/hardening-admin-proof.json
 target/dev-test-game/backup-admin-proof.json
 target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/named-games.json
@@ -234,6 +235,10 @@ plus API votecount, keeps a second action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` and refreshes to D02
 without the stale action control, and the host page sends a stale `UnlockThread`
 and verifies the `Reject PhaseLocked` recovery message while D02 remains open.
+The same local hardening evidence is inspectable from the seeded admin role:
+`target/dev-test-game/hardening-admin-proof.json` is written by clicking from
+the admin overview into the native local multiplayer-hardening detail route and
+verifying the six hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -244,6 +249,10 @@ production/release readiness.
 The release-readiness checklist is intentionally not a release gate. It keeps
 `releaseReady: false` and `productionReady: false`. Without an explicit
 backup/restore artifact, it keeps `backup-restore-drill` unproven. After
+`npm run test:dev-test-game-hardening-admin-proof`, the checklist consumes
+`target/dev-test-game/hardening-admin-proof.json` and attaches only the seeded
+admin overview-to-local-hardening-detail browser proof to the existing local
+hardening lane; exhaustive race coverage remains unproven. After
 `npm run test:dev-test-game-backup-restore`, the checklist consumes
 `target/live-stack-backup-restore-drill/local-backup-restore-proof.json` plus
 `target/live-stack-backup-restore-drill/local-live-stack.dump`, then attaches

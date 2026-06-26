@@ -3,6 +3,7 @@ import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import {
   readLocalBackupRestoreProof,
+  readLocalDevTestGameProofRun,
   readLocalIdentityAdapterProof,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
@@ -26,6 +27,7 @@ export async function load({ cookies, locals, fetch, url }) {
     apiBaseUrl,
     sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
+    proofRun: await readLocalDevTestGameProofRun(),
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),

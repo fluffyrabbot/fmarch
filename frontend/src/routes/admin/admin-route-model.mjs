@@ -20,6 +20,7 @@ export async function buildAdminRouteData({
   apiBaseUrl = "",
   sessionToken = null,
   identityPrincipalUserId = "host_h",
+  proofRun = null,
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
@@ -126,7 +127,11 @@ export async function buildAdminRouteData({
         appendLocalBackupRestoreAudit(
           appendLocalReleaseReadinessAudit(
             appendLocalSeedFixtureAudit(
-              appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+              appendLocalOpsArtifactsAudit(
+                appendLocalHardeningAudit(coldData.audit, proofRun, { game }),
+                opsArtifacts,
+                { game },
+              ),
               seedFixtureSummary,
               { game },
             ),
@@ -184,6 +189,7 @@ export async function buildAdminAuditDetailData({
   apiBaseUrl = "",
   sessionToken = null,
   identityPrincipalUserId = "host_h",
+  proofRun = null,
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
@@ -198,6 +204,7 @@ export async function buildAdminAuditDetailData({
     apiBaseUrl,
     sessionToken,
     identityPrincipalUserId,
+    proofRun,
     opsArtifacts,
     seedFixtureSummary,
     releaseReadinessChecklist,
@@ -502,6 +509,78 @@ export function normalizeLocalReleaseReadinessAudit(
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalHardeningAudit(audit, proofRun, { game }) {
+  const row = normalizeLocalHardeningAudit(proofRun, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalHardeningAudit(proofRun, { game }) {
+  if (
+    proofRun === null ||
+    typeof proofRun !== "object" ||
+    proofRun.version !== 1 ||
+    proofRun.proof !== "dev-test-game-proof-run" ||
+    proofRun.status !== "passed" ||
+    proofRun.scope !== "local-dev-test-game-harness" ||
+    proofRun.releaseReady !== false ||
+    proofRun.productionReady !== false
+  ) {
+    return null;
+  }
+  const requiredLaneIds = [
+    "idempotent-retry",
+    "reconnect-recovery",
+    "stale-player-vote",
+    "concurrent-vote-race",
+    "stale-action-conflict",
+    "stale-host-control",
+  ];
+  const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
+  const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+  if (
+    requiredLaneIds.some((id) => laneById.get(id)?.status !== "passed") ||
+    proofRun.session?.verificationStatus !== "passed"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: "local-hardening",
+    label: "Local multiplayer hardening",
+    status: `${requiredLaneIds.length} hardening lanes passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local multiplayer-hardening proof",
+    boundaryDetail:
+      proofRun.proofBoundary ??
+      "Local dev-test-game proof-run hardening lanes without exhaustive race claims.",
+    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-hardening",
+    }),
+    checks: Object.freeze(
+      requiredLaneIds.map((id) => {
+        const lane = laneById.get(id);
+        return Object.freeze({
+          id,
+          status: String(lane.status),
+        });
+      }),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(proofRun.session?.game ?? ""),
+      roleCount: Array.isArray(proofRun.session?.roles)
+        ? proofRun.session.roles.length
+        : 0,
+      laneCount: lanes.length,
+      releaseReady: proofRun.releaseReady === true,
+      productionReady: proofRun.productionReady === true,
     }),
   });
 }

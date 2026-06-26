@@ -278,6 +278,22 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) => item.id === "backup-restore-drill" && item.status === "unproven",
     ),
   );
+  const hardeningReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    hardeningAdminProofPath: "target/dev-test-game/hardening-admin-proof.json",
+    hardeningAdminProof: hardeningAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(hardeningReadiness);
+  assert.equal(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hardening-proof",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-hardening?game=<seeded-game>",
+  );
+  assert.equal(
+    hardeningReadiness.generatedFrom.hardeningAdminProof,
+    "target/dev-test-game/hardening-admin-proof.json",
+  );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
@@ -626,6 +642,41 @@ function identityAdminProofFixture() {
         "admin-audit-surface",
       ],
       visibleSessions: ["admin", "host", "player"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function hardeningAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hardening-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hardening-admin-surface",
+    proofBoundary: "Local admin hardening proof only.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-hardening",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "idempotent-retry",
+        "reconnect-recovery",
+        "stale-player-vote",
+        "concurrent-vote-race",
+        "stale-action-conflict",
+        "stale-host-control",
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
