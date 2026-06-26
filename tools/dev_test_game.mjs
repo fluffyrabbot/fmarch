@@ -14,6 +14,7 @@ const sessionMdPath = path.join(artifactDir, "session.md");
 const namedGamesPath = path.join(artifactDir, "named-games.json");
 export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
 export const defaultGameName = "local";
+export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
@@ -32,6 +33,7 @@ let seedMode;
 let commandEnvelopeId = 1;
 let serverOutput = "";
 let apiServerExit;
+let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   args = parseArgs(rawArgs);
@@ -51,6 +53,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
   apiBaseUrl = args.apiBaseUrl;
   frontendBaseUrl = args.frontendBaseUrl;
+  apiStartupTimeoutMs = args.apiStartupTimeoutMs ?? defaultApiStartupTimeoutMs;
   commandEnvelopeId = 1;
   serverOutput = "";
   apiServerExit = undefined;
@@ -124,6 +127,7 @@ async function startApi() {
     await assertPortAvailable(port, "API");
   }
   const baseUrl = `http://${host}:${port}`;
+  console.log(`starting Rust API on ${baseUrl} with cargo run -p server`);
   apiServer = spawn("cargo", ["run", "-p", "server"], {
     cwd: repoRoot,
     env: {
@@ -135,11 +139,12 @@ async function startApi() {
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  console.log(`Rust API process pid: ${apiServer.pid}`);
   apiServer.stdout.on("data", (chunk) => {
-    serverOutput += chunk.toString();
+    recordServerOutput(chunk);
   });
   apiServer.stderr.on("data", (chunk) => {
-    serverOutput += chunk.toString();
+    recordServerOutput(chunk);
   });
   apiServer.once("error", (error) => {
     apiServerExit = { error };
@@ -147,12 +152,17 @@ async function startApi() {
   apiServer.once("exit", (code, signal) => {
     apiServerExit = { code, signal };
   });
-  await waitForHealth(baseUrl, () => {
-    if (apiServerExit !== undefined) {
-      throw new Error(
-        `rust server exited before healthcheck: ${JSON.stringify(apiServerExit)}\n${serverOutput}`,
-      );
-    }
+  await waitForHealth(baseUrl, {
+    label: "Rust API",
+    timeoutMs: apiStartupTimeoutMs,
+    progress: () => lastServerOutputLine(),
+    beforeRetry: () => {
+      if (apiServerExit !== undefined) {
+        throw new Error(
+          `rust server exited before healthcheck: ${JSON.stringify(apiServerExit)}\n${serverOutput}`,
+        );
+      }
+    },
   });
   return baseUrl;
 }
@@ -488,21 +498,43 @@ async function verifyRoleEntry({ browser, session, game }) {
   }
 }
 
-async function waitForHealth(baseUrl, beforeRetry = () => {}) {
-  const deadline = Date.now() + 240000;
+async function waitForHealth(baseUrl, options = {}) {
+  const {
+    beforeRetry = () => {},
+    label = "server",
+    progress = () => "",
+    timeoutMs = 240000,
+  } = typeof options === "function" ? { beforeRetry: options } : options;
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  let nextProgress = started + 10000;
   while (Date.now() < deadline) {
     beforeRetry();
     try {
       const response = await fetchWithTimeout(`${baseUrl}/healthz`, {}, 1000);
       if (response.ok) {
+        console.log(`${label} healthy at ${baseUrl}/healthz`);
         return;
       }
     } catch {
       // Server is still compiling, migrating, or binding.
     }
+    if (Date.now() >= nextProgress) {
+      const elapsedSeconds = Math.round((Date.now() - started) / 1000);
+      const latest = progress();
+      const suffix = latest === "" ? "" : `; latest: ${latest}`;
+      console.log(`${label} still waiting after ${elapsedSeconds}s${suffix}`);
+      nextProgress += 10000;
+    }
     await delay(250);
   }
-  throw new Error(`server did not become healthy at ${baseUrl}/healthz`);
+  const latest = progress();
+  const suffix = latest === "" ? "" : ` Latest output: ${latest}`;
+  throw new Error(
+    `${label} did not become healthy at ${baseUrl}/healthz within ${Math.round(
+      timeoutMs / 1000,
+    )}s.${suffix}`,
+  );
 }
 
 async function fetchJson(url, options = {}, timeoutMs = 15000) {
@@ -693,6 +725,9 @@ export function parseArgs(values) {
       case "--api-port":
         parsed.apiPort = parsePositiveInt(requireValue(values, ++index, value), value);
         break;
+      case "--api-startup-timeout-ms":
+        parsed.apiStartupTimeoutMs = parsePositiveInt(requireValue(values, ++index, value), value);
+        break;
       case "--frontend-base-url":
         parsed.frontendBaseUrl = requireValue(values, ++index, value).replace(/\/$/, "");
         break;
@@ -742,6 +777,25 @@ function parsePositiveInt(value, flag) {
   return parsed;
 }
 
+function recordServerOutput(chunk) {
+  const text = chunk.toString();
+  serverOutput += text;
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (/^(Compiling|Finished|Running|Checking|Building|Downloading)\b/.test(trimmed)) {
+      console.log(`[api] ${trimmed}`);
+    }
+  }
+}
+
+function lastServerOutputLine() {
+  const lines = serverOutput
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.at(-1) ?? "";
+}
+
 function requireValue(values, index, flag) {
   const value = values[index];
   if (value === undefined || value.startsWith("--")) {
@@ -759,6 +813,7 @@ creates browser-login tokens, prints role URLs, and writes target/dev-test-game/
 Options:
   --api-base-url URL       Use an existing API instead of starting cargo run -p server
   --api-port PORT          Port for a started API
+  --api-startup-timeout-ms Milliseconds to wait for a started API (default: ${defaultApiStartupTimeoutMs})
   --frontend-base-url URL  Use an existing frontend instead of starting Vite
   --database-url URL       DATABASE_URL for a started API (default: ${defaultDatabaseUrl})
   --frontend-port PORT     Port for a started frontend

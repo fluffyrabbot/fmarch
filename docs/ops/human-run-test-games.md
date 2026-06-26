@@ -44,6 +44,11 @@ The command starts a Rust API, starts the SvelteKit frontend, seeds one
 prints role entry URLs for `admin`, `host`, `player`, and `cohost`, and keeps the
 servers alive until Ctrl-C.
 
+On a cold Rust target directory, the API step can spend a few minutes compiling
+before `/healthz` is reachable. The harness prints the selected API URL, the
+Cargo process id, Cargo compile progress, and periodic health-wait updates so a
+real build is distinguishable from a stuck server.
+
 It also writes:
 
 ```text
