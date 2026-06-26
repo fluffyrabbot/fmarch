@@ -49,6 +49,12 @@ before `/healthz` is reachable. The harness prints the selected API URL, the
 Cargo process id, Cargo compile progress, and periodic health-wait updates so a
 real build is distinguishable from a stuck server.
 
+To make that compile phase explicit before starting the browser harness, run:
+
+```sh
+npm run dev:test-game:prebuild
+```
+
 It also writes:
 
 ```text
@@ -99,9 +105,9 @@ The live local gate is:
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
 ```
 
-That live gate starts the API and frontend, seeds a fresh `live-proof` game,
-verifies host and player browser entry through `/auth/login`, then checks the
-generated session artifact.
+That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
+and frontend, seeds a fresh `live-proof` game, verifies host and player browser
+entry through `/auth/login`, then checks the generated session artifact.
 
 ## Boundary
 
