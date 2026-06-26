@@ -4,6 +4,7 @@
   "scripts": {
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
+    "dev:test-game:local": "node tools/dev_test_game_local.mjs",
     "dev:test-game": "node tools/dev_test_game.mjs",
     "test:dev-postgres-contract": "node --test tools/dev_postgres.test.mjs",
     "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs",
