@@ -48,7 +48,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   const selection = selectGame({ args, gameName, registry });
   game = selection.game;
   seedMode = selection.seedMode;
-  tokenPrefix = args.tokenPrefix ?? `dev-test-${gameName}-${game}`;
+  tokenPrefix = args.tokenPrefix ?? `dev-test-${gameName}-${game}-${crypto.randomUUID()}`;
   tokens = createTokenSet(tokenPrefix);
   expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
   apiBaseUrl = args.apiBaseUrl;
@@ -281,26 +281,30 @@ async function createSessions() {
   });
 
   return {
-    admin: await createGrantedSession({
-      token: tokens.admin,
+    admin: await createInviteCredential({
+      inviteToken: tokens.admin,
       principalUserId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
       returnTo: "/admin",
+      expectedCapabilityKind: "GlobalAdmin",
     }),
-    host: await createGrantedSession({
-      token: tokens.host,
+    host: await createInviteCredential({
+      inviteToken: tokens.host,
       principalUserId: "host_h",
       returnTo: `/g/${game}/host`,
+      expectedCapabilityKind: "HostOf",
     }),
-    player: await createGrantedSession({
-      token: tokens.player,
+    player: await createInviteCredential({
+      inviteToken: tokens.player,
       principalUserId: "player-mira",
       returnTo: `/g/${game}`,
+      expectedCapabilityKind: "SlotOccupant",
     }),
-    cohost: await createGrantedSession({
-      token: tokens.cohost,
+    cohost: await createInviteCredential({
+      inviteToken: tokens.cohost,
       principalUserId: "cohost_c",
       returnTo: `/g/${game}/host`,
+      expectedCapabilityKind: "CohostOf",
     }),
   };
 }
@@ -315,34 +319,48 @@ export function createTokenSet(prefix) {
   });
 }
 
-async function createGrantedSession({
-  token,
+async function createInviteCredential({
+  inviteToken,
   principalUserId,
   returnTo,
   globalCapabilities = [],
+  expectedCapabilityKind,
 }) {
-  const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+  const invite = await fetchJson(`${apiBaseUrl}/auth/invites`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${tokens.rootAdmin}`,
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      token,
+      invite_token: inviteToken,
       principal_user_id: principalUserId,
       expires_at: expiresAt,
       global_capabilities: globalCapabilities,
     }),
   });
-  const capabilityKinds = (session.capabilities ?? []).map((capability) => capability.kind);
   return {
-    principalUserId: session.principal_user_id,
-    token,
-    loginUrl: `${frontendBaseUrl ?? "(frontend pending)"}/auth/login?returnTo=${encodeURIComponent(returnTo)}`,
+    principalUserId: invite.principal_user_id,
+    credentialKind: "invite",
+    token: inviteToken,
+    inviteToken,
+    loginUrl: roleLoginUrl({
+      frontendBaseUrl: frontendBaseUrl ?? "(frontend pending)",
+      session: { inviteToken, returnTo },
+    }),
     directUrl: frontendBaseUrl === undefined ? null : `${frontendBaseUrl}${returnTo}`,
     returnTo,
-    capabilityKinds,
+    expectedCapabilityKind,
+    globalCapabilities: invite.global_capabilities ?? [],
   };
+}
+
+function roleLoginUrl({ frontendBaseUrl, session }) {
+  const params = new URLSearchParams({ returnTo: session.returnTo });
+  if (session.credentialKind === "invite" || session.inviteToken !== undefined) {
+    params.set("invite", session.inviteToken);
+  }
+  return `${frontendBaseUrl}/auth/login?${params.toString()}`;
 }
 
 async function sendCommand(principalUserId, command) {
@@ -395,9 +413,7 @@ export function buildSessionCard({
       role,
       {
         ...session,
-        loginUrl: `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
-          session.returnTo,
-        )}`,
+        loginUrl: roleLoginUrl({ frontendBaseUrl, session }),
         directUrl: `${frontendBaseUrl}${session.returnTo}`,
       },
     ]),
@@ -431,8 +447,8 @@ function printSessionCard(card) {
   console.log(`artifact: ${card.artifacts.markdown}`);
   for (const [role, session] of Object.entries(card.sessions)) {
     console.log(`\n${role}`);
-    console.log(`  url:   ${session.loginUrl}`);
-    console.log(`  token: ${session.token}`);
+    console.log(`  url:    ${session.loginUrl}`);
+    console.log(`  invite: ${session.inviteToken ?? session.token}`);
   }
 }
 
@@ -449,14 +465,30 @@ export function markdownSessionCard(card) {
     `- frontend: ${card.frontendBaseUrl}`,
     `- api: ${card.apiBaseUrl}`,
     "",
-    "Open a role login URL, paste that role's token, and submit.",
+    "Open a role invite URL and submit. The invite token is prefilled in the URL and repeated below for recovery/debug use.",
     "",
   ];
   for (const [role, session] of Object.entries(card.sessions)) {
-    lines.push(`## ${role}`, "", `URL: ${session.loginUrl}`, "", `Token: ${session.token}`, "");
+    lines.push(
+      `## ${role}`,
+      "",
+      `Invite URL: ${session.loginUrl}`,
+      "",
+      `Invite token: ${session.inviteToken ?? session.token}`,
+      "",
+    );
   }
   if (card.verification !== undefined) {
     lines.push("## Verification", "", `Roles: ${card.verification.roles.join(", ")}`, "");
+    if (card.verification.sessions !== undefined) {
+      for (const [role, verified] of Object.entries(card.verification.sessions)) {
+        lines.push(
+          "",
+          `- ${role}: ${verified.capabilityKinds.join(", ")} via ${verified.cookie.valuePrefix}...`,
+        );
+      }
+      lines.push("");
+    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -465,9 +497,16 @@ async function verifySessionCard(card) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   const roles = [];
+  const sessions = {};
   try {
     for (const role of ["host", "player"]) {
-      await verifyRoleEntry({ browser, session: card.sessions[role], game: card.game });
+      sessions[role] = await verifyRoleEntry({
+        browser,
+        session: card.sessions[role],
+        game: card.game,
+        apiBaseUrl: card.apiBaseUrl,
+        frontendBaseUrl: card.frontendBaseUrl,
+      });
       roles.push(role);
     }
   } finally {
@@ -476,23 +515,58 @@ async function verifySessionCard(card) {
   return {
     status: "passed",
     roles,
+    sessions,
   };
 }
 
-async function verifyRoleEntry({ browser, session, game }) {
+async function verifyRoleEntry({ browser, session, game, apiBaseUrl, frontendBaseUrl }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   try {
     await page.goto(session.loginUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("auth-login-token").fill(session.token);
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    const credential = session.inviteToken ?? session.token;
+    const prefilled = await page.getByTestId("auth-login-token").inputValue();
+    if (prefilled !== credential) {
+      await page.getByTestId("auth-login-token").fill(credential);
+    }
     await Promise.all([
       page.waitForURL(session.directUrl, { timeout: 15000 }),
       page.getByTestId("auth-login-submit").click(),
     ]);
     await page.waitForLoadState("networkidle");
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    if (sessionCookie === undefined) {
+      throw new Error(`${session.principalUserId} login did not set fmarch_session cookie`);
+    }
+    const resolved = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
+    });
+    const capabilityKinds = (resolved.capabilities ?? []).map((capability) => capability.kind);
+    if (
+      session.expectedCapabilityKind !== undefined &&
+      !capabilityKinds.includes(session.expectedCapabilityKind)
+    ) {
+      throw new Error(
+        `${session.principalUserId} session missing ${session.expectedCapabilityKind}: ${JSON.stringify(
+          resolved,
+        )}`,
+      );
+    }
     const body = await page.locator("body").innerText();
     if (!body.includes(game)) {
       throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
     }
+    return {
+      principalUserId: resolved.principal_user_id,
+      capabilityKinds,
+      cookie: {
+        httpOnly: sessionCookie.httpOnly,
+        sameSite: sessionCookie.sameSite,
+        secure: sessionCookie.secure,
+        valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+      },
+    };
   } finally {
     await page.close();
   }

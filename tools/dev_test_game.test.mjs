@@ -85,7 +85,7 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
 });
 
-test("session card and markdown include role entry URLs and tokens", () => {
+test("session card and markdown include role invite URLs and tokens", () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
   const card = buildSessionCard({
@@ -99,15 +99,19 @@ test("session card and markdown include role entry URLs and tokens", () => {
     sessions: {
       host: {
         principalUserId: "host_h",
+        credentialKind: "invite",
         token: tokens.host,
+        inviteToken: tokens.host,
         returnTo: `/g/${game}/host`,
-        capabilityKinds: ["HostOf"],
+        expectedCapabilityKind: "HostOf",
       },
       player: {
         principalUserId: "player-mira",
+        credentialKind: "invite",
         token: tokens.player,
+        inviteToken: tokens.player,
         returnTo: `/g/${game}`,
-        capabilityKinds: ["SlotOccupant"],
+        expectedCapabilityKind: "SlotOccupant",
       },
     },
   });
@@ -116,11 +120,15 @@ test("session card and markdown include role entry URLs and tokens", () => {
   assert.equal(card.seedCommandCount, 1);
   assert.equal(
     card.sessions.host.loginUrl,
-    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost`,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host`,
   );
+  assert.equal(card.sessions.host.credentialKind, "invite");
+  assert.equal(card.sessions.host.inviteToken, "dev-test-card-host");
   assert.equal(card.sessions.player.token, "dev-test-card-player");
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
+  assert(markdown.includes("Open a role invite URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
+  assert(markdown.includes("Invite token: dev-test-card-player"));
 });

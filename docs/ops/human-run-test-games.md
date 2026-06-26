@@ -55,9 +55,9 @@ DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run dev:test-gam
 ```
 
 The command starts a Rust API, starts the SvelteKit frontend, seeds one
-`mafiascum` D01 game through `/commands`, creates opaque browser-login tokens,
-prints role entry URLs for `admin`, `host`, `player`, and `cohost`, and keeps the
-servers alive until Ctrl-C.
+`mafiascum` D01 game through `/commands`, creates invite-backed browser role
+credentials for `admin`, `host`, `player`, and `cohost`, prints role entry URLs
+with the invite prefilled, and keeps the servers alive until Ctrl-C.
 
 On a cold Rust target directory, the API step can spend a few minutes compiling
 before `/healthz` is reachable. The harness prints the selected API URL, the
@@ -78,7 +78,8 @@ target/dev-test-game/session.md
 target/dev-test-game/named-games.json
 ```
 
-Open a role URL from `session.md`, paste that role's token, and submit.
+Open a role invite URL from `session.md` and submit. The invite token is
+prefilled in the URL and repeated in the artifact for recovery/debug use.
 
 ## Repeated Runs
 
@@ -122,11 +123,15 @@ DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-tes
 
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
-entry through `/auth/login`, then checks the generated session artifact.
+entry through `/auth/login`, checks that those browser sessions came from
+invite-issued `fmarch_session` cookies, verifies host/player capabilities
+through `/auth/session?game=...`, then checks the generated session artifact.
 
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer. It does
-not prove production auth, hosted deployment, multiplayer hardening, upload or
-transcode behavior, beta readiness, or rollback/delete semantics for existing
-append-only games.
+not prove production account identity, hosted deployment, multiplayer hardening,
+upload or transcode behavior, beta readiness, or rollback/delete semantics for
+existing append-only games. The harness still uses an internal root dev session
+only to mint local invites; production accounts/sessions/invites remain a later
+identity layer over the same role surfaces.

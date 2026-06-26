@@ -34,8 +34,20 @@ assert.match(session.frontendBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
 assert.match(session.apiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
 for (const role of ["admin", "cohost", "host", "player"]) {
   assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
-  assert.match(session.sessions[role].loginUrl, /\/auth\/login\?returnTo=/);
+  assert.equal(session.sessions[role].credentialKind, "invite", `${role} credential kind`);
+  assert.equal(session.sessions[role].inviteToken, session.sessions[role].token);
+  assert.match(session.sessions[role].loginUrl, /\/auth\/login\?returnTo=.*&invite=/);
 }
+assert.equal(
+  session.verification.sessions.host.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  session.verification.sessions.player.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(session.verification.sessions.host.cookie.valuePrefix, "invite-session-");
+assert.equal(session.verification.sessions.player.cookie.valuePrefix, "invite-session-");
 
 console.log(`dev test-game live proof passed for ${session.game}`);
 
