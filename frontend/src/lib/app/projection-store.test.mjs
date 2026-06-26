@@ -8,6 +8,7 @@ import {
 
 test("projection store refreshes cold-load keys and preserves failed projections", async () => {
   const snapshots = [];
+  const fetchRequests = [];
   const store = createProjectionStore({
     initialSnapshot: {
       thread: { posts: [] },
@@ -28,8 +29,9 @@ test("projection store refreshes cold-load keys and preserves failed projections
 
   const unsubscribe = store.subscribe((snapshot) => snapshots.push(snapshot));
   const refreshed = await store.refresh(["thread", "votecount"], {
-    fetchImpl: async (url) => {
-      if (url === "/thread") {
+    fetchImpl: async (url, options) => {
+      fetchRequests.push({ url, options });
+      if (url.startsWith("/thread?")) {
         return jsonResponse({ posts: [{ seq: 7, body: "cold load" }] });
       }
       return { ok: false, status: 503 };
@@ -44,6 +46,16 @@ test("projection store refreshes cold-load keys and preserves failed projections
   assert.equal(snapshots.length, 2);
   assert.equal(snapshots[0].thread.posts.length, 0);
   assert.equal(snapshots[1].thread.posts[0].body, "cold load");
+  assert.deepEqual(fetchRequests, [
+    {
+      url: "/thread?_fmarch_projection_refresh=1",
+      options: { cache: "no-store", headers: { accept: "application/json" } },
+    },
+    {
+      url: "/votecount?_fmarch_projection_refresh=2",
+      options: { cache: "no-store", headers: { accept: "application/json" } },
+    },
+  ]);
 });
 
 test("projection store applies server payloads through the registered normalizer", () => {

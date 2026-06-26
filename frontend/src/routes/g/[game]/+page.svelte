@@ -138,6 +138,8 @@
         });
       },
     });
+    window.__fmarchPlayerColdLoadEndpoints = data.coldLoad;
+    window.__fmarchPlayerResyncKeys = playerProjectionResyncKeys;
     window.__fmarchTriggerPlayerResync = async (fromSeq = 0) => {
       const recovery = await triggerPlayerLiveProjectionResync({
         windowRef: window,
@@ -150,7 +152,23 @@
       liveStatus = recovery.liveStatus;
       return recovery.snapshot;
     };
-    return () => connection?.close();
+    window.__fmarchClosePlayerLiveProjection = () => {
+      connection?.close();
+      liveStatus = recordPlayerLiveProjectionEvent({
+        windowRef: window,
+        message: { kind: "close" },
+        snapshot: null,
+        currentStatus: liveStatus,
+      });
+      return liveStatus;
+    };
+    return () => {
+      delete window.__fmarchTriggerPlayerResync;
+      delete window.__fmarchClosePlayerLiveProjection;
+      delete window.__fmarchPlayerColdLoadEndpoints;
+      delete window.__fmarchPlayerResyncKeys;
+      connection?.close();
+    };
   });
 
   async function submitPlayerCommand(action) {

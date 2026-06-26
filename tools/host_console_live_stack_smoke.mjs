@@ -1297,6 +1297,9 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     throw new Error(`player thread did not cold-load real post: ${firstPostText}`);
   }
 
+  let playerStep = "submit-vote";
+  let reconnectDebug = {};
+  let reconnectEvidence;
   const voteButton = page.getByText("Vote slot-2", { exact: true });
   const voteButtonBox = await voteButton.boundingBox();
   assertHitTarget(voteButtonBox, "player vote button");
@@ -1310,6 +1313,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         ?.getAttribute("data-state") === "ack",
   );
   try {
+    playerStep = "wait-live-vote-count-2";
     await page.waitForFunction(() => {
       return window.__fmarchLiveProjectionEvents?.some(
         (event) =>
@@ -1325,10 +1329,12 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       );
     });
 
+    playerStep = "withdraw-vote";
     const withdrawButton = page.getByText("Withdraw vote", { exact: true });
     const withdrawButtonBox = await withdrawButton.boundingBox();
     assertHitTarget(withdrawButtonBox, "player withdraw button");
     await withdrawButton.click();
+    playerStep = "wait-live-vote-count-1-after-withdraw";
     await page.waitForFunction(() => {
       const events = window.__fmarchLiveProjectionEvents ?? [];
       const countTwoIndex = events.findIndex(
@@ -1351,28 +1357,189 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         (row) => row.target === "slot-2" && row.count === 1,
       );
     });
-    await page.evaluate(async () => window.__fmarchTriggerPlayerResync(9002));
-    await page.waitForFunction(() => {
-      const events = window.__fmarchLiveProjectionEvents ?? [];
-      return events.some(
-        (event) =>
-          event?.kind === "resync-required" &&
-          event.fromSeq === 9002 &&
-          event.state === "recovered",
-      );
+    playerStep = "close-live-projection";
+    await page.waitForFunction(
+      () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+    );
+    await page.evaluate(() => window.__fmarchClosePlayerLiveProjection());
+    await page.waitForFunction(
+      () => window.__fmarchLiveProjectionStatus?.state === "closed",
+    );
+    const liveStatusBadge = page.getByTestId("player-live-status");
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-live-status"]')
+          ?.getAttribute("data-state") === "closed",
+    );
+    const closedStatus = await page.evaluate(
+      () => window.__fmarchLiveProjectionStatus,
+    );
+    const renderedClosedStatus = {
+      state: await liveStatusBadge.getAttribute("data-state"),
+      message: await liveStatusBadge.innerText(),
+    };
+    const reconnectPostBody = `Player reconnect resync proof ${game}`;
+    playerStep = "send-disconnected-thread-post";
+    const reconnectCommand = await sendCommand("player-seed", {
+      SubmitPost: {
+        game,
+        channel_id: "main",
+        actor_slot: "slot-3",
+        body: reconnectPostBody,
+      },
     });
-    await page.waitForFunction(() => {
-      const projection = window.__fmarchPlayerProjection;
-      return projection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 1,
+    playerStep = "wait-api-thread-post";
+    const apiThreadPost = await waitForMainThreadPost(reconnectPostBody);
+    playerStep = "probe-browser-thread-post";
+    reconnectDebug = {
+      reconnectPostBody,
+      reconnectCommand,
+      apiThreadPost,
+    };
+    const playerResyncPlan = await page.evaluate(() => ({
+      coldLoadEndpoints: window.__fmarchPlayerColdLoadEndpoints,
+      resyncKeys: window.__fmarchPlayerResyncKeys,
+    }));
+    let browserThreadPageBeforeResync;
+    try {
+      browserThreadPageBeforeResync = await page.evaluate(
+        async ({ endpoint, expectedBody }) => {
+          try {
+            const url = new URL(endpoint, window.location.href);
+            url.searchParams.set("_fmarch_browser_fetch_probe", expectedBody);
+            const response = await fetch(url.toString(), {
+              cache: "no-store",
+              headers: { accept: "application/json" },
+            });
+            const body = await response.json();
+            return {
+              endpoint: url.toString(),
+              ok: response.ok,
+              status: response.status,
+              postBodies: (body.posts ?? []).map((post) => post.body),
+              containsExpectedPost: (body.posts ?? []).some(
+                (post) => post.body === expectedBody,
+              ),
+            };
+          } catch (error) {
+            return {
+              endpoint,
+              ok: false,
+              status: null,
+              error: error.message,
+              postBodies: [],
+              containsExpectedPost: false,
+            };
+          }
+        },
+        {
+          endpoint: playerResyncPlan.coldLoadEndpoints.threadEndpoint,
+          expectedBody: reconnectPostBody,
+        },
       );
+    } catch (error) {
+      browserThreadPageBeforeResync = {
+        endpoint: playerResyncPlan.coldLoadEndpoints.threadEndpoint,
+        ok: false,
+        status: null,
+        evaluateError: error.message,
+        postBodies: [],
+        containsExpectedPost: false,
+      };
+    }
+    reconnectDebug = {
+      reconnectPostBody,
+      reconnectCommand,
+      apiThreadPost,
+      browserThreadPageBeforeResync,
+      playerResyncPlan,
+    };
+    if (browserThreadPageBeforeResync.containsExpectedPost !== true) {
+      throw new Error(
+        `browser thread fetch did not include disconnected post: ${JSON.stringify(reconnectDebug)}`,
+      );
+    }
+    playerStep = "trigger-player-reconnect-resync";
+    const reconnectFromSeq = reconnectCommand.streamSeqs?.[0] ?? 9013;
+    const recoveredSnapshot = await page.evaluate(
+      async (fromSeq) => window.__fmarchTriggerPlayerResync(fromSeq),
+      reconnectFromSeq,
+    );
+    reconnectDebug = {
+      ...reconnectDebug,
+      reconnectFromSeq,
+      recoveredSnapshotPostBodies: recoveredSnapshot?.thread?.posts?.map(
+        (post) => post.body,
+      ),
+    };
+    await page.waitForFunction(
+      (fromSeq) => {
+        const events = window.__fmarchLiveProjectionEvents ?? [];
+        return events.some(
+          (event) =>
+            event?.kind === "resync-required" &&
+            event.fromSeq === fromSeq &&
+            event.state === "recovered",
+        );
+      },
+      reconnectFromSeq,
+    );
+    await page.waitForFunction(
+      () => window.__fmarchLiveProjectionStatus?.state === "recovered",
+    );
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-live-status"]')
+          ?.getAttribute("data-state") === "recovered",
+    );
+    await page.waitForFunction(
+      (expectedBody) =>
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) => post.body === expectedBody,
+        ),
+      reconnectPostBody,
+    );
+    await page.getByText(reconnectPostBody, { exact: true }).waitFor({
+      state: "visible",
     });
+    playerStep = "reconnect-proof-complete";
+    reconnectEvidence = {
+      boundary:
+        "player route can expose a closed live-projection state, accept a server-side projection change while the socket is closed, and recover the thread snapshot through the seeded role URL resync bridge without reloading",
+      closedStatus,
+      renderedClosedStatus,
+      reconnectCommand,
+      reconnectFromSeq,
+      apiThreadPost,
+      browserThreadPageBeforeResync,
+      playerResyncPlan,
+      recoveredStatus: await page.evaluate(
+        () => window.__fmarchLiveProjectionStatus,
+      ),
+      recoveredPostBody: reconnectPostBody,
+      recoveredSnapshotContainsPost: recoveredSnapshot?.thread?.posts?.some(
+        (post) => post.body === reconnectPostBody,
+      ),
+    };
   } catch (error) {
     const debug = {
+      playerStep,
       statusText: await status.innerText(),
       statusState: await status.getAttribute("data-state"),
       projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+      liveStatus: await page.evaluate(() => window.__fmarchLiveProjectionStatus),
+      hasCloseHook: await page.evaluate(
+        () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+      ),
+      playerWindowKeys: await page.evaluate(() =>
+        Object.keys(window)
+          .filter((key) => key.startsWith("__fmarch"))
+          .sort(),
+      ),
       apiVoteCount: await fetchJson(`${apiBaseUrl}/games/${game}/votecount`),
+      reconnectDebug,
     };
     throw new Error(`player projection did not refresh after ack: ${JSON.stringify(debug)}`);
   }
@@ -1390,6 +1557,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     commandStatus,
     projection,
     liveProjectionEvents,
+    reconnect: reconnectEvidence,
   };
 }
 
@@ -2357,6 +2525,22 @@ async function waitForProjectionRequests(requests, suffixes) {
   }
   throw new Error(
     `projection refresh requests did not include ${suffixes.join(", ")}: ${JSON.stringify(requests)}`,
+  );
+}
+
+async function waitForMainThreadPost(expectedBody) {
+  const deadline = Date.now() + 10_000;
+  let lastPage = null;
+  while (Date.now() < deadline) {
+    lastPage = await fetchJson(`${apiBaseUrl}/games/${game}/thread?limit=50`);
+    const post = lastPage.posts?.find((item) => item.body === expectedBody);
+    if (post !== undefined) {
+      return post;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `main thread projection did not include ${expectedBody}: ${JSON.stringify(lastPage)}`,
   );
 }
 

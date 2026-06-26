@@ -13,6 +13,7 @@ export function createProjectionStore({
   liveTransport = COLD_LOAD_TRANSPORT_BOUNDARY,
 }) {
   let snapshot = freezeSnapshot(requiredObject(initialSnapshot, "initialSnapshot"));
+  let refreshNonce = 0;
   const subscribers = new Set();
 
   function subscribe(listener) {
@@ -40,9 +41,13 @@ export function createProjectionStore({
         if (coldLoad === undefined) {
           throw new TypeError(`unknown projection cold-load key: ${key}`);
         }
-        const response = await fetchImpl(coldLoad.url, {
-          headers: { accept: "application/json" },
-        });
+        const response = await fetchImpl(
+          projectionRefreshUrl(coldLoad.url, ++refreshNonce),
+          {
+            cache: "no-store",
+            headers: { accept: "application/json" },
+          },
+        );
         if (!response?.ok) {
           return null;
         }
@@ -149,6 +154,18 @@ function normalizeProjectionPayload({ key, payload, previous, coldLoad }) {
     throw new TypeError(`projection payload for ${key} must not be undefined`);
   }
   return payload;
+}
+
+function projectionRefreshUrl(url, nonce) {
+  if (typeof url !== "string" || url.trim() === "") {
+    return url;
+  }
+  const hashIndex = url.indexOf("#");
+  const hasHash = hashIndex >= 0;
+  const base = hasHash ? url.slice(0, hashIndex) : url;
+  const hash = hasHash ? url.slice(hashIndex) : "";
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}_fmarch_projection_refresh=${encodeURIComponent(String(nonce))}${hash}`;
 }
 
 function requiredObject(value, field) {
