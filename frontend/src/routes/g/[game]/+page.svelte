@@ -154,6 +154,7 @@
   });
 
   async function submitPlayerCommand(action) {
+    const dispatchData = currentData;
     const optimisticStatus = playerCommandPendingStatus(action);
     commandStatus = optimisticStatus;
     commandReceipts = recordPlayerCommandReceipt(
@@ -165,7 +166,7 @@
       const result = await submitPlayerRouteCommand({
         action,
         composerBody,
-        data: currentData,
+        data: dispatchData,
         fetchImpl: fetch,
         projectionStore,
       });
@@ -177,7 +178,7 @@
       );
       if (typeof window !== "undefined") {
         const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data: currentData,
+          data: dispatchData,
           action,
           composerBody,
           optimisticStatus,
@@ -200,7 +201,7 @@
       );
       if (typeof window !== "undefined") {
         const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data: currentData,
+          data: dispatchData,
           action,
           composerBody,
           optimisticStatus,

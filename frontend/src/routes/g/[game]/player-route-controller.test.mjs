@@ -11,6 +11,7 @@ import {
   playerCommandPendingStatus,
   playerCommandTrace,
   playerRefreshKeysForAction,
+  playerRefreshKeysForCommandOutcome,
   playerRefreshKeysForLiveDelta,
   playerResyncKeys,
   recordPlayerCommandReceipt,
@@ -211,7 +212,38 @@ test("player route controller refreshes only projections touched by acked comman
   assert.deepEqual(playerRefreshKeysForAction("withdraw_vote"), ["votecount"]);
 });
 
-test("player route controller preserves reject outcomes without post-ack refresh", async () => {
+test("player route controller refreshes command state after stale phase rejects", async () => {
+  const refreshed = [];
+  const result = await submitPlayerRouteCommand({
+    action: "submit_action:factional_kill",
+    composerBody: "",
+    data: fixtureData(),
+    fetchImpl: async () => null,
+    projectionStore: fakeProjectionStore({
+      refresh: async (keys) => {
+        refreshed.push(keys);
+      },
+    }),
+    sendCommandImpl: async () => ({
+      state: "reject",
+      error: "PhaseLocked",
+      message: "Reject PhaseLocked",
+    }),
+  });
+
+  assert.deepEqual(refreshed, [["notifications", "investigationResults", "commandState"]]);
+  assert.equal(result.commandStatus.message, "Reject PhaseLocked");
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_action:factional_kill",
+      commandStatus: { state: "reject", error: "PhaseLocked" },
+    }),
+    ["notifications", "investigationResults", "commandState"],
+  );
+});
+
+test("player route controller preserves non-phase reject outcomes without refresh", async () => {
   const refreshed = [];
   const result = await submitPlayerRouteCommand({
     action: "withdraw_vote",
@@ -223,11 +255,15 @@ test("player route controller preserves reject outcomes without post-ack refresh
         refreshed.push(keys);
       },
     }),
-    sendCommandImpl: async () => ({ state: "reject", message: "Reject PhaseLocked" }),
+    sendCommandImpl: async () => ({
+      state: "reject",
+      error: "InvalidTarget",
+      message: "Reject InvalidTarget",
+    }),
   });
 
   assert.deepEqual(refreshed, []);
-  assert.equal(result.commandStatus.message, "Reject PhaseLocked");
+  assert.equal(result.commandStatus.message, "Reject InvalidTarget");
 });
 
 test("player route controller loads and merges older thread pages", async () => {

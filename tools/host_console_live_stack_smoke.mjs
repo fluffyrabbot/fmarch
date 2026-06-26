@@ -1509,6 +1509,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     () => window.__fmarchPlayerCommandStatus,
   );
   assertInvalidActionRecovery(invalidOutcome);
+  const stalePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
 
   const legalButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await legalButton.boundingBox(), "legal player action button");
@@ -1560,6 +1561,10 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
       response.phaseKind === "Night" &&
       response.actions.length === 0,
   );
+  await stalePlayerSession.page
+    .locator('[data-action="submit_action:factional_kill"]')
+    .waitFor({ state: "visible" });
+  const staleActionRecovery = await submitStalePlayerAction(stalePlayerSession);
   const advanceCommand = await sendCommand("host_h", {
     AdvancePhase: { game: actionGame },
   });
@@ -1604,6 +1609,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
 
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
   const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+  await stalePlayerSession.context.close();
   await context.close();
   return {
     url: pageUrl,
@@ -1611,6 +1617,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     capability,
     invalidOutcome,
     legalOutcome,
+    staleActionRecovery,
     commandState: {
       requests: commandStateRequests,
       responses: commandStateResponses,
@@ -1626,7 +1633,134 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. The same hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase, removing the night action controls without a reload.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+  };
+}
+
+async function openStalePlayerActionBrowser(frontendBaseUrl) {
+  const commandStateRequests = [];
+  const commandStateResponses = [];
+  const commandStateResponseTasks = [];
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addInitScript(() => {
+    window.WebSocket = undefined;
+  });
+  context.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/player-command-state")) {
+      commandStateRequests.push({
+        url: request.url(),
+        pathname,
+        method: request.method(),
+      });
+    }
+  });
+  context.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (!pathname.endsWith("/player-command-state")) {
+      return;
+    }
+    commandStateResponseTasks.push(
+      response.json().then((body) => {
+        commandStateResponses.push({
+          url: response.url(),
+          pathname,
+          status: response.status(),
+          ok: response.ok(),
+          actorSlot: body.actor_slot ?? null,
+          roleKey: body.role_key ?? null,
+          phaseId: body.phase?.phase_id ?? null,
+          phaseKind: body.phase?.phase_kind ?? null,
+          locked: body.phase?.locked ?? null,
+          actions: (body.actions ?? []).map((action) => ({
+            templateId: action.template_id,
+            targets: action.targets,
+            targetOptions: action.target_options,
+          })),
+          boundary: body.boundary ?? null,
+        });
+      }),
+    );
+  });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: actionPlayerSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${actionGame}`;
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `stale action player route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  await page.locator('[data-action="submit_action:factional_kill"]').waitFor({
+    state: "visible",
+  });
+  return {
+    context,
+    page,
+    commandStateRequests,
+    commandStateResponses,
+    commandStateResponseTasks,
+  };
+}
+
+async function submitStalePlayerAction(staleSession) {
+  const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
+    staleSession;
+  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
+  assertHitTarget(await staleButton.boundingBox(), "stale player action button");
+  await staleButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  assertStalePlayerActionRecovery(outcome);
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
+      window.__fmarchPlayerProjection?.commandState?.actions?.length === 0,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+  );
+  await Promise.allSettled(commandStateResponseTasks);
+  const lockedCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot_4" &&
+      response.phaseId === "N01" &&
+      response.phaseKind === "Night" &&
+      response.locked === true &&
+      response.actions.length === 0,
+  );
+  return {
+    outcome,
+    statusMessage: await status.innerText(),
+    commandState: {
+      requests: commandStateRequests,
+      responses: commandStateResponses,
+      lockedCommandState,
+    },
+    projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+    receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
   };
 }
 
@@ -2432,6 +2566,28 @@ function assertInvalidActionRecovery(outcome) {
   }
   if (command.targets?.[0] !== "slot_4") {
     throw new Error(`invalid player action did not self-target slot_4: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertStalePlayerActionRecovery(outcome) {
+  if (outcome?.state !== "reject" || outcome.error !== "PhaseLocked") {
+    throw new Error(`stale player action did not render PhaseLocked recovery: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (command?.game !== actionGame) {
+    throw new Error(`stale player action used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot_4") {
+    throw new Error(`stale player action used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.action_id !== "role_factional_kill") {
+    throw new Error(`stale player action used wrong action id: ${JSON.stringify(command)}`);
+  }
+  if (command.template_id !== "factional_kill") {
+    throw new Error(`stale player action used wrong template: ${JSON.stringify(command)}`);
+  }
+  if (command.targets?.[0] !== "slot-2") {
+    throw new Error(`stale player action used wrong target: ${JSON.stringify(command)}`);
   }
 }
 

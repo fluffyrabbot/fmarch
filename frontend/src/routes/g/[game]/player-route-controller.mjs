@@ -242,16 +242,28 @@ export async function submitPlayerRouteCommand({
     ...buildPlayerCommandRequest({ data, action, composerBody }),
     fetchImpl,
   });
-  if (commandStatus.state === "ack") {
-    const refreshKeys = playerRefreshKeysForDataAction(data, action);
-    if (refreshKeys.length > 0) {
-      await projectionStore.refresh(refreshKeys, { fetchImpl });
-    }
+  const refreshKeys = playerRefreshKeysForCommandOutcome({
+    data,
+    action,
+    commandStatus,
+  });
+  if (refreshKeys.length > 0) {
+    await projectionStore.refresh(refreshKeys, { fetchImpl });
   }
   return Object.freeze({
     commandStatus,
     snapshot: projectionStore.getSnapshot(),
   });
+}
+
+export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus }) {
+  if (commandStatus?.state === "ack") {
+    return playerRefreshKeysForDataAction(data, action);
+  }
+  if (commandStatus?.state === "reject" && commandStatus?.error === "PhaseLocked") {
+    return playerRefreshKeysForDataAction(data, action);
+  }
+  return Object.freeze([]);
 }
 
 function playerRefreshKeysForDataAction(data, action) {
