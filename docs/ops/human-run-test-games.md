@@ -153,6 +153,14 @@ The local seed/demo fixture summary generator is:
 npm run test:dev-test-game-seed-fixture
 ```
 
+After the live gate has written the dev-test-game proof, ops bundle, and seed
+fixture, the local identity-adapter proof for replacing dev tokens without
+changing role surfaces is:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity
+```
+
 The local backup/restore drill for this spine is:
 
 ```sh
@@ -218,7 +226,12 @@ the local dump/restore check. After `npm run test:dev-test-game-ops`, the
 checklist consumes `target/dev-test-game/ops-artifacts.json` and promotes only
 the local ops artifact bundle. After `npm run test:dev-test-game-seed-fixture`,
 the checklist consumes `target/dev-test-game/seed-fixture-summary.json` and
-promotes only the local seed/demo fixture inventory. Production identity,
+promotes only the local seed/demo fixture inventory. After
+`npm run test:dev-test-game-identity`, the checklist consumes
+`target/auth-invite-role-proof/invite-role-proof.json` and promotes only the
+local identity-adapter proof that invite-issued opaque sessions preserve the
+same role URL and capability architecture. Hosted account lifecycle, invite
+delivery, session rotation/revocation, recovery, rate limits, abuse controls,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,
 production-like backup storage/PITR, exhaustive race coverage, hosted
 observability/operations, and a human release runbook remain outside that local
@@ -229,9 +242,11 @@ proof.
 This proves a local seeded browser test-game workflow for one developer, plus
 specific duplicate-command, player reconnect, concurrent vote race, stale player
 vote, stale action conflict, stale host control recovery, local artifact-bundle,
-local seed/demo fixture inventory, and local backup/restore lanes. It does not
-prove production account identity, hosted deployment, hosted demo fixtures,
-production-like backup/PITR, exhaustive race coverage, hosted
+local seed/demo fixture inventory, local identity-adapter shape, and local
+backup/restore lanes. It does not prove hosted production account lifecycle,
+invite delivery, session rotation/revocation, recovery, rate limits, abuse
+controls, hosted deployment, hosted demo fixtures, production-like backup/PITR,
+exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
 rollback/delete semantics for existing append-only games. The harness still
 uses an internal root dev session only to mint local invites; production

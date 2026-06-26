@@ -25,6 +25,12 @@ const defaultSeedFixtureSummaryPath = path.join(
   artifactDir,
   "seed-fixture-summary.json",
 );
+const defaultIdentityAdapterProofPath = path.join(
+  repoRoot,
+  "target",
+  "auth-invite-role-proof",
+  "invite-role-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -65,6 +71,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.seedFixtureSummaryPath ??
           "target/dev-test-game/seed-fixture-summary.json",
         artifact: options.seedFixtureSummaryArtifact,
+      })
+    : undefined;
+  const identityAdapterEvidence = options.identityAdapterProof
+    ? validateDevTestGameIdentityAdapterProof(options.identityAdapterProof, {
+        path:
+          options.identityAdapterProofPath ??
+          "target/auth-invite-role-proof/invite-role-proof.json",
+        artifact: options.identityAdapterProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -126,13 +140,34 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       scenarioCount: seedFixtureEvidence.scenarioCount,
     });
   }
+  if (identityAdapterEvidence !== undefined) {
+    localChecks.push({
+      id: "local-identity-adapter-proof",
+      label: "Local production-identity adapter proof",
+      status: "passed",
+      evidence: identityAdapterEvidence.path,
+      proofBoundary: identityAdapterEvidence.proofBoundary,
+      roles: identityAdapterEvidence.roles,
+    });
+  }
   const unproven = [
-    {
-      id: "production-identity",
-      status: "unproven",
-      requiredEvidence:
-        "Real accounts, sessions, and invite delivery replacing local dev tokens without changing role surfaces",
-    },
+    ...(identityAdapterEvidence === undefined
+      ? [
+          {
+            id: "production-identity",
+            status: "unproven",
+            requiredEvidence:
+              "Real accounts, sessions, and invite delivery replacing local dev tokens without changing role surfaces",
+          },
+        ]
+      : [
+          {
+            id: "hosted-production-identity",
+            status: "unproven",
+            requiredEvidence:
+              "Hosted account lifecycle, session rotation/revocation, invite delivery, recovery, rate limits, and abuse controls over the proven role-surface adapter",
+          },
+        ]),
     {
       id: "hosted-deployment",
       status: "unproven",
@@ -229,13 +264,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             seedFixtureSummary: seedFixtureEvidence.path,
           }),
+      ...(identityAdapterEvidence === undefined
+        ? {}
+        : {
+            identityAdapterProof: identityAdapterEvidence.path,
+          }),
     },
     localDevelopmentSpine: {
       status: "passed",
       checks: localChecks,
       ...((backupRestoreEvidence === undefined &&
         opsArtifactsEvidence === undefined &&
-        seedFixtureEvidence === undefined)
+        seedFixtureEvidence === undefined &&
+        identityAdapterEvidence === undefined)
         ? {}
         : {
             evidence: {
@@ -248,6 +289,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(seedFixtureEvidence === undefined
                 ? {}
                 : { seedFixture: seedFixtureEvidence }),
+              ...(identityAdapterEvidence === undefined
+                ? {}
+                : { identityAdapter: identityAdapterEvidence }),
             },
           }),
     },
@@ -257,6 +301,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         backupRestoreEvidence,
         opsArtifactsEvidence,
         seedFixtureEvidence,
+        identityAdapterEvidence,
       }),
       unproven,
     },
@@ -269,15 +314,19 @@ function releaseReadinessReason({
   backupRestoreEvidence,
   opsArtifactsEvidence,
   seedFixtureEvidence,
+  identityAdapterEvidence,
 }) {
   const passed = [
     "the local development-spine proof",
     ...(backupRestoreEvidence === undefined ? [] : ["local backup/restore drill"]),
     ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
     ...(seedFixtureEvidence === undefined ? [] : ["local seed/demo fixture"]),
+    ...(identityAdapterEvidence === undefined ? [] : ["local identity adapter"]),
   ];
   const missing = [
-    "production identity",
+    identityAdapterEvidence === undefined
+      ? "production identity"
+      : "hosted identity lifecycle",
     "hosted operations",
     seedFixtureEvidence === undefined ? "seed/demo fixtures" : "hosted demo fixtures",
     backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
@@ -471,6 +520,69 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   };
 }
 
+export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
+  const requiredRoles = new Map([
+    ["admin", "GlobalAdmin"],
+    ["host", "HostOf"],
+    ["player", "SlotOccupant"],
+  ]);
+  if (proof?.version !== 1) {
+    throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "auth-invite-role-proof") {
+    throw new Error(`unexpected identity adapter proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`identity adapter proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-auth-invite-role-proof") {
+    throw new Error(`identity adapter proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("identity adapter proof must not claim production or release readiness");
+  }
+  if (
+    proof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
+    proof.identityAdapter?.browserCookieName !== "fmarch_session" ||
+    proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
+    proof.identityAdapter?.sessionCredentialKind !== "opaque-session"
+  ) {
+    throw new Error("identity adapter proof does not preserve the role-surface adapter");
+  }
+  for (const [role, capability] of requiredRoles) {
+    const entry = proof.roles?.[role];
+    if (entry === undefined) {
+      throw new Error(`identity adapter proof missing role: ${role}`);
+    }
+    if (!entry.capabilityKinds?.includes(capability)) {
+      throw new Error(`identity adapter proof role ${role} missing ${capability}`);
+    }
+    if (entry.cookie?.valuePrefix !== "invite-session-") {
+      throw new Error(`identity adapter proof role ${role} did not use invite session`);
+    }
+    const loginUrl = typeof entry.loginUrl === "string" ? new URL(entry.loginUrl) : null;
+    if (loginUrl?.pathname !== "/auth/login") {
+      throw new Error(`identity adapter proof role ${role} did not use /auth/login`);
+    }
+    if (!loginUrl.searchParams.has("returnTo") || !loginUrl.searchParams.has("invite")) {
+      throw new Error(`identity adapter proof role ${role} missing role URL params`);
+    }
+  }
+  if ((proof.seedCommands ?? []).length !== 22) {
+    throw new Error("identity adapter proof did not seed the local game shape");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/auth-invite-role-proof/invite-role-proof.json",
+    roleCount: requiredRoles.size,
+    roles: Array.from(requiredRoles.keys()),
+    proofBoundary: proof.proofBoundary,
+    scope: proof.scope,
+    productionReady: proof.productionReady,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -524,6 +636,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (hasSeedFixtureCheck && hasSeedFixtureUnproven) {
     throw new Error("dev-test-game seed fixtures cannot be both passed and unproven");
   }
+  const hasIdentityAdapterCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) => check.id === "local-identity-adapter-proof" && check.status === "passed",
+  );
+  const hasIdentityUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "production-identity",
+  );
+  if (hasIdentityAdapterCheck && hasIdentityUnproven) {
+    throw new Error("dev-test-game identity adapter cannot be both passed and unproven");
+  }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
       throw new Error(`release item ${item.id} must remain unproven`);
@@ -576,17 +697,23 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ? path.resolve(process.cwd(), process.argv[2])
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
-  const [backupRestoreOptions, opsArtifactsOptions, seedFixtureOptions] =
-    await Promise.all([
+  const [
+    backupRestoreOptions,
+    opsArtifactsOptions,
+    seedFixtureOptions,
+    identityAdapterOptions,
+  ] = await Promise.all([
       readOptionalBackupRestoreArtifacts(),
       readOptionalOpsArtifacts(),
       readOptionalSeedFixtureSummary(),
+      readOptionalIdentityAdapterProof(),
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
     ...(backupRestoreOptions ?? {}),
     ...(opsArtifactsOptions ?? {}),
     ...(seedFixtureOptions ?? {}),
+    ...(identityAdapterOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -624,6 +751,21 @@ async function readOptionalSeedFixtureSummary() {
     seedFixtureSummary: JSON.parse(await readFile(fixturePath, "utf8")),
     seedFixtureSummaryPath: path.relative(repoRoot, fixturePath),
     seedFixtureSummaryArtifact: artifact,
+  };
+}
+
+async function readOptionalIdentityAdapterProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultIdentityAdapterProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    identityAdapterProof: JSON.parse(await readFile(proofPath, "utf8")),
+    identityAdapterProofPath: path.relative(repoRoot, proofPath),
+    identityAdapterProofArtifact: artifact,
   };
 }
 

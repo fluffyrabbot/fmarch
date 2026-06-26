@@ -86,11 +86,24 @@ try {
   };
 
   const evidence = {
+    version: 1,
+    proof: "auth-invite-role-proof",
     status: "passed",
+    releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
       "Local scratch-Postgres plus local Rust API, SvelteKit login action, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs; it does not prove production account recovery, email delivery, hosted identity, abuse controls, or beta release readiness.",
+    identityAdapter: {
+      status: "passed",
+      replacesDevTokensWithoutRoleSurfaceChange: true,
+      browserCookieName: "fmarch_session",
+      sessionCredentialKind: "opaque-session",
+      inviteCredentialKind: "single-use-invite",
+      roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      capabilityAuthority:
+        "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
+    },
     game,
     database: {
       name: proofDatabase.name,
@@ -274,8 +287,20 @@ async function driveInviteLogin({
 }
 
 function assertInviteProof(evidence) {
-  if (evidence.status !== "passed" || evidence.productionReady !== false) {
+  if (
+    evidence.version !== 1 ||
+    evidence.proof !== "auth-invite-role-proof" ||
+    evidence.status !== "passed" ||
+    evidence.productionReady !== false ||
+    evidence.releaseReady !== false
+  ) {
     throw new Error("invite proof must pass locally without claiming production readiness");
+  }
+  if (
+    evidence.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
+    evidence.identityAdapter?.browserCookieName !== "fmarch_session"
+  ) {
+    throw new Error("invite proof must preserve the role-surface identity adapter");
   }
   for (const [role, capability] of [
     ["admin", "GlobalAdmin"],

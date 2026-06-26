@@ -382,6 +382,29 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) => item.id === "hosted-demo-fixtures" && item.status === "unproven",
     ),
   );
+  const identityReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    identityAdapterProofPath:
+      "target/auth-invite-role-proof/invite-role-proof.json",
+    identityAdapterProof: identityAdapterProofFixture(game),
+  });
+  assertDevTestGameReleaseReadiness(identityReadiness);
+  assert(
+    identityReadiness.localDevelopmentSpine.checks.some(
+      (item) => item.id === "local-identity-adapter-proof" && item.status === "passed",
+    ),
+  );
+  assert.equal(
+    identityReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "production-identity",
+    ),
+    false,
+  );
+  assert(
+    identityReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-production-identity" && item.status === "unproven",
+    ),
+  );
   const backupRestoreReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     backupRestoreProofPath:
@@ -444,5 +467,69 @@ function artifactSummary(path) {
     ageSeconds: 0,
     sizeBytes: 123,
     sha256: "0".repeat(64),
+  };
+}
+
+function identityAdapterProofFixture(game) {
+  return {
+    version: 1,
+    proof: "auth-invite-role-proof",
+    status: "passed",
+    scope: "local-auth-invite-role-proof",
+    productionReady: false,
+    releaseReady: false,
+    proofBoundary: "Local invite proof only.",
+    identityAdapter: {
+      status: "passed",
+      replacesDevTokensWithoutRoleSurfaceChange: true,
+      browserCookieName: "fmarch_session",
+      sessionCredentialKind: "opaque-session",
+      inviteCredentialKind: "single-use-invite",
+      roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      capabilityAuthority:
+        "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
+    },
+    game,
+    seedCommands: Array.from({ length: 22 }, (_, index) => ({
+      principalUserId: index === 0 ? "host_h" : "player-mira",
+      kind: index === 0 ? "CreateGame" : "SeedCommand",
+      streamSeqs: [index + 1],
+    })),
+    roles: {
+      admin: identityRole({
+        role: "admin",
+        loginUrl: "http://127.0.0.1:5173/auth/login?returnTo=%2Fadmin&invite=admin-invite-token",
+        principalUserId: "admin_a",
+        capabilityKinds: ["GlobalAdmin"],
+      }),
+      host: identityRole({
+        role: "host",
+        loginUrl: `http://127.0.0.1:5173/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=host-invite-token`,
+        principalUserId: "host_h",
+        capabilityKinds: ["HostOf"],
+      }),
+      player: identityRole({
+        role: "player",
+        loginUrl: `http://127.0.0.1:5173/auth/login?returnTo=%2Fg%2F${game}&invite=player-invite-token`,
+        principalUserId: "player-mira",
+        capabilityKinds: ["SlotOccupant"],
+      }),
+    },
+  };
+}
+
+function identityRole({ role, loginUrl, principalUserId, capabilityKinds }) {
+  return {
+    role,
+    loginUrl,
+    returnTo: new URL(loginUrl).searchParams.get("returnTo"),
+    principalUserId,
+    capabilityKinds,
+    cookie: {
+      httpOnly: true,
+      sameSite: "Lax",
+      secure: false,
+      valuePrefix: "invite-session-",
+    },
   };
 }
