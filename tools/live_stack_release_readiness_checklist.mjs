@@ -12,6 +12,7 @@ const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const defaultSources = Object.freeze({
   liveStackProof: "target/host-console-live-stack-smoke/live-stack-proof.json",
+  inviteRoleProof: "target/auth-invite-role-proof/invite-role-proof.json",
   backupRestoreProof:
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
   backupRestoreDump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
@@ -29,6 +30,7 @@ if (!Number.isFinite(maxArtifactAgeMs) || maxArtifactAgeMs <= 0) {
 
 const sources = {
   liveStackProof: resolveSource(process.env.FMARCH_LIVE_STACK_PROOF),
+  inviteRoleProof: resolveSource(process.env.FMARCH_INVITE_ROLE_PROOF),
   backupRestoreProof: resolveSource(process.env.FMARCH_BACKUP_RESTORE_PROOF),
   backupRestoreDump: resolveSource(process.env.FMARCH_BACKUP_RESTORE_DUMP),
 };
@@ -45,6 +47,11 @@ const sourceArtifacts = {
     defaultSources.backupRestoreProof,
     now,
   ),
+  inviteRoleProof: await readFreshJsonArtifact(
+    sources.inviteRoleProof,
+    defaultSources.inviteRoleProof,
+    now,
+  ),
   backupRestoreDump: await readFreshBinaryArtifact(
     sources.backupRestoreDump,
     defaultSources.backupRestoreDump,
@@ -53,6 +60,7 @@ const sourceArtifacts = {
 };
 
 const liveStackEvidence = validateLiveStackProof(sourceArtifacts.liveStackProof);
+const inviteRoleEvidence = validateInviteRoleProof(sourceArtifacts.inviteRoleProof);
 const backupRestoreEvidence = validateBackupRestoreProof(
   sourceArtifacts.backupRestoreProof,
   sourceArtifacts.backupRestoreDump,
@@ -64,6 +72,7 @@ const checklist = buildChecklist({
   sources,
   sourceArtifacts,
   liveStackEvidence,
+  inviteRoleEvidence,
   backupRestoreEvidence,
 });
 
@@ -207,12 +216,59 @@ function validateBackupRestoreProof(proofArtifact, dumpArtifact) {
   };
 }
 
+function validateInviteRoleProof(artifact) {
+  const proof = artifact.data;
+  if (proof.status !== "passed") {
+    throw new Error(`invite role proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-auth-invite-role-proof") {
+    throw new Error(`invite role proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false) {
+    throw new Error("invite role proof must not claim production readiness");
+  }
+  const required = new Map([
+    ["admin", "GlobalAdmin"],
+    ["host", "HostOf"],
+    ["player", "SlotOccupant"],
+  ]);
+  for (const [role, capability] of required) {
+    const roleEvidence = proof.roles?.[role];
+    if (!roleEvidence?.capabilityKinds?.includes(capability)) {
+      throw new Error(`invite role proof missing ${role} ${capability}`);
+    }
+    if (roleEvidence.cookie?.valuePrefix !== "invite-session-") {
+      throw new Error(`invite role proof did not issue an invite session for ${role}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: artifact.path,
+    artifactMtime: artifact.mtime,
+    roleCount: required.size,
+    roles: Object.fromEntries(
+      [...required.keys()].map((role) => [
+        role,
+        {
+          principalUserId: proof.roles[role].principalUserId,
+          capabilityKinds: proof.roles[role].capabilityKinds,
+          returnTo: proof.roles[role].returnTo,
+        },
+      ]),
+    ),
+    proofBoundary: proof.proofBoundary,
+    scope: proof.scope,
+    productionReady: proof.productionReady,
+  };
+}
+
 function buildChecklist({
   generatedAt,
   maxArtifactAgeHours,
   sources,
   sourceArtifacts,
   liveStackEvidence,
+  inviteRoleEvidence,
   backupRestoreEvidence,
 }) {
   const localChecks = [
@@ -222,6 +278,13 @@ function buildChecklist({
       status: "passed",
       evidence: liveStackEvidence.path,
       proofBoundary: liveStackEvidence.proofBoundary,
+    },
+    {
+      id: "invite-issued-role-url-proof",
+      label: "Invite-issued role URLs preserve role surfaces",
+      status: "passed",
+      evidence: inviteRoleEvidence.path,
+      proofBoundary: inviteRoleEvidence.proofBoundary,
     },
     {
       id: "local-backup-restore-drill",
@@ -240,7 +303,7 @@ function buildChecklist({
     {
       id: "production-identity",
       status: "unproven",
-      requiredEvidence: "Real accounts, sessions, and invite flow replacing local/dev tokens",
+      requiredEvidence: "Hosted real accounts, sessions, and invite delivery replacing local/dev tokens",
     },
     {
       id: "key-escrow-and-secret-rotation",
@@ -270,10 +333,11 @@ function buildChecklist({
     generatedAt,
     scope: "local-live-stack-release-readiness-checklist",
     proofBoundary:
-      "Derived local checklist over fresh live-stack and backup/restore artifacts. Passing means the local development-spine evidence is coherent; it does not mean beta, hosted, production, or human release readiness.",
+      "Derived local checklist over fresh live-stack, invite-role, and backup/restore artifacts. Passing means the local development-spine evidence is coherent; it does not mean beta, hosted, production, or human release readiness.",
     maxArtifactAgeHours,
     generatedFrom: {
       liveStackProof: sources.liveStackProof ?? defaultSources.liveStackProof,
+      inviteRoleProof: sources.inviteRoleProof ?? defaultSources.inviteRoleProof,
       backupRestoreProof:
         sources.backupRestoreProof ?? defaultSources.backupRestoreProof,
       backupRestoreDump:
@@ -284,10 +348,12 @@ function buildChecklist({
       checks: localChecks,
       evidence: {
         liveStack: liveStackEvidence,
+        inviteRole: inviteRoleEvidence,
         backupRestore: backupRestoreEvidence,
       },
       artifacts: {
         liveStackProof: artifactSummary(sourceArtifacts.liveStackProof),
+        inviteRoleProof: artifactSummary(sourceArtifacts.inviteRoleProof),
         backupRestoreProof: artifactSummary(sourceArtifacts.backupRestoreProof),
         backupRestoreDump: artifactSummary(sourceArtifacts.backupRestoreDump),
       },

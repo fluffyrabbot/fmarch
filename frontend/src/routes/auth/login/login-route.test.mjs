@@ -11,6 +11,7 @@ test("login load preserves only local return paths", () => {
     {
       login: {
         principalUserId: null,
+        inviteToken: "",
         returnTo: "/admin",
       },
     },
@@ -26,7 +27,24 @@ test("login load preserves only local return paths", () => {
     {
       login: {
         principalUserId: "admin_a",
+        inviteToken: "",
         returnTo: "/",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    load({
+      locals: {},
+      url: new URL(
+        "http://localhost/auth/login?returnTo=/g/midsummer&invite=host-invite-token",
+      ),
+    }),
+    {
+      login: {
+        principalUserId: null,
+        inviteToken: "host-invite-token",
+        returnTo: "/g/midsummer",
       },
     },
   );
@@ -81,6 +99,70 @@ test("login action verifies the opaque token before setting the browser session 
   });
 });
 
+test("login action redeems invite tokens into opaque browser sessions", async () => {
+  const observed = { requests: [] };
+  await assert.rejects(
+    async () =>
+      await actions.default({
+        cookies: {
+          set(name, value, options) {
+            observed.cookie = { name, value, options };
+          },
+        },
+        fetch: async (url, init) => {
+          observed.requests.push({
+            url,
+            method: init.method,
+            authorization: init.headers.authorization,
+            accept: init.headers.accept,
+            body: init.body === undefined ? null : JSON.parse(init.body),
+          });
+          if (url === "/auth/session") {
+            return jsonResponse(
+              { message: "not a session" },
+              { ok: false, status: 401 },
+            );
+          }
+          assert.equal(url, "/auth/invites/redeem");
+          return jsonResponse({
+            principal_user_id: "host_h",
+            capabilities: [{ kind: "HostOf" }],
+          });
+        },
+        request: formRequest({
+          token: "  host-invite-token  ",
+          returnTo: "/g/midsummer/host",
+        }),
+        url: new URL("http://localhost/auth/login"),
+      }),
+    (err) => err.status === 303 && err.location === "/g/midsummer/host",
+  );
+
+  assert.equal(observed.requests.length, 2);
+  assert.deepEqual(observed.requests[0], {
+    url: "/auth/session",
+    method: "GET",
+    authorization: "Bearer host-invite-token",
+    accept: "application/json",
+    body: null,
+  });
+  assert.equal(observed.requests[1].url, "/auth/invites/redeem");
+  assert.equal(observed.requests[1].method, "POST");
+  assert.equal(observed.requests[1].accept, "application/json");
+  assert.equal(observed.requests[1].body.invite_token, "host-invite-token");
+  assert.match(observed.requests[1].body.session_token, /^invite-session-/);
+  assert.deepEqual(observed.cookie, {
+    name: "fmarch_session",
+    value: observed.requests[1].body.session_token,
+    options: {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+    },
+  });
+});
+
 test("login action rejects missing or revoked tokens without setting a cookie", async () => {
   const missing = await actions.default({
     cookies: forbiddenCookieJar(),
@@ -90,17 +172,23 @@ test("login action rejects missing or revoked tokens without setting a cookie", 
   });
   assert.equal(missing.status, 400);
   assert.equal(missing.data.state, "reject");
-  assert.equal(missing.data.message, "Session token is required");
+  assert.equal(missing.data.message, "Session or invite token is required");
 
   const revoked = await actions.default({
     cookies: forbiddenCookieJar(),
-    fetch: async () => jsonResponse({ message: "nope" }, { ok: false, status: 401 }),
+    fetch: async (url) =>
+      url === "/auth/session"
+        ? jsonResponse({ message: "nope" }, { ok: false, status: 401 })
+        : jsonResponse({ message: "nope" }, { ok: false, status: 401 }),
     request: formRequest({ token: "revoked-token", returnTo: "//evil.test/" }),
     url: new URL("http://localhost/auth/login"),
   });
   assert.equal(revoked.status, 401);
   assert.equal(revoked.data.returnTo, "/");
-  assert.equal(revoked.data.message, "Session token is missing, expired, or revoked");
+  assert.equal(
+    revoked.data.message,
+    "Session or invite token is missing, expired, or revoked",
+  );
 });
 
 function formRequest(fields) {

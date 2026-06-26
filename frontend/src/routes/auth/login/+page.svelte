@@ -5,6 +5,7 @@
   $: login = data?.login ?? {};
   $: returnTo = form?.returnTo ?? login.returnTo ?? "/";
   $: rejection = form?.state === "reject" ? form.message : null;
+  $: tokenValue = login.inviteToken ?? "";
 </script>
 
 <svelte:head>
@@ -17,7 +18,7 @@
       <p class="fm-eyebrow">Auth</p>
       <h1>Sign in</h1>
       <p class="fm-summary">
-        Use an opaque session token issued through an authenticated session grant.
+        Use an opaque session token or invite issued through an authenticated identity flow.
       </p>
     </div>
   </section>
@@ -32,12 +33,13 @@
     <form method="POST" class="auth-login__form" data-testid="auth-login-form">
       <input type="hidden" name="returnTo" value={returnTo} />
       <label class="auth-login__field">
-        <span>Session token</span>
+        <span>Session or invite token</span>
         <input
           name="token"
           type="password"
           autocomplete="current-password"
           data-testid="auth-login-token"
+          value={tokenValue}
           required
         />
       </label>

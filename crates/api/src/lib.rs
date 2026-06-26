@@ -81,6 +81,8 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/session", get(auth_session))
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
+        .route("/auth/invites", post(create_auth_invite))
+        .route("/auth/invites/redeem", post(redeem_auth_invite))
         .route("/commands", post(command))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
@@ -144,6 +146,28 @@ struct CreateAuthSessionGrant {
     expires_at: i64,
     #[serde(default)]
     global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateAuthInvite {
+    invite_token: String,
+    principal_user_id: String,
+    expires_at: i64,
+    #[serde(default)]
+    global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthInviteResponse {
+    principal_user_id: String,
+    expires_at: i64,
+    global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RedeemAuthInvite {
+    invite_token: String,
+    session_token: String,
 }
 
 async fn auth_session(
@@ -271,6 +295,151 @@ async fn create_auth_session_grant(
     ))
 }
 
+async fn create_auth_invite(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateAuthInvite>,
+) -> Result<Json<AuthInviteResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let (invited_by_user_id, caller_global_capabilities) =
+        active_session_principal_and_globals(&state, caller_token).await?;
+    if !caller_global_capabilities
+        .iter()
+        .any(|capability| capability == "GlobalAdmin")
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: "invite issuance requires GlobalAdmin".to_string(),
+        });
+    }
+
+    let invite_token = request.invite_token.trim();
+    if invite_token.is_empty() || request.principal_user_id.trim().is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "invite requires invite_token and principal_user_id".to_string(),
+        });
+    }
+    let now = unix_now_seconds();
+    if request.expires_at <= now {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "invite expiry must be in the future".to_string(),
+        });
+    }
+    let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
+
+    let inserted = sqlx::query(
+        r#"
+        INSERT INTO auth_invite (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            redeemed_at,
+            redeemed_session_token_hash,
+            global_capabilities,
+            invited_by_user_id
+        )
+        VALUES ($1, $2, $3, $4, NULL, NULL, $5, $6)
+        ON CONFLICT (token_hash) DO NOTHING
+        "#,
+    )
+    .bind(hash_session_token(invite_token))
+    .bind(request.principal_user_id.as_str())
+    .bind(now)
+    .bind(request.expires_at)
+    .bind(&global_capabilities)
+    .bind(invited_by_user_id)
+    .execute(&state.pool)
+    .await?;
+
+    if inserted.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "invite token already exists".to_string(),
+        });
+    }
+
+    Ok(Json(AuthInviteResponse {
+        principal_user_id: request.principal_user_id,
+        expires_at: request.expires_at,
+        global_capabilities,
+    }))
+}
+
+async fn redeem_auth_invite(
+    State(state): State<ApiState>,
+    Json(request): Json<RedeemAuthInvite>,
+) -> Result<Json<AuthSessionResponse>, ApiError> {
+    let invite_token = request.invite_token.trim();
+    let session_token = request.session_token.trim();
+    if invite_token.is_empty() || session_token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "invite redemption requires invite_token and session_token".to_string(),
+        });
+    }
+
+    let now = unix_now_seconds();
+    let invite_hash = hash_session_token(invite_token);
+    let session_hash = hash_session_token(session_token);
+    let mut tx = state.pool.begin().await?;
+    let invite = sqlx::query_as::<_, (String, i64, Vec<String>)>(
+        r#"
+        UPDATE auth_invite
+        SET redeemed_at = $1,
+            redeemed_session_token_hash = $2
+        WHERE token_hash = $3
+          AND redeemed_at IS NULL
+          AND expires_at > $1
+        RETURNING principal_user_id, expires_at, global_capabilities
+        "#,
+    )
+    .bind(now)
+    .bind(&session_hash)
+    .bind(invite_hash)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_invite)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, $5)
+        ON CONFLICT (token_hash) DO UPDATE
+        SET principal_user_id = EXCLUDED.principal_user_id,
+            expires_at = EXCLUDED.expires_at,
+            revoked_at = NULL,
+            global_capabilities = EXCLUDED.global_capabilities
+        "#,
+    )
+    .bind(session_hash)
+    .bind(invite.0.as_str())
+    .bind(now)
+    .bind(invite.1)
+    .bind(&invite.2)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(
+        auth_session_response(&state, invite.0, None, invite.2).await?,
+    ))
+}
+
 async fn auth_session_response(
     state: &ApiState,
     principal_user_id: String,
@@ -335,6 +504,14 @@ fn unauthorized_session() -> ApiError {
         status: StatusCode::UNAUTHORIZED,
         error: RejectCode::NotAuthorized,
         message: "session token is missing, expired, or revoked".to_string(),
+    }
+}
+
+fn unauthorized_invite() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::UNAUTHORIZED,
+        error: RejectCode::NotAuthorized,
+        message: "invite token is missing, expired, or already redeemed".to_string(),
     }
 }
 
