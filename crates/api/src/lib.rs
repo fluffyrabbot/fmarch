@@ -860,7 +860,24 @@ async fn player_command_state(
     let actions = if actor.alive {
         match (phase.as_ref(), role_key.as_deref()) {
             (Some(phase), Some(role_key)) if !phase.locked => {
-                available_role_actions(&state, game, phase, &slots, actor, role_key).await?
+                let active_templates = commands::active_action_templates_for_actor_phase(
+                    &state.pool,
+                    game,
+                    &phase.phase_id,
+                    &actor.slot_id,
+                )
+                .await
+                .map_err(command_reject_api_error)?;
+                available_role_actions(
+                    &state,
+                    game,
+                    phase,
+                    &slots,
+                    actor,
+                    role_key,
+                    &active_templates,
+                )
+                .await?
             }
             _ => Vec::new(),
         }
@@ -885,6 +902,7 @@ async fn available_role_actions(
     slots: &[projections::SlotStateRow],
     actor: &projections::SlotStateRow,
     role_key: &str,
+    active_templates: &std::collections::BTreeSet<String>,
 ) -> Result<Vec<PlayerCommandAction>, ApiError> {
     let pack = load_pack_for_game(state, game).await?;
     let role = pack.roles.get(role_key).ok_or_else(|| ApiError::Reject {
@@ -898,6 +916,10 @@ async fn available_role_actions(
         .actions
         .iter()
         .filter(|action| action.window.matches_phase_kind(phase_kind))
+        .filter(|action| {
+            action.has_modifier(domain::Modifier::Simultaneous)
+                || !active_templates.contains(&action.id)
+        })
         .filter_map(|action| {
             let target_options = target_options_for_action(action, slots, actor);
             let targets = default_targets_for_action(action, &target_options)?;
@@ -1730,6 +1752,24 @@ impl From<caps::CapError> for ApiError {
 impl From<sqlx::Error> for ApiError {
     fn from(err: sqlx::Error) -> Self {
         ApiError::Db(err)
+    }
+}
+
+fn command_reject_api_error(reject: commands::Reject) -> ApiError {
+    let status = match &reject {
+        commands::Reject::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        commands::Reject::UnknownGame | commands::Reject::UnknownSlot => StatusCode::NOT_FOUND,
+        commands::Reject::NotAuthorized
+        | commands::Reject::NotHost
+        | commands::Reject::NotYourSlot => StatusCode::FORBIDDEN,
+        _ => StatusCode::CONFLICT,
+    };
+    let error = RejectCode::from(&reject);
+    let message = reject.to_string();
+    ApiError::Reject {
+        status,
+        error,
+        message,
     }
 }
 

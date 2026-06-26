@@ -1685,6 +1685,8 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     () => window.__fmarchPlayerCommandStatus,
   );
   assertInvalidActionRecovery(invalidOutcome);
+  const duplicatePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
+  const racePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
   const stalePlayerSession = await openStalePlayerActionBrowser(frontendBaseUrl);
 
   const duplicatePlayerSubmitCommandId = crypto.randomUUID();
@@ -1710,26 +1712,15 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     label: "first player SubmitAction",
   });
 
-  await legalButton.waitFor({ state: "visible" });
-  await legalButton.click();
-  await page.waitForFunction(
-    (previousEnvelopeId) =>
-      window.__fmarchPlayerCommandStatus?.state === "ack" &&
-      window.__fmarchPlayerCommandStatus?.envelopeId > previousEnvelopeId,
-    legalOutcome.envelopeId,
-  );
-  const duplicateLegalOutcome = await page.evaluate(
-    () => window.__fmarchPlayerCommandStatus,
-  );
-  assertPlayerActionSubmitOutcome(duplicateLegalOutcome);
-  const duplicatePlayerSubmit = assertDuplicatePlayerSubmitOutcome({
+  const duplicateRetry = await submitDuplicatePlayerAction(duplicatePlayerSession, {
     firstOutcome: legalOutcome,
-    duplicateOutcome: duplicateLegalOutcome,
     commandId: duplicatePlayerSubmitCommandId,
   });
-  const duplicateStatusMessage = await status.innerText();
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
+  });
+  const staleSameActionRecovery = await submitRacingPlayerAction(racePlayerSession, {
+    winningCommandId: legalOutcome.commandId,
   });
 
   const actionRows = await runSql(
@@ -1828,6 +1819,8 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
 
   const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
   const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+  await duplicatePlayerSession.context.close();
+  await racePlayerSession.context.close();
   await stalePlayerSession.context.close();
   await context.close();
   return {
@@ -1836,12 +1829,14 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     capability,
     invalidOutcome,
     legalOutcome,
-    duplicateLegalOutcome,
+    duplicateLegalOutcome: duplicateRetry.outcome,
     duplicatePlayerSubmit: {
-      ...duplicatePlayerSubmit,
-      statusMessage: duplicateStatusMessage,
+      ...duplicateRetry.duplicatePlayerSubmit,
+      statusMessage: duplicateRetry.statusMessage,
       receiptRows: duplicateReceiptRows,
+      commandState: duplicateRetry.commandState,
     },
+    staleSameActionRecovery,
     staleActionRecovery,
     commandState: {
       requests: commandStateRequests,
@@ -1858,7 +1853,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, clicked the legal action again with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and left exactly one ActionSubmitted row. The host then resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, then a stale second player page retried the legal action with the same command_id through the player route, received the original ACK stream seqs from command_receipt, and refreshed to N01/no-actions. A stale third player page submitted the same action with a distinct command_id and rendered ActionAlreadySubmitted recovery guidance while refreshing to N01/no-actions. The proof left exactly one ActionSubmitted row. The host then resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A fourth stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 
@@ -1988,6 +1983,125 @@ async function submitStalePlayerAction(staleSession) {
       requests: commandStateRequests,
       responses: commandStateResponses,
       lockedCommandState,
+    },
+    projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+    receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
+  };
+}
+
+async function submitDuplicatePlayerAction(duplicateSession, { firstOutcome, commandId }) {
+  const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
+    duplicateSession;
+  await page.evaluate((fixedCommandId) => {
+    window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
+  }, commandId);
+  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
+  assertHitTarget(await staleButton.boundingBox(), "duplicate player action button");
+  await staleButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  assertPlayerActionSubmitOutcome(outcome);
+  const duplicatePlayerSubmit = assertDuplicatePlayerSubmitOutcome({
+    firstOutcome,
+    duplicateOutcome: outcome,
+    commandId,
+  });
+  const statusMessage = await status.innerText();
+  await page.evaluate(() => {
+    delete window.__fmarchPlayerCommandIdFactory;
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      window.__fmarchPlayerProjection?.commandState?.actions?.length === 0,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+  );
+  await Promise.allSettled(commandStateResponseTasks);
+  const noActionCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot_4" &&
+      response.phaseId === "N01" &&
+      response.phaseKind === "Night" &&
+      response.locked === false &&
+      response.actions.length === 0,
+  );
+  return {
+    outcome,
+    duplicatePlayerSubmit,
+    statusMessage,
+    commandState: {
+      requests: commandStateRequests,
+      responses: commandStateResponses,
+      noActionCommandState,
+    },
+    projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+    receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
+  };
+}
+
+async function submitRacingPlayerAction(raceSession, { winningCommandId }) {
+  const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
+    raceSession;
+  const staleButton = page.locator('[data-action="submit_action:factional_kill"]');
+  assertHitTarget(await staleButton.boundingBox(), "racing player action button");
+  await staleButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  assertStaleSameActionRecovery({ outcome, winningCommandId });
+  const statusMessage = await status.innerText();
+  assertStaleSameActionRecoveryMessage({ outcome, statusMessage });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      window.__fmarchPlayerProjection?.commandState?.actions?.length === 0,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+  );
+  await Promise.allSettled(commandStateResponseTasks);
+  const noActionCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot_4" &&
+      response.phaseId === "N01" &&
+      response.phaseKind === "Night" &&
+      response.locked === false &&
+      response.actions.length === 0,
+  );
+  return {
+    outcome,
+    statusMessage,
+    commandState: {
+      requests: commandStateRequests,
+      responses: commandStateResponses,
+      noActionCommandState,
     },
     projection: await page.evaluate(() => window.__fmarchPlayerProjection),
     receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
@@ -2955,6 +3069,41 @@ function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
   }
 }
 
+function assertStaleSameActionRecovery({ outcome, winningCommandId }) {
+  if (outcome?.state !== "reject" || outcome.error !== "ActionAlreadySubmitted") {
+    throw new Error(`stale same-action race did not render ActionAlreadySubmitted recovery: ${JSON.stringify(outcome)}`);
+  }
+  if (outcome.commandId === winningCommandId) {
+    throw new Error(`stale same-action race reused the winning command_id: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (command?.game !== actionGame) {
+    throw new Error(`stale same-action race used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot_4") {
+    throw new Error(`stale same-action race used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.action_id !== "role_factional_kill") {
+    throw new Error(`stale same-action race used wrong action id: ${JSON.stringify(command)}`);
+  }
+  if (command.template_id !== "factional_kill") {
+    throw new Error(`stale same-action race used wrong template: ${JSON.stringify(command)}`);
+  }
+  if (command.targets?.[0] !== "slot-2") {
+    throw new Error(`stale same-action race used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertStaleSameActionRecoveryMessage({ outcome, statusMessage }) {
+  const expected = "refresh and use current controls";
+  if (!String(outcome?.message ?? "").includes(expected)) {
+    throw new Error(`stale same-action race did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
+  }
+  if (!String(statusMessage ?? "").includes(expected)) {
+    throw new Error(`stale same-action race did not render recovery guidance: ${statusMessage}`);
+  }
+}
+
 function assertHostStreamConflictRecovery(outcome) {
   if (
     outcome?.state !== "reject" ||
@@ -3059,7 +3208,7 @@ function assertDuplicatePlayerSubmitOutcome({
     commandId,
     label: "duplicate player SubmitAction",
   });
-  if (duplicateOutcome.envelopeId <= firstOutcome.envelopeId) {
+  if (duplicateOutcome.envelopeId === firstOutcome.envelopeId) {
     throw new Error(
       `duplicate player SubmitAction did not send a fresh envelope: ${JSON.stringify({ firstOutcome, duplicateOutcome })}`,
     );

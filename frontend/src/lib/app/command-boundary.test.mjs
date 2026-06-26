@@ -250,6 +250,34 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
   );
 
+  const alreadySubmittedReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "withdraw_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+    }),
+    commandIdFactory: () => "55555555-5555-4555-8555-555555555555",
+    envelopeIdFactory: () => 14,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 14,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "ActionAlreadySubmitted",
+            retryable: false,
+            message: "action already submitted",
+          },
+        },
+      }),
+  });
+  assert.equal(
+    alreadySubmittedReject.message,
+    "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+  );
+
   const retryableReject = await sendCommand({
     principalUserId: "player_mira",
     command: buildPlayerCommand({

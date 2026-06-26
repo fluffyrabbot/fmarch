@@ -33,7 +33,7 @@ use domain::{
 use eventstore::{ActorId, EventInput};
 use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
-use sqlx::{postgres::PgPool, Row};
+use sqlx::{pool::PoolConnection, postgres::PgPool, Postgres, Row};
 use uuid::Uuid;
 
 mod model;
@@ -1114,6 +1114,33 @@ async fn submit_action(
     grant_id: Option<String>,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_submit_action_lock(pool, game).await?;
+    let result = submit_action_locked(
+        pool,
+        principal,
+        game,
+        action_id,
+        actor_slot,
+        template_id,
+        targets,
+        grant_id,
+        receipt,
+    )
+    .await;
+    release_submit_action_lock(&mut lock, game, result).await
+}
+
+async fn submit_action_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    action_id: String,
+    actor_slot: String,
+    template_id: String,
+    targets: Vec<String>,
+    grant_id: Option<String>,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     if action_id.trim().is_empty() || template_id.trim().is_empty() {
         return Err(Reject::InvalidTarget);
@@ -1201,6 +1228,51 @@ async fn submit_action(
         ));
     }
     persist(pool, game, &events, receipt).await
+}
+
+async fn acquire_submit_action_lock(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<PoolConnection<Postgres>, Reject> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(submit_action_lock_key(game))
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(conn)
+}
+
+async fn release_submit_action_lock(
+    conn: &mut PoolConnection<Postgres>,
+    game: Uuid,
+    result: Result<Ack, Reject>,
+) -> Result<Ack, Reject> {
+    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
+        .bind(submit_action_lock_key(game))
+        .fetch_one(&mut **conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    if !released {
+        return Err(Reject::Internal(
+            "submit action lock was not held at release".to_string(),
+        ));
+    }
+    result
+}
+
+fn submit_action_lock_key(game: Uuid) -> i64 {
+    let bytes = game.as_bytes();
+    let high = u64::from_be_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]);
+    let low = u64::from_be_bytes([
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+    ]);
+    (high ^ low ^ 0x6d66_6172_6368_0001) as i64
 }
 
 async fn withdraw_action(
@@ -4299,7 +4371,7 @@ async fn validate_action_slot_capacity(
                 .values()
                 .any(|action| action.template_id == template_id);
             if base_already_active && !template.has_modifier(Modifier::Simultaneous) {
-                return Err(Reject::InvalidTarget);
+                return Err(Reject::ActionAlreadySubmitted);
             }
         }
         (ActionSource::Role, None) => {
@@ -4307,7 +4379,7 @@ async fn validate_action_slot_capacity(
                 .values()
                 .any(|action| action.grant_id.is_none() && action.template_id == template_id);
             if base_already_active && !template.has_modifier(Modifier::Simultaneous) {
-                return Err(Reject::InvalidTarget);
+                return Err(Reject::ActionAlreadySubmitted);
             }
         }
         (ActionSource::Role, Some(grant_id)) | (ActionSource::ItemGrant, Some(grant_id)) => {
@@ -4398,6 +4470,21 @@ async fn active_actions_for_actor_phase(
         }
     }
     Ok(active)
+}
+
+pub async fn active_action_templates_for_actor_phase(
+    pool: &PgPool,
+    game: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<BTreeSet<String>, Reject> {
+    Ok(
+        active_actions_for_actor_phase(pool, game, phase_id, actor_slot)
+            .await?
+            .into_values()
+            .map(|action| action.template_id)
+            .collect(),
+    )
 }
 
 fn action_counter_id(template_id: &str) -> String {

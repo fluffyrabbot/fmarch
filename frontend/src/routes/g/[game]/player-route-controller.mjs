@@ -265,6 +265,9 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
   if (commandStatus?.state === "reject" && commandStatus?.error === "PhaseLocked") {
     return playerRefreshKeysForDataAction(data, action);
   }
+  if (commandStatus?.state === "reject" && commandStatus?.error === "ActionAlreadySubmitted") {
+    return playerRefreshKeysForDataAction(data, action);
+  }
   if (
     commandStatus?.state === "reject" &&
     (commandStatus?.retryable === true || commandStatus?.error === "StreamConflict")

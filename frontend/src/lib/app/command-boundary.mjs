@@ -186,6 +186,9 @@ function rejectMessage(reject, retryable) {
   if (reject.error === "PhaseLocked") {
     return `${base}; stale projection, refresh and use current controls`;
   }
+  if (reject.error === "ActionAlreadySubmitted") {
+    return `${base}; refresh and use current controls`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 

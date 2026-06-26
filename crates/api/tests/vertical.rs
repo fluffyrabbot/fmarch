@@ -555,6 +555,41 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
         post_command(
             app.clone(),
             12,
+            "action-goon",
+            Command::SubmitAction {
+                game,
+                action_id: "role_factional_kill".into(),
+                actor_slot: "slot_4".into(),
+                template_id: "factional_kill".into(),
+                targets: vec!["slot-2".into()],
+                grant_id: None,
+            },
+        )
+        .await,
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let submitted_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(submitted_state["phase"]["phase_id"], "N01");
+    assert_eq!(submitted_state["actions"], serde_json::json!([]));
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            13,
             "host_h",
             Command::OpenDayPhase {
                 game,

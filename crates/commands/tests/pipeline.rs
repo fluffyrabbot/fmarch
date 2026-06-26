@@ -51024,7 +51024,7 @@ async fn action_submission_spends_explicit_extra_action_grant(pool: PgPool) {
     )
     .await
     .expect_err("duplicate base action requires explicit grant spend");
-    assert_eq!(err, Reject::InvalidTarget);
+    assert_eq!(err, Reject::ActionAlreadySubmitted);
 
     handle(
         &pool,
@@ -70539,6 +70539,142 @@ async fn conflict_surfaces_as_retryable_stream_conflict(pool: PgPool) {
     assert!(err.is_retryable(), "the caller is told to reload + retry");
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_submit_action_revalidates_after_winning_action(pool: PgPool) {
+    let host = user("host_h");
+    let game = Uuid::new_v4();
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_4", "action-goon", "mafia_goon"),
+        ("slot-2", "town-target-2", "vanilla_townie"),
+        ("slot-3", "town-target-3", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let lock_key = 41_005_i64;
+    install_action_insert_blocker(&pool, game, lock_key).await;
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let first_pool = pool.clone();
+    let first = tokio::spawn(async move {
+        handle(
+            &first_pool,
+            &user("action-goon"),
+            Command::SubmitAction {
+                game,
+                action_id: "race_first".into(),
+                actor_slot: "slot_4".into(),
+                template_id: "factional_kill".into(),
+                targets: vec!["slot-2".into()],
+                grant_id: None,
+            },
+        )
+        .await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+
+    let second_pool = pool.clone();
+    let second = tokio::spawn(async move {
+        handle(
+            &second_pool,
+            &user("action-goon"),
+            Command::SubmitAction {
+                game,
+                action_id: "race_second".into(),
+                actor_slot: "slot_4".into(),
+                template_id: "factional_kill".into(),
+                targets: vec!["slot-3".into()],
+                grant_id: None,
+            },
+        )
+        .await
+    });
+    wait_for_advisory_wait_count(&pool, 2).await;
+
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let first = first.await.unwrap().expect("first racing action wins");
+    assert_eq!(first.stream_seqs.len(), 1);
+    let second = second
+        .await
+        .unwrap()
+        .expect_err("second racing action revalidates after first append");
+    assert_eq!(second, Reject::ActionAlreadySubmitted);
+
+    let actions: Vec<String> = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|event| event.kind == "ActionSubmitted")
+        .filter_map(|event| event.payload["action_id"].as_str().map(str::to_string))
+        .collect();
+    assert_eq!(
+        actions,
+        vec!["race_first".to_string()],
+        "same-action race must append only the winning action"
+    );
+}
+
 async fn install_deadline_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
     let function_sql = format!(
         r#"
@@ -70570,24 +70706,57 @@ async fn install_deadline_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i6
     .unwrap();
 }
 
+async fn install_action_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
+    let function_sql = format!(
+        r#"
+        CREATE OR REPLACE FUNCTION test_block_action_insert() RETURNS trigger AS $$
+        BEGIN
+            IF NEW.stream_id = '{game}'::uuid AND NEW.kind = 'ActionSubmitted' THEN
+                PERFORM pg_advisory_lock({lock_key});
+                PERFORM pg_advisory_unlock({lock_key});
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        "#
+    );
+    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_action_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER test_block_action_insert
+            BEFORE INSERT ON events
+            FOR EACH ROW EXECUTE FUNCTION test_block_action_insert()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn wait_for_advisory_wait(pool: &PgPool) {
+    wait_for_advisory_wait_count(pool, 1).await;
+}
+
+async fn wait_for_advisory_wait_count(pool: &PgPool, min_waiting: i64) {
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            let waiting: bool = sqlx::query_scalar(
+            let waiting: i64 = sqlx::query_scalar(
                 r#"
-                SELECT EXISTS (
-                    SELECT 1
+                SELECT count(*)
                     FROM pg_stat_activity
                     WHERE datname = current_database()
                       AND wait_event_type = 'Lock'
                       AND wait_event = 'advisory'
-                )
                 "#,
             )
             .fetch_one(pool)
             .await
             .unwrap();
-            if waiting {
+            if waiting >= min_waiting {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;

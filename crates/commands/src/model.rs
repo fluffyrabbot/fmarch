@@ -201,6 +201,9 @@ pub enum Reject {
     /// The vote/action target is invalid.
     #[error("invalid target")]
     InvalidTarget,
+    /// A non-simultaneous action for this actor/template is already active in the phase.
+    #[error("action already submitted")]
+    ActionAlreadySubmitted,
     /// The referenced role key does not exist in the game's pack.
     #[error("invalid role: {0}")]
     InvalidRole(String),

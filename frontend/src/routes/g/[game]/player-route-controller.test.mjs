@@ -255,6 +255,14 @@ test("player route controller refreshes command state after stale phase rejects"
     }),
     ["votecount"],
   );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_action:factional_kill",
+      commandStatus: { state: "reject", error: "ActionAlreadySubmitted" },
+    }),
+    ["notifications", "investigationResults", "commandState"],
+  );
 });
 
 test("player route controller preserves non-phase reject outcomes without refresh", async () => {
