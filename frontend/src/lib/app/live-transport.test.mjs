@@ -353,6 +353,49 @@ test("websocket resync frames refresh the projection store", async () => {
   connection.close();
 });
 
+test("websocket delta frames can refresh dependent cold-load keys", async () => {
+  const store = fakeProjectionStore({
+    thread: { posts: [] },
+    commandState: { actions: ["old-action"] },
+  });
+  const events = [];
+  connectLiveProjection({
+    url: "ws://example.test/ws",
+    projectionStore: store,
+    WebSocketCtor: FakeWebSocket,
+    fetchImpl: async (url) =>
+      jsonResponse(
+        url === "/player-command-state"
+          ? { actions: ["fresh-action"] }
+          : { posts: [] },
+      ),
+    refreshKeysForEvent: (message) =>
+      message?.kind === "delta" ? ["commandState"] : [],
+    onEvent: (message, snapshot) => events.push({ message, snapshot }),
+  });
+
+  await FakeWebSocket.last.emit("message", {
+    data: JSON.stringify({
+      v: 1,
+      id: 7,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "ThreadPostsChanged",
+          body: {
+            posts: [{ source_seq: 77, author_user: "host", body: "Dawn" }],
+          },
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(store.refreshed, [["commandState"]]);
+  assert.deepEqual(store.getSnapshot().commandState, { actions: ["fresh-action"] });
+  assert.equal(events.at(-1).message.delta.kind, "ThreadPostsChanged");
+  assert.equal(events.at(-1).snapshot.commandState.actions[0], "fresh-action");
+});
+
 test("live projection events map to visible status copy", () => {
   assert.deepEqual(liveProjectionStatusForEvent({ kind: "open" }), {
     state: "connected",
@@ -415,16 +458,30 @@ function fakeProjectionStore(initialSnapshot) {
   return {
     snapshot: initialSnapshot,
     refreshCalls: [],
+    refreshed: [],
     getSnapshot() {
       return this.snapshot;
     },
-    applyLiveEnvelope() {
+    applyLiveEnvelope(envelope) {
+      const body = envelope?.body?.body;
+      if (body?.kind === "ThreadPostsChanged") {
+        this.snapshot = {
+          ...this.snapshot,
+          thread: { posts: body.body?.posts ?? [] },
+        };
+      }
       return this.snapshot;
     },
     async refresh(keys, { fetchImpl } = {}) {
       this.refreshCalls.push({ keys, hasFetchImpl: typeof fetchImpl === "function" });
-      const response = await fetchImpl("/votecount");
-      this.snapshot = { ...this.snapshot, votecount: await response.json() };
+      this.refreshed.push(keys);
+      const patches = {};
+      for (const key of keys) {
+        const url = key === "commandState" ? "/player-command-state" : `/${key}`;
+        const response = await fetchImpl(url);
+        patches[key] = await response.json();
+      }
+      this.snapshot = { ...this.snapshot, ...patches };
       return this.snapshot;
     },
   };

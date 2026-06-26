@@ -89,6 +89,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
     data.coldLoad.investigationResultsEndpoint,
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
   );
+  assert.equal(
+    data.coldLoad.commandStateEndpoint,
+    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+  );
   assert.deepEqual(data.threadPager, {
     pageSize: 50,
     hasOlder: true,

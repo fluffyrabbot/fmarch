@@ -1544,6 +1544,42 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   const resolveCommand = await sendCommand("host_h", {
     ResolvePhase: { game: actionGame, seed: 918273 },
   });
+  await Promise.allSettled(commandStateResponseTasks);
+  await page.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  await page.waitForFunction(
+    () => document.querySelector('[data-testid="player-action-commands"]') === null,
+  );
+  const postResolveLockedCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot_4" &&
+      response.phaseId === "N01" &&
+      response.phaseKind === "Night" &&
+      response.actions.length === 0,
+  );
+  const advanceCommand = await sendCommand("host_h", {
+    AdvancePhase: { game: actionGame },
+  });
+  const postAdvanceCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot_4" &&
+      response.phaseId === "D02" &&
+      response.phaseKind === "Day" &&
+      response.actions.length === 0,
+  );
+  await page.waitForFunction(() =>
+    document
+      .querySelector('[data-testid="player-votecount-deadline"]')
+      ?.innerText.includes("Day 2"),
+  );
+  const postAdvancePhaseText = await page
+    .getByTestId("player-votecount-deadline")
+    .innerText();
   const actionGameHostState = await fetchJson(
     `${apiBaseUrl}/games/${actionGame}/host-console-state?principal_user_id=host_h&slot_id=slot-2`,
   );
@@ -1581,12 +1617,16 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     },
     actionRows,
     resolveCommand,
+    advanceCommand,
     resolvedTargetSlot: targetSlot,
     resolutionRows,
+    postResolveLockedCommandState,
+    postAdvanceCommandState,
+    postAdvancePhaseText,
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. The same hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase, removing the night action controls without a reload.",
   };
 }
 
@@ -2263,6 +2303,20 @@ function assertPlayerCommandStateEvidence({ commandStateRequests, commandStateRe
   if (!String(response.boundary ?? "").includes("Final command validation")) {
     throw new Error(`player-command-state boundary drifted: ${JSON.stringify(response)}`);
   }
+}
+
+async function waitForCommandStateResponse(commandStateResponses, predicate) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const response = commandStateResponses.find(predicate);
+    if (response !== undefined) {
+      return response;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `player-command-state response did not reach expected state: ${JSON.stringify(commandStateResponses)}`,
+  );
 }
 
 function assertPlayerActionSubmitOutcome(outcome) {

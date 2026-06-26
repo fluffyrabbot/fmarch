@@ -19,6 +19,8 @@
   import PlayerThread from "$lib/components/player-thread/PlayerThread.svelte";
   import {
     PLAYER_ROUTE_CONTRACT,
+    buildPlayerComposerView,
+    buildPlayerPhaseView,
     buildLiveOfficialPost,
     buildPrivateQueueBoundary,
     buildPrivateQueueRouteItems,
@@ -40,6 +42,7 @@
     playerCommandErrorStatus,
     playerCommandPendingStatus,
     recordPlayerCommandReceipt,
+    playerRefreshKeysForLiveDelta,
     playerResyncKeys,
     playerThreadErrorStatus,
     playerThreadPendingStatus,
@@ -54,6 +57,10 @@
   let commandReceipts = [];
   let thread = data.thread;
   let votecount = data.votecount;
+  let commandState = data.commandState;
+  let phase = data.phase;
+  let composer = data.composer;
+  let surfaceHeader = data.surfaceHeader;
   let privateQueue = data.privateQueue;
   let privateQueueBoundary = data.privateQueueBoundary;
   let liveOfficialPost = data.liveOfficialPost;
@@ -76,6 +83,13 @@
   $: playerForcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
     : null;
+  $: currentData = Object.freeze({
+    ...data,
+    commandState,
+    phase,
+    composer,
+    surfaceHeader,
+  });
   $: playerEmptyState = buildRouteStateViewModel({
     surface: "player",
     state: "empty",
@@ -89,6 +103,14 @@
   projectionStore.subscribe((snapshot) => {
     thread = snapshot.thread;
     votecount = snapshot.votecount;
+    commandState = snapshot.commandState;
+    phase = buildPlayerPhaseView(commandState);
+    composer = buildPlayerComposerView(data.composer, commandState, data.player.slotId);
+    surfaceHeader = Object.freeze({
+      ...data.surfaceHeader,
+      title: phase.label,
+      summary: phase.summary,
+    });
     liveOfficialPost = buildLiveOfficialPost(snapshot.thread);
     privateQueue = buildPrivateQueueRouteItems(snapshot, {
       game: data.game.id,
@@ -105,6 +127,8 @@
       projectionStore,
       fetchImpl: fetch,
       resyncKeys: playerProjectionResyncKeys,
+      refreshKeysForEvent: (message) =>
+        playerRefreshKeysForLiveDelta(data, message),
       onEvent(message, snapshot) {
         liveStatus = recordPlayerLiveProjectionEvent({
           windowRef: window,
@@ -141,7 +165,7 @@
       const result = await submitPlayerRouteCommand({
         action,
         composerBody,
-        data,
+        data: currentData,
         fetchImpl: fetch,
         projectionStore,
       });
@@ -153,7 +177,7 @@
       );
       if (typeof window !== "undefined") {
         const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data,
+          data: currentData,
           action,
           composerBody,
           optimisticStatus,
@@ -176,7 +200,7 @@
       );
       if (typeof window !== "undefined") {
         const bridgePlan = buildPlayerCommandDispatchBridgePlan({
-          data,
+          data: currentData,
           action,
           composerBody,
           optimisticStatus,
@@ -224,11 +248,11 @@
 </svelte:head>
 
 <main class="fm-surface player-surface" data-testid={PLAYER_ROUTE_CONTRACT.surfaceTestId}>
-  <AppSurfaceHeader header={data.surfaceHeader} {liveStatus} />
+  <AppSurfaceHeader header={surfaceHeader} {liveStatus} />
 
   <PlayerPostureStrip
     channel={data.channel}
-    phase={data.phase}
+    {phase}
     projectionBoundary={data.projectionBoundary}
     threadPager={data.threadPager}
     {votecount}
@@ -249,7 +273,7 @@
       <PlayerChannelRail channels={data.channels} />
 
       <PlayerThread
-        phase={data.phase}
+        {phase}
         {thread}
         {liveOfficialPost}
         {threadPageStatus}
@@ -271,8 +295,8 @@
         data-stability-mode={data.layout.commandRail.data.stabilityMode}
       >
         <PlayerCommandPanel
-          composer={data.composer}
-          phase={data.phase}
+          {composer}
+          {phase}
           {votecount}
           channel={data.channel}
           player={data.player}

@@ -46,6 +46,7 @@ struct LiveProjectionUpdate {
     host_console_dirty: bool,
     host_prompts_dirty: bool,
     player_private_dirty: bool,
+    player_command_state_dirty: bool,
 }
 
 impl ApiState {
@@ -450,6 +451,7 @@ async fn command(
     let host_console_dirty = command_affects_host_console(&msg.command);
     let host_prompts_dirty = command_affects_host_prompts(&msg.command);
     let player_private_dirty = command_affects_player_private(&msg.command);
+    let player_command_state_dirty = command_affects_player_command_state(&msg.command);
     let previous_votecount = match game {
         Some(game) => current_votecount_rows(&state, game).await.ok(),
         None => None,
@@ -473,6 +475,7 @@ async fn command(
                     host_console_dirty,
                     host_prompts_dirty,
                     player_private_dirty,
+                    player_command_state_dirty,
                 )
                 .await;
             }
@@ -491,6 +494,7 @@ async fn publish_live_projection_change(
     host_console_dirty: bool,
     host_prompts_dirty: bool,
     player_private_dirty: bool,
+    player_command_state_dirty: bool,
 ) {
     let Ok(current) = current_votecount_rows(state, game).await else {
         return;
@@ -523,6 +527,7 @@ async fn publish_live_projection_change(
         && !host_console_dirty
         && !host_prompts_dirty
         && !player_private_dirty
+        && !player_command_state_dirty
     {
         return;
     }
@@ -533,6 +538,7 @@ async fn publish_live_projection_change(
         host_console_dirty,
         host_prompts_dirty,
         player_private_dirty,
+        player_command_state_dirty,
     });
 }
 
@@ -1371,6 +1377,7 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
             && !update.host_console_dirty
             && !update.host_prompts_dirty
             && !update.player_private_dirty
+            && !update.player_command_state_dirty
         {
             break;
         }
@@ -1422,6 +1429,18 @@ async fn ws_session(mut socket: WebSocket, state: ApiState, params: WsParams) {
                 continue;
             }
             let sent_to = send_projection_deltas(&mut socket, next_envelope_id, deltas).await;
+            if sent_to == next_envelope_id {
+                break;
+            }
+            next_envelope_id = sent_to;
+        }
+        if update.player_command_state_dirty {
+            let sent_to = send_projection_deltas(
+                &mut socket,
+                next_envelope_id,
+                vec![ProjectionDelta::ResyncRequired { from_seq: 0 }],
+            )
+            .await;
             if sent_to == next_envelope_id {
                 break;
             }
@@ -1615,6 +1634,22 @@ fn command_affects_player_private(command: &wire::Command) -> bool {
             | wire::Command::ResolveHostPrompt { .. }
             | wire::Command::SubmitAction { .. }
             | wire::Command::WithdrawAction { .. }
+    )
+}
+
+fn command_affects_player_command_state(command: &wire::Command) -> bool {
+    matches!(
+        command,
+        wire::Command::AssignRole { .. }
+            | wire::Command::SetSlotStatus { .. }
+            | wire::Command::StartGame { .. }
+            | wire::Command::OpenDayPhase { .. }
+            | wire::Command::AdvancePhase { .. }
+            | wire::Command::AdvancePhaseByDeadline { .. }
+            | wire::Command::LockThread { .. }
+            | wire::Command::UnlockThread { .. }
+            | wire::Command::ResolvePhase { .. }
+            | wire::Command::CompleteGame { .. }
     )
 }
 

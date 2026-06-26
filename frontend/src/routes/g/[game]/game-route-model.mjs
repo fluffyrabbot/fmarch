@@ -6,6 +6,7 @@ import {
 } from "../../../lib/app/capabilities.mjs";
 import {
   loadPlayerColdData,
+  playerCommandStateUrl,
   playerThreadUrl,
   playerVotecountUrl,
   principalScopedGameUrl,
@@ -76,12 +77,13 @@ export async function buildGameRouteData({
       (capability.game === gameId || capability.game === undefined),
   );
   const playerSlotId = slotCapability?.slot ?? "slot-7";
+  const playerCommandStateSlot = slotCapability === undefined ? null : playerSlotId;
 
   const coldLoad = await loadPlayerColdData({
     game: gameId,
     activeChannel: channelId,
     principalUserId,
-    actorSlot: playerSlotId,
+    actorSlot: playerCommandStateSlot,
     fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
     apiBaseUrl,
     fallback: PLAYER_FIXTURE_COLD_LOAD,
@@ -94,6 +96,20 @@ export async function buildGameRouteData({
   const playerCapabilityLabel =
     slotCapability === undefined ? access.capabilityLabel : capabilityLabel(slotCapability);
   const phase = buildPlayerPhaseView(coldLoad.commandState);
+  const composer = buildPlayerComposerView(
+    {
+      canonicalVoteTag: "##vote slot-2",
+      defaultBody: "##vote slot-2",
+      postCommandLabel: "Post",
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      voteTargetSlot: "slot-2",
+      commandEndpoint: "/commands",
+      transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
+    },
+    coldLoad.commandState,
+    playerSlotId,
+  );
 
   return Object.freeze({
     shell: buildAppShell({
@@ -175,6 +191,14 @@ export async function buildGameRouteData({
             principalUserId,
           })
         : null,
+      commandStateEndpoint:
+        hasPrincipal && playerCommandStateSlot !== null
+          ? playerCommandStateUrl({
+              game: gameId,
+              principalUserId,
+              slotId: playerCommandStateSlot,
+            })
+          : null,
     }),
     liveProjection: Object.freeze({
       endpoint: hasPrincipal
@@ -186,21 +210,11 @@ export async function buildGameRouteData({
         : null,
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
-    composer: Object.freeze({
-      canonicalVoteTag: "##vote slot-2",
-      defaultBody: "##vote slot-2",
-      postCommandLabel: "Post",
-      voteCommandLabel: "Vote slot-2",
-      withdrawCommandLabel: "Withdraw vote",
-      actionCommands: buildPlayerActionCommands(coldLoad.commandState, playerSlotId),
-      voteTargetSlot: "slot-2",
-      commandEndpoint: "/commands",
-      transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
-    }),
+    composer,
   });
 }
 
-function buildPlayerPhaseView(commandState) {
+export function buildPlayerPhaseView(commandState) {
   const phase = commandState?.phase;
   if (phase === null || phase === undefined || phase.phaseId === "") {
     return FIXTURE_PHASE;
@@ -216,7 +230,14 @@ function buildPlayerPhaseView(commandState) {
   });
 }
 
-function buildPlayerActionCommands(commandState, actorSlot) {
+export function buildPlayerComposerView(baseComposer, commandState, actorSlot) {
+  return Object.freeze({
+    ...baseComposer,
+    actionCommands: buildPlayerActionCommands(commandState, actorSlot),
+  });
+}
+
+export function buildPlayerActionCommands(commandState, actorSlot) {
   const actions = commandState?.actions ?? [];
   if (actions.length === 0) {
     return Object.freeze([]);

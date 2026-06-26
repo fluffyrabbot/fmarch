@@ -11,6 +11,7 @@ import {
   playerCommandPendingStatus,
   playerCommandTrace,
   playerRefreshKeysForAction,
+  playerRefreshKeysForLiveDelta,
   playerResyncKeys,
   recordPlayerCommandReceipt,
   playerThreadErrorStatus,
@@ -28,18 +29,21 @@ test("player route controller builds projection store boundaries from route data
     votecount: data.votecount,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
+    commandState: data.commandState,
   });
   assert.deepEqual(Object.keys(buildPlayerProjectionColdLoads(data)), [
     "thread",
     "votecount",
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
   assert.deepEqual(playerResyncKeys(data), [
     "thread",
     "votecount",
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
 
   const anonymousData = fixtureData({
@@ -47,6 +51,7 @@ test("player route controller builds projection store boundaries from route data
       ...fixtureData().coldLoad,
       notificationsEndpoint: null,
       investigationResultsEndpoint: null,
+      commandStateEndpoint: null,
     },
   });
   assert.deepEqual(Object.keys(buildPlayerProjectionColdLoads(anonymousData)), [
@@ -54,6 +59,20 @@ test("player route controller builds projection store boundaries from route data
     "votecount",
   ]);
   assert.deepEqual(playerResyncKeys(anonymousData), ["thread", "votecount"]);
+  assert.deepEqual(
+    playerRefreshKeysForLiveDelta(data, {
+      kind: "delta",
+      delta: { kind: "ThreadPostsChanged" },
+    }),
+    ["commandState"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForLiveDelta(anonymousData, {
+      kind: "delta",
+      delta: { kind: "ThreadPostsChanged" },
+    }),
+    [],
+  );
 });
 
 test("player route controller builds typed player command requests", () => {
@@ -182,10 +201,12 @@ test("player route controller refreshes only projections touched by acked comman
   assert.deepEqual(playerRefreshKeysForAction("submit_action"), [
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
   assert.deepEqual(playerRefreshKeysForAction("submit_action:factional_kill"), [
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
   assert.deepEqual(playerRefreshKeysForAction("withdraw_vote"), ["votecount"]);
 });
@@ -330,7 +351,7 @@ test("player route controller handles no-older and local view statuses", async (
     actionId: "submit_action",
     statusKey: "submit_action",
     dispatchKind: "submit_action",
-    projectionRefreshKeys: ["notifications", "investigationResults"],
+    projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
   });
   assert.deepEqual(playerThreadPendingStatus(), {
     state: "pending",
@@ -428,6 +449,10 @@ function fixtureData(overrides = {}) {
     votecount: [],
     notifications: [],
     investigationResults: [],
+    commandState: {
+      phase: { phaseId: "N01", phaseKind: "Night", phaseNumber: 1, locked: false },
+      actions: [],
+    },
     coldLoad: {
       threadEndpoint: "/games/midsummer/thread?limit=50",
       votecountEndpoint: "/games/midsummer/votecount",
@@ -435,6 +460,8 @@ function fixtureData(overrides = {}) {
         "/games/midsummer/notifications?principal_user_id=player_mira",
       investigationResultsEndpoint:
         "/games/midsummer/investigation-results?principal_user_id=player_mira",
+      commandStateEndpoint:
+        "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
     },
     ...overrides,
   };

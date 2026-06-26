@@ -122,6 +122,7 @@ export function connectLiveProjection({
   WebSocketCtor = globalThis.WebSocket,
   fetchImpl = globalThis.fetch,
   resyncKeys = undefined,
+  refreshKeysForEvent = () => [],
   onEvent = () => {},
 }) {
   if (typeof WebSocketCtor !== "function") {
@@ -145,7 +146,11 @@ export function connectLiveProjection({
         onEvent(recovery.message, recovery.snapshot);
         return;
       }
-      const snapshot = projectionStore.applyLiveEnvelope(envelope);
+      let snapshot = projectionStore.applyLiveEnvelope(envelope);
+      const refreshKeys = normalizeRefreshKeys(refreshKeysForEvent(message, snapshot));
+      if (refreshKeys.length > 0) {
+        snapshot = await projectionStore.refresh(refreshKeys, { fetchImpl });
+      }
       onEvent(message, snapshot);
     } catch (error) {
       onEvent(Object.freeze({ kind: "error", message: error.message }), null);
@@ -162,6 +167,14 @@ export function connectLiveProjection({
       socket.close();
     },
   });
+}
+
+function normalizeRefreshKeys(value) {
+  if (value === undefined || value === null) {
+    return Object.freeze([]);
+  }
+  const keys = Array.isArray(value) ? value : [value];
+  return Object.freeze(keys.filter((key) => typeof key === "string" && key !== ""));
 }
 
 export function liveProjectionStatusForEvent(

@@ -12,6 +12,7 @@ import {
 } from "../../../lib/app/command-boundary.mjs";
 import {
   normalizeThreadPage,
+  normalizePlayerCommandState,
   normalizeVotecount,
   playerThreadUrl,
 } from "../../../lib/app/cold-load.mjs";
@@ -26,6 +27,7 @@ export function buildPlayerProjectionInitialSnapshot(data) {
     votecount: data.votecount,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
+    commandState: data.commandState,
   });
 }
 
@@ -55,6 +57,14 @@ export function buildPlayerProjectionColdLoads(data) {
             normalize: normalizePrivateRows,
           }),
         }),
+    ...(data.coldLoad.commandStateEndpoint == null
+      ? {}
+      : {
+          commandState: Object.freeze({
+            url: data.coldLoad.commandStateEndpoint,
+            normalize: normalizePlayerCommandState,
+          }),
+        }),
   });
 }
 
@@ -66,7 +76,18 @@ export function playerResyncKeys(data) {
     ...(data.coldLoad.investigationResultsEndpoint === null
       ? []
       : ["investigationResults"]),
+    ...(data.coldLoad.commandStateEndpoint == null ? [] : ["commandState"]),
   ]);
+}
+
+export function playerRefreshKeysForLiveDelta(data, message) {
+  if (
+    data.coldLoad.commandStateEndpoint == null ||
+    message?.kind !== "delta"
+  ) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(["commandState"]);
 }
 
 export function playerCommandTrace(action) {
@@ -152,7 +173,7 @@ export function playerRefreshKeysForAction(action) {
     normalizedAction === "submit_invalid_action" ||
     normalizedAction.startsWith("submit_invalid_action:")
   ) {
-    return Object.freeze(["notifications", "investigationResults"]);
+    return Object.freeze(["notifications", "investigationResults", "commandState"]);
   }
   switch (normalizedAction) {
     case "submit_post":
@@ -222,7 +243,7 @@ export async function submitPlayerRouteCommand({
     fetchImpl,
   });
   if (commandStatus.state === "ack") {
-    const refreshKeys = playerRefreshKeysForAction(action);
+    const refreshKeys = playerRefreshKeysForDataAction(data, action);
     if (refreshKeys.length > 0) {
       await projectionStore.refresh(refreshKeys, { fetchImpl });
     }
@@ -231,6 +252,14 @@ export async function submitPlayerRouteCommand({
     commandStatus,
     snapshot: projectionStore.getSnapshot(),
   });
+}
+
+function playerRefreshKeysForDataAction(data, action) {
+  const keys = playerRefreshKeysForAction(action);
+  if (data.coldLoad.commandStateEndpoint != null) {
+    return keys;
+  }
+  return Object.freeze(keys.filter((key) => key !== "commandState"));
 }
 
 export function playerActionConfig(data, action) {
