@@ -137,6 +137,12 @@ The local release-readiness checklist generator is:
 npm run test:dev-test-game-readiness
 ```
 
+The local backup/restore drill for this spine is:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-backup-restore
+```
+
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
 entry through `/auth/login`, checks that those browser sessions came from
@@ -179,10 +185,14 @@ when the proof-run artifact is stale, missing a required lane, or claims
 production/release readiness.
 
 The release-readiness checklist is intentionally not a release gate. It keeps
-`releaseReady: false` and `productionReady: false`, while naming the exact
-remaining evidence needed for production identity, hosted deployment,
-backup/restore, exhaustive race coverage, observability, and a human release
-runbook.
+`releaseReady: false` and `productionReady: false`. Without an explicit
+backup/restore artifact, it keeps `backup-restore-drill` unproven. After
+`npm run test:dev-test-game-backup-restore`, the checklist consumes
+`target/live-stack-backup-restore-drill/local-backup-restore-proof.json` plus
+`target/live-stack-backup-restore-drill/local-live-stack.dump` and promotes only
+the local dump/restore check. Production identity, hosted deployment,
+production-like backup storage/PITR, exhaustive race coverage, observability,
+and a human release runbook remain outside that local proof.
 
 ## Boundary
 

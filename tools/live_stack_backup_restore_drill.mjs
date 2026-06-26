@@ -200,12 +200,12 @@ async function assertRestoredApi(apiBaseUrl) {
   if (
     !votecount.some(
       (row) =>
-        row.body?.candidate_slot === "slot-2" &&
+        row.body?.candidate_slot === "slot_5" &&
         row.body?.phase_id === "D01" &&
-        row.body?.count === 1,
+        row.body?.count === 3,
     )
   ) {
-    throw new Error(`restored votecount missing slot-2 ballot: ${JSON.stringify(votecount)}`);
+    throw new Error(`restored votecount missing slot_5 wagon: ${JSON.stringify(votecount)}`);
   }
 
   const thread = await fetchJson(

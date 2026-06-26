@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -8,13 +8,46 @@ export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultProofPath = path.join(artifactDir, "proof-run.json");
+const defaultBackupRestoreProofPath = path.join(
+  repoRoot,
+  "target",
+  "live-stack-backup-restore-drill",
+  "local-backup-restore-proof.json",
+);
+const defaultBackupRestoreDumpPath = path.join(
+  repoRoot,
+  "target",
+  "live-stack-backup-restore-drill",
+  "local-live-stack.dump",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
+const maxBackupArtifactAgeHours = Number.parseFloat(
+  process.env.FMARCH_DEV_TEST_GAME_READINESS_MAX_ARTIFACT_AGE_HOURS ?? "24",
+);
+
+if (!Number.isFinite(maxBackupArtifactAgeHours) || maxBackupArtifactAgeHours <= 0) {
+  throw new Error(
+    "FMARCH_DEV_TEST_GAME_READINESS_MAX_ARTIFACT_AGE_HOURS must be a positive number",
+  );
+}
 
 export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
+  const backupRestoreEvidence = options.backupRestoreProof
+    ? validateDevTestGameBackupRestoreProof(options.backupRestoreProof, {
+        proofPath:
+          options.backupRestoreProofPath ??
+          "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+        dumpPath:
+          options.backupRestoreDumpPath ??
+          "target/live-stack-backup-restore-drill/local-live-stack.dump",
+        proofArtifact: options.backupRestoreProofArtifact,
+        dumpArtifact: options.backupRestoreDumpArtifact,
+      })
+    : undefined;
   const localChecks = [
     {
       id: "local-role-url-browser-proof",
@@ -44,6 +77,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ],
     },
   ];
+  if (backupRestoreEvidence !== undefined) {
+    localChecks.push({
+      id: "local-backup-restore-drill",
+      label: "Local dump/restore drill",
+      status: "passed",
+      evidence: backupRestoreEvidence.path,
+      dump: backupRestoreEvidence.dumpPath,
+      proofBoundary: backupRestoreEvidence.proofBoundary,
+    });
+  }
   const unproven = [
     {
       id: "production-identity",
@@ -56,11 +99,23 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "unproven",
       requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
     },
-    {
-      id: "backup-restore-drill",
-      status: "unproven",
-      requiredEvidence: "Local or production-like backup/restore drill tied to this dev-test-game spine",
-    },
+    ...(backupRestoreEvidence === undefined
+      ? [
+          {
+            id: "backup-restore-drill",
+            status: "unproven",
+            requiredEvidence:
+              "Local or production-like backup/restore drill tied to this dev-test-game spine",
+          },
+        ]
+      : [
+          {
+            id: "production-backup-recovery",
+            status: "unproven",
+            requiredEvidence:
+              "Production-like backup storage, PITR restore, key escrow, and secret rotation evidence",
+          },
+        ]),
     {
       id: "exhaustive-race-coverage",
       status: "unproven",
@@ -90,19 +145,96 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofRun: sourcePath,
       proofGeneratedAt: proof.generatedAt,
       game: proof.session.game,
+      ...(backupRestoreEvidence === undefined
+        ? {}
+        : {
+            backupRestoreProof: backupRestoreEvidence.path,
+            backupRestoreDump: backupRestoreEvidence.dumpPath,
+          }),
     },
     localDevelopmentSpine: {
       status: "passed",
       checks: localChecks,
+      ...(backupRestoreEvidence === undefined
+        ? {}
+        : {
+            evidence: {
+              backupRestore: backupRestoreEvidence,
+            },
+          }),
     },
     releaseReadiness: {
       status: "not_ready",
       reason:
-        "The local development-spine proof passed, but production identity, hosted operations, backup/restore, exhaustive races, observability, and human release evidence remain unproven.",
+        backupRestoreEvidence === undefined
+          ? "The local development-spine proof passed, but production identity, hosted operations, backup/restore, exhaustive races, observability, and human release evidence remain unproven."
+          : "The local development-spine proof and local backup/restore drill passed, but production identity, hosted operations, production backup/PITR, exhaustive races, observability, and human release evidence remain unproven.",
       unproven,
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact. Passing means the local harness evidence is coherent; it does not mean production, hosted, beta, or release readiness.",
+  };
+}
+
+export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
+  const requiredChecks = [
+    "dump-created",
+    "event-log-restored",
+    "projection-fingerprints-restored",
+    "auth-sessions-restored",
+    "restored-api-capabilities",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`backup/restore proof version drifted: ${proof?.version}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`backup/restore proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-live-stack-backup-restore-drill") {
+    throw new Error(`backup/restore proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false) {
+    throw new Error("backup/restore proof must not claim production readiness");
+  }
+  const checks = new Map((proof.checks ?? []).map((check) => [check.id, check.status]));
+  for (const id of requiredChecks) {
+    if (checks.get(id) !== "passed") {
+      throw new Error(`backup/restore check failed or missing: ${id}`);
+    }
+  }
+  assertDeepEqual(
+    proof.fingerprints?.restored,
+    proof.fingerprints?.source,
+    "backup/restore source and restored fingerprints",
+  );
+  if ((proof.fingerprints?.source?.events?.total ?? 0) <= 0) {
+    throw new Error("backup/restore proof has no event rows");
+  }
+  assertSessionCapability(proof, "host", "HostOf");
+  assertSessionCapability(proof, "player", "SlotOccupant");
+  assertSessionCapability(proof, "player", "ChannelMember");
+  assertSessionCapability(proof, "admin", "GlobalAdmin");
+  const dumpPath =
+    options.dumpPath ?? "target/live-stack-backup-restore-drill/local-live-stack.dump";
+  if (proof.artifact?.dump !== dumpPath) {
+    throw new Error(`backup/restore dump path drifted: ${proof.artifact?.dump} != ${dumpPath}`);
+  }
+  return {
+    status: "passed",
+    path:
+      options.proofPath ??
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    dumpPath,
+    checkCount: requiredChecks.length,
+    eventRows: proof.fingerprints.source.events.total,
+    restoredSessions: proof.restoredApiEvidence.restoredSessions,
+    proofBoundary: proof.proofBoundary,
+    scope: proof.scope,
+    productionReady: proof.productionReady,
+    ...(options.proofArtifact === undefined
+      ? {}
+      : { artifact: options.proofArtifact }),
+    ...(options.dumpArtifact === undefined ? {} : { dumpArtifact: options.dumpArtifact }),
   };
 }
 
@@ -124,8 +256,22 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist.localDevelopmentSpine?.status !== "passed") {
     throw new Error("dev-test-game local development spine did not pass");
   }
+  for (const check of checklist.localDevelopmentSpine?.checks ?? []) {
+    if (check.status !== "passed") {
+      throw new Error(`dev-test-game local check ${check.id} did not pass`);
+    }
+  }
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
+  }
+  const hasBackupCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) => check.id === "local-backup-restore-drill" && check.status === "passed",
+  );
+  const hasBackupUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "backup-restore-drill",
+  );
+  if (hasBackupCheck && hasBackupUnproven) {
+    throw new Error("dev-test-game backup/restore cannot be both passed and unproven");
   }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
@@ -179,8 +325,10 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ? path.resolve(process.cwd(), process.argv[2])
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
+  const backupRestoreOptions = await readOptionalBackupRestoreArtifacts();
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
+    ...(backupRestoreOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -189,4 +337,79 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   console.log(
     `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
   );
+}
+
+async function readOptionalBackupRestoreArtifacts() {
+  const proofOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF;
+  const dumpOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP;
+  if ((proofOverride === undefined) !== (dumpOverride === undefined)) {
+    throw new Error(
+      "FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF and FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP must be set together",
+    );
+  }
+  if (proofOverride === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(proofOverride, defaultBackupRestoreProofPath);
+  const dumpPath = resolveArtifactPath(dumpOverride, defaultBackupRestoreDumpPath);
+  const [proofArtifact, dumpArtifact] = await Promise.all([
+    readFreshArtifactMetadata(proofPath, now),
+    readFreshArtifactMetadata(dumpPath, now),
+  ]);
+  return {
+    backupRestoreProof: JSON.parse(await readFile(proofPath, "utf8")),
+    backupRestoreProofPath: path.relative(repoRoot, proofPath),
+    backupRestoreDumpPath: path.relative(repoRoot, dumpPath),
+    backupRestoreProofArtifact: proofArtifact,
+    backupRestoreDumpArtifact: dumpArtifact,
+  };
+}
+
+function resolveArtifactPath(value, fallback) {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+  return path.resolve(process.cwd(), value);
+}
+
+async function readFreshArtifactMetadata(absolutePath, now) {
+  const metadata = await stat(absolutePath);
+  const ageMs = now.getTime() - metadata.mtime.getTime();
+  if (ageMs < 0) {
+    throw new Error(`${path.relative(repoRoot, absolutePath)} has a future mtime`);
+  }
+  const maxAgeMs = maxBackupArtifactAgeHours * 60 * 60 * 1000;
+  if (ageMs > maxAgeMs) {
+    throw new Error(
+      `${path.relative(repoRoot, absolutePath)} is stale: ${formatAge(ageMs)} old`,
+    );
+  }
+  return {
+    path: path.relative(repoRoot, absolutePath),
+    mtime: metadata.mtime.toISOString(),
+    ageSeconds: Math.round(ageMs / 1000),
+    sizeBytes: metadata.size,
+  };
+}
+
+function assertSessionCapability(proof, sessionKey, capability) {
+  const capabilities = proof.restoredApiEvidence?.restoredSessions?.[sessionKey] ?? [];
+  if (!capabilities.includes(capability)) {
+    throw new Error(`restored ${sessionKey} session missing ${capability}`);
+  }
+}
+
+function assertDeepEqual(actual, expected, label) {
+  const actualJson = JSON.stringify(actual);
+  const expectedJson = JSON.stringify(expected);
+  if (actualJson !== expectedJson) {
+    throw new Error(`${label} mismatch\nactual: ${actualJson}\nexpected: ${expectedJson}`);
+  }
+}
+
+function formatAge(ageMs) {
+  const hours = Math.floor(ageMs / (60 * 60 * 1000));
+  const minutes = Math.floor((ageMs % (60 * 60 * 1000)) / (60 * 1000));
+  return `${hours}h ${minutes}m`;
 }

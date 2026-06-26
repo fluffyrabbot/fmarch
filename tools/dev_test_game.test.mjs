@@ -257,4 +257,57 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) => item.id === "backup-restore-drill" && item.status === "unproven",
     ),
   );
+  const backupRestoreReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    backupRestoreProofPath:
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    backupRestoreDumpPath: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    backupRestoreProof: {
+      version: 1,
+      status: "passed",
+      scope: "local-live-stack-backup-restore-drill",
+      productionReady: false,
+      proofBoundary: "Local disposable Postgres backup/restore proof.",
+      artifact: {
+        proof: "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+        dump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+      },
+      checks: [
+        { id: "dump-created", status: "passed" },
+        { id: "event-log-restored", status: "passed" },
+        { id: "projection-fingerprints-restored", status: "passed" },
+        { id: "auth-sessions-restored", status: "passed" },
+        { id: "restored-api-capabilities", status: "passed" },
+      ],
+      fingerprints: {
+        source: { events: { total: 3 }, projections: { phase_state: [] } },
+        restored: { events: { total: 3 }, projections: { phase_state: [] } },
+      },
+      restoredApiEvidence: {
+        restoredSessions: {
+          host: ["HostOf"],
+          player: ["SlotOccupant", "ChannelMember"],
+          admin: ["GlobalAdmin"],
+        },
+      },
+    },
+  });
+  assertDevTestGameReleaseReadiness(backupRestoreReadiness);
+  assert(
+    backupRestoreReadiness.localDevelopmentSpine.checks.some(
+      (item) => item.id === "local-backup-restore-drill" && item.status === "passed",
+    ),
+  );
+  assert.equal(
+    backupRestoreReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "backup-restore-drill",
+    ),
+    false,
+  );
+  assert(
+    backupRestoreReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "production-backup-recovery" && item.status === "unproven",
+    ),
+  );
+  assert.equal(backupRestoreReadiness.releaseReadiness.status, "not_ready");
 });
