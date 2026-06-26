@@ -2,9 +2,9 @@ import { pathToFileURL } from "node:url";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import { runNodeScript } from "./dev_test_game_spine_runner.mjs";
 
-const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
+export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
 
-const readinessEvidenceEnv = {
+export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
     "target/dev-test-game/core-loop-admin-proof.json",
   FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF:
@@ -35,6 +35,6 @@ export async function runDevTestGameAdminSpine() {
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
-    env: readinessEvidenceEnv,
+    env: adminSpineReadinessEvidenceEnv,
   });
 }

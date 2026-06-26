@@ -24,6 +24,20 @@ import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
+import { adminSpineReadinessEvidenceEnv } from "./dev_test_game_admin_spine.mjs";
+import {
+  backupAwareOpsEnv,
+  backupRestoreEvidenceEnv,
+  backupRestoreFinalReadinessEnv,
+  devTestGameBackupRestoreSpinePlan,
+  opsReadinessEnv,
+  seedReadinessEnv,
+} from "./dev_test_game_backup_restore_spine.mjs";
+import {
+  devTestGameIdentitySpinePlan,
+  identityReadinessEnv,
+} from "./dev_test_game_identity_spine.mjs";
+import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -52,6 +66,106 @@ test("dev test-game args expose reset reuse naming and verification controls", (
   );
 
   assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
+});
+
+test("dev test-game spine orchestrators expose stable proof order and env maps", () => {
+  assert.deepEqual(
+    devTestGameBackupRestoreSpinePlan.map((step) => step.script),
+    [
+      "tools/live_stack_backup_restore_drill.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_ops_artifacts.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_seed_fixture_summary.mjs",
+      "tools/dev_test_game_seed_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_backup_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+    ],
+  );
+  assert.deepEqual(backupRestoreEvidenceEnv, {
+    FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
+      "target/live-stack-backup-restore-drill/local-live-stack.dump",
+  });
+  assert.deepEqual(backupAwareOpsEnv, {
+    FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_PROOF:
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    FMARCH_DEV_TEST_GAME_OPS_BACKUP_RESTORE_DUMP:
+      "target/live-stack-backup-restore-drill/local-live-stack.dump",
+  });
+  assert.deepEqual(opsReadinessEnv, {
+    ...backupRestoreEvidenceEnv,
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+  });
+  assert.deepEqual(seedReadinessEnv, {
+    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
+      "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
+      "target/dev-test-game/seed-admin-proof.json",
+  });
+  assert.deepEqual(backupRestoreFinalReadinessEnv, {
+    ...backupRestoreEvidenceEnv,
+    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
+      "target/dev-test-game/backup-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
+      "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
+      "target/dev-test-game/seed-admin-proof.json",
+  });
+  assert.deepEqual(
+    devTestGameIdentitySpinePlan.map((step) => step.script),
+    [
+      "tools/auth_invite_role_proof.mjs",
+      "tools/dev_test_game_identity_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+    ],
+  );
+  assert.deepEqual(identityReadinessEnv, {
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
+      "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
+      "target/auth-invite-role-proof/invite-role-proof.json",
+    FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
+      "target/dev-test-game/identity-admin-proof.json",
+  });
+  assert.deepEqual(adminSpineReadinessEvidenceEnv, {
+    FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
+      "target/dev-test-game/core-loop-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF:
+      "target/dev-test-game/hardening-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
+      "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
+      "target/dev-test-game/backup-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF:
+      "target/dev-test-game/ops-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
+      "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
+      "target/dev-test-game/seed-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
+      "target/auth-invite-role-proof/invite-role-proof.json",
+    FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
+      "target/dev-test-game/identity-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF:
+      "target/dev-test-game/admin-spine-proof.json",
+  });
+  assert.deepEqual(devTestGameLiveSpinePlan, [
+    { kind: "npm", script: "dev:test-game:prebuild" },
+    { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
+    { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
+    { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+    { kind: "spine", script: "backup-restore" },
+    { kind: "spine", script: "identity" },
+    { kind: "spine", script: "admin" },
+  ]);
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {
