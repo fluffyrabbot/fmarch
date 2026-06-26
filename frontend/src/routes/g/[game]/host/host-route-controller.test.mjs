@@ -10,6 +10,7 @@ import {
   hostCommandErrorOutcome,
   hostCommandPendingStatus,
   hostPostAckRefreshKeys,
+  hostPostCommandRefreshKeys,
   hostProjectionResyncKeys,
   recordHostCommandStatus,
   sendHostRouteAction,
@@ -203,6 +204,38 @@ test("host route controller derives dispatch bridge plans from host actions", ()
   });
 });
 
+test("host route controller reports stale phase reject refreshes in dispatch plans", () => {
+  const event = {
+    actionId: "lock_thread",
+    confirmationTrace: {
+      kind: "confirmation-command-trace",
+      confirmationKind: "confirmation-action",
+      surface: "moderator-host",
+      actionId: "lock_thread",
+      statusKey: "lock_thread",
+      dispatchKind: "lock_thread",
+    },
+    payload: {
+      kind: "lock_thread",
+      gameId: "midsummer",
+    },
+  };
+  const plan = buildHostCommandDispatchBridgePlan({
+    event,
+    data: fixtureData(),
+    optimisticStatus: hostCommandPendingStatus(event),
+    finalStatus: {
+      state: "reject",
+      actionId: event.actionId,
+      error: "PhaseLocked",
+      message: "Reject PhaseLocked: phase locked",
+    },
+  });
+
+  assert.equal(plan.finalState, "reject");
+  assert.deepEqual(plan.projectionRefreshKeys, ["host"]);
+});
+
 test("host route controller sends commands and applies acked host projection state", async () => {
   const sent = [];
   const projectionStore = fakeProjectionStore({
@@ -352,7 +385,7 @@ test("host route controller refreshes host prompts after hydrated prompt ACKs", 
   );
 });
 
-test("host route controller only schedules post-ACK refreshes for prompt ACKs without patches", () => {
+test("host route controller schedules projection refreshes for prompt ACKs and stale phase rejects", () => {
   assert.deepEqual(
     hostPostAckRefreshKeys({
       event: { payload: { kind: "resolve_host_prompt" } },
@@ -386,11 +419,25 @@ test("host route controller only schedules post-ACK refreshes for prompt ACKs wi
     }),
     [],
   );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
+      event: { payload: { kind: "lock_thread" } },
+      outcome: { state: "reject", error: "PhaseLocked" },
+    }),
+    ["host"],
+  );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
+      event: { payload: { kind: "process_replacement" } },
+      outcome: { state: "reject", error: "InvalidTarget" },
+    }),
+    [],
+  );
 });
 
-test("host route controller preserves reject outcomes without projection application", async () => {
+test("host route controller refreshes host projection after stale phase rejects", async () => {
   const projectionStore = fakeProjectionStore({
-    host: { phase: { id: "D01" }, replacement: null },
+    host: { phase: { id: "D01", locked: false, state: "open" }, replacement: null },
   });
 
   const result = await sendHostRouteAction({
@@ -401,13 +448,50 @@ test("host route controller preserves reject outcomes without projection applica
     sendHostActionCommandImpl: async () => ({
       state: "reject",
       actionId: "lock_thread",
+      error: "PhaseLocked",
       message: "Reject PhaseLocked",
     }),
   });
 
   assert.equal(result.outcome.message, "Reject PhaseLocked");
   assert.deepEqual(projectionStore.applied, []);
-  assert.deepEqual(result.snapshot.host.phase.id, "D01");
+  assert.deepEqual(projectionStore.refreshed, [["host"]]);
+  assert.deepEqual(result.snapshot.host.phase, {
+    id: "D01",
+    locked: true,
+    state: "locked",
+  });
+});
+
+test("host route controller preserves non-phase reject outcomes without projection refresh", async () => {
+  const projectionStore = fakeProjectionStore({
+    host: { phase: { id: "D01", locked: false, state: "open" }, replacement: null },
+  });
+
+  const result = await sendHostRouteAction({
+    event: {
+      actionId: "process_replacement",
+      payload: { kind: "process_replacement" },
+    },
+    data: fixtureData(),
+    fetchImpl: async () => null,
+    projectionStore,
+    sendHostActionCommandImpl: async () => ({
+      state: "reject",
+      actionId: "process_replacement",
+      error: "InvalidTarget",
+      message: "Reject InvalidTarget",
+    }),
+  });
+
+  assert.equal(result.outcome.message, "Reject InvalidTarget");
+  assert.deepEqual(projectionStore.applied, []);
+  assert.deepEqual(projectionStore.refreshed, []);
+  assert.deepEqual(result.snapshot.host.phase, {
+    id: "D01",
+    locked: false,
+    state: "open",
+  });
 });
 
 function fixtureData(overrides = {}) {
@@ -437,7 +521,13 @@ function fakeProjectionStore(snapshot) {
     },
     async refresh(keys) {
       this.refreshed.push(keys);
-      snapshot = { ...snapshot, hostPrompts: [] };
+      snapshot = {
+        ...snapshot,
+        ...(keys.includes("host")
+          ? { host: { phase: { id: "D01", locked: true, state: "locked" }, replacement: null } }
+          : {}),
+        ...(keys.includes("hostPrompts") ? { hostPrompts: [] } : {}),
+      };
       return snapshot;
     },
     getSnapshot() {

@@ -553,30 +553,8 @@ async fn handle_inner(
             phase,
             observed_at,
         } => advance_phase_by_deadline(pool, principal, game, phase, observed_at, receipt).await,
-        Command::LockThread { game } => {
-            host_lifecycle(
-                pool,
-                principal,
-                game,
-                "ThreadLocked",
-                serde_json::json!({ "channel_id": "main" }),
-                ActorId::Host,
-                receipt,
-            )
-            .await
-        }
-        Command::UnlockThread { game } => {
-            host_lifecycle(
-                pool,
-                principal,
-                game,
-                "ThreadUnlocked",
-                serde_json::json!({ "channel_id": "main" }),
-                ActorId::Host,
-                receipt,
-            )
-            .await
-        }
+        Command::LockThread { game } => lock_thread(pool, principal, game, receipt).await,
+        Command::UnlockThread { game } => unlock_thread(pool, principal, game, receipt).await,
         Command::ResolvePhase { game, seed } => {
             resolve_phase(pool, principal, game, seed, receipt).await
         }
@@ -760,6 +738,71 @@ async fn host_phase_lifecycle(
         receipt,
     )
     .await
+}
+
+async fn lock_thread(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_thread_lock_state(pool, game, false).await?;
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "ThreadLocked",
+            1,
+            serde_json::json!({ "channel_id": "main" }),
+            ActorId::Host,
+            0,
+        )],
+        receipt,
+    )
+    .await
+}
+
+async fn unlock_thread(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    require_thread_lock_state(pool, game, true).await?;
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "ThreadUnlocked",
+            1,
+            serde_json::json!({ "channel_id": "main" }),
+            ActorId::Host,
+            0,
+        )],
+        receipt,
+    )
+    .await
+}
+
+async fn require_thread_lock_state(
+    pool: &PgPool,
+    game: Uuid,
+    expected_locked: bool,
+) -> Result<(), Reject> {
+    let Some(phase) = projections::phase_state(pool, game).await? else {
+        return Err(Reject::PhaseLocked);
+    };
+    if phase.locked == expected_locked {
+        Ok(())
+    } else {
+        Err(Reject::PhaseLocked)
+    }
 }
 
 async fn start_game(

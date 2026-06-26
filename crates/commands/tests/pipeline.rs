@@ -69847,6 +69847,60 @@ async fn vote_in_locked_phase_is_phase_locked(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+
+    handle(&pool, &host, Command::LockThread { game })
+        .await
+        .expect("initial lock");
+    let duplicate_lock = handle(&pool, &host, Command::LockThread { game })
+        .await
+        .expect_err("stale lock control rejects once phase is already locked");
+    assert_eq!(duplicate_lock, Reject::PhaseLocked);
+
+    let locked_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        locked_count, 1,
+        "stale lock rejection must not append a duplicate ThreadLocked event"
+    );
+    assert!(
+        phase_state(&pool, game).await.unwrap().unwrap().locked,
+        "stale lock rejection must preserve the locked projection"
+    );
+
+    handle(&pool, &host, Command::UnlockThread { game })
+        .await
+        .expect("unlock");
+    let duplicate_unlock = handle(&pool, &host, Command::UnlockThread { game })
+        .await
+        .expect_err("stale unlock control rejects once phase is open");
+    assert_eq!(duplicate_unlock, Reject::PhaseLocked);
+
+    let unlocked_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadUnlocked'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        unlocked_count, 1,
+        "stale unlock rejection must not append a duplicate ThreadUnlocked event"
+    );
+    assert!(
+        !phase_state(&pool, game).await.unwrap().unwrap().locked,
+        "stale unlock rejection must preserve the open projection"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     let game = setup_game_with_pack(
         &pool,

@@ -1655,7 +1655,7 @@ async function openModeratorBrowser(frontendBaseUrl) {
 }
 
 async function driveModeratorBrowser({ page, pageUrl }) {
-  const phaseControlEvidence = await driveHostPhaseControlsBrowser(page);
+  const phaseControlEvidence = await driveHostPhaseControlsBrowser(page, pageUrl);
   const actionEvidence = [];
   for (const expected of [
     { id: "extend_deadline", status: "ack" },
@@ -1754,27 +1754,67 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   return evidence;
 }
 
-async function driveHostPhaseControlsBrowser(page) {
+async function driveHostPhaseControlsBrowser(page, pageUrl) {
+  const staleSession = await openStaleModeratorBrowser(pageUrl);
   await expectHostPhaseActions(page, ["lock_thread"]);
+  await expectHostPhaseActions(staleSession.page, ["lock_thread"]);
   const lockEvidence = await confirmHostAction(page, "lock_thread");
   await waitForHostConsolePhaseLocked(page, true);
   await expectHostPhaseActions(page, ["unlock_thread", "advance_phase"]);
+  await expectHostPhaseActions(staleSession.page, ["lock_thread"]);
+  const staleLockEvidence = await confirmHostAction(
+    staleSession.page,
+    "lock_thread",
+    "reject",
+  );
+  await waitForHostProjectionPhaseLocked(staleSession.page, true);
+  await expectHostPhaseActions(staleSession.page, ["unlock_thread", "advance_phase"]);
   const unlockEvidence = await confirmHostAction(page, "unlock_thread");
   await waitForHostConsolePhaseLocked(page, false);
   await expectHostPhaseActions(page, ["lock_thread"]);
+  await staleSession.context.close();
 
   return {
     initialActions: ["lock_thread"],
     lockedActions: ["unlock_thread", "advance_phase"],
+    staleActionsBeforeReject: ["lock_thread"],
+    staleActionsAfterRejectRefresh: ["unlock_thread", "advance_phase"],
     restoredActions: ["lock_thread"],
     lock: lockEvidence,
+    staleLockReject: staleLockEvidence,
     unlock: unlockEvidence,
     proof:
-      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Lock only, LockThread ACK refreshed the same page to locked controls with Unlock and Advance, and UnlockThread ACK restored Lock without a page reload.",
+      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Lock only, LockThread ACK refreshed the live page to locked controls with Unlock and Advance, a second stale host page with its live websocket blocked submitted the old Lock control and recovered through a rendered Reject PhaseLocked plus host projection refresh to Unlock/Advance, and UnlockThread ACK restored Lock without a page reload.",
   };
 }
 
-async function confirmHostAction(page, actionId) {
+async function openStaleModeratorBrowser(pageUrl) {
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addInitScript(() => {
+    window.WebSocket = undefined;
+  });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: hostSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `stale host console route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+  await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
+  return { context, page };
+}
+
+async function confirmHostAction(page, actionId, expectedState = "ack") {
   const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
   const trigger = actionRoot.getByTestId("critical-host-action-trigger");
   await trigger.waitFor({ state: "visible" });
@@ -1793,9 +1833,9 @@ async function confirmHostAction(page, actionId) {
   await confirm.click();
 
   await page.waitForFunction(
-    (expectedActionId) =>
-      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
-    actionId,
+    ({ expectedActionId, state }) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === state,
+    { expectedActionId: actionId, state: expectedState },
   );
   const commandStatus = await page.evaluate(
     (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
@@ -2067,6 +2107,13 @@ async function waitForHostConsolePhaseLocked(page, locked) {
           event?.delta?.kind === "HostConsoleStateChanged" &&
           event.delta.body?.phase?.locked === expectedLocked,
       ),
+    locked,
+  );
+}
+
+async function waitForHostProjectionPhaseLocked(page, locked) {
+  await page.waitForFunction(
+    (expectedLocked) => window.__fmarchHostProjection?.phase?.locked === expectedLocked,
     locked,
   );
 }

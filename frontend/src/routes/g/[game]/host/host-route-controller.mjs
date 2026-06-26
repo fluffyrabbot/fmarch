@@ -120,7 +120,7 @@ export function buildHostCommandDispatchBridgePlan({
   data,
   optimisticStatus,
   finalStatus,
-  projectionRefreshKeys = hostPostAckRefreshKeys({
+  projectionRefreshKeys = hostPostCommandRefreshKeys({
     event,
     outcome: finalStatus,
   }),
@@ -170,12 +170,12 @@ export async function sendHostRouteAction({
       projectionStore,
     });
   }
-  const postAckRefreshKeys = hostPostAckRefreshKeys({
+  const postOutcomeRefreshKeys = hostPostCommandRefreshKeys({
     event,
     outcome,
   });
-  if (postAckRefreshKeys.length > 0) {
-    await projectionStore.refresh(postAckRefreshKeys, { fetchImpl });
+  if (postOutcomeRefreshKeys.length > 0) {
+    await projectionStore.refresh(postOutcomeRefreshKeys, { fetchImpl });
   }
   return Object.freeze({
     outcome,
@@ -194,6 +194,25 @@ export function hostPostAckRefreshKeys({ event, outcome }) {
     return Object.freeze([]);
   }
   return Object.freeze(["hostPrompts"]);
+}
+
+export function hostPostCommandRefreshKeys({ event, outcome }) {
+  const ackRefreshKeys = hostPostAckRefreshKeys({ event, outcome });
+  if (ackRefreshKeys.length > 0) {
+    return ackRefreshKeys;
+  }
+  if (
+    outcome?.state === "reject" &&
+    outcome?.error === "PhaseLocked" &&
+    isPhaseControlAction(event?.payload?.kind)
+  ) {
+    return Object.freeze(["host"]);
+  }
+  return Object.freeze([]);
+}
+
+function isPhaseControlAction(kind) {
+  return ["lock_thread", "unlock_thread", "advance_phase"].includes(kind);
 }
 
 function applyOutcomeProjectionPatches({ patches, projectionStore }) {
