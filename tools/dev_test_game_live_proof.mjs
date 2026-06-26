@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
+const proofRunPath = path.join(repoRoot, "target", "dev-test-game", "proof-run.json");
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
 
@@ -24,11 +25,22 @@ if (exitCode !== 0) {
 }
 
 const session = JSON.parse(await readFile(sessionPath, "utf8"));
+const proofRun = JSON.parse(await readFile(proofRunPath, "utf8"));
 assert.equal(session.status, "ready");
 assert.equal(session.name, "live-proof");
 assert.equal(session.seedMode, "seeded");
 assert.equal(session.seedCommandCount, 22);
 assert.equal(session.verification?.status, "passed");
+assert.equal(session.artifacts.proofRun, "target/dev-test-game/proof-run.json");
+assert.equal(proofRun.proof, "dev-test-game-proof-run");
+assert.equal(proofRun.status, "passed");
+assert.equal(proofRun.session.game, session.game);
+assert.equal(proofRun.productionReady, false);
+assert.equal(proofRun.releaseReady, false);
+assert.equal(
+  proofRun.lanes.every((lane) => lane.status === "passed"),
+  true,
+);
 assert.deepEqual(session.verification.roles, [
   "host",
   "player",

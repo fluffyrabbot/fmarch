@@ -76,6 +76,7 @@ It also writes:
 ```text
 target/dev-test-game/session.json
 target/dev-test-game/session.md
+target/dev-test-game/proof-run.json
 target/dev-test-game/named-games.json
 ```
 
@@ -122,12 +123,19 @@ The live local gate is:
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
 ```
 
+The saved proof artifact validator is:
+
+```sh
+npm run test:dev-test-game-proof
+```
+
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
 entry through `/auth/login`, checks that those browser sessions came from
 invite-issued `fmarch_session` cookies, verifies host/player capabilities
 through `/auth/session?game=...`, drives a small core-loop proof, then checks
-the generated session artifact.
+the generated session artifact and validates `target/dev-test-game/proof-run.json`
+against the current `session.json`.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -153,6 +161,12 @@ lands, refreshes command state after a stale locked-phase vote reject, submits
 two concurrent D02 votes from separate role pages and verifies converged browser
 plus API votecount, and the host page sends a stale `UnlockThread` and verifies
 the `Reject PhaseLocked` recovery message while D02 remains open.
+
+`proof-run.json` is the compact machine-checkable truth surface for this local
+harness. It records the passed lanes, seed game identity, artifact paths, and
+explicit non-claims. The validator recomputes it from `session.json` and fails
+when the proof-run artifact is stale, missing a required lane, or claims
+production/release readiness.
 
 ## Boundary
 

@@ -5,12 +5,17 @@ import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  assertDevTestGameProofRun,
+  buildDevTestGameProofRun,
+} from "./dev_test_game_proof_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
+const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
 const namedGamesPath = path.join(artifactDir, "named-games.json");
 export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
 export const defaultGameName = "local";
@@ -94,8 +99,11 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   if (args.verify) {
     const verification = await verifySessionCard(card);
     card.verification = verification;
+    const proofRun = buildDevTestGameProofRun(card);
+    assertDevTestGameProofRun(proofRun);
     await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
     await writeFile(sessionMdPath, markdownSessionCard(card));
+    await writeFile(proofRunJsonPath, `${JSON.stringify(proofRun, null, 2)}\n`);
     console.log(`\nverified browser entry: ${verification.roles.join(", ")}`);
   }
 
@@ -458,6 +466,7 @@ export function buildSessionCard({
     artifacts: {
       json: path.relative(repoRoot, sessionJsonPath),
       markdown: path.relative(repoRoot, sessionMdPath),
+      proofRun: path.relative(repoRoot, proofRunJsonPath),
     },
   };
 }
@@ -1810,6 +1819,7 @@ function printHelp() {
 
 Starts a local Rust API and SvelteKit frontend, seeds one mafiascum D01 game,
 creates browser-login tokens, prints role URLs, and writes target/dev-test-game/session.md.
+With --verify, it also writes target/dev-test-game/proof-run.json.
 
 Options:
   --api-base-url URL       Use an existing API instead of starting cargo run -p server

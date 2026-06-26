@@ -8,6 +8,10 @@ import {
   seedCommandPlanForGame,
   selectGame,
 } from "./dev_test_game.mjs";
+import {
+  assertDevTestGameProofRun,
+  buildDevTestGameProofRun,
+} from "./dev_test_game_proof_contract.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -127,48 +131,68 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(card.sessions.player.token, "dev-test-card-player");
   card.verification = {
     status: "passed",
-    roles: ["host", "player"],
+    roles: ["host", "player", "actionPlayer", "deniedPlayer"],
     coreLoop: {
       status: "passed",
       proof: "host locked D01 and player recovered from PhaseLocked",
-      rejectedVote: { message: "Reject PhaseLocked: phase locked" },
+      lock: { commandStatus: { state: "ack" } },
+      rejectedVote: { error: "PhaseLocked", message: "Reject PhaseLocked: phase locked" },
+      unlock: { commandStatus: { state: "ack" } },
     },
     actionLoop: {
       status: "passed",
       proof: "host resolved N01 and action player advanced to D02",
-      invalidAction: { message: "Reject InvalidTarget: invalid target" },
-      legalAction: { message: "Ack: stream seqs 42" },
+      invalidAction: { error: "InvalidTarget", message: "Reject InvalidTarget: invalid target" },
+      legalAction: { state: "ack", message: "Ack: stream seqs 42" },
+      resolvedTargetSlot: { alive: false },
+      d02Phase: { phaseId: "D02" },
     },
     privateChannel: {
       status: "passed",
       proof: "player posted privately and denied player recovered",
-      allowed: { submitPost: { message: "Ack: stream seqs 43" } },
+      channel: "private:mafia_day_chat",
+      allowed: { submitPost: { state: "ack", message: "Ack: stream seqs 43" } },
       denied: { status: 403, actionLabel: "Back to board" },
     },
     multiplayerHardening: {
       status: "passed",
       proof: "duplicate command id returned one post and stale host control recovered",
       idempotentRetry: {
-        retryPost: { message: "Ack: stream seqs 44" },
+        channel: "main",
+        firstPost: { state: "ack", streamSeqs: [44] },
+        retryPost: { state: "ack", streamSeqs: [44], message: "Ack: stream seqs 44" },
+        projectedPostCount: 1,
       },
       reconnect: {
+        status: "passed",
+        reconnectingStatus: { state: "reconnecting" },
         reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+        recoveredSnapshotContainsPost: true,
       },
       stalePlayerVote: {
+        status: "passed",
         reject: {
+          error: "PhaseLocked",
           message:
             "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
         },
+        phaseAfterReject: { locked: true },
+        hostPhaseAfterUnlock: { locked: false },
       },
       concurrentVoteRace: {
+        status: "passed",
         targetSlot: "slot_5",
+        playerVote: { state: "ack", streamSeqs: [45] },
+        actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
       staleHostControl: {
         reject: {
+          error: "PhaseLocked",
           message:
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
         },
+        phaseAfterReject: { phase_id: "D02", locked: false },
       },
     },
   };
@@ -190,4 +214,25 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
+  const proofRun = buildDevTestGameProofRun(card, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameProofRun(proofRun);
+  assert.equal(proofRun.status, "passed");
+  assert.equal(proofRun.productionReady, false);
+  assert.equal(proofRun.releaseReady, false);
+  assert.deepEqual(
+    proofRun.lanes.map((lane) => lane.id),
+    [
+      "browser-entry",
+      "core-loop",
+      "action-loop",
+      "private-channel",
+      "idempotent-retry",
+      "reconnect-recovery",
+      "stale-player-vote",
+      "concurrent-vote-race",
+      "stale-host-control",
+    ],
+  );
 });
