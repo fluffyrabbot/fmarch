@@ -1,9 +1,7 @@
-import { spawn } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
+import { runNodeScript } from "./dev_test_game_spine_runner.mjs";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
 
 const readinessEvidenceEnv = {
@@ -38,26 +36,5 @@ export async function runDevTestGameAdminSpine() {
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
     env: readinessEvidenceEnv,
-  });
-}
-
-function runNodeScript(scriptPath, { env = {} } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        ...env,
-      },
-      stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${scriptPath} exited with code ${code}`));
-      }
-    });
   });
 }
