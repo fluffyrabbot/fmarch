@@ -102,19 +102,25 @@ checklist before they are called done:
   `/commands` envelopes, and post-ACK projection rendering. `npm run
   test:host-console-live-stack-smoke` is the stronger boundary proof: it creates a temporary
   Postgres database, starts the Rust API and SvelteKit dev server together, seeds the game
-  through `/commands`, resolves the host session through `/auth/session`, drives both actions
+  through `/commands`, disables `/auth/dev-session`, issues browser session tokens through
+  `/auth/session-grants`, submits one granted token through `/auth/login` to write
+  `fmarch_session`, resolves sessions through `/auth/session`, drives both host actions
   in Chromium, verifies the UI refreshes from the real `host-console-state` API, then drives
   the player private-channel route through the same live stack. That live-stack lane now
   records a `private:mafia_day_chat` `SubmitPost` ACK from the real `/commands` API after
   mafiascum `StartGame` declares the Encryptor-backed faction day chat, proves a non-member
   private-channel 403 can recover through the SvelteKit `Back to board` error action, and
   records tablet media evidence from a Rust `ThreadPage` media payload served by the SvelteKit
-  smoke media endpoint. Its media evidence proves the 1024px browser requested the tablet
-  image, rendered a tablet/small `srcset`, and kept original/full/desktop URLs out of
-  rendered attributes and request logs. The faction day chat membership is command-declared;
-  only the media seed row is scratch-database setup until a media upload command exists. The
-  post ACK, forbidden route, recovery navigation, Rust API reads, SvelteKit rendering, and
-  Chromium requests are live-stack proof. The same live moderator session now also confirms
+  reference-checked media endpoint. Its media evidence proves the 1024px browser requested
+  the tablet image, rendered a tablet/small `srcset`, observed content-address/reference
+  headers for the projected private-channel post, kept original/full/desktop URLs out of
+  rendered attributes and request logs, and denied the same private-channel tablet media to
+  a non-member session with 403. The faction day chat membership and the tablet/small media
+  reference are command-ingested through the Rust `/commands` path; full binary upload,
+  canonical hashing, storage, and transcode remain future media-pipeline work. The login
+  redirect/cookie write, post ACK, forbidden route, recovery navigation, Rust API reads,
+  SvelteKit rendering, and Chromium requests are live-stack proof. The same live moderator
+  session now also confirms
   `ResolveHostPrompt` ACK/removal and `modkill_slot` to typed `SetSlotStatus` ACK plus
   `Modkilled` slot lifecycle API/projection evidence against the real Rust API. The
   multi-role browser smoke is the acceptance gate for nonblank admin/player/moderator
@@ -141,7 +147,8 @@ checklist before they are called done:
   `aria-expanded`, detail visibility, focus retention, nonblank screenshots for both states,
   and player thread media request evidence proving the browser requested only tablet/small
   image variants from the SvelteKit live-stack media endpoint while original/full/desktop URLs
-  stayed out of rendered image attributes and request logs. Use
+  stayed out of rendered image attributes and request logs; the live-stack media lane also
+  proves reference-backed private-channel media denial for a non-member session. Use
   `npm run test:frontend-role-proof:browser` as the browser acceptance command; it runs the
   Chromium smoke and then verifies the generated artifact shape.
   In restricted sandboxes that deny localhost binds, the browser smokes write a structured
@@ -187,7 +194,7 @@ checklist before they are called done:
 | `npm run test:frontend-readiness-summary` | Operator-readable readiness summary at `target/frontend-readiness-summary/readiness-summary.json` and `.md`, derived from the generated proof artifacts. It separates single-root-shell proof, role model/SSR/DOM readiness, no-bind Chromium diagnostics, localhost browser acceptance, imported role-smoke acceptance, the prepared in-app file fixture, the direct file fixture browser-run artifact, the localhost-served fixture browser-run artifact, and the imported external fixture browser-run artifact, including diagnostic blockers, feedback-rail status IDs, checked promotion criteria, and per-role promotion failures when full role-smoke evidence is absent. When the completion audit is complete, readiness reports `status: passed` and `overall.state: complete`. | New frontend behavior, browser proof, or completion by itself; it is a truth surface over current artifacts and does not promote the prepared file fixture, blocked fixture browser-runs, or a blocked imported run to full app acceptance. |
 | `npm run test:frontend-role-proof` | Restricted-sandbox admin/player/moderator route models, component view models, capability gating, modeled 44px touch metadata, representative command ack/reject paths, shared `ConfirmationShell` ownership for admin/moderator confirmation wrapper attributes, shared confirmation-action ownership for admin/moderator confirmation payloads, confirmation-command trace ownership from admin/moderator confirmations into command activity rows, player command trace ownership from player actions into command receipt rows, no-browser dispatch bridge proof from trace metadata through route handlers into admin/player/moderator typed command lifecycles and smoke-exposed bridge plans, no-localhost hydrated-handler proof for DOM-facing admin/player/moderator ACK/reject rows including moderator `SetSlotStatus` ACK and `Modkilled` projection, no-localhost hydrated-surface proof over real route data for shared headers, native admin audit navigation, player private disclosure plus `SubmitVote`/`SubmitPost` ACK, moderator host-prompt confirmation/ACK projection removal, and moderator slot-lifecycle confirmation/ACK projection refresh, no-bind compiled-component interaction proof for command controls and re-rendered ACK rows including moderator `ResolveHostPrompt` and `SetSlotStatus`, static SSR focusability proof for modeled focus targets and forbidden ids, tablet interaction source/CSS proof for tap-first preload posture, no hover-only affordances, and shared touch/focus guardrails, no-bind Chromium interaction smoke for command click/focus/touch geometry when Chromium can launch, no-bind keyboard traversal smoke for skip-link-first Tab order and visible focus outlines when Chromium can launch, generated in-app browser file-backed interaction page fixture, static DOM proof over that fixture, plus attempted file-backed browser-run evidence, admin setup/recovery confirmation coverage, admin audit native inspect-route affordance plus principal-scoped operator-proof evidence endpoint, moderator critical-action confirmation coverage including modeled initial focus, focus return, Escape cancel, and tab containment, moderator host-prompt ACK projection-patch and hydrated-refresh removal paths, moderator `SetSlotStatus` browser-promotion predicate and slot lifecycle projection evidence shape, shared shell nav/touch contract, shared nav/focus coverage, fixture-routable and SSR-rendered empty/loading/reject route-state scenarios, no-browser DOM smoke, no-bind render-smoke attempt, generated completion audit, and generated fallback artifact consistency. | Dev-server Chromium pixels/interactions when localhost, Chromium launch, or in-app file navigation is blocked; Svelte client scheduling, command side effects, visible focus rings, or actual tab traversal. |
 | `npm run test:frontend-role-proof:browser` | Full multi-role Chromium smoke, including rendered empty/loading/reject route states, screenshot nonblank pixel metrics, player private disclosure before/after screenshots, player tablet-media request evidence, player `SubmitVote` reject followed by `SubmitPost` ACK with refreshed thread evidence, admin/moderator confirmation focus traversal checked against the DOM-visible confirmation contract metadata, admin audit click-through to the native inspect route plus principal-scoped operator-proof evidence endpoint, moderator host-prompt confirm-to-`ResolveHostPrompt` ACK and prompt removal, moderator `modkill_slot` confirm-to-`SetSlotStatus` ACK with refreshed `Modkilled` slot lifecycle evidence, and generated artifact-shape verification when localhost bind is available. | Rust API/live Postgres integration beyond the browser smoke's mocked command, media, and cold-load boundaries. |
-| `npm run test:frontend-contract` | Model and controller contracts for app shell, root layout session handoff into error surfaces, root-owned app route shell ownership, role routes, command envelopes, confirmations, projection stores, live deltas, paging, private queues, and host/admin/player components, including player classification for private-channel error paths and the admin session-grant server action's explicit `GlobalMod`-only payload plus positive Unix timestamp validation before the authenticated API request is sent. | Browser rendering, CSS pixel geometry, or real pointer/focus traversal. |
+| `npm run test:frontend-contract` | Model and controller contracts for app shell, root layout session handoff into error surfaces, root-owned app route shell ownership, role routes, command envelopes, confirmations, projection stores, live deltas, paging, private queues, and host/admin/player components, including player classification for private-channel error paths, the admin session-grant server action's explicit `GlobalMod`-only payload plus positive Unix timestamp validation before the authenticated API request is sent, and the `/auth/login` server action's token verification, safe return path, and httpOnly cookie write. | Browser rendering, CSS pixel geometry, or real pointer/focus traversal. |
 | `npm --prefix frontend run check` | SvelteKit sync and frontend toolchain availability for the Svelte app. | Runtime behavior or route/model correctness. |
 | `npm --prefix frontend run build` | Production SvelteKit client/server bundle generation. | Product acceptance, browser interaction, or backend integration. |
 
@@ -257,7 +264,7 @@ routes/
     /c/[channel]          a private channel (scumchat, neighborhood, mod↔slot)
   /g/[game]/host          THE MOD CONSOLE  (capability-gated: HostOf/CohostOf)
   /u/[user]               profile
-  /auth                   login / session
+  /auth/login             token login: verifies /auth/session, then sets fmarch_session
 ```
 
 The shared shell renders role surfaces from resolved capabilities. Allowed surfaces are

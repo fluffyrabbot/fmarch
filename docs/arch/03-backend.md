@@ -102,6 +102,13 @@ upload go over plain HTTP:
 - `GET /games/{game}/resolution-traces?principal_user_id=...&run_id=...` returns host/cohost-only
   stored `ResolutionTrace` inspection rows, with each decision/edge/generated/effect/visibility
   row anchored to the persisted `ResolutionApplied` stream sequence when one exists.
+- `GET /auth/session` resolves an opaque bearer token against the `auth_session` table and
+  returns only server-derived principal/capability data. `POST /auth/session-grants` lets an
+  active `GlobalAdmin` issue scoped operator tokens; the SvelteKit `/auth/login` action now
+  verifies one of those tokens before writing the browser's `fmarch_session` cookie. The
+  live-stack browser proof keeps `/auth/dev-session` disabled and uses a scratch-database
+  root admin only to issue browser tokens through `/auth/session-grants`; `/auth/dev-session`
+  remains gated by `FMARCH_DEV_AUTH=1` for explicit local-only setup.
 - Image upload is a `POST` that runs the ingest pipeline ([07](07-images.md)) and returns
   a content-addressed handle.
 - A reconnecting client cold-loads the current projection state, then resumes the live

@@ -43,15 +43,21 @@ A single game, one channel, real votes, live, with the two irreversible mechanic
    the tablet route's typed command adapter and post-ACK projection rendering.
    `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run
    test:host-console-live-stack-smoke` starts the Rust API and SvelteKit together against a
-   temporary database, seeds through `/commands`, drives the tablet browser route without
+   temporary database, seeds through `/commands`, keeps `/auth/dev-session` disabled, issues
+   browser tokens through `/auth/session-grants`, submits one granted token through
+   `/auth/login` to write `fmarch_session`, drives the tablet browser route without
    route-level command or state mocks, verifies the browser reads the post-action state
    from the real API, posts to the mafiascum Encryptor-backed `private:mafia_day_chat`
    room through the hydrated player UI and real `/commands` API, proves a private-channel
    403 can recover through `Back to board`, and records tablet media request evidence from
-   a live Rust `ThreadPage` media payload. The faction day chat membership is declared by
-   `StartGame` from pack data; only the media seed row remains scratch-database setup until
-   a media upload command exists. The ACK, recovery navigation, API reads, SvelteKit
-   rendering, and Chromium request evidence are live-stack proof. The same live-stack
+   a live Rust `ThreadPage` media payload served through the reference-checked SvelteKit
+   media route. The media lane proves tablet/small rendering, content-address/reference
+   headers for the projected private-channel post, and 403 denial for a non-member media
+   request. The faction day chat membership is declared by `StartGame` from pack data, and
+   the tablet/small media reference is now ingested through a real `SubmitPost` `/commands`
+   ACK into `ThreadPage.media`; full binary upload/storage/transcode remains future work.
+   The login redirect/cookie write, ACK, recovery navigation, API reads, SvelteKit rendering,
+   media serving, and Chromium request evidence are live-stack proof. The same live-stack
    moderator session now proves `ResolveHostPrompt` ACK/removal and `modkill_slot` to typed
    `SetSlotStatus` ACK with `Modkilled` slot lifecycle API/projection evidence.
    `npm run test:frontend-role-proof:browser` is the current full browser

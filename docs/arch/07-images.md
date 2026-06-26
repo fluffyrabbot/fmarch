@@ -60,6 +60,24 @@ blobs/
 - Content negotiation / `<picture>` with AVIF primary and WebP fallback for older clients.
 - Immutable cache headers; CDN-friendly by construction.
 
+Current implemented slice:
+
+- `frontend/src/routes/media/live-stack/thread/[asset]/+server.js` serves the live-stack
+  thread handles used by the browser proof as real generated PNG bytes for `tablet` and
+  `small` only. `original`, `full`, and unknown variants are not routable.
+- The serving route resolves the game/channel reference from the media request, resolves the
+  requester session for that game, fetches the live Rust `ThreadPage`, and serves the bytes
+  only when that projection still references the requested handle/variant. For private
+  channels, a matching `ChannelMember`/host/admin-style capability is required before the
+  route fetches and serves the media.
+- `SubmitPost` now accepts optional thread media metadata, so the live-stack proof ingests
+  the generated `tablet`/`small` proof handles through the real `/commands` path and lets
+  `PostSubmitted` fold into `ThreadPage.media`; it no longer inserts a scratch
+  `thread_view` row. This proves command-backed reference ingest, immutable/content-address
+  headers, tablet/small rendering, and 403 denial for a non-member private-channel media
+  request. Binary upload validation, canonical raster hashing, persistent blob storage, and
+  AVIF/WebP transcode are still future slices.
+
 ## Access control
 
 - Images posted in a private channel inherit that channel's visibility. A content-addressed
