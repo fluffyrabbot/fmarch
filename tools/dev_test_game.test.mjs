@@ -12,6 +12,10 @@ import {
   assertDevTestGameProofRun,
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
+import {
+  assertDevTestGameReleaseReadiness,
+  buildDevTestGameReleaseReadiness,
+} from "./dev_test_game_release_readiness.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -234,5 +238,23 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "concurrent-vote-race",
       "stale-host-control",
     ],
+  );
+  const readiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameReleaseReadiness(readiness);
+  assert.equal(readiness.status, "passed");
+  assert.equal(readiness.releaseReady, false);
+  assert.equal(readiness.productionReady, false);
+  assert.equal(readiness.releaseReadiness.status, "not_ready");
+  assert(
+    readiness.releaseReadiness.unproven.some(
+      (item) => item.id === "production-identity" && item.status === "unproven",
+    ),
+  );
+  assert(
+    readiness.releaseReadiness.unproven.some(
+      (item) => item.id === "backup-restore-drill" && item.status === "unproven",
+    ),
   );
 });

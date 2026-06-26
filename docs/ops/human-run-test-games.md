@@ -77,6 +77,8 @@ It also writes:
 target/dev-test-game/session.json
 target/dev-test-game/session.md
 target/dev-test-game/proof-run.json
+target/dev-test-game/release-readiness-checklist.json
+target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/named-games.json
 ```
 
@@ -129,13 +131,21 @@ The saved proof artifact validator is:
 npm run test:dev-test-game-proof
 ```
 
+The local release-readiness checklist generator is:
+
+```sh
+npm run test:dev-test-game-readiness
+```
+
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
 entry through `/auth/login`, checks that those browser sessions came from
 invite-issued `fmarch_session` cookies, verifies host/player capabilities
 through `/auth/session?game=...`, drives a small core-loop proof, then checks
 the generated session artifact and validates `target/dev-test-game/proof-run.json`
-against the current `session.json`.
+against the current `session.json`. It also writes
+`target/dev-test-game/release-readiness-checklist.{json,md}` from the validated
+proof run.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -167,6 +177,12 @@ harness. It records the passed lanes, seed game identity, artifact paths, and
 explicit non-claims. The validator recomputes it from `session.json` and fails
 when the proof-run artifact is stale, missing a required lane, or claims
 production/release readiness.
+
+The release-readiness checklist is intentionally not a release gate. It keeps
+`releaseReady: false` and `productionReady: false`, while naming the exact
+remaining evidence needed for production identity, hosted deployment,
+backup/restore, exhaustive race coverage, observability, and a human release
+runbook.
 
 ## Boundary
 
