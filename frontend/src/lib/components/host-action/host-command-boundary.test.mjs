@@ -255,6 +255,32 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
   assert.equal(reject.state, "reject");
   assert.equal(reject.error, "UnknownSlot");
   assert.match(reject.message, /unknown slot/);
+
+  const retryableReject = await sendHostActionCommand({
+    actionEvent: REPLACEMENT_EVENT,
+    principalUserId: "host_h",
+    commandIdFactory: () => "33333333-3333-4333-8333-333333333333",
+    envelopeIdFactory: () => 9,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 9,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "StreamConflict",
+            retryable: true,
+            message: "stream conflict (retryable)",
+          },
+        },
+      }),
+  });
+
+  assert.equal(retryableReject.retryable, true);
+  assert.equal(
+    retryableReject.message,
+    "Reject StreamConflict: stream conflict (retryable); reload and retry",
+  );
 });
 
 test("host command sender can refresh projected host console state after ack", async () => {

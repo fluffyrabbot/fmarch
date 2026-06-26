@@ -433,6 +433,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
     }),
     [],
   );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
+      event: { payload: { kind: "extend_deadline" } },
+      outcome: { state: "reject", error: "StreamConflict", retryable: true },
+    }),
+    ["host", "votecount", "hostPrompts"],
+  );
 });
 
 test("host route controller refreshes host projection after stale phase rejects", async () => {

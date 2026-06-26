@@ -246,6 +246,35 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   });
   assert.equal(reject.state, "reject");
   assert.equal(reject.message, "Reject PhaseLocked: phase locked");
+
+  const retryableReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "withdraw_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+    }),
+    commandIdFactory: () => "44444444-4444-4444-8444-444444444444",
+    envelopeIdFactory: () => 13,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 13,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "StreamConflict",
+            retryable: true,
+            message: "stream conflict (retryable)",
+          },
+        },
+      }),
+  });
+  assert.equal(retryableReject.retryable, true);
+  assert.equal(
+    retryableReject.message,
+    "Reject StreamConflict: stream conflict (retryable); reload and retry",
+  );
 });
 
 function jsonResponse(body) {

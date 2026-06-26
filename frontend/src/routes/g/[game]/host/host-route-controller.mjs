@@ -208,6 +208,12 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
   ) {
     return Object.freeze(["host"]);
   }
+  if (
+    outcome?.state === "reject" &&
+    (outcome?.retryable === true || outcome?.error === "StreamConflict")
+  ) {
+    return hostProjectionResyncKeys();
+  }
   return Object.freeze([]);
 }
 

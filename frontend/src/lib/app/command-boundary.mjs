@@ -164,20 +164,26 @@ export function normalizeCommandResponse({
 
   if (body?.kind === "Reject") {
     const reject = body.body;
+    const retryable = reject.retryable === true;
     return Object.freeze({
       state: "reject",
       commandId,
       envelopeId: requestEnvelope.id,
       httpStatus: response.status,
       error: reject.error,
-      retryable: reject.retryable === true,
-      message: `Reject ${reject.error}: ${reject.message}`,
+      retryable,
+      message: rejectMessage(reject, retryable),
       requestEnvelope,
       serverEnvelope,
     });
   }
 
   throw new TypeError("server response must be a wire Ack or Reject envelope");
+}
+
+function rejectMessage(reject, retryable) {
+  const base = `Reject ${reject.error}: ${reject.message}`;
+  return retryable ? `${base}; reload and retry` : base;
 }
 
 function requiredString(value, field) {

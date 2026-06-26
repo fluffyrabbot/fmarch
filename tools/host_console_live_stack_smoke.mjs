@@ -1790,6 +1790,7 @@ async function openModeratorBrowser(frontendBaseUrl) {
 
 async function driveModeratorBrowser({ page, pageUrl }) {
   const phaseControlEvidence = await driveHostPhaseControlsBrowser(page, pageUrl);
+  const streamConflictEvidence = await driveHostStreamConflictBrowser(page);
   const actionEvidence = [];
   for (const expected of [
     { id: "extend_deadline", status: "ack" },
@@ -1867,6 +1868,7 @@ async function driveModeratorBrowser({ page, pageUrl }) {
     url: pageUrl,
     actions: actionEvidence,
     phaseControls: phaseControlEvidence,
+    streamConflict: streamConflictEvidence,
     hostPrompt: {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,
@@ -1886,6 +1888,95 @@ async function driveModeratorBrowser({ page, pageUrl }) {
     apiStateBeforePrompt,
   };
   return evidence;
+}
+
+async function driveHostStreamConflictBrowser(page) {
+  await installDeadlineStreamConflictTrigger();
+  const projectionRequests = [];
+  const onRequest = (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (
+      pathname.endsWith("/host-console-state") ||
+      pathname.endsWith("/votecount") ||
+      pathname.endsWith("/host-prompts")
+    ) {
+      projectionRequests.push({
+        url: request.url(),
+        pathname,
+        method: request.method(),
+      });
+    }
+  };
+  page.on("request", onRequest);
+  try {
+    const conflictEvidence = await confirmHostAction(page, "extend_deadline", "reject");
+    assertHostStreamConflictRecovery(conflictEvidence.commandStatus);
+    await page.waitForFunction(() =>
+      window.__fmarchHostCommandDispatchBridgePlan?.projectionRefreshKeys?.join(",") ===
+      "host,votecount,hostPrompts",
+    );
+    await waitForProjectionRequests(projectionRequests, [
+      "/host-console-state",
+      "/votecount",
+      "/host-prompts",
+    ]);
+    return {
+      ...conflictEvidence,
+      projectionRefreshRequests: projectionRequests,
+      dispatchBridgePlan: await page.evaluate(
+        () => window.__fmarchHostCommandDispatchBridgePlan,
+      ),
+      proof:
+        "The live host page hit a scratch-DB forced same-stream append conflict through the real ExtendDeadline control, rendered retryable Reject StreamConflict copy with reload-and-retry guidance, and refreshed host, votecount, and host-prompt projections before the normal retry path.",
+    };
+  } finally {
+    page.off("request", onRequest);
+    await dropDeadlineStreamConflictTrigger();
+  }
+}
+
+async function installDeadlineStreamConflictTrigger() {
+  await runSql(
+    smokeDatabase.url,
+    `
+    CREATE OR REPLACE FUNCTION test_force_deadline_stream_conflict() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.stream_id = ${sqlLiteral(game)}::uuid AND NEW.kind = 'DeadlineExtended' THEN
+        INSERT INTO events
+          (stream_id, stream_seq, kind, version, payload, actor, occurred_at, causation_id, meta)
+        VALUES
+          (
+            NEW.stream_id,
+            NEW.stream_seq,
+            'ThreadUnlocked',
+            1,
+            '{"channel_id":"main","source":"forced_stream_conflict"}'::jsonb,
+            NEW.actor,
+            NEW.occurred_at,
+            NEW.causation_id,
+            NEW.meta
+          );
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events;
+    CREATE TRIGGER test_force_deadline_stream_conflict
+      BEFORE INSERT ON events
+      FOR EACH ROW EXECUTE FUNCTION test_force_deadline_stream_conflict();
+    `,
+  );
+}
+
+async function dropDeadlineStreamConflictTrigger() {
+  await runSql(
+    smokeDatabase.url,
+    `
+    DROP TRIGGER IF EXISTS test_force_deadline_stream_conflict ON events;
+    DROP FUNCTION IF EXISTS test_force_deadline_stream_conflict();
+    `,
+  );
 }
 
 async function driveHostPhaseControlsBrowser(page, pageUrl) {
@@ -2252,6 +2343,23 @@ async function waitForHostProjectionPhaseLocked(page, locked) {
   );
 }
 
+async function waitForProjectionRequests(requests, suffixes) {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (
+      suffixes.every((suffix) =>
+        requests.some((request) => request.pathname.endsWith(suffix)),
+      )
+    ) {
+      return;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `projection refresh requests did not include ${suffixes.join(", ")}: ${JSON.stringify(requests)}`,
+  );
+}
+
 async function waitForHostLiveVotecount(page, count) {
   try {
     await page.waitForFunction(
@@ -2588,6 +2696,26 @@ function assertStalePlayerActionRecovery(outcome) {
   }
   if (command.targets?.[0] !== "slot-2") {
     throw new Error(`stale player action used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertHostStreamConflictRecovery(outcome) {
+  if (
+    outcome?.state !== "reject" ||
+    outcome.error !== "StreamConflict" ||
+    outcome.retryable !== true
+  ) {
+    throw new Error(`host conflict did not render retryable StreamConflict: ${JSON.stringify(outcome)}`);
+  }
+  if (!String(outcome.message ?? "").includes("reload and retry")) {
+    throw new Error(`host conflict did not tell the user how to recover: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.ExtendDeadline;
+  if (command?.game !== game) {
+    throw new Error(`host conflict ExtendDeadline used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.phase !== "D01") {
+    throw new Error(`host conflict ExtendDeadline used wrong phase: ${JSON.stringify(command)}`);
   }
 }
 
