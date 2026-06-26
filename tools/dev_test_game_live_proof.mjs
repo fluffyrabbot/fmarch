@@ -181,6 +181,42 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.targetSlot,
+  "slot_5",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.playerVote.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.actionVote.state,
+  "ack",
+);
+assert.notDeepEqual(
+  session.verification.multiplayerHardening.concurrentVoteRace.playerVote.streamSeqs,
+  session.verification.multiplayerHardening.concurrentVoteRace.actionVote.streamSeqs,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count,
+  2,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.playerProjection.some(
+    (row) => row.target === "slot_5" && row.count === 2,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentVoteRace.actionProjection.some(
+    (row) => row.target === "slot_5" && row.count === 2,
+  ),
+  true,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostControl.reject.state,
   "reject",
 );

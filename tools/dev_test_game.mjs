@@ -568,6 +568,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale player vote: ${card.verification.multiplayerHardening.stalePlayerVote.reject.message}`,
         "",
+        `Concurrent vote race: ${card.verification.multiplayerHardening.concurrentVoteRace.targetSlot} count ${card.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count}`,
+        "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
       );
@@ -618,6 +620,7 @@ async function verifySessionCard(card) {
     multiplayerHardening = await verifySeededMultiplayerHardening({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
+      actionPage: roleEntries.actionPlayer.page,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
@@ -924,6 +927,7 @@ async function verifySeededPrivateChannel({
 async function verifySeededMultiplayerHardening({
   hostPage,
   playerPage,
+  actionPage,
   game,
   apiBaseUrl,
 }) {
@@ -1002,6 +1006,13 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     normalizeServerCommandEnvelope,
   });
+  const concurrentVoteRace = await verifyConcurrentVoteRace({
+    playerPage,
+    actionPage,
+    game,
+    apiBaseUrl,
+    normalizeCommandResponse,
+  });
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleCommandId = crypto.randomUUID();
@@ -1048,6 +1059,7 @@ async function verifySeededMultiplayerHardening({
     },
     reconnect,
     stalePlayerVote,
+    concurrentVoteRace,
     staleHostControl: {
       commandId: staleCommandId,
       actionId: "unlock_thread",
@@ -1055,7 +1067,7 @@ async function verifySeededMultiplayerHardening({
       phaseAfterReject: hostStateAfterReject.phase,
     },
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
   };
 }
 
@@ -1217,6 +1229,108 @@ async function verifyStalePlayerVoteRecovery({
   };
 }
 
+async function verifyConcurrentVoteRace({
+  playerPage,
+  actionPage,
+  game,
+  apiBaseUrl,
+  normalizeCommandResponse,
+}) {
+  await gotoPlayerBoard(playerPage, game);
+  await gotoPlayerBoard(actionPage, game);
+  await Promise.all([
+    playerPage.waitForFunction(
+      () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+    ),
+    actionPage.waitForFunction(
+      () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+    ),
+  ]);
+
+  const targetSlot = "slot_5";
+  const playerCommandId = crypto.randomUUID();
+  const actionCommandId = crypto.randomUUID();
+  const playerVoteCommand = {
+    SubmitVote: {
+      game,
+      actor_slot: "slot-7",
+      target: { Slot: targetSlot },
+    },
+  };
+  const actionVoteCommand = {
+    SubmitVote: {
+      game,
+      actor_slot: "slot_4",
+      target: { Slot: targetSlot },
+    },
+  };
+  const [playerRaw, actionRaw] = await Promise.all([
+    sendBrowserCommand(playerPage, {
+      principalUserId: "player-mira",
+      command: playerVoteCommand,
+      commandId: playerCommandId,
+    }),
+    sendBrowserCommand(actionPage, {
+      principalUserId: "player-goon-a",
+      command: actionVoteCommand,
+      commandId: actionCommandId,
+    }),
+  ]);
+  const playerVote = normalizeCommandResponse({
+    commandId: playerCommandId,
+    requestEnvelope: playerRaw.requestEnvelope,
+    response: { status: playerRaw.httpStatus },
+    serverEnvelope: playerRaw.serverEnvelope,
+  });
+  const actionVote = normalizeCommandResponse({
+    commandId: actionCommandId,
+    requestEnvelope: actionRaw.requestEnvelope,
+    response: { status: actionRaw.httpStatus },
+    serverEnvelope: actionRaw.serverEnvelope,
+  });
+  if (playerVote.state !== "ack" || actionVote.state !== "ack") {
+    throw new Error(
+      `concurrent votes did not both ack: ${JSON.stringify({ playerVote, actionVote })}`,
+    );
+  }
+  if (sameArray(playerVote.streamSeqs, actionVote.streamSeqs)) {
+    throw new Error(
+      `concurrent votes reused the same stream seqs: ${JSON.stringify({
+        player: playerVote.streamSeqs,
+        action: actionVote.streamSeqs,
+      })}`,
+    );
+  }
+
+  await waitForPlayerVotecount(playerPage, { target: targetSlot, count: 2 });
+  await actionPage.waitForFunction(() => typeof window.__fmarchTriggerPlayerResync === "function");
+  await actionPage.evaluate(() => window.__fmarchTriggerPlayerResync(0));
+  await waitForPlayerVotecount(actionPage, { target: targetSlot, count: 2 });
+  const apiVotecount = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+  const projectedRow = normalizedVotecountRows(apiVotecount).find(
+    (row) => row.phaseId === "D02" && row.target === targetSlot,
+  );
+  if (projectedRow?.count !== 2) {
+    throw new Error(
+      `concurrent vote API projection did not converge to ${targetSlot}=2: ${JSON.stringify(
+        apiVotecount,
+      )}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    targetSlot,
+    playerVote,
+    actionVote,
+    apiProjection: projectedRow,
+    playerProjection: await playerPage.evaluate(() => window.__fmarchPlayerProjection?.votecount),
+    actionProjection: await actionPage.evaluate(() => window.__fmarchPlayerProjection?.votecount),
+    proof:
+      "The seeded player and action-player role URLs submitted concurrent D02 SubmitVote commands for slot_5 through /commands, both ACKed with distinct stream seqs, and both browser projections plus the API votecount converged to slot_5 count 2.",
+  };
+}
+
 async function fetchResolvedSlotState({ apiBaseUrl, game, slot }) {
   const state = await fetchHostConsoleState({ apiBaseUrl, game, slot });
   return state.slots?.find((candidate) => candidate.slot_id === slot) ?? null;
@@ -1230,6 +1344,33 @@ async function gotoPlayerBoard(page, game) {
     throw new Error(`player board route failed with ${response?.status() ?? "no response"}`);
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
+}
+
+async function waitForPlayerVotecount(page, { target, count }) {
+  await page.waitForFunction(
+    (expected) =>
+      window.__fmarchPlayerProjection?.votecount?.some(
+        (row) => row.target === expected.target && row.count === expected.count,
+      ),
+    { target, count },
+  );
+}
+
+function normalizedVotecountRows(apiVotecount) {
+  const rows = Array.isArray(apiVotecount) ? apiVotecount : [];
+  return rows
+    .map((delta) =>
+      delta?.kind === "VoteCountChanged"
+        ? delta.body
+        : delta?.VoteCountChanged ?? delta?.body?.VoteCountChanged ?? null,
+    )
+    .filter(Boolean)
+    .map((delta) => ({
+      target: delta.candidate_slot ?? delta.candidateSlot ?? "unknown",
+      phaseId: delta.phase_id ?? delta.phaseId ?? "unknown",
+      count: Number(delta.count ?? 0),
+      needed: Number(delta.majority ?? 0),
+    }));
 }
 
 async function fetchHostConsoleState({ apiBaseUrl, game, slot }) {

@@ -160,6 +160,10 @@ test("session card and markdown include role invite URLs and tokens", () => {
             "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
         },
       },
+      concurrentVoteRace: {
+        targetSlot: "slot_5",
+        apiProjection: { count: 2 },
+      },
       staleHostControl: {
         reject: {
           message:
@@ -184,5 +188,6 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
+  assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
 });

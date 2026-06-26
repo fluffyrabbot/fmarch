@@ -144,22 +144,23 @@ page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
 board` recovery for that same channel.
 
-The multiplayer-hardening proof promotes the first retry, reconnect, and
-stale-client behaviors into the same browser harness: the player page replays
-one `SubmitPost` with the same durable `command_id` and verifies the original
-ACK plus exactly one projected post, drops and automatically reconnects the
-player live projection while a server-side post lands, refreshes command state
-after a stale locked-phase vote reject, and the host page sends a stale
-`UnlockThread` and verifies the `Reject PhaseLocked` recovery message while D02
-remains open.
+The multiplayer-hardening proof promotes the first retry, reconnect,
+concurrent-vote, and stale-client behaviors into the same browser harness: the
+player page replays one `SubmitPost` with the same durable `command_id` and
+verifies the original ACK plus exactly one projected post, drops and
+automatically reconnects the player live projection while a server-side post
+lands, refreshes command state after a stale locked-phase vote reject, submits
+two concurrent D02 votes from separate role pages and verifies converged browser
+plus API votecount, and the host page sends a stale `UnlockThread` and verifies
+the `Reject PhaseLocked` recovery message while D02 remains open.
 
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer, plus
-specific duplicate-command, player reconnect, stale player vote, and stale host
-control recovery lanes. It does not prove production account identity, hosted
-deployment, concurrent command races, upload or transcode behavior, beta
-readiness, or rollback/delete semantics for existing append-only games. The
-harness still uses an internal root dev session only to mint local invites;
-production accounts/sessions/invites remain a later identity layer over the same
-role surfaces.
+specific duplicate-command, player reconnect, concurrent vote race, stale player
+vote, and stale host control recovery lanes. It does not prove production
+account identity, hosted deployment, exhaustive race coverage, upload or
+transcode behavior, beta readiness, or rollback/delete semantics for existing
+append-only games. The harness still uses an internal root dev session only to
+mint local invites; production accounts/sessions/invites remain a later identity
+layer over the same role surfaces.
