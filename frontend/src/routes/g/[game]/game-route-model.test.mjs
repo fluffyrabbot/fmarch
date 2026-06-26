@@ -79,6 +79,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     "/media/midsummer/thread/receipt-442-original.jpg",
   );
   assert.equal(data.composer.voteCommandLabel, "Vote slot-2");
+  assert.deepEqual(data.composer.actionCommands, []);
   assert.equal(data.coldLoad.threadEndpoint, "/games/midsummer/thread?limit=50");
   assert.equal(
     data.coldLoad.notificationsEndpoint,
@@ -305,10 +306,65 @@ test("player route data uses REST projection cold-loads when available", async (
           { mode: "cop", target_slot: "slot-2", result: "Mafia" },
         ]);
       }
+      if (url.includes("/player-command-state")) {
+        return jsonResponse({
+          game: "midsummer",
+          actor_slot: "slot-7",
+          role_key: "mafia_goon",
+          phase: {
+            phase_id: "N01",
+            phase_kind: "Night",
+            phase_number: 1,
+            locked: false,
+          },
+          actions: [
+            {
+              template_id: "factional_kill",
+              ability: "Kill",
+              window: "Night",
+              label: "Submit factional kill",
+              detail: "factional_kill -> slot-2",
+              targets: ["slot-2"],
+              target_options: ["slot-2", "slot-3"],
+            },
+          ],
+          boundary: "live player command state",
+        });
+      }
       return { ok: false };
     },
   });
 
+  assert.equal(data.phase.label, "Night 1");
+  assert.equal(data.surfaceHeader.title, "Night 1");
+  assert.deepEqual(
+    data.composer.actionCommands.map((command) => ({
+      action: command.action,
+      commandKind: command.commandKind,
+      label: command.label,
+      detail: command.detail,
+      templateId: command.templateId,
+      targets: command.targets,
+    })),
+    [
+      {
+        action: "submit_action:factional_kill",
+        commandKind: "submit_action",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot-2",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+      },
+      {
+        action: "submit_invalid_action:factional_kill",
+        commandKind: "submit_invalid_action",
+        label: "Try invalid self-action",
+        detail: "factional_kill -> own slot",
+        templateId: "factional_kill",
+        targets: ["slot-7"],
+      },
+    ],
+  );
   assert.equal(data.thread.posts[0].body, "server thread post");
   assert.equal(
     data.thread.posts[0].media[0].variants.small.url,

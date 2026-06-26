@@ -114,6 +114,7 @@ function actionCommandButton(command) {
   const action = String(command?.action ?? "submit_action");
   return Object.freeze({
     action,
+    commandKind: String(command?.commandKind ?? action),
     label: String(command?.label ?? action),
     detail: String(command?.detail ?? ""),
     className: "fm-touch-button fm-touch-button--secondary",

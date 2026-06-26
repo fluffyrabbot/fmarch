@@ -75,11 +75,13 @@ export async function buildGameRouteData({
       capability.kind === "SlotOccupant" &&
       (capability.game === gameId || capability.game === undefined),
   );
+  const playerSlotId = slotCapability?.slot ?? "slot-7";
 
   const coldLoad = await loadPlayerColdData({
     game: gameId,
     activeChannel: channelId,
     principalUserId,
+    actorSlot: playerSlotId,
     fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
     apiBaseUrl,
     fallback: PLAYER_FIXTURE_COLD_LOAD,
@@ -91,6 +93,7 @@ export async function buildGameRouteData({
   });
   const playerCapabilityLabel =
     slotCapability === undefined ? access.capabilityLabel : capabilityLabel(slotCapability);
+  const phase = buildPlayerPhaseView(coldLoad.commandState);
 
   return Object.freeze({
     shell: buildAppShell({
@@ -106,14 +109,14 @@ export async function buildGameRouteData({
     access,
     player: Object.freeze({
       principalUserId,
-      slotId: slotCapability?.slot ?? "slot-7",
+      slotId: playerSlotId,
       capabilityLabel: playerCapabilityLabel,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
       surface: "player",
       eyebrow: "Midsummer Invitational",
-      title: FIXTURE_PHASE.label,
-      summary: FIXTURE_PHASE.summary,
+      title: phase.label,
+      summary: phase.summary,
       capabilityLabel: playerCapabilityLabel,
       capabilityTestId: PLAYER_ROUTE_CONTRACT.capabilityTestId,
       liveStatusTestId: PLAYER_ROUTE_CONTRACT.liveStatusTestId,
@@ -124,7 +127,7 @@ export async function buildGameRouteData({
       capabilities,
       activeChannel: channelId,
     }),
-    phase: FIXTURE_PHASE,
+    phase,
     ...coldLoad,
     privateQueue,
     privateQueueBoundary: buildPrivateQueueBoundary(coldLoad),
@@ -189,29 +192,59 @@ export async function buildGameRouteData({
       postCommandLabel: "Post",
       voteCommandLabel: "Vote slot-2",
       withdrawCommandLabel: "Withdraw vote",
-      actionCommands: Object.freeze([
-        Object.freeze({
-          action: "submit_action",
-          label: "Submit factional kill",
-          detail: "factional_kill -> slot-2",
-          actionId: "browser_factional_kill_n01",
-          templateId: "factional_kill",
-          targets: Object.freeze(["slot-2"]),
-        }),
-        Object.freeze({
-          action: "submit_invalid_action",
-          label: "Try invalid self-action",
-          detail: "factional_kill -> own slot",
-          actionId: "browser_invalid_self_action_n01",
-          templateId: "factional_kill",
-          targets: Object.freeze([slotCapability?.slot ?? "slot-7"]),
-        }),
-      ]),
+      actionCommands: buildPlayerActionCommands(coldLoad.commandState, playerSlotId),
       voteTargetSlot: "slot-2",
       commandEndpoint: "/commands",
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
     }),
   });
+}
+
+function buildPlayerPhaseView(commandState) {
+  const phase = commandState?.phase;
+  if (phase === null || phase === undefined || phase.phaseId === "") {
+    return FIXTURE_PHASE;
+  }
+  const label = `${phase.phaseKind} ${phase.phaseNumber}`;
+  const state = phase.locked ? "locked" : "open";
+  return Object.freeze({
+    label,
+    state,
+    deadlineLabel:
+      typeof phase.deadline === "number" ? formatDeadline(phase.deadline) : "",
+    summary: `${label} is ${state}.`,
+  });
+}
+
+function buildPlayerActionCommands(commandState, actorSlot) {
+  const actions = commandState?.actions ?? [];
+  if (actions.length === 0) {
+    return Object.freeze([]);
+  }
+  const legal = actions.map((action) =>
+    Object.freeze({
+      action: action.action,
+      commandKind: action.commandKind,
+      label: action.label,
+      detail: action.detail,
+      actionId: action.actionId,
+      templateId: action.templateId,
+      targets: action.targets,
+      grantId: action.grantId,
+    }),
+  );
+  const first = actions[0];
+  const invalidRecovery = Object.freeze({
+    action: `submit_invalid_action:${first.templateId}`,
+    commandKind: "submit_invalid_action",
+    label: "Try invalid self-action",
+    detail: `${first.templateId} -> own slot`,
+    actionId: `invalid_self_${first.templateId}`,
+    templateId: first.templateId,
+    targets: Object.freeze([actorSlot]),
+    grantId: first.grantId,
+  });
+  return Object.freeze([...legal, invalidRecovery]);
 }
 
 export function playerForbiddenMessage(game) {
@@ -275,6 +308,14 @@ function privateQueueExpandedItems({ items, privateItem }) {
   return Object.freeze({ [item.id]: true });
 }
 
+function formatDeadline(value) {
+  return new Date(value * 1000).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Los_Angeles",
+  });
+}
+
 const FIXTURE_PHASE = Object.freeze({
   label: "Day 2",
   state: "open",
@@ -283,6 +324,15 @@ const FIXTURE_PHASE = Object.freeze({
 });
 
 const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
+  commandState: Object.freeze({
+    game: "midsummer",
+    actorSlot: "slot-7",
+    roleKey: null,
+    phase: null,
+    actions: Object.freeze([]),
+    boundary:
+      "Fixture player route data does not invent role action availability.",
+  }),
   votecount: Object.freeze([
     Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
     Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),

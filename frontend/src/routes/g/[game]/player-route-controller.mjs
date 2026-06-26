@@ -145,12 +145,18 @@ export function togglePrivateItemExpansion(expandedPrivateItems, item) {
 }
 
 export function playerRefreshKeysForAction(action) {
-  switch (action) {
+  const normalizedAction = String(action);
+  if (
+    normalizedAction === "submit_action" ||
+    normalizedAction.startsWith("submit_action:") ||
+    normalizedAction === "submit_invalid_action" ||
+    normalizedAction.startsWith("submit_invalid_action:")
+  ) {
+    return Object.freeze(["notifications", "investigationResults"]);
+  }
+  switch (normalizedAction) {
     case "submit_post":
       return Object.freeze(["thread", "votecount"]);
-    case "submit_action":
-    case "submit_invalid_action":
-      return Object.freeze(["notifications", "investigationResults"]);
     case "submit_vote":
     case "withdraw_vote":
       return Object.freeze(["votecount"]);

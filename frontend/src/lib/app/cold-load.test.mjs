@@ -7,10 +7,12 @@ import {
   loadHostColdData,
   loadPlayerColdData,
   normalizeHostPrompts,
+  normalizePlayerCommandState,
   normalizeThreadPage,
   normalizeThreadPost,
   normalizeVotecount,
   operatorProofRunUrl,
+  playerCommandStateUrl,
   playerThreadUrl,
   principalScopedGameUrl,
 } from "./cold-load.mjs";
@@ -27,6 +29,14 @@ const FALLBACK = Object.freeze({
     }),
   ]),
   hostPrompts: Object.freeze([]),
+  commandState: Object.freeze({
+    game: null,
+    actorSlot: null,
+    roleKey: null,
+    phase: null,
+    actions: Object.freeze([]),
+    boundary: "fallback command state",
+  }),
 });
 
 test("cold-load URLs match existing API route contracts", () => {
@@ -74,6 +84,14 @@ test("cold-load URLs match existing API route contracts", () => {
   );
   assert.equal(hostVotecountUrl({ game: "game-a" }), "/games/game-a/votecount");
   assert.equal(
+    playerCommandStateUrl({
+      game: "game-a",
+      principalUserId: "player_a",
+      slotId: "slot_4",
+    }),
+    "/games/game-a/player-command-state?principal_user_id=player_a&slot_id=slot_4",
+  );
+  assert.equal(
     operatorProofRunUrl({
       apiBaseUrl: "http://api.test",
       game: "game-a",
@@ -90,6 +108,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
     game: "midsummer",
     activeChannel: "role-pm",
     principalUserId: "player_mira",
+    actorSlot: "slot-7",
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
@@ -102,6 +121,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
     "/games/midsummer/votecount",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
+    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
   ]);
 });
 
@@ -252,6 +272,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   const data = await loadPlayerColdData({
     game: "midsummer",
     principalUserId: "player_mira",
+    actorSlot: "slot_4",
     fallback: FALLBACK,
     fetchImpl: async (url) => {
       seen.push(url);
@@ -259,6 +280,30 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
         return jsonResponse({
           next_before_seq: null,
           posts: [{ source_seq: 1, body: "hello", occurred_at: 1781928000 }],
+        });
+      }
+      if (url.includes("/player-command-state")) {
+        return jsonResponse({
+          game: "midsummer",
+          actor_slot: "slot_4",
+          role_key: "mafia_goon",
+          phase: {
+            phase_id: "N01",
+            phase_kind: "Night",
+            phase_number: 1,
+            locked: false,
+          },
+          actions: [
+            {
+              template_id: "factional_kill",
+              ability: "Kill",
+              window: "Night",
+              targets: ["slot-2"],
+              target_options: ["slot-2", "slot-3"],
+              label: "Submit factional kill",
+            },
+          ],
+          boundary: "live role actions",
         });
       }
       return { ok: false };
@@ -270,9 +315,72 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
     "/games/midsummer/votecount",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
+    "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot_4",
   ]);
   assert.equal(data.thread.posts[0].body, "hello");
   assert.deepEqual(data.votecount, FALLBACK.votecount);
+  assert.equal(data.commandState.phase.phaseId, "N01");
+  assert.equal(data.commandState.actions[0].templateId, "factional_kill");
+  assert.deepEqual(data.commandState.actions[0].targets, ["slot-2"]);
+});
+
+test("normalizes player command state into route action configs", () => {
+  assert.deepEqual(
+    normalizePlayerCommandState(
+      {
+        game: "midsummer",
+        actor_slot: "slot_4",
+        role_key: "mafia_goon",
+        phase: {
+          phase_id: "N01",
+          phase_kind: "Night",
+          phase_number: 1,
+          locked: false,
+          deadline: 1781928000,
+        },
+        actions: [
+          {
+            template_id: "factional_kill",
+            ability: "Kill",
+            window: "Night",
+            targets: ["slot-2"],
+            target_options: ["slot-2", "slot-3"],
+          },
+        ],
+        boundary: "live command state",
+      },
+      FALLBACK.commandState,
+    ),
+    {
+      game: "midsummer",
+      actorSlot: "slot_4",
+      roleKey: "mafia_goon",
+      phase: {
+        phaseId: "N01",
+        phaseKind: "Night",
+        phaseNumber: 1,
+        locked: false,
+        deadline: 1781928000,
+      },
+      actions: [
+        {
+          source: "role",
+          action: "submit_action:factional_kill",
+          commandKind: "submit_action",
+          label: "Submit factional kill",
+          detail: "factional_kill -> slot-2",
+          actionId: "role_factional_kill",
+          templateId: "factional_kill",
+          targets: ["slot-2"],
+          targetOptions: ["slot-2", "slot-3"],
+          grantId: null,
+          ability: "Kill",
+          window: "Night",
+        },
+      ],
+      boundary: "live command state",
+    },
+  );
 });
 
 test("player cold-load skips private scoped endpoints without a principal", async () => {

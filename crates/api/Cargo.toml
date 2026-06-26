@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 caps = { path = "../caps" }
 commands = { path = "../commands" }
+domain = { path = "../domain" }
 projections = { path = "../projections" }
 wire = { path = "../wire" }
 axum = { version = "0.8", features = ["ws"] }

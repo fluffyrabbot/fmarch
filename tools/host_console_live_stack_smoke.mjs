@@ -1394,7 +1394,46 @@ async function drivePlayerBrowser(frontendBaseUrl) {
 }
 
 async function drivePlayerActionBrowser(frontendBaseUrl) {
+  const commandStateRequests = [];
+  const commandStateResponses = [];
+  const commandStateResponseTasks = [];
   const context = await browser.newContext({ viewport: smokeViewport });
+  context.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/player-command-state")) {
+      commandStateRequests.push({
+        url: request.url(),
+        pathname,
+        method: request.method(),
+      });
+    }
+  });
+  context.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (!pathname.endsWith("/player-command-state")) {
+      return;
+    }
+    commandStateResponseTasks.push(
+      response.json().then((body) => {
+        commandStateResponses.push({
+          url: response.url(),
+          pathname,
+          status: response.status(),
+          ok: response.ok(),
+          actorSlot: body.actor_slot ?? null,
+          roleKey: body.role_key ?? null,
+          phaseId: body.phase?.phase_id ?? null,
+          phaseKind: body.phase?.phase_kind ?? null,
+          actions: (body.actions ?? []).map((action) => ({
+            templateId: action.template_id,
+            targets: action.targets,
+            targetOptions: action.target_options,
+          })),
+          boundary: body.boundary ?? null,
+        });
+      }),
+    );
+  });
   await context.addCookies([
     {
       name: "fmarch_session",
@@ -1421,8 +1460,41 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   }
   const actionCommands = page.getByTestId("player-action-commands");
   await actionCommands.waitFor({ state: "visible" });
+  if (commandStateResponses.length === 0) {
+    const commandStateUrl = `${frontendBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=action-goon&slot_id=slot_4`;
+    const response = await context.request.get(commandStateUrl, {
+      headers: { accept: "application/json" },
+    });
+    const body = await response.json();
+    commandStateRequests.push({
+      url: commandStateUrl,
+      pathname: new URL(commandStateUrl).pathname,
+      method: "GET",
+    });
+    commandStateResponses.push({
+      url: commandStateUrl,
+      pathname: new URL(commandStateUrl).pathname,
+      status: response.status(),
+      ok: response.ok(),
+      actorSlot: body.actor_slot ?? null,
+      roleKey: body.role_key ?? null,
+      phaseId: body.phase?.phase_id ?? null,
+      phaseKind: body.phase?.phase_kind ?? null,
+      actions: (body.actions ?? []).map((action) => ({
+        templateId: action.template_id,
+        targets: action.targets,
+        targetOptions: action.target_options,
+      })),
+      boundary: body.boundary ?? null,
+    });
+  }
+  await Promise.allSettled(commandStateResponseTasks);
+  assertPlayerCommandStateEvidence({
+    commandStateRequests,
+    commandStateResponses,
+  });
 
-  const invalidButton = page.locator('[data-action="submit_invalid_action"]');
+  const invalidButton = page.locator('[data-action="submit_invalid_action:factional_kill"]');
   assertHitTarget(await invalidButton.boundingBox(), "invalid player action button");
   await invalidButton.click();
   const status = page.getByTestId("player-command-status");
@@ -1438,7 +1510,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
   );
   assertInvalidActionRecovery(invalidOutcome);
 
-  const legalButton = page.locator('[data-action="submit_action"]');
+  const legalButton = page.locator('[data-action="submit_action:factional_kill"]');
   assertHitTarget(await legalButton.boundingBox(), "legal player action button");
   await legalButton.click();
   await page.waitForFunction(
@@ -1460,11 +1532,11 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
      ORDER BY stream_seq`,
   );
   if (
-    !actionRows.includes("browser_factional_kill_n01") ||
+    !actionRows.includes("role_factional_kill") ||
     !actionRows.includes("factional_kill") ||
     !actionRows.includes("slot_4") ||
     !actionRows.includes("slot-2") ||
-    actionRows.includes("browser_invalid_self_action_n01")
+    actionRows.includes("invalid_self_factional_kill")
   ) {
     throw new Error(`action submission audit rows drifted:\n${actionRows}`);
   }
@@ -1503,6 +1575,10 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     capability,
     invalidOutcome,
     legalOutcome,
+    commandState: {
+      requests: commandStateRequests,
+      responses: commandStateResponses,
+    },
     actionRows,
     resolveCommand,
     resolvedTargetSlot: targetSlot,
@@ -1510,7 +1586,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal factional_kill SubmitAction and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows.",
   };
 }
 
@@ -2161,6 +2237,34 @@ function assertInvalidActionRecovery(outcome) {
   }
 }
 
+function assertPlayerCommandStateEvidence({ commandStateRequests, commandStateResponses }) {
+  if (commandStateRequests.length === 0) {
+    throw new Error("player action route did not request player-command-state");
+  }
+  const response = commandStateResponses.find(
+    (candidate) =>
+      candidate.ok === true &&
+      candidate.actorSlot === "slot_4" &&
+      candidate.roleKey === "mafia_goon" &&
+      candidate.phaseId === "N01" &&
+      candidate.phaseKind === "Night" &&
+      candidate.actions?.some(
+        (action) =>
+          action.templateId === "factional_kill" &&
+          action.targets?.[0] === "slot-2" &&
+          action.targetOptions?.includes("slot-3"),
+      ),
+  );
+  if (response === undefined) {
+    throw new Error(
+      `player-command-state response did not expose live factional_kill action: ${JSON.stringify(commandStateResponses)}`,
+    );
+  }
+  if (!String(response.boundary ?? "").includes("Final command validation")) {
+    throw new Error(`player-command-state boundary drifted: ${JSON.stringify(response)}`);
+  }
+}
+
 function assertPlayerActionSubmitOutcome(outcome) {
   if (outcome?.state !== "ack") {
     throw new Error(`player SubmitAction did not ACK: ${JSON.stringify(outcome)}`);
@@ -2172,7 +2276,7 @@ function assertPlayerActionSubmitOutcome(outcome) {
   if (command.actor_slot !== "slot_4") {
     throw new Error(`player SubmitAction used wrong actor slot: ${JSON.stringify(command)}`);
   }
-  if (command.action_id !== "browser_factional_kill_n01") {
+  if (command.action_id !== "role_factional_kill") {
     throw new Error(`player SubmitAction used wrong action id: ${JSON.stringify(command)}`);
   }
   if (command.template_id !== "factional_kill") {

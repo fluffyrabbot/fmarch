@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
 use std::collections::HashSet;
+use std::path::Path as FsPath;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -91,6 +92,10 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route(
             "/games/{game}/investigation-results",
             get(player_investigation_results),
+        )
+        .route(
+            "/games/{game}/player-command-state",
+            get(player_command_state),
         )
         .route(
             "/games/{game}/host-phase-controls",
@@ -758,6 +763,287 @@ async fn player_investigation_results_for_principal(
         .into_iter()
         .map(PlayerInvestigationResult::from)
         .collect())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct PlayerCommandStateQuery {
+    principal_user_id: String,
+    #[serde(default)]
+    slot_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerCommandStateResponse {
+    pub game: Uuid,
+    pub actor_slot: Option<String>,
+    pub role_key: Option<String>,
+    pub phase: Option<PlayerCommandPhaseState>,
+    pub actions: Vec<PlayerCommandAction>,
+    pub boundary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerCommandPhaseState {
+    pub phase_id: String,
+    pub phase_kind: String,
+    pub phase_number: u32,
+    pub locked: bool,
+    pub deadline: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerCommandAction {
+    pub source: String,
+    pub template_id: String,
+    pub ability: String,
+    pub window: String,
+    pub label: String,
+    pub detail: String,
+    pub targets: Vec<String>,
+    pub target_options: Vec<String>,
+    pub grant_id: Option<String>,
+}
+
+async fn player_command_state(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+    Query(query): Query<PlayerCommandStateQuery>,
+) -> Result<Json<PlayerCommandStateResponse>, ApiError> {
+    let caps = caps::resolve(
+        &state.pool,
+        &Principal::user(query.principal_user_id.as_str()),
+        game,
+    )
+    .await?;
+    let actor_slot = match query.slot_id {
+        Some(slot) if caps.grants(&Capability::SlotOccupant(slot.clone())) => slot,
+        Some(_) => {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotYourSlot,
+                message: "principal cannot act as requested slot".to_string(),
+            });
+        }
+        None => caps
+            .iter()
+            .find_map(|cap| match cap {
+                Capability::SlotOccupant(slot) => Some(slot.clone()),
+                _ => None,
+            })
+            .ok_or_else(|| ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "principal cannot read player command state for this game".to_string(),
+            })?,
+    };
+
+    let phase = projections::phase_state(&state.pool, game).await?;
+    let slots = projections::slot_state(&state.pool, game).await?;
+    let actor = slots
+        .iter()
+        .find(|slot| slot.slot_id == actor_slot)
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::NOT_FOUND,
+            error: RejectCode::UnknownSlot,
+            message: "actor slot does not exist in this game".to_string(),
+        })?;
+    let role_key = actor.role_key.clone();
+    let phase_view = phase
+        .as_ref()
+        .and_then(|phase| player_phase_state(phase).ok());
+    let actions = if actor.alive {
+        match (phase.as_ref(), role_key.as_deref()) {
+            (Some(phase), Some(role_key)) if !phase.locked => {
+                available_role_actions(&state, game, phase, &slots, actor, role_key).await?
+            }
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+
+    Ok(Json(PlayerCommandStateResponse {
+        game,
+        actor_slot: Some(actor_slot),
+        role_key,
+        phase: phase_view,
+        actions,
+        boundary: "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string(),
+    }))
+}
+
+async fn available_role_actions(
+    state: &ApiState,
+    game: Uuid,
+    phase: &projections::PhaseStateRow,
+    slots: &[projections::SlotStateRow],
+    actor: &projections::SlotStateRow,
+    role_key: &str,
+) -> Result<Vec<PlayerCommandAction>, ApiError> {
+    let pack = load_pack_for_game(state, game).await?;
+    let role = pack.roles.get(role_key).ok_or_else(|| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("role `{role_key}` is missing from game pack {}", pack.name),
+    })?;
+    let phase_kind = phase_kind_for_id(phase.phase_id.as_str())?;
+
+    Ok(role
+        .actions
+        .iter()
+        .filter(|action| action.window.matches_phase_kind(phase_kind))
+        .filter_map(|action| {
+            let target_options = target_options_for_action(action, slots, actor);
+            let targets = default_targets_for_action(action, &target_options)?;
+            Some(PlayerCommandAction {
+                source: "role".to_string(),
+                template_id: action.id.clone(),
+                ability: format!("{:?}", action.ability),
+                window: format!("{:?}", action.window),
+                label: action_label(action),
+                detail: action_detail(action, &targets),
+                targets,
+                target_options,
+                grant_id: None,
+            })
+        })
+        .collect())
+}
+
+fn target_options_for_action(
+    action: &domain::pack::ActionTemplate,
+    slots: &[projections::SlotStateRow],
+    actor: &projections::SlotStateRow,
+) -> Vec<String> {
+    if action.targets == domain::pack::TargetSpec::None {
+        return Vec::new();
+    }
+    let target_state = action
+        .constraints
+        .target_state
+        .unwrap_or(domain::pack::TargetState::Alive);
+    slots
+        .iter()
+        .filter(|slot| {
+            if !action.constraints.self_allowed && slot.slot_id == actor.slot_id {
+                return false;
+            }
+            match target_state {
+                domain::pack::TargetState::Any => true,
+                domain::pack::TargetState::Alive => slot.alive,
+                domain::pack::TargetState::Dead => !slot.alive,
+            }
+        })
+        .map(|slot| slot.slot_id.clone())
+        .collect()
+}
+
+fn default_targets_for_action(
+    action: &domain::pack::ActionTemplate,
+    target_options: &[String],
+) -> Option<Vec<String>> {
+    match action.targets {
+        domain::pack::TargetSpec::None => Some(Vec::new()),
+        domain::pack::TargetSpec::One => target_options.first().cloned().map(|target| vec![target]),
+        domain::pack::TargetSpec::Many | domain::pack::TargetSpec::Group => {
+            if target_options.is_empty() {
+                None
+            } else {
+                Some(
+                    target_options
+                        .iter()
+                        .take(action.constraints.max_targets as usize)
+                        .cloned()
+                        .collect(),
+                )
+            }
+        }
+    }
+}
+
+fn action_label(action: &domain::pack::ActionTemplate) -> String {
+    let action_name = action.id.replace('_', " ");
+    match action.ability {
+        domain::IrAbility::Kill => format!("Submit {action_name}"),
+        domain::IrAbility::Protect => format!("Submit {action_name}"),
+        domain::IrAbility::Investigate => format!("Submit {action_name}"),
+        _ => format!("Submit {action_name}"),
+    }
+}
+
+fn action_detail(action: &domain::pack::ActionTemplate, targets: &[String]) -> String {
+    if targets.is_empty() {
+        action.id.clone()
+    } else {
+        format!("{} -> {}", action.id, targets.join(", "))
+    }
+}
+
+fn player_phase_state(
+    phase: &projections::PhaseStateRow,
+) -> Result<PlayerCommandPhaseState, ApiError> {
+    let phase_kind = phase_kind_for_id(phase.phase_id.as_str())?;
+    Ok(PlayerCommandPhaseState {
+        phase_id: phase.phase_id.clone(),
+        phase_kind: format!("{:?}", phase_kind),
+        phase_number: phase_number_for_id(phase.phase_id.as_str())?,
+        locked: phase.locked,
+        deadline: phase.deadline,
+    })
+}
+
+fn phase_kind_for_id(phase_id: &str) -> Result<domain::pack::PhaseKind, ApiError> {
+    match phase_id.chars().next() {
+        Some('D') => Ok(domain::pack::PhaseKind::Day),
+        Some('N') => Ok(domain::pack::PhaseKind::Night),
+        Some('T') => Ok(domain::pack::PhaseKind::Twilight),
+        _ => Err(ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("invalid phase id `{phase_id}`"),
+        }),
+    }
+}
+
+fn phase_number_for_id(phase_id: &str) -> Result<u32, ApiError> {
+    phase_id
+        .get(1..)
+        .and_then(|raw| raw.parse::<u32>().ok())
+        .filter(|number| *number > 0)
+        .ok_or_else(|| ApiError::Reject {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            error: RejectCode::Internal,
+            message: format!("invalid phase id `{phase_id}`"),
+        })
+}
+
+async fn load_pack_for_game(state: &ApiState, game: Uuid) -> Result<domain::Pack, ApiError> {
+    let pack_name = sqlx::query_scalar::<_, Option<String>>(
+        "SELECT payload->>'pack' FROM events WHERE stream_id = $1 AND kind = 'GameCreated' ORDER BY stream_seq ASC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_optional(&state.pool)
+    .await?
+    .flatten()
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::UnknownGame,
+        message: "game stream has no GameCreated pack".to_string(),
+    })?;
+    let path = FsPath::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packs")
+        .join(&pack_name)
+        .join("pack.json");
+    let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("read pack {}: {err}", path.display()),
+    })?;
+    domain::load_pack_from_json(&raw).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("load pack {pack_name}: {err}"),
+    })
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -415,6 +415,193 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPool) {
+    let app = router(pool);
+    let game = Uuid::new_v4();
+    for (id, principal, command) in [
+        (
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        ),
+        (
+            2,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot_4".into(),
+            },
+        ),
+        (
+            3,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot-2".into(),
+            },
+        ),
+        (
+            4,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot-3".into(),
+            },
+        ),
+        (
+            5,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot_4".into(),
+                user: "action-goon".into(),
+            },
+        ),
+        (
+            6,
+            "host_h",
+            Command::AssignRole {
+                game,
+                slot: "slot_4".into(),
+                role_key: "mafia_goon".into(),
+            },
+        ),
+        (
+            7,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot-2".into(),
+                user: "action-target".into(),
+            },
+        ),
+        (
+            8,
+            "host_h",
+            Command::AssignRole {
+                game,
+                slot: "slot-2".into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ),
+        (
+            9,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot-3".into(),
+                user: "action-town".into(),
+            },
+        ),
+        (
+            10,
+            "host_h",
+            Command::AssignRole {
+                game,
+                slot: "slot-3".into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ),
+        (
+            11,
+            "host_h",
+            Command::StartGame {
+                game,
+                phase: "N01".into(),
+            },
+        ),
+    ] {
+        expect_ack(post_command(app.clone(), id, principal, command).await);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(state["actor_slot"], "slot_4");
+    assert_eq!(state["role_key"], "mafia_goon");
+    assert_eq!(state["phase"]["phase_id"], "N01");
+    assert_eq!(state["phase"]["phase_kind"], "Night");
+    assert_eq!(state["actions"][0]["template_id"], "factional_kill");
+    assert_eq!(
+        state["actions"][0]["targets"],
+        serde_json::json!(["slot-2"])
+    );
+    assert_eq!(
+        state["actions"][0]["target_options"],
+        serde_json::json!(["slot-2", "slot-3"])
+    );
+    assert!(state["boundary"]
+        .as_str()
+        .unwrap()
+        .contains("Final command validation"));
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            12,
+            "host_h",
+            Command::OpenDayPhase {
+                game,
+                phase: "D01".into(),
+            },
+        )
+        .await,
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-goon&slot_id=slot_4"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let day_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(day_state["phase"]["phase_id"], "D01");
+    assert_eq!(day_state["actions"], serde_json::json!([]));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-target&slot_id=slot_4"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(reject.error, RejectCode::NotYourSlot);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn websocket_game_connection_sends_initial_votecount_delta(pool: sqlx::PgPool) {
     let app = router(pool);
     let game = Uuid::new_v4();

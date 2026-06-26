@@ -101,7 +101,7 @@ test("player route controller builds typed player command requests", () => {
   assert.deepEqual(
     buildPlayerCommandRequest({
       data: fixtureData(),
-      action: "submit_action",
+      action: "submit_action:factional_kill",
       composerBody: "ignored for action",
     }),
     {
@@ -180,6 +180,10 @@ test("player route controller refreshes only projections touched by acked comman
 
   assert.deepEqual(playerRefreshKeysForAction("submit_post"), ["thread", "votecount"]);
   assert.deepEqual(playerRefreshKeysForAction("submit_action"), [
+    "notifications",
+    "investigationResults",
+  ]);
+  assert.deepEqual(playerRefreshKeysForAction("submit_action:factional_kill"), [
     "notifications",
     "investigationResults",
   ]);
@@ -411,7 +415,8 @@ function fixtureData(overrides = {}) {
       voteTargetSlot: "slot-2",
       actionCommands: [
         {
-          action: "submit_action",
+          action: "submit_action:factional_kill",
+          commandKind: "submit_action",
           actionId: "browser_factional_kill_n01",
           templateId: "factional_kill",
           targets: ["slot-2"],

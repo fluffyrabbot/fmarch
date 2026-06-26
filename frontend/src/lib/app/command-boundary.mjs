@@ -30,7 +30,8 @@ export function buildPlayerCommand({
   target,
   actionConfig = null,
 }) {
-  switch (action) {
+  const commandKind = actionConfig?.commandKind ?? action;
+  switch (commandKind) {
     case "submit_post":
       return Object.freeze({
         SubmitPost: Object.freeze({

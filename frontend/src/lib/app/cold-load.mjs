@@ -2,13 +2,16 @@ export async function loadPlayerColdData({
   game,
   activeChannel = "main",
   principalUserId,
+  actorSlot = null,
   fetchImpl,
   apiBaseUrl = "",
   fallback,
 }) {
   const canLoadPrivate =
     typeof principalUserId === "string" && principalUserId.trim() !== "";
-  const [thread, votecount, notifications, investigationResults] = await Promise.all([
+  const canLoadCommandState =
+    canLoadPrivate && typeof actorSlot === "string" && actorSlot.trim() !== "";
+  const [thread, votecount, notifications, investigationResults, commandState] = await Promise.all([
     fetchJson({
       fetchImpl,
       fallback: fallback.thread,
@@ -49,6 +52,18 @@ export async function loadPlayerColdData({
           }),
         })
       : [],
+    canLoadCommandState
+      ? fetchJson({
+          fetchImpl,
+          fallback: fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
+          url: playerCommandStateUrl({
+            apiBaseUrl,
+            game,
+            principalUserId,
+            slotId: actorSlot,
+          }),
+        })
+      : fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
   ]);
 
   return Object.freeze({
@@ -59,6 +74,10 @@ export async function loadPlayerColdData({
     ),
     investigationResults: Object.freeze(
       Array.isArray(investigationResults) ? investigationResults : [],
+    ),
+    commandState: normalizePlayerCommandState(
+      commandState,
+      fallback.commandState ?? EMPTY_PLAYER_COMMAND_STATE,
     ),
   });
 }
@@ -292,6 +311,78 @@ export function normalizeVotecount(deltas, fallback) {
   return Object.freeze(rows.length === 0 ? fallback : rows);
 }
 
+export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
+  game: null,
+  actorSlot: null,
+  roleKey: null,
+  phase: null,
+  actions: Object.freeze([]),
+  boundary:
+    "No live player command-state endpoint was available; the route renders no role action controls.",
+});
+
+export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COMMAND_STATE) {
+  if (payload === null || typeof payload !== "object") {
+    return fallback;
+  }
+  const actions = Array.isArray(payload.actions) ? payload.actions : [];
+  return Object.freeze({
+    game: payload.game ?? fallback.game ?? null,
+    actorSlot: payload.actor_slot ?? payload.actorSlot ?? fallback.actorSlot ?? null,
+    roleKey: payload.role_key ?? payload.roleKey ?? fallback.roleKey ?? null,
+    phase: normalizePlayerCommandPhase(payload.phase ?? null),
+    actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),
+    boundary: String(payload.boundary ?? fallback.boundary ?? ""),
+  });
+}
+
+function normalizePlayerCommandPhase(phase) {
+  if (phase === null || typeof phase !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    phaseId: String(phase.phase_id ?? phase.phaseId ?? ""),
+    phaseKind: String(phase.phase_kind ?? phase.phaseKind ?? "Unknown"),
+    phaseNumber: Number(phase.phase_number ?? phase.phaseNumber ?? 0),
+    locked: phase.locked === true,
+    deadline: phase.deadline ?? null,
+  });
+}
+
+function normalizePlayerCommandAction(action) {
+  if (action === null || typeof action !== "object") {
+    return null;
+  }
+  const templateId = action.template_id ?? action.templateId;
+  if (typeof templateId !== "string" || templateId.trim() === "") {
+    return null;
+  }
+  const targets = normalizeStringArray(action.targets);
+  return Object.freeze({
+    source: String(action.source ?? "role"),
+    action: String(action.action ?? `submit_action:${templateId}`),
+    commandKind: String(action.command_kind ?? action.commandKind ?? "submit_action"),
+    label: String(action.label ?? `Submit ${templateId.replaceAll("_", " ")}`),
+    detail: String(
+      action.detail ?? (targets.length === 0 ? templateId : `${templateId} -> ${targets.join(", ")}`),
+    ),
+    actionId: String(action.action_id ?? action.actionId ?? `role_${templateId}`),
+    templateId,
+    targets,
+    targetOptions: normalizeStringArray(action.target_options ?? action.targetOptions),
+    grantId: action.grant_id ?? action.grantId ?? null,
+    ability: String(action.ability ?? ""),
+    window: String(action.window ?? ""),
+  });
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) {
+    return Object.freeze([]);
+  }
+  return Object.freeze(value.map((item) => String(item)));
+}
+
 export function normalizeAdminAudit(proofStatus, fallback, context = {}) {
   if (proofStatus === null || typeof proofStatus !== "object") {
     return fallback;
@@ -386,6 +477,19 @@ export function playerThreadUrl({
 
 export function playerVotecountUrl({ apiBaseUrl = "", game }) {
   return `${apiBaseUrl}/games/${encodeURIComponent(game)}/votecount`;
+}
+
+export function playerCommandStateUrl({
+  apiBaseUrl = "",
+  game,
+  principalUserId,
+  slotId,
+}) {
+  const params = new URLSearchParams({
+    principal_user_id: principalUserId,
+    slot_id: slotId,
+  });
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/player-command-state?${params.toString()}`;
 }
 
 export function hostVotecountUrl({ apiBaseUrl = "", game }) {
