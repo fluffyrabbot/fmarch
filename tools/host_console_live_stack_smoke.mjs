@@ -11,6 +11,10 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import {
+  assertLiveStackReadiness,
+  buildLiveStackReadiness,
+} from "./live_stack_readiness_contract.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -167,6 +171,9 @@ try {
     apiState,
     slotLifecycleApiState,
   };
+  const readiness = buildLiveStackReadiness(evidence);
+  assertLiveStackReadiness(readiness);
+  evidence.readiness = readiness;
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   await writeProgress({ stage: "complete", evidencePath });
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
