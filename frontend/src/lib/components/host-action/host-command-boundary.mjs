@@ -236,6 +236,16 @@ export function projectHostConsoleState(state, fallback) {
     phase: Object.freeze({
       ...fallback.phase,
       id: phase?.phase_id ?? fallback.phase.id,
+      locked:
+        typeof phase?.locked === "boolean"
+          ? phase.locked
+          : fallback.phase.locked ?? fallback.phase.state === "locked",
+      state:
+        typeof phase?.locked === "boolean"
+          ? phase.locked
+            ? "locked"
+            : "open"
+          : fallback.phase.state,
       lockedLabel:
         typeof phase?.locked === "boolean"
           ? phase.locked

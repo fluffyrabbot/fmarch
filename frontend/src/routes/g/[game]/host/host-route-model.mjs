@@ -51,6 +51,7 @@ export async function buildHostConsoleRouteData({
 
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
+    phase: HOST_FIXTURE_PHASE,
   });
 
   return Object.freeze({
@@ -109,14 +110,7 @@ export async function buildHostConsoleRouteData({
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
     access,
-    phase: Object.freeze({
-      id: "D01",
-      label: "Day 2",
-      state: "open",
-      summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
-      deadlineLabel: "No deadline extension committed",
-      lockedLabel: "Thread open",
-    }),
+    phase: HOST_FIXTURE_PHASE,
     replacement: Object.freeze({
       slotId: "slot-7",
       occupantLabel: "player-mira",
@@ -247,6 +241,16 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
       decisionKind: "acknowledge",
     }),
   ]),
+});
+
+const HOST_FIXTURE_PHASE = Object.freeze({
+  id: "D01",
+  label: "Day 2",
+  state: "open",
+  locked: false,
+  summary: "Day 2 deadline is active. Slot 7 / Mira has a pending replacement.",
+  deadlineLabel: "No deadline extension committed",
+  lockedLabel: "Thread open",
 });
 
 function normalizeGame(game) {

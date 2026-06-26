@@ -43,7 +43,7 @@ test("host route controller derives action groups from live host projections", (
     gameId: "midsummer",
     snapshot: {
       host: {
-        phase: { id: "D01" },
+        phase: { id: "D01", locked: false, state: "open" },
         replacement: null,
       },
       votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
@@ -79,6 +79,30 @@ test("host route controller derives action groups from live host projections", (
   assert.equal(
     derived.moderatorActionGroups.find((group) => group.id === "votecount").value,
     "1 projected target",
+  );
+  assert.deepEqual(
+    derived.moderatorActionGroups
+      .find((group) => group.id === "phase")
+      .actions.map((action) => action.id),
+    ["lock_thread"],
+  );
+
+  const locked = buildHostDerivedState({
+    gameId: "midsummer",
+    snapshot: {
+      host: {
+        phase: { id: "N01", locked: true, state: "locked" },
+        replacement: null,
+      },
+      votecount: [],
+      hostPrompts: [],
+    },
+  });
+  assert.deepEqual(
+    locked.moderatorActionGroups
+      .find((group) => group.id === "phase")
+      .actions.map((action) => action.id),
+    ["unlock_thread", "advance_phase"],
   );
 });
 
@@ -394,7 +418,7 @@ function fixtureData(overrides = {}) {
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
-    phase: { id: "D01", label: "Day 1" },
+    phase: { id: "D01", label: "Day 1", locked: false, state: "open" },
     replacement: null,
     votecount: [],
     hostPrompts: [],

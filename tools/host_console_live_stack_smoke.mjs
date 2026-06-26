@@ -1655,6 +1655,7 @@ async function openModeratorBrowser(frontendBaseUrl) {
 }
 
 async function driveModeratorBrowser({ page, pageUrl }) {
+  const phaseControlEvidence = await driveHostPhaseControlsBrowser(page);
   const actionEvidence = [];
   for (const expected of [
     { id: "extend_deadline", status: "ack" },
@@ -1731,6 +1732,7 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   const evidence = {
     url: pageUrl,
     actions: actionEvidence,
+    phaseControls: phaseControlEvidence,
     hostPrompt: {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,
@@ -1750,6 +1752,102 @@ async function driveModeratorBrowser({ page, pageUrl }) {
     apiStateBeforePrompt,
   };
   return evidence;
+}
+
+async function driveHostPhaseControlsBrowser(page) {
+  await expectHostPhaseActions(page, ["lock_thread"]);
+  const lockEvidence = await confirmHostAction(page, "lock_thread");
+  await waitForHostConsolePhaseLocked(page, true);
+  await expectHostPhaseActions(page, ["unlock_thread", "advance_phase"]);
+  const unlockEvidence = await confirmHostAction(page, "unlock_thread");
+  await waitForHostConsolePhaseLocked(page, false);
+  await expectHostPhaseActions(page, ["lock_thread"]);
+
+  return {
+    initialActions: ["lock_thread"],
+    lockedActions: ["unlock_thread", "advance_phase"],
+    restoredActions: ["lock_thread"],
+    lock: lockEvidence,
+    unlock: unlockEvidence,
+    proof:
+      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Lock only, LockThread ACK refreshed the same page to locked controls with Unlock and Advance, and UnlockThread ACK restored Lock without a page reload.",
+  };
+}
+
+async function confirmHostAction(page, actionId) {
+  const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  const trigger = actionRoot.getByTestId("critical-host-action-trigger");
+  await trigger.waitFor({ state: "visible" });
+  const triggerBox = await trigger.boundingBox();
+  assertHitTarget(triggerBox, `${actionId} trigger`);
+  await trigger.click();
+
+  const confirmation = actionRoot.getByTestId("critical-host-action-confirmation");
+  await confirmation.waitFor({ state: "visible" });
+  const confirmationMessage = await actionRoot
+    .getByTestId("critical-host-action-confirmation-message")
+    .innerText();
+  const confirm = actionRoot.getByTestId("critical-host-action-confirm");
+  const confirmBox = await confirm.boundingBox();
+  assertHitTarget(confirmBox, `${actionId} confirm`);
+  await confirm.click();
+
+  await page.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
+    actionId,
+  );
+  const commandStatus = await page.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  return {
+    actionId,
+    triggerBox,
+    confirmBox,
+    confirmationMessage,
+    statusMessage: commandStatus?.message ?? "",
+    commandStatus,
+  };
+}
+
+async function expectHostPhaseActions(page, expectedActions) {
+  try {
+    await page.waitForFunction((expected) => {
+      const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
+      if (phaseGroup === null) {
+        return false;
+      }
+      const actual = [...phaseGroup.querySelectorAll('[data-testid^="critical-host-action-"]')]
+        .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
+        .filter((id) =>
+          id !== undefined &&
+          !["trigger", "confirmation", "confirmation-message", "confirm", "cancel"].includes(id),
+        )
+        .sort();
+      return JSON.stringify(actual) === JSON.stringify([...expected].sort());
+    }, expectedActions);
+  } catch (error) {
+    const debug = await page.evaluate(() => {
+      const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
+      return {
+        phaseGroupText: phaseGroup?.innerText ?? null,
+        actions: phaseGroup === null
+          ? []
+          : [...phaseGroup.querySelectorAll('[data-testid^="critical-host-action-"]')]
+              .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
+              .filter((id) =>
+                id !== undefined &&
+                !["trigger", "confirmation", "confirmation-message", "confirm", "cancel"].includes(id),
+              )
+              .sort(),
+        projection: window.__fmarchHostProjection,
+      };
+    });
+    throw new Error(
+      `host phase actions did not match ${JSON.stringify(expectedActions)}: ${JSON.stringify(debug)}`,
+    );
+  }
 }
 
 async function issueBelovedPrincessPrompt() {
@@ -1957,6 +2055,19 @@ async function waitForHostConsoleSlotStatusDelta(page, { slotId, status }) {
           ),
       ),
     { expectedSlotId: slotId, expectedStatus: status },
+  );
+}
+
+async function waitForHostConsolePhaseLocked(page, locked) {
+  await page.waitForFunction(
+    (expectedLocked) =>
+      window.__fmarchHostProjection?.phase?.locked === expectedLocked &&
+      (window.__fmarchHostLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.delta?.kind === "HostConsoleStateChanged" &&
+          event.delta.body?.phase?.locked === expectedLocked,
+      ),
+    locked,
   );
 }
 

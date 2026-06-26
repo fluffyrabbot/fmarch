@@ -1,4 +1,8 @@
-export function buildHostConsoleCriticalActions(gameId, { hostPrompts = [] } = {}) {
+export function buildHostConsoleCriticalActions(
+  gameId,
+  { hostPrompts = [], phase = null } = {},
+) {
+  const phaseActions = buildPhaseActions(gameId, phase);
   return Object.freeze([
     freezeHostAction({
       id: "extend_deadline",
@@ -32,45 +36,7 @@ export function buildHostConsoleCriticalActions(gameId, { hostPrompts = [] } = {
         incomingPlayerId: "player-rowan",
       },
     }),
-    freezeHostAction({
-      id: "lock_thread",
-      label: "Lock thread",
-      objectLabel: "Main thread",
-      outcomeLabel: "block new posts and votes",
-      confirmationText:
-        "Lock main thread: block new posts and votes for Main thread.",
-      requiresConfirmation: true,
-      payload: {
-        kind: "lock_thread",
-        gameId,
-      },
-    }),
-    freezeHostAction({
-      id: "unlock_thread",
-      label: "Unlock thread",
-      objectLabel: "Main thread",
-      outcomeLabel: "allow posts and votes again",
-      confirmationText:
-        "Unlock main thread: allow posts and votes again for Main thread.",
-      requiresConfirmation: true,
-      payload: {
-        kind: "unlock_thread",
-        gameId,
-      },
-    }),
-    freezeHostAction({
-      id: "advance_phase",
-      label: "Advance phase",
-      objectLabel: "Current phase",
-      outcomeLabel: "advance to the next pack-defined phase",
-      confirmationText:
-        "Advance current phase: advance to the next pack-defined phase for Current phase.",
-      irreversible: true,
-      payload: {
-        kind: "advance_phase",
-        gameId,
-      },
-    }),
+    ...phaseActions,
     freezeHostAction({
       id: "publish_votecount",
       label: "Publish count",
@@ -149,6 +115,71 @@ export function buildHostConsoleCriticalActions(gameId, { hostPrompts = [] } = {
         }),
       ),
   ]);
+}
+
+function buildPhaseActions(gameId, phase) {
+  const locked = phaseLocked(phase);
+  if (locked === true) {
+    return [
+      freezeHostAction({
+        id: "unlock_thread",
+        label: "Unlock thread",
+        objectLabel: "Main thread",
+        outcomeLabel: "allow posts and votes again",
+        confirmationText:
+          "Unlock main thread: allow posts and votes again for Main thread.",
+        requiresConfirmation: true,
+        payload: {
+          kind: "unlock_thread",
+          gameId,
+        },
+      }),
+      freezeHostAction({
+        id: "advance_phase",
+        label: "Advance phase",
+        objectLabel: "Current phase",
+        outcomeLabel: "advance to the next pack-defined phase",
+        confirmationText:
+          "Advance current phase: advance to the next pack-defined phase for Current phase.",
+        irreversible: true,
+        payload: {
+          kind: "advance_phase",
+          gameId,
+        },
+      }),
+    ];
+  }
+  if (locked === null) {
+    return [
+      ...buildPhaseActions(gameId, { locked: false }),
+      ...buildPhaseActions(gameId, { locked: true }),
+    ];
+  }
+  return [
+    freezeHostAction({
+      id: "lock_thread",
+      label: "Lock thread",
+      objectLabel: "Main thread",
+      outcomeLabel: "block new posts and votes",
+      confirmationText:
+        "Lock main thread: block new posts and votes for Main thread.",
+      requiresConfirmation: true,
+      payload: {
+        kind: "lock_thread",
+        gameId,
+      },
+    }),
+  ];
+}
+
+function phaseLocked(phase) {
+  if (phase?.locked === true || phase?.state === "locked") {
+    return true;
+  }
+  if (phase?.locked === false || phase?.state === "open") {
+    return false;
+  }
+  return null;
 }
 
 export function buildHostConsoleActionGroups({

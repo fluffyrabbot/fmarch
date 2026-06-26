@@ -63,6 +63,7 @@ export function buildHostDerivedState({ gameId, snapshot }) {
   const hostPrompts = snapshot.hostPrompts;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts,
+    phase: projection.phase,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,
