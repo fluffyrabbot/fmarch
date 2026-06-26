@@ -11,6 +11,7 @@ import {
   validateDevTestGameOpsAdminProof,
   validateDevTestGameReleaseAdminProof,
   validateDevTestGameSeedAdminProof,
+  validateDevTestGameSpineManifestAdminProof,
 } from "./dev_test_game_release_readiness.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -67,6 +68,13 @@ export const devTestGameAdminSpineProofPlan = [
     path: "target/dev-test-game/release-admin-proof.json",
     validate: validateDevTestGameReleaseAdminProof,
   },
+  {
+    id: "spine-manifest",
+    label: "Spine manifest admin role surface",
+    script: "tools/dev_test_game_spine_manifest_admin_proof.mjs",
+    path: "target/dev-test-game/spine-manifest-admin-proof.json",
+    validate: validateDevTestGameSpineManifestAdminProof,
+  },
 ];
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
@@ -76,6 +84,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 
 export async function runAdminSpineProof() {
   await mkdir(artifactDir, { recursive: true });
+  await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
   for (const spec of devTestGameAdminSpineProofPlan) {
     await runNodeScript(spec.script);

@@ -93,6 +93,7 @@ target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/admin-spine-proof.json
 target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
+target/dev-test-game/spine-manifest-admin-proof.json
 target/auth-invite-role-proof/invite-role-proof.json
 target/live-stack-backup-restore-drill/local-backup-restore-proof.json
 target/live-stack-backup-restore-drill/local-live-stack.dump
@@ -171,6 +172,12 @@ env wiring without claiming release or production readiness, is:
 
 ```sh
 npm run test:dev-test-game-spine-manifest
+```
+
+The seeded admin overview-to-local-spine-manifest detail browser proof is:
+
+```sh
+npm run test:dev-test-game-spine-manifest-admin-proof
 ```
 
 The local ops artifact bundle generator is:
@@ -304,9 +311,11 @@ credential echoes.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while
-keeping release readiness `not_ready`. The same command then writes
-`target/dev-test-game/spine-manifest.{json,md}` so the current local proof order
-and evidence env wiring are inspectable without reading the orchestration code.
+keeping release readiness `not_ready`. The same command also writes
+`target/dev-test-game/spine-manifest.{json,md}` and
+`target/dev-test-game/spine-manifest-admin-proof.json`, proving the current local
+proof order and evidence env wiring are inspectable from the seeded admin role
+surface without reading the orchestration code.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

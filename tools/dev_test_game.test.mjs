@@ -159,6 +159,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
       "target/dev-test-game/identity-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
+    FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
+      "target/dev-test-game/spine-manifest-admin-proof.json",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF:
       "target/dev-test-game/admin-spine-proof.json",
   });
@@ -205,6 +208,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
+  assert(
+    manifest.artifacts.includes(
+      "target/dev-test-game/spine-manifest-admin-proof.json",
+    ),
+  );
   assert(
     manifest.artifacts.includes(
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
@@ -692,7 +700,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    7,
+    8,
   );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
@@ -702,7 +710,30 @@ test("session card and markdown include role invite URLs and tokens", () => {
     "ops",
     "seed",
     "release",
+    "spine-manifest",
   ]);
+  const manifestReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    spineManifestPath: "target/dev-test-game/spine-manifest.json",
+    spineManifest: spineManifestFixture(),
+    spineManifestAdminProofPath: "target/dev-test-game/spine-manifest-admin-proof.json",
+    spineManifestAdminProof: spineManifestAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(manifestReadiness);
+  assert.equal(
+    manifestReadiness.generatedFrom.spineManifest,
+    "target/dev-test-game/spine-manifest.json",
+  );
+  assert.equal(
+    manifestReadiness.generatedFrom.spineManifestAdminProof,
+    "target/dev-test-game/spine-manifest-admin-proof.json",
+  );
+  assert.equal(
+    manifestReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-spine-manifest",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-spine-manifest?game=<seeded-game>",
+  );
 });
 
 function artifactSummary(path) {
@@ -1048,6 +1079,75 @@ function releaseAdminProofFixture() {
   };
 }
 
+function spineManifestFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-spine-manifest",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-spine-manifest",
+    proofBoundary: "Generated local dev-test-game orchestration manifest.",
+    commands: {
+      live: { plan: [{ script: "dev:test-game:prebuild" }] },
+      backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
+      identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
+      adminSpine: { plan: [{ script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" }] },
+    },
+    artifacts: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/spine-manifest.md",
+      "target/dev-test-game/spine-manifest-admin-proof.json",
+    ],
+    checks: [
+      { id: "live-spine-order-recorded", status: "passed" },
+      { id: "sub-spine-orders-recorded", status: "passed" },
+      { id: "evidence-env-wiring-recorded", status: "passed" },
+      {
+        id: "release-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+  };
+}
+
+function spineManifestAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-spine-manifest-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-spine-manifest-admin-surface",
+    proofBoundary: "Local admin spine manifest proof only.",
+    generatedFrom: {
+      spineManifest: "target/dev-test-game/spine-manifest.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-spine-manifest",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "live-spine-order-recorded",
+        "sub-spine-orders-recorded",
+        "evidence-env-wiring-recorded",
+        "release-boundary-carried",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function adminSpineProofFixture() {
   const fixtures = [
     ["core-loop", coreLoopAdminProofFixture()],
@@ -1057,6 +1157,7 @@ function adminSpineProofFixture() {
     ["ops", opsAdminProofFixture()],
     ["seed", seedAdminProofFixture()],
     ["release", releaseAdminProofFixture()],
+    ["spine-manifest", spineManifestAdminProofFixture()],
   ];
   return {
     version: 1,

@@ -26,6 +26,7 @@ export async function buildAdminRouteData({
   releaseReadinessChecklist = null,
   backupRestoreProof = null,
   identityAdapterProof = null,
+  spineManifest = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -123,29 +124,33 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalIdentityAdapterAudit(
-        appendLocalBackupRestoreAudit(
-          appendLocalReleaseReadinessAudit(
-            appendLocalSeedFixtureAudit(
-              appendLocalOpsArtifactsAudit(
-                appendLocalHardeningAudit(
-                  appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                  proofRun,
+      appendLocalSpineManifestAudit(
+        appendLocalIdentityAdapterAudit(
+          appendLocalBackupRestoreAudit(
+            appendLocalReleaseReadinessAudit(
+              appendLocalSeedFixtureAudit(
+                appendLocalOpsArtifactsAudit(
+                  appendLocalHardeningAudit(
+                    appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                    proofRun,
+                    { game },
+                  ),
+                  opsArtifacts,
                   { game },
                 ),
-                opsArtifacts,
+                seedFixtureSummary,
                 { game },
               ),
-              seedFixtureSummary,
+              releaseReadinessChecklist,
               { game },
             ),
-            releaseReadinessChecklist,
+            backupRestoreProof,
             { game },
           ),
-          backupRestoreProof,
+          identityAdapterProof,
           { game },
         ),
-        identityAdapterProof,
+        spineManifest,
         { game },
       ),
       { game },
@@ -199,6 +204,7 @@ export async function buildAdminAuditDetailData({
   releaseReadinessChecklist = null,
   backupRestoreProof = null,
   identityAdapterProof = null,
+  spineManifest = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -214,6 +220,7 @@ export async function buildAdminAuditDetailData({
     releaseReadinessChecklist,
     backupRestoreProof,
     identityAdapterProof,
+    spineManifest,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -380,6 +387,66 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
       roleCount: Number(opsArtifacts.run?.roleCount ?? 0),
       releaseReady: opsArtifacts.releaseReady === true,
       productionReady: opsArtifacts.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalSpineManifestAudit(audit, spineManifest, { game }) {
+  const row = normalizeLocalSpineManifestAudit(spineManifest, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
+  if (
+    spineManifest === null ||
+    typeof spineManifest !== "object" ||
+    spineManifest.version !== 1 ||
+    spineManifest.proof !== "dev-test-game-spine-manifest" ||
+    spineManifest.status !== "passed" ||
+    spineManifest.scope !== "local-dev-test-game-spine-manifest" ||
+    spineManifest.releaseReady !== false ||
+    spineManifest.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(spineManifest.checks) ? spineManifest.checks : [];
+  const commands =
+    spineManifest.commands !== null && typeof spineManifest.commands === "object"
+      ? Object.entries(spineManifest.commands)
+      : [];
+  const artifacts = Array.isArray(spineManifest.artifacts)
+    ? spineManifest.artifacts
+    : [];
+  return Object.freeze({
+    id: "local-spine-manifest",
+    label: "Local spine manifest",
+    status: `${checks.filter((check) => check?.status === "passed").length} manifest checks passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local development-spine manifest",
+    boundaryDetail:
+      spineManifest.proofBoundary ??
+      "Generated local dev-test-game proof order and evidence wiring without release claims.",
+    href: "target/dev-test-game/spine-manifest.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-spine-manifest" }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      commandCount: commands.length,
+      artifactCount: artifacts.length,
+      adminSpineStepCount: Number(
+        spineManifest.commands?.adminSpine?.plan?.length ?? 0,
+      ),
+      releaseReady: spineManifest.releaseReady === true,
+      productionReady: spineManifest.productionReady === true,
     }),
   });
 }

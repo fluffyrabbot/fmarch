@@ -46,6 +46,11 @@ const defaultIdentityAdminProofPath = path.join(
   artifactDir,
   "identity-admin-proof.json",
 );
+const defaultSpineManifestPath = path.join(artifactDir, "spine-manifest.json");
+const defaultSpineManifestAdminProofPath = path.join(
+  artifactDir,
+  "spine-manifest-admin-proof.json",
+);
 const defaultAdminSpineProofPath = path.join(artifactDir, "admin-spine-proof.json");
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
@@ -139,6 +144,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.identityAdminProofArtifact,
       })
     : undefined;
+  const spineManifestEvidence = options.spineManifest
+    ? validateDevTestGameSpineManifest(options.spineManifest, {
+        path: options.spineManifestPath ?? "target/dev-test-game/spine-manifest.json",
+        artifact: options.spineManifestArtifact,
+      })
+    : undefined;
+  const spineManifestAdminProofEvidence = options.spineManifestAdminProof
+    ? validateDevTestGameSpineManifestAdminProof(options.spineManifestAdminProof, {
+        path:
+          options.spineManifestAdminProofPath ??
+          "target/dev-test-game/spine-manifest-admin-proof.json",
+        artifact: options.spineManifestAdminProofArtifact,
+      })
+    : undefined;
   const adminSpineProofEvidence = options.adminSpineProof
     ? validateDevTestGameAdminSpineProof(options.adminSpineProof, {
         path: options.adminSpineProofPath ?? "target/dev-test-game/admin-spine-proof.json",
@@ -230,6 +249,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...(identityAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: identityAdminProofEvidence }),
+    });
+  }
+  if (spineManifestEvidence !== undefined) {
+    localChecks.push({
+      id: "local-spine-manifest",
+      label: "Local development-spine manifest",
+      status: "passed",
+      evidence: spineManifestEvidence.path,
+      proofBoundary: spineManifestEvidence.proofBoundary,
+      commandCount: spineManifestEvidence.commandCount,
+      artifactCount: spineManifestEvidence.artifactCount,
+      ...(spineManifestAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: spineManifestAdminProofEvidence }),
     });
   }
   const unproven = [
@@ -366,6 +399,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { identityAdminProof: identityAdminProofEvidence.path }),
           }),
+      ...(spineManifestEvidence === undefined
+        ? {}
+        : {
+            spineManifest: spineManifestEvidence.path,
+            ...(spineManifestAdminProofEvidence === undefined
+              ? {}
+              : { spineManifestAdminProof: spineManifestAdminProofEvidence.path }),
+          }),
       ...(adminSpineProofEvidence === undefined
         ? {}
         : { adminProofSpine: adminSpineProofEvidence.path }),
@@ -377,6 +418,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         opsArtifactsEvidence === undefined &&
         seedFixtureEvidence === undefined &&
         identityAdapterEvidence === undefined &&
+        spineManifestEvidence === undefined &&
         adminSpineProofEvidence === undefined)
         ? {}
         : {
@@ -420,6 +462,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                         : { adminRoleSurface: identityAdminProofEvidence }),
                     },
                   }),
+              ...(spineManifestEvidence === undefined
+                ? {}
+                : {
+                    spineManifest: {
+                      ...spineManifestEvidence,
+                      ...(spineManifestAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: spineManifestAdminProofEvidence }),
+                    },
+                  }),
               ...(adminSpineProofEvidence === undefined
                 ? {}
                 : { adminProofSpine: adminSpineProofEvidence }),
@@ -433,6 +485,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         opsArtifactsEvidence,
         seedFixtureEvidence,
         identityAdapterEvidence,
+        spineManifestEvidence,
       }),
       unproven,
     },
@@ -446,6 +499,7 @@ function releaseReadinessReason({
   opsArtifactsEvidence,
   seedFixtureEvidence,
   identityAdapterEvidence,
+  spineManifestEvidence,
 }) {
   const passed = [
     "the local development-spine proof",
@@ -453,6 +507,7 @@ function releaseReadinessReason({
     ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
     ...(seedFixtureEvidence === undefined ? [] : ["local seed/demo fixture"]),
     ...(identityAdapterEvidence === undefined ? [] : ["local identity adapter"]),
+    ...(spineManifestEvidence === undefined ? [] : ["local spine manifest"]),
   ];
   const missing = [
     identityAdapterEvidence === undefined
@@ -1079,6 +1134,103 @@ export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameSpineManifest(manifest, options = {}) {
+  const requiredChecks = [
+    "live-spine-order-recorded",
+    "sub-spine-orders-recorded",
+    "evidence-env-wiring-recorded",
+    "release-boundary-carried",
+  ];
+  if (manifest?.version !== 1) {
+    throw new Error(`spine manifest version drifted: ${manifest?.version}`);
+  }
+  if (manifest.proof !== "dev-test-game-spine-manifest") {
+    throw new Error(`unexpected spine manifest id: ${manifest.proof}`);
+  }
+  if (manifest.status !== "passed") {
+    throw new Error(`spine manifest status is ${manifest.status}`);
+  }
+  if (manifest.scope !== "local-dev-test-game-spine-manifest") {
+    throw new Error(`spine manifest scope drifted: ${manifest.scope}`);
+  }
+  if (manifest.productionReady !== false || manifest.releaseReady !== false) {
+    throw new Error("spine manifest must not claim production or release readiness");
+  }
+  const checks = new Map(
+    (manifest.checks ?? []).map((check) => [check.id, check.status]),
+  );
+  for (const id of requiredChecks) {
+    if (checks.get(id) !== "passed") {
+      throw new Error(`spine manifest missing passed check: ${id}`);
+    }
+  }
+  const commandCount = Object.keys(manifest.commands ?? {}).length;
+  if (commandCount < 4) {
+    throw new Error(`spine manifest command count drifted: ${commandCount}`);
+  }
+  if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
+    throw new Error("spine manifest missing artifact list");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/spine-manifest.json",
+    checkCount: requiredChecks.length,
+    commandCount,
+    artifactCount: manifest.artifacts.length,
+    proofBoundary: manifest.proofBoundary,
+    scope: manifest.scope,
+    productionReady: manifest.productionReady,
+    releaseReady: manifest.releaseReady,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameSpineManifestAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "live-spine-order-recorded",
+    "sub-spine-orders-recorded",
+    "evidence-env-wiring-recorded",
+    "release-boundary-carried",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`spine manifest admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-spine-manifest-admin-proof") {
+    throw new Error(`unexpected spine manifest admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`spine manifest admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-spine-manifest-admin-surface") {
+    throw new Error(`spine manifest admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "spine manifest admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("spine manifest admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`spine manifest admin proof missing visible check: ${checkId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/spine-manifest-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameAdminSpineProof(proof, options = {}) {
   const requiredProofs = [
     "core-loop",
@@ -1088,6 +1240,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "ops",
     "seed",
     "release",
+    "spine-manifest",
   ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine proof version drifted: ${proof?.version}`);
@@ -1255,6 +1408,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     identityAdminProofOptions,
     opsAdminProofOptions,
     seedAdminProofOptions,
+    spineManifestOptions,
+    spineManifestAdminProofOptions,
     adminSpineProofOptions,
   ] = await Promise.all([
       readOptionalCoreLoopAdminProof(),
@@ -1267,6 +1422,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
       readOptionalIdentityAdminProof(),
       readOptionalOpsAdminProof(),
       readOptionalSeedAdminProof(),
+      readOptionalSpineManifest(),
+      readOptionalSpineManifestAdminProof(),
       readOptionalAdminSpineProof(),
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
@@ -1281,6 +1438,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(identityAdminProofOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
     ...(seedAdminProofOptions ?? {}),
+    ...(spineManifestOptions ?? {}),
+    ...(spineManifestAdminProofOptions ?? {}),
     ...(adminSpineProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
@@ -1424,6 +1583,39 @@ async function readOptionalIdentityAdminProof() {
     identityAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     identityAdminProofPath: path.relative(repoRoot, proofPath),
     identityAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalSpineManifest() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const manifestPath = resolveArtifactPath(override, defaultSpineManifestPath);
+  const artifact = await readFreshArtifactMetadata(manifestPath, now);
+  return {
+    spineManifest: JSON.parse(await readFile(manifestPath, "utf8")),
+    spineManifestPath: path.relative(repoRoot, manifestPath),
+    spineManifestArtifact: artifact,
+  };
+}
+
+async function readOptionalSpineManifestAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(
+    override,
+    defaultSpineManifestAdminProofPath,
+  );
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    spineManifestAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    spineManifestAdminProofPath: path.relative(repoRoot, proofPath),
+    spineManifestAdminProofArtifact: artifact,
   };
 }
 

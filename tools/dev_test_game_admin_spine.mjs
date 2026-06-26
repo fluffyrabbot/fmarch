@@ -24,6 +24,9 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
     "target/dev-test-game/identity-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
+  FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
+    "target/dev-test-game/spine-manifest-admin-proof.json",
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "target/dev-test-game/admin-spine-proof.json",
 };
 

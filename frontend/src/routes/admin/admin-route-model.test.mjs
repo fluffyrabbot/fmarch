@@ -561,6 +561,59 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   });
 });
 
+test("admin route data exposes local spine manifest as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    spineManifest: spineManifestFixture(),
+  });
+
+  const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
+  assert.equal(manifest.label, "Local spine manifest");
+  assert.equal(manifest.status, "4 manifest checks passed");
+  assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
+  assert.deepEqual(
+    manifest.checks.map((check) => check.id),
+    [
+      "live-spine-order-recorded",
+      "sub-spine-orders-recorded",
+      "evidence-env-wiring-recorded",
+      "release-boundary-carried",
+    ],
+  );
+  assert.deepEqual(manifest.artifactSummary, {
+    commandCount: 4,
+    artifactCount: 3,
+    adminSpineStepCount: 8,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local spine manifest detail data carries manifest check rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-spine-manifest",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    spineManifest: spineManifestFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local spine manifest");
+  assert.equal(data.audit.id, "local-spine-manifest");
+  assert.equal(data.audit.checks.length, 4);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["live-spine-order-recorded", "passed"],
+      ["sub-spine-orders-recorded", "passed"],
+      ["evidence-env-wiring-recorded", "passed"],
+      ["release-boundary-carried", "passed"],
+    ],
+  );
+});
+
 test("admin route data exposes local hardening proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1110,6 +1163,52 @@ function seedScenario(id, title, role) {
     title,
     role,
     status: "available_locally",
+  };
+}
+
+function spineManifestFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-spine-manifest",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-spine-manifest",
+    proofBoundary: "Generated local dev-test-game orchestration manifest.",
+    commands: {
+      live: { plan: [{ script: "dev:test-game:prebuild" }] },
+      backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
+      identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
+      adminSpine: {
+        plan: [
+          { script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+          { script: "tools/dev_test_game_hardening_admin_proof.mjs" },
+          { script: "tools/dev_test_game_identity_admin_proof.mjs" },
+          { script: "tools/dev_test_game_backup_admin_proof.mjs" },
+          { script: "tools/dev_test_game_ops_admin_proof.mjs" },
+          { script: "tools/dev_test_game_seed_admin_proof.mjs" },
+          { script: "tools/dev_test_game_release_admin_proof.mjs" },
+          { script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" },
+        ],
+      },
+    },
+    artifacts: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/spine-manifest.md",
+      "target/dev-test-game/spine-manifest-admin-proof.json",
+    ],
+    checks: [
+      { id: "live-spine-order-recorded", status: "passed" },
+      { id: "sub-spine-orders-recorded", status: "passed" },
+      { id: "evidence-env-wiring-recorded", status: "passed" },
+      {
+        id: "release-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
   };
 }
 

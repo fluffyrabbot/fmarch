@@ -173,6 +173,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
     "tools/dev_test_game_release_admin_proof.mjs",
+    "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
   for (const path of [
     spineManifestPath,
@@ -182,6 +183,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
+    "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     "target/live-stack-backup-restore-drill/local-live-stack.dump",
   ]) {

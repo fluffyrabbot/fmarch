@@ -6,6 +6,7 @@ import {
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
+  readLocalSpineManifest,
 } from "../../../../lib/server/local-ops-artifacts.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 import {
@@ -31,6 +32,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
     backupRestoreProof: await readLocalBackupRestoreProof(),
     identityAdapterProof: await readLocalIdentityAdapterProof(),
+    spineManifest: await readLocalSpineManifest(),
   });
 
   if (!data.access.allowed) {

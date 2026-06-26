@@ -10,6 +10,7 @@ const DEFAULT_BACKUP_RESTORE_PROOF =
   "target/live-stack-backup-restore-drill/local-backup-restore-proof.json";
 const DEFAULT_IDENTITY_ADAPTER_PROOF =
   "target/auth-invite-role-proof/invite-role-proof.json";
+const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -52,6 +53,13 @@ export async function readLocalIdentityAdapterProof({ env = process.env } = {}) 
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF,
     fallback: DEFAULT_IDENTITY_ADAPTER_PROOF,
+  });
+}
+
+export async function readLocalSpineManifest({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST,
+    fallback: DEFAULT_SPINE_MANIFEST,
   });
 }
 
