@@ -251,6 +251,14 @@ test("player route controller refreshes command state after stale phase rejects"
     playerRefreshKeysForCommandOutcome({
       data: fixtureData(),
       action: "submit_vote",
+      commandStatus: { state: "reject", error: "PhaseLocked" },
+    }),
+    ["votecount", "commandState"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_vote",
       commandStatus: { state: "reject", error: "StreamConflict", retryable: true },
     }),
     ["votecount"],

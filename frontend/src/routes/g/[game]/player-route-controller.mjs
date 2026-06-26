@@ -263,7 +263,7 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     return playerRefreshKeysForDataAction(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "PhaseLocked") {
-    return playerRefreshKeysForDataAction(data, action);
+    return playerRefreshKeysForDataActionWithCommandState(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "ActionAlreadySubmitted") {
     return playerRefreshKeysForDataAction(data, action);
@@ -283,6 +283,17 @@ function playerRefreshKeysForDataAction(data, action) {
     return keys;
   }
   return Object.freeze(keys.filter((key) => key !== "commandState"));
+}
+
+function playerRefreshKeysForDataActionWithCommandState(data, action) {
+  const keys = [...playerRefreshKeysForDataAction(data, action)];
+  if (
+    data.coldLoad.commandStateEndpoint != null &&
+    !keys.includes("commandState")
+  ) {
+    keys.push("commandState");
+  }
+  return Object.freeze(keys);
 }
 
 export function playerActionConfig(data, action) {

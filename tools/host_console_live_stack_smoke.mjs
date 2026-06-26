@@ -1300,6 +1300,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   let playerStep = "submit-vote";
   let reconnectDebug = {};
   let reconnectEvidence;
+  let staleVoteRecovery;
+  let staleVoteLockCommand;
+  let staleVoteUnlockCommand;
+  const staleVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
   const voteButton = page.getByText("Vote slot-2", { exact: true });
   const voteButtonBox = await voteButton.boundingBox();
   assertHitTarget(voteButtonBox, "player vote button");
@@ -1528,6 +1532,20 @@ async function drivePlayerBrowser(frontendBaseUrl) {
         (post) => post.body === reconnectPostBody,
       ),
     };
+    playerStep = "lock-for-stale-vote";
+    staleVoteLockCommand = await sendCommand("host_h", {
+      LockThread: { game },
+    });
+    playerStep = "stale-vote-reject";
+    staleVoteRecovery = await submitStalePlayerVote(staleVoteSession);
+    playerStep = "unlock-after-stale-vote";
+    staleVoteUnlockCommand = await sendCommand("host_h", {
+      UnlockThread: { game },
+    });
+    playerStep = "wait-player-unlocked-after-stale-vote";
+    await page.waitForFunction(
+      () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+    );
   } catch (error) {
     const debug = {
       playerStep,
@@ -1557,6 +1575,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     () => window.__fmarchLiveProjectionEvents,
   );
   const commandStatus = await status.innerText();
+  await staleVoteSession.context.close();
   await context.close();
   return {
     url: pageUrl,
@@ -1566,6 +1585,138 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     projection,
     liveProjectionEvents,
     reconnect: reconnectEvidence,
+    staleVoteRecovery: {
+      lockCommand: staleVoteLockCommand,
+      recovery: staleVoteRecovery,
+      unlockCommand: staleVoteUnlockCommand,
+      proof:
+        "A stale seeded player page loaded /g/{game} with live WebSocket disabled before LockThread, kept the old Vote slot-2 control, submitted it after the host locked D01, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to D01 locked for slot-7, and the host unlocked the phase before the moderator proof continued.",
+    },
+  };
+}
+
+async function openStalePlayerVoteBrowser(frontendBaseUrl) {
+  const commandStateRequests = [];
+  const commandStateResponses = [];
+  const commandStateResponseTasks = [];
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addInitScript(() => {
+    window.WebSocket = undefined;
+  });
+  context.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.endsWith("/player-command-state")) {
+      commandStateRequests.push({
+        url: request.url(),
+        pathname,
+        method: request.method(),
+      });
+    }
+  });
+  context.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (!pathname.endsWith("/player-command-state")) {
+      return;
+    }
+    commandStateResponseTasks.push(
+      response.json().then((body) => {
+        commandStateResponses.push({
+          url: response.url(),
+          pathname,
+          status: response.status(),
+          ok: response.ok(),
+          actorSlot: body.actor_slot ?? null,
+          roleKey: body.role_key ?? null,
+          phaseId: body.phase?.phase_id ?? null,
+          phaseKind: body.phase?.phase_kind ?? null,
+          locked: body.phase?.locked ?? null,
+          actions: (body.actions ?? []).map((action) => ({
+            templateId: action.template_id,
+            targets: action.targets,
+            targetOptions: action.target_options,
+          })),
+          boundary: body.boundary ?? null,
+        });
+      }),
+    );
+  });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: playerSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${game}`;
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `stale vote player route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  await page.getByText("Vote slot-2", { exact: true }).waitFor({
+    state: "visible",
+  });
+  return {
+    context,
+    page,
+    commandStateRequests,
+    commandStateResponses,
+    commandStateResponseTasks,
+  };
+}
+
+async function submitStalePlayerVote(staleSession) {
+  const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
+    staleSession;
+  const staleButton = page.getByText("Vote slot-2", { exact: true });
+  assertHitTarget(await staleButton.boundingBox(), "stale player vote button");
+  await staleButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  assertStalePlayerVoteRecovery(outcome);
+  const statusMessage = await status.innerText();
+  assertStalePlayerVoteRecoveryMessage({
+    outcome,
+    statusMessage,
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+  );
+  await Promise.allSettled(commandStateResponseTasks);
+  const lockedCommandState = await waitForCommandStateResponse(
+    commandStateResponses,
+    (response) =>
+      response.ok === true &&
+      response.actorSlot === "slot-7" &&
+      response.phaseId === "D01" &&
+      response.phaseKind === "Day" &&
+      response.locked === true,
+  );
+  return {
+    outcome,
+    statusMessage,
+    commandState: {
+      requests: commandStateRequests,
+      responses: commandStateResponses,
+      lockedCommandState,
+    },
+    projection: await page.evaluate(() => window.__fmarchPlayerProjection),
+    receipts: await page.evaluate(() => window.__fmarchPlayerCommandReceipts),
   };
 }
 
@@ -3066,6 +3217,32 @@ function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
   }
   if (!String(statusMessage ?? "").includes(expected)) {
     throw new Error(`stale player action did not render recovery guidance: ${statusMessage}`);
+  }
+}
+
+function assertStalePlayerVoteRecovery(outcome) {
+  if (outcome?.state !== "reject" || outcome.error !== "PhaseLocked") {
+    throw new Error(`stale player vote did not render PhaseLocked recovery: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitVote;
+  if (command?.game !== game) {
+    throw new Error(`stale player vote used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot-7") {
+    throw new Error(`stale player vote used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.target?.Slot !== "slot-2") {
+    throw new Error(`stale player vote used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertStalePlayerVoteRecoveryMessage({ outcome, statusMessage }) {
+  const expected = "stale projection, refresh and use current controls";
+  if (!String(outcome?.message ?? "").includes(expected)) {
+    throw new Error(`stale player vote did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
+  }
+  if (!String(statusMessage ?? "").includes(expected)) {
+    throw new Error(`stale player vote did not render recovery guidance: ${statusMessage}`);
   }
 }
 
