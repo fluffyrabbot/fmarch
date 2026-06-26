@@ -131,8 +131,10 @@ where
 
 /// Append `events` to `stream_id` at `current_max + 1..`, inside `tx`.
 ///
-/// Returns the assigned `stream_seq` values in order. A concurrent append racing
-/// for the same slot trips the UNIQUE constraint and surfaces as
+/// The stream is guarded by a transaction-scoped advisory lock before reading
+/// `current_max`, so normal writers serialize per stream and avoid exposing
+/// same-stream races to command callers. The `(stream_id, stream_seq)` unique
+/// constraint remains a defensive backstop for bypass writers and still maps to
 /// [`StoreError::Conflict`] (retryable) — never a panic.
 ///
 /// This is the shared core; [`append`] wraps it in its own transaction and
@@ -147,6 +149,7 @@ pub async fn append_in_tx(
         return Ok(Vec::new());
     }
 
+    acquire_stream_append_lock(tx, stream_id).await?;
     let base = current_stream_seq(&mut **tx, stream_id).await?;
     let mut out = Vec::with_capacity(events.len());
 
@@ -207,6 +210,17 @@ pub async fn append_in_tx(
     }
 
     Ok(out)
+}
+
+async fn acquire_stream_append_lock(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    stream_id: Uuid,
+) -> Result<(), StoreError> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))")
+        .bind(stream_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 /// Append `events` to `stream_id` in their own transaction.

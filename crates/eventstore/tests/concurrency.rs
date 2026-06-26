@@ -5,7 +5,7 @@
 //! `DATABASE_URL` to be set (the compose Postgres, `:5544`); if it is unset the
 //! test FAILS to connect — it never silently passes without a DB.
 
-use eventstore::{append, append_in_tx, load_stream, ActorId, EventInput, StoreError};
+use eventstore::{append, append_in_tx, load_stream, ActorId, EventInput};
 use sqlx::Row;
 use std::sync::{Mutex, MutexGuard};
 use uuid::Uuid;
@@ -281,27 +281,26 @@ async fn racing_appends_one_conflicts(pool: sqlx::PgPool) {
     assert_eq!(loaded[0].payload["target"], "slot_2", "A won");
 }
 
-/// The store's OWN code path returns the typed `StoreError::Conflict`: two
-/// concurrent `append_in_tx` calls both compute base=0; one commits, the other's
-/// INSERT blocks then surfaces the UNIQUE violation mapped to `Conflict`.
+/// The store's own append path serializes concurrent writers before assigning
+/// stream seqs, so both calls can commit in canonical order instead of surfacing
+/// a client-visible conflict.
 #[sqlx::test(migrations = "./migrations")]
-async fn append_in_tx_returns_typed_conflict(pool: sqlx::PgPool) {
+async fn append_in_tx_serializes_concurrent_writers(pool: sqlx::PgPool) {
     let g = Uuid::new_v4();
 
     let mut tx_a = pool.begin().await.unwrap();
     let mut tx_b = pool.begin().await.unwrap();
 
-    // A inserts (uncommitted) at seq=1.
-    append_in_tx(&mut tx_a, g, &[vote("slot_2", "D1")])
+    let a = append_in_tx(&mut tx_a, g, &[vote("slot_2", "D1")])
         .await
         .unwrap();
+    assert_eq!(a[0].stream_seq, 1);
 
-    // B (separate connection/tx) tries to append concurrently. Its base read
-    // sees the empty stream (A uncommitted), so it targets seq=1. The INSERT
-    // blocks on A's uncommitted row, so drive A's commit from another task.
+    // B starts while A's transaction-scoped stream lock is still held. It waits
+    // until A commits, then reads the updated max and appends at seq=2.
     let appender_b = async { append_in_tx(&mut tx_b, g, &[vote("slot_3", "D1")]).await };
     let committer_a = async {
-        // Yield so B's INSERT is in-flight and blocked before A commits.
+        // Yield so B reaches the advisory lock before A commits.
         tokio::task::yield_now().await;
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         tx_a.commit().await
@@ -309,25 +308,14 @@ async fn append_in_tx_returns_typed_conflict(pool: sqlx::PgPool) {
     let (b_res, a_commit) = tokio::join!(appender_b, committer_a);
     a_commit.unwrap();
 
-    match b_res {
-        Err(StoreError::Conflict {
-            stream_id,
-            stream_seq,
-        }) => {
-            assert_eq!(stream_id, g);
-            assert_eq!(stream_seq, 1);
-            assert!(StoreError::Conflict {
-                stream_id,
-                stream_seq
-            }
-            .is_retryable());
-        }
-        other => panic!("expected typed StoreError::Conflict from append_in_tx, got {other:?}"),
-    }
-    tx_b.rollback().await.unwrap();
+    let b = b_res.expect("second writer waits and appends after first commit");
+    assert_eq!(b[0].stream_seq, 2);
+    tx_b.commit().await.unwrap();
 
     let loaded = load_stream(&pool, g).await.unwrap();
-    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded.len(), 2);
+    assert_eq!(loaded[0].payload["target"], "slot_2");
+    assert_eq!(loaded[1].payload["target"], "slot_3");
 }
 
 /// The losing appender can reload and retry, landing at the next free slot.

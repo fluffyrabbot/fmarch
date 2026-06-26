@@ -26,6 +26,7 @@ const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.rando
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
 const actionPlayerSessionToken = `host-console-live-stack-action-player-${crypto.randomUUID()}`;
+const racePlayerSessionToken = `host-console-live-stack-race-player-${crypto.randomUUID()}`;
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
 const cohostSessionToken = `host-console-live-stack-cohost-${crypto.randomUUID()}`;
 const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
@@ -692,6 +693,10 @@ async function createGrantedSessions() {
       token: actionPlayerSessionToken,
       principalUserId: "action-goon",
     }),
+    racePlayer: await createGrantedSession({
+      token: racePlayerSessionToken,
+      principalUserId: "player-goon-a",
+    }),
     cohost: await createGrantedSession({
       token: cohostSessionToken,
       principalUserId: "cohost_c",
@@ -1306,26 +1311,55 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   let duplicateVoteRetry;
   let duplicateVoteRows;
   let duplicateVoteReceiptRows;
+  let concurrentVoteRace;
+  let concurrentVoteRows;
+  let raceVoteWithdrawCommand;
   const duplicateVoteCommandId = crypto.randomUUID();
+  const raceVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl, {
+    sessionToken: racePlayerSessionToken,
+    label: "racing vote player",
+  });
   const duplicateVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
   const staleVoteSession = await openStalePlayerVoteBrowser(frontendBaseUrl);
   await page.evaluate((commandId) => {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicateVoteCommandId);
+  await installVoteInsertDelayTrigger();
   const voteButton = page.getByText("Vote slot-2", { exact: true });
   const voteButtonBox = await voteButton.boundingBox();
   assertHitTarget(voteButtonBox, "player vote button");
-  await voteButton.click();
+  const raceVoteButton = raceVoteSession.page.getByText("Vote slot-2", { exact: true });
+  assertHitTarget(await raceVoteButton.boundingBox(), "racing player vote button");
+  const raceStatus = raceVoteSession.page.getByTestId("player-command-status");
   const status = page.getByTestId("player-command-status");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    () =>
-      document
-        .querySelector('[data-testid="player-command-status"]')
-        ?.getAttribute("data-state") === "ack",
-  );
+  try {
+    await Promise.all([voteButton.click(), raceVoteButton.click()]);
+    await status.waitFor({ state: "visible" });
+    await raceStatus.waitFor({ state: "visible" });
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-command-status"]')
+          ?.getAttribute("data-state") === "ack",
+    );
+    await raceVoteSession.page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-command-status"]')
+          ?.getAttribute("data-state") === "ack",
+    );
+  } finally {
+    await dropVoteInsertDelayTrigger();
+  }
   const voteOutcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
-  assertPlayerVoteSubmitOutcome(voteOutcome);
+  const raceVoteOutcome = await raceVoteSession.page.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  assertPlayerVoteSubmitOutcome(voteOutcome, { actorSlot: "slot-7" });
+  assertPlayerVoteSubmitOutcome(raceVoteOutcome, {
+    actorSlot: "slot_4",
+    label: "racing player SubmitVote",
+  });
   assertPlayerVoteCommandId({
     outcome: voteOutcome,
     commandId: duplicateVoteCommandId,
@@ -1335,26 +1369,56 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     delete window.__fmarchPlayerCommandIdFactory;
   });
   try {
-    playerStep = "wait-live-vote-count-2";
+    playerStep = "wait-live-vote-race-count-3";
     await page.waitForFunction(() => {
       return window.__fmarchLiveProjectionEvents?.some(
         (event) =>
           event?.delta?.kind === "VoteCountChanged" &&
           event.delta.body?.candidate_slot === "slot-2" &&
-          event.delta.body?.count === 2,
+          event.delta.body?.count === 3,
       );
     });
     await page.waitForFunction(() => {
       const projection = window.__fmarchPlayerProjection;
       return projection?.votecount?.some(
-        (row) => row.target === "slot-2" && row.count === 2,
+        (row) => row.target === "slot-2" && row.count === 3,
       );
     });
+    await raceVoteSession.page.waitForFunction(() =>
+      typeof window.__fmarchTriggerPlayerResync === "function",
+    );
+    await raceVoteSession.page.evaluate(() => window.__fmarchTriggerPlayerResync(0));
+    await raceVoteSession.page.waitForFunction(() =>
+      window.__fmarchPlayerProjection?.votecount?.some(
+        (row) => row.target === "slot-2" && row.count === 3,
+      ),
+    );
+    concurrentVoteRows = await runSql(
+      smokeDatabase.url,
+      `SELECT kind, stream_seq, payload->>'actor' AS actor, payload->>'target' AS target, payload->>'phase_id' AS phase_id
+       FROM events
+       WHERE stream_id = '${game}' AND kind = 'VoteSubmitted' AND payload->>'actor' IN ('slot-7', 'slot_4')
+       ORDER BY stream_seq`,
+    );
+    assertConcurrentPlayerVoteRows(concurrentVoteRows);
+    concurrentVoteRace = {
+      firstOutcome: voteOutcome,
+      secondOutcome: raceVoteOutcome,
+      secondStatusMessage: await raceStatus.innerText(),
+      rows: concurrentVoteRows,
+      firstProjection: await page.evaluate(() => window.__fmarchPlayerProjection),
+      secondProjection: await raceVoteSession.page.evaluate(
+        () => window.__fmarchPlayerProjection,
+      ),
+      proof:
+        "Two authenticated seeded player role pages submitted distinct SubmitVote commands for slot-7 and slot_4 under a scratch VoteSubmitted insert delay; both browser commands ACKed without StreamConflict, the stale race page recovered to authoritative votecount 3 through the player resync hook, and the scratch event stream retained one VoteSubmitted row for each actor.",
+    };
 
     playerStep = "duplicate-vote-retry";
     duplicateVoteRetry = await submitDuplicatePlayerVote(duplicateVoteSession, {
       firstOutcome: voteOutcome,
       commandId: duplicateVoteCommandId,
+      expectedCount: 3,
     });
     duplicateVoteRows = await runSql(
       smokeDatabase.url,
@@ -1381,7 +1445,34 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     const withdrawButtonBox = await withdrawButton.boundingBox();
     assertHitTarget(withdrawButtonBox, "player withdraw button");
     await withdrawButton.click();
-    playerStep = "wait-live-vote-count-1-after-withdraw";
+    playerStep = "wait-live-vote-count-2-after-primary-withdraw";
+    await page.waitForFunction(() => {
+      const events = window.__fmarchLiveProjectionEvents ?? [];
+      const countThreeIndex = events.findIndex(
+        (event) =>
+          event?.delta?.kind === "VoteCountChanged" &&
+          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.count === 3,
+      );
+      return events.some(
+        (event, index) =>
+          index > countThreeIndex &&
+          event?.delta?.kind === "VoteCountChanged" &&
+          event.delta.body?.candidate_slot === "slot-2" &&
+          event.delta.body?.count === 2,
+      );
+    });
+    await page.waitForFunction(() => {
+      const projection = window.__fmarchPlayerProjection;
+      return projection?.votecount?.some(
+        (row) => row.target === "slot-2" && row.count === 2,
+      );
+    });
+    playerStep = "withdraw-racing-vote";
+    raceVoteWithdrawCommand = await sendCommand("player-goon-a", {
+      WithdrawVote: { game, actor_slot: "slot_4" },
+    });
+    playerStep = "wait-live-vote-count-1-after-race-withdraw";
     await page.waitForFunction(() => {
       const events = window.__fmarchLiveProjectionEvents ?? [];
       const countTwoIndex = events.findIndex(
@@ -1619,6 +1710,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     () => window.__fmarchLiveProjectionEvents,
   );
   const commandStatus = await status.innerText();
+  await raceVoteSession.context.close();
   await duplicateVoteSession.context.close();
   await staleVoteSession.context.close();
   await context.close();
@@ -1629,6 +1721,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     commandStatus,
     projection,
     liveProjectionEvents,
+    concurrentVoteRace: {
+      ...concurrentVoteRace,
+      withdrawCommand: raceVoteWithdrawCommand,
+    },
     duplicateVoteRetry: {
       ...duplicateVoteRetry,
       voteRows: duplicateVoteRows,
@@ -1647,7 +1743,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   };
 }
 
-async function submitDuplicatePlayerVote(duplicateSession, { firstOutcome, commandId }) {
+async function submitDuplicatePlayerVote(
+  duplicateSession,
+  { firstOutcome, commandId, expectedCount = 2 },
+) {
   const { page } = duplicateSession;
   await page.evaluate((fixedCommandId) => {
     window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
@@ -1673,10 +1772,12 @@ async function submitDuplicatePlayerVote(duplicateSession, { firstOutcome, comma
   await page.evaluate(() => {
     delete window.__fmarchPlayerCommandIdFactory;
   });
-  await page.waitForFunction(() =>
-    window.__fmarchPlayerProjection?.votecount?.some(
-      (row) => row.target === "slot-2" && row.count === 2,
-    ),
+  await page.waitForFunction(
+    (count) =>
+      window.__fmarchPlayerProjection?.votecount?.some(
+        (row) => row.target === "slot-2" && row.count === count,
+      ),
+    expectedCount,
   );
   return {
     outcome,
@@ -1687,7 +1788,10 @@ async function submitDuplicatePlayerVote(duplicateSession, { firstOutcome, comma
   };
 }
 
-async function openStalePlayerVoteBrowser(frontendBaseUrl) {
+async function openStalePlayerVoteBrowser(
+  frontendBaseUrl,
+  { sessionToken = playerSessionToken, label = "stale vote player" } = {},
+) {
   const commandStateRequests = [];
   const commandStateResponses = [];
   const commandStateResponseTasks = [];
@@ -1735,7 +1839,7 @@ async function openStalePlayerVoteBrowser(frontendBaseUrl) {
   await context.addCookies([
     {
       name: "fmarch_session",
-      value: playerSessionToken,
+      value: sessionToken,
       domain: host,
       path: "/",
       httpOnly: true,
@@ -1747,7 +1851,7 @@ async function openStalePlayerVoteBrowser(frontendBaseUrl) {
   const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
   if (response === null || !response.ok()) {
     throw new Error(
-      `stale vote player route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+      `${label} route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
     );
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
@@ -2566,6 +2670,37 @@ async function dropDeadlineStreamConflictTrigger() {
   );
 }
 
+async function installVoteInsertDelayTrigger() {
+  await runSql(
+    smokeDatabase.url,
+    `
+    CREATE OR REPLACE FUNCTION test_delay_vote_insert() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.stream_id = ${sqlLiteral(game)}::uuid AND NEW.kind = 'VoteSubmitted' THEN
+        PERFORM pg_sleep(0.35);
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS test_delay_vote_insert ON events;
+    CREATE TRIGGER test_delay_vote_insert
+      BEFORE INSERT ON events
+      FOR EACH ROW EXECUTE FUNCTION test_delay_vote_insert();
+    `,
+  );
+}
+
+async function dropVoteInsertDelayTrigger() {
+  await runSql(
+    smokeDatabase.url,
+    `
+    DROP TRIGGER IF EXISTS test_delay_vote_insert ON events;
+    DROP FUNCTION IF EXISTS test_delay_vote_insert();
+    `,
+  );
+}
+
 async function driveHostPhaseControlsBrowser(page, pageUrl) {
   const staleSession = await openStaleModeratorBrowser(pageUrl);
   await expectHostPhaseActions(page, ["lock_thread"]);
@@ -3208,19 +3343,22 @@ function assertPlayerVoteProjection(deltas) {
   }
 }
 
-function assertPlayerVoteSubmitOutcome(outcome) {
+function assertPlayerVoteSubmitOutcome(
+  outcome,
+  { actorSlot = "slot-7", targetSlot = "slot-2", label = "player SubmitVote" } = {},
+) {
   if (outcome?.state !== "ack") {
-    throw new Error(`player SubmitVote did not ACK: ${JSON.stringify(outcome)}`);
+    throw new Error(`${label} did not ACK: ${JSON.stringify(outcome)}`);
   }
   const command = outcome.requestEnvelope?.body?.body?.command?.SubmitVote;
   if (command?.game !== game) {
-    throw new Error(`player SubmitVote used wrong game: ${JSON.stringify(command)}`);
+    throw new Error(`${label} used wrong game: ${JSON.stringify(command)}`);
   }
-  if (command.actor_slot !== "slot-7") {
-    throw new Error(`player SubmitVote used wrong actor slot: ${JSON.stringify(command)}`);
+  if (command.actor_slot !== actorSlot) {
+    throw new Error(`${label} used wrong actor slot: ${JSON.stringify(command)}`);
   }
-  if (command.target?.Slot !== "slot-2") {
-    throw new Error(`player SubmitVote used wrong target: ${JSON.stringify(command)}`);
+  if (command.target?.Slot !== targetSlot) {
+    throw new Error(`${label} used wrong target: ${JSON.stringify(command)}`);
   }
 }
 
@@ -3270,6 +3408,23 @@ function assertSinglePlayerVoteSubmittedRow(voteRows) {
   }
   if (!voteRows.includes("slot-7") || !voteRows.includes("slot-2") || !voteRows.includes("D01")) {
     throw new Error(`duplicate player SubmitVote row drifted:\n${voteRows}`);
+  }
+}
+
+function assertConcurrentPlayerVoteRows(voteRows) {
+  const voteSubmittedRows = voteRows.match(/VoteSubmitted/g) ?? [];
+  if (voteSubmittedRows.length !== 2) {
+    throw new Error(
+      `concurrent player SubmitVote appended ${voteSubmittedRows.length} rows:\n${voteRows}`,
+    );
+  }
+  for (const actor of ["slot-7", "slot_4"]) {
+    if (!voteRows.includes(actor)) {
+      throw new Error(`concurrent player SubmitVote rows missing ${actor}:\n${voteRows}`);
+    }
+  }
+  if (!voteRows.includes("slot-2") || !voteRows.includes("D01")) {
+    throw new Error(`concurrent player SubmitVote row target/phase drifted:\n${voteRows}`);
   }
 }
 
