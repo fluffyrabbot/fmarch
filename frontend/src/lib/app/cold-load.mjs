@@ -87,23 +87,44 @@ export async function loadAdminColdData({
   principalUserId,
   fetchImpl,
   apiBaseUrl = "",
+  sessionToken = null,
+  identityPrincipalUserId = "host_h",
   fallback,
 }) {
-  const proofStatus = await fetchJson({
-    fetchImpl,
-    fallback: null,
-    url: principalScopedGameUrl({
-      apiBaseUrl,
-      game,
-      path: "operator/proof-runs/status",
-      principalUserId,
+  const [proofStatus, identityLifecycleAudit] = await Promise.all([
+    fetchJson({
+      fetchImpl,
+      fallback: null,
+      url: principalScopedGameUrl({
+        apiBaseUrl,
+        game,
+        path: "operator/proof-runs/status",
+        principalUserId,
+      }),
     }),
+    sessionToken === null || sessionToken === undefined || sessionToken.trim() === ""
+      ? null
+      : fetchJson({
+          fetchImpl,
+          fallback: null,
+          url: identityLifecycleAuditUrl({
+            apiBaseUrl,
+            principalUserId: identityPrincipalUserId,
+          }),
+          headers: {
+            authorization: `Bearer ${sessionToken}`,
+          },
+        }),
+  ]);
+  const audit = normalizeAdminAudit(proofStatus, fallback.audit, {
+    game,
+    principalUserId,
   });
 
   return Object.freeze({
-    audit: normalizeAdminAudit(proofStatus, fallback.audit, {
+    audit: appendIdentityLifecycleAudit(audit, identityLifecycleAudit, {
       game,
-      principalUserId,
+      identityPrincipalUserId,
     }),
   });
 }
@@ -138,14 +159,21 @@ export async function loadHostColdData({
   });
 }
 
-export async function fetchJson({ fetchImpl, url, fallback }) {
+export async function fetchJson({ fetchImpl, url, fallback, headers = null }) {
+  return await fetchJsonWithInit({ fetchImpl, url, fallback, headers });
+}
+
+export async function fetchJsonWithInit({ fetchImpl, url, fallback, headers = null }) {
   if (typeof fetchImpl !== "function") {
     return fallback;
   }
 
   try {
     const response = await fetchImpl(url, {
-      headers: { accept: "application/json" },
+      headers: {
+        accept: "application/json",
+        ...(headers ?? {}),
+      },
     });
     if (!response?.ok) {
       return fallback;
@@ -424,6 +452,73 @@ export function normalizeAdminAudit(proofStatus, fallback, context = {}) {
   );
 }
 
+export function appendIdentityLifecycleAudit(audit, identityLifecycleAudit, context = {}) {
+  const identityRow = normalizeIdentityLifecycleAudit(identityLifecycleAudit, context);
+  if (identityRow === null) {
+    return audit;
+  }
+  const withoutExisting = audit.filter((item) => item.id !== identityRow.id);
+  return Object.freeze([...withoutExisting, identityRow]);
+}
+
+export function normalizeIdentityLifecycleAudit(payload, context = {}) {
+  if (payload === null || typeof payload !== "object" || !Array.isArray(payload.entries)) {
+    return null;
+  }
+  const entries = payload.entries
+    .map(normalizeIdentityLifecycleEntry)
+    .filter(Boolean);
+  if (entries.length === 0) {
+    return null;
+  }
+  const eventKinds = [...new Set(entries.map((entry) => entry.eventKind))].sort();
+  const requiredEvents = ["invite_revoked", "session_revoked", "session_rotated"];
+  const complete = requiredEvents.every((eventKind) => eventKinds.includes(eventKind));
+  const principalUserId = String(context.identityPrincipalUserId ?? entries[0].principalUserId);
+
+  return Object.freeze({
+    id: "identity-lifecycle",
+    label: "Identity lifecycle",
+    status: complete
+      ? `${eventKinds.length} lifecycle audit events available`
+      : "Lifecycle audit is missing required events",
+    authority: "GlobalAdmin",
+    boundary: "Local identity lifecycle audit",
+    boundaryDetail:
+      "/auth/identity-lifecycle-audit records session and invite lifecycle events without raw credential echoes",
+    href: adminIdentityLifecycleAuditHref({
+      game: context.game,
+      principalUserId,
+    }),
+    entries: Object.freeze(entries),
+    eventKinds: Object.freeze(eventKinds),
+    principalUserId,
+    rawTokensStored: false,
+  });
+}
+
+function normalizeIdentityLifecycleEntry(entry) {
+  if (entry === null || typeof entry !== "object") {
+    return null;
+  }
+  const eventKind = firstNonEmptyString(entry.event_kind, entry.eventKind);
+  const principalUserId = firstNonEmptyString(
+    entry.principal_user_id,
+    entry.principalUserId,
+  );
+  if (eventKind === null || principalUserId === null) {
+    return null;
+  }
+  return Object.freeze({
+    id: Number(entry.id ?? 0),
+    eventAt: Number(entry.event_at ?? entry.eventAt ?? 0),
+    eventKind,
+    actorUserId: firstNonEmptyString(entry.actor_user_id, entry.actorUserId),
+    principalUserId,
+    metadata: entry.metadata ?? {},
+  });
+}
+
 function operatorStatusRows(proofStatus) {
   if (!Array.isArray(proofStatus.families)) {
     return [];
@@ -440,6 +535,29 @@ function operatorStatusRows(proofStatus) {
   });
 }
 
+export function identityLifecycleAuditUrl({
+  apiBaseUrl = "",
+  principalUserId,
+  limit = 10,
+}) {
+  if (typeof principalUserId !== "string" || principalUserId.trim() === "") {
+    throw new TypeError("principalUserId is required for identity lifecycle audit URLs");
+  }
+  const params = new URLSearchParams({
+    principal_user_id: principalUserId,
+    limit: String(limit),
+  });
+  return `${apiBaseUrl}/auth/identity-lifecycle-audit?${params.toString()}`;
+}
+
+export function adminIdentityLifecycleAuditHref({ game, principalUserId }) {
+  const params = new URLSearchParams({
+    game,
+    principal_user_id: principalUserId,
+  });
+  return `/admin/audit/identity-lifecycle?${params.toString()}`;
+}
+
 export function operatorProofRunUrl({
   apiBaseUrl = "",
   game,
@@ -452,6 +570,15 @@ export function operatorProofRunUrl({
     principalUserId,
     path,
   });
+}
+
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim() !== "") {
+      return value;
+    }
+  }
+  return null;
 }
 
 export function playerThreadUrl({

@@ -1,10 +1,11 @@
 import { error } from "@sveltejs/kit";
+import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
   buildAdminAuditDetailData,
 } from "../../admin-route-model.mjs";
 
-export async function load({ locals, fetch, params, url }) {
+export async function load({ cookies, locals, fetch, params, url }) {
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
   const fixtureMode = process.env.FMARCH_FRONTEND_FIXTURE_SESSION === "1";
   const data = await buildAdminAuditDetailData({
@@ -14,6 +15,8 @@ export async function load({ locals, fetch, params, url }) {
     game: url.searchParams.get("game") ?? "midsummer",
     fetchImpl: fixtureMode && apiBaseUrl === "" ? null : fetch,
     apiBaseUrl,
+    sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
+    identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
   });
 
   if (!data.access.allowed) {

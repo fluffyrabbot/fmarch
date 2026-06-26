@@ -449,6 +449,88 @@ test("admin route data uses operator proof status when available", async () => {
   ]);
 });
 
+test("admin route data exposes identity lifecycle audit when admin session is present", async () => {
+  const observed = [];
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    sessionToken: "admin-session",
+    fetchImpl: async (url, init) => {
+      observed.push({
+        url,
+        authorization: init.headers.authorization ?? null,
+      });
+      if (String(url).startsWith("/auth/identity-lifecycle-audit")) {
+        return jsonResponse(identityLifecycleAuditFixture());
+      }
+      return jsonResponse({
+        rows: [{ id: "proof-a", label: "Proof A", status: "green" }],
+      });
+    },
+  });
+
+  const identity = data.audit.find((item) => item.id === "identity-lifecycle");
+  assert.equal(
+    observed.find((item) => item.url.startsWith("/auth/identity-lifecycle-audit"))
+      .authorization,
+    "Bearer admin-session",
+  );
+  assert.equal(identity.label, "Identity lifecycle");
+  assert.equal(identity.status, "3 lifecycle audit events available");
+  assert.equal(identity.authority, "GlobalAdmin");
+  assert.equal(identity.rawTokensStored, false);
+  assert.deepEqual(identity.eventKinds, [
+    "invite_revoked",
+    "session_revoked",
+    "session_rotated",
+  ]);
+  assert.equal(
+    identity.href,
+    "/admin/audit/identity-lifecycle?game=midsummer&principal_user_id=host_h",
+  );
+  assert.equal(
+    identity.inspectHref,
+    "/admin/audit/identity-lifecycle?game=midsummer",
+  );
+  assert.deepEqual(
+    identity.entries.map((entry) => entry.eventKind),
+    ["session_rotated", "session_revoked", "invite_revoked"],
+  );
+});
+
+test("admin identity lifecycle detail data carries audit event rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "identity-lifecycle",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    sessionToken: "admin-session",
+    fetchImpl: async (url) =>
+      String(url).startsWith("/auth/identity-lifecycle-audit")
+        ? jsonResponse(identityLifecycleAuditFixture())
+        : jsonResponse({
+            rows: [{ id: "proof-a", label: "Proof A", status: "green" }],
+          }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Identity lifecycle");
+  assert.match(data.surfaceHeader.summary, /identity-lifecycle-audit/);
+  assert.equal(data.audit.id, "identity-lifecycle");
+  assert.equal(data.audit.entries.length, 3);
+  assert.deepEqual(
+    data.audit.entries.map((entry) => [
+      entry.eventKind,
+      entry.principalUserId,
+      entry.actorUserId,
+    ]),
+    [
+      ["session_rotated", "host_h", "host_h"],
+      ["session_revoked", "host_h", "admin_a"],
+      ["invite_revoked", "host_h", "admin_a"],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -486,6 +568,37 @@ function jsonResponse(body, { ok = true, status = 200 } = {}) {
     async json() {
       return body;
     },
+  };
+}
+
+function identityLifecycleAuditFixture() {
+  return {
+    entries: [
+      {
+        id: 1,
+        event_at: 100,
+        event_kind: "session_rotated",
+        actor_user_id: "host_h",
+        principal_user_id: "host_h",
+        metadata: { global_capability_count: 0 },
+      },
+      {
+        id: 2,
+        event_at: 101,
+        event_kind: "session_revoked",
+        actor_user_id: "admin_a",
+        principal_user_id: "host_h",
+        metadata: {},
+      },
+      {
+        id: 3,
+        event_at: 102,
+        event_kind: "invite_revoked",
+        actor_user_id: "admin_a",
+        principal_user_id: "host_h",
+        metadata: {},
+      },
+    ],
   };
 }
 

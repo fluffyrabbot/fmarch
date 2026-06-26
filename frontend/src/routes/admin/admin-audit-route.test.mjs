@@ -29,6 +29,59 @@ test("admin audit detail load returns the native SPA audit surface", async () =>
   );
 });
 
+test("admin audit detail load returns identity lifecycle rows through admin session", async () => {
+  const data = await load({
+    cookies: { get: () => "admin-session" },
+    locals: {
+      principalUserId: "admin_a",
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    params: { audit: "identity-lifecycle" },
+    url: new URL("http://localhost/admin/audit/identity-lifecycle?game=midsummer"),
+    fetch: async (url, init) => {
+      if (String(url).startsWith("/auth/identity-lifecycle-audit")) {
+        assert.equal(init.headers.authorization, "Bearer admin-session");
+        return jsonResponse({
+          entries: [
+            {
+              id: 1,
+              event_at: 100,
+              event_kind: "session_rotated",
+              actor_user_id: "host_h",
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+            {
+              id: 2,
+              event_at: 101,
+              event_kind: "session_revoked",
+              actor_user_id: "admin_a",
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+            {
+              id: 3,
+              event_at: 102,
+              event_kind: "invite_revoked",
+              actor_user_id: "admin_a",
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+          ],
+        });
+      }
+      return jsonResponse({ rows: [] });
+    },
+  });
+
+  assert.equal(data.audit.id, "identity-lifecycle");
+  assert.equal(data.surfaceHeader.title, "Identity lifecycle");
+  assert.deepEqual(
+    data.audit.entries.map((entry) => entry.eventKind),
+    ["session_rotated", "session_revoked", "invite_revoked"],
+  );
+});
+
 test("admin audit detail load rejects non-admin authority", async () => {
   await assert.rejects(
     async () =>
@@ -44,6 +97,16 @@ test("admin audit detail load rejects non-admin authority", async () => {
     (err) => err.status === 403 && err.body.message === adminForbiddenMessage(),
   );
 });
+
+function jsonResponse(body, { ok = true, status = 200 } = {}) {
+  return {
+    ok,
+    status,
+    async json() {
+      return body;
+    },
+  };
+}
 
 test("admin audit detail load rejects unknown audit rows", async () => {
   await assert.rejects(

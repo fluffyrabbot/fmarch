@@ -35,6 +35,22 @@
       testId={statusTestId}
       className="admin-surface__audit-status"
     />
+    {#if data.audit.entries?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-entries">
+        {#each data.audit.entries as entry}
+          <li
+            class="admin-audit-detail__entry"
+            data-testid={`admin-audit-entry-${entry.eventKind}`}
+          >
+            <strong>{entry.eventKind}</strong>
+            <span>{entry.principalUserId}</span>
+            {#if entry.actorUserId}
+              <span>{entry.actorUserId}</span>
+            {/if}
+          </li>
+        {/each}
+      </ol>
+    {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
       data-testid={evidenceTestId}
@@ -74,5 +90,31 @@
   .admin-surface__boundary span {
     color: #455466;
     font-size: 0.9rem;
+  }
+
+  .admin-audit-detail__entries {
+    display: grid;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .admin-audit-detail__entry {
+    border: 1px solid #d7e0ea;
+    border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-block-size: 44px;
+    padding: 10px 12px;
+  }
+
+  .admin-audit-detail__entry strong {
+    color: #18212d;
+  }
+
+  .admin-audit-detail__entry span {
+    color: #455466;
   }
 </style>

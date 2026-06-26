@@ -87,20 +87,21 @@ try {
   const identityLifecycle = await proveIdentityLifecycle({
     apiBaseUrl,
     frontendBaseUrl,
+    adminSessionToken: proofRoles.admin.sessionToken,
     hostSessionToken: proofRoles.host.sessionToken,
     hostReturnTo: `/g/${game}/host`,
   });
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 3,
+    version: 4,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login action, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs; it does not prove production account recovery, email delivery, hosted identity, abuse controls, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including GlobalAdmin inspection of local identity lifecycle audit rows; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -299,6 +300,7 @@ async function driveInviteLogin({
 async function proveIdentityLifecycle({
   apiBaseUrl,
   frontendBaseUrl,
+  adminSessionToken,
   hostSessionToken,
   hostReturnTo,
 }) {
@@ -375,6 +377,16 @@ async function proveIdentityLifecycle({
       throw new Error("identity lifecycle audit leaked a raw credential");
     }
   }
+  const adminAuditSurface = await driveAdminIdentityAuditSurface({
+    frontendBaseUrl,
+    adminSessionToken,
+    rawTokens: [
+      hostSessionToken,
+      rotatedSessionToken,
+      revokedInviteToken,
+      recoveryInviteToken,
+    ],
+  });
 
   return {
     status: "passed",
@@ -412,6 +424,7 @@ async function proveIdentityLifecycle({
       ].sort(),
       rawTokensStored: false,
     },
+    adminAuditSurface,
     nonClaims: [
       "hosted account recovery",
       "email or out-of-band invite delivery",
@@ -469,6 +482,60 @@ async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalUserId }) {
       },
     },
   );
+}
+
+async function driveAdminIdentityAuditSurface({
+  frontendBaseUrl,
+  adminSessionToken,
+  rawTokens,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const auditUrl = `${frontendBaseUrl}/admin/audit/identity-lifecycle?game=${encodeURIComponent(
+    game,
+  )}&principal_user_id=host_h`;
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: adminSessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(auditUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const visibleEventKinds = [];
+    for (const eventKind of ["session_rotated", "session_revoked", "invite_revoked"]) {
+      await page.getByTestId(`admin-audit-entry-${eventKind}`).waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      visibleEventKinds.push(eventKind);
+    }
+    const bodyText = await page.locator("body").innerText();
+    if (!bodyText.includes("host_h")) {
+      throw new Error("admin identity lifecycle audit did not show the host principal");
+    }
+    for (const rawToken of rawTokens) {
+      if (bodyText.includes(rawToken)) {
+        throw new Error("admin identity lifecycle audit leaked a raw credential");
+      }
+    }
+    return {
+      status: "passed",
+      roleUrl: `/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h`,
+      surfaceTestId: "admin-audit-detail-surface",
+      visibleEventKinds,
+      principalUserId: "host_h",
+      rawTokensVisible: false,
+    };
+  } finally {
+    await page.close();
+  }
 }
 
 async function assertUnauthorizedSession(apiBaseUrl, token) {
@@ -554,7 +621,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 3 ||
+    evidence.version !== 4 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -573,7 +640,18 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
-    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked")
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
+    evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
+    evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "session_rotated",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "session_revoked",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "invite_revoked",
+    )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
   }

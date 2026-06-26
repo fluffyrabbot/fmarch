@@ -472,7 +472,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 3,
+    version: 4,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -517,6 +517,14 @@ function identityAdapterProofFixture(game) {
         eventKinds: ["invite_revoked", "session_revoked", "session_rotated"],
         actorUserIds: ["admin_a", "host_h"],
         rawTokensStored: false,
+      },
+      adminAuditSurface: {
+        status: "passed",
+        roleUrl: "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+        surfaceTestId: "admin-audit-detail-surface",
+        visibleEventKinds: ["session_rotated", "session_revoked", "invite_revoked"],
+        principalUserId: "host_h",
+        rawTokensVisible: false,
       },
       nonClaims: [
         "hosted account recovery",

@@ -526,7 +526,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 3) {
+  if (proof?.version !== 4) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -568,7 +568,18 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
-    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked")
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
+    proof.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
+    proof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "session_rotated",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "session_revoked",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "invite_revoked",
+    )
   ) {
     throw new Error("identity adapter proof does not prove lifecycle recovery");
   }

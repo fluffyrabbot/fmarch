@@ -18,6 +18,8 @@ export async function buildAdminRouteData({
   game = "midsummer",
   fetchImpl = null,
   apiBaseUrl = "",
+  sessionToken = null,
+  identityPrincipalUserId = "host_h",
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -29,6 +31,8 @@ export async function buildAdminRouteData({
     principalUserId,
     fetchImpl,
     apiBaseUrl,
+    sessionToken,
+    identityPrincipalUserId,
     fallback: adminFixtureColdLoad({ game, principalUserId }),
   });
 
@@ -154,6 +158,8 @@ export async function buildAdminAuditDetailData({
   game = "midsummer",
   fetchImpl = null,
   apiBaseUrl = "",
+  sessionToken = null,
+  identityPrincipalUserId = "host_h",
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -161,6 +167,8 @@ export async function buildAdminAuditDetailData({
     game,
     fetchImpl,
     apiBaseUrl,
+    sessionToken,
+    identityPrincipalUserId,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
