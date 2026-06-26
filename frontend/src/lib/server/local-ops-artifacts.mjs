@@ -3,6 +3,8 @@ import path from "node:path";
 
 const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
 const DEFAULT_SEED_FIXTURE_SUMMARY = "target/dev-test-game/seed-fixture-summary.json";
+const DEFAULT_RELEASE_READINESS_CHECKLIST =
+  "target/dev-test-game/release-readiness-checklist.json";
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -15,6 +17,15 @@ export async function readLocalSeedFixtureSummary({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY,
     fallback: DEFAULT_SEED_FIXTURE_SUMMARY,
+  });
+}
+
+export async function readLocalReleaseReadinessChecklist({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS,
+    fallback: DEFAULT_RELEASE_READINESS_CHECKLIST,
   });
 }
 

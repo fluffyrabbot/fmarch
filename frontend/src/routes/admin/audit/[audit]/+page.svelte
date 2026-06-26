@@ -78,6 +78,20 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.unproven?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-unproven">
+        {#each data.audit.unproven as item}
+          <li
+            class="admin-audit-detail__entry"
+            data-testid={`admin-audit-unproven-${item.id}`}
+          >
+            <strong>{item.id}</strong>
+            <span>{item.status}</span>
+            <span>{item.requiredEvidence}</span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
       data-testid={evidenceTestId}

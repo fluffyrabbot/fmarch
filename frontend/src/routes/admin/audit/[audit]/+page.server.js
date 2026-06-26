@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import {
   readLocalOpsArtifacts,
+  readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
 } from "../../../../lib/server/local-ops-artifacts.mjs";
 import { SESSION_COOKIE_NAME } from "../../../../lib/server/session-capabilities.mjs";
@@ -23,6 +24,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     identityPrincipalUserId: url.searchParams.get("principal_user_id") ?? "host_h",
     opsArtifacts: await readLocalOpsArtifacts(),
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
+    releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
   });
 
   if (!data.access.allowed) {

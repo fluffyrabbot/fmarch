@@ -644,6 +644,64 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   );
 });
 
+test("admin route data exposes local release readiness as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: releaseReadinessChecklistFixture(),
+  });
+
+  const readiness = data.audit.find((item) => item.id === "local-release-readiness");
+  assert.equal(readiness.label, "Local release readiness");
+  assert.equal(readiness.status, "3 local checks passed, 2 release items unproven");
+  assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    readiness.inspectHref,
+    "/admin/audit/local-release-readiness?game=midsummer",
+  );
+  assert.deepEqual(
+    readiness.checks.map((check) => check.id),
+    [
+      "local-role-url-browser-proof",
+      "local-core-loop-proof",
+      "local-hardening-proof",
+    ],
+  );
+  assert.deepEqual(
+    readiness.unproven.map((item) => item.id),
+    ["hosted-deployment", "human-release-runbook"],
+  );
+  assert.deepEqual(readiness.artifactSummary, {
+    game: "game-a",
+    localCheckCount: 3,
+    unprovenCount: 2,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local release readiness detail data carries checks and unproven rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-release-readiness",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: releaseReadinessChecklistFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local release readiness");
+  assert.equal(data.audit.id, "local-release-readiness");
+  assert.equal(data.audit.checks.length, 3);
+  assert.equal(data.audit.unproven.length, 2);
+  assert.deepEqual(
+    data.audit.unproven.map((item) => [item.id, item.status]),
+    [
+      ["hosted-deployment", "unproven"],
+      ["human-release-runbook", "unproven"],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -778,6 +836,64 @@ function seedScenario(id, title, role) {
     title,
     role,
     status: "available_locally",
+  };
+}
+
+function releaseReadinessChecklistFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-release-readiness",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-release-readiness-checklist",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      proofGeneratedAt: "2026-06-26T00:00:00.000Z",
+      game: "game-a",
+    },
+    localDevelopmentSpine: {
+      status: "passed",
+      checks: [
+        {
+          id: "local-role-url-browser-proof",
+          label: "Seeded role URLs and browser proof",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+        },
+        {
+          id: "local-core-loop-proof",
+          label: "Host controls and player actions",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+        },
+        {
+          id: "local-hardening-proof",
+          label: "Idempotency and stale-client handling",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+        },
+      ],
+    },
+    releaseReadiness: {
+      status: "not_ready",
+      reason: "Local proof passed, but hosted evidence remains unproven.",
+      unproven: [
+        {
+          id: "hosted-deployment",
+          status: "unproven",
+          requiredEvidence: "Hosted API/frontend deployment proof",
+        },
+        {
+          id: "human-release-runbook",
+          status: "unproven",
+          requiredEvidence: "Human-executed beta/release checklist",
+        },
+      ],
+    },
+    proofBoundary:
+      "Derived from the local dev-test-game proof-run artifact without release claims.",
   };
 }
 

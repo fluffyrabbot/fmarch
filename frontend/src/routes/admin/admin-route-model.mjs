@@ -22,6 +22,7 @@ export async function buildAdminRouteData({
   identityPrincipalUserId = "host_h",
   opsArtifacts = null,
   seedFixtureSummary = null,
+  releaseReadinessChecklist = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -119,9 +120,13 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalSeedFixtureAudit(
-        appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
-        seedFixtureSummary,
+      appendLocalReleaseReadinessAudit(
+        appendLocalSeedFixtureAudit(
+          appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+          seedFixtureSummary,
+          { game },
+        ),
+        releaseReadinessChecklist,
         { game },
       ),
       { game },
@@ -171,6 +176,7 @@ export async function buildAdminAuditDetailData({
   identityPrincipalUserId = "host_h",
   opsArtifacts = null,
   seedFixtureSummary = null,
+  releaseReadinessChecklist = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -182,6 +188,7 @@ export async function buildAdminAuditDetailData({
     identityPrincipalUserId,
     opsArtifacts,
     seedFixtureSummary,
+    releaseReadinessChecklist,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -404,6 +411,83 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
       slotCount: Number(seedFixtureSummary.fixture?.slots?.length ?? 0),
       releaseReady: seedFixtureSummary.releaseReady === true,
       productionReady: seedFixtureSummary.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalReleaseReadinessAudit(
+  audit,
+  releaseReadinessChecklist,
+  { game },
+) {
+  const row = normalizeLocalReleaseReadinessAudit(releaseReadinessChecklist, {
+    game,
+  });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalReleaseReadinessAudit(
+  releaseReadinessChecklist,
+  { game },
+) {
+  if (
+    releaseReadinessChecklist === null ||
+    typeof releaseReadinessChecklist !== "object" ||
+    releaseReadinessChecklist.version !== 1 ||
+    releaseReadinessChecklist.proof !== "dev-test-game-release-readiness" ||
+    releaseReadinessChecklist.status !== "passed" ||
+    releaseReadinessChecklist.releaseReady !== false ||
+    releaseReadinessChecklist.productionReady !== false ||
+    releaseReadinessChecklist.releaseReadiness?.status !== "not_ready"
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(releaseReadinessChecklist.localDevelopmentSpine?.checks)
+    ? releaseReadinessChecklist.localDevelopmentSpine.checks
+    : [];
+  const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
+    ? releaseReadinessChecklist.releaseReadiness.unproven
+    : [];
+  return Object.freeze({
+    id: "local-release-readiness",
+    label: "Local release readiness",
+    status: `${checks.length} local checks passed, ${unproven.length} release items unproven`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local release-readiness checklist",
+    boundaryDetail:
+      releaseReadinessChecklist.proofBoundary ??
+      "Local dev-test-game release-readiness checklist without beta or production claims.",
+    href: "target/dev-test-game/release-readiness-checklist.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-release-readiness",
+    }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    unproven: Object.freeze(
+      unproven.map((item) =>
+        Object.freeze({
+          id: String(item.id),
+          status: String(item.status),
+          requiredEvidence: String(item.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(releaseReadinessChecklist.generatedFrom?.game ?? ""),
+      localCheckCount: checks.length,
+      unprovenCount: unproven.length,
+      releaseReady: releaseReadinessChecklist.releaseReady === true,
+      productionReady: releaseReadinessChecklist.productionReady === true,
     }),
   });
 }

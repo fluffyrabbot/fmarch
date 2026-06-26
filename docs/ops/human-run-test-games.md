@@ -85,6 +85,7 @@ target/dev-test-game/seed-fixture-summary.md
 target/dev-test-game/seed-admin-proof.json
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
+target/dev-test-game/release-admin-proof.json
 target/dev-test-game/named-games.json
 ```
 
@@ -143,6 +144,12 @@ The local release-readiness checklist generator is:
 npm run test:dev-test-game-readiness
 ```
 
+The local release-readiness admin browser proof is:
+
+```sh
+npm run test:dev-test-game-release-admin-proof
+```
+
 The local ops artifact bundle generator is:
 
 ```sh
@@ -185,7 +192,10 @@ seeded slots, local demo scenarios, and proof-lane mappings, then writes
 `target/dev-test-game/seed-admin-proof.json` by clicking from the seeded admin
 overview into the native local seed fixture detail route. The final readiness
 checklist pass consumes the ops bundle plus the seed fixture summary and its
-admin browser proof, and promotes only those local checks.
+admin browser proof, and promotes only those local checks. It then writes
+`target/dev-test-game/release-admin-proof.json` by clicking from the seeded
+admin overview into the native release-readiness detail route, where passed
+local checks and remaining unproven release items are visible.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
