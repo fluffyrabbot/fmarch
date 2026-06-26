@@ -24,6 +24,7 @@ export async function buildAdminRouteData({
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
   backupRestoreProof = null,
+  identityAdapterProof = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -121,17 +122,21 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalBackupRestoreAudit(
-        appendLocalReleaseReadinessAudit(
-          appendLocalSeedFixtureAudit(
-            appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
-            seedFixtureSummary,
+      appendLocalIdentityAdapterAudit(
+        appendLocalBackupRestoreAudit(
+          appendLocalReleaseReadinessAudit(
+            appendLocalSeedFixtureAudit(
+              appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+              seedFixtureSummary,
+              { game },
+            ),
+            releaseReadinessChecklist,
             { game },
           ),
-          releaseReadinessChecklist,
+          backupRestoreProof,
           { game },
         ),
-        backupRestoreProof,
+        identityAdapterProof,
         { game },
       ),
       { game },
@@ -183,6 +188,7 @@ export async function buildAdminAuditDetailData({
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
   backupRestoreProof = null,
+  identityAdapterProof = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -196,6 +202,7 @@ export async function buildAdminAuditDetailData({
     seedFixtureSummary,
     releaseReadinessChecklist,
     backupRestoreProof,
+    identityAdapterProof,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -578,6 +585,109 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
       ),
       sessionCount: sessions.length,
       productionReady: backupRestoreProof.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalIdentityAdapterAudit(audit, identityAdapterProof, { game }) {
+  const row = normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game }) {
+  if (
+    identityAdapterProof === null ||
+    typeof identityAdapterProof !== "object" ||
+    identityAdapterProof.version !== 5 ||
+    identityAdapterProof.proof !== "auth-invite-role-proof" ||
+    identityAdapterProof.status !== "passed" ||
+    identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
+    identityAdapterProof.releaseReady !== false ||
+    identityAdapterProof.productionReady !== false ||
+    identityAdapterProof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true
+  ) {
+    return null;
+  }
+  const requiredRoleCapabilities = new Map([
+    ["admin", "GlobalAdmin"],
+    ["host", "HostOf"],
+    ["player", "SlotOccupant"],
+  ]);
+  for (const [role, capability] of requiredRoleCapabilities) {
+    if (!identityAdapterProof.roles?.[role]?.capabilityKinds?.includes(capability)) {
+      return null;
+    }
+  }
+  const roles = Object.entries(identityAdapterProof.roles ?? {}).map(([role, entry]) =>
+    Object.freeze({
+      role,
+      capabilities: Array.isArray(entry?.capabilityKinds)
+        ? Object.freeze(entry.capabilityKinds.map((capability) => String(capability)))
+        : Object.freeze([]),
+    }),
+  );
+  const lifecycleChecks = [
+    ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
+    ["session-revocation", identityAdapterProof.identityLifecycle?.sessionRevocation?.status],
+    ["invite-revocation", identityAdapterProof.identityLifecycle?.inviteRevocation?.status],
+    ["audit-trail", identityAdapterProof.identityLifecycle?.auditTrail?.status],
+    [
+      "admin-audit-surface",
+      identityAdapterProof.identityLifecycle?.adminAuditSurface?.status,
+    ],
+  ];
+  if (
+    roles.length === 0 ||
+    lifecycleChecks.some(([, status]) => status !== "passed") ||
+    identityAdapterProof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
+    identityAdapterProof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false
+  ) {
+    return null;
+  }
+  const controls = Array.isArray(identityAdapterProof.identityAdapter?.lifecycleControls)
+    ? identityAdapterProof.identityAdapter.lifecycleControls
+    : [];
+  return Object.freeze({
+    id: "local-identity-adapter",
+    label: "Local identity adapter",
+    status: `${roles.length} role surfaces, ${controls.length} lifecycle controls`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local production-identity adapter proof",
+    boundaryDetail:
+      identityAdapterProof.proofBoundary ??
+      "Local invite/session identity adapter proof without hosted account claims.",
+    href: "target/auth-invite-role-proof/invite-role-proof.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-identity-adapter",
+    }),
+    checks: Object.freeze(
+      lifecycleChecks.map(([id, status]) =>
+        Object.freeze({
+          id,
+          status: String(status),
+        }),
+      ),
+    ),
+    sessions: Object.freeze(roles),
+    artifactSummary: Object.freeze({
+      game: String(identityAdapterProof.game ?? ""),
+      browserCookieName: String(identityAdapterProof.identityAdapter?.browserCookieName ?? ""),
+      inviteCredentialKind: String(
+        identityAdapterProof.identityAdapter?.inviteCredentialKind ?? "",
+      ),
+      sessionCredentialKind: String(
+        identityAdapterProof.identityAdapter?.sessionCredentialKind ?? "",
+      ),
+      lifecycleControls: Object.freeze(controls.map((control) => String(control))),
+      rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
+      rawTokensVisible:
+        identityAdapterProof.identityLifecycle.adminAuditSurface.rawTokensVisible,
+      releaseReady: identityAdapterProof.releaseReady === true,
+      productionReady: identityAdapterProof.productionReady === true,
     }),
   });
 }

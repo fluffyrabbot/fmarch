@@ -7,6 +7,8 @@ const DEFAULT_RELEASE_READINESS_CHECKLIST =
   "target/dev-test-game/release-readiness-checklist.json";
 const DEFAULT_BACKUP_RESTORE_PROOF =
   "target/live-stack-backup-restore-drill/local-backup-restore-proof.json";
+const DEFAULT_IDENTITY_ADAPTER_PROOF =
+  "target/auth-invite-role-proof/invite-role-proof.json";
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -35,6 +37,13 @@ export async function readLocalBackupRestoreProof({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF,
     fallback: DEFAULT_BACKUP_RESTORE_PROOF,
+  });
+}
+
+export async function readLocalIdentityAdapterProof({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF,
+    fallback: DEFAULT_IDENTITY_ADAPTER_PROOF,
   });
 }
 

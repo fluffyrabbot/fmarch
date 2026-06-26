@@ -34,6 +34,10 @@ const defaultIdentityAdapterProofPath = path.join(
   "auth-invite-role-proof",
   "invite-role-proof.json",
 );
+const defaultIdentityAdminProofPath = path.join(
+  artifactDir,
+  "identity-admin-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -100,6 +104,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.identityAdapterProofPath ??
           "target/auth-invite-role-proof/invite-role-proof.json",
         artifact: options.identityAdapterProofArtifact,
+      })
+    : undefined;
+  const identityAdminProofEvidence = options.identityAdminProof
+    ? validateDevTestGameIdentityAdminProof(options.identityAdminProof, {
+        path:
+          options.identityAdminProofPath ??
+          "target/dev-test-game/identity-admin-proof.json",
+        artifact: options.identityAdminProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -178,6 +190,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: identityAdapterEvidence.path,
       proofBoundary: identityAdapterEvidence.proofBoundary,
       roles: identityAdapterEvidence.roles,
+      ...(identityAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: identityAdminProofEvidence }),
     });
   }
   const unproven = [
@@ -304,6 +319,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             identityAdapterProof: identityAdapterEvidence.path,
+            ...(identityAdminProofEvidence === undefined
+              ? {}
+              : { identityAdminProof: identityAdminProofEvidence.path }),
           }),
     },
     localDevelopmentSpine: {
@@ -341,7 +359,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                   }),
               ...(identityAdapterEvidence === undefined
                 ? {}
-                : { identityAdapter: identityAdapterEvidence }),
+                : {
+                    identityAdapter: {
+                      ...identityAdapterEvidence,
+                      ...(identityAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: identityAdminProofEvidence }),
+                    },
+                  }),
             },
           }),
     },
@@ -811,6 +836,58 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "session-rotation",
+    "session-revocation",
+    "invite-revocation",
+    "audit-trail",
+    "admin-audit-surface",
+  ];
+  const requiredSessions = ["admin", "host", "player"];
+  if (proof?.version !== 1) {
+    throw new Error(`identity admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-identity-admin-proof") {
+    throw new Error(`unexpected identity admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`identity admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-identity-admin-surface") {
+    throw new Error(`identity admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("identity admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("identity admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`identity admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const sessionRole of requiredSessions) {
+    if (!proof.adminRoleSurface?.visibleSessions?.includes(sessionRole)) {
+      throw new Error(`identity admin proof missing visible session: ${sessionRole}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/identity-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleSessions: proof.adminRoleSurface.visibleSessions,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -931,6 +1008,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     opsArtifactsOptions,
     seedFixtureOptions,
     identityAdapterOptions,
+    identityAdminProofOptions,
     opsAdminProofOptions,
     seedAdminProofOptions,
   ] = await Promise.all([
@@ -939,6 +1017,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
       readOptionalOpsArtifacts(),
       readOptionalSeedFixtureSummary(),
       readOptionalIdentityAdapterProof(),
+      readOptionalIdentityAdminProof(),
       readOptionalOpsAdminProof(),
       readOptionalSeedAdminProof(),
     ]);
@@ -949,6 +1028,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(opsArtifactsOptions ?? {}),
     ...(seedFixtureOptions ?? {}),
     ...(identityAdapterOptions ?? {}),
+    ...(identityAdminProofOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
     ...(seedAdminProofOptions ?? {}),
   });
@@ -1048,6 +1128,21 @@ async function readOptionalIdentityAdapterProof() {
     identityAdapterProof: JSON.parse(await readFile(proofPath, "utf8")),
     identityAdapterProofPath: path.relative(repoRoot, proofPath),
     identityAdapterProofArtifact: artifact,
+  };
+}
+
+async function readOptionalIdentityAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultIdentityAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    identityAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    identityAdminProofPath: path.relative(repoRoot, proofPath),
+    identityAdminProofArtifact: artifact,
   };
 }
 

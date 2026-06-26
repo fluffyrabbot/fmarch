@@ -768,6 +768,77 @@ test("admin local backup restore detail data carries checks and restored session
   );
 });
 
+test("admin route data exposes local identity adapter proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    identityAdapterProof: identityAdapterProofFixture(),
+  });
+
+  const identity = data.audit.find((item) => item.id === "local-identity-adapter");
+  assert.equal(identity.label, "Local identity adapter");
+  assert.equal(identity.status, "3 role surfaces, 3 lifecycle controls");
+  assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    identity.inspectHref,
+    "/admin/audit/local-identity-adapter?game=midsummer",
+  );
+  assert.deepEqual(
+    identity.checks.map((check) => check.id),
+    [
+      "session-rotation",
+      "session-revocation",
+      "invite-revocation",
+      "audit-trail",
+      "admin-audit-surface",
+    ],
+  );
+  assert.deepEqual(
+    identity.sessions.map((session) => [session.role, session.capabilities]),
+    [
+      ["admin", ["GlobalAdmin"]],
+      ["host", ["HostOf"]],
+      ["player", ["SlotOccupant", "ChannelMember"]],
+    ],
+  );
+  assert.deepEqual(identity.artifactSummary, {
+    game: "game-a",
+    browserCookieName: "fmarch_session",
+    inviteCredentialKind: "single-use-invite",
+    sessionCredentialKind: "opaque-session",
+    lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+    rawTokensStored: false,
+    rawTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local identity adapter detail data carries lifecycle checks and role rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-identity-adapter",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    identityAdapterProof: identityAdapterProofFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local identity adapter");
+  assert.equal(data.audit.id, "local-identity-adapter");
+  assert.equal(data.audit.checks.length, 5);
+  assert.equal(data.audit.sessions.length, 3);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["session-rotation", "passed"],
+      ["session-revocation", "passed"],
+      ["invite-revocation", "passed"],
+      ["audit-trail", "passed"],
+      ["admin-audit-surface", "passed"],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -995,6 +1066,58 @@ function backupRestoreProofFixture() {
       },
       restored: {
         events: { total: 3 },
+      },
+    },
+  };
+}
+
+function identityAdapterProofFixture() {
+  return {
+    version: 5,
+    proof: "auth-invite-role-proof",
+    status: "passed",
+    scope: "local-auth-invite-role-proof",
+    releaseReady: false,
+    productionReady: false,
+    proofBoundary: "Local invite proof only.",
+    game: "game-a",
+    identityAdapter: {
+      status: "passed",
+      replacesDevTokensWithoutRoleSurfaceChange: true,
+      browserCookieName: "fmarch_session",
+      inviteCredentialKind: "single-use-invite",
+      sessionCredentialKind: "opaque-session",
+      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+    },
+    identityLifecycle: {
+      status: "passed",
+      sessionRotation: {
+        status: "passed",
+      },
+      sessionRevocation: {
+        status: "passed",
+      },
+      inviteRevocation: {
+        status: "passed",
+      },
+      auditTrail: {
+        status: "passed",
+        rawTokensStored: false,
+      },
+      adminAuditSurface: {
+        status: "passed",
+        rawTokensVisible: false,
+      },
+    },
+    roles: {
+      admin: {
+        capabilityKinds: ["GlobalAdmin"],
+      },
+      host: {
+        capabilityKinds: ["HostOf"],
+      },
+      player: {
+        capabilityKinds: ["SlotOccupant", "ChannelMember"],
       },
     },
   };

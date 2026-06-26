@@ -403,12 +403,20 @@ test("session card and markdown include role invite URLs and tokens", () => {
     identityAdapterProofPath:
       "target/auth-invite-role-proof/invite-role-proof.json",
     identityAdapterProof: identityAdapterProofFixture(game),
+    identityAdminProofPath: "target/dev-test-game/identity-admin-proof.json",
+    identityAdminProof: identityAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(identityReadiness);
   assert(
     identityReadiness.localDevelopmentSpine.checks.some(
       (item) => item.id === "local-identity-adapter-proof" && item.status === "passed",
     ),
+  );
+  assert.equal(
+    identityReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-identity-adapter-proof",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-identity-adapter?game=<seeded-game>",
   );
   assert.equal(
     identityReadiness.releaseReadiness.unproven.some(
@@ -586,6 +594,41 @@ function identityAdapterProofFixture(game) {
         principalUserId: "player-mira",
         capabilityKinds: ["SlotOccupant"],
       }),
+    },
+  };
+}
+
+function identityAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-identity-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-identity-admin-surface",
+    proofBoundary: "Local admin identity adapter proof only.",
+    generatedFrom: {
+      identityAdapterProof: "target/auth-invite-role-proof/invite-role-proof.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-identity-adapter",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "session-rotation",
+        "session-revocation",
+        "invite-revocation",
+        "audit-trail",
+        "admin-audit-surface",
+      ],
+      visibleSessions: ["admin", "host", "player"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
     },
   };
 }

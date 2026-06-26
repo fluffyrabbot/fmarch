@@ -87,6 +87,7 @@ target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/release-admin-proof.json
 target/dev-test-game/backup-admin-proof.json
+target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/named-games.json
 ```
 
@@ -171,6 +172,11 @@ changing role surfaces and proving local lifecycle recovery is:
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity
 ```
 
+That command also writes `target/dev-test-game/identity-admin-proof.json` by
+clicking from the seeded admin overview into the native local identity-adapter
+detail route, where lifecycle checks and admin/host/player role surfaces are
+visible without raw invite-token echoes.
+
 The local backup/restore drill for this spine is:
 
 ```sh
@@ -253,12 +259,13 @@ the checklist consumes `target/dev-test-game/seed-fixture-summary.json` plus
 seed/demo fixture inventory with its seeded admin overview-to-detail browser
 proof. After
 `npm run test:dev-test-game-identity`, the checklist consumes
-`target/auth-invite-role-proof/invite-role-proof.json` and promotes only the
-local identity-adapter proof that invite-issued opaque sessions preserve the
-same role URL and capability architecture through local session rotation,
-session revocation, revoked-invite rejection, replacement-invite recovery, and
-the seeded GlobalAdmin overview linking through to local lifecycle audit rows
-without raw credential echoes.
+`target/auth-invite-role-proof/invite-role-proof.json` plus
+`target/dev-test-game/identity-admin-proof.json`, and promotes only the local
+identity-adapter proof that invite-issued opaque sessions preserve the same role
+URL and capability architecture through local session rotation, session
+revocation, revoked-invite rejection, replacement-invite recovery, and a seeded
+admin overview-to-local-identity-adapter-detail browser proof without raw
+credential echoes.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

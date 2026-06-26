@@ -3,6 +3,7 @@ import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import {
   readLocalBackupRestoreProof,
+  readLocalIdentityAdapterProof,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
@@ -29,6 +30,7 @@ export async function load({ cookies, locals, fetch, url }) {
     seedFixtureSummary: await readLocalSeedFixtureSummary(),
     releaseReadinessChecklist: await readLocalReleaseReadinessChecklist(),
     backupRestoreProof: await readLocalBackupRestoreProof(),
+    identityAdapterProof: await readLocalIdentityAdapterProof(),
   });
 
   if (!data.access.allowed) {
