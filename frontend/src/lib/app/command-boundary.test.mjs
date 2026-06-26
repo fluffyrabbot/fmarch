@@ -58,6 +58,62 @@ test("player actions map to Rust wire command variants", () => {
       },
     },
   );
+
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      channelId: "role-pm",
+      actorSlot: "slot-7",
+      body: "private note with receipt",
+      media: [
+        {
+          id: "live-faction-day-chat-receipt",
+          kind: "image",
+          alt: "Live faction day chat tablet receipt",
+          variants: {
+            tablet: {
+              url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
+              width: 960,
+              height: 720,
+            },
+            small: {
+              url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
+              width: 480,
+              height: 360,
+            },
+          },
+        },
+      ],
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "role-pm",
+        actor_slot: "slot-7",
+        body: "private note with receipt",
+        media: [
+          {
+            id: "live-faction-day-chat-receipt",
+            kind: "image",
+            alt: "Live faction day chat tablet receipt",
+            variants: {
+              tablet: {
+                url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
+                width: 960,
+                height: 720,
+              },
+              small: {
+                url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
+                width: 480,
+                height: 360,
+              },
+            },
+          },
+        ],
+      },
+    },
+  );
 });
 
 test("generic command envelope uses the Rust ClientEnvelope shape", () => {

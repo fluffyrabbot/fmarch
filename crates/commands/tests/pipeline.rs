@@ -2769,6 +2769,7 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
             channel_id: "main".into(),
             actor_slot: slot.into(),
             body: "I am slot 7".into(),
+            media: Vec::new(),
         },
     )
     .await
@@ -3588,6 +3589,7 @@ async fn resolve_phase_tags_treestump_and_preserves_dead_vote_action_bar(pool: P
             channel_id: "main".into(),
             actor_slot: "slot_1".into(),
             body: "still here, no vote".into(),
+            media: Vec::new(),
         },
     )
     .await

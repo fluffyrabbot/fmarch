@@ -2,12 +2,13 @@ use api::ApiState;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
+use std::collections::BTreeMap;
 use tower::ServiceExt;
 use uuid::Uuid;
 use wire::{
     ClientEnvelope, ClientMsg, Command, CommandMsg, PlayerInvestigationResult, PlayerNotification,
     ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg, SlotLifecycle, ThreadPage,
-    VoteTarget, PROTOCOL_VERSION,
+    ThreadPostMedia, ThreadPostMediaVariant, VoteTarget, PROTOCOL_VERSION,
 };
 
 fn router(pool: sqlx::PgPool) -> axum::Router {
@@ -1159,6 +1160,7 @@ async fn vertical_thread_cold_load_returns_paginated_posts(pool: sqlx::PgPool) {
                     channel_id: "main".into(),
                     actor_slot: "slot_1".into(),
                     body: body.into(),
+                    media: None,
                 },
             )
             .await,
@@ -1379,6 +1381,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
                 channel_id: "role-pm".into(),
                 actor_slot: "slot_1".into(),
                 body: "private role confirmation".into(),
+                media: None,
             },
         )
         .await,
@@ -1426,6 +1429,7 @@ async fn vertical_private_channel_submit_post_requires_channel_membership(pool: 
             channel_id: "scum-chat".into(),
             actor_slot: "slot_1".into(),
             body: "not a member".into(),
+            media: None,
         },
     )
     .await;
@@ -1541,6 +1545,29 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
                 channel_id: "private:mafia_day_chat".into(),
                 actor_slot: "slot_1".into(),
                 body: "day chat is live".into(),
+                media: Some(vec![ThreadPostMedia {
+                    id: "live-faction-day-chat-receipt".into(),
+                    kind: "image".into(),
+                    alt: "Live faction day chat tablet receipt".into(),
+                    variants: BTreeMap::from([
+                        (
+                            "tablet".into(),
+                            ThreadPostMediaVariant {
+                                url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png".into(),
+                                width: Some(960),
+                                height: Some(720),
+                            },
+                        ),
+                        (
+                            "small".into(),
+                            ThreadPostMediaVariant {
+                                url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png".into(),
+                                width: Some(480),
+                                height: Some(360),
+                            },
+                        ),
+                    ]),
+                }]),
             },
         )
         .await,
@@ -1570,6 +1597,18 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             .collect::<Vec<_>>(),
         vec![("private:mafia_day_chat", "day chat is live")]
     );
+    assert_eq!(allowed_page.posts[0].media.len(), 1);
+    assert_eq!(
+        allowed_page.posts[0].media[0].id,
+        "live-faction-day-chat-receipt"
+    );
+    assert_eq!(
+        allowed_page.posts[0].media[0]
+            .variants
+            .get("tablet")
+            .map(|variant| variant.url.as_str()),
+        Some("/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png"),
+    );
 
     let denied_read = app
         .clone()
@@ -1595,6 +1634,7 @@ async fn vertical_faction_day_chat_is_command_declared_and_channel_scoped(pool: 
             channel_id: "private:mafia_day_chat".into(),
             actor_slot: "slot_3".into(),
             body: "traitor should not enter".into(),
+            media: None,
         },
     )
     .await;
@@ -1683,6 +1723,7 @@ async fn host_action_commands_are_capability_gated_and_projected(pool: sqlx::PgP
                 channel_id: "main".into(),
                 actor_slot: "slot_7".into(),
                 body: "Slot 7 check-in before replacement".into(),
+                media: None,
             },
         )
         .await,
@@ -2115,6 +2156,7 @@ async fn duplicate_command_id_returns_original_ack_without_duplicate_post(pool: 
         channel_id: "main".into(),
         actor_slot: "slot_1".into(),
         body: "commit happened; ack vanished".into(),
+        media: None,
     };
 
     let first_ack = expect_ack(

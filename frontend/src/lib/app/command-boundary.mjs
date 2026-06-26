@@ -26,6 +26,7 @@ export function buildPlayerCommand({
   channelId = "main",
   actorSlot,
   body,
+  media = [],
   target,
 }) {
   switch (action) {
@@ -36,6 +37,7 @@ export function buildPlayerCommand({
           channel_id: requiredString(channelId, "channelId"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
           body: requiredString(body, "body"),
+          ...(media.length > 0 ? { media } : {}),
         }),
       });
     case "submit_vote":

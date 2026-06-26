@@ -38,7 +38,9 @@ use uuid::Uuid;
 
 mod model;
 pub mod operator_proof;
-pub use model::{Ack, Command, HostPromptDecision, Reject, VoteTarget};
+pub use model::{
+    Ack, Command, HostPromptDecision, Reject, ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
+};
 
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_SEED: u64 = 90_001;
 pub const LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS: u64 = 20_000;
@@ -647,7 +649,13 @@ async fn handle_inner(
             channel_id,
             actor_slot,
             body,
-        } => submit_post(pool, principal, game, channel_id, actor_slot, body, receipt).await,
+            media,
+        } => {
+            submit_post(
+                pool, principal, game, channel_id, actor_slot, body, media, receipt,
+            )
+            .await
+        }
         Command::ExtendDeadline { game, phase, at } => {
             extend_deadline(pool, principal, game, phase, at, receipt).await
         }
@@ -1194,6 +1202,7 @@ async fn submit_post(
     channel_id: String,
     actor_slot: String,
     body: String,
+    media: Vec<model::ThreadPostMedia>,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
@@ -1205,15 +1214,19 @@ async fn submit_post(
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.
     let phase = current_phase(pool, game).await?.unwrap_or_default();
+    let mut payload = serde_json::json!({
+        "channel_id": channel_id,
+        "slot_or_user": { "slot": actor_slot.clone() },
+        "body": body,
+        "phase_id": phase,
+    });
+    if !media.is_empty() {
+        payload["media"] = serde_json::to_value(media).expect("thread post media serializes");
+    }
     let ev = EventInput::new(
         "PostSubmitted",
         1,
-        serde_json::json!({
-            "channel_id": channel_id,
-            "slot_or_user": { "slot": actor_slot.clone() },
-            "body": body,
-            "phase_id": phase,
-        }),
+        payload,
         ActorId::Slot(actor_slot.clone()),
         0,
     );

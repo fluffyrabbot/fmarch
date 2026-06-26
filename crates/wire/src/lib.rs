@@ -277,6 +277,9 @@ pub enum Command {
         channel_id: String,
         actor_slot: String,
         body: String,
+        #[serde(default)]
+        #[ts(optional)]
+        media: Option<Vec<ThreadPostMedia>>,
     },
     ExtendDeadline {
         game: Uuid,
@@ -383,11 +386,17 @@ impl From<Command> for commands::Command {
                 channel_id,
                 actor_slot,
                 body,
+                media,
             } => commands::Command::SubmitPost {
                 game,
                 channel_id,
                 actor_slot,
                 body,
+                media: media
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(commands::ThreadPostMedia::from)
+                    .collect(),
             },
             Command::ExtendDeadline { game, phase, at } => {
                 commands::Command::ExtendDeadline { game, phase, at }
@@ -689,6 +698,31 @@ pub struct ThreadPostMediaVariant {
     pub url: String,
     pub width: Option<i64>,
     pub height: Option<i64>,
+}
+
+impl From<ThreadPostMedia> for commands::ThreadPostMedia {
+    fn from(media: ThreadPostMedia) -> Self {
+        commands::ThreadPostMedia {
+            id: media.id,
+            kind: media.kind,
+            alt: media.alt,
+            variants: media
+                .variants
+                .into_iter()
+                .map(|(name, variant)| (name, commands::ThreadPostMediaVariant::from(variant)))
+                .collect(),
+        }
+    }
+}
+
+impl From<ThreadPostMediaVariant> for commands::ThreadPostMediaVariant {
+    fn from(variant: ThreadPostMediaVariant) -> Self {
+        commands::ThreadPostMediaVariant {
+            url: variant.url,
+            width: variant.width,
+            height: variant.height,
+        }
+    }
 }
 
 impl From<projections::ThreadPostRow> for ThreadPost {

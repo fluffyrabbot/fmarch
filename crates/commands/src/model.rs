@@ -1,6 +1,7 @@
 //! Command / Ack / Reject types: the typed surface of the pipeline.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 /// A vote target: a slot, or the no-lynch sentinel.
@@ -23,6 +24,21 @@ pub enum HostPromptDecision {
         #[serde(default)]
         metadata: serde_json::Value,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadPostMedia {
+    pub id: String,
+    pub kind: String,
+    pub alt: String,
+    pub variants: BTreeMap<String, ThreadPostMediaVariant>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadPostMediaVariant {
+    pub url: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
 }
 
 /// The commands the pipeline accepts. Slice commands + the minimal bootstrap
@@ -140,6 +156,8 @@ pub enum Command {
         channel_id: String,
         actor_slot: String,
         body: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        media: Vec<ThreadPostMedia>,
     },
     /// Extend a phase deadline. Requires `HostOf|CohostOf`.
     ExtendDeadline { game: Uuid, phase: String, at: i64 },
