@@ -20,6 +20,7 @@ const defaultBackupRestoreDumpPath = path.join(
   "live-stack-backup-restore-drill",
   "local-live-stack.dump",
 );
+const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -46,6 +47,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           "target/live-stack-backup-restore-drill/local-live-stack.dump",
         proofArtifact: options.backupRestoreProofArtifact,
         dumpArtifact: options.backupRestoreDumpArtifact,
+      })
+    : undefined;
+  const opsArtifactsEvidence = options.opsArtifacts
+    ? validateDevTestGameOpsArtifacts(options.opsArtifacts, {
+        path: options.opsArtifactsPath ?? "target/dev-test-game/ops-artifacts.json",
+        artifact: options.opsArtifactsArtifact,
       })
     : undefined;
   const localChecks = [
@@ -87,6 +94,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofBoundary: backupRestoreEvidence.proofBoundary,
     });
   }
+  if (opsArtifactsEvidence !== undefined) {
+    localChecks.push({
+      id: "local-ops-artifact-bundle",
+      label: "Local ops artifact bundle",
+      status: "passed",
+      evidence: opsArtifactsEvidence.path,
+      proofBoundary: opsArtifactsEvidence.proofBoundary,
+    });
+  }
   const unproven = [
     {
       id: "production-identity",
@@ -122,11 +138,23 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredEvidence:
         "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
     },
-    {
-      id: "observability-and-operations",
-      status: "unproven",
-      requiredEvidence: "Saved logs/metrics/traces and operator runbook evidence for the seeded game flow",
-    },
+    ...(opsArtifactsEvidence === undefined
+      ? [
+          {
+            id: "observability-and-operations",
+            status: "unproven",
+            requiredEvidence:
+              "Saved local proof artifacts, redacted role entrypoints, checksums, logs/metrics/traces, and operator runbook evidence for the seeded game flow",
+          },
+        ]
+      : [
+          {
+            id: "hosted-observability-and-operations",
+            status: "unproven",
+            requiredEvidence:
+              "Hosted logs, metrics, traces, paging/SLOs, and incident response evidence",
+          },
+        ]),
     {
       id: "human-release-runbook",
       status: "unproven",
@@ -151,29 +179,63 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             backupRestoreProof: backupRestoreEvidence.path,
             backupRestoreDump: backupRestoreEvidence.dumpPath,
           }),
+      ...(opsArtifactsEvidence === undefined
+        ? {}
+        : {
+            opsArtifacts: opsArtifactsEvidence.path,
+          }),
     },
     localDevelopmentSpine: {
       status: "passed",
       checks: localChecks,
-      ...(backupRestoreEvidence === undefined
+      ...((backupRestoreEvidence === undefined && opsArtifactsEvidence === undefined)
         ? {}
         : {
             evidence: {
-              backupRestore: backupRestoreEvidence,
+              ...(backupRestoreEvidence === undefined
+                ? {}
+                : { backupRestore: backupRestoreEvidence }),
+              ...(opsArtifactsEvidence === undefined
+                ? {}
+                : { opsArtifacts: opsArtifactsEvidence }),
             },
           }),
     },
     releaseReadiness: {
       status: "not_ready",
-      reason:
-        backupRestoreEvidence === undefined
-          ? "The local development-spine proof passed, but production identity, hosted operations, backup/restore, exhaustive races, observability, and human release evidence remain unproven."
-          : "The local development-spine proof and local backup/restore drill passed, but production identity, hosted operations, production backup/PITR, exhaustive races, observability, and human release evidence remain unproven.",
+      reason: releaseReadinessReason({ backupRestoreEvidence, opsArtifactsEvidence }),
       unproven,
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact. Passing means the local harness evidence is coherent; it does not mean production, hosted, beta, or release readiness.",
   };
+}
+
+function releaseReadinessReason({ backupRestoreEvidence, opsArtifactsEvidence }) {
+  const passed = [
+    "the local development-spine proof",
+    ...(backupRestoreEvidence === undefined ? [] : ["local backup/restore drill"]),
+    ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
+  ];
+  const missing = [
+    "production identity",
+    "hosted operations",
+    backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
+    "exhaustive races",
+    opsArtifactsEvidence === undefined ? "observability" : "hosted observability",
+    "human release evidence",
+  ];
+  return `${joinEnglish(passed)} passed, but ${joinEnglish(missing)} remain unproven.`;
+}
+
+function joinEnglish(items) {
+  if (items.length <= 1) {
+    return items.join("");
+  }
+  if (items.length === 2) {
+    return `${items[0]} and ${items[1]}`;
+  }
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
 }
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
@@ -238,6 +300,50 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameOpsArtifacts(ops, options = {}) {
+  const requiredChecks = [
+    "source-artifacts-checksummed",
+    "role-entrypoints-redacted",
+    "proof-lanes-summarized",
+    "release-boundary-carried",
+  ];
+  if (ops?.version !== 1) {
+    throw new Error(`ops artifact version drifted: ${ops?.version}`);
+  }
+  if (ops.proof !== "dev-test-game-ops-artifacts") {
+    throw new Error(`unexpected ops artifact proof id: ${ops.proof}`);
+  }
+  if (ops.status !== "passed") {
+    throw new Error(`ops artifact status is ${ops.status}`);
+  }
+  if (ops.scope !== "local-dev-test-game-ops-artifacts") {
+    throw new Error(`ops artifact scope drifted: ${ops.scope}`);
+  }
+  if (ops.productionReady !== false || ops.releaseReady !== false) {
+    throw new Error("ops artifact must not claim production or release readiness");
+  }
+  const checks = new Map((ops.checks ?? []).map((check) => [check.id, check.status]));
+  for (const id of requiredChecks) {
+    if (checks.get(id) !== "passed") {
+      throw new Error(`ops artifact missing passed check: ${id}`);
+    }
+  }
+  if (/invite=(?!REDACTED)/.test(JSON.stringify(ops))) {
+    throw new Error("ops artifact leaked an invite URL token");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/ops-artifacts.json",
+    checkCount: requiredChecks.length,
+    roleCount: ops.run?.roleCount ?? 0,
+    laneCount: ops.proofRun?.laneCount ?? 0,
+    proofBoundary: ops.proofBoundary,
+    scope: ops.scope,
+    productionReady: ops.productionReady,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist?.version !== DEV_TEST_GAME_RELEASE_READINESS_VERSION) {
     throw new Error(
@@ -272,6 +378,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   );
   if (hasBackupCheck && hasBackupUnproven) {
     throw new Error("dev-test-game backup/restore cannot be both passed and unproven");
+  }
+  const hasOpsCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) => check.id === "local-ops-artifact-bundle" && check.status === "passed",
+  );
+  const hasOpsUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "observability-and-operations",
+  );
+  if (hasOpsCheck && hasOpsUnproven) {
+    throw new Error("dev-test-game ops artifacts cannot be both passed and unproven");
   }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
@@ -325,10 +440,14 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ? path.resolve(process.cwd(), process.argv[2])
     : defaultProofPath;
   const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
-  const backupRestoreOptions = await readOptionalBackupRestoreArtifacts();
+  const [backupRestoreOptions, opsArtifactsOptions] = await Promise.all([
+    readOptionalBackupRestoreArtifacts(),
+    readOptionalOpsArtifacts(),
+  ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
     ...(backupRestoreOptions ?? {}),
+    ...(opsArtifactsOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -337,6 +456,21 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   console.log(
     `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
   );
+}
+
+async function readOptionalOpsArtifacts() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const opsPath = resolveArtifactPath(override, defaultOpsArtifactsPath);
+  const artifact = await readFreshArtifactMetadata(opsPath, now);
+  return {
+    opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
+    opsArtifactsPath: path.relative(repoRoot, opsPath),
+    opsArtifactsArtifact: artifact,
+  };
 }
 
 async function readOptionalBackupRestoreArtifacts() {

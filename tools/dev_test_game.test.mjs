@@ -16,6 +16,10 @@ import {
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
+import {
+  assertDevTestGameOpsArtifacts,
+  buildDevTestGameOpsArtifacts,
+} from "./dev_test_game_ops_artifacts.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -257,6 +261,56 @@ test("session card and markdown include role invite URLs and tokens", () => {
       (item) => item.id === "backup-restore-drill" && item.status === "unproven",
     ),
   );
+  const opsArtifacts = buildDevTestGameOpsArtifacts({
+    session: card,
+    proofRun,
+    readiness,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    artifacts: {
+      session: artifactSummary("target/dev-test-game/session.json"),
+      proofRun: artifactSummary("target/dev-test-game/proof-run.json"),
+      readiness: artifactSummary(
+        "target/dev-test-game/release-readiness-checklist.json",
+      ),
+    },
+  });
+  assertDevTestGameOpsArtifacts(opsArtifacts);
+  assert.equal(opsArtifacts.status, "passed");
+  assert.equal(opsArtifacts.releaseReady, false);
+  assert.equal(opsArtifacts.productionReady, false);
+  assert.equal(opsArtifacts.run.game, game);
+  assert.equal(opsArtifacts.run.seedCommandCount, 1);
+  assert.equal(opsArtifacts.proofRun.laneCount, 9);
+  assert.equal(
+    opsArtifacts.roles.host.loginUrlRedacted,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
+  );
+  assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-host"), false);
+  assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-player"), false);
+  const opsReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifacts,
+  });
+  assertDevTestGameReleaseReadiness(opsReadiness);
+  assert(
+    opsReadiness.localDevelopmentSpine.checks.some(
+      (item) => item.id === "local-ops-artifact-bundle" && item.status === "passed",
+    ),
+  );
+  assert.equal(
+    opsReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "observability-and-operations",
+    ),
+    false,
+  );
+  assert(
+    opsReadiness.releaseReadiness.unproven.some(
+      (item) =>
+        item.id === "hosted-observability-and-operations" &&
+        item.status === "unproven",
+    ),
+  );
   const backupRestoreReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     backupRestoreProofPath:
@@ -311,3 +365,13 @@ test("session card and markdown include role invite URLs and tokens", () => {
   );
   assert.equal(backupRestoreReadiness.releaseReadiness.status, "not_ready");
 });
+
+function artifactSummary(path) {
+  return {
+    path,
+    mtime: "2026-06-26T00:00:00.000Z",
+    ageSeconds: 0,
+    sizeBytes: 123,
+    sha256: "0".repeat(64),
+  };
+}

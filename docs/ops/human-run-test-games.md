@@ -77,6 +77,8 @@ It also writes:
 target/dev-test-game/session.json
 target/dev-test-game/session.md
 target/dev-test-game/proof-run.json
+target/dev-test-game/ops-artifacts.json
+target/dev-test-game/ops-artifacts.md
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/named-games.json
@@ -137,6 +139,12 @@ The local release-readiness checklist generator is:
 npm run test:dev-test-game-readiness
 ```
 
+The local ops artifact bundle generator is:
+
+```sh
+npm run test:dev-test-game-ops
+```
+
 The local backup/restore drill for this spine is:
 
 ```sh
@@ -149,9 +157,12 @@ entry through `/auth/login`, checks that those browser sessions came from
 invite-issued `fmarch_session` cookies, verifies host/player capabilities
 through `/auth/session?game=...`, drives a small core-loop proof, then checks
 the generated session artifact and validates `target/dev-test-game/proof-run.json`
-against the current `session.json`. It also writes
+against the current `session.json`. It writes
 `target/dev-test-game/release-readiness-checklist.{json,md}` from the validated
-proof run.
+proof run, then writes `target/dev-test-game/ops-artifacts.{json,md}` with
+redacted role entry URLs, source artifact checksums, command and lane counts,
+and a local proof boundary. The final readiness checklist pass consumes that
+ops bundle and promotes only the local ops artifact check.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -190,17 +201,22 @@ backup/restore artifact, it keeps `backup-restore-drill` unproven. After
 `npm run test:dev-test-game-backup-restore`, the checklist consumes
 `target/live-stack-backup-restore-drill/local-backup-restore-proof.json` plus
 `target/live-stack-backup-restore-drill/local-live-stack.dump` and promotes only
-the local dump/restore check. Production identity, hosted deployment,
-production-like backup storage/PITR, exhaustive race coverage, observability,
-and a human release runbook remain outside that local proof.
+the local dump/restore check. After `npm run test:dev-test-game-ops`, the
+checklist consumes `target/dev-test-game/ops-artifacts.json` and promotes only
+the local ops artifact bundle. Production identity, hosted deployment,
+production-like backup storage/PITR, exhaustive race coverage, hosted
+observability/operations, and a human release runbook remain outside that local
+proof.
 
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer, plus
 specific duplicate-command, player reconnect, concurrent vote race, stale player
-vote, and stale host control recovery lanes. It does not prove production
-account identity, hosted deployment, exhaustive race coverage, upload or
-transcode behavior, beta readiness, or rollback/delete semantics for existing
-append-only games. The harness still uses an internal root dev session only to
-mint local invites; production accounts/sessions/invites remain a later identity
-layer over the same role surfaces.
+vote, stale host control recovery, local artifact-bundle, and local
+backup/restore lanes. It does not prove production account identity, hosted
+deployment, production-like backup/PITR, exhaustive race coverage, hosted
+logs/metrics/traces, upload or transcode behavior, beta readiness, or
+rollback/delete semantics for existing append-only games. The harness still
+uses an internal root dev session only to mint local invites; production
+accounts/sessions/invites remain a later identity layer over the same role
+surfaces.
