@@ -58,7 +58,7 @@ try {
   const invites = await createInvites(apiBaseUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
-  const roles = {
+  const proofRoles = {
     admin: await driveInviteLogin({
       frontendBaseUrl,
       apiBaseUrl,
@@ -84,9 +84,16 @@ try {
       expectedCapability: "SlotOccupant",
     }),
   };
+  const identityLifecycle = await proveIdentityLifecycle({
+    apiBaseUrl,
+    frontendBaseUrl,
+    hostSessionToken: proofRoles.host.sessionToken,
+    hostReturnTo: `/g/${game}/host`,
+  });
+  const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 1,
+    version: 2,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
@@ -100,10 +107,12 @@ try {
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
+      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
+    identityLifecycle,
     game,
     database: {
       name: proofDatabase.name,
@@ -274,6 +283,7 @@ async function driveInviteLogin({
       returnTo,
       principalUserId: session.principal_user_id,
       capabilityKinds,
+      sessionToken: sessionCookie.value,
       cookie: {
         httpOnly: sessionCookie.httpOnly,
         sameSite: sessionCookie.sameSite,
@@ -286,9 +296,217 @@ async function driveInviteLogin({
   }
 }
 
+async function proveIdentityLifecycle({
+  apiBaseUrl,
+  frontendBaseUrl,
+  hostSessionToken,
+  hostReturnTo,
+}) {
+  const rotatedSessionToken = `rotated-host-session-${game}`;
+  const rotation = await rotateSession({
+    apiBaseUrl,
+    oldSessionToken: hostSessionToken,
+    newSessionToken: rotatedSessionToken,
+  });
+  await assertUnauthorizedSession(apiBaseUrl, hostSessionToken);
+  const rotatedSession = await assertSessionCapability({
+    apiBaseUrl,
+    token: rotatedSessionToken,
+    expectedCapability: "HostOf",
+  });
+  await assertBrowserSessionRendersRole({
+    frontendBaseUrl,
+    sessionToken: rotatedSessionToken,
+    returnTo: hostReturnTo,
+    expectedText: game,
+  });
+  const sessionRevocation = await revokeSession({
+    apiBaseUrl,
+    token: rotatedSessionToken,
+  });
+  await assertUnauthorizedSession(apiBaseUrl, rotatedSessionToken);
+
+  const revokedInviteToken = `revoked-host-invite-${game}`;
+  await createInvite(apiBaseUrl, {
+    inviteToken: revokedInviteToken,
+    principalUserId: "host_h",
+  });
+  const inviteRevocation = await revokeInvite({
+    apiBaseUrl,
+    inviteToken: revokedInviteToken,
+  });
+  const revokedInviteReject = await driveRejectedInviteLogin({
+    frontendBaseUrl,
+    inviteToken: revokedInviteToken,
+    returnTo: hostReturnTo,
+  });
+
+  const recoveryInviteToken = `recovery-host-invite-${game}`;
+  await createInvite(apiBaseUrl, {
+    inviteToken: recoveryInviteToken,
+    principalUserId: "host_h",
+  });
+  const recovery = await driveInviteLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    role: "hostRecovery",
+    inviteToken: recoveryInviteToken,
+    returnTo: hostReturnTo,
+    expectedCapability: "HostOf",
+  });
+
+  return {
+    status: "passed",
+    sessionRotation: {
+      status: "passed",
+      principalUserId: rotation.principal_user_id,
+      oldSessionRejected: true,
+      rotatedSessionCapabilityKinds: (rotatedSession.capabilities ?? []).map(
+        (capability) => capability.kind,
+      ),
+      sameRoleSurface: true,
+    },
+    sessionRevocation: {
+      status: "passed",
+      principalUserId: sessionRevocation.principal_user_id,
+      revokedSessionRejected: true,
+    },
+    inviteRevocation: {
+      status: "passed",
+      principalUserId: inviteRevocation.principal_user_id,
+      revokedInviteRejected: revokedInviteReject.status === "reject",
+      recoveryCapabilityKinds: recovery.capabilityKinds,
+      sameRoleSurface: new URL(recovery.loginUrl).searchParams.get("returnTo") === hostReturnTo,
+    },
+    nonClaims: [
+      "hosted account recovery",
+      "email or out-of-band invite delivery",
+      "rate limiting or abuse controls",
+    ],
+  };
+}
+
+async function rotateSession({ apiBaseUrl, oldSessionToken, newSessionToken }) {
+  return await fetchJson(`${apiBaseUrl}/auth/session-rotations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${oldSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      session_token: newSessionToken,
+    }),
+  });
+}
+
+async function revokeSession({ apiBaseUrl, token }) {
+  return await fetchJson(`${apiBaseUrl}/auth/session-revocations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ token }),
+  });
+}
+
+async function revokeInvite({ apiBaseUrl, inviteToken }) {
+  return await fetchJson(`${apiBaseUrl}/auth/invite-revocations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      invite_token: inviteToken,
+    }),
+  });
+}
+
+async function assertUnauthorizedSession(apiBaseUrl, token) {
+  const response = await fetchWithTimeout(`${apiBaseUrl}/auth/session?game=${game}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (response.status !== 401) {
+    throw new Error(`expected revoked session to be unauthorized, got ${response.status}`);
+  }
+}
+
+async function assertSessionCapability({ apiBaseUrl, token, expectedCapability }) {
+  const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const capabilityKinds = (session.capabilities ?? []).map(
+    (capability) => capability.kind,
+  );
+  if (!capabilityKinds.includes(expectedCapability)) {
+    throw new Error(`rotated session missing ${expectedCapability}`);
+  }
+  return session;
+}
+
+async function assertBrowserSessionRendersRole({
+  frontendBaseUrl,
+  sessionToken,
+  returnTo,
+  expectedText,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: sessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" });
+    const bodyText = await page.locator("body").innerText();
+    if (!bodyText.includes(expectedText)) {
+      throw new Error("rotated browser session did not render the role surface");
+    }
+  } finally {
+    await page.close();
+  }
+}
+
+async function driveRejectedInviteLogin({ frontendBaseUrl, inviteToken, returnTo }) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&invite=${encodeURIComponent(inviteToken)}`;
+  try {
+    await page.goto(loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-submit").click();
+    await page.getByText("Session or invite token is missing, expired, or revoked").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    return {
+      status: "reject",
+      loginUrl,
+      returnTo,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+function redactProofRoles(roles) {
+  return Object.fromEntries(
+    Object.entries(roles).map(([role, entry]) => {
+      const { sessionToken: _sessionToken, ...redacted } = entry;
+      return [role, redacted];
+    }),
+  );
+}
+
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 1 ||
+    evidence.version !== 2 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -298,7 +516,11 @@ function assertInviteProof(evidence) {
   }
   if (
     evidence.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
-    evidence.identityAdapter?.browserCookieName !== "fmarch_session"
+    evidence.identityAdapter?.browserCookieName !== "fmarch_session" ||
+    evidence.identityLifecycle?.status !== "passed" ||
+    evidence.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
+    evidence.identityLifecycle?.sessionRevocation?.revokedSessionRejected !== true ||
+    evidence.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
   }

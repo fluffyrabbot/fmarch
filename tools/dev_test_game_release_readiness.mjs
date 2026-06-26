@@ -165,7 +165,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             id: "hosted-production-identity",
             status: "unproven",
             requiredEvidence:
-              "Hosted account lifecycle, session rotation/revocation, invite delivery, recovery, rate limits, and abuse controls over the proven role-surface adapter",
+              "Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse controls, and production session-secret policy over the proven role-surface adapter",
           },
         ]),
     {
@@ -526,7 +526,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 1) {
+  if (proof?.version !== 2) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -545,9 +545,27 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
     proof.identityAdapter?.browserCookieName !== "fmarch_session" ||
     proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
-    proof.identityAdapter?.sessionCredentialKind !== "opaque-session"
+    proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
+    !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation")
   ) {
     throw new Error("identity adapter proof does not preserve the role-surface adapter");
+  }
+  if (
+    proof.identityLifecycle?.status !== "passed" ||
+    proof.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
+    !proof.identityLifecycle?.sessionRotation?.rotatedSessionCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.sessionRevocation?.revokedSessionRejected !== true ||
+    proof.identityLifecycle?.inviteRevocation?.revokedInviteRejected !== true ||
+    !proof.identityLifecycle?.inviteRevocation?.recoveryCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.inviteRevocation?.sameRoleSurface !== true
+  ) {
+    throw new Error("identity adapter proof does not prove lifecycle recovery");
   }
   for (const [role, capability] of requiredRoles) {
     const entry = proof.roles?.[role];

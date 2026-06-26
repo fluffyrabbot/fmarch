@@ -472,7 +472,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 1,
+    version: 2,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -485,9 +485,37 @@ function identityAdapterProofFixture(game) {
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
+      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
+    },
+    identityLifecycle: {
+      status: "passed",
+      sessionRotation: {
+        status: "passed",
+        principalUserId: "host_h",
+        oldSessionRejected: true,
+        rotatedSessionCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+      },
+      sessionRevocation: {
+        status: "passed",
+        principalUserId: "host_h",
+        revokedSessionRejected: true,
+      },
+      inviteRevocation: {
+        status: "passed",
+        principalUserId: "host_h",
+        revokedInviteRejected: true,
+        recoveryCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+      },
+      nonClaims: [
+        "hosted account recovery",
+        "email or out-of-band invite delivery",
+        "rate limiting or abuse controls",
+      ],
     },
     game,
     seedCommands: Array.from({ length: 22 }, (_, index) => ({

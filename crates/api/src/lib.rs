@@ -81,8 +81,11 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/session", get(auth_session))
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
+        .route("/auth/session-rotations", post(rotate_auth_session))
+        .route("/auth/session-revocations", post(revoke_auth_session))
         .route("/auth/invites", post(create_auth_invite))
         .route("/auth/invites/redeem", post(redeem_auth_invite))
+        .route("/auth/invite-revocations", post(revoke_auth_invite))
         .route("/commands", post(command))
         .route("/games/{game}/votecount", get(votecount))
         .route("/games/{game}/day-vote-outcomes", get(day_vote_outcomes))
@@ -149,6 +152,16 @@ struct CreateAuthSessionGrant {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+struct RotateAuthSession {
+    session_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RevokeAuthSession {
+    token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 struct CreateAuthInvite {
     invite_token: String,
     principal_user_id: String,
@@ -168,6 +181,17 @@ struct AuthInviteResponse {
 struct RedeemAuthInvite {
     invite_token: String,
     session_token: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RevokeAuthInvite {
+    invite_token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthLifecycleResponse {
+    status: String,
+    principal_user_id: String,
 }
 
 async fn auth_session(
@@ -295,6 +319,114 @@ async fn create_auth_session_grant(
     ))
 }
 
+async fn rotate_auth_session(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RotateAuthSession>,
+) -> Result<Json<AuthSessionResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let new_token = request.session_token.trim();
+    if new_token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "session rotation requires session_token".to_string(),
+        });
+    }
+    let old_hash = hash_session_token(caller_token);
+    let new_hash = hash_session_token(new_token);
+    if old_hash == new_hash {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "session rotation requires a new token".to_string(),
+        });
+    }
+
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    let session = sqlx::query_as::<_, (String, i64, Vec<String>)>(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = $1
+        WHERE token_hash = $2
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        RETURNING principal_user_id, expires_at, global_capabilities
+        "#,
+    )
+    .bind(now)
+    .bind(old_hash)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, $5)
+        "#,
+    )
+    .bind(new_hash)
+    .bind(session.0.as_str())
+    .bind(now)
+    .bind(session.1)
+    .bind(&session.2)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(
+        auth_session_response(&state, session.0, None, session.2).await?,
+    ))
+}
+
+async fn revoke_auth_session(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RevokeAuthSession>,
+) -> Result<Json<AuthLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_admin(&state, caller_token, "session revocation").await?;
+
+    let token = request.token.trim();
+    if token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "session revocation requires token".to_string(),
+        });
+    }
+    let now = unix_now_seconds();
+    let principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        UPDATE auth_session
+        SET revoked_at = $1
+        WHERE token_hash = $2
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        RETURNING principal_user_id
+        "#,
+    )
+    .bind(now)
+    .bind(hash_session_token(token))
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_session)?;
+
+    Ok(Json(AuthLifecycleResponse {
+        status: "revoked".to_string(),
+        principal_user_id,
+    }))
+}
+
 async fn create_auth_invite(
     State(state): State<ApiState>,
     headers: HeaderMap,
@@ -397,6 +529,7 @@ async fn redeem_auth_invite(
             redeemed_session_token_hash = $2
         WHERE token_hash = $3
           AND redeemed_at IS NULL
+          AND revoked_at IS NULL
           AND expires_at > $1
         RETURNING principal_user_id, expires_at, global_capabilities
         "#,
@@ -438,6 +571,46 @@ async fn redeem_auth_invite(
     Ok(Json(
         auth_session_response(&state, invite.0, None, invite.2).await?,
     ))
+}
+
+async fn revoke_auth_invite(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<RevokeAuthInvite>,
+) -> Result<Json<AuthLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    require_global_admin(&state, caller_token, "invite revocation").await?;
+
+    let invite_token = request.invite_token.trim();
+    if invite_token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "invite revocation requires invite_token".to_string(),
+        });
+    }
+    let now = unix_now_seconds();
+    let principal_user_id = sqlx::query_scalar::<_, String>(
+        r#"
+        UPDATE auth_invite
+        SET revoked_at = $1
+        WHERE token_hash = $2
+          AND redeemed_at IS NULL
+          AND revoked_at IS NULL
+          AND expires_at > $1
+        RETURNING principal_user_id
+        "#,
+    )
+    .bind(now)
+    .bind(hash_session_token(invite_token))
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_invite)?;
+
+    Ok(Json(AuthLifecycleResponse {
+        status: "revoked".to_string(),
+        principal_user_id,
+    }))
 }
 
 async fn auth_session_response(
@@ -499,6 +672,26 @@ async fn active_session_principal_and_globals(
     .ok_or_else(unauthorized_session)
 }
 
+async fn require_global_admin(
+    state: &ApiState,
+    token: &str,
+    action: &str,
+) -> Result<String, ApiError> {
+    let (principal_user_id, global_capabilities) =
+        active_session_principal_and_globals(state, token).await?;
+    if !global_capabilities
+        .iter()
+        .any(|capability| capability == "GlobalAdmin")
+    {
+        return Err(ApiError::Reject {
+            status: StatusCode::FORBIDDEN,
+            error: RejectCode::NotAuthorized,
+            message: format!("{action} requires GlobalAdmin"),
+        });
+    }
+    Ok(principal_user_id)
+}
+
 fn unauthorized_session() -> ApiError {
     ApiError::Reject {
         status: StatusCode::UNAUTHORIZED,
@@ -511,7 +704,7 @@ fn unauthorized_invite() -> ApiError {
     ApiError::Reject {
         status: StatusCode::UNAUTHORIZED,
         error: RejectCode::NotAuthorized,
-        message: "invite token is missing, expired, or already redeemed".to_string(),
+        message: "invite token is missing, expired, revoked, or already redeemed".to_string(),
     }
 }
 
