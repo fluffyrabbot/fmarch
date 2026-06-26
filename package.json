@@ -13,6 +13,7 @@
     "test:frontend-live-role-smoke": "node tools/host_console_live_stack_smoke.mjs",
     "test:frontend-live-role-proof-artifact": "node tools/host_console_live_stack_proof_contract.mjs",
     "test:live-stack-backup-restore-drill": "node tools/live_stack_backup_restore_drill.mjs",
+    "test:live-stack-release-readiness": "node tools/live_stack_release_readiness_checklist.mjs",
     "test:frontend-dispatch-bridge": "node tools/frontend_dispatch_bridge_contract.mjs",
     "test:frontend-hydrated-handlers": "node tools/frontend_hydrated_handler_contract.mjs",
     "test:frontend-hydrated-surfaces": "node tools/frontend_hydrated_surface_contract.mjs",
