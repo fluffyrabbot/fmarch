@@ -90,6 +90,10 @@ target/dev-test-game/core-loop-admin-proof.json
 target/dev-test-game/hardening-admin-proof.json
 target/dev-test-game/backup-admin-proof.json
 target/dev-test-game/identity-admin-proof.json
+target/dev-test-game/admin-spine-proof.json
+target/auth-invite-role-proof/invite-role-proof.json
+target/live-stack-backup-restore-drill/local-backup-restore-proof.json
+target/live-stack-backup-restore-drill/local-live-stack.dump
 target/dev-test-game/named-games.json
 ```
 
@@ -207,14 +211,12 @@ proof run, then writes `target/dev-test-game/ops-artifacts.{json,md}` with
 redacted role entry URLs, source artifact checksums, command and lane counts,
 and a local proof boundary. It then writes
 `target/dev-test-game/seed-fixture-summary.{json,md}` with redacted role URLs,
-seeded slots, local demo scenarios, and proof-lane mappings, then writes
-`target/dev-test-game/seed-admin-proof.json` by clicking from the seeded admin
-overview into the native local seed fixture detail route. The final readiness
-checklist pass consumes the ops bundle plus the seed fixture summary and its
-admin browser proof, and promotes only those local checks. It then writes
-`target/dev-test-game/release-admin-proof.json` by clicking from the seeded
-admin overview into the native release-readiness detail route, where passed
-local checks and remaining unproven release items are visible.
+seeded slots, local demo scenarios, and proof-lane mappings, then runs the
+backup/restore and identity-adapter proof lanes. The final aggregate admin-spine
+pass writes the core-loop, hardening, identity, backup, ops, seed, and
+release-readiness admin browser proofs, then records
+`target/dev-test-game/admin-spine-proof.json` in the readiness checklist while
+keeping release readiness `not_ready`.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
