@@ -37,4 +37,5 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
     env: adminSpineReadinessEvidenceEnv,
   });
+  await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
 }

@@ -21,6 +21,7 @@
     "test:dev-test-game-backup-admin-proof": "node tools/dev_test_game_backup_admin_proof.mjs",
     "test:dev-test-game-identity-admin-proof": "node tools/dev_test_game_identity_admin_proof.mjs",
     "test:dev-test-game-admin-spine-proof": "node tools/dev_test_game_admin_spine_proof.mjs",
+    "test:dev-test-game-spine-manifest": "node tools/dev_test_game_spine_manifest.mjs",
     "test:dev-test-game-admin-spine": "node tools/dev_test_game_admin_spine.mjs",
     "test:dev-test-game-identity": "node tools/dev_test_game_identity_spine.mjs",
     "test:dev-test-game-backup-restore": "node tools/dev_test_game_backup_restore_spine.mjs",

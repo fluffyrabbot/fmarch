@@ -17,7 +17,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const evidencePath = path.join(artifactDir, "admin-spine-proof.json");
 
-const adminProofs = [
+export const devTestGameAdminSpineProofPlan = [
   {
     id: "core-loop",
     label: "Core loop admin role surface",
@@ -77,7 +77,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 export async function runAdminSpineProof() {
   await mkdir(artifactDir, { recursive: true });
   const entries = [];
-  for (const spec of adminProofs) {
+  for (const spec of devTestGameAdminSpineProofPlan) {
     await runNodeScript(spec.script);
     const proofPath = path.join(repoRoot, spec.path);
     const proof = JSON.parse(await readFile(proofPath, "utf8"));

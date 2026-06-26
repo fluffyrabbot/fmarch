@@ -38,6 +38,11 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
+import {
+  assertDevTestGameSpineManifest,
+  buildDevTestGameSpineManifest,
+} from "./dev_test_game_spine_manifest.mjs";
+import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -166,6 +171,45 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "spine", script: "identity" },
     { kind: "spine", script: "admin" },
   ]);
+});
+
+test("dev test-game spine manifest records command order and evidence wiring", () => {
+  const manifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameSpineManifest(manifest);
+  assert.equal(manifest.status, "passed");
+  assert.equal(manifest.releaseReady, false);
+  assert.equal(manifest.productionReady, false);
+  assert.deepEqual(manifest.commands.live.plan, devTestGameLiveSpinePlan);
+  assert.deepEqual(
+    manifest.commands.backupRestore.plan,
+    devTestGameBackupRestoreSpinePlan,
+  );
+  assert.deepEqual(manifest.commands.identity.plan, devTestGameIdentitySpinePlan);
+  assert.deepEqual(
+    manifest.commands.adminSpine.plan,
+    devTestGameAdminSpineProofPlan.map(({ id, label, script, path }) => ({
+      id,
+      label,
+      script,
+      path,
+    })),
+  );
+  assert.deepEqual(
+    manifest.commands.adminSpine.readinessEnv,
+    adminSpineReadinessEvidenceEnv,
+  );
+  assert.deepEqual(manifest.evidenceEnv.identity.identityReadinessEnv, identityReadinessEnv);
+  assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.json"));
+  assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
+  assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
+  assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
+  assert(
+    manifest.artifacts.includes(
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    ),
+  );
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {

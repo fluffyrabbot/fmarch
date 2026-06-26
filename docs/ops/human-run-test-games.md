@@ -91,6 +91,8 @@ target/dev-test-game/hardening-admin-proof.json
 target/dev-test-game/backup-admin-proof.json
 target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/admin-spine-proof.json
+target/dev-test-game/spine-manifest.json
+target/dev-test-game/spine-manifest.md
 target/auth-invite-role-proof/invite-role-proof.json
 target/live-stack-backup-restore-drill/local-backup-restore-proof.json
 target/live-stack-backup-restore-drill/local-live-stack.dump
@@ -162,6 +164,13 @@ The ordered aggregate admin-spine browser proof is:
 
 ```sh
 npm run test:dev-test-game-admin-spine
+```
+
+The generated spine manifest, which records proof command order and evidence
+env wiring without claiming release or production readiness, is:
+
+```sh
+npm run test:dev-test-game-spine-manifest
 ```
 
 The local ops artifact bundle generator is:
@@ -295,7 +304,9 @@ credential echoes.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while
-keeping release readiness `not_ready`.
+keeping release readiness `not_ready`. The same command then writes
+`target/dev-test-game/spine-manifest.{json,md}` so the current local proof order
+and evidence env wiring are inspectable without reading the orchestration code.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,
