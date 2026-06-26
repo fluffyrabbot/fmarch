@@ -20,10 +20,12 @@ const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
+const actionGame = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
 const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
+const actionPlayerSessionToken = `host-console-live-stack-action-player-${crypto.randomUUID()}`;
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
 const cohostSessionToken = `host-console-live-stack-cohost-${crypto.randomUUID()}`;
 const grantedGlobalModToken = `session-grant-${adminCreatedGame}`;
@@ -88,6 +90,8 @@ try {
   await waitForHealth();
   await writeProgress({ stage: "seed-game", game });
   const seedCommands = await seedGame();
+  await writeProgress({ stage: "seed-action-game", actionGame });
+  const actionSeedCommands = await seedActionGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
   await writeProgress({ stage: "seed-root-admin-session" });
@@ -153,6 +157,7 @@ try {
     frontendBaseUrl,
     viewport: smokeViewport,
     seedCommands,
+    actionSeedCommands,
     privateChannelFixture,
     rootAdminSession,
     grantedSessions,
@@ -470,6 +475,74 @@ async function seedGame() {
   return commands;
 }
 
+async function seedActionGame() {
+  const commands = [];
+  for (const [principal, command] of [
+    ["host_h", { CreateGame: { game: actionGame, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game: actionGame, slot: "slot_4" } }],
+    ["host_h", { AddSlot: { game: actionGame, slot: "slot-2" } }],
+    ["host_h", { AddSlot: { game: actionGame, slot: "slot-3" } }],
+    [
+      "host_h",
+      { AssignSlot: { game: actionGame, slot: "slot_4", user: "action-goon" } },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: actionGame,
+          slot: "slot_4",
+          role_key: "mafia_goon",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignSlot: {
+          game: actionGame,
+          slot: "slot-2",
+          user: "action-target",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: actionGame,
+          slot: "slot-2",
+          role_key: "vanilla_townie",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignSlot: {
+          game: actionGame,
+          slot: "slot-3",
+          user: "action-town",
+        },
+      },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: actionGame,
+          slot: "slot-3",
+          role_key: "vanilla_townie",
+        },
+      },
+    ],
+    ["host_h", { StartGame: { game: actionGame, phase: "N01" } }],
+  ]) {
+    commands.push(await sendCommand(principal, command));
+  }
+  return commands;
+}
+
 async function seedFactionDayChatFixture() {
   const media = [
     {
@@ -615,6 +688,10 @@ async function createGrantedSessions() {
       token: playerSessionToken,
       principalUserId: "player-mira",
     }),
+    actionPlayer: await createGrantedSession({
+      token: actionPlayerSessionToken,
+      principalUserId: "action-goon",
+    }),
     cohost: await createGrantedSession({
       token: cohostSessionToken,
       principalUserId: "cohost_c",
@@ -658,6 +735,7 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
   try {
     await waitForHostLiveVotecount(moderatorSession.page, 1);
     playerEvidence = await drivePlayerBrowser(frontendBaseUrl);
+    const playerActionEvidence = await drivePlayerActionBrowser(frontendBaseUrl);
     const playerPrivateChannelEvidence =
       await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
     const privateChannelForbiddenEvidence =
@@ -672,6 +750,7 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
     return {
       admin: adminEvidence,
       player: playerEvidence,
+      playerAction: playerActionEvidence,
       playerPrivateChannel: playerPrivateChannelEvidence,
       privateChannelForbidden: privateChannelForbiddenEvidence,
       moderator: moderatorEvidence,
@@ -1314,6 +1393,127 @@ async function drivePlayerBrowser(frontendBaseUrl) {
   };
 }
 
+async function drivePlayerActionBrowser(frontendBaseUrl) {
+  const context = await browser.newContext({ viewport: smokeViewport });
+  await context.addCookies([
+    {
+      name: "fmarch_session",
+      value: actionPlayerSessionToken,
+      domain: host,
+      path: "/",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  const page = await context.newPage();
+  const pageUrl = `${frontendBaseUrl}/g/${actionGame}`;
+  const response = await page.goto(pageUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `action player route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  const capability = await page.getByTestId("player-capability").innerText();
+  if (!capability.includes("SlotOccupant")) {
+    throw new Error(`action player capability did not render SlotOccupant: ${capability}`);
+  }
+  const actionCommands = page.getByTestId("player-action-commands");
+  await actionCommands.waitFor({ state: "visible" });
+
+  const invalidButton = page.locator('[data-action="submit_invalid_action"]');
+  assertHitTarget(await invalidButton.boundingBox(), "invalid player action button");
+  await invalidButton.click();
+  const status = page.getByTestId("player-command-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const invalidOutcome = await page.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  assertInvalidActionRecovery(invalidOutcome);
+
+  const legalButton = page.locator('[data-action="submit_action"]');
+  assertHitTarget(await legalButton.boundingBox(), "legal player action button");
+  await legalButton.click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-command-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  const legalOutcome = await page.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  assertPlayerActionSubmitOutcome(legalOutcome);
+
+  const actionRows = await runSql(
+    smokeDatabase.url,
+    `SELECT kind, payload->>'action_id' AS action_id, payload->>'template_id' AS template_id, payload->>'actor' AS actor, payload->'targets' AS targets
+     FROM events
+     WHERE stream_id = '${actionGame}' AND kind = 'ActionSubmitted'
+     ORDER BY stream_seq`,
+  );
+  if (
+    !actionRows.includes("browser_factional_kill_n01") ||
+    !actionRows.includes("factional_kill") ||
+    !actionRows.includes("slot_4") ||
+    !actionRows.includes("slot-2") ||
+    actionRows.includes("browser_invalid_self_action_n01")
+  ) {
+    throw new Error(`action submission audit rows drifted:\n${actionRows}`);
+  }
+
+  const resolveCommand = await sendCommand("host_h", {
+    ResolvePhase: { game: actionGame, seed: 918273 },
+  });
+  const actionGameHostState = await fetchJson(
+    `${apiBaseUrl}/games/${actionGame}/host-console-state?principal_user_id=host_h&slot_id=slot-2`,
+  );
+  const targetSlot = actionGameHostState.slots?.find(
+    (slot) => slot.slot_id === "slot-2",
+  );
+  if (targetSlot?.alive !== false || targetSlot.status !== "dead") {
+    throw new Error(
+      `resolved factional kill did not kill slot-2: ${JSON.stringify(actionGameHostState.slots)}`,
+    );
+  }
+  const resolutionRows = await runSql(
+    smokeDatabase.url,
+    `SELECT kind FROM events WHERE stream_id = '${actionGame}' AND kind IN ('ResolutionApplied', 'ResolutionTrace') ORDER BY stream_seq`,
+  );
+  if (
+    !resolutionRows.includes("ResolutionApplied") ||
+    !resolutionRows.includes("ResolutionTrace")
+  ) {
+    throw new Error(`action resolution rows missing:\n${resolutionRows}`);
+  }
+
+  const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+  const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+  await context.close();
+  return {
+    url: pageUrl,
+    game: actionGame,
+    capability,
+    invalidOutcome,
+    legalOutcome,
+    actionRows,
+    resolveCommand,
+    resolvedTargetSlot: targetSlot,
+    resolutionRows,
+    projection,
+    receipts,
+    proof:
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal factional_kill SubmitAction and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows.",
+  };
+}
+
 async function openModeratorBrowser(frontendBaseUrl) {
   const context = await browser.newContext({ viewport: smokeViewport });
   await context.addCookies([
@@ -1939,6 +2139,47 @@ function assertFactionDayChatSubmitPostOutcome(outcome) {
   }
   if (command.body !== factionDayChatPostBody) {
     throw new Error(`faction day chat SubmitPost used wrong body: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertInvalidActionRecovery(outcome) {
+  if (outcome?.state !== "reject" || outcome.error !== "InvalidTarget") {
+    throw new Error(`invalid player action did not render InvalidTarget recovery: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (command?.game !== actionGame) {
+    throw new Error(`invalid player action used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot_4") {
+    throw new Error(`invalid player action used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.template_id !== "factional_kill") {
+    throw new Error(`invalid player action used wrong template: ${JSON.stringify(command)}`);
+  }
+  if (command.targets?.[0] !== "slot_4") {
+    throw new Error(`invalid player action did not self-target slot_4: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertPlayerActionSubmitOutcome(outcome) {
+  if (outcome?.state !== "ack") {
+    throw new Error(`player SubmitAction did not ACK: ${JSON.stringify(outcome)}`);
+  }
+  const command = outcome.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (command?.game !== actionGame) {
+    throw new Error(`player SubmitAction used wrong game: ${JSON.stringify(command)}`);
+  }
+  if (command.actor_slot !== "slot_4") {
+    throw new Error(`player SubmitAction used wrong actor slot: ${JSON.stringify(command)}`);
+  }
+  if (command.action_id !== "browser_factional_kill_n01") {
+    throw new Error(`player SubmitAction used wrong action id: ${JSON.stringify(command)}`);
+  }
+  if (command.template_id !== "factional_kill") {
+    throw new Error(`player SubmitAction used wrong template: ${JSON.stringify(command)}`);
+  }
+  if (command.targets?.[0] !== "slot-2") {
+    throw new Error(`player SubmitAction used wrong target: ${JSON.stringify(command)}`);
   }
 }
 

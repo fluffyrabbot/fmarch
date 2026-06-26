@@ -28,6 +28,7 @@ export function buildPlayerCommand({
   body,
   media = [],
   target,
+  actionConfig = null,
 }) {
   switch (action) {
     case "submit_post":
@@ -55,6 +56,26 @@ export function buildPlayerCommand({
         WithdrawVote: Object.freeze({
           game: requiredString(game, "game"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
+        }),
+      });
+    case "submit_action":
+    case "submit_invalid_action":
+      return Object.freeze({
+        SubmitAction: Object.freeze({
+          game: requiredString(game, "game"),
+          action_id: requiredString(
+            actionConfig?.actionId ?? action,
+            "actionConfig.actionId",
+          ),
+          actor_slot: requiredString(actorSlot, "actorSlot"),
+          template_id: requiredString(
+            actionConfig?.templateId,
+            "actionConfig.templateId",
+          ),
+          targets: Object.freeze(
+            normalizeTargets(actionConfig?.targets ?? actionConfig?.targetSlot),
+          ),
+          grant_id: actionConfig?.grantId ?? null,
         }),
       });
     default:
@@ -163,6 +184,17 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function normalizeTargets(value) {
+  const targets = Array.isArray(value)
+    ? value
+    : value === undefined || value === null
+      ? []
+      : [value];
+  return targets.map((target, index) =>
+    requiredString(target, `actionConfig.targets[${index}]`),
+  );
 }
 
 function defaultCommandId() {

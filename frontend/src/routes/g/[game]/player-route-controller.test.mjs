@@ -97,6 +97,28 @@ test("player route controller builds typed player command requests", () => {
       },
     },
   );
+
+  assert.deepEqual(
+    buildPlayerCommandRequest({
+      data: fixtureData(),
+      action: "submit_action",
+      composerBody: "ignored for action",
+    }),
+    {
+      principalUserId: "player_mira",
+      endpoint: "/commands",
+      command: {
+        SubmitAction: {
+          game: "midsummer",
+          action_id: "browser_factional_kill_n01",
+          actor_slot: "slot-7",
+          template_id: "factional_kill",
+          targets: ["slot-2"],
+          grant_id: null,
+        },
+      },
+    },
+  );
 });
 
 test("player route controller derives dispatch bridge plans from command requests", () => {
@@ -157,6 +179,10 @@ test("player route controller refreshes only projections touched by acked comman
   assert.deepEqual(result.snapshot, projectionStore.getSnapshot());
 
   assert.deepEqual(playerRefreshKeysForAction("submit_post"), ["thread", "votecount"]);
+  assert.deepEqual(playerRefreshKeysForAction("submit_action"), [
+    "notifications",
+    "investigationResults",
+  ]);
   assert.deepEqual(playerRefreshKeysForAction("withdraw_vote"), ["votecount"]);
 });
 
@@ -294,6 +320,14 @@ test("player route controller handles no-older and local view statuses", async (
     dispatchKind: "withdraw_vote",
     projectionRefreshKeys: ["votecount"],
   });
+  assert.deepEqual(playerCommandTrace("submit_action"), {
+    kind: "command-trace",
+    surface: "player",
+    actionId: "submit_action",
+    statusKey: "submit_action",
+    dispatchKind: "submit_action",
+    projectionRefreshKeys: ["notifications", "investigationResults"],
+  });
   assert.deepEqual(playerThreadPendingStatus(), {
     state: "pending",
     message: "Loading older posts",
@@ -375,6 +409,14 @@ function fixtureData(overrides = {}) {
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
+      actionCommands: [
+        {
+          action: "submit_action",
+          actionId: "browser_factional_kill_n01",
+          templateId: "factional_kill",
+          targets: ["slot-2"],
+        },
+      ],
     },
     threadPager: { pageSize: 50, channel: "main" },
     thread: { nextBeforeSeq: 41, posts: [] },

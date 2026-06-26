@@ -49,6 +49,10 @@ export function buildPlayerCommandPanelViewModel({
           label: composer.postCommandLabel,
         }),
       ]),
+      actionHeading: "Night actions",
+      actionButtons: Object.freeze(
+        (composer.actionCommands ?? []).map(actionCommandButton),
+      ),
     }),
   });
 }
@@ -104,4 +108,32 @@ function commandButton({ action, label, primary = false }) {
       minTouchTargetPx: PLAYER_COMMAND_PANEL_CONTRACT.minTouchTargetPx,
     }),
   });
+}
+
+function actionCommandButton(command) {
+  const action = String(command?.action ?? "submit_action");
+  return Object.freeze({
+    action,
+    label: String(command?.label ?? action),
+    detail: String(command?.detail ?? ""),
+    className: "fm-touch-button fm-touch-button--secondary",
+    data: Object.freeze({
+      action,
+      templateId: String(command?.templateId ?? ""),
+      targetSlots: Object.freeze(
+        normalizeTargets(command?.targets ?? command?.targetSlot),
+      ),
+      minTouchTargetPx: PLAYER_COMMAND_PANEL_CONTRACT.minTouchTargetPx,
+    }),
+  });
+}
+
+function normalizeTargets(value) {
+  if (Array.isArray(value)) {
+    return value.map((target) => String(target));
+  }
+  if (value === undefined || value === null || value === "") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([String(value)]);
 }

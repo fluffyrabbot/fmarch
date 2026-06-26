@@ -76,6 +76,27 @@
       {/each}
     </div>
   </div>
+  {#if view.composer.actionButtons.length > 0}
+    <div class="player-command-panel__actions" data-testid="player-action-commands">
+      <h3>{view.composer.actionHeading}</h3>
+      {#each view.composer.actionButtons as button}
+        <button
+          type="button"
+          class={button.className}
+          data-action={button.data.action}
+          data-template-id={button.data.templateId}
+          data-target-slots={button.data.targetSlots.join(",")}
+          data-min-touch-target-px={button.data.minTouchTargetPx}
+          on:click={() => onCommand(button.action)}
+        >
+          <span>{button.label}</span>
+          {#if button.detail}
+            <small>{button.detail}</small>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 </aside>
 
 <style>
@@ -135,6 +156,36 @@
     display: grid;
     gap: 10px;
     margin-block-start: 8px;
+  }
+
+  .player-command-panel__actions {
+    border-block-start: 1px solid #d0d8d3;
+    display: grid;
+    gap: 8px;
+    padding-block-start: 10px;
+  }
+
+  .player-command-panel__actions h3 {
+    color: #53606f;
+    font-size: 12px;
+    line-height: 1.25;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
+  .player-command-panel__actions button {
+    display: grid;
+    gap: 2px;
+    justify-items: start;
+    text-align: start;
+  }
+
+  .player-command-panel__actions small {
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.25;
+    opacity: 0.74;
+    overflow-wrap: anywhere;
   }
 
   .player-command-panel__channel-context {

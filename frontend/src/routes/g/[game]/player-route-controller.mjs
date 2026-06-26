@@ -148,6 +148,9 @@ export function playerRefreshKeysForAction(action) {
   switch (action) {
     case "submit_post":
       return Object.freeze(["thread", "votecount"]);
+    case "submit_action":
+    case "submit_invalid_action":
+      return Object.freeze(["notifications", "investigationResults"]);
     case "submit_vote":
     case "withdraw_vote":
       return Object.freeze(["votecount"]);
@@ -157,6 +160,7 @@ export function playerRefreshKeysForAction(action) {
 }
 
 export function buildPlayerCommandRequest({ data, action, composerBody }) {
+  const actionConfig = playerActionConfig(data, action);
   return Object.freeze({
     principalUserId: data.player.principalUserId,
     endpoint: data.composer.commandEndpoint,
@@ -167,6 +171,7 @@ export function buildPlayerCommandRequest({ data, action, composerBody }) {
       actorSlot: data.player.slotId,
       body: composerBody,
       target: data.composer.voteTargetSlot,
+      actionConfig,
     }),
   });
 }
@@ -220,6 +225,14 @@ export async function submitPlayerRouteCommand({
     commandStatus,
     snapshot: projectionStore.getSnapshot(),
   });
+}
+
+export function playerActionConfig(data, action) {
+  return (
+    data.composer.actionCommands?.find(
+      (command) => String(command.action) === String(action),
+    ) ?? null
+  );
 }
 
 export async function loadOlderPlayerThreadPage({

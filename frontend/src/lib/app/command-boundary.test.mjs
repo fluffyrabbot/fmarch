@@ -114,6 +114,29 @@ test("player actions map to Rust wire command variants", () => {
       },
     },
   );
+
+  assert.deepEqual(
+    buildPlayerCommand({
+      action: "submit_action",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot_4",
+      actionConfig: {
+        actionId: "browser_factional_kill_n01",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+      },
+    }),
+    {
+      SubmitAction: {
+        game: "00000000-0000-0000-0000-000000000001",
+        action_id: "browser_factional_kill_n01",
+        actor_slot: "slot_4",
+        template_id: "factional_kill",
+        targets: ["slot-2"],
+        grant_id: null,
+      },
+    },
+  );
 });
 
 test("generic command envelope uses the Rust ClientEnvelope shape", () => {

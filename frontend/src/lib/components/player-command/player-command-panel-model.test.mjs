@@ -12,6 +12,15 @@ test("player command panel model exposes tablet touch command contracts", () => 
       voteCommandLabel: "Vote slot-2",
       withdrawCommandLabel: "Withdraw vote",
       postCommandLabel: "Post",
+      actionCommands: [
+        {
+          action: "submit_action",
+          label: "Submit factional kill",
+          detail: "factional_kill -> slot-2",
+          templateId: "factional_kill",
+          targets: ["slot-2"],
+        },
+      ],
     },
     phase: {
       label: "Day 2",
@@ -65,6 +74,26 @@ test("player command panel model exposes tablet touch command contracts", () => 
       { action: "submit_post", label: "Post", minTouchTargetPx: 44 },
     ],
   );
+  assert.deepEqual(
+    view.composer.actionButtons.map((button) => ({
+      action: button.action,
+      label: button.label,
+      detail: button.detail,
+      templateId: button.data.templateId,
+      targetSlots: button.data.targetSlots,
+      minTouchTargetPx: button.data.minTouchTargetPx,
+    })),
+    [
+      {
+        action: "submit_action",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot-2",
+        templateId: "factional_kill",
+        targetSlots: ["slot-2"],
+        minTouchTargetPx: 44,
+      },
+    ],
+  );
   assert.match(view.composer.buttons[1].className, /secondary/);
 });
 
@@ -96,4 +125,5 @@ test("player command panel model normalizes missing row and label data", () => {
     view.composer.buttons.map((button) => button.label),
     ["submit_vote", "withdraw_vote", "submit_post"],
   );
+  assert.deepEqual(view.composer.actionButtons, []);
 });
