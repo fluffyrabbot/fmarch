@@ -48,6 +48,19 @@ assert.equal(
 );
 assert.equal(session.verification.sessions.host.cookie.valuePrefix, "invite-session-");
 assert.equal(session.verification.sessions.player.cookie.valuePrefix, "invite-session-");
+assert.equal(session.verification.coreLoop.status, "passed");
+assert.equal(session.verification.coreLoop.lock.commandStatus.state, "ack");
+assert.equal(session.verification.coreLoop.rejectedVote.state, "reject");
+assert.equal(session.verification.coreLoop.rejectedVote.error, "PhaseLocked");
+assert.equal(session.verification.coreLoop.unlock.commandStatus.state, "ack");
+assert.equal(
+  session.verification.coreLoop.playerPhases.lockedBeforeVote.locked,
+  true,
+);
+assert.equal(
+  session.verification.coreLoop.playerPhases.unlockedAfterRecovery.locked,
+  false,
+);
 
 console.log(`dev test-game live proof passed for ${session.game}`);
 

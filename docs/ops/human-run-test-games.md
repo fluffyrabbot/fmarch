@@ -125,7 +125,13 @@ That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
 and frontend, seeds a fresh `live-proof` game, verifies host and player browser
 entry through `/auth/login`, checks that those browser sessions came from
 invite-issued `fmarch_session` cookies, verifies host/player capabilities
-through `/auth/session?game=...`, then checks the generated session artifact.
+through `/auth/session?game=...`, drives a small core-loop proof, then checks
+the generated session artifact.
+
+The core-loop proof uses the generated role URLs: the host page locks D01
+through the hydrated phase control, the player page submits a vote into the
+locked phase and renders `Reject PhaseLocked` recovery, and the host page unlocks
+D01 again so the human-run game remains usable after verification.
 
 ## Boundary
 

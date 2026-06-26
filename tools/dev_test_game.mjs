@@ -489,6 +489,18 @@ export function markdownSessionCard(card) {
       }
       lines.push("");
     }
+    if (card.verification.coreLoop !== undefined) {
+      lines.push(
+        "## Core Loop Proof",
+        "",
+        `Status: ${card.verification.coreLoop.status}`,
+        "",
+        `Proof: ${card.verification.coreLoop.proof}`,
+        "",
+        `Rejected vote: ${card.verification.coreLoop.rejectedVote.message}`,
+        "",
+      );
+    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -498,29 +510,47 @@ async function verifySessionCard(card) {
   const browser = await chromium.launch();
   const roles = [];
   const sessions = {};
+  const roleEntries = {};
+  let coreLoop;
   try {
     for (const role of ["host", "player"]) {
-      sessions[role] = await verifyRoleEntry({
+      roleEntries[role] = await openVerifiedRoleEntry({
         browser,
         session: card.sessions[role],
         game: card.game,
         apiBaseUrl: card.apiBaseUrl,
         frontendBaseUrl: card.frontendBaseUrl,
       });
+      sessions[role] = roleEntries[role].verification;
       roles.push(role);
     }
+    coreLoop = await verifySeededCoreLoop({
+      hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
+    });
   } finally {
+    await Promise.all(
+      Object.values(roleEntries).map((entry) => entry.context.close()),
+    );
     await browser.close();
   }
   return {
     status: "passed",
     roles,
     sessions,
+    coreLoop,
   };
 }
 
-async function verifyRoleEntry({ browser, session, game, apiBaseUrl, frontendBaseUrl }) {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+async function openVerifiedRoleEntry({
+  browser,
+  session,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
   try {
     await page.goto(session.loginUrl, { waitUntil: "networkidle" });
     await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
@@ -558,18 +588,129 @@ async function verifyRoleEntry({ browser, session, game, apiBaseUrl, frontendBas
       throw new Error(`authenticated page for ${session.principalUserId} did not show ${game}`);
     }
     return {
-      principalUserId: resolved.principal_user_id,
-      capabilityKinds,
-      cookie: {
-        httpOnly: sessionCookie.httpOnly,
-        sameSite: sessionCookie.sameSite,
-        secure: sessionCookie.secure,
-        valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+      context,
+      page,
+      verification: {
+        principalUserId: resolved.principal_user_id,
+        capabilityKinds,
+        cookie: {
+          httpOnly: sessionCookie.httpOnly,
+          sameSite: sessionCookie.sameSite,
+          secure: sessionCookie.secure,
+          valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+        },
       },
     };
-  } finally {
-    await page.close();
+  } catch (error) {
+    await context.close();
+    throw error;
   }
+}
+
+async function verifySeededCoreLoop({ hostPage, playerPage }) {
+  await expectHostPhaseActions(hostPage, ["lock_thread"]);
+  const lock = await confirmHostAction(hostPage, "lock_thread");
+  await waitForHostProjectionPhaseLocked(hostPage, true);
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+  );
+  const playerLockedBeforeVote = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  await playerPage.getByText("Vote slot-2", { exact: true }).click();
+  await playerPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+  );
+  const rejectedVote = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const playerProjectionAfterReject = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  await expectHostPhaseActions(hostPage, ["unlock_thread", "advance_phase"]);
+  const unlock = await confirmHostAction(hostPage, "unlock_thread");
+  await waitForHostProjectionPhaseLocked(hostPage, false);
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+  );
+  const playerUnlockedAfterRecovery = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+
+  return {
+    status: "passed",
+    hostActions: {
+      initial: ["lock_thread"],
+      locked: ["unlock_thread", "advance_phase"],
+      restored: ["lock_thread"],
+    },
+    lock,
+    rejectedVote,
+    unlock,
+    playerPhases: {
+      lockedBeforeVote: playerLockedBeforeVote,
+      afterReject: playerProjectionAfterReject,
+      unlockedAfterRecovery: playerUnlockedAfterRecovery,
+    },
+    proof:
+      "The seeded host role URL locked D01 through the hydrated host phase control, the seeded player role URL submitted a vote while the phase was locked and rendered Reject PhaseLocked recovery, then the host role URL unlocked D01 so the human-run game remains usable.",
+  };
+}
+
+async function confirmHostAction(page, actionId, expectedState = "ack") {
+  const actionRoot = page.getByTestId(`critical-host-action-${actionId}`);
+  const trigger = actionRoot.getByTestId("critical-host-action-trigger");
+  await trigger.waitFor({ state: "visible" });
+  await trigger.click();
+
+  await actionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  const confirmationMessage = await actionRoot
+    .getByTestId("critical-host-action-confirmation-message")
+    .innerText();
+  await actionRoot.getByTestId("critical-host-action-confirm").click();
+
+  await page.waitForFunction(
+    ({ expectedActionId, state }) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === state,
+    { expectedActionId: actionId, state: expectedState },
+  );
+  const commandStatus = await page.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  return {
+    actionId,
+    confirmationMessage,
+    statusMessage: commandStatus?.message ?? "",
+    commandStatus,
+  };
+}
+
+async function expectHostPhaseActions(page, expectedActions) {
+  await page.waitForFunction((expected) => {
+    const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
+    if (phaseGroup === null) {
+      return false;
+    }
+    const actual = [...phaseGroup.querySelectorAll('[data-testid^="critical-host-action-"]')]
+      .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
+      .filter(
+        (id) =>
+          id !== undefined &&
+          !["trigger", "confirmation", "confirmation-message", "confirm", "cancel"].includes(id),
+      )
+      .sort();
+    return JSON.stringify(actual) === JSON.stringify([...expected].sort());
+  }, expectedActions);
+}
+
+async function waitForHostProjectionPhaseLocked(page, locked) {
+  await page.waitForFunction(
+    (expectedLocked) => window.__fmarchHostProjection?.phase?.locked === expectedLocked,
+    locked,
+  );
 }
 
 async function waitForHealth(baseUrl, options = {}) {

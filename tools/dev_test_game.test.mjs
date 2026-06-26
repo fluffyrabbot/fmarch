@@ -125,10 +125,21 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(card.sessions.host.credentialKind, "invite");
   assert.equal(card.sessions.host.inviteToken, "dev-test-card-host");
   assert.equal(card.sessions.player.token, "dev-test-card-player");
+  card.verification = {
+    status: "passed",
+    roles: ["host", "player"],
+    coreLoop: {
+      status: "passed",
+      proof: "host locked D01 and player recovered from PhaseLocked",
+      rejectedVote: { message: "Reject PhaseLocked: phase locked" },
+    },
+  };
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
   assert(markdown.includes("Open a role invite URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
   assert(markdown.includes("Invite token: dev-test-card-player"));
+  assert(markdown.includes("## Core Loop Proof"));
+  assert(markdown.includes("Reject PhaseLocked: phase locked"));
 });
