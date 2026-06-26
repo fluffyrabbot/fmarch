@@ -17,6 +17,7 @@ export const defaultGameName = "local";
 export const defaultApiStartupTimeoutMs = 15 * 60 * 1000;
 const factionDayChatChannel = "private:mafia_day_chat";
 const factionDayChatPostBody = "Faction day chat post from dev:test-game.";
+const hardeningRetryChannel = "main";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
@@ -553,6 +554,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.multiplayerHardening !== undefined) {
+      lines.push(
+        "## Multiplayer Hardening Proof",
+        "",
+        `Status: ${card.verification.multiplayerHardening.status}`,
+        "",
+        `Proof: ${card.verification.multiplayerHardening.proof}`,
+        "",
+        `Duplicate retry: ${card.verification.multiplayerHardening.idempotentRetry.retryPost.message}`,
+        "",
+        `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
+        "",
+      );
+    }
   }
   return `${lines.join("\n")}\n`;
 }
@@ -566,6 +581,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let privateChannel;
   let actionLoop;
+  let multiplayerHardening;
   try {
     for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
@@ -595,6 +611,12 @@ async function verifySessionCard(card) {
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
+    multiplayerHardening = await verifySeededMultiplayerHardening({
+      hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+    });
   } finally {
     await Promise.all(
       Object.values(roleEntries).map((entry) => entry.context.close()),
@@ -608,6 +630,7 @@ async function verifySessionCard(card) {
     coreLoop,
     privateChannel,
     actionLoop,
+    multiplayerHardening,
   };
 }
 
@@ -894,13 +917,143 @@ async function verifySeededPrivateChannel({
   };
 }
 
-async function fetchResolvedSlotState({ apiBaseUrl, game, slot }) {
-  const state = await fetchJson(
-    `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=${encodeURIComponent(
-      slot,
-    )}`,
+async function verifySeededMultiplayerHardening({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+}) {
+  const { normalizeCommandResponse } = await importFrontendModule(
+    "src/lib/app/command-boundary.mjs",
   );
+  const { normalizeServerCommandEnvelope } = await importFrontendModule(
+    "src/lib/components/host-action/host-command-boundary.mjs",
+  );
+
+  const retryCommandId = crypto.randomUUID();
+  const retryPostBody = `Idempotent retry post from dev:test-game ${retryCommandId}.`;
+  const submitPostCommand = {
+    SubmitPost: {
+      game,
+      channel_id: hardeningRetryChannel,
+      actor_slot: "slot-7",
+      body: retryPostBody,
+    },
+  };
+  const firstPostRaw = await sendBrowserCommand(playerPage, {
+    principalUserId: "player-mira",
+    command: submitPostCommand,
+    commandId: retryCommandId,
+  });
+  const retryPostRaw = await sendBrowserCommand(playerPage, {
+    principalUserId: "player-mira",
+    command: submitPostCommand,
+    commandId: retryCommandId,
+  });
+  const firstPost = normalizeCommandResponse({
+    commandId: retryCommandId,
+    requestEnvelope: firstPostRaw.requestEnvelope,
+    response: { status: firstPostRaw.httpStatus },
+    serverEnvelope: firstPostRaw.serverEnvelope,
+  });
+  const retryPost = normalizeCommandResponse({
+    commandId: retryCommandId,
+    requestEnvelope: retryPostRaw.requestEnvelope,
+    response: { status: retryPostRaw.httpStatus },
+    serverEnvelope: retryPostRaw.serverEnvelope,
+  });
+  if (firstPost.state !== "ack" || retryPost.state !== "ack") {
+    throw new Error(
+      `expected duplicate command id to ack twice: ${JSON.stringify({ firstPost, retryPost })}`,
+    );
+  }
+  if (!sameArray(firstPost.streamSeqs, retryPost.streamSeqs)) {
+    throw new Error(
+      `duplicate command id returned different stream seqs: ${JSON.stringify({
+        first: firstPost.streamSeqs,
+        retry: retryPost.streamSeqs,
+      })}`,
+    );
+  }
+  const mainThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+  );
+  const retryPostCount = mainThread.posts.filter((post) => post.body === retryPostBody).length;
+  if (retryPostCount !== 1) {
+    throw new Error(
+      `duplicate command id appended ${retryPostCount} matching posts: ${JSON.stringify(
+        mainThread.posts.map((post) => post.body),
+      )}`,
+    );
+  }
+
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
+  const staleCommandId = crypto.randomUUID();
+  const staleUnlockRaw = await sendBrowserCommand(hostPage, {
+    principalUserId: "host_h",
+    command: { UnlockThread: { game } },
+    commandId: staleCommandId,
+  });
+  const staleUnlock = normalizeServerCommandEnvelope({
+    actionId: "unlock_thread",
+    commandId: staleCommandId,
+    requestEnvelope: staleUnlockRaw.requestEnvelope,
+    response: { status: staleUnlockRaw.httpStatus },
+    serverEnvelope: staleUnlockRaw.serverEnvelope,
+  });
+  if (
+    staleUnlock.state !== "reject" ||
+    staleUnlock.error !== "PhaseLocked" ||
+    !staleUnlock.message.includes("stale phase state")
+  ) {
+    throw new Error(`stale host control did not surface recovery: ${JSON.stringify(staleUnlock)}`);
+  }
+  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    hostStateAfterReject.phase?.phase_id !== "D02" ||
+    hostStateAfterReject.phase?.locked !== false
+  ) {
+    throw new Error(
+      `stale host control changed phase projection: ${JSON.stringify(
+        hostStateAfterReject.phase,
+      )}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    idempotentRetry: {
+      channel: hardeningRetryChannel,
+      commandId: retryCommandId,
+      body: retryPostBody,
+      firstPost,
+      retryPost,
+      projectedPostCount: retryPostCount,
+    },
+    staleHostControl: {
+      commandId: staleCommandId,
+      actionId: "unlock_thread",
+      reject: staleUnlock,
+      phaseAfterReject: hostStateAfterReject.phase,
+    },
+    proof:
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+  };
+}
+
+async function fetchResolvedSlotState({ apiBaseUrl, game, slot }) {
+  const state = await fetchHostConsoleState({ apiBaseUrl, game, slot });
   return state.slots?.find((candidate) => candidate.slot_id === slot) ?? null;
+}
+
+async function fetchHostConsoleState({ apiBaseUrl, game, slot }) {
+  const params = new URLSearchParams({ principal_user_id: "host_h" });
+  if (slot !== undefined) {
+    params.set("slot_id", slot);
+  }
+  return await fetchJson(
+    `${apiBaseUrl}/games/${game}/host-console-state?${params.toString()}`,
+  );
 }
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
@@ -932,6 +1085,57 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
     statusMessage: commandStatus?.message ?? "",
     commandStatus,
   };
+}
+
+async function importFrontendModule(relativePath) {
+  return await import(pathToFileURL(path.join(frontendRoot, relativePath)).href);
+}
+
+async function sendBrowserCommand(page, { principalUserId, command, commandId }) {
+  const envelopeId = commandEnvelopeId++;
+  return await page.evaluate(
+    async ({
+      principalUserId: browserPrincipalUserId,
+      command: browserCommand,
+      commandId: browserCommandId,
+      envelopeId: browserEnvelopeId,
+    }) => {
+      const requestEnvelope = {
+        v: 1,
+        id: browserEnvelopeId,
+        body: {
+          kind: "Command",
+          body: {
+            command_id: browserCommandId,
+            principal_user_id: browserPrincipalUserId,
+            command: browserCommand,
+          },
+        },
+      };
+      const response = await fetch("/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestEnvelope),
+      });
+      return {
+        commandId: browserCommandId,
+        envelopeId: browserEnvelopeId,
+        httpStatus: response.status,
+        requestEnvelope,
+        serverEnvelope: await response.json(),
+      };
+    },
+    { principalUserId, command, commandId, envelopeId },
+  );
+}
+
+function sameArray(left, right) {
+  return (
+    Array.isArray(left) &&
+    Array.isArray(right) &&
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 async function expectHostPhaseActions(page, expectedActions) {

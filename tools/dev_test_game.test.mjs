@@ -145,6 +145,19 @@ test("session card and markdown include role invite URLs and tokens", () => {
       allowed: { submitPost: { message: "Ack: stream seqs 43" } },
       denied: { status: 403, actionLabel: "Back to board" },
     },
+    multiplayerHardening: {
+      status: "passed",
+      proof: "duplicate command id returned one post and stale host control recovered",
+      idempotentRetry: {
+        retryPost: { message: "Ack: stream seqs 44" },
+      },
+      staleHostControl: {
+        reject: {
+          message:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        },
+      },
+    },
   };
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
@@ -158,4 +171,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Private Channel Proof"));
   assert(markdown.includes("Denied route: 403 Back to board"));
+  assert(markdown.includes("## Multiplayer Hardening Proof"));
+  assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
+  assert(markdown.includes("Stale control: Reject PhaseLocked"));
 });

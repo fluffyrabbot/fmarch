@@ -214,6 +214,9 @@ export function normalizeServerCommandEnvelope({
 
 function rejectMessage(reject, retryable) {
   const base = `Reject ${reject.error}: ${reject.message}`;
+  if (reject.error === "PhaseLocked") {
+    return `${base}; stale phase state, refresh and use current controls`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 

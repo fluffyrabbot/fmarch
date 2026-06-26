@@ -144,11 +144,18 @@ page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
 board` recovery for that same channel.
 
+The multiplayer-hardening proof promotes the first retry/stale-client behaviors
+into the same browser harness: the player page replays one `SubmitPost` with the
+same durable `command_id` and verifies the original ACK plus exactly one
+projected post, then the host page sends a stale `UnlockThread` and verifies the
+`Reject PhaseLocked` recovery message while D02 remains open.
+
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer. It does
-not prove production account identity, hosted deployment, multiplayer hardening,
-upload or transcode behavior, beta readiness, or rollback/delete semantics for
-existing append-only games. The harness still uses an internal root dev session
-only to mint local invites; production accounts/sessions/invites remain a later
-identity layer over the same role surfaces.
+not prove production account identity, hosted deployment, reconnect behavior,
+concurrent command races, upload or transcode behavior, beta readiness, or
+rollback/delete semantics for existing append-only games. The harness still uses
+an internal root dev session only to mint local invites; production
+accounts/sessions/invites remain a later identity layer over the same role
+surfaces.

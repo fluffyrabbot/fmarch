@@ -103,6 +103,47 @@ assert.equal(session.verification.actionLoop.resolveNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.resolvedTargetSlot.alive, false);
 assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
+assert.equal(session.verification.multiplayerHardening.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.idempotentRetry.channel,
+  "main",
+);
+assert.equal(
+  session.verification.multiplayerHardening.idempotentRetry.firstPost.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.idempotentRetry.retryPost.state,
+  "ack",
+);
+assert.deepEqual(
+  session.verification.multiplayerHardening.idempotentRetry.retryPost.streamSeqs,
+  session.verification.multiplayerHardening.idempotentRetry.firstPost.streamSeqs,
+);
+assert.equal(
+  session.verification.multiplayerHardening.idempotentRetry.projectedPostCount,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostControl.reject.message,
+  /stale phase state/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.phaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.phaseAfterReject.locked,
+  false,
+);
 
 console.log(`dev test-game live proof passed for ${session.game}`);
 
