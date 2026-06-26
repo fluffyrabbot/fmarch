@@ -1342,7 +1342,7 @@ async fn require_host_audit_access(
     if caps.grants(&Capability::HostOf(game)) || caps.grants(&Capability::CohostOf(game)) {
         return Ok(());
     }
-    if state.dev_auth_enabled && active_dev_global_operator(&state.pool, principal_user_id).await? {
+    if active_global_operator(&state.pool, principal_user_id).await? {
         return Ok(());
     }
 
@@ -1353,10 +1353,7 @@ async fn require_host_audit_access(
     })
 }
 
-async fn active_dev_global_operator(
-    pool: &PgPool,
-    principal_user_id: &str,
-) -> Result<bool, ApiError> {
+async fn active_global_operator(pool: &PgPool, principal_user_id: &str) -> Result<bool, ApiError> {
     let now = unix_now_seconds();
     let has_global = sqlx::query_scalar::<_, bool>(
         r#"

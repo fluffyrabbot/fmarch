@@ -82,7 +82,7 @@ async fn operator_routes_are_host_audit_only(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
-async fn dev_global_operator_can_read_status_only_when_dev_auth_enabled(pool: sqlx::PgPool) {
+async fn active_global_operator_session_can_read_status_without_dev_auth(pool: sqlx::PgPool) {
     let game = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO auth_session \
@@ -91,7 +91,7 @@ async fn dev_global_operator_can_read_status_only_when_dev_auth_enabled(pool: sq
     )
     .execute(&pool)
     .await
-    .expect("insert dev global operator session");
+    .expect("insert global operator session");
 
     let enabled = operator_api::router_with_state(
         operator_api::OperatorApiState::new(pool.clone()).with_dev_auth(true),
@@ -110,8 +110,8 @@ async fn dev_global_operator_can_read_status_only_when_dev_auth_enabled(pool: sq
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let disabled = app(pool);
-    let response = disabled
+    let dev_disabled = app(pool);
+    let response = dev_disabled
         .oneshot(
             Request::builder()
                 .method("GET")
@@ -123,5 +123,5 @@ async fn dev_global_operator_can_read_status_only_when_dev_auth_enabled(pool: sq
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::OK);
 }

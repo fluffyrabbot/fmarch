@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -20,6 +21,7 @@ const host = "127.0.0.1";
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
 const game = crypto.randomUUID();
 const adminCreatedGame = crypto.randomUUID();
+const rootAdminSessionToken = `host-console-live-stack-root-admin-${crypto.randomUUID()}`;
 const hostSessionToken = `host-console-live-stack-host-${crypto.randomUUID()}`;
 const playerSessionToken = `host-console-live-stack-player-${crypto.randomUUID()}`;
 const adminSessionToken = `host-console-live-stack-admin-${crypto.randomUUID()}`;
@@ -55,10 +57,8 @@ let smokeDatabase;
 let serverOutput = "";
 const previousSmokeAuth = process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
-const previousDevAuth = process.env.FMARCH_DEV_AUTH;
 process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH = "1";
 process.env.FMARCH_API_BASE_URL = apiBaseUrl;
-process.env.FMARCH_DEV_AUTH = "1";
 process.chdir(frontendRoot);
 
 try {
@@ -73,7 +73,6 @@ try {
       ...process.env,
       DATABASE_URL: smokeDatabase.url,
       FMARCH_BIND: `${host}:${apiPort}`,
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -91,8 +90,10 @@ try {
   const seedCommands = await seedGame();
   await writeProgress({ stage: "seed-faction-day-chat-fixture", game });
   const privateChannelFixture = await seedFactionDayChatFixture();
-  await writeProgress({ stage: "create-dev-sessions", game });
-  const devSessions = await createDevSessions();
+  await writeProgress({ stage: "seed-root-admin-session" });
+  const rootAdminSession = await seedRootAdminSession();
+  await writeProgress({ stage: "create-granted-sessions", game });
+  const grantedSessions = await createGrantedSessions();
 
   await writeProgress({ stage: "start-sveltekit" });
   const { createServer: createViteServer } = await import(
@@ -123,7 +124,7 @@ try {
   const frontendBaseUrl = `http://${host}:${frontendAddress.port}`;
 
   await writeProgress({ stage: "drive-browser", frontendBaseUrl, apiBaseUrl });
-  const browserEvidence = await driveBrowser(frontendBaseUrl);
+  const browserEvidence = await driveBrowser(frontendBaseUrl, privateChannelFixture);
   const playerVoteCount =
     browserEvidence.playerVoteCountAfterPlayer ??
     (await fetchJson(`${apiBaseUrl}/games/${game}/votecount`));
@@ -153,7 +154,8 @@ try {
     viewport: smokeViewport,
     seedCommands,
     privateChannelFixture,
-    devSessions,
+    rootAdminSession,
+    grantedSessions,
     browser: browserEvidence,
     playerVoteCount,
     apiState,
@@ -198,11 +200,6 @@ try {
     delete process.env.FMARCH_API_BASE_URL;
   } else {
     process.env.FMARCH_API_BASE_URL = previousApiBaseUrl;
-  }
-  if (previousDevAuth === undefined) {
-    delete process.env.FMARCH_DEV_AUTH;
-  } else {
-    process.env.FMARCH_DEV_AUTH = previousDevAuth;
   }
 }
 
@@ -474,7 +471,6 @@ async function seedGame() {
 }
 
 async function seedFactionDayChatFixture() {
-  const mediaPostSeq = 100000;
   const media = [
     {
       id: factionDayChatMediaId,
@@ -482,17 +478,17 @@ async function seedFactionDayChatFixture() {
       alt: "Live faction day chat tablet receipt",
       variants: {
         tablet: {
-          url: "/media/live-stack/thread/live-faction-day-chat-receipt-tablet.png",
+          url: liveStackThreadMediaUrl(factionDayChatMediaId, "tablet"),
           width: 960,
           height: 720,
         },
         small: {
-          url: "/media/live-stack/thread/live-faction-day-chat-receipt-small.png",
+          url: liveStackThreadMediaUrl(factionDayChatMediaId, "small"),
           width: 480,
           height: 360,
         },
         original: {
-          url: "/media/live-stack/thread/live-faction-day-chat-receipt-original.png",
+          url: liveStackThreadMediaUrl(factionDayChatMediaId, "original"),
           width: 4000,
           height: 3000,
         },
@@ -514,25 +510,35 @@ async function seedFactionDayChatFixture() {
   ) {
     throw new Error(`faction day chat membership was not command-declared:\n${memberRows}`);
   }
-  await runSql(smokeDatabase.url, `
-    INSERT INTO thread_view (
-      game_id, source_seq, stream_seq, channel_id, author_slot, author_user,
-      phase_id, body, media, occurred_at
-    )
-    VALUES (
-      '${game}', ${mediaPostSeq}, ${mediaPostSeq}, '${factionDayChatChannel}', 'slot-7', NULL,
-      'D01', ${sqlLiteral(factionDayChatSeedBody)}, ${sqlLiteral(JSON.stringify(media))}::jsonb,
-      1781928000
-    )
-    ON CONFLICT (game_id, source_seq) DO UPDATE SET
-      channel_id = EXCLUDED.channel_id,
-      author_slot = EXCLUDED.author_slot,
-      author_user = EXCLUDED.author_user,
-      phase_id = EXCLUDED.phase_id,
-      body = EXCLUDED.body,
-      media = EXCLUDED.media,
-      occurred_at = EXCLUDED.occurred_at;
-  `);
+  const mediaCommand = await sendCommand("player-mira", {
+    SubmitPost: {
+      game,
+      channel_id: factionDayChatChannel,
+      actor_slot: "slot-7",
+      body: factionDayChatSeedBody,
+      media,
+    },
+  });
+  const privateThreadPage = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${encodeURIComponent(
+      factionDayChatChannel,
+    )}/thread?principal_user_id=player-mira&limit=25`,
+  );
+  const mediaPost = privateThreadPage.posts?.find(
+    (post) =>
+      post.body === factionDayChatSeedBody &&
+      post.media?.some((item) => item.id === factionDayChatMediaId),
+  );
+  if (mediaPost === undefined) {
+    throw new Error(
+      `media SubmitPost did not project into private thread: ${JSON.stringify(privateThreadPage)}`,
+    );
+  }
+  const mediaPostSeq = Number(mediaPost.source_seq ?? mediaPost.sourceSeq);
+  const mediaPostStreamSeq = Number(mediaPost.stream_seq ?? mediaPost.streamSeq);
+  if (!Number.isFinite(mediaPostSeq) || mediaPostSeq <= 0) {
+    throw new Error(`projected media post missing source_seq: ${JSON.stringify(mediaPost)}`);
+  }
   return {
     channelId: factionDayChatChannel,
     roomType: "FactionDayChat",
@@ -540,39 +546,89 @@ async function seedFactionDayChatFixture() {
     memberPrincipalUserId: "player-mira",
     commandDeclaredMembers: ["slot-7", "slot_4"],
     mediaPostSeq,
+    mediaPostStreamSeq,
     factionDayChatSeedBody,
     media,
+    mediaCommand,
     boundary:
-      "membership is declared by mafiascum StartGame commands; media row is scratch database setup until a media upload command exists; faction-day-chat SubmitPost ACK is driven through the real SvelteKit UI and Rust /commands path",
+      "membership is declared by mafiascum StartGame commands; the tablet/small media reference is ingested through a real SubmitPost /commands ACK and projected through the Rust ThreadPage before SvelteKit serves reference-checked bytes",
   };
 }
 
-async function createDevSessions() {
+async function seedRootAdminSession() {
+  await runSql(smokeDatabase.url, `
+    INSERT INTO auth_session (
+      token_hash,
+      principal_user_id,
+      created_at,
+      expires_at,
+      revoked_at,
+      global_capabilities
+    )
+    VALUES (
+      ${sqlLiteral(hashSessionToken(rootAdminSessionToken))},
+      'root_admin',
+      0,
+      4102444800,
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (token_hash) DO UPDATE SET
+      principal_user_id = EXCLUDED.principal_user_id,
+      expires_at = EXCLUDED.expires_at,
+      revoked_at = NULL,
+      global_capabilities = EXCLUDED.global_capabilities;
+  `);
+  const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+    },
+  });
+  const capabilityKinds = (session.capabilities ?? []).map(
+    (capability) => capability.kind,
+  );
+  if (!capabilityKinds.includes("GlobalAdmin")) {
+    throw new Error(
+      `root admin seed did not resolve GlobalAdmin: ${JSON.stringify(session)}`,
+    );
+  }
   return {
-    admin: await createDevSession({
+    principalUserId: session.principal_user_id,
+    capabilityKinds,
+    boundary:
+      "root GlobalAdmin is seeded directly into the scratch auth_session table so the live browser proof can keep /auth/dev-session disabled and mint all browser tokens through /auth/session-grants",
+  };
+}
+
+async function createGrantedSessions() {
+  return {
+    admin: await createGrantedSession({
       token: adminSessionToken,
       principalUserId: "admin_a",
       globalCapabilities: ["GlobalAdmin"],
     }),
-    host: await createDevSession({
+    host: await createGrantedSession({
       token: hostSessionToken,
       principalUserId: "host_h",
     }),
-    player: await createDevSession({
+    player: await createGrantedSession({
       token: playerSessionToken,
       principalUserId: "player-mira",
     }),
-    cohost: await createDevSession({
+    cohost: await createGrantedSession({
       token: cohostSessionToken,
       principalUserId: "cohost_c",
     }),
   };
 }
 
-async function createDevSession({ token, principalUserId, globalCapabilities = [] }) {
-  const session = await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
+async function createGrantedSession({ token, principalUserId, globalCapabilities = [] }) {
+  const session = await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       token,
       principal_user_id: principalUserId,
@@ -589,7 +645,11 @@ async function createDevSession({ token, principalUserId, globalCapabilities = [
   };
 }
 
-async function driveBrowser(frontendBaseUrl) {
+function hashSessionToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
   browser = await chromium.launch();
   const adminEvidence = await driveAdminBrowser(frontendBaseUrl);
   const moderatorSession = await openModeratorBrowser(frontendBaseUrl);
@@ -599,7 +659,7 @@ async function driveBrowser(frontendBaseUrl) {
     await waitForHostLiveVotecount(moderatorSession.page, 1);
     playerEvidence = await drivePlayerBrowser(frontendBaseUrl);
     const playerPrivateChannelEvidence =
-      await drivePlayerPrivateChannelBrowser(frontendBaseUrl);
+      await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
     const privateChannelForbiddenEvidence =
       await drivePrivateChannelForbiddenBrowser(frontendBaseUrl);
     await waitForHostLiveVotecountEvent(moderatorSession.page, 2);
@@ -622,7 +682,7 @@ async function driveBrowser(frontendBaseUrl) {
   }
 }
 
-async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
+async function drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture) {
   const mediaRequests = [];
   const mediaResponses = [];
   const mediaResponseTasks = [];
@@ -653,6 +713,9 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
           contentType: headers["content-type"] ?? null,
           cacheControl: headers["cache-control"] ?? null,
           contentAddress: headers["x-fmarch-media-content-address"] ?? null,
+          channel: headers["x-fmarch-media-channel"] ?? null,
+          postSeq: headers["x-fmarch-media-post-seq"] ?? null,
+          reference: headers["x-fmarch-media-reference"] ?? null,
           variant: headers["x-fmarch-media-variant"] ?? null,
           etag: headers.etag ?? null,
           bodyBytes: body.byteLength,
@@ -694,13 +757,17 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
   if ((await activeChannel.getAttribute("aria-current")) !== "page") {
     throw new Error("faction day chat channel rail item is not active");
   }
-  const seededPost = page.locator('[data-testid="thread-post-100000"]');
+  const seededPost = page.locator(
+    `[data-testid="thread-post-${privateChannelFixture.mediaPostSeq}"]`,
+  );
   await seededPost.waitFor({ state: "visible" });
   const seededPostText = await seededPost.innerText();
   if (!seededPostText.includes(factionDayChatSeedBody)) {
     throw new Error(`faction day chat live API seed post did not render: ${seededPostText}`);
   }
-  const mediaBoundary = page.getByTestId("thread-post-media-boundary-100000");
+  const mediaBoundary = page.getByTestId(
+    `thread-post-media-boundary-${privateChannelFixture.mediaPostSeq}`,
+  );
   await mediaBoundary.waitFor({ state: "visible" });
   const mediaFigure = page.getByTestId(`thread-post-media-${factionDayChatMediaId}`);
   await mediaFigure.waitFor({ state: "visible" });
@@ -723,7 +790,12 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
     };
   }, `thread-post-media-${factionDayChatMediaId}`);
   await Promise.allSettled(mediaResponseTasks);
-  assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses });
+  assertTabletMediaEvidence({
+    mediaAttributes,
+    mediaRequests,
+    mediaResponses,
+    mediaPostSeq: privateChannelFixture.mediaPostSeq,
+  });
   const mediaBoundaryStatus = await mediaBoundary.getAttribute("data-boundary-status");
 
   const textarea = page.locator('[data-testid="player-composer"] textarea');
@@ -793,7 +865,7 @@ async function drivePlayerPrivateChannelBrowser(frontendBaseUrl) {
 
 async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
   const deniedToken = `host-console-live-stack-denied-${crypto.randomUUID()}`;
-  await createDevSession({
+  await createGrantedSession({
     token: deniedToken,
     principalUserId: "player-target",
   });
@@ -828,6 +900,18 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
       `private channel 403 recovery drifted: ${JSON.stringify({ errorStatus, actionLabel, actionHref })}`,
     );
   }
+  const deniedMediaUrl = `${frontendBaseUrl}${liveStackThreadMediaUrl(
+    factionDayChatMediaId,
+    "tablet",
+  )}`;
+  const deniedMediaResponse = await context.request.get(deniedMediaUrl, {
+    headers: { accept: "image/png" },
+  });
+  if (deniedMediaResponse.status() !== 403) {
+    throw new Error(
+      `private channel media expected 403 for non-member, got ${deniedMediaResponse.status()}: ${await deniedMediaResponse.text()}`,
+    );
+  }
   assertHitTarget(await action.boundingBox(), "private-channel 403 Back to board");
   await Promise.all([
     page.waitForURL(`${frontendBaseUrl}/`, { waitUntil: "networkidle" }),
@@ -842,6 +926,12 @@ async function drivePrivateChannelForbiddenBrowser(frontendBaseUrl) {
     actionLabel,
     actionHref,
     recoveredUrl,
+    media: {
+      url: deniedMediaUrl,
+      status: deniedMediaResponse.status(),
+      proof:
+        "Non-member session could render the private-channel 403 recovery page but could not fetch the referenced private-channel tablet media variant.",
+    },
   };
 }
 
@@ -1004,6 +1094,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
       `admin session grant did not grant GlobalMod: ${JSON.stringify(grantedGlobalModSession)}`,
     );
   }
+  const grantedGlobalModLogin = await driveGrantedGlobalModLogin(frontendBaseUrl);
 
   await context.close();
   return {
@@ -1027,6 +1118,62 @@ async function driveAdminBrowser(frontendBaseUrl) {
       principalUserId: grantedGlobalModSession.principal_user_id,
       capabilityKinds: grantedGlobalModCapabilityKinds,
     },
+    grantedGlobalModLogin,
+  };
+}
+
+async function driveGrantedGlobalModLogin(frontendBaseUrl) {
+  const context = await browser.newContext({ viewport: smokeViewport });
+  const page = await context.newPage();
+  const returnTo = `/admin?game=${adminCreatedGame}`;
+  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+  const response = await page.goto(loginUrl, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `auth login route failed with ${response?.status() ?? "no response"}: ${await page.textContent("body")}`,
+    );
+  }
+  await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+  await page.getByTestId("auth-login-token").fill(grantedGlobalModToken);
+  await Promise.all([
+    page.waitForURL(`${frontendBaseUrl}${returnTo}`, { waitUntil: "networkidle" }),
+    page.getByTestId("auth-login-submit").click(),
+  ]);
+  await page.getByTestId("admin-surface").waitFor({ state: "visible" });
+  const capability = await page.getByTestId("admin-capability").innerText();
+  if (capability !== "GlobalMod") {
+    throw new Error(`login-granted admin capability did not render GlobalMod: ${capability}`);
+  }
+  const sessionCookies = (await context.cookies(frontendBaseUrl)).filter(
+    (cookie) => cookie.name === "fmarch_session",
+  );
+  const sessionCookie = sessionCookies.at(-1);
+  if (sessionCookie === undefined || sessionCookie.value !== grantedGlobalModToken) {
+    throw new Error(
+      `auth login did not write fmarch_session cookie: ${JSON.stringify(sessionCookies)}`,
+    );
+  }
+  const proofCard = page.locator('[data-testid^="admin-audit-"]').first();
+  await proofCard.waitFor({ state: "visible" });
+  const proofCardText = await proofCard.innerText();
+  const finalUrl = page.url();
+  await context.close();
+  return {
+    loginUrl,
+    returnTo,
+    finalUrl,
+    capability,
+    sessionCookie: {
+      name: sessionCookie.name,
+      path: sessionCookie.path,
+      httpOnly: sessionCookie.httpOnly,
+      sameSite: sessionCookie.sameSite,
+      secure: sessionCookie.secure,
+      valueMatchesGrantedToken: sessionCookie.value === grantedGlobalModToken,
+    },
+    proofCardText,
+    proof:
+      "A GlobalAdmin-issued /auth/session-grants token was submitted through /auth/login, the SvelteKit action verified it with /auth/session, wrote the httpOnly fmarch_session cookie, redirected to /admin, and rendered the authenticated GlobalMod UI without a pre-seeded browser cookie.",
   };
 }
 
@@ -1795,7 +1942,7 @@ function assertFactionDayChatSubmitPostOutcome(outcome) {
   }
 }
 
-function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses }) {
+function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaResponses, mediaPostSeq }) {
   const rendered = [
     mediaAttributes?.src,
     mediaAttributes?.srcset,
@@ -1826,7 +1973,10 @@ function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaRespon
     tabletResponse.status !== 200 ||
     tabletResponse.contentType !== "image/png" ||
     tabletResponse.variant !== "tablet" ||
-    tabletResponse.contentAddress !== "live-stack-thread-faction-day-chat-receipt-canonical-raster"
+    tabletResponse.contentAddress !== "live-stack-thread-faction-day-chat-receipt-canonical-raster" ||
+    tabletResponse.channel !== factionDayChatChannel ||
+    tabletResponse.postSeq !== String(mediaPostSeq) ||
+    tabletResponse.reference !== `${game}/${factionDayChatChannel}/${mediaPostSeq}/${factionDayChatMediaId}`
   ) {
     throw new Error(`tablet media response metadata drifted: ${JSON.stringify(tabletResponse)}`);
   }
@@ -1836,6 +1986,14 @@ function assertTabletMediaEvidence({ mediaAttributes, mediaRequests, mediaRespon
   if (Number(tabletResponse.bodyBytes ?? 0) <= 1000) {
     throw new Error(`tablet media response still looks like a shim: ${JSON.stringify(tabletResponse)}`);
   }
+}
+
+function liveStackThreadMediaUrl(mediaId, variant) {
+  const params = new URLSearchParams({
+    game,
+    channel: factionDayChatChannel,
+  });
+  return `/media/live-stack/thread/${mediaId}-${variant}.png?${params}`;
 }
 
 function assertHitTarget(box, label) {
