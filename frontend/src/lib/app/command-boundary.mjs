@@ -183,6 +183,9 @@ export function normalizeCommandResponse({
 
 function rejectMessage(reject, retryable) {
   const base = `Reject ${reject.error}: ${reject.message}`;
+  if (reject.error === "PhaseLocked") {
+    return `${base}; stale projection, refresh and use current controls`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 

@@ -245,7 +245,10 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
       }),
   });
   assert.equal(reject.state, "reject");
-  assert.equal(reject.message, "Reject PhaseLocked: phase locked");
+  assert.equal(
+    reject.message,
+    "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+  );
 
   const retryableReject = await sendCommand({
     principalUserId: "player_mira",

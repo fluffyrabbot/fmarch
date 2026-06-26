@@ -1809,7 +1809,7 @@ async function drivePlayerActionBrowser(frontendBaseUrl) {
     projection,
     receipts,
     proof:
-      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
+      "A seeded mafiascum N01 game exposed the goon at /g/{game} with a SlotOccupant session, the browser loaded /player-command-state from the Rust API, rendered the returned phase-valid factional_kill action, clicked a typed invalid SubmitAction and recovered through a rendered Reject, clicked the legal action and received an ACK, and the host resolved that stored action through Command::ResolvePhase into a dead target slot plus ResolutionApplied/ResolutionTrace rows. A second stale player page with its live websocket blocked kept the old factional_kill control, submitted it after resolution, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to locked N01/no-actions, and removed the stale action controls without a page reload. The live hydrated player page then refreshed /player-command-state to locked N01/no-actions and to D02/Day after Command::AdvancePhase.",
   };
 }
 
@@ -1905,6 +1905,11 @@ async function submitStalePlayerAction(staleSession) {
   );
   const outcome = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   assertStalePlayerActionRecovery(outcome);
+  const statusMessage = await status.innerText();
+  assertStalePlayerActionRecoveryMessage({
+    outcome,
+    statusMessage,
+  });
   await page.waitForFunction(
     () =>
       window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
@@ -1929,7 +1934,7 @@ async function submitStalePlayerAction(staleSession) {
   );
   return {
     outcome,
-    statusMessage: await status.innerText(),
+    statusMessage,
     commandState: {
       requests: commandStateRequests,
       responses: commandStateResponses,
@@ -2888,6 +2893,16 @@ function assertStalePlayerActionRecovery(outcome) {
   }
   if (command.targets?.[0] !== "slot-2") {
     throw new Error(`stale player action used wrong target: ${JSON.stringify(command)}`);
+  }
+}
+
+function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
+  const expected = "stale projection, refresh and use current controls";
+  if (!String(outcome?.message ?? "").includes(expected)) {
+    throw new Error(`stale player action did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
+  }
+  if (!String(statusMessage ?? "").includes(expected)) {
+    throw new Error(`stale player action did not render recovery guidance: ${statusMessage}`);
   }
 }
 
