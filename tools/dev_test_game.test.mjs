@@ -151,6 +151,15 @@ test("session card and markdown include role invite URLs and tokens", () => {
       idempotentRetry: {
         retryPost: { message: "Ack: stream seqs 44" },
       },
+      reconnect: {
+        reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+      },
+      stalePlayerVote: {
+        reject: {
+          message:
+            "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+        },
+      },
       staleHostControl: {
         reject: {
           message:
@@ -173,5 +182,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Denied route: 403 Back to board"));
   assert(markdown.includes("## Multiplayer Hardening Proof"));
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
+  assert(markdown.includes("Reconnect: attempt 1 recovered"));
+  assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
 });

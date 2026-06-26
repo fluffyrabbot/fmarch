@@ -564,6 +564,10 @@ export function markdownSessionCard(card) {
         "",
         `Duplicate retry: ${card.verification.multiplayerHardening.idempotentRetry.retryPost.message}`,
         "",
+        `Reconnect: attempt ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.attempt} ${card.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.state}`,
+        "",
+        `Stale player vote: ${card.verification.multiplayerHardening.stalePlayerVote.reject.message}`,
+        "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
       );
@@ -987,6 +991,18 @@ async function verifySeededMultiplayerHardening({
     );
   }
 
+  const reconnect = await verifyPlayerReconnectRecovery({
+    playerPage,
+    game,
+  });
+  const stalePlayerVote = await verifyStalePlayerVoteRecovery({
+    hostPage,
+    playerPage,
+    game,
+    apiBaseUrl,
+    normalizeServerCommandEnvelope,
+  });
+
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleCommandId = crypto.randomUUID();
   const staleUnlockRaw = await sendBrowserCommand(hostPage, {
@@ -1030,6 +1046,8 @@ async function verifySeededMultiplayerHardening({
       retryPost,
       projectedPostCount: retryPostCount,
     },
+    reconnect,
+    stalePlayerVote,
     staleHostControl: {
       commandId: staleCommandId,
       actionId: "unlock_thread",
@@ -1037,13 +1055,181 @@ async function verifySeededMultiplayerHardening({
       phaseAfterReject: hostStateAfterReject.phase,
     },
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+  };
+}
+
+async function verifyPlayerReconnectRecovery({ playerPage, game }) {
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    () => typeof window.__fmarchDropPlayerLiveProjection === "function",
+  );
+  await playerPage.evaluate(() => window.__fmarchDropPlayerLiveProjection());
+  await playerPage.waitForFunction(
+    () => window.__fmarchLiveProjectionStatus?.state === "reconnecting",
+  );
+  const reconnectingStatus = await playerPage.evaluate(
+    () => window.__fmarchLiveProjectionStatus,
+  );
+  const reconnectPostBody = `Player reconnect proof from dev:test-game ${crypto.randomUUID()}.`;
+  const reconnectCommand = await sendCommand("player-seed", {
+    SubmitPost: {
+      game,
+      channel_id: "main",
+      actor_slot: "slot-3",
+      body: reconnectPostBody,
+    },
+  });
+  await playerPage.waitForFunction(
+    () =>
+      (window.__fmarchLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.kind === "reconnect" &&
+          event.attempt === 1 &&
+          event.state === "recovered",
+      ),
+  );
+  const recoveredStatus = await playerPage.evaluate(
+    () => window.__fmarchLiveProjectionStatus,
+  );
+  const reconnectRecoveryEvent = await playerPage.evaluate(() =>
+    (window.__fmarchLiveProjectionEvents ?? []).find(
+      (event) =>
+        event?.kind === "reconnect" &&
+        event.attempt === 1 &&
+        event.state === "recovered",
+    ),
+  );
+  await playerPage.waitForFunction(
+    (expectedBody) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.some(
+        (post) => post.body === expectedBody,
+      ),
+    reconnectPostBody,
+  );
+  await playerPage.getByText(reconnectPostBody, { exact: true }).waitFor({
+    state: "visible",
+  });
+  const postVisibleStatus = await playerPage.evaluate(
+    () => window.__fmarchLiveProjectionStatus,
+  );
+  const recoveredProjection = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection,
+  );
+  return {
+    status: "passed",
+    reconnectingStatus,
+    reconnectCommand,
+    reconnectRecoveryEvent,
+    recoveredStatus,
+    postVisibleStatus,
+    recoveredPostBody: reconnectPostBody,
+    recoveredSnapshotContainsPost: recoveredProjection?.thread?.posts?.some(
+      (post) => post.body === reconnectPostBody,
+    ),
+  };
+}
+
+async function verifyStalePlayerVoteRecovery({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+  normalizeServerCommandEnvelope,
+}) {
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+  );
+  const phaseBeforeClose = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  await playerPage.waitForFunction(
+    () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+  );
+  const closedStatus = await playerPage.evaluate(
+    () => window.__fmarchClosePlayerLiveProjection(),
+  );
+  const lockCommandId = crypto.randomUUID();
+  const lockRaw = await sendBrowserCommand(hostPage, {
+    principalUserId: "host_h",
+    command: { LockThread: { game } },
+    commandId: lockCommandId,
+  });
+  const lock = normalizeServerCommandEnvelope({
+    actionId: "lock_thread",
+    commandId: lockCommandId,
+    requestEnvelope: lockRaw.requestEnvelope,
+    response: { status: lockRaw.httpStatus },
+    serverEnvelope: lockRaw.serverEnvelope,
+  });
+  if (lock.state !== "ack") {
+    throw new Error(`stale vote setup lock did not ack: ${JSON.stringify(lock)}`);
+  }
+
+  await playerPage.locator('[data-action="submit_vote"]').click();
+  await playerPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+  );
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+  );
+  const reject = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  if (!reject.message.includes("stale projection")) {
+    throw new Error(`stale player vote message drifted: ${JSON.stringify(reject)}`);
+  }
+  const phaseAfterReject = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+
+  const unlockCommandId = crypto.randomUUID();
+  const unlockRaw = await sendBrowserCommand(hostPage, {
+    principalUserId: "host_h",
+    command: { UnlockThread: { game } },
+    commandId: unlockCommandId,
+  });
+  const unlock = normalizeServerCommandEnvelope({
+    actionId: "unlock_thread",
+    commandId: unlockCommandId,
+    requestEnvelope: unlockRaw.requestEnvelope,
+    response: { status: unlockRaw.httpStatus },
+    serverEnvelope: unlockRaw.serverEnvelope,
+  });
+  if (unlock.state !== "ack") {
+    throw new Error(`stale vote cleanup unlock did not ack: ${JSON.stringify(unlock)}`);
+  }
+  const hostStateAfterUnlock = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (hostStateAfterUnlock.phase?.locked !== false) {
+    throw new Error(`stale vote cleanup left phase locked: ${JSON.stringify(hostStateAfterUnlock.phase)}`);
+  }
+
+  return {
+    status: "passed",
+    phaseBeforeClose,
+    closedStatus,
+    lock,
+    reject,
+    phaseAfterReject,
+    unlock,
+    hostPhaseAfterUnlock: hostStateAfterUnlock.phase,
   };
 }
 
 async function fetchResolvedSlotState({ apiBaseUrl, game, slot }) {
   const state = await fetchHostConsoleState({ apiBaseUrl, game, slot });
   return state.slots?.find((candidate) => candidate.slot_id === slot) ?? null;
+}
+
+async function gotoPlayerBoard(page, game) {
+  const response = await page.goto(`${frontendBaseUrl}/g/${game}`, {
+    waitUntil: "networkidle",
+  });
+  if (response === null || !response.ok()) {
+    throw new Error(`player board route failed with ${response?.status() ?? "no response"}`);
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
 }
 
 async function fetchHostConsoleState({ apiBaseUrl, game, slot }) {

@@ -125,6 +125,62 @@ assert.equal(
   1,
 );
 assert.equal(
+  session.verification.multiplayerHardening.reconnect.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.reconnect.reconnectingStatus.state,
+  "reconnecting",
+);
+assert.equal(
+  session.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.state,
+  "recovered",
+);
+assert.equal(
+  session.verification.multiplayerHardening.reconnect.reconnectRecoveryEvent.attempt,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.reconnect.recoveredSnapshotContainsPost,
+  true,
+);
+assert.match(
+  session.verification.multiplayerHardening.reconnect.recoveredPostBody,
+  /^Player reconnect proof from dev:test-game /,
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.lock.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.stalePlayerVote.reject.message,
+  /stale projection/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.phaseAfterReject.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.unlock.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.stalePlayerVote.hostPhaseAfterUnlock.locked,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostControl.reject.state,
   "reject",
 );
