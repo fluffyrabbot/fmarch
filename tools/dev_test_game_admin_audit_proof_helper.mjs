@@ -23,7 +23,7 @@ export async function runAdminAuditProof({
   smokeName,
   stage,
   evidencePath,
-  envOverrides,
+  envOverrides = {},
   loadSource,
   prove,
   buildEvidence,
@@ -96,6 +96,8 @@ export async function proveAdminAuditDetail({
   requiredChecks = [],
   requiredScenarios = [],
   requiredSessions = [],
+  requiredUnproven = [],
+  forbiddenText = [],
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const linkTestId = `admin-audit-link-${auditId}`;
@@ -148,9 +150,19 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-session",
       ids: requiredSessions,
     });
+    const visibleUnproven = await waitForRows({
+      page,
+      prefix: "admin-audit-unproven",
+      ids: requiredUnproven,
+    });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error(`${auditId} admin surface leaked an invite URL token`);
+    }
+    for (const token of forbiddenText) {
+      if (bodyText.includes(token)) {
+        throw new Error(`${auditId} admin surface leaked forbidden text`);
+      }
     }
     return {
       status: "passed",
@@ -162,6 +174,7 @@ export async function proveAdminAuditDetail({
       ...(visibleChecks.length === 0 ? {} : { visibleChecks }),
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
+      ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
