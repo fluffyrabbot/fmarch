@@ -372,12 +372,20 @@ test("session card and markdown include role invite URLs and tokens", () => {
     opsArtifacts,
     seedFixtureSummaryPath: "target/dev-test-game/seed-fixture-summary.json",
     seedFixtureSummary: seedFixture,
+    seedAdminProofPath: "target/dev-test-game/seed-admin-proof.json",
+    seedAdminProof: seedAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(seedFixtureReadiness);
   assert(
     seedFixtureReadiness.localDevelopmentSpine.checks.some(
       (item) => item.id === "local-seed-demo-fixture" && item.status === "passed",
     ),
+  );
+  assert.equal(
+    seedFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-seed-demo-fixture",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-seed-fixtures?game=<seeded-game>",
   );
   assert.equal(
     seedFixtureReadiness.releaseReadiness.unproven.some(
@@ -599,6 +607,42 @@ function opsAdminProofFixture() {
         "role-entrypoints-redacted",
         "proof-lanes-summarized",
         "release-boundary-carried",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function seedAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-seed-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-seed-admin-surface",
+    proofBoundary: "Local admin seed fixture proof only.",
+    generatedFrom: {
+      seedFixtureSummary: "target/dev-test-game/seed-fixture-summary.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-seed-fixtures",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleScenarios: [
+        "host-phase-controls",
+        "player-vote-recovery",
+        "night-action-loop",
+        "private-channel-member",
+        "private-channel-denied",
+        "multiplayer-hardening",
+        "local-ops-readiness",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,

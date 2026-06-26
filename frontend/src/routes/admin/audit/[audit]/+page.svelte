@@ -64,6 +64,20 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.scenarios?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-scenarios">
+        {#each data.audit.scenarios as scenario}
+          <li
+            class="admin-audit-detail__entry"
+            data-testid={`admin-audit-scenario-${scenario.id}`}
+          >
+            <strong>{scenario.title}</strong>
+            <span>{scenario.status}</span>
+            <span>{scenario.role}</span>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
       data-testid={evidenceTestId}

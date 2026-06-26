@@ -21,6 +21,7 @@ export async function buildAdminRouteData({
   sessionToken = null,
   identityPrincipalUserId = "host_h",
   opsArtifacts = null,
+  seedFixtureSummary = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -118,7 +119,11 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+      appendLocalSeedFixtureAudit(
+        appendLocalOpsArtifactsAudit(coldData.audit, opsArtifacts, { game }),
+        seedFixtureSummary,
+        { game },
+      ),
       { game },
     ),
     recoveryTasks: Object.freeze([
@@ -165,6 +170,7 @@ export async function buildAdminAuditDetailData({
   sessionToken = null,
   identityPrincipalUserId = "host_h",
   opsArtifacts = null,
+  seedFixtureSummary = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -175,6 +181,7 @@ export async function buildAdminAuditDetailData({
     sessionToken,
     identityPrincipalUserId,
     opsArtifacts,
+    seedFixtureSummary,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -341,6 +348,62 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
       roleCount: Number(opsArtifacts.run?.roleCount ?? 0),
       releaseReady: opsArtifacts.releaseReady === true,
       productionReady: opsArtifacts.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalSeedFixtureAudit(audit, seedFixtureSummary, { game }) {
+  const row = normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
+  if (
+    seedFixtureSummary === null ||
+    typeof seedFixtureSummary !== "object" ||
+    seedFixtureSummary.version !== 1 ||
+    seedFixtureSummary.proof !== "dev-test-game-seed-fixture-summary" ||
+    seedFixtureSummary.status !== "passed"
+  ) {
+    return null;
+  }
+  const scenarios = Array.isArray(seedFixtureSummary.demoScenarios)
+    ? seedFixtureSummary.demoScenarios
+    : [];
+  const localScenarios = scenarios.filter(
+    (scenario) => scenario?.status === "available_locally",
+  );
+  return Object.freeze({
+    id: "local-seed-fixtures",
+    label: "Local seed fixtures",
+    status: `${localScenarios.length} demo scenarios available locally`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local seed/demo fixture inventory",
+    boundaryDetail:
+      seedFixtureSummary.proofBoundary ??
+      "Local seed/demo fixture summary without hosted demo-data claims.",
+    href: "target/dev-test-game/seed-fixture-summary.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-seed-fixtures" }),
+    scenarios: Object.freeze(
+      scenarios.map((scenario) =>
+        Object.freeze({
+          id: String(scenario.id),
+          title: String(scenario.title ?? scenario.id),
+          status: String(scenario.status),
+          role: String(scenario.role ?? ""),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(seedFixtureSummary.fixture?.game ?? ""),
+      scenarioCount: scenarios.length,
+      roleCount: Number(seedFixtureSummary.fixture?.roleCount ?? 0),
+      slotCount: Number(seedFixtureSummary.fixture?.slots?.length ?? 0),
+      releaseReady: seedFixtureSummary.releaseReady === true,
+      productionReady: seedFixtureSummary.productionReady === true,
     }),
   });
 }

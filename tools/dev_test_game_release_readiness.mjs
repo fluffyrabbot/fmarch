@@ -26,6 +26,7 @@ const defaultSeedFixtureSummaryPath = path.join(
   artifactDir,
   "seed-fixture-summary.json",
 );
+const defaultSeedAdminProofPath = path.join(artifactDir, "seed-admin-proof.json");
 const defaultIdentityAdapterProofPath = path.join(
   repoRoot,
   "target",
@@ -78,6 +79,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.seedFixtureSummaryPath ??
           "target/dev-test-game/seed-fixture-summary.json",
         artifact: options.seedFixtureSummaryArtifact,
+      })
+    : undefined;
+  const seedAdminProofEvidence = options.seedAdminProof
+    ? validateDevTestGameSeedAdminProof(options.seedAdminProof, {
+        path: options.seedAdminProofPath ?? "target/dev-test-game/seed-admin-proof.json",
+        artifact: options.seedAdminProofArtifact,
       })
     : undefined;
   const identityAdapterEvidence = options.identityAdapterProof
@@ -148,6 +155,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: seedFixtureEvidence.path,
       proofBoundary: seedFixtureEvidence.proofBoundary,
       scenarioCount: seedFixtureEvidence.scenarioCount,
+      ...(seedAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: seedAdminProofEvidence }),
     });
   }
   if (identityAdapterEvidence !== undefined) {
@@ -273,6 +283,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             seedFixtureSummary: seedFixtureEvidence.path,
+            ...(seedAdminProofEvidence === undefined
+              ? {}
+              : { seedAdminProof: seedAdminProofEvidence.path }),
           }),
       ...(identityAdapterEvidence === undefined
         ? {}
@@ -298,7 +311,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : { opsArtifacts: opsArtifactsEvidence }),
               ...(seedFixtureEvidence === undefined
                 ? {}
-                : { seedFixture: seedFixtureEvidence }),
+                : {
+                    seedFixture: {
+                      ...seedFixtureEvidence,
+                      ...(seedAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: seedAdminProofEvidence }),
+                    },
+                  }),
               ...(identityAdapterEvidence === undefined
                 ? {}
                 : { identityAdapter: identityAdapterEvidence }),
@@ -574,6 +594,53 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   };
 }
 
+export function validateDevTestGameSeedAdminProof(proof, options = {}) {
+  const requiredScenarios = [
+    "host-phase-controls",
+    "player-vote-recovery",
+    "night-action-loop",
+    "private-channel-member",
+    "private-channel-denied",
+    "multiplayer-hardening",
+    "local-ops-readiness",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(`seed admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-seed-admin-proof") {
+    throw new Error(`unexpected seed admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`seed admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-seed-admin-surface") {
+    throw new Error(`seed admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("seed admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("seed admin proof did not prove admin overview click-through");
+  }
+  for (const scenarioId of requiredScenarios) {
+    if (!proof.adminRoleSurface?.visibleScenarios?.includes(scenarioId)) {
+      throw new Error(`seed admin proof missing visible scenario: ${scenarioId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/seed-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleScenarios: proof.adminRoleSurface.visibleScenarios,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   const requiredRoles = new Map([
     ["admin", "GlobalAdmin"],
@@ -792,12 +859,14 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     seedFixtureOptions,
     identityAdapterOptions,
     opsAdminProofOptions,
+    seedAdminProofOptions,
   ] = await Promise.all([
       readOptionalBackupRestoreArtifacts(),
       readOptionalOpsArtifacts(),
       readOptionalSeedFixtureSummary(),
       readOptionalIdentityAdapterProof(),
       readOptionalOpsAdminProof(),
+      readOptionalSeedAdminProof(),
     ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -806,6 +875,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(seedFixtureOptions ?? {}),
     ...(identityAdapterOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
+    ...(seedAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -843,6 +913,21 @@ async function readOptionalOpsAdminProof() {
     opsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     opsAdminProofPath: path.relative(repoRoot, proofPath),
     opsAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalSeedAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultSeedAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    seedAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    seedAdminProofPath: path.relative(repoRoot, proofPath),
+    seedAdminProofArtifact: artifact,
   };
 }
 

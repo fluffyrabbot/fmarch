@@ -584,6 +584,66 @@ test("admin local ops artifact detail data carries check rows", async () => {
   );
 });
 
+test("admin route data exposes local seed fixture summary as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    seedFixtureSummary: seedFixtureSummaryFixture(),
+  });
+
+  const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
+  assert.equal(seed.label, "Local seed fixtures");
+  assert.equal(seed.status, "7 demo scenarios available locally");
+  assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
+  assert.deepEqual(
+    seed.scenarios.map((scenario) => scenario.id),
+    [
+      "host-phase-controls",
+      "player-vote-recovery",
+      "night-action-loop",
+      "private-channel-member",
+      "private-channel-denied",
+      "multiplayer-hardening",
+      "local-ops-readiness",
+    ],
+  );
+  assert.deepEqual(seed.artifactSummary, {
+    game: "game-a",
+    scenarioCount: 7,
+    roleCount: 6,
+    slotCount: 5,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local seed fixture detail data carries scenario rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-seed-fixtures",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    seedFixtureSummary: seedFixtureSummaryFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local seed fixtures");
+  assert.equal(data.audit.id, "local-seed-fixtures");
+  assert.equal(data.audit.scenarios.length, 7);
+  assert.deepEqual(
+    data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
+    [
+      ["host-phase-controls", "available_locally"],
+      ["player-vote-recovery", "available_locally"],
+      ["night-action-loop", "available_locally"],
+      ["private-channel-member", "available_locally"],
+      ["private-channel-denied", "available_locally"],
+      ["multiplayer-hardening", "available_locally"],
+      ["local-ops-readiness", "available_locally"],
+    ],
+  );
+});
+
 test("admin load accepts GlobalMod escalation authority", async () => {
   const data = await load({
     locals: {
@@ -677,6 +737,47 @@ function localOpsArtifactsFixture() {
       { id: "proof-lanes-summarized", status: "passed" },
       { id: "release-boundary-carried", status: "passed" },
     ],
+  };
+}
+
+function seedFixtureSummaryFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-seed-fixture-summary",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-seed-fixture",
+    proofBoundary: "Local seed/demo fixture inventory for one dev-test-game run.",
+    fixture: {
+      game: "game-a",
+      roleCount: 6,
+      slots: [
+        { slotId: "slot-1" },
+        { slotId: "slot-2" },
+        { slotId: "slot-3" },
+        { slotId: "slot-4" },
+        { slotId: "slot-5" },
+      ],
+    },
+    demoScenarios: [
+      seedScenario("host-phase-controls", "Host phase controls", "host"),
+      seedScenario("player-vote-recovery", "Player vote recovery", "player"),
+      seedScenario("night-action-loop", "Night action loop", "actionPlayer"),
+      seedScenario("private-channel-member", "Private channel member", "player"),
+      seedScenario("private-channel-denied", "Private channel denial", "deniedPlayer"),
+      seedScenario("multiplayer-hardening", "Multiplayer hardening", "player"),
+      seedScenario("local-ops-readiness", "Local ops readiness", "admin"),
+    ],
+  };
+}
+
+function seedScenario(id, title, role) {
+  return {
+    id,
+    title,
+    role,
+    status: "available_locally",
   };
 }
 

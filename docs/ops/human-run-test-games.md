@@ -79,8 +79,10 @@ target/dev-test-game/session.md
 target/dev-test-game/proof-run.json
 target/dev-test-game/ops-artifacts.json
 target/dev-test-game/ops-artifacts.md
+target/dev-test-game/ops-admin-proof.json
 target/dev-test-game/seed-fixture-summary.json
 target/dev-test-game/seed-fixture-summary.md
+target/dev-test-game/seed-admin-proof.json
 target/dev-test-game/release-readiness-checklist.json
 target/dev-test-game/release-readiness-checklist.md
 target/dev-test-game/named-games.json
@@ -179,9 +181,11 @@ proof run, then writes `target/dev-test-game/ops-artifacts.{json,md}` with
 redacted role entry URLs, source artifact checksums, command and lane counts,
 and a local proof boundary. It then writes
 `target/dev-test-game/seed-fixture-summary.{json,md}` with redacted role URLs,
-seeded slots, local demo scenarios, and proof-lane mappings. The final
-readiness checklist pass consumes the ops bundle plus the seed fixture summary
-and promotes only those local checks.
+seeded slots, local demo scenarios, and proof-lane mappings, then writes
+`target/dev-test-game/seed-admin-proof.json` by clicking from the seeded admin
+overview into the native local seed fixture detail route. The final readiness
+checklist pass consumes the ops bundle plus the seed fixture summary and its
+admin browser proof, and promotes only those local checks.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -227,8 +231,10 @@ checklist consumes `target/dev-test-game/ops-artifacts.json` plus
 `target/dev-test-game/ops-admin-proof.json` and promotes only the local ops
 artifact bundle with its seeded admin overview-to-detail browser proof. After
 `npm run test:dev-test-game-seed-fixture`,
-the checklist consumes `target/dev-test-game/seed-fixture-summary.json` and
-promotes only the local seed/demo fixture inventory. After
+the checklist consumes `target/dev-test-game/seed-fixture-summary.json` plus
+`target/dev-test-game/seed-admin-proof.json` and promotes only the local
+seed/demo fixture inventory with its seeded admin overview-to-detail browser
+proof. After
 `npm run test:dev-test-game-identity`, the checklist consumes
 `target/auth-invite-role-proof/invite-role-proof.json` and promotes only the
 local identity-adapter proof that invite-issued opaque sessions preserve the

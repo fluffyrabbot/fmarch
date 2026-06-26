@@ -1,7 +1,10 @@
 import { error, fail } from "@sveltejs/kit";
 import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
-import { readLocalOpsArtifacts } from "../../lib/server/local-ops-artifacts.mjs";
+import {
+  readLocalOpsArtifacts,
+  readLocalSeedFixtureSummary,
+} from "../../lib/server/local-ops-artifacts.mjs";
 import { SESSION_COOKIE_NAME } from "../../lib/server/session-capabilities.mjs";
 import {
   adminForbiddenMessage,
@@ -21,6 +24,7 @@ export async function load({ cookies, locals, fetch, url }) {
     sessionToken: cookies?.get?.(SESSION_COOKIE_NAME) ?? null,
     identityPrincipalUserId: url.searchParams.get("identity_principal_user_id") ?? "host_h",
     opsArtifacts: await readLocalOpsArtifacts(),
+    seedFixtureSummary: await readLocalSeedFixtureSummary(),
   });
 
   if (!data.access.allowed) {
