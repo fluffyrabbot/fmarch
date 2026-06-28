@@ -3,6 +3,7 @@ import { operatorProofRunUrl } from "../../lib/app/cold-load.mjs";
 import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mjs";
 import {
   readLocalBackupRestoreProof,
+  readLocalAdminSpineProof,
   readLocalDevTestGameProofRun,
   readLocalIdentityAdapterProof,
   readLocalOpsArtifacts,
@@ -35,6 +36,7 @@ export async function load({ cookies, locals, fetch, url }) {
     backupRestoreProof: await readLocalBackupRestoreProof(),
     identityAdapterProof: await readLocalIdentityAdapterProof(),
     spineManifest: await readLocalSpineManifest(),
+    adminSpineProof: await readLocalAdminSpineProof(),
   });
 
   if (!data.access.allowed) {

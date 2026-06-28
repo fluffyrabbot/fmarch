@@ -94,6 +94,7 @@ target/dev-test-game/admin-spine-proof.json
 target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
 target/dev-test-game/spine-manifest-admin-proof.json
+target/dev-test-game/admin-spine-admin-proof.json
 target/auth-invite-role-proof/invite-role-proof.json
 target/live-stack-backup-restore-drill/local-backup-restore-proof.json
 target/live-stack-backup-restore-drill/local-live-stack.dump
@@ -165,6 +166,12 @@ The ordered aggregate admin-spine browser proof is:
 
 ```sh
 npm run test:dev-test-game-admin-spine
+```
+
+The seeded admin overview-to-local-admin-spine detail browser proof is:
+
+```sh
+npm run test:dev-test-game-admin-spine-admin-proof
 ```
 
 The generated spine manifest, which records proof command order and evidence
@@ -315,7 +322,10 @@ keeping release readiness `not_ready`. The same command also writes
 `target/dev-test-game/spine-manifest.{json,md}` and
 `target/dev-test-game/spine-manifest-admin-proof.json`, proving the current local
 proof order and evidence env wiring are inspectable from the seeded admin role
-surface without reading the orchestration code.
+surface without reading the orchestration code. It also writes
+`target/dev-test-game/admin-spine-admin-proof.json`, proving the aggregate
+`admin-spine-proof.json` is itself inspectable from the seeded admin overview in
+the native local-admin-spine detail route.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

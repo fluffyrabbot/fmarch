@@ -164,6 +164,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/spine-manifest-admin-proof.json",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF:
       "target/dev-test-game/admin-spine-proof.json",
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
+      "target/dev-test-game/admin-spine-admin-proof.json",
   });
   assert.deepEqual(devTestGameLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
@@ -212,6 +214,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     manifest.artifacts.includes(
       "target/dev-test-game/spine-manifest-admin-proof.json",
     ),
+  );
+  assert(
+    manifest.artifacts.includes("target/dev-test-game/admin-spine-admin-proof.json"),
   );
   assert(
     manifest.artifacts.includes(
@@ -692,11 +697,23 @@ test("session card and markdown include role invite URLs and tokens", () => {
     generatedAt: "2026-06-26T00:00:00.000Z",
     adminSpineProofPath: "target/dev-test-game/admin-spine-proof.json",
     adminSpineProof: adminSpineProofFixture(),
+    adminSpineAdminProofPath: "target/dev-test-game/admin-spine-admin-proof.json",
+    adminSpineAdminProof: adminSpineAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(adminSpineReadiness);
   assert.equal(
     adminSpineReadiness.generatedFrom.adminProofSpine,
     "target/dev-test-game/admin-spine-proof.json",
+  );
+  assert.equal(
+    adminSpineReadiness.generatedFrom.adminSpineAdminProof,
+    "target/dev-test-game/admin-spine-admin-proof.json",
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-admin-spine-surface",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-admin-spine?game=<seeded-game>",
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
@@ -1140,6 +1157,54 @@ function spineManifestAdminProofFixture() {
         "sub-spine-orders-recorded",
         "evidence-env-wiring-recorded",
         "release-boundary-carried",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function adminSpineAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-admin-spine-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-admin-spine-admin-surface",
+    proofBoundary: "Local admin aggregate spine proof only.",
+    generatedFrom: {
+      adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      proofIds: [
+        "core-loop",
+        "hardening",
+        "identity",
+        "backup",
+        "ops",
+        "seed",
+        "release",
+        "spine-manifest",
+      ],
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-admin-spine",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "core-loop",
+        "hardening",
+        "identity",
+        "backup",
+        "ops",
+        "seed",
+        "release",
+        "spine-manifest",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,

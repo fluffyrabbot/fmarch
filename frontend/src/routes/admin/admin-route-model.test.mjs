@@ -614,6 +614,66 @@ test("admin local spine manifest detail data carries manifest check rows", async
   );
 });
 
+test("admin route data exposes local admin spine proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    adminSpineProof: adminSpineProofFixture(),
+  });
+
+  const adminSpine = data.audit.find((item) => item.id === "local-admin-spine");
+  assert.equal(adminSpine.label, "Local admin spine");
+  assert.equal(adminSpine.status, "8 admin proof surfaces passed");
+  assert.equal(adminSpine.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(adminSpine.inspectHref, "/admin/audit/local-admin-spine?game=midsummer");
+  assert.deepEqual(
+    adminSpine.checks.map((check) => check.id),
+    [
+      "core-loop",
+      "hardening",
+      "identity",
+      "backup",
+      "ops",
+      "seed",
+      "release",
+      "spine-manifest",
+    ],
+  );
+  assert.deepEqual(adminSpine.artifactSummary, {
+    game: "game-a",
+    proofCount: 8,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local admin spine detail data carries aggregate proof rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-admin-spine",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    adminSpineProof: adminSpineProofFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local admin spine");
+  assert.equal(data.audit.id, "local-admin-spine");
+  assert.equal(data.audit.checks.length, 8);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["core-loop", "passed"],
+      ["hardening", "passed"],
+      ["identity", "passed"],
+      ["backup", "passed"],
+      ["ops", "passed"],
+      ["seed", "passed"],
+      ["release", "passed"],
+      ["spine-manifest", "passed"],
+    ],
+  );
+});
+
 test("admin route data exposes local hardening proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1209,6 +1269,55 @@ function spineManifestFixture() {
         productionReady: false,
       },
     ],
+  };
+}
+
+function adminSpineProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-admin-spine-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-admin-spine",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    generatedFrom: {
+      game: "game-a",
+      proofs: {
+        "core-loop": "target/dev-test-game/core-loop-admin-proof.json",
+        hardening: "target/dev-test-game/hardening-admin-proof.json",
+        identity: "target/dev-test-game/identity-admin-proof.json",
+        backup: "target/dev-test-game/backup-admin-proof.json",
+        ops: "target/dev-test-game/ops-admin-proof.json",
+        seed: "target/dev-test-game/seed-admin-proof.json",
+        release: "target/dev-test-game/release-admin-proof.json",
+        "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
+      },
+    },
+    adminProofs: [
+      adminSpineProofRow("core-loop"),
+      adminSpineProofRow("hardening"),
+      adminSpineProofRow("identity"),
+      adminSpineProofRow("backup"),
+      adminSpineProofRow("ops"),
+      adminSpineProofRow("seed"),
+      adminSpineProofRow("release"),
+      adminSpineProofRow("spine-manifest"),
+    ],
+    proofBoundary: "Local aggregate admin spine proof only.",
+  };
+}
+
+function adminSpineProofRow(id) {
+  return {
+    id,
+    label: `${id} admin proof`,
+    proof: `dev-test-game-${id}-admin-proof`,
+    status: "passed",
+    path: `target/dev-test-game/${id}-admin-proof.json`,
+    game: "game-a",
+    releaseReady: false,
+    productionReady: false,
   };
 }
 

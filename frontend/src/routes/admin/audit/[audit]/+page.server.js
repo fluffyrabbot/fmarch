@@ -1,6 +1,7 @@
 import { error } from "@sveltejs/kit";
 import {
   readLocalBackupRestoreProof,
+  readLocalAdminSpineProof,
   readLocalDevTestGameProofRun,
   readLocalIdentityAdapterProof,
   readLocalOpsArtifacts,
@@ -33,6 +34,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     backupRestoreProof: await readLocalBackupRestoreProof(),
     identityAdapterProof: await readLocalIdentityAdapterProof(),
     spineManifest: await readLocalSpineManifest(),
+    adminSpineProof: await readLocalAdminSpineProof(),
   });
 
   if (!data.access.allowed) {

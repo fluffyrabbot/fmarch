@@ -28,6 +28,8 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
     "target/dev-test-game/spine-manifest-admin-proof.json",
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "target/dev-test-game/admin-spine-proof.json",
+  FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
+    "target/dev-test-game/admin-spine-admin-proof.json",
 };
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
@@ -37,6 +39,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 export async function runDevTestGameAdminSpine() {
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
+  await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
     env: adminSpineReadinessEvidenceEnv,
   });

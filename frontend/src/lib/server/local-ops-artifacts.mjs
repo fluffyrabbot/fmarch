@@ -11,6 +11,7 @@ const DEFAULT_BACKUP_RESTORE_PROOF =
 const DEFAULT_IDENTITY_ADAPTER_PROOF =
   "target/auth-invite-role-proof/invite-role-proof.json";
 const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
+const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -60,6 +61,13 @@ export async function readLocalSpineManifest({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST,
     fallback: DEFAULT_SPINE_MANIFEST,
+  });
+}
+
+export async function readLocalAdminSpineProof({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF,
+    fallback: DEFAULT_ADMIN_SPINE_PROOF,
   });
 }
 

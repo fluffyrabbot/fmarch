@@ -27,6 +27,7 @@ export async function buildAdminRouteData({
   backupRestoreProof = null,
   identityAdapterProof = null,
   spineManifest = null,
+  adminSpineProof = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -124,33 +125,37 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalSpineManifestAudit(
-        appendLocalIdentityAdapterAudit(
-          appendLocalBackupRestoreAudit(
-            appendLocalReleaseReadinessAudit(
-              appendLocalSeedFixtureAudit(
-                appendLocalOpsArtifactsAudit(
-                  appendLocalHardeningAudit(
-                    appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                    proofRun,
+      appendLocalAdminSpineAudit(
+        appendLocalSpineManifestAudit(
+          appendLocalIdentityAdapterAudit(
+            appendLocalBackupRestoreAudit(
+              appendLocalReleaseReadinessAudit(
+                appendLocalSeedFixtureAudit(
+                  appendLocalOpsArtifactsAudit(
+                    appendLocalHardeningAudit(
+                      appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                      proofRun,
+                      { game },
+                    ),
+                    opsArtifacts,
                     { game },
                   ),
-                  opsArtifacts,
+                  seedFixtureSummary,
                   { game },
                 ),
-                seedFixtureSummary,
+                releaseReadinessChecklist,
                 { game },
               ),
-              releaseReadinessChecklist,
+              backupRestoreProof,
               { game },
             ),
-            backupRestoreProof,
+            identityAdapterProof,
             { game },
           ),
-          identityAdapterProof,
+          spineManifest,
           { game },
         ),
-        spineManifest,
+        adminSpineProof,
         { game },
       ),
       { game },
@@ -205,6 +210,7 @@ export async function buildAdminAuditDetailData({
   backupRestoreProof = null,
   identityAdapterProof = null,
   spineManifest = null,
+  adminSpineProof = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -221,6 +227,7 @@ export async function buildAdminAuditDetailData({
     backupRestoreProof,
     identityAdapterProof,
     spineManifest,
+    adminSpineProof,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -447,6 +454,58 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       ),
       releaseReady: spineManifest.releaseReady === true,
       productionReady: spineManifest.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalAdminSpineAudit(audit, adminSpineProof, { game }) {
+  const row = normalizeLocalAdminSpineAudit(adminSpineProof, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
+  if (
+    adminSpineProof === null ||
+    typeof adminSpineProof !== "object" ||
+    adminSpineProof.version !== 1 ||
+    adminSpineProof.proof !== "dev-test-game-admin-spine-proof" ||
+    adminSpineProof.status !== "passed" ||
+    adminSpineProof.scope !== "local-dev-test-game-admin-spine" ||
+    adminSpineProof.releaseReady !== false ||
+    adminSpineProof.productionReady !== false
+  ) {
+    return null;
+  }
+  const proofs = Array.isArray(adminSpineProof.adminProofs)
+    ? adminSpineProof.adminProofs
+    : [];
+  return Object.freeze({
+    id: "local-admin-spine",
+    label: "Local admin spine",
+    status: `${proofs.filter((proof) => proof?.status === "passed").length} admin proof surfaces passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local aggregate admin proof",
+    boundaryDetail:
+      adminSpineProof.proofBoundary ??
+      "Local aggregate admin proof without hosted or release-readiness claims.",
+    href: "target/dev-test-game/admin-spine-proof.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-admin-spine" }),
+    checks: Object.freeze(
+      proofs.map((proof) =>
+        Object.freeze({
+          id: String(proof.id),
+          status: String(proof.status),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(adminSpineProof.generatedFrom?.game ?? ""),
+      proofCount: proofs.length,
+      releaseReady: adminSpineProof.releaseReady === true,
+      productionReady: adminSpineProof.productionReady === true,
     }),
   });
 }
