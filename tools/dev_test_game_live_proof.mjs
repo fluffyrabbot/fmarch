@@ -549,6 +549,63 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery.principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .reconnectingStatus.state,
+  "reconnecting",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .reconnectRecoveryEvent.state,
+  "recovered",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .reconnectRecoveryEvent.attempt,
+  1,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .recoveredSnapshotContainsPost,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .reconnectCommand.principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .reconnectCommand.command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .recoveredCommandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .recoveredCommandState.actorAlive,
+  true,
+);
+assert.match(
+  session.verification.replacementConsole.replacementReconnectRecovery
+    .recoveredPostBody,
+  /^Replacement Rowan reconnect proof from dev:test-game /,
+);
+assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.status,
   "passed",
 );

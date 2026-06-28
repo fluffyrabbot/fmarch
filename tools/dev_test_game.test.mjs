@@ -959,6 +959,29 @@ test("session card and markdown include role credential URLs and tokens", () => 
         freshCredentialKind: "session",
         freshRoleUrlHasInvite: false,
       },
+      replacementReconnectRecovery: {
+        status: "passed",
+        principalUserId: "player-rowan",
+        actorSlot: "slot-7",
+        reconnectingStatus: { state: "reconnecting" },
+        reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+        recoveredSnapshotContainsPost: true,
+        recoveredPostBody: "Replacement Rowan reconnect proof from dev:test-game",
+        reconnectCommand: {
+          principalUserId: "player-rowan",
+          command: {
+            SubmitPost: {
+              actor_slot: "slot-7",
+              body: "Replacement Rowan reconnect proof from dev:test-game",
+            },
+          },
+          streamSeqs: [47],
+        },
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          actorAlive: true,
+        },
+      },
       invalidReplacementRecovery: {
         status: "passed",
         invalidReplacement: {
@@ -1469,6 +1492,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-session-revocation-recovery",
       "replacement-session-refresh-recovery",
       "replacement-stale-session-after-refresh",
+      "replacement-reconnect-recovery",
       "replacement-invalid-target-recovery",
       "replacement-console",
       "replacement-idempotent-retry",
@@ -1553,7 +1577,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 28);
+  assert.equal(opsArtifacts.proofRun.laneCount, 29);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1654,6 +1678,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-session-revocation-recovery",
       "replacement-session-refresh-recovery",
       "replacement-stale-session-after-refresh",
+      "replacement-reconnect-recovery",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
@@ -2063,6 +2088,7 @@ function hardeningAdminProofFixture() {
         "replacement-session-revocation-recovery",
         "replacement-session-refresh-recovery",
         "replacement-stale-session-after-refresh",
+        "replacement-reconnect-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -2148,6 +2174,7 @@ function seedAdminProofFixture() {
         "replacement-session-revocation-recovery",
         "replacement-session-refresh-recovery",
         "replacement-stale-session-after-refresh",
+        "replacement-reconnect-recovery",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",

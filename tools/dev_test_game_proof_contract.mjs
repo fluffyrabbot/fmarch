@@ -23,6 +23,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-session-revocation-recovery",
   "replacement-session-refresh-recovery",
   "replacement-stale-session-after-refresh",
+  "replacement-reconnect-recovery",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -483,6 +484,53 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.freshCredentialKind === "session" &&
         verification.replacementConsole?.replacementStaleSessionAfterRefresh
           ?.freshRoleUrlHasInvite === false,
+    }),
+    lane("replacement-reconnect-recovery", "Replacement player reconnect recovers Slot 7 state", {
+      principalUserId:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.principalUserId ?? null,
+      actorSlot:
+        verification.replacementConsole?.replacementReconnectRecovery?.actorSlot ??
+        null,
+      reconnectingState:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectingStatus?.state ?? null,
+      recoveryState:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectRecoveryEvent?.state ?? null,
+      recoveredSnapshotContainsPost:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredSnapshotContainsPost ?? null,
+      recoveredCommandStateSlot:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredCommandState?.actorSlot ?? null,
+      recoveredCommandStateAlive:
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredCommandState?.actorAlive ?? null,
+      passed:
+        verification.replacementConsole?.replacementReconnectRecovery?.status ===
+          "passed" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.principalUserId === "player-rowan" &&
+        verification.replacementConsole?.replacementReconnectRecovery?.actorSlot ===
+          "slot-7" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectingStatus?.state === "reconnecting" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectRecoveryEvent?.state === "recovered" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectRecoveryEvent?.attempt === 1 &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredSnapshotContainsPost === true &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectCommand?.principalUserId ===
+          "player-rowan" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.reconnectCommand?.command?.SubmitPost?.actor_slot === "slot-7" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredCommandState?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.replacementReconnectRecovery
+          ?.recoveredCommandState?.actorAlive === true,
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:

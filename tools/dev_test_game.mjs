@@ -2030,6 +2030,10 @@ async function verifySeededReplacementConsole({
         apiBaseUrl,
         frontendBaseUrl,
       });
+    const replacementReconnectRecovery = await verifyReplacementReconnectRecovery({
+      replacementEntry: pendingIncomingPlayer.replacementEntry,
+      game,
+    });
     if (
       hostIssuedInvite?.status !== "passed" ||
       hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
@@ -2107,7 +2111,15 @@ async function verifySeededReplacementConsole({
       replacementStaleSessionAfterRefresh?.freshCredentialKind !== "session" ||
       replacementStaleSessionAfterRefresh?.freshRoleUrlHasInvite !== false ||
       replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !==
-        "invite-session-"
+        "invite-session-" ||
+      replacementReconnectRecovery?.status !== "passed" ||
+      replacementReconnectRecovery?.principalUserId !== "player-rowan" ||
+      replacementReconnectRecovery?.actorSlot !== "slot-7" ||
+      replacementReconnectRecovery?.reconnectingStatus?.state !== "reconnecting" ||
+      replacementReconnectRecovery?.reconnectRecoveryEvent?.state !== "recovered" ||
+      replacementReconnectRecovery?.recoveredSnapshotContainsPost !== true ||
+      replacementReconnectRecovery?.recoveredCommandState?.actorSlot !== "slot-7" ||
+      replacementReconnectRecovery?.recoveredCommandState?.actorAlive !== true
     ) {
       throw new Error(
         `replacement console proof drifted: ${JSON.stringify({
@@ -2126,6 +2138,7 @@ async function verifySeededReplacementConsole({
             withoutStaleReplacementEntry(replacementSessionRevocation),
           replacementSessionRefresh,
           replacementStaleSessionAfterRefresh,
+          replacementReconnectRecovery,
         })}`,
       );
     }
@@ -2146,8 +2159,9 @@ async function verifySeededReplacementConsole({
         withoutStaleReplacementEntry(replacementSessionRevocation),
       replacementSessionRefresh,
       replacementStaleSessionAfterRefresh,
+      replacementReconnectRecovery,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, then proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
     };
   } finally {
     await replacementSessionRevocation?.staleEntry?.context.close().catch(() => {});
@@ -3303,6 +3317,42 @@ async function verifyReplacementSessionRefreshRecovery({
   };
 }
 
+async function verifyReplacementReconnectRecovery({ replacementEntry, game }) {
+  const page = replacementEntry?.page;
+  if (page === undefined) {
+    throw new Error("replacement reconnect proof requires an open browser entry");
+  }
+  const reconnect = await verifyRoleReconnectRecovery({
+    page,
+    game,
+    principalUserId: "player-rowan",
+    actorSlot: "slot-7",
+    postPrefix: "Replacement Rowan reconnect proof",
+  });
+  if (
+    reconnect.status !== "passed" ||
+    reconnect.principalUserId !== "player-rowan" ||
+    reconnect.actorSlot !== "slot-7" ||
+    reconnect.reconnectingStatus?.state !== "reconnecting" ||
+    reconnect.reconnectRecoveryEvent?.state !== "recovered" ||
+    reconnect.reconnectRecoveryEvent?.attempt !== 1 ||
+    reconnect.recoveredSnapshotContainsPost !== true ||
+    reconnect.reconnectCommand?.principalUserId !== "player-rowan" ||
+    reconnect.reconnectCommand?.command?.SubmitPost?.actor_slot !== "slot-7" ||
+    reconnect.recoveredCommandState?.actorSlot !== "slot-7" ||
+    reconnect.recoveredCommandState?.actorAlive !== true
+  ) {
+    throw new Error(
+      `replacement reconnect recovery drifted: ${JSON.stringify(reconnect)}`,
+    );
+  }
+  return {
+    ...reconnect,
+    proof:
+      "After the replacement player logged in with a fresh session, the same role page dropped its live projection, a server-side Slot 7 post was appended as player-rowan, and the reconnect recovery snapshot restored current Slot 7 command state plus the new Rowan post.",
+  };
+}
+
 async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
   await gotoPlayerBoard(staleOutgoingPage, game);
   await staleOutgoingPage.locator('[data-action="submit_vote"]').waitFor({
@@ -3595,27 +3645,47 @@ async function submitStaleCohostDeadlineRecovery({
 }
 
 async function verifyPlayerReconnectRecovery({ playerPage, game }) {
-  await gotoPlayerBoard(playerPage, game);
-  await playerPage.waitForFunction(
+  return await verifyRoleReconnectRecovery({
+    page: playerPage,
+    game,
+    principalUserId: "player-seed",
+    actorSlot: "slot-3",
+    postPrefix: "Player reconnect proof",
+    navigate: true,
+  });
+}
+
+async function verifyRoleReconnectRecovery({
+  page,
+  game,
+  principalUserId,
+  actorSlot,
+  postPrefix,
+  navigate = false,
+}) {
+  if (navigate) {
+    await gotoPlayerBoard(page, game);
+  }
+  await page.waitForFunction(
     () => typeof window.__fmarchDropPlayerLiveProjection === "function",
   );
-  await playerPage.evaluate(() => window.__fmarchDropPlayerLiveProjection());
-  await playerPage.waitForFunction(
+  await page.evaluate(() => window.__fmarchDropPlayerLiveProjection());
+  await page.waitForFunction(
     () => window.__fmarchLiveProjectionStatus?.state === "reconnecting",
   );
-  const reconnectingStatus = await playerPage.evaluate(
+  const reconnectingStatus = await page.evaluate(
     () => window.__fmarchLiveProjectionStatus,
   );
-  const reconnectPostBody = `Player reconnect proof from dev:test-game ${crypto.randomUUID()}.`;
-  const reconnectCommand = await sendCommand("player-seed", {
+  const reconnectPostBody = `${postPrefix} from dev:test-game ${crypto.randomUUID()}.`;
+  const reconnectCommand = await sendCommand(principalUserId, {
     SubmitPost: {
       game,
       channel_id: "main",
-      actor_slot: "slot-3",
+      actor_slot: actorSlot,
       body: reconnectPostBody,
     },
   });
-  await playerPage.waitForFunction(
+  await page.waitForFunction(
     () =>
       (window.__fmarchLiveProjectionEvents ?? []).some(
         (event) =>
@@ -3624,10 +3694,10 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
           event.state === "recovered",
       ),
   );
-  const recoveredStatus = await playerPage.evaluate(
+  const recoveredStatus = await page.evaluate(
     () => window.__fmarchLiveProjectionStatus,
   );
-  const reconnectRecoveryEvent = await playerPage.evaluate(() =>
+  const reconnectRecoveryEvent = await page.evaluate(() =>
     (window.__fmarchLiveProjectionEvents ?? []).find(
       (event) =>
         event?.kind === "reconnect" &&
@@ -3635,24 +3705,27 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
         event.state === "recovered",
     ),
   );
-  await playerPage.waitForFunction(
-    (expectedBody) =>
+  await page.waitForFunction(
+    ({ expectedBody, expectedActorSlot }) =>
       window.__fmarchPlayerProjection?.thread?.posts?.some(
-        (post) => post.body === expectedBody,
+        (post) =>
+          post.body === expectedBody && post.authorSlot === expectedActorSlot,
       ),
-    reconnectPostBody,
+    { expectedBody: reconnectPostBody, expectedActorSlot: actorSlot },
   );
-  await playerPage.getByText(reconnectPostBody, { exact: true }).waitFor({
+  await page.getByText(reconnectPostBody, { exact: true }).waitFor({
     state: "visible",
   });
-  const postVisibleStatus = await playerPage.evaluate(
+  const postVisibleStatus = await page.evaluate(
     () => window.__fmarchLiveProjectionStatus,
   );
-  const recoveredProjection = await playerPage.evaluate(
+  const recoveredProjection = await page.evaluate(
     () => window.__fmarchPlayerProjection,
   );
   return {
     status: "passed",
+    principalUserId,
+    actorSlot,
     reconnectingStatus,
     reconnectCommand,
     reconnectRecoveryEvent,
@@ -3660,8 +3733,9 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
     postVisibleStatus,
     recoveredPostBody: reconnectPostBody,
     recoveredSnapshotContainsPost: recoveredProjection?.thread?.posts?.some(
-      (post) => post.body === reconnectPostBody,
+      (post) => post.body === reconnectPostBody && post.authorSlot === actorSlot,
     ),
+    recoveredCommandState: recoveredProjection?.commandState ?? null,
   };
 }
 
