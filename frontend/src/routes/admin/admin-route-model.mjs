@@ -934,6 +934,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "concurrent-vote-race",
     "stale-action-conflict",
     "stale-host-control",
+    "stale-cohost-deadline",
   ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));

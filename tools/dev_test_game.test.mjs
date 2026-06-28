@@ -862,6 +862,43 @@ test("session card and markdown include role invite URLs and tokens", () => {
         },
         apiPhaseAfterReject: { phase_id: "D02", locked: false },
       },
+      staleCohostDeadline: {
+        status: "passed",
+        actionId: "extend_deadline",
+        setup: {
+          stalePhase: { id: "D01", locked: false },
+          deadlineActions: ["extend_deadline"],
+          phaseActions: [],
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        },
+        commandOutcomes: [
+          {
+            actionId: "extend_deadline",
+            state: "reject",
+            error: "PhaseLocked",
+          },
+        ],
+        phaseAfterReject: { id: "D02", locked: false },
+        deadlineActionsAfterReject: ["extend_deadline"],
+        phaseActionsAfterReject: [],
+        activityStatusText:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "extend_deadline",
+          dispatchKind: "extend_deadline",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
+      },
     },
   };
   const markdown = markdownSessionCard(card);
@@ -902,6 +939,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
+  assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
     generatedAt: "2026-06-26T00:00:00.000Z",
   });
@@ -927,6 +965,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "concurrent-vote-race",
       "stale-action-conflict",
       "stale-host-control",
+      "stale-cohost-deadline",
     ],
   );
   const readiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -998,7 +1037,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 15);
+  assert.equal(opsArtifacts.proofRun.laneCount, 16);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1464,6 +1503,7 @@ function hardeningAdminProofFixture() {
         "concurrent-vote-race",
         "stale-action-conflict",
         "stale-host-control",
+        "stale-cohost-deadline",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,

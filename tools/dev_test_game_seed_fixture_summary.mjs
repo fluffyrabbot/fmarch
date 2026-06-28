@@ -278,8 +278,9 @@ function demoScenarios({ roles, laneIds }) {
         "reconnect-recovery",
         "concurrent-vote-race",
         "stale-host-control",
+        "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise duplicate command retry, reconnect recovery, one concurrent vote race, and stale host control rejection.",
+      note: "Seeded roles exercise duplicate command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

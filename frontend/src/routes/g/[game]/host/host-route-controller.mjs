@@ -220,7 +220,13 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
 }
 
 function isPhaseControlAction(kind) {
-  return ["resolve_phase", "lock_thread", "unlock_thread", "advance_phase"].includes(kind);
+  return [
+    "resolve_phase",
+    "lock_thread",
+    "unlock_thread",
+    "advance_phase",
+    "extend_deadline",
+  ].includes(kind);
 }
 
 function applyOutcomeProjectionPatches({ patches, projectionStore }) {

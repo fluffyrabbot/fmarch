@@ -457,6 +457,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({
+      event: { payload: { kind: "extend_deadline" } },
+      outcome: { state: "reject", error: "PhaseLocked" },
+    }),
+    ["host"],
+  );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
       event: { payload: { kind: "process_replacement" } },
       outcome: { state: "reject", error: "InvalidTarget" },
     }),

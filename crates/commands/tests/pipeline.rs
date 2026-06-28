@@ -2916,6 +2916,116 @@ async fn non_host_extend_deadline_is_rejected_host_acks(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AddCohost {
+            game,
+            user: "user_c".into(),
+        },
+    )
+    .await
+    .expect("delegate cohost");
+
+    let wrong_phase_err = handle(
+        &pool,
+        &user("user_c"),
+        Command::ExtendDeadline {
+            game,
+            phase: "N01".into(),
+            at: 111,
+        },
+    )
+    .await
+    .expect_err("cohost cannot extend a non-current phase");
+    assert_eq!(wrong_phase_err, Reject::PhaseLocked);
+    let d01_before_deadline = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(d01_before_deadline.phase_id, "D01");
+    assert_eq!(d01_before_deadline.deadline, None);
+
+    handle(
+        &pool,
+        &user("user_c"),
+        Command::ExtendDeadline {
+            game,
+            phase: "D01".into(),
+            at: 222,
+        },
+    )
+    .await
+    .expect("cohost extends the current open phase");
+    assert_eq!(
+        phase_state(&pool, game).await.unwrap().unwrap().deadline,
+        Some(222),
+    );
+
+    handle(&pool, &user("host_h"), Command::ResolvePhase { game, seed: 4815 })
+        .await
+        .expect("host resolves D01");
+    let locked_phase_err = handle(
+        &pool,
+        &user("user_c"),
+        Command::ExtendDeadline {
+            game,
+            phase: "D01".into(),
+            at: 333,
+        },
+    )
+    .await
+    .expect_err("cohost cannot extend a locked phase");
+    assert_eq!(locked_phase_err, Reject::PhaseLocked);
+    assert_eq!(
+        phase_state(&pool, game).await.unwrap().unwrap().deadline,
+        Some(222),
+    );
+
+    handle(&pool, &user("host_h"), Command::AdvancePhase { game })
+        .await
+        .expect("host advances to night");
+    let n01 = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(n01.phase_id, "N01");
+    assert_eq!(n01.deadline, None);
+
+    let stale_phase_err = handle(
+        &pool,
+        &user("user_c"),
+        Command::ExtendDeadline {
+            game,
+            phase: "D01".into(),
+            at: 444,
+        },
+    )
+    .await
+    .expect_err("cohost cannot extend a stale phase");
+    assert_eq!(stale_phase_err, Reject::PhaseLocked);
+    let after_stale_reject = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(after_stale_reject.phase_id, "N01");
+    assert_eq!(after_stale_reject.deadline, None);
+
+    append_and_project(
+        &pool,
+        game,
+        &[EventInput::new(
+            "DeadlineExtended",
+            1,
+            serde_json::json!({ "phase_id": "D01", "at": 555 }),
+            ActorId::Host,
+            0,
+        )],
+    )
+    .await
+    .expect("bypass stale deadline event appends");
+    let after_bypass_event = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(after_bypass_event.phase_id, "N01");
+    assert_eq!(
+        after_bypass_event.deadline, None,
+        "projection must not let stale deadline events mutate the current phase",
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn stored_game_stream_loads_deterministic_slot_only_engine_snapshot(pool: PgPool) {
     let game = Uuid::new_v4();
     let host = user("host_h");

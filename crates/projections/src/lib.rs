@@ -580,9 +580,12 @@ async fn fold_event(
                         source: serde::de::Error::custom("missing integer field `at`"),
                     })?;
             ensure_phase(tx, game_id, &phase_id).await?;
-            sqlx::query("UPDATE phase_state SET deadline = $2 WHERE game_id = $1")
+            sqlx::query(
+                "UPDATE phase_state SET deadline = $2 WHERE game_id = $1 AND phase_id = $3",
+            )
                 .bind(game_id)
                 .bind(at)
+                .bind(phase_id)
                 .execute(&mut **tx)
                 .await?;
         }

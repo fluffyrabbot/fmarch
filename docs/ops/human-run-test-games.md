@@ -332,11 +332,15 @@ stale `factional_kill` rejects with `Reject PhaseLocked` and refreshes to D02
 without the stale action control, and keeps a second host page frozen on the N01
 locked controls until its stale `UnlockThread` click renders a host command
 activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
-`resolve_phase` / `lock_thread` controls.
+`resolve_phase` / `lock_thread` controls, and keeps a second cohost page frozen
+on the D01 delegated deadline control until its stale `ExtendDeadline` click
+renders a host command activity `Reject PhaseLocked` receipt, refreshes to D02,
+and exposes only the current delegated deadline control without mutating the D02
+deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the six hardening lane rows above.
+verifying the seven hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -414,7 +418,7 @@ This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
 duplicate-command, player reconnect,
 concurrent vote race, stale player vote, stale action conflict, stale host
-control recovery, local artifact-bundle, local seed/demo fixture inventory,
+control recovery, stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
 invite delivery, account recovery, rate limits, abuse controls, production

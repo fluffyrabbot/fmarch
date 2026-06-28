@@ -661,6 +661,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
+        `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
+        "",
       );
     }
   }
@@ -684,6 +686,7 @@ async function verifySessionCard(card) {
   let multiplayerHardening;
   let staleActionPage;
   let staleHostPage;
+  let staleCohostPage;
   try {
     for (const role of ["host", "player", "actionPlayer", "deniedPlayer", "cohost"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
@@ -698,9 +701,12 @@ async function verifySessionCard(card) {
     }
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
+    staleCohostPage = await roleEntries.cohost.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
+      staleCohostPage,
       game: card.game,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
     coreLoop = await verifySeededCoreLoop({
       hostPage: roleEntries.host.page,
@@ -735,12 +741,15 @@ async function verifySessionCard(card) {
       staleActionConflict: actionLoop.staleActionConflict,
       staleHostPage,
       staleHostControlSetup: actionLoop.staleHostControlSetup,
+      staleCohostPage,
+      staleCohostDeadlineSetup: cohostConsole.staleDeadlineSetup,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
   } finally {
     await staleActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
+    await staleCohostPage?.close().catch(() => {});
     await Promise.all(
       Object.values(roleEntries).map((entry) => entry.context.close()),
     );
@@ -827,7 +836,12 @@ async function openVerifiedRoleEntry({
   }
 }
 
-async function verifySeededCohostConsole({ cohostPage, game }) {
+async function verifySeededCohostConsole({
+  cohostPage,
+  staleCohostPage,
+  game,
+  frontendBaseUrl,
+}) {
   await cohostPage.getByTestId("host-console-surface").waitFor({ state: "visible" });
   const capability = await cohostPage.getByTestId("host-console-capability").innerText();
   if (!capability.includes(`CohostOf(${game})`)) {
@@ -874,6 +888,11 @@ async function verifySeededCohostConsole({ cohostPage, game }) {
       `cohost host-only reject mutated phase state: ${JSON.stringify(phaseAfterReject)}`,
     );
   }
+  const staleDeadlineSetup = await freezeStaleCohostDeadlinePage({
+    staleCohostPage,
+    game,
+    frontendBaseUrl,
+  });
   return {
     status: "passed",
     capabilityLabel: capability,
@@ -884,6 +903,7 @@ async function verifySeededCohostConsole({ cohostPage, game }) {
       statusMessage: `Reject ${rejectBody.body.error}: ${rejectBody.body.message}`,
     },
     phaseAfterReject,
+    staleDeadlineSetup,
     proof:
       "The seeded cohost role URL opened the host console with CohostOf authority, exposed only the delegated deadline control, extended the D01 deadline through the hydrated host-console command path, and rejected a direct host-only ResolvePhase command as NotHost without mutating phase state.",
   };
@@ -891,6 +911,46 @@ async function verifySeededCohostConsole({ cohostPage, game }) {
 
 async function hostActionVisible(page, actionId) {
   return await page.getByTestId(`critical-host-action-${actionId}`).isVisible().catch(() => false);
+}
+
+async function freezeStaleCohostDeadlinePage({ staleCohostPage, game, frontendBaseUrl }) {
+  await staleCohostPage.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
+  await staleCohostPage.locator('[data-testid="critical-host-action-extend_deadline"]').waitFor({
+    state: "visible",
+  });
+  await staleCohostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D01" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const stalePhase = await staleCohostPage.evaluate(() => window.__fmarchHostProjection?.phase);
+  const deadlineActions = await visibleHostControlActions(staleCohostPage, "deadline");
+  const phaseActions = await visibleHostControlActions(staleCohostPage, "phase");
+  const closedStatus = await staleCohostPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D01" ||
+    stalePhase?.locked !== false ||
+    !deadlineActions.includes("extend_deadline") ||
+    phaseActions.length !== 0 ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale cohost deadline setup drifted: ${JSON.stringify({
+        stalePhase,
+        deadlineActions,
+        phaseActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    deadlineActions,
+    phaseActions,
+    closedStatus,
+  };
 }
 
 async function verifySeededCoreLoop({ hostPage, playerPage }) {
@@ -1650,6 +1710,8 @@ async function verifySeededMultiplayerHardening({
   staleActionConflict,
   staleHostPage,
   staleHostControlSetup,
+  staleCohostPage,
+  staleCohostDeadlineSetup,
   game,
   apiBaseUrl,
 }) {
@@ -1743,6 +1805,12 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  const staleCohostDeadline = await submitStaleCohostDeadlineRecovery({
+    staleCohostPage,
+    staleCohostDeadlineSetup,
+    apiBaseUrl,
+    game,
+  });
 
   return {
     status: "passed",
@@ -1759,8 +1827,9 @@ async function verifySeededMultiplayerHardening({
     concurrentVoteRace,
     staleActionConflict,
     staleHostControl,
+    staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then a stale seeded host role URL clicked UnlockThread, rendered a PhaseLocked command-activity receipt, refreshed to D02, and exposed the current valid phase controls.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -1850,6 +1919,106 @@ async function submitStaleHostControlRecovery({
     commandOutcomes,
     phaseAfterReject,
     visibleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
+}
+
+async function submitStaleCohostDeadlineRecovery({
+  staleCohostPage,
+  staleCohostDeadlineSetup,
+  apiBaseUrl,
+  game,
+}) {
+  const staleActionRoot = staleCohostPage.getByTestId("critical-host-action-extend_deadline");
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleCohostPage.waitForFunction(
+    () =>
+      window.__fmarchHostCommandStatuses?.extend_deadline?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.extend_deadline?.error === "PhaseLocked",
+  );
+  await staleCohostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const reject = await staleCohostPage.evaluate(
+    () => window.__fmarchHostCommandStatuses?.extend_deadline,
+  );
+  const commandOutcomes = await staleCohostPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const phaseAfterReject = await staleCohostPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const deadlineActionsAfterReject = await visibleHostControlActions(staleCohostPage, "deadline");
+  const phaseActionsAfterReject = await visibleHostControlActions(staleCohostPage, "phase");
+  const activityStatusText = await staleCohostPage
+    .getByTestId("host-command-activity-status-extend_deadline")
+    .innerText();
+  const activityRow = await staleCohostPage
+    .getByTestId("host-command-activity-extend_deadline")
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleCohostPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const hostStateAfterReject = await fetchHostConsoleState({
+    apiBaseUrl,
+    game,
+    principalUserId: "cohost_c",
+  });
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    !reject?.message?.includes("stale phase state") ||
+    phaseAfterReject?.id !== "D02" ||
+    phaseAfterReject?.locked !== false ||
+    !deadlineActionsAfterReject.includes("extend_deadline") ||
+    phaseActionsAfterReject.length !== 0 ||
+    !activityStatusText.includes("Reject PhaseLocked") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== "extend_deadline" ||
+    activityRow.dispatchKind !== "extend_deadline" ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    hostStateAfterReject.phase?.phase_id !== "D02" ||
+    hostStateAfterReject.phase?.locked !== false ||
+    hostStateAfterReject.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `stale cohost deadline recovery drifted: ${JSON.stringify({
+        staleCohostDeadlineSetup,
+        reject,
+        commandOutcomes,
+        phaseAfterReject,
+        deadlineActionsAfterReject,
+        phaseActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPhase: hostStateAfterReject.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId: "extend_deadline",
+    setup: staleCohostDeadlineSetup,
+    reject,
+    commandOutcomes,
+    phaseAfterReject,
+    deadlineActionsAfterReject,
+    phaseActionsAfterReject,
     activityStatusText,
     activityRow,
     dispatchPlan,
@@ -2159,8 +2328,8 @@ function normalizedVotecountRows(apiVotecount) {
     }));
 }
 
-async function fetchHostConsoleState({ apiBaseUrl, game, slot }) {
-  const params = new URLSearchParams({ principal_user_id: "host_h" });
+async function fetchHostConsoleState({ apiBaseUrl, game, slot, principalUserId = "host_h" }) {
+  const params = new URLSearchParams({ principal_user_id: principalUserId });
   if (slot !== undefined) {
     params.set("slot_id", slot);
   }
@@ -2270,12 +2439,16 @@ async function expectHostPhaseActions(page, expectedActions) {
 }
 
 async function visibleHostPhaseActions(page) {
-  return await page.evaluate(() => {
-    const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
-    if (phaseGroup === null) {
+  return await visibleHostControlActions(page, "phase");
+}
+
+async function visibleHostControlActions(page, controlId) {
+  return await page.evaluate((controlId) => {
+    const group = document.querySelector(`[data-testid="moderator-control-${controlId}"]`);
+    if (group === null) {
       return [];
     }
-    return [...phaseGroup.querySelectorAll('[data-testid^="critical-host-action-"]')]
+    return [...group.querySelectorAll('[data-testid^="critical-host-action-"]')]
       .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
       .filter(
         (id) =>
@@ -2283,7 +2456,7 @@ async function visibleHostPhaseActions(page) {
           !["trigger", "confirmation", "confirmation-message", "confirm", "cancel"].includes(id),
       )
       .sort();
-  });
+  }, controlId);
 }
 
 async function waitForHostProjectionPhaseLocked(page, locked) {

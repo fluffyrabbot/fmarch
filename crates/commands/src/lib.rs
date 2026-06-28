@@ -1405,6 +1405,10 @@ async fn extend_deadline(
     let caps = caps::resolve(pool, principal, game).await?;
     // Requires HostOf|CohostOf — the narrowest is CohostOf (host subsumes it).
     require(&caps, &Capability::CohostOf(game), Reject::NotHost)?;
+    let current_phase = require_open_phase(pool, game).await?;
+    if current_phase != phase {
+        return Err(Reject::PhaseLocked);
+    }
     let ev = EventInput::new(
         "DeadlineExtended",
         1,

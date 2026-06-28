@@ -22,6 +22,7 @@ const requiredChecks = [
   "concurrent-vote-race",
   "stale-action-conflict",
   "stale-host-control",
+  "stale-cohost-deadline",
 ];
 
 await runAdminAuditProof({

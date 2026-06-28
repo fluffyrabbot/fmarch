@@ -458,6 +458,84 @@ assert.equal(
   session.verification.multiplayerHardening.staleHostControl.apiPhaseAfterReject.locked,
   false,
 );
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.stalePhase.id,
+  "D01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.stalePhase.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.deadlineActions.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.phaseActions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleCohostDeadline.reject.message,
+  /stale phase state/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.phaseAfterReject.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.phaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.deadlineActionsAfterReject.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.phaseActionsAfterReject.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.activityRow.source,
+  "outcome",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.activityRow.actionId,
+  "extend_deadline",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.apiPhaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.apiPhaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.apiPhaseAfterReject.deadline,
+  null,
+);
 
 console.log(`dev test-game live proof passed for ${session.game}`);
 

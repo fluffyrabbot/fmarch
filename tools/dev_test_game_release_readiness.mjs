@@ -214,6 +214,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "concurrent-vote-race",
         "stale-action-conflict",
         "stale-host-control",
+        "stale-cohost-deadline",
       ],
       ...(hardeningAdminProofEvidence === undefined
         ? {}
@@ -695,6 +696,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "concurrent-vote-race",
     "stale-action-conflict",
     "stale-host-control",
+    "stale-cohost-deadline",
   ];
   if (proof?.version !== 1) {
     throw new Error(`hardening admin proof version drifted: ${proof?.version}`);

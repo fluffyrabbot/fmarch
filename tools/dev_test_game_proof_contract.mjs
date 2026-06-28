@@ -23,6 +23,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-vote-race",
   "stale-action-conflict",
   "stale-host-control",
+  "stale-cohost-deadline",
 ]);
 
 export function buildDevTestGameProofRun(session, options = {}) {
@@ -333,6 +334,40 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === false &&
         hardening.staleHostControl?.apiPhaseAfterReject?.phase_id === "D02" &&
         hardening.staleHostControl?.apiPhaseAfterReject?.locked === false,
+    }),
+    lane("stale-cohost-deadline", "Stale cohost deadline control rejects without drift", {
+      rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
+      stalePhase: hardening.staleCohostDeadline?.setup?.stalePhase?.id ?? null,
+      phaseId: hardening.staleCohostDeadline?.phaseAfterReject?.id ?? null,
+      activitySource: hardening.staleCohostDeadline?.activityRow?.source ?? null,
+      currentActions: hardening.staleCohostDeadline?.deadlineActionsAfterReject ?? null,
+      apiDeadline: hardening.staleCohostDeadline?.apiPhaseAfterReject?.deadline ?? null,
+      passed:
+        hardening.staleCohostDeadline?.status === "passed" &&
+        hardening.staleCohostDeadline?.setup?.stalePhase?.id === "D01" &&
+        hardening.staleCohostDeadline?.setup?.stalePhase?.locked === false &&
+        hardening.staleCohostDeadline?.setup?.deadlineActions?.includes(
+          "extend_deadline",
+        ) === true &&
+        hardening.staleCohostDeadline?.setup?.phaseActions?.length === 0 &&
+        hardening.staleCohostDeadline?.reject?.error === "PhaseLocked" &&
+        hardening.staleCohostDeadline?.reject?.message?.includes(
+          "stale phase state",
+        ) === true &&
+        hardening.staleCohostDeadline?.phaseAfterReject?.id === "D02" &&
+        hardening.staleCohostDeadline?.phaseAfterReject?.locked === false &&
+        hardening.staleCohostDeadline?.deadlineActionsAfterReject?.includes(
+          "extend_deadline",
+        ) === true &&
+        hardening.staleCohostDeadline?.phaseActionsAfterReject?.length === 0 &&
+        hardening.staleCohostDeadline?.activityRow?.source === "outcome" &&
+        hardening.staleCohostDeadline?.activityRow?.actionId === "extend_deadline" &&
+        hardening.staleCohostDeadline?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleCohostDeadline?.apiPhaseAfterReject?.phase_id === "D02" &&
+        hardening.staleCohostDeadline?.apiPhaseAfterReject?.locked === false &&
+        hardening.staleCohostDeadline?.apiPhaseAfterReject?.deadline === null,
     }),
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";
