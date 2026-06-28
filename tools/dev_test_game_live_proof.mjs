@@ -381,6 +381,43 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation
+    .revokedPrincipalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation.apiSessionStatus,
+  401,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation.routeErrorStatus,
+  403,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation
+    .routeErrorActionHref,
+  "/",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation
+    .playerSurfaceVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation.controlCounts
+    .primaryButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRevocation.controlCounts
+    .actionButtons,
+  0,
+);
+assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.status,
   "passed",
 );

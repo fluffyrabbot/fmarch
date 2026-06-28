@@ -216,6 +216,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: sourcePath,
       laneIds: [
         "replacement-redeemed-invite-recovery",
+        "replacement-session-revocation-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -707,6 +708,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
   const requiredChecks = [
     "replacement-redeemed-invite-recovery",
+    "replacement-session-revocation-recovery",
     "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",
@@ -914,6 +916,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-redeemed-invite-recovery",
+    "replacement-session-revocation-recovery",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",

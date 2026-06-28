@@ -160,6 +160,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-redeemed-invite-recovery",
+    "replacement-session-revocation-recovery",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
@@ -293,6 +294,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "A fresh browser opens the already-redeemed replacement invite URL, receives a clear login rejection, and does not get an fmarch_session cookie.",
     }),
     scenario({
+      id: "replacement-session-revocation-recovery",
+      title: "Revoked replacement session recovery",
+      role: "replacementPlayer",
+      provenBy: ["replacement-session-revocation-recovery"].filter(hasLane),
+      note: "After Rowan acts as the incoming Slot 7 player, the replacement browser session is revoked, the old cookie is rejected by the auth API, and the role path returns to the shared 403 recovery boundary without player controls.",
+    }),
+    scenario({
       id: "replacement-invalid-target-recovery",
       title: "Invalid replacement recovery",
       role: "replacementPlayer",
@@ -347,6 +355,7 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: [
         "replacement-redeemed-invite-recovery",
+        "replacement-session-revocation-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",

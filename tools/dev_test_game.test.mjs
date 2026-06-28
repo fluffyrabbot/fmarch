@@ -855,6 +855,24 @@ test("session card and markdown include role invite URLs and tokens", () => {
         sessionCookiePresent: false,
         stayedOnLogin: true,
       },
+      replacementSessionRevocation: {
+        status: "passed",
+        revokedPrincipalUserId: "player-rowan",
+        apiSessionStatus: 401,
+        routeErrorStatus: 403,
+        routeErrorActionHref: "/",
+        playerSurfaceVisible: false,
+        controlCounts: {
+          primaryButtons: 0,
+          actionButtons: 0,
+        },
+        sessionCookie: {
+          httpOnly: true,
+          sameSite: "Lax",
+          secure: false,
+          valuePrefix: "invite-session-",
+        },
+      },
       invalidReplacementRecovery: {
         status: "passed",
         invalidReplacement: {
@@ -1357,6 +1375,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-host-issued-invite",
       "replacement-pending-player",
       "replacement-redeemed-invite-recovery",
+      "replacement-session-revocation-recovery",
       "replacement-invalid-target-recovery",
       "replacement-console",
       "replacement-idempotent-retry",
@@ -1441,7 +1460,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 25);
+  assert.equal(opsArtifacts.proofRun.laneCount, 26);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1513,6 +1532,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-host-issued-invite",
       "replacement-pending-player",
       "replacement-redeemed-invite-recovery",
+      "replacement-session-revocation-recovery",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
@@ -1919,6 +1939,7 @@ function hardeningAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [
         "replacement-redeemed-invite-recovery",
+        "replacement-session-revocation-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -2001,6 +2022,7 @@ function seedAdminProofFixture() {
         "replacement-host-issued-invite",
         "replacement-pending-player",
         "replacement-redeemed-invite-recovery",
+        "replacement-session-revocation-recovery",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",

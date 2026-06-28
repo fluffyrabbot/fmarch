@@ -20,6 +20,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-redeemed-invite-recovery",
+  "replacement-session-revocation-recovery",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -329,6 +330,46 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.sessionCookiePresent === false &&
         verification.replacementConsole?.redeemedInviteRecovery?.stayedOnLogin ===
           true,
+    }),
+    lane("replacement-session-revocation-recovery", "Revoked replacement session returns to recovery boundary", {
+      revokedPrincipalUserId:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.revokedPrincipalUserId ?? null,
+      apiSessionStatus:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.apiSessionStatus ?? null,
+      routeErrorStatus:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.routeErrorStatus ?? null,
+      routeErrorActionHref:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.routeErrorActionHref ?? null,
+      playerSurfaceVisible:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.playerSurfaceVisible ?? null,
+      primaryButtons:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.controlCounts?.primaryButtons ?? null,
+      actionButtons:
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.controlCounts?.actionButtons ?? null,
+      passed:
+        verification.replacementConsole?.replacementSessionRevocation?.status ===
+          "passed" &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.revokedPrincipalUserId === "player-rowan" &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.apiSessionStatus === 401 &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.routeErrorStatus === 403 &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.routeErrorActionHref === "/" &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.playerSurfaceVisible === false &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.controlCounts?.primaryButtons === 0 &&
+        verification.replacementConsole?.replacementSessionRevocation
+          ?.controlCounts?.actionButtons === 0,
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:

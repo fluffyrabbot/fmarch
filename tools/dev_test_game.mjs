@@ -654,6 +654,8 @@ export function markdownSessionCard(card) {
         "",
         `Redeemed invite recovery: ${card.verification.replacementConsole.redeemedInviteRecovery.message}`,
         "",
+        `Revoked replacement session recovery: ${card.verification.replacementConsole.replacementSessionRevocation.routeErrorStatus}`,
+        "",
         `Invalid replacement recovery: ${card.verification.replacementConsole.invalidReplacementRecovery.reject.error}`,
         "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
@@ -1958,6 +1960,14 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
+    const replacementSessionRevocation =
+      await verifyReplacementSessionRevocationRecovery({
+        replacementSession: hostIssuedInvite.session,
+        replacementEntry: pendingIncomingPlayer.replacementEntry,
+        game,
+        apiBaseUrl,
+        frontendBaseUrl,
+      });
     if (
       hostIssuedInvite?.status !== "passed" ||
       hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
@@ -2007,7 +2017,14 @@ async function verifySeededReplacementConsole({
       incomingPlayer?.commandState?.actorSlot !== "slot-7" ||
       incomingPlayer?.postStatus?.state !== "ack" ||
       incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
-      incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false
+      incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false ||
+      replacementSessionRevocation?.status !== "passed" ||
+      replacementSessionRevocation?.revokedPrincipalUserId !== "player-rowan" ||
+      replacementSessionRevocation?.apiSessionStatus !== 401 ||
+      replacementSessionRevocation?.routeErrorStatus !== 403 ||
+      replacementSessionRevocation?.playerSurfaceVisible !== false ||
+      replacementSessionRevocation?.controlCounts?.primaryButtons !== 0 ||
+      replacementSessionRevocation?.controlCounts?.actionButtons !== 0
     ) {
       throw new Error(
         `replacement console proof drifted: ${JSON.stringify({
@@ -2022,6 +2039,7 @@ async function verifySeededReplacementConsole({
           staleOutgoingPlayer,
           staleReplacementAfterSuccess,
           incomingPlayer,
+          replacementSessionRevocation,
         })}`,
       );
     }
@@ -2038,8 +2056,9 @@ async function verifySeededReplacementConsole({
       staleOutgoingPlayer,
       staleReplacementAfterSuccess,
       incomingPlayer,
+      replacementSessionRevocation,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, then revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls.",
     };
   } finally {
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
@@ -2797,6 +2816,100 @@ async function verifyIncomingReplacementPlayer({
       await replacementEntry?.context.close().catch(() => {});
     }
   }
+}
+
+async function verifyReplacementSessionRevocationRecovery({
+  replacementSession,
+  replacementEntry,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const page = replacementEntry?.page;
+  const context = replacementEntry?.context;
+  if (page === undefined || context === undefined) {
+    throw new Error("replacement session revocation proof requires an open browser entry");
+  }
+  const cookies = await context.cookies(frontendBaseUrl);
+  const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+  if (sessionCookie === undefined) {
+    throw new Error("replacement session revocation proof did not find fmarch_session");
+  }
+  const revocation = await revokeAuthSession({
+    apiBaseUrl,
+    token: sessionCookie.value,
+  });
+  const revokedPrincipalUserId =
+    revocation.principal_user_id ?? revocation.principalUserId ?? null;
+  const unauthorized = await fetchWithTimeout(
+    `${apiBaseUrl}/auth/session?game=${game}`,
+    {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
+    },
+  );
+  await page.goto(replacementSession.directUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("route-error-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const routeErrorStatus = Number(
+    await page.getByTestId("route-error-surface").getAttribute("data-status"),
+  );
+  const routeErrorText = await page.getByTestId("route-error-panel").innerText();
+  const routeErrorActionHref = await page
+    .getByTestId("route-error-action")
+    .getAttribute("href");
+  const playerSurfaceVisible = await page
+    .getByTestId("player-surface")
+    .isVisible()
+    .catch(() => false);
+  const controlCounts = {
+    primaryButtons: await page.locator("[data-action]").count(),
+    actionButtons: await page.locator("[data-template-id]").count(),
+  };
+  if (
+    revocation.status !== "revoked" ||
+    revokedPrincipalUserId !== "player-rowan" ||
+    unauthorized.status !== 401 ||
+    routeErrorStatus !== 403 ||
+    !routeErrorText.includes(
+      `Game ${game} requires SlotOccupant, ChannelMember, or DeadViewer capability.`,
+    ) ||
+    routeErrorActionHref !== "/" ||
+    playerSurfaceVisible !== false ||
+    controlCounts.primaryButtons !== 0 ||
+    controlCounts.actionButtons !== 0
+  ) {
+    throw new Error(
+      `replacement session revocation recovery drifted: ${JSON.stringify({
+        revocation,
+        revokedPrincipalUserId,
+        apiSessionStatus: unauthorized.status,
+        routeErrorStatus,
+        routeErrorText,
+        routeErrorActionHref,
+        playerSurfaceVisible,
+        controlCounts,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    revokedPrincipalUserId,
+    apiSessionStatus: unauthorized.status,
+    routeErrorStatus,
+    routeErrorActionHref,
+    playerSurfaceVisible,
+    controlCounts,
+    sessionCookie: {
+      httpOnly: sessionCookie.httpOnly,
+      sameSite: sessionCookie.sameSite,
+      secure: sessionCookie.secure,
+      valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+    },
+    proof:
+      "After the incoming replacement player proved Slot 7 ownership, the same browser session was revoked through /auth/session-revocations; the API rejected the old cookie, and reloading the role path rendered the shared 403 recovery surface without player controls.",
+  };
 }
 
 async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
@@ -3585,6 +3698,17 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
   return body;
+}
+
+async function revokeAuthSession({ apiBaseUrl, token }) {
+  return await fetchJson(`${apiBaseUrl}/auth/session-revocations`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${tokens.rootAdmin}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ token }),
+  });
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
