@@ -389,6 +389,49 @@ async function createInviteCredential({
   };
 }
 
+async function createSessionGrantCredential({
+  token,
+  principalUserId,
+  returnTo,
+  globalCapabilities = [],
+  expectedCapabilityKind,
+  issuedBy,
+}) {
+  const session = await grantAuthSession({
+    apiBaseUrl,
+    token,
+    principalUserId,
+    globalCapabilities,
+  });
+  const capabilityKinds = (session.capabilities ?? []).map((capability) => capability.kind);
+  if (
+    expectedCapabilityKind !== undefined &&
+    !capabilityKinds.includes(expectedCapabilityKind) &&
+    expectedCapabilityKind !== "SlotOccupant"
+  ) {
+    throw new Error(
+      `${principalUserId} session grant missing ${expectedCapabilityKind}: ${JSON.stringify(
+        session,
+      )}`,
+    );
+  }
+  const credential = {
+    principalUserId: session.principal_user_id,
+    credentialKind: "session",
+    token,
+    returnTo,
+    expectedCapabilityKind,
+    globalCapabilities,
+    capabilityKinds,
+    issuedBy,
+  };
+  return {
+    ...credential,
+    loginUrl: roleLoginUrl({ frontendBaseUrl, session: credential }),
+    directUrl: `${frontendBaseUrl}${returnTo}`,
+  };
+}
+
 function roleLoginUrl({ frontendBaseUrl, session }) {
   const params = new URLSearchParams({ returnTo: session.returnTo });
   if (session.credentialKind === "invite" || session.inviteToken !== undefined) {
@@ -483,7 +526,7 @@ function printSessionCard(card) {
   for (const [role, session] of Object.entries(card.sessions)) {
     console.log(`\n${role}`);
     console.log(`  url:    ${session.loginUrl}`);
-    console.log(`  invite: ${session.inviteToken ?? session.token}`);
+    console.log(`  token:  ${session.inviteToken ?? session.token}`);
   }
 }
 
@@ -500,16 +543,16 @@ export function markdownSessionCard(card) {
     `- frontend: ${card.frontendBaseUrl}`,
     `- api: ${card.apiBaseUrl}`,
     "",
-    "Open a role invite URL and submit. The invite token is prefilled in the URL and repeated below for recovery/debug use.",
+    "Open a role login URL and submit. Invite tokens are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
     "",
   ];
   for (const [role, session] of Object.entries(card.sessions)) {
     lines.push(
       `## ${role}`,
       "",
-      `Invite URL: ${session.loginUrl}`,
+      `Role login URL: ${session.loginUrl}`,
       "",
-      `Invite token: ${session.inviteToken ?? session.token}`,
+      `Credential token: ${session.inviteToken ?? session.token}`,
       "",
     );
   }
@@ -656,6 +699,8 @@ export function markdownSessionCard(card) {
         "",
         `Revoked replacement session recovery: ${card.verification.replacementConsole.replacementSessionRevocation.routeErrorStatus}`,
         "",
+        `Replacement session refresh recovery: ${card.verification.replacementConsole.replacementSessionRefresh.postStatus.message}`,
+        "",
         `Invalid replacement recovery: ${card.verification.replacementConsole.invalidReplacementRecovery.reject.error}`,
         "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
@@ -788,8 +833,8 @@ async function verifySessionCard(card) {
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
-    card.sessions.replacementPlayer = replacementConsole.hostIssuedInvite.session;
-    sessions.replacementPlayer = replacementConsole.incomingPlayer.browserEntry;
+    card.sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.session;
+    sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.browserEntry;
     roles.push("replacementPlayer");
   } finally {
     await staleActionPage?.close().catch(() => {});
@@ -1968,6 +2013,13 @@ async function verifySeededReplacementConsole({
         apiBaseUrl,
         frontendBaseUrl,
       });
+    const replacementSessionRefresh =
+      await verifyReplacementSessionRefreshRecovery({
+        replacementEntry: pendingIncomingPlayer.replacementEntry,
+        game,
+        apiBaseUrl,
+        frontendBaseUrl,
+      });
     if (
       hostIssuedInvite?.status !== "passed" ||
       hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
@@ -2024,7 +2076,18 @@ async function verifySeededReplacementConsole({
       replacementSessionRevocation?.routeErrorStatus !== 403 ||
       replacementSessionRevocation?.playerSurfaceVisible !== false ||
       replacementSessionRevocation?.controlCounts?.primaryButtons !== 0 ||
-      replacementSessionRevocation?.controlCounts?.actionButtons !== 0
+      replacementSessionRevocation?.controlCounts?.actionButtons !== 0 ||
+      replacementSessionRefresh?.status !== "passed" ||
+      replacementSessionRefresh?.session?.credentialKind !== "session" ||
+      replacementSessionRefresh?.session?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.login?.usedInviteToken !== false ||
+      replacementSessionRefresh?.browserEntry?.principalUserId !== "player-rowan" ||
+      replacementSessionRefresh?.browserEntry?.capabilityKinds?.includes(
+        "SlotOccupant",
+      ) !== true ||
+      replacementSessionRefresh?.commandState?.actorSlot !== "slot-7" ||
+      replacementSessionRefresh?.postStatus?.state !== "ack" ||
+      replacementSessionRefresh?.privateReceiptIsolation?.targetKillVisible !== false
     ) {
       throw new Error(
         `replacement console proof drifted: ${JSON.stringify({
@@ -2040,6 +2103,7 @@ async function verifySeededReplacementConsole({
           staleReplacementAfterSuccess,
           incomingPlayer,
           replacementSessionRevocation,
+          replacementSessionRefresh,
         })}`,
       );
     }
@@ -2057,8 +2121,9 @@ async function verifySeededReplacementConsole({
       staleReplacementAfterSuccess,
       incomingPlayer,
       replacementSessionRevocation,
+      replacementSessionRefresh,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, then revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, then granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7.",
     };
   } finally {
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
@@ -2912,6 +2977,179 @@ async function verifyReplacementSessionRevocationRecovery({
   };
 }
 
+async function verifyReplacementSessionRefreshRecovery({
+  replacementEntry,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const page = replacementEntry?.page;
+  const context = replacementEntry?.context;
+  if (page === undefined || context === undefined) {
+    throw new Error("replacement session refresh proof requires an open browser entry");
+  }
+  const sessionToken = `${tokenPrefix}-replacement-session-refresh-${crypto.randomUUID()}`;
+  const session = await createSessionGrantCredential({
+    token: sessionToken,
+    principalUserId: "player-rowan",
+    returnTo: `/g/${game}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  await page.goto(session.loginUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+  const prefilled = await page.getByTestId("auth-login-token").inputValue();
+  await page.getByTestId("auth-login-token").fill(session.token);
+  await Promise.all([
+    page.waitForURL(session.directUrl, { timeout: 15000 }),
+    page.getByTestId("auth-login-submit").click(),
+  ]);
+  await page.waitForLoadState("networkidle");
+  await page.getByTestId("player-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+  );
+  const cookies = await context.cookies(frontendBaseUrl);
+  const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+  if (sessionCookie === undefined) {
+    throw new Error("replacement session refresh login did not set fmarch_session");
+  }
+  const resolved = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+    headers: { authorization: `Bearer ${sessionCookie.value}` },
+  });
+  const browserEntry = {
+    principalUserId: resolved.principal_user_id,
+    capabilityKinds: (resolved.capabilities ?? []).map((capability) => capability.kind),
+    cookie: {
+      httpOnly: sessionCookie.httpOnly,
+      sameSite: sessionCookie.sameSite,
+      secure: sessionCookie.secure,
+      valuePrefix: sessionCookie.value.slice(
+        0,
+        `${tokenPrefix}-replacement-session-refresh-`.length,
+      ),
+    },
+  };
+  const commandState = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const capabilityLabel = await page
+    .getByTestId("player-command-channel-context")
+    .getAttribute("data-capability-label");
+  const controlCounts = {
+    primaryButtons: await page.locator("[data-action]").count(),
+    actionButtons: await page.locator("[data-template-id]").count(),
+  };
+  const refreshPostBody = `Replacement Rowan refreshed-session post from dev:test-game ${crypto.randomUUID()}.`;
+  await page.locator("textarea").fill(refreshPostBody);
+  await page.locator('[data-action="submit_post"]').click();
+  await page.waitForFunction(
+    (expectedBody) =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+        ?.SubmitPost?.body === expectedBody,
+    refreshPostBody,
+  );
+  await page.waitForFunction(
+    (expectedBody) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.some(
+        (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+      ),
+    refreshPostBody,
+  );
+  const postStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const rowanProjectedPost = await page.evaluate((expectedBody) =>
+    window.__fmarchPlayerProjection?.thread?.posts?.find(
+      (post) => post.body === expectedBody,
+    ),
+  refreshPostBody);
+  const notifications = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.notifications ?? [],
+  );
+  const investigationResults = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.investigationResults ?? [],
+  );
+  const privateReceiptIsolation = {
+    targetKillVisible: notifications.some(
+      (item) =>
+        item.effect === "player_killed" ||
+        item.status === "factional_kill" ||
+        item.audience_slot === "slot-2",
+    ),
+    actionResultVisible: investigationResults.some(
+      (item) =>
+        item.actor_slot === "slot_4" ||
+        item.action_id === "browser_factional_kill_n01" ||
+        item.status === "factional_kill",
+    ),
+    notificationCount: notifications.length,
+    investigationResultCount: investigationResults.length,
+  };
+  if (
+    session.credentialKind !== "session" ||
+    session.principalUserId !== "player-rowan" ||
+    prefilled !== "" ||
+    browserEntry.principalUserId !== "player-rowan" ||
+    !browserEntry.capabilityKinds.includes("SlotOccupant") ||
+    commandState?.actorSlot !== "slot-7" ||
+    commandState?.actorAlive !== true ||
+    !capabilityLabel?.includes("SlotOccupant") ||
+    controlCounts.primaryButtons <= 0 ||
+    postStatus?.state !== "ack" ||
+    postStatus?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+    postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+      "slot-7" ||
+    rowanProjectedPost?.authorSlot !== "slot-7" ||
+    privateReceiptIsolation.targetKillVisible !== false ||
+    privateReceiptIsolation.actionResultVisible !== false
+  ) {
+    throw new Error(
+      `replacement session refresh recovery drifted: ${JSON.stringify({
+        session: {
+          ...session,
+          token: "<redacted>",
+        },
+        prefilled,
+        browserEntry,
+        commandState,
+        capabilityLabel,
+        controlCounts,
+        postStatus,
+        rowanProjectedPost,
+        privateReceiptIsolation,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    session,
+    login: {
+      prefilledSessionToken: false,
+      submittedSessionToken: true,
+      usedInviteToken: false,
+      landedOnDirectUrl: page.url() === session.directUrl,
+    },
+    browserEntry,
+    commandState,
+    capabilityLabel,
+    controlCounts,
+    postStatus,
+    rowanProjectedPost,
+    privateReceiptIsolation,
+    proof:
+      "After the replacement session was revoked, a fresh local session grant for player-rowan was submitted through the normal login page without replaying the invite token; the role path restored Slot 7 controls, ACKed a new Slot 7 post, and still withheld target-only private receipts.",
+  };
+}
+
 async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
   await gotoPlayerBoard(staleOutgoingPage, game);
   await staleOutgoingPage.locator('[data-action="submit_vote"]').waitFor({
@@ -3708,6 +3946,27 @@ async function revokeAuthSession({ apiBaseUrl, token }) {
       "content-type": "application/json",
     },
     body: JSON.stringify({ token }),
+  });
+}
+
+async function grantAuthSession({
+  apiBaseUrl,
+  token,
+  principalUserId,
+  globalCapabilities = [],
+}) {
+  return await fetchJson(`${apiBaseUrl}/auth/session-grants`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${tokens.rootAdmin}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      token,
+      principal_user_id: principalUserId,
+      expires_at: expiresAt,
+      global_capabilities: globalCapabilities,
+    }),
   });
 }
 

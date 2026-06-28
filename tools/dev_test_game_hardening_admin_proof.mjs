@@ -18,6 +18,7 @@ const evidencePath = path.join(artifactDir, "hardening-admin-proof.json");
 const requiredChecks = [
   "replacement-redeemed-invite-recovery",
   "replacement-session-revocation-recovery",
+  "replacement-session-refresh-recovery",
   "replacement-idempotent-retry",
   "idempotent-retry",
   "reconnect-recovery",

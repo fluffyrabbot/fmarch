@@ -501,7 +501,7 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
 });
 
-test("session card and markdown include role invite URLs and tokens", () => {
+test("session card and markdown include role credential URLs and tokens", () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
   const card = buildSessionCard({
@@ -871,6 +871,73 @@ test("session card and markdown include role invite URLs and tokens", () => {
           sameSite: "Lax",
           secure: false,
           valuePrefix: "invite-session-",
+        },
+      },
+      replacementSessionRefresh: {
+        status: "passed",
+        session: {
+          principalUserId: "player-rowan",
+          credentialKind: "session",
+          token: `dev-test-card-${game}-replacement-session-refresh-token`,
+          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+          directUrl: `http://127.0.0.1:4102/g/${game}`,
+          returnTo: `/g/${game}`,
+          expectedCapabilityKind: "SlotOccupant",
+          globalCapabilities: [],
+          capabilityKinds: [],
+          issuedBy: {
+            principalUserId: "root_admin",
+            capabilityKind: "GlobalAdmin",
+            surface: "/auth/session-grants",
+          },
+        },
+        login: {
+          prefilledSessionToken: false,
+          submittedSessionToken: true,
+          usedInviteToken: false,
+          landedOnDirectUrl: true,
+        },
+        browserEntry: {
+          principalUserId: "player-rowan",
+          capabilityKinds: ["SlotOccupant", "ChannelMember"],
+          cookie: { valuePrefix: "dev-test-card-" },
+        },
+        commandState: {
+          actorSlot: "slot-7",
+          actorAlive: true,
+          actions: [],
+        },
+        capabilityLabel: "SlotOccupant or ChannelMember(main)",
+        controlCounts: {
+          primaryButtons: 3,
+          actionButtons: 0,
+        },
+        postStatus: {
+          state: "ack",
+          message: "Ack: stream seqs 46",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitPost: {
+                    actor_slot: "slot-7",
+                    body: "Replacement Rowan refreshed-session post from dev:test-game",
+                  },
+                },
+              },
+            },
+          },
+        },
+        rowanProjectedPost: {
+          authorSlot: "slot-7",
+          body: "Replacement Rowan refreshed-session post from dev:test-game",
+        },
+        privateReceiptIsolation: {
+          targetKillVisible: false,
+          actionResultVisible: false,
+          notificationCount: 0,
+          investigationResultCount: 0,
         },
       },
       invalidReplacementRecovery: {
@@ -1296,13 +1363,18 @@ test("session card and markdown include role invite URLs and tokens", () => {
       },
     },
   };
+  card.sessions.replacementPlayer =
+    card.verification.replacementConsole.replacementSessionRefresh.session;
+  card.verification.sessions.replacementPlayer =
+    card.verification.replacementConsole.replacementSessionRefresh.browserEntry;
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
-  assert(markdown.includes("Open a role invite URL"));
+  assert(markdown.includes("Open a role login URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes("dev-test-card-cohost"));
+  assert(markdown.includes("replacement-session-refresh-token"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
-  assert(markdown.includes("Invite token: dev-test-card-player"));
+  assert(markdown.includes("Credential token: dev-test-card-player"));
   assert(markdown.includes("## Cohost Console Proof"));
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
   assert(markdown.includes("Host-only controls visible: false"));
@@ -1376,6 +1448,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-pending-player",
       "replacement-redeemed-invite-recovery",
       "replacement-session-revocation-recovery",
+      "replacement-session-refresh-recovery",
       "replacement-invalid-target-recovery",
       "replacement-console",
       "replacement-idempotent-retry",
@@ -1460,13 +1533,26 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 26);
+  assert.equal(opsArtifacts.proofRun.laneCount, 27);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
   );
+  assert.equal(opsArtifacts.roles.replacementPlayer.credentialKind, "session");
+  assert.equal(
+    opsArtifacts.roles.replacementPlayer.loginUrlRedacted,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+  );
+  assert.equal(
+    opsArtifacts.roles.replacementPlayer.loginUrlRedacted.includes("invite="),
+    false,
+  );
   assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-host"), false);
   assert.equal(JSON.stringify(opsArtifacts).includes("dev-test-card-player"), false);
+  assert.equal(
+    JSON.stringify(opsArtifacts).includes("replacement-session-refresh-token"),
+    false,
+  );
   const opsReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
@@ -1515,8 +1601,21 @@ test("session card and markdown include role invite URLs and tokens", () => {
     seedFixture.fixture.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
   );
+  assert.equal(seedFixture.fixture.roles.replacementPlayer.credentialKind, "session");
+  assert.equal(
+    seedFixture.fixture.roles.replacementPlayer.loginUrlRedacted,
+    `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}`,
+  );
+  assert.equal(
+    seedFixture.fixture.roles.replacementPlayer.loginUrlRedacted.includes("invite="),
+    false,
+  );
   assert.equal(JSON.stringify(seedFixture).includes("dev-test-card-host"), false);
   assert.equal(JSON.stringify(seedFixture).includes("dev-test-card-player"), false);
+  assert.equal(
+    JSON.stringify(seedFixture).includes("replacement-session-refresh-token"),
+    false,
+  );
   assert.deepEqual(
     seedFixture.demoScenarios.map((scenario) => scenario.id),
     [
@@ -1533,6 +1632,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-pending-player",
       "replacement-redeemed-invite-recovery",
       "replacement-session-revocation-recovery",
+      "replacement-session-refresh-recovery",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
@@ -1940,6 +2040,7 @@ function hardeningAdminProofFixture() {
       visibleChecks: [
         "replacement-redeemed-invite-recovery",
         "replacement-session-revocation-recovery",
+        "replacement-session-refresh-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -2023,6 +2124,7 @@ function seedAdminProofFixture() {
         "replacement-pending-player",
         "replacement-redeemed-invite-recovery",
         "replacement-session-revocation-recovery",
+        "replacement-session-refresh-recovery",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",

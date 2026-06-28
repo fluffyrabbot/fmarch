@@ -21,6 +21,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-pending-player",
   "replacement-redeemed-invite-recovery",
   "replacement-session-revocation-recovery",
+  "replacement-session-refresh-recovery",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -370,6 +371,67 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.controlCounts?.primaryButtons === 0 &&
         verification.replacementConsole?.replacementSessionRevocation
           ?.controlCounts?.actionButtons === 0,
+    }),
+    lane("replacement-session-refresh-recovery", "Fresh replacement session restores role URL", {
+      credentialKind:
+        verification.replacementConsole?.replacementSessionRefresh?.session
+          ?.credentialKind ?? null,
+      principalUserId:
+        verification.replacementConsole?.replacementSessionRefresh?.session
+          ?.principalUserId ?? null,
+      usedInviteToken:
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.usedInviteToken ?? null,
+      landedOnDirectUrl:
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.landedOnDirectUrl ?? null,
+      capabilityKinds:
+        verification.replacementConsole?.replacementSessionRefresh?.browserEntry
+          ?.capabilityKinds ?? null,
+      commandStateSlot:
+        verification.replacementConsole?.replacementSessionRefresh?.commandState
+          ?.actorSlot ?? null,
+      postState:
+        verification.replacementConsole?.replacementSessionRefresh?.postStatus?.state ??
+        null,
+      targetKillVisible:
+        verification.replacementConsole?.replacementSessionRefresh
+          ?.privateReceiptIsolation?.targetKillVisible ?? null,
+      actionResultVisible:
+        verification.replacementConsole?.replacementSessionRefresh
+          ?.privateReceiptIsolation?.actionResultVisible ?? null,
+      passed:
+        verification.replacementConsole?.replacementSessionRefresh?.status ===
+          "passed" &&
+        verification.replacementConsole?.replacementSessionRefresh?.session
+          ?.credentialKind === "session" &&
+        verification.replacementConsole?.replacementSessionRefresh?.session
+          ?.principalUserId === "player-rowan" &&
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.usedInviteToken === false &&
+        verification.replacementConsole?.replacementSessionRefresh?.login
+          ?.landedOnDirectUrl === true &&
+        verification.replacementConsole?.replacementSessionRefresh?.browserEntry
+          ?.principalUserId === "player-rowan" &&
+        verification.replacementConsole?.replacementSessionRefresh?.browserEntry
+          ?.capabilityKinds?.includes("SlotOccupant") === true &&
+        verification.replacementConsole?.replacementSessionRefresh?.commandState
+          ?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.replacementSessionRefresh?.commandState
+          ?.actorAlive === true &&
+        verification.replacementConsole?.replacementSessionRefresh?.postStatus
+          ?.state === "ack" &&
+        verification.replacementConsole?.replacementSessionRefresh?.postStatus
+          ?.requestEnvelope?.body?.body?.principal_user_id === "player-rowan" &&
+        verification.replacementConsole?.replacementSessionRefresh?.postStatus
+          ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
+          "slot-7" &&
+        verification.replacementConsole?.replacementSessionRefresh?.rowanProjectedPost
+          ?.authorSlot === "slot-7" &&
+        verification.replacementConsole?.replacementSessionRefresh
+          ?.privateReceiptIsolation?.targetKillVisible === false &&
+        verification.replacementConsole?.replacementSessionRefresh
+          ?.privateReceiptIsolation?.actionResultVisible === false,
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:

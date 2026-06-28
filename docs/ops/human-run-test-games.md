@@ -104,8 +104,9 @@ target/live-stack-backup-restore-drill/local-live-stack.dump
 target/dev-test-game/named-games.json
 ```
 
-Open a role invite URL from `session.md` and submit. The invite token is
-prefilled in the URL and repeated in the artifact for recovery/debug use.
+Open a role login URL from `session.md` and submit. Invite tokens are prefilled
+in invite URLs; refreshed session credentials are repeated in the artifact for
+recovery/debug use.
 
 ## Repeated Runs
 
@@ -345,7 +346,10 @@ Slot 7 thread history, submits a new Slot 7 post and vote, and checks
 target-only private receipts did not leak to the incoming player. It then
 revokes that replacement browser session through `/auth/session-revocations`,
 verifies the old cookie is rejected by `/auth/session`, and reloads the role
-path into the shared 403 recovery boundary with no player controls.
+path into the shared 403 recovery boundary with no player controls. The harness
+then grants `player-rowan` a fresh local session through `/auth/session-grants`,
+submits that session credential through the normal login page without replaying
+the invite token, restores Slot 7 authority, and ACKs a new Slot 7 post.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
@@ -358,8 +362,9 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 
 The multiplayer-hardening proof promotes the first auth revocation, retry,
 reconnect, concurrent-vote, and stale-client behaviors into the same browser
-harness: the replacement player session revocation above is carried as
-`replacement-session-revocation-recovery`, the
+harness: the replacement player session revocation and positive session refresh
+above are carried as `replacement-session-revocation-recovery` and
+`replacement-session-refresh-recovery`, the
 player page replays one `SubmitPost` with the same durable `command_id` and
 verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
@@ -378,7 +383,7 @@ deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the ten hardening lane rows above.
+verifying the eleven hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and

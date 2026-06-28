@@ -58,13 +58,23 @@ for (const role of [
   "player",
   "actionPlayer",
   "deniedPlayer",
-  "replacementPlayer",
 ]) {
   assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
   assert.equal(session.sessions[role].credentialKind, "invite", `${role} credential kind`);
   assert.equal(session.sessions[role].inviteToken, session.sessions[role].token);
   assert.match(session.sessions[role].loginUrl, /\/auth\/login\?returnTo=.*&invite=/);
 }
+assert.equal(typeof session.sessions.replacementPlayer?.token, "string");
+assert.equal(session.sessions.replacementPlayer.credentialKind, "session");
+assert.equal(session.sessions.replacementPlayer.inviteToken, undefined);
+assert.match(
+  session.sessions.replacementPlayer.loginUrl,
+  /\/auth\/login\?returnTo=%2Fg%2F/,
+);
+assert.equal(
+  session.sessions.replacementPlayer.loginUrl.includes("&invite="),
+  false,
+);
 assert.equal(
   session.verification.sessions.host.capabilityKinds.includes("HostOf"),
   true,
@@ -416,6 +426,78 @@ assert.equal(
   session.verification.replacementConsole.replacementSessionRevocation.controlCounts
     .actionButtons,
   0,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.session
+    .credentialKind,
+  "session",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.session
+    .principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.login
+    .usedInviteToken,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.login
+    .landedOnDirectUrl,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.browserEntry
+    .principalUserId,
+  "player-rowan",
+);
+assert(
+  session.verification.replacementConsole.replacementSessionRefresh.browserEntry
+    .capabilityKinds.includes("SlotOccupant"),
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.commandState
+    .actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.commandState
+    .actorAlive,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.postStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.postStatus
+    .requestEnvelope.body.body.principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.postStatus
+    .requestEnvelope.body.body.command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh.rowanProjectedPost
+    .authorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh
+    .privateReceiptIsolation.targetKillVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementSessionRefresh
+    .privateReceiptIsolation.actionResultVisible,
+  false,
 );
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.status,

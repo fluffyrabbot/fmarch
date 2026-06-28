@@ -206,8 +206,20 @@ export function assertDevTestGameOpsArtifacts(ops) {
     throw new Error("ops artifact leaked a test invite token");
   }
   for (const [role, entry] of Object.entries(ops.roles ?? {})) {
-    if (entry.loginUrlRedacted?.includes("invite=") !== true) {
+    if (typeof entry.loginUrlRedacted !== "string" || entry.loginUrlRedacted === "") {
       throw new Error(`ops artifact role ${role} missing redacted login URL`);
+    }
+    if (
+      entry.credentialKind === "invite" &&
+      entry.loginUrlRedacted?.includes("invite=REDACTED") !== true
+    ) {
+      throw new Error(`ops artifact role ${role} missing redacted invite URL`);
+    }
+    if (
+      entry.credentialKind === "session" &&
+      entry.loginUrlRedacted?.includes("invite=") === true
+    ) {
+      throw new Error(`ops artifact role ${role} leaked invite query on session URL`);
     }
   }
   return ops;

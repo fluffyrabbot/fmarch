@@ -217,6 +217,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [
         "replacement-redeemed-invite-recovery",
         "replacement-session-revocation-recovery",
+        "replacement-session-refresh-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -709,6 +710,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
   const requiredChecks = [
     "replacement-redeemed-invite-recovery",
     "replacement-session-revocation-recovery",
+    "replacement-session-refresh-recovery",
     "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",
@@ -917,6 +919,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "replacement-pending-player",
     "replacement-redeemed-invite-recovery",
     "replacement-session-revocation-recovery",
+    "replacement-session-refresh-recovery",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",

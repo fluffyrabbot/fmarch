@@ -161,6 +161,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-pending-player",
     "replacement-redeemed-invite-recovery",
     "replacement-session-revocation-recovery",
+    "replacement-session-refresh-recovery",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
@@ -187,8 +188,20 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     throw new Error("seed fixture summary leaked an invite URL token");
   }
   for (const [role, entry] of Object.entries(summary.fixture?.roles ?? {})) {
-    if (entry.loginUrlRedacted?.includes("invite=") !== true) {
+    if (typeof entry.loginUrlRedacted !== "string" || entry.loginUrlRedacted === "") {
       throw new Error(`seed fixture role ${role} missing redacted login URL`);
+    }
+    if (
+      entry.credentialKind === "invite" &&
+      entry.loginUrlRedacted?.includes("invite=REDACTED") !== true
+    ) {
+      throw new Error(`seed fixture role ${role} missing redacted invite URL`);
+    }
+    if (
+      entry.credentialKind === "session" &&
+      entry.loginUrlRedacted?.includes("invite=") === true
+    ) {
+      throw new Error(`seed fixture role ${role} leaked invite query on session URL`);
     }
     if ("token" in entry || "inviteToken" in entry) {
       throw new Error(`seed fixture role ${role} leaked a credential field`);
@@ -301,6 +314,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "After Rowan acts as the incoming Slot 7 player, the replacement browser session is revoked, the old cookie is rejected by the auth API, and the role path returns to the shared 403 recovery boundary without player controls.",
     }),
     scenario({
+      id: "replacement-session-refresh-recovery",
+      title: "Fresh replacement session recovery",
+      role: "replacementPlayer",
+      provenBy: ["replacement-session-refresh-recovery"].filter(hasLane),
+      note: "After revocation, a fresh local session grant for player-rowan is submitted through the normal login page, restores the replacement role URL to Slot 7 authority, ACKs a new post, and avoids invite-token replay.",
+    }),
+    scenario({
       id: "replacement-invalid-target-recovery",
       title: "Invalid replacement recovery",
       role: "replacementPlayer",
@@ -356,6 +376,7 @@ function demoScenarios({ roles, laneIds }) {
       provenBy: [
         "replacement-redeemed-invite-recovery",
         "replacement-session-revocation-recovery",
+        "replacement-session-refresh-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
