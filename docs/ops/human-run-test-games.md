@@ -318,7 +318,11 @@ The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
 surface, opens that host-issued `replacementPlayer` role URL before replacement
 as an authenticated pending player with no current SlotOccupant authority and no
-player controls, clicks the hydrated `ProcessReplacement` control for Slot 7,
+player controls, sends a stale direct `ProcessReplacement` from the host browser
+with `player-rowan` as the wrong outgoing user, records the `InvalidTarget`
+reject, and verifies the host-console API still shows Slot 7 owned by
+`player-mira` while the `replacementPlayer` URL remains pending with no
+controls. It then clicks the hydrated `ProcessReplacement` control for Slot 7,
 records the ACK, verifies the host projection now shows `player-rowan`, and
 checks the slot-scoped host-console API still reports the stable `slot-7`
 history boundary. It also opens a separate stale `player` role URL as
@@ -335,8 +339,9 @@ the admin overview into the native local core-loop detail route and verifying
 the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `replacement-host-issued-invite`,
-`replacement-pending-player`, `replacement-console`, `replacement-stale-player`,
-and `replacement-incoming-player` rows.
+`replacement-pending-player`, `replacement-invalid-target-recovery`,
+`replacement-console`, `replacement-stale-player`, and
+`replacement-incoming-player` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

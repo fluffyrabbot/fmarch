@@ -159,6 +159,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "host-replacement-console",
     "replacement-host-issued-invite",
     "replacement-pending-player",
+    "replacement-invalid-target-recovery",
     "replacement-stale-player",
     "replacement-incoming-player",
     "private-channel-member",
@@ -280,6 +281,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "replacementPlayer",
       provenBy: ["replacement-pending-player"].filter(hasLane),
       note: "Incoming player opens the host-issued role URL before replacement, lands on an authenticated pending surface, has no current SlotOccupant authority, and sees no player controls.",
+    }),
+    scenario({
+      id: "replacement-invalid-target-recovery",
+      title: "Invalid replacement recovery",
+      role: "replacementPlayer",
+      provenBy: ["replacement-invalid-target-recovery"].filter(hasLane),
+      note: "Host sends a stale replacement command with the wrong outgoing user, receives InvalidTarget, and the incoming replacement URL stays pending without slot authority or controls.",
     }),
     scenario({
       id: "replacement-stale-player",

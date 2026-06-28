@@ -19,6 +19,7 @@ const requiredLaneIds = Object.freeze([
   "private-channel",
   "replacement-host-issued-invite",
   "replacement-pending-player",
+  "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-stale-player",
   "replacement-incoming-player",
@@ -302,6 +303,55 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.primaryButtons === 0 &&
         verification.replacementConsole?.pendingIncomingPlayer?.controlCounts
           ?.actionButtons === 0,
+    }),
+    lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
+      rejectError:
+        verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ?? null,
+      commandOutgoing:
+        verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ??
+        null,
+      apiOccupant:
+        verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
+          ?.occupant_user_id ?? null,
+      pendingActorStatus:
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.commandState?.actorStatus ?? null,
+      pendingCapabilityKinds:
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.capabilityKinds ?? null,
+      pendingPrimaryButtons:
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.controlCounts?.primaryButtons ?? null,
+      passed:
+        verification.replacementConsole?.invalidReplacementRecovery?.status === "passed" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
+          ?.serverEnvelope?.body?.kind === "Reject" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ===
+          "InvalidTarget" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
+          ?.requestEnvelope?.body?.body?.principal_user_id === "host_h" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
+          "player-rowan" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
+          ?.slot_id === "slot-7" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
+          ?.occupant_user_id === "player-mira" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.principalUserId === "player-rowan" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.capabilityKinds?.length === 0 &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.capabilityLabel === `PendingReplacement(${session?.game ?? ""})` &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.commandState?.actorStatus === "pending_replacement" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.coldLoadEndpoints?.commandStateEndpoint === null &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.controlCounts?.primaryButtons === 0 &&
+        verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
+          ?.controlCounts?.actionButtons === 0,
     }),
     lane("replacement-console", "Host replacement preserves slot history", {
       commandState:

@@ -361,6 +361,64 @@ assert.equal(
   0,
 );
 assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.invalidReplacement
+    .serverEnvelope.body.kind,
+  "Reject",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.reject.error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.invalidReplacement
+    .requestEnvelope.body.body.principal_user_id,
+  "host_h",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.invalidReplacement
+    .requestEnvelope.body.body.command.ProcessReplacement.outgoing_user,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.apiSlotAfterReject
+    .occupant_user_id,
+  "player-mira",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .capabilityKinds.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .commandState.actorStatus,
+  "pending_replacement",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .coldLoadEndpoints.commandStateEndpoint,
+  null,
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .controlCounts.primaryButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
+    .controlCounts.actionButtons,
+  0,
+);
+assert.equal(
   session.verification.replacementConsole.processReplacement.commandStatus.state,
   "ack",
 );
