@@ -41,6 +41,8 @@ import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
 import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
+  proofFreshnessAdminProofCommand,
+  proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_manifest.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
@@ -205,10 +207,20 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     manifest.commands.adminSpine.readinessEnv,
     adminSpineReadinessEvidenceEnv,
   );
+  assert.deepEqual(manifest.commands.proofFreshness, {
+    script: proofFreshnessAdminProofCommand,
+    proofArtifact: proofFreshnessAdminProofPath,
+    dependsOn: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/admin-spine-proof.json",
+      "target/dev-test-game/release-readiness-checklist.json",
+    ],
+  });
   assert.deepEqual(manifest.evidenceEnv.identity.identityReadinessEnv, identityReadinessEnv);
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.json"));
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
+  assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
   assert(
     manifest.artifacts.includes(

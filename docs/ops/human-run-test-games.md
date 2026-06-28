@@ -181,8 +181,9 @@ The seeded admin overview-to-local-proof-freshness detail browser proof is:
 npm run test:dev-test-game-proof-freshness-admin-proof
 ```
 
-The generated spine manifest, which records proof command order and evidence
-env wiring without claiming release or production readiness, is:
+The generated spine manifest, which records proof command order, evidence env
+wiring, and the final proof-freshness command/artifact without claiming release
+or production readiness, is:
 
 ```sh
 npm run test:dev-test-game-spine-manifest
@@ -328,8 +329,9 @@ admin browser proof set as a single development-spine evidence signal while
 keeping release readiness `not_ready`. The same command also writes
 `target/dev-test-game/spine-manifest.{json,md}` and
 `target/dev-test-game/spine-manifest-admin-proof.json`, proving the current local
-proof order and evidence env wiring are inspectable from the seeded admin role
-surface without reading the orchestration code. It also writes
+proof order, evidence env wiring, and proof-freshness command/artifact are
+inspectable from the seeded admin role surface without reading the orchestration
+code. It also writes
 `target/dev-test-game/admin-spine-admin-proof.json`, proving the aggregate
 `admin-spine-proof.json` is itself inspectable from the seeded admin overview in
 the native local-admin-spine detail route. Finally, it writes

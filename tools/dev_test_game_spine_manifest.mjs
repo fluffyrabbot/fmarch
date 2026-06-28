@@ -25,6 +25,10 @@ export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
 
 export const spineManifestPath = "target/dev-test-game/spine-manifest.json";
 export const spineManifestMarkdownPath = "target/dev-test-game/spine-manifest.md";
+export const proofFreshnessAdminProofPath =
+  "target/dev-test-game/proof-freshness-admin-proof.json";
+export const proofFreshnessAdminProofCommand =
+  "test:dev-test-game-proof-freshness-admin-proof";
 
 const manifestJsonPath = path.join(repoRoot, spineManifestPath);
 const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
@@ -76,12 +80,22 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: adminSpineProofPath,
         readinessEnv: { ...adminSpineReadinessEvidenceEnv },
       },
+      proofFreshness: {
+        script: proofFreshnessAdminProofCommand,
+        proofArtifact: proofFreshnessAdminProofPath,
+        dependsOn: [
+          spineManifestPath,
+          adminSpineProofPath,
+          "target/dev-test-game/release-readiness-checklist.json",
+        ],
+      },
     },
     evidenceEnv,
     artifacts: uniqueSorted([
       spineManifestPath,
       spineManifestMarkdownPath,
       adminSpineProofPath,
+      proofFreshnessAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
       ...envValues(evidenceEnv.backupRestore.backupRestoreEvidenceEnv),
       ...envValues(evidenceEnv.backupRestore.backupAwareOpsEnv),
@@ -110,6 +124,11 @@ export function buildDevTestGameSpineManifest({
         id: "evidence-env-wiring-recorded",
         status: "passed",
         evidence: Object.keys(adminSpineReadinessEvidenceEnv),
+      },
+      {
+        id: "freshness-proof-recorded",
+        status: "passed",
+        evidence: [proofFreshnessAdminProofCommand, proofFreshnessAdminProofPath],
       },
       {
         id: "release-boundary-carried",
@@ -175,10 +194,21 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
+  if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
+    throw new Error(
+      `spine manifest proof freshness command drifted: ${manifest.commands?.proofFreshness?.script}`,
+    );
+  }
+  if (manifest.commands.proofFreshness.proofArtifact !== proofFreshnessAdminProofPath) {
+    throw new Error(
+      `spine manifest proof freshness artifact drifted: ${manifest.commands.proofFreshness.proofArtifact}`,
+    );
+  }
   for (const path of [
     spineManifestPath,
     spineManifestMarkdownPath,
     "target/dev-test-game/admin-spine-proof.json",
+    proofFreshnessAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
@@ -197,6 +227,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
     "evidence-env-wiring-recorded",
+    "freshness-proof-recorded",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {
