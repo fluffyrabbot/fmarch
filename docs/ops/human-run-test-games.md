@@ -269,10 +269,12 @@ release-readiness admin browser proofs, records per-surface recovery commands in
 keeping release readiness `not_ready`.
 
 The cohost proof uses the generated cohost role URL to open the host console
-with `CohostOf(<game>)`, runs the delegated D01 `ExtendDeadline` host action,
-and records the ACK as the `cohost-console` proof lane. That proves the local
-capability shape for delegated host controls without claiming production
-identity or exhaustive cohost policy coverage.
+with `CohostOf(<game>)`, renders only the delegated deadline control, runs the
+delegated D01 `ExtendDeadline` host action, and records the ACK as part of the
+`cohost-console` proof lane. The same browser session then submits a direct
+host-only `ResolvePhase` command and records `Reject NotHost` while D01 remains
+open. That proves the local capability shape for delegated host controls without
+claiming production identity or exhaustive cohost policy coverage.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -382,7 +384,8 @@ proof.
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer, plus
-specific cohost deadline delegation, duplicate-command, player reconnect,
+specific cohost deadline delegation with host-only command rejection,
+duplicate-command, player reconnect,
 concurrent vote race, stale player vote, stale action conflict, stale host
 control recovery, local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove

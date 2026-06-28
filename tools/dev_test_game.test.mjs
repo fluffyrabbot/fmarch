@@ -561,7 +561,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
     cohostConsole: {
       status: "passed",
       capabilityLabel: `CohostOf(${game})`,
-      proof: "cohost opened the host console and extended deadline",
+      proof: "cohost opened the host console, extended deadline, and rejected host-only resolve",
       extendDeadline: {
         statusMessage: "Ack: stream seqs 41",
         commandStatus: {
@@ -580,6 +580,37 @@ test("session card and markdown include role invite URLs and tokens", () => {
             },
           },
         },
+      },
+      hostOnlyControlsVisible: false,
+      hostOnlyResolveReject: {
+        statusMessage: "Reject NotHost: not host",
+        requestEnvelope: {
+          body: {
+            body: {
+              principal_user_id: "cohost_c",
+              command: {
+                ResolvePhase: {
+                  game,
+                  seed: 918273,
+                },
+              },
+            },
+          },
+        },
+        serverEnvelope: {
+          body: {
+            kind: "Reject",
+            body: {
+              error: "NotHost",
+              message: "not host",
+              retryable: false,
+            },
+          },
+        },
+      },
+      phaseAfterReject: {
+        id: "D01",
+        locked: false,
       },
     },
     coreLoop: {
@@ -666,6 +697,8 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Invite token: dev-test-card-player"));
   assert(markdown.includes("## Cohost Console Proof"));
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
+  assert(markdown.includes("Host-only controls visible: false"));
+  assert(markdown.includes("Host-only resolve: Reject NotHost: not host"));
   assert(markdown.includes("## Core Loop Proof"));
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Action Loop Proof"));

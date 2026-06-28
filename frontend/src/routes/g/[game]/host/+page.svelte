@@ -79,6 +79,7 @@
     const derived = buildHostDerivedState({
       gameId: data.game.id,
       snapshot,
+      capabilityKind: data.access.capability?.kind,
     });
     projection = derived.projection;
     votecount = derived.votecount;

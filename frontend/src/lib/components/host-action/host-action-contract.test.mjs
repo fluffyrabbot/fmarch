@@ -423,6 +423,32 @@ test("host console action groups turn typed commands into moderator control bays
     groups.find((group) => group.id === "roles").boundaryDetail,
     /CompleteGame/,
   );
+
+  const cohostActions = buildHostConsoleCriticalActions("midsummer", {
+    capabilityKind: "CohostOf",
+    hostPrompts: [
+      {
+        id: "D01:tie:slot_2",
+        label: "tie",
+        status: "pending",
+        decisionKind: "acknowledge",
+      },
+    ],
+  });
+  assert.deepEqual(
+    cohostActions.map((action) => action.id),
+    ["extend_deadline"],
+  );
+  const cohostGroups = buildHostConsoleActionGroups({
+    actions: cohostActions,
+    capabilityKind: "CohostOf",
+    pendingPromptCount: 1,
+    votecountCount: 2,
+  });
+  assert.deepEqual(
+    cohostGroups.map((group) => [group.id, group.authority]),
+    [["deadline", "CohostOf(game)"]],
+  );
 });
 
 test("host console prompt rows become confirmable typed host actions", () => {

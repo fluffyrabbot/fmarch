@@ -52,6 +52,11 @@ export async function buildHostConsoleRouteData({
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
     phase: HOST_FIXTURE_PHASE,
+    capabilityKind: access.capability?.kind,
+  });
+  const moderatorControls = buildModeratorControls({
+    capabilityKind: access.capability?.kind,
+    pendingPromptCount,
   });
 
   return Object.freeze({
@@ -124,36 +129,9 @@ export async function buildHostConsoleRouteData({
       actions: criticalActions,
       pendingPromptCount,
       votecountCount: coldLoad.votecount.length,
+      capabilityKind: access.capability?.kind,
     }),
-    moderatorControls: Object.freeze([
-      Object.freeze({
-        id: "phase",
-        label: "Phase",
-        value: "Advance, lock, or unlock",
-        authority: "HostOf(game)",
-      }),
-      Object.freeze({
-        id: "host-prompts",
-        label: "Host prompts",
-        value:
-          pendingPromptCount === 1
-            ? "1 durable prompt pending"
-            : `${pendingPromptCount} durable prompts pending`,
-        authority: "HostOf(game)",
-      }),
-      Object.freeze({
-        id: "slot-lifecycle",
-        label: "Slot lifecycle",
-        value: "Alive, dead, modkill",
-        authority: "HostOf(game)",
-      }),
-      Object.freeze({
-        id: "roles",
-        label: "Roles",
-        value: "Bulk reveal after completion",
-        authority: "HostOf(game)",
-      }),
-    ]),
+    moderatorControls,
     workQueues: Object.freeze([
       Object.freeze({
         id: "deadline",
@@ -175,6 +153,48 @@ export async function buildHostConsoleRouteData({
       }),
     ]),
   });
+}
+
+function buildModeratorControls({ capabilityKind, pendingPromptCount }) {
+  const deadline = Object.freeze({
+    id: "deadline",
+    label: "Deadline",
+    value: "Extend the active phase deadline",
+    authority: "CohostOf(game)",
+  });
+  if (capabilityKind === "CohostOf") {
+    return Object.freeze([deadline]);
+  }
+  return Object.freeze([
+    deadline,
+    Object.freeze({
+      id: "phase",
+      label: "Phase",
+      value: "Advance, lock, or unlock",
+      authority: "HostOf(game)",
+    }),
+    Object.freeze({
+      id: "host-prompts",
+      label: "Host prompts",
+      value:
+        pendingPromptCount === 1
+          ? "1 durable prompt pending"
+          : `${pendingPromptCount} durable prompts pending`,
+      authority: "HostOf(game)",
+    }),
+    Object.freeze({
+      id: "slot-lifecycle",
+      label: "Slot lifecycle",
+      value: "Alive, dead, modkill",
+      authority: "HostOf(game)",
+    }),
+    Object.freeze({
+      id: "roles",
+      label: "Roles",
+      value: "Bulk reveal after completion",
+      authority: "HostOf(game)",
+    }),
+  ]);
 }
 
 export function resolveHostConsoleAccess({ game, capabilities = [] }) {

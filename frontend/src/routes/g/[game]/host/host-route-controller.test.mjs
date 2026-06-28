@@ -105,6 +105,35 @@ test("host route controller derives action groups from live host projections", (
       .actions.map((action) => action.id),
     ["unlock_thread", "advance_phase"],
   );
+
+  const cohost = buildHostDerivedState({
+    gameId: "midsummer",
+    capabilityKind: "CohostOf",
+    snapshot: {
+      host: {
+        phase: { id: "D01", locked: false, state: "open" },
+        replacement: null,
+      },
+      votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      hostPrompts: [
+        {
+          id: "D01:tie:slot_2",
+          label: "tie",
+          status: "pending",
+          decisionKind: "select_slot",
+          subjectSlot: "slot_2",
+        },
+      ],
+    },
+  });
+  assert.deepEqual(
+    cohost.criticalActions.map((action) => action.id),
+    ["extend_deadline"],
+  );
+  assert.deepEqual(
+    cohost.moderatorActionGroups.map((group) => group.id),
+    ["deadline"],
+  );
 });
 
 test("host route controller records immutable local command state", () => {

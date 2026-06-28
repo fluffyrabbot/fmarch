@@ -90,6 +90,27 @@ assert.equal(
     .command.ExtendDeadline.phase,
   "D01",
 );
+assert.equal(session.verification.cohostConsole.hostOnlyControlsVisible, false);
+assert.equal(
+  session.verification.cohostConsole.hostOnlyResolveReject.serverEnvelope.body.kind,
+  "Reject",
+);
+assert.equal(
+  session.verification.cohostConsole.hostOnlyResolveReject.serverEnvelope.body.body.error,
+  "NotHost",
+);
+assert.equal(
+  session.verification.cohostConsole.hostOnlyResolveReject.requestEnvelope.body.body
+    .principal_user_id,
+  "cohost_c",
+);
+assert.equal(
+  session.verification.cohostConsole.hostOnlyResolveReject.requestEnvelope.body.body
+    .command.ResolvePhase.game,
+  session.game,
+);
+assert.equal(session.verification.cohostConsole.phaseAfterReject.id, "D01");
+assert.equal(session.verification.cohostConsole.phaseAfterReject.locked, false);
 assert.equal(session.verification.coreLoop.status, "passed");
 assert.equal(session.verification.coreLoop.lock.commandStatus.state, "ack");
 assert.equal(session.verification.coreLoop.rejectedVote.state, "reject");

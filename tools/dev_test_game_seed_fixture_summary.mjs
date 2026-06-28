@@ -206,7 +206,7 @@ function demoScenarios({ roles, laneIds }) {
       title: "Cohost deadline control",
       role: "cohost",
       provenBy: ["browser-entry", "cohost-console"].filter(hasLane),
-      note: "Cohost opens the seeded host-console role URL with CohostOf authority and extends the active deadline through /commands.",
+      note: "Cohost opens the seeded host-console role URL with CohostOf authority, sees only delegated deadline controls, extends the active deadline, and rejects host-only ResolvePhase through /commands.",
     }),
     scenario({
       id: "player-vote-recovery",

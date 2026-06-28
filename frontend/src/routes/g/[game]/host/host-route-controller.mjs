@@ -57,18 +57,20 @@ export function hostProjectionResyncKeys() {
   return HOST_PROJECTION_RESYNC_KEYS;
 }
 
-export function buildHostDerivedState({ gameId, snapshot }) {
+export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "HostOf" }) {
   const projection = snapshot.host;
   const votecount = snapshot.votecount;
   const hostPrompts = snapshot.hostPrompts;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts,
     phase: projection.phase,
+    capabilityKind,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({
     actions: criticalActions,
     pendingPromptCount: pendingPromptCount(hostPrompts),
     votecountCount: votecount.length,
+    capabilityKind,
   });
 
   return Object.freeze({

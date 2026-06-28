@@ -31,20 +31,38 @@ export function buildDevTestGameProofRun(session, options = {}) {
       sessionRoles: Object.keys(verification.sessions ?? {}),
       passed: verification.status === "passed" && requiredRolesPresent(verification),
     }),
-    lane("cohost-console", "Cohost role URL opens host console and extends deadline", {
+    lane("cohost-console", "Cohost role URL opens delegated host console controls", {
       capabilityLabel: verification.cohostConsole?.capabilityLabel ?? null,
       extendDeadlineState:
         verification.cohostConsole?.extendDeadline?.commandStatus?.state ?? null,
       extendDeadlinePrincipal:
         verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body?.body
           ?.principal_user_id ?? null,
+      hostOnlyControlsVisible:
+        verification.cohostConsole?.hostOnlyControlsVisible ?? null,
+      hostOnlyRejectError:
+        verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.body
+          ?.error ?? null,
+      hostOnlyRejectPrincipal:
+        verification.cohostConsole?.hostOnlyResolveReject?.requestEnvelope?.body?.body
+          ?.principal_user_id ?? null,
+      phaseAfterReject: verification.cohostConsole?.phaseAfterReject ?? null,
       passed:
         verification.cohostConsole?.status === "passed" &&
         verification.cohostConsole?.capabilityLabel ===
           `CohostOf(${session?.game ?? ""})` &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.state === "ack" &&
         verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body
-          ?.body?.principal_user_id === "cohost_c",
+          ?.body?.principal_user_id === "cohost_c" &&
+        verification.cohostConsole?.hostOnlyControlsVisible === false &&
+        verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        verification.cohostConsole?.hostOnlyResolveReject?.serverEnvelope?.body?.body
+          ?.error === "NotHost" &&
+        verification.cohostConsole?.hostOnlyResolveReject?.requestEnvelope?.body?.body
+          ?.principal_user_id === "cohost_c" &&
+        verification.cohostConsole?.phaseAfterReject?.id === "D01" &&
+        verification.cohostConsole?.phaseAfterReject?.locked === false,
     }),
     lane("core-loop", "Host phase controls and player locked-vote recovery", {
       rejectedVoteError: verification.coreLoop?.rejectedVote?.error ?? null,

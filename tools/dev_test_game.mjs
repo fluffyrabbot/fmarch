@@ -545,6 +545,10 @@ export function markdownSessionCard(card) {
         "",
         `Extend deadline: ${card.verification.cohostConsole.extendDeadline.statusMessage}`,
         "",
+        `Host-only controls visible: ${card.verification.cohostConsole.hostOnlyControlsVisible}`,
+        "",
+        `Host-only resolve: ${card.verification.cohostConsole.hostOnlyResolveReject.statusMessage}`,
+        "",
       );
     }
     if (card.verification.actionLoop !== undefined) {
@@ -754,13 +758,55 @@ async function verifySeededCohostConsole({ cohostPage, game }) {
   ) {
     throw new Error(`cohost ExtendDeadline drifted: ${JSON.stringify(extendDeadline)}`);
   }
+  const hostOnlyControlsVisible = await hostActionVisible(cohostPage, "resolve_phase");
+  if (hostOnlyControlsVisible) {
+    throw new Error("cohost console exposed host-only resolve_phase control");
+  }
+  const hostOnlyResolveReject = await sendBrowserCommand(cohostPage, {
+    principalUserId: "cohost_c",
+    commandId: crypto.randomUUID(),
+    command: {
+      ResolvePhase: {
+        game,
+        seed: 918273,
+      },
+    },
+  });
+  const rejectBody = hostOnlyResolveReject.serverEnvelope?.body;
+  if (
+    rejectBody?.kind !== "Reject" ||
+    rejectBody?.body?.error !== "NotHost" ||
+    hostOnlyResolveReject.requestEnvelope?.body?.body?.principal_user_id !== "cohost_c"
+  ) {
+    throw new Error(
+      `cohost host-only ResolvePhase did not reject as NotHost: ${JSON.stringify(
+        hostOnlyResolveReject,
+      )}`,
+    );
+  }
+  const phaseAfterReject = await cohostPage.evaluate(() => window.__fmarchHostProjection?.phase);
+  if (phaseAfterReject?.id !== "D01" || phaseAfterReject?.locked !== false) {
+    throw new Error(
+      `cohost host-only reject mutated phase state: ${JSON.stringify(phaseAfterReject)}`,
+    );
+  }
   return {
     status: "passed",
     capabilityLabel: capability,
     extendDeadline,
+    hostOnlyControlsVisible,
+    hostOnlyResolveReject: {
+      ...hostOnlyResolveReject,
+      statusMessage: `Reject ${rejectBody.body.error}: ${rejectBody.body.message}`,
+    },
+    phaseAfterReject,
     proof:
-      "The seeded cohost role URL opened the host console with CohostOf authority and extended the D01 deadline through the hydrated host-console command path.",
+      "The seeded cohost role URL opened the host console with CohostOf authority, exposed only the delegated deadline control, extended the D01 deadline through the hydrated host-console command path, and rejected a direct host-only ResolvePhase command as NotHost without mutating phase state.",
   };
+}
+
+async function hostActionVisible(page, actionId) {
+  return await page.getByTestId(`critical-host-action-${actionId}`).isVisible().catch(() => false);
 }
 
 async function verifySeededCoreLoop({ hostPage, playerPage }) {

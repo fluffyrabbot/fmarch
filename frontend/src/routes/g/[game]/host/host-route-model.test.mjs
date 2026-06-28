@@ -90,7 +90,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   );
   assert.deepEqual(
     data.moderatorControls.map((control) => control.id),
-    ["phase", "host-prompts", "slot-lifecycle", "roles"],
+    ["deadline", "phase", "host-prompts", "slot-lifecycle", "roles"],
   );
   assert.deepEqual(
     data.moderatorActionGroups.map((group) => group.id),
@@ -207,7 +207,12 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   assert.equal(data.workQueues.find((queue) => queue.id === "votecount").value, "1 projected target");
 });
 
-test("host console route data is allowed for CohostOf scoped to the current game", () => {
+test("host console route data is allowed for CohostOf scoped to the current game", async () => {
+  const data = await buildHostConsoleRouteData({
+    game: "midsummer",
+    principalUserId: "cohost_c",
+    capabilities: [{ kind: "CohostOf", game: "midsummer" }],
+  });
   const access = resolveHostConsoleAccess({
     game: "midsummer",
     capabilities: [{ kind: "CohostOf", game: "midsummer" }],
@@ -215,6 +220,26 @@ test("host console route data is allowed for CohostOf scoped to the current game
 
   assert.equal(access.allowed, true);
   assert.equal(access.capabilityLabel, "CohostOf(midsummer)");
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.access.capabilityLabel, "CohostOf(midsummer)");
+  assert.deepEqual(
+    data.criticalActions.map((action) => action.id),
+    ["extend_deadline"],
+  );
+  assert.deepEqual(
+    data.moderatorControls.map((control) => [control.id, control.authority]),
+    [["deadline", "CohostOf(game)"]],
+  );
+  assert.deepEqual(
+    data.moderatorActionGroups.map((group) => [group.id, group.authority]),
+    [["deadline", "CohostOf(game)"]],
+  );
+  assert.deepEqual(data.commandContext, {
+    gameId: "midsummer",
+    principalUserId: "cohost_c",
+    capabilityLabel: "CohostOf(midsummer)",
+    commandEndpoint: "/commands",
+  });
 });
 
 test("host console access rejects missing and wrong-game capabilities", () => {

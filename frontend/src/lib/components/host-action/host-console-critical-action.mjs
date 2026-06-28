@@ -1,9 +1,9 @@
 export function buildHostConsoleCriticalActions(
   gameId,
-  { hostPrompts = [], phase = null } = {},
+  { hostPrompts = [], phase = null, capabilityKind = "HostOf" } = {},
 ) {
   const phaseActions = buildPhaseActions(gameId, phase);
-  return Object.freeze([
+  const actions = [
     freezeHostAction({
       id: "extend_deadline",
       label: "Extend deadline",
@@ -114,7 +114,12 @@ export function buildHostConsoleCriticalActions(
           },
         }),
       ),
-  ]);
+  ];
+  return Object.freeze(
+    actions.filter((action) =>
+      hostActionAllowedForCapability(action, capabilityKind),
+    ),
+  );
 }
 
 function buildPhaseActions(gameId, phase) {
@@ -200,13 +205,14 @@ export function buildHostConsoleActionGroups({
   actions = [],
   pendingPromptCount = 0,
   votecountCount = 0,
+  capabilityKind = "HostOf",
 } = {}) {
   const actionList = Array.isArray(actions) ? actions : [];
-  return Object.freeze([
+  const groups = [
     freezeHostActionGroup({
       id: "deadline",
       label: "Deadline",
-      authority: "HostOf(game)",
+      authority: "CohostOf(game)",
       value: "Extend the active phase deadline",
       boundary: "Typed command",
       boundaryDetail: "ExtendDeadline /commands Ack or Reject",
@@ -282,11 +288,36 @@ export function buildHostConsoleActionGroups({
       actionIds: ["complete_game"],
       actions: actionList,
     }),
-  ]);
+  ];
+  return Object.freeze(
+    groups.filter((group) =>
+      hostActionGroupAllowedForCapability(group, capabilityKind),
+    ),
+  );
 }
 
 export const HOST_CONSOLE_CRITICAL_ACTIONS =
   buildHostConsoleCriticalActions("game-tablet-smoke");
+
+export function hostActionAllowedForCapability(action, capabilityKind) {
+  const normalizedCapabilityKind = normalizeHostCapabilityKind(capabilityKind);
+  if (normalizedCapabilityKind === "HostOf") {
+    return true;
+  }
+  return action?.id === "extend_deadline";
+}
+
+function hostActionGroupAllowedForCapability(group, capabilityKind) {
+  const normalizedCapabilityKind = normalizeHostCapabilityKind(capabilityKind);
+  if (normalizedCapabilityKind === "HostOf") {
+    return true;
+  }
+  return group?.id === "deadline";
+}
+
+function normalizeHostCapabilityKind(capabilityKind) {
+  return capabilityKind === "CohostOf" ? "CohostOf" : "HostOf";
+}
 
 function freezeHostAction(action) {
   return Object.freeze({
