@@ -706,7 +706,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
   const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
   assert.equal(freshness.label, "Local proof freshness");
-  assert.equal(freshness.status, "10 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.status, "18 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
@@ -723,13 +723,21 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "release-readiness",
       "identity-adapter",
       "spine-manifest",
+      "core-loop",
+      "hardening",
+      "identity",
+      "backup",
+      "ops",
+      "seed",
+      "release",
+      "spine-manifest-admin",
       "admin-spine",
       "admin-spine-admin",
     ],
   );
   assert.deepEqual(freshness.artifactSummary, {
-    artifactCount: 10,
-    freshCount: 10,
+    artifactCount: 18,
+    freshCount: 18,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
@@ -1418,6 +1426,14 @@ function proofFreshnessFixture({
     freshnessArtifact("release-readiness", "fresh"),
     freshnessArtifact("identity-adapter", "fresh"),
     freshnessArtifact("spine-manifest", "fresh"),
+    freshnessArtifact("core-loop", "fresh"),
+    freshnessArtifact("hardening", "fresh"),
+    freshnessArtifact("identity", "fresh"),
+    freshnessArtifact("backup", "fresh"),
+    freshnessArtifact("ops", "fresh"),
+    freshnessArtifact("seed", "fresh"),
+    freshnessArtifact("release", "fresh"),
+    freshnessArtifact("spine-manifest-admin", "fresh"),
     freshnessArtifact("admin-spine", "fresh"),
     freshnessArtifact("admin-spine-admin", "fresh"),
   ],

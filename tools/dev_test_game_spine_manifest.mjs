@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { readLocalProofFreshness } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
+import {
+  readLocalAdminSpineProof,
+  readLocalProofFreshness,
+} from "../frontend/src/lib/server/local-ops-artifacts.mjs";
 import {
   adminSpineProofPath,
   adminSpineReadinessEvidenceEnv,
@@ -37,7 +40,9 @@ const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
 export function buildDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
   proofFreshness,
+  adminSpineProof,
 } = {}) {
+  const adminSpineRecoveryCommands = recoveryCommandsFromAdminSpineProof(adminSpineProof);
   const evidenceEnv = {
     backupRestore: {
       backupRestoreEvidenceEnv,
@@ -93,7 +98,9 @@ export function buildDevTestGameSpineManifest({
       },
     },
     evidenceEnv,
-    artifactFreshness: buildArtifactFreshnessReport(proofFreshness),
+    artifactFreshness: buildArtifactFreshnessReport(proofFreshness, {
+      recoveryCommands: adminSpineRecoveryCommands,
+    }),
     artifacts: uniqueSorted([
       spineManifestPath,
       spineManifestMarkdownPath,
@@ -255,7 +262,12 @@ export async function writeDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
 } = {}) {
   const proofFreshness = await readLocalProofFreshness();
-  const manifest = buildDevTestGameSpineManifest({ generatedAt, proofFreshness });
+  const adminSpineProof = await readLocalAdminSpineProof();
+  const manifest = buildDevTestGameSpineManifest({
+    generatedAt,
+    proofFreshness,
+    adminSpineProof,
+  });
   await mkdir(path.dirname(manifestJsonPath), { recursive: true });
   await writeFile(manifestJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(manifestMarkdownPath, markdownSpineManifest(manifest));
@@ -290,7 +302,7 @@ function uniqueSorted(values) {
   return Array.from(new Set(values)).sort();
 }
 
-function buildArtifactFreshnessReport(proofFreshness) {
+function buildArtifactFreshnessReport(proofFreshness, { recoveryCommands = new Map() } = {}) {
   if (proofFreshness === undefined || proofFreshness === null) {
     return {
       status: "unknown",
@@ -304,7 +316,8 @@ function buildArtifactFreshnessReport(proofFreshness) {
     };
   }
   const artifacts = (proofFreshness.artifacts ?? []).map((artifact) => {
-    const refreshCommand = refreshCommandForArtifact(artifact);
+    const recoveryCommand = recoveryCommands.get(artifact.id) ?? recoveryCommands.get(artifact.path);
+    const refreshCommand = recoveryCommand ?? refreshCommandForArtifact(artifact);
     return {
       id: artifact.id,
       label: artifact.label,
@@ -316,6 +329,7 @@ function buildArtifactFreshnessReport(proofFreshness) {
         ? {}
         : { maxAgeSeconds: artifact.maxAgeSeconds }),
       refreshCommand,
+      refreshSource: recoveryCommand === undefined ? "manifest-default" : "admin-spine-recovery",
       ...(artifact.status === "fresh" ? {} : { nextCommand: refreshCommand }),
     };
   });
@@ -334,6 +348,22 @@ function buildArtifactFreshnessReport(proofFreshness) {
     proofBoundary: proofFreshness.proofBoundary,
     artifacts,
   };
+}
+
+function recoveryCommandsFromAdminSpineProof(adminSpineProof) {
+  const commands = new Map();
+  for (const surface of adminSpineProof?.recovery?.surfaces ?? []) {
+    if (typeof surface.rerunCommand !== "string" || surface.rerunCommand.trim() === "") {
+      continue;
+    }
+    if (typeof surface.id === "string" && surface.id.trim() !== "") {
+      commands.set(surface.id, surface.rerunCommand);
+    }
+    if (typeof surface.path === "string" && surface.path.trim() !== "") {
+      commands.set(surface.path, surface.rerunCommand);
+    }
+  }
+  return commands;
 }
 
 function assertArtifactFreshnessReport(report) {
@@ -356,6 +386,11 @@ function assertArtifactFreshnessReport(report) {
     }
     if (typeof artifact.refreshCommand !== "string" || artifact.refreshCommand === "") {
       throw new Error(`spine manifest artifact ${artifact.id} is missing refresh command`);
+    }
+    if (!["manifest-default", "admin-spine-recovery"].includes(artifact.refreshSource)) {
+      throw new Error(
+        `spine manifest artifact ${artifact.id} has invalid refresh source: ${artifact.refreshSource}`,
+      );
     }
     if (artifact.status !== "fresh" && artifact.nextCommand !== artifact.refreshCommand) {
       throw new Error(`spine manifest artifact ${artifact.id} is missing next command`);
@@ -386,6 +421,14 @@ const artifactRefreshCommands = Object.freeze({
   "release-readiness": "npm run test:dev-test-game-readiness",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
+  "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",
+  hardening: "npm run test:dev-test-game-hardening-admin-proof",
+  identity: "npm run test:dev-test-game-identity-admin-proof",
+  backup: "npm run test:dev-test-game-backup-admin-proof",
+  ops: "npm run test:dev-test-game-ops-admin-proof",
+  seed: "npm run test:dev-test-game-seed-admin-proof",
+  release: "npm run test:dev-test-game-release-admin-proof",
+  "spine-manifest-admin": "npm run test:dev-test-game-spine-manifest-admin-proof",
   "admin-spine": "npm run test:dev-test-game-admin-spine",
   "admin-spine-admin": "npm run test:dev-test-game-admin-spine",
 });

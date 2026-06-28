@@ -198,9 +198,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       },
       artifacts: [
         {
-          id: "proof-run",
-          label: "Dev test-game proof run",
-          path: "target/dev-test-game/proof-run.json",
+          id: "core-loop",
+          label: "Core loop admin proof",
+          path: "target/dev-test-game/core-loop-admin-proof.json",
           status: "stale",
           mtime: "2026-06-25T00:00:00.000Z",
           ageSeconds: 90000,
@@ -216,6 +216,17 @@ test("dev test-game spine manifest records command order and evidence wiring", (
           maxAgeSeconds: 86400,
         },
       ],
+    },
+    adminSpineProof: {
+      recovery: {
+        surfaces: [
+          {
+            id: "core-loop",
+            path: "target/dev-test-game/core-loop-admin-proof.json",
+            rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+          },
+        ],
+      },
     },
   });
   assertDevTestGameSpineManifest(manifest);
@@ -253,28 +264,29 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
-    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    "npm run test:dev-test-game-core-loop-admin-proof",
   );
   assert.deepEqual(
     manifest.artifactFreshness.artifacts.map((artifact) => ({
       id: artifact.id,
       status: artifact.status,
       refreshCommand: artifact.refreshCommand,
+      refreshSource: artifact.refreshSource,
       nextCommand: artifact.nextCommand,
     })),
     [
       {
-        id: "proof-run",
+        id: "core-loop",
         status: "stale",
-        refreshCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
-        nextCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        refreshCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+        refreshSource: "admin-spine-recovery",
+        nextCommand: "npm run test:dev-test-game-core-loop-admin-proof",
       },
       {
         id: "spine-manifest",
         status: "fresh",
         refreshCommand: "npm run test:dev-test-game-spine-manifest",
+        refreshSource: "manifest-default",
         nextCommand: undefined,
       },
     ],
