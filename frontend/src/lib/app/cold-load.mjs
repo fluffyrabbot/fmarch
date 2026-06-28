@@ -342,6 +342,8 @@ export function normalizeVotecount(deltas, fallback) {
 export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   game: null,
   actorSlot: null,
+  actorAlive: null,
+  actorStatus: null,
   roleKey: null,
   phase: null,
   actions: Object.freeze([]),
@@ -357,6 +359,15 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
   return Object.freeze({
     game: payload.game ?? fallback.game ?? null,
     actorSlot: payload.actor_slot ?? payload.actorSlot ?? fallback.actorSlot ?? null,
+    actorAlive:
+      typeof payload.actor_alive === "boolean"
+        ? payload.actor_alive
+        : typeof payload.actorAlive === "boolean"
+          ? payload.actorAlive
+          : fallback.actorAlive ?? null,
+    actorStatus: String(
+      payload.actor_status ?? payload.actorStatus ?? fallback.actorStatus ?? "",
+    ),
     roleKey: payload.role_key ?? payload.roleKey ?? fallback.roleKey ?? null,
     phase: normalizePlayerCommandPhase(payload.phase ?? null),
     actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),

@@ -21,6 +21,7 @@ const requiredScenarios = [
   "player-vote-recovery",
   "player-action-denied",
   "resolution-receipt",
+  "dead-player-recovery",
   "night-action-loop",
   "private-channel-member",
   "private-channel-denied",

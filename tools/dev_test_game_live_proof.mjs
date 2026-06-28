@@ -175,6 +175,55 @@ assert.equal(session.verification.resolutionReceipts.actionReceipt.templateId, "
 assert.equal(session.verification.resolutionReceipts.actionReceipt.target, "slot-2");
 assert.equal(session.verification.resolutionReceipts.normalPlayerNoticeVisible, false);
 assert.equal(session.verification.resolutionReceipts.actionPlayerNoticeVisible, false);
+assert.equal(session.verification.deadPlayerRecovery.status, "passed");
+assert.equal(session.verification.deadPlayerRecovery.targetSlot, "slot-2");
+assert.equal(session.verification.deadPlayerRecovery.commandState.actorSlot, "slot-2");
+assert.equal(session.verification.deadPlayerRecovery.commandState.actorAlive, false);
+assert.equal(session.verification.deadPlayerRecovery.commandState.actorStatus, "dead");
+assert.equal(session.verification.deadPlayerRecovery.commandState.phase.phaseId, "D02");
+assert.equal(session.verification.deadPlayerRecovery.commandState.actions.length, 0);
+assert.equal(session.verification.deadPlayerRecovery.channelContext.actorSlot, "slot-2");
+assert.equal(session.verification.deadPlayerRecovery.channelContext.actorAlive, "false");
+assert.equal(session.verification.deadPlayerRecovery.channelContext.actorStatus, "dead");
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.vote, true);
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.withdraw, true);
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.post, true);
+assert.equal(session.verification.deadPlayerRecovery.actionControlCount, 0);
+assert.equal(
+  session.verification.deadPlayerRecovery.directVote.serverEnvelope.body.body.error,
+  "SlotNotAlive",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.directPost.serverEnvelope.body.body.error,
+  "SlotNotAlive",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.directAction.serverEnvelope.body.body.error,
+  "SlotNotAlive",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.directVote.requestEnvelope.body.body
+    .principal_user_id,
+  "player-target",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.directPost.requestEnvelope.body.body
+    .principal_user_id,
+  "player-target",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.directAction.requestEnvelope.body.body
+    .principal_user_id,
+  "player-target",
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.commandStateAfterRejects.actorAlive,
+  false,
+);
+assert.equal(
+  session.verification.deadPlayerRecovery.commandStateAfterRejects.actions.length,
+  0,
+);
 assert.equal(session.verification.playerActionBoundary.status, "passed");
 assert.equal(session.verification.playerActionBoundary.phase.phaseId, "N01");
 assert.equal(session.verification.playerActionBoundary.commandActions.length, 0);

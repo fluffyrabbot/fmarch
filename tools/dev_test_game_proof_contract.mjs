@@ -13,6 +13,7 @@ const requiredLaneIds = Object.freeze([
   "core-loop",
   "action-loop",
   "resolution-receipts",
+  "dead-player-recovery",
   "player-action-boundary",
   "private-channel",
   "idempotent-retry",
@@ -116,6 +117,47 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.resolutionReceipts?.actionReceipt?.target === "slot-2" &&
         verification.resolutionReceipts?.normalPlayerNoticeVisible === false &&
         verification.resolutionReceipts?.actionPlayerNoticeVisible === false,
+    }),
+    lane("dead-player-recovery", "Dead player role URL disables controls and rejects commands", {
+      targetSlot: verification.deadPlayerRecovery?.targetSlot ?? null,
+      actorAlive: verification.deadPlayerRecovery?.commandState?.actorAlive ?? null,
+      actorStatus: verification.deadPlayerRecovery?.commandState?.actorStatus ?? null,
+      phase: verification.deadPlayerRecovery?.commandState?.phase?.phaseId ?? null,
+      actionControlCount: verification.deadPlayerRecovery?.actionControlCount ?? null,
+      voteDisabled: verification.deadPlayerRecovery?.disabledControls?.vote ?? null,
+      postDisabled: verification.deadPlayerRecovery?.disabledControls?.post ?? null,
+      directVoteError:
+        verification.deadPlayerRecovery?.directVote?.serverEnvelope?.body?.body?.error ??
+        null,
+      directPostError:
+        verification.deadPlayerRecovery?.directPost?.serverEnvelope?.body?.body?.error ??
+        null,
+      directActionError:
+        verification.deadPlayerRecovery?.directAction?.serverEnvelope?.body?.body?.error ??
+        null,
+      actionsAfterReject:
+        verification.deadPlayerRecovery?.commandStateAfterRejects?.actions?.length ?? null,
+      passed:
+        verification.deadPlayerRecovery?.status === "passed" &&
+        verification.deadPlayerRecovery?.targetSlot === "slot-2" &&
+        verification.deadPlayerRecovery?.commandState?.actorAlive === false &&
+        verification.deadPlayerRecovery?.commandState?.actorStatus === "dead" &&
+        verification.deadPlayerRecovery?.commandState?.phase?.phaseId === "D02" &&
+        verification.deadPlayerRecovery?.commandState?.actions?.length === 0 &&
+        verification.deadPlayerRecovery?.channelContext?.actorAlive === "false" &&
+        verification.deadPlayerRecovery?.channelContext?.actorStatus === "dead" &&
+        verification.deadPlayerRecovery?.disabledControls?.vote === true &&
+        verification.deadPlayerRecovery?.disabledControls?.withdraw === true &&
+        verification.deadPlayerRecovery?.disabledControls?.post === true &&
+        verification.deadPlayerRecovery?.actionControlCount === 0 &&
+        verification.deadPlayerRecovery?.directVote?.serverEnvelope?.body?.body?.error ===
+          "SlotNotAlive" &&
+        verification.deadPlayerRecovery?.directPost?.serverEnvelope?.body?.body?.error ===
+          "SlotNotAlive" &&
+        verification.deadPlayerRecovery?.directAction?.serverEnvelope?.body?.body?.error ===
+          "SlotNotAlive" &&
+        verification.deadPlayerRecovery?.commandStateAfterRejects?.actorAlive === false &&
+        verification.deadPlayerRecovery?.commandStateAfterRejects?.actions?.length === 0,
     }),
     lane("player-action-boundary", "Player role URL hides and rejects unowned night actions", {
       phase: verification.playerActionBoundary?.phase?.phaseId ?? null,

@@ -126,6 +126,8 @@ export async function buildGameRouteData({
     player: Object.freeze({
       principalUserId,
       slotId: playerSlotId,
+      alive: coldLoad.commandState.actorAlive,
+      status: coldLoad.commandState.actorStatus,
       capabilityLabel: playerCapabilityLabel,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({

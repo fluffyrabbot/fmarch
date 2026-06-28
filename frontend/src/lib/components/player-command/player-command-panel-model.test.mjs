@@ -50,6 +50,8 @@ test("player command panel model exposes tablet touch command contracts", () => 
     channelLabel: "Role PM",
     capabilityLabel: "ChannelMember(role-pm)",
     slotId: "slot-7",
+    actorAlive: "unknown",
+    actorStatus: "",
     label: "Posting target",
     value: "Role PM as slot-7",
   });
@@ -66,18 +68,20 @@ test("player command panel model exposes tablet touch command contracts", () => 
     view.composer.buttons.map((button) => ({
       action: button.action,
       label: button.label,
+      disabled: button.disabled,
       minTouchTargetPx: button.data.minTouchTargetPx,
     })),
     [
-      { action: "submit_vote", label: "Vote slot-2", minTouchTargetPx: 44 },
-      { action: "withdraw_vote", label: "Withdraw vote", minTouchTargetPx: 44 },
-      { action: "submit_post", label: "Post", minTouchTargetPx: 44 },
+      { action: "submit_vote", label: "Vote slot-2", disabled: false, minTouchTargetPx: 44 },
+      { action: "withdraw_vote", label: "Withdraw vote", disabled: false, minTouchTargetPx: 44 },
+      { action: "submit_post", label: "Post", disabled: false, minTouchTargetPx: 44 },
     ],
   );
   assert.deepEqual(
     view.composer.actionButtons.map((button) => ({
       action: button.action,
       label: button.label,
+      disabled: button.disabled,
       detail: button.detail,
       templateId: button.data.templateId,
       targetSlots: button.data.targetSlots,
@@ -87,6 +91,7 @@ test("player command panel model exposes tablet touch command contracts", () => 
       {
         action: "submit_action",
         label: "Submit factional kill",
+        disabled: false,
         detail: "factional_kill -> slot-2",
         templateId: "factional_kill",
         targetSlots: ["slot-2"],
@@ -95,6 +100,45 @@ test("player command panel model exposes tablet touch command contracts", () => 
     ],
   );
   assert.match(view.composer.buttons[1].className, /secondary/);
+});
+
+test("player command panel model disables command controls for dead actors", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      postCommandLabel: "Post",
+      actionCommands: [],
+    },
+    channel: { channel: "main", label: "Main thread" },
+    player: {
+      slotId: "slot-2",
+      alive: false,
+      status: "dead",
+      capabilityLabel: "SlotOccupant(slot-2)",
+    },
+  });
+
+  assert.deepEqual(view.composer.channelContext, {
+    testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
+    channelId: "main",
+    channelLabel: "Main thread",
+    capabilityLabel: "SlotOccupant(slot-2)",
+    slotId: "slot-2",
+    actorAlive: "false",
+    actorStatus: "dead",
+    label: "Posting target",
+    value: "Main thread as slot-2 (dead)",
+  });
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [
+      ["submit_vote", true],
+      ["withdraw_vote", true],
+      ["submit_post", true],
+    ],
+  );
+  assert.deepEqual(view.composer.actionButtons, []);
 });
 
 test("player command panel model normalizes missing row and label data", () => {
@@ -110,6 +154,8 @@ test("player command panel model normalizes missing row and label data", () => {
     channelLabel: "Main thread",
     capabilityLabel: "Scoped player capability",
     slotId: "slot",
+    actorAlive: "unknown",
+    actorStatus: "",
     label: "Posting target",
     value: "Main thread as slot",
   });

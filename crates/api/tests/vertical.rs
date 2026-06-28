@@ -534,6 +534,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(state["actor_slot"], "slot_4");
+    assert_eq!(state["actor_alive"], true);
+    assert_eq!(state["actor_status"], "alive");
     assert_eq!(state["role_key"], "mafia_goon");
     assert_eq!(state["phase"]["phase_id"], "N01");
     assert_eq!(state["phase"]["phase_kind"], "Night");
@@ -584,6 +586,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let submitted_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(submitted_state["phase"]["phase_id"], "N01");
+    assert_eq!(submitted_state["actor_alive"], true);
+    assert_eq!(submitted_state["actor_status"], "alive");
     assert_eq!(submitted_state["actions"], serde_json::json!([]));
 
     expect_ack(
@@ -615,6 +619,27 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     assert_eq!(target_notifications[0].audience_slot, "slot-2");
     assert_eq!(target_notifications[0].effect, "player_killed");
     assert_eq!(target_notifications[0].status, "factional_kill");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-target&slot_id=slot-2"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let dead_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(dead_state["actor_slot"], "slot-2");
+    assert_eq!(dead_state["actor_alive"], false);
+    assert_eq!(dead_state["actor_status"], "dead");
+    assert_eq!(dead_state["actions"], serde_json::json!([]));
 
     let response = app
         .clone()
@@ -668,6 +693,8 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
     let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let day_state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(day_state["phase"]["phase_id"], "D01");
+    assert_eq!(day_state["actor_alive"], true);
+    assert_eq!(day_state["actor_status"], "alive");
     assert_eq!(day_state["actions"], serde_json::json!([]));
 
     let response = app

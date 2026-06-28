@@ -317,6 +317,8 @@ test("player route data uses REST projection cold-loads when available", async (
         return jsonResponse({
           game: "midsummer",
           actor_slot: "slot-7",
+          actor_alive: true,
+          actor_status: "alive",
           role_key: "mafia_goon",
           phase: {
             phase_id: "N01",
@@ -344,6 +346,10 @@ test("player route data uses REST projection cold-loads when available", async (
 
   assert.equal(data.phase.label, "Night 1");
   assert.equal(data.surfaceHeader.title, "Night 1");
+  assert.equal(data.commandState.actorAlive, true);
+  assert.equal(data.commandState.actorStatus, "alive");
+  assert.equal(data.player.alive, true);
+  assert.equal(data.player.status, "alive");
   assert.deepEqual(
     data.composer.actionCommands.map((command) => ({
       action: command.action,

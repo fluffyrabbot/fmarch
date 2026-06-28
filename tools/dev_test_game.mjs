@@ -579,6 +579,24 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.deadPlayerRecovery !== undefined) {
+      lines.push(
+        "## Dead Player Recovery Proof",
+        "",
+        `Status: ${card.verification.deadPlayerRecovery.status}`,
+        "",
+        `Proof: ${card.verification.deadPlayerRecovery.proof}`,
+        "",
+        `Actor status: ${card.verification.deadPlayerRecovery.commandState.actorStatus}`,
+        "",
+        `Direct vote: ${card.verification.deadPlayerRecovery.directVote.statusMessage}`,
+        "",
+        `Direct post: ${card.verification.deadPlayerRecovery.directPost.statusMessage}`,
+        "",
+        `Direct action: ${card.verification.deadPlayerRecovery.directAction.statusMessage}`,
+        "",
+      );
+    }
     if (card.verification.playerActionBoundary !== undefined) {
       lines.push(
         "## Player Action Boundary Proof",
@@ -644,6 +662,7 @@ async function verifySessionCard(card) {
   let privateChannel;
   let actionLoop;
   let resolutionReceipts;
+  let deadPlayerRecovery;
   let playerActionBoundary;
   let multiplayerHardening;
   let staleActionPage;
@@ -685,6 +704,7 @@ async function verifySessionCard(card) {
       apiBaseUrl: card.apiBaseUrl,
     });
     resolutionReceipts = actionLoop.resolutionReceipts;
+    deadPlayerRecovery = actionLoop.deadPlayerRecovery;
     playerActionBoundary = actionLoop.playerActionBoundary;
     multiplayerHardening = await verifySeededMultiplayerHardening({
       hostPage: roleEntries.host.page,
@@ -709,6 +729,7 @@ async function verifySessionCard(card) {
     privateChannel,
     actionLoop,
     resolutionReceipts,
+    deadPlayerRecovery,
     playerActionBoundary,
     multiplayerHardening,
   };
@@ -973,6 +994,11 @@ async function verifySeededActionLoop({
     resolvedTargetSlot: targetState,
     legalAction,
   });
+  const deadPlayerRecovery = await verifySeededDeadPlayerRecovery({
+    targetPage,
+    game,
+    targetSlot,
+  });
   const staleActionConflict = await submitStaleActionConflict({
     staleActionPage,
     staleActionSetup,
@@ -987,6 +1013,7 @@ async function verifySeededActionLoop({
     legalAction,
     playerActionBoundary,
     resolutionReceipts,
+    deadPlayerRecovery,
     resolveNight,
     resolvedTargetSlot: targetState,
     advanceDay,
@@ -995,6 +1022,145 @@ async function verifySeededActionLoop({
     staleActionConflict,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function verifySeededDeadPlayerRecovery({ targetPage, game, targetSlot }) {
+  await gotoPlayerBoard(targetPage, game);
+  await targetPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === false,
+  );
+  const commandState = await targetPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const channelContext = await targetPage
+    .getByTestId("player-command-channel-context")
+    .evaluate((node) => ({
+      actorSlot: node.getAttribute("data-actor-slot"),
+      actorAlive: node.getAttribute("data-actor-alive"),
+      actorStatus: node.getAttribute("data-actor-status"),
+      text: node.textContent,
+    }));
+  const disabledControls = {
+    vote: await targetPage.locator('[data-action="submit_vote"]').isDisabled(),
+    withdraw: await targetPage.locator('[data-action="withdraw_vote"]').isDisabled(),
+    post: await targetPage.locator('[data-action="submit_post"]').isDisabled(),
+  };
+  const actionControlCount = await targetPage.locator('[data-action^="submit_action"]').count();
+  if (
+    commandState?.actorSlot !== targetSlot ||
+    commandState?.actorAlive !== false ||
+    commandState?.actorStatus !== "dead" ||
+    commandState?.phase?.phaseId !== "D02" ||
+    commandState?.actions?.length !== 0 ||
+    channelContext.actorAlive !== "false" ||
+    channelContext.actorStatus !== "dead" ||
+    !Object.values(disabledControls).every(Boolean) ||
+    actionControlCount !== 0
+  ) {
+    throw new Error(
+      `dead player role URL state drifted: ${JSON.stringify({
+        commandState,
+        channelContext,
+        disabledControls,
+        actionControlCount,
+      })}`,
+    );
+  }
+
+  const directVote = await sendDeadPlayerCommand(targetPage, {
+    game,
+    command: {
+      SubmitVote: {
+        game,
+        actor_slot: targetSlot,
+        target: { Slot: "slot_5" },
+      },
+    },
+  });
+  const directPost = await sendDeadPlayerCommand(targetPage, {
+    game,
+    command: {
+      SubmitPost: {
+        game,
+        channel_id: "main",
+        actor_slot: targetSlot,
+        body: "Dead slot direct post recovery proof.",
+        media: null,
+      },
+    },
+  });
+  const directAction = await sendDeadPlayerCommand(targetPage, {
+    game,
+    command: {
+      SubmitAction: {
+        game,
+        action_id: "dead-player-factional-kill",
+        actor_slot: targetSlot,
+        template_id: "factional_kill",
+        targets: ["slot_5"],
+        grant_id: null,
+      },
+    },
+  });
+
+  await gotoPlayerBoard(targetPage, game);
+  await targetPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === false,
+  );
+  const commandStateAfterRejects = await targetPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  if (
+    commandStateAfterRejects?.actorSlot !== targetSlot ||
+    commandStateAfterRejects?.actorAlive !== false ||
+    commandStateAfterRejects?.actorStatus !== "dead" ||
+    commandStateAfterRejects?.actions?.length !== 0
+  ) {
+    throw new Error(
+      `dead player rejects mutated command state: ${JSON.stringify(
+        commandStateAfterRejects,
+      )}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    targetSlot,
+    commandState,
+    channelContext,
+    disabledControls,
+    actionControlCount,
+    directVote,
+    directPost,
+    directAction,
+    commandStateAfterRejects,
+    proof:
+      "The killed player role URL reached D02 with actorAlive=false, actorStatus=dead, disabled vote/post controls, no night actions, and direct vote/post/action commands all rejected as SlotNotAlive without restoring actions.",
+  };
+}
+
+async function sendDeadPlayerCommand(page, { command }) {
+  const raw = await sendBrowserCommand(page, {
+    principalUserId: "player-target",
+    commandId: crypto.randomUUID(),
+    command,
+  });
+  const rejectBody = raw.serverEnvelope?.body;
+  if (
+    rejectBody?.kind !== "Reject" ||
+    rejectBody?.body?.error !== "SlotNotAlive" ||
+    raw.requestEnvelope?.body?.body?.principal_user_id !== "player-target"
+  ) {
+    throw new Error(`dead player command did not reject as SlotNotAlive: ${JSON.stringify(raw)}`);
+  }
+  return {
+    ...raw,
+    statusMessage: `Reject ${rejectBody.body.error}: ${rejectBody.body.message}`,
   };
 }
 

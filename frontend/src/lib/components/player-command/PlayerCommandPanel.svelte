@@ -53,6 +53,8 @@
       data-channel-label={view.composer.channelContext.channelLabel}
       data-capability-label={view.composer.channelContext.capabilityLabel}
       data-actor-slot={view.composer.channelContext.slotId}
+      data-actor-alive={view.composer.channelContext.actorAlive}
+      data-actor-status={view.composer.channelContext.actorStatus}
     >
       <span>{view.composer.channelContext.label}</span>
       <strong>{view.composer.channelContext.value}</strong>
@@ -69,6 +71,7 @@
           class={button.className}
           data-action={button.data.action}
           data-min-touch-target-px={button.data.minTouchTargetPx}
+          disabled={button.disabled}
           on:click={() => onCommand(button.action)}
         >
           {button.label}
@@ -87,6 +90,7 @@
           data-template-id={button.data.templateId}
           data-target-slots={button.data.targetSlots.join(",")}
           data-min-touch-target-px={button.data.minTouchTargetPx}
+          disabled={button.disabled}
           on:click={() => onCommand(button.action)}
         >
           <span>{button.label}</span>

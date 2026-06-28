@@ -286,6 +286,8 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
         return jsonResponse({
           game: "midsummer",
           actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
           role_key: "mafia_goon",
           phase: {
             phase_id: "N01",
@@ -320,6 +322,8 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   assert.equal(data.thread.posts[0].body, "hello");
   assert.deepEqual(data.votecount, FALLBACK.votecount);
   assert.equal(data.commandState.phase.phaseId, "N01");
+  assert.equal(data.commandState.actorAlive, true);
+  assert.equal(data.commandState.actorStatus, "alive");
   assert.equal(data.commandState.actions[0].templateId, "factional_kill");
   assert.deepEqual(data.commandState.actions[0].targets, ["slot-2"]);
 });
@@ -330,6 +334,8 @@ test("normalizes player command state into route action configs", () => {
       {
         game: "midsummer",
         actor_slot: "slot_4",
+        actor_alive: false,
+        actor_status: "dead",
         role_key: "mafia_goon",
         phase: {
           phase_id: "N01",
@@ -354,6 +360,8 @@ test("normalizes player command state into route action configs", () => {
     {
       game: "midsummer",
       actorSlot: "slot_4",
+      actorAlive: false,
+      actorStatus: "dead",
       roleKey: "mafia_goon",
       phase: {
         phaseId: "N01",

@@ -652,6 +652,74 @@ test("session card and markdown include role invite URLs and tokens", () => {
       normalPlayerNoticeVisible: false,
       actionPlayerNoticeVisible: false,
     },
+    deadPlayerRecovery: {
+      status: "passed",
+      proof: "dead player controls disabled and direct commands rejected",
+      targetSlot: "slot-2",
+      commandState: {
+        actorSlot: "slot-2",
+        actorAlive: false,
+        actorStatus: "dead",
+        phase: { phaseId: "D02" },
+        actions: [],
+      },
+      channelContext: {
+        actorSlot: "slot-2",
+        actorAlive: "false",
+        actorStatus: "dead",
+        text: "Posting target Main thread as slot-2 (dead)",
+      },
+      disabledControls: { vote: true, withdraw: true, post: true },
+      actionControlCount: 0,
+      directVote: {
+        statusMessage: "Reject SlotNotAlive: slot not alive",
+        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        serverEnvelope: {
+          body: {
+            kind: "Reject",
+            body: {
+              error: "SlotNotAlive",
+              message: "slot not alive",
+              retryable: false,
+            },
+          },
+        },
+      },
+      directPost: {
+        statusMessage: "Reject SlotNotAlive: slot not alive",
+        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        serverEnvelope: {
+          body: {
+            kind: "Reject",
+            body: {
+              error: "SlotNotAlive",
+              message: "slot not alive",
+              retryable: false,
+            },
+          },
+        },
+      },
+      directAction: {
+        statusMessage: "Reject SlotNotAlive: slot not alive",
+        requestEnvelope: { body: { body: { principal_user_id: "player-target" } } },
+        serverEnvelope: {
+          body: {
+            kind: "Reject",
+            body: {
+              error: "SlotNotAlive",
+              message: "slot not alive",
+              retryable: false,
+            },
+          },
+        },
+      },
+      commandStateAfterRejects: {
+        actorSlot: "slot-2",
+        actorAlive: false,
+        actorStatus: "dead",
+        actions: [],
+      },
+    },
     playerActionBoundary: {
       status: "passed",
       proof: "player did not see factional kill and direct command rejected",
@@ -765,6 +833,11 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("## Resolution Receipt Proof"));
   assert(markdown.includes("Target notice: player_killed factional_kill"));
   assert(markdown.includes("Normal player notice leaked: false"));
+  assert(markdown.includes("## Dead Player Recovery Proof"));
+  assert(markdown.includes("Actor status: dead"));
+  assert(markdown.includes("Direct vote: Reject SlotNotAlive: slot not alive"));
+  assert(markdown.includes("Direct post: Reject SlotNotAlive: slot not alive"));
+  assert(markdown.includes("Direct action: Reject SlotNotAlive: slot not alive"));
   assert(markdown.includes("## Player Action Boundary Proof"));
   assert(markdown.includes("Factional kill visible: false"));
   assert(markdown.includes("Direct factional kill: Reject InvalidTarget: invalid target"));
@@ -792,6 +865,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "core-loop",
       "action-loop",
       "resolution-receipts",
+      "dead-player-recovery",
       "player-action-boundary",
       "private-channel",
       "idempotent-retry",
@@ -871,7 +945,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 13);
+  assert.equal(opsArtifacts.proofRun.laneCount, 14);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -936,6 +1010,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "player-vote-recovery",
       "player-action-denied",
       "resolution-receipt",
+      "dead-player-recovery",
       "night-action-loop",
       "private-channel-member",
       "private-channel-denied",
@@ -1296,6 +1371,7 @@ function coreLoopAdminProofFixture() {
         "core-loop",
         "action-loop",
         "resolution-receipts",
+        "dead-player-recovery",
         "player-action-boundary",
         "private-channel",
       ],
@@ -1400,6 +1476,7 @@ function seedAdminProofFixture() {
         "player-vote-recovery",
         "player-action-denied",
         "resolution-receipt",
+        "dead-player-recovery",
         "night-action-loop",
         "private-channel-member",
         "private-channel-denied",

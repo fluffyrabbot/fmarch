@@ -293,6 +293,11 @@ player and action-player role URLs do not receive that target-only notice. The
 host-side lifecycle receipt is limited to the focused local host-console state
 endpoint for the killed slot.
 
+The dead-player recovery proof keeps that killed `deniedPlayer` role URL on D02
+and verifies the player command state marks the actor dead, exposes no legal
+actions, disables vote/post controls in the browser, and returns
+`Reject SlotNotAlive` for direct `/commands` vote, post, and action attempts.
+
 The player action-boundary proof keeps the seeded `player` role URL on the same
 local game at N01, verifies that the player command surface has no unowned
 `factional_kill` action, submits a direct browser `/commands` `SubmitAction`
@@ -307,7 +312,7 @@ The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
 the `core-loop`, `action-loop`, `resolution-receipts`,
-`player-action-boundary`, and `private-channel` rows.
+`dead-player-recovery`, `player-action-boundary`, and `private-channel` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

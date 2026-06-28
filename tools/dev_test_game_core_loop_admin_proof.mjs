@@ -19,6 +19,7 @@ const requiredChecks = [
   "core-loop",
   "action-loop",
   "resolution-receipts",
+  "dead-player-recovery",
   "player-action-boundary",
   "private-channel",
 ];

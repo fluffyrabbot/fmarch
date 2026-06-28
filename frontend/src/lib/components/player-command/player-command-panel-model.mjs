@@ -17,6 +17,7 @@ export function buildPlayerCommandPanelViewModel({
   player = {},
 }) {
   const channelContext = buildChannelContextViewModel({ channel, player });
+  const playerCommandsDisabled = player.alive === false;
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
@@ -39,14 +40,17 @@ export function buildPlayerCommandPanelViewModel({
           action: "submit_vote",
           label: composer.voteCommandLabel,
           primary: true,
+          disabled: playerCommandsDisabled,
         }),
         commandButton({
           action: "withdraw_vote",
           label: composer.withdrawCommandLabel,
+          disabled: playerCommandsDisabled,
         }),
         commandButton({
           action: "submit_post",
           label: composer.postCommandLabel,
+          disabled: playerCommandsDisabled,
         }),
       ]),
       actionHeading: "Night actions",
@@ -64,14 +68,20 @@ function buildChannelContextViewModel({ channel = {}, player = {} }) {
     channel.capabilityLabel ?? player.capabilityLabel ?? "Scoped player capability",
   );
   const slotId = String(player.slotId ?? "slot");
+  const actorStatus = String(player.status ?? "").trim();
+  const actorAlive = player.alive === false ? "false" : player.alive === true ? "true" : "unknown";
+  const lifecycleSuffix =
+    actorStatus !== "" && actorStatus !== "alive" ? ` (${actorStatus})` : "";
   return Object.freeze({
     testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
     channelId,
     channelLabel,
     capabilityLabel,
     slotId,
+    actorAlive,
+    actorStatus,
     label: "Posting target",
-    value: `${channelLabel} as ${slotId}`,
+    value: `${channelLabel} as ${slotId}${lifecycleSuffix}`,
   });
 }
 
@@ -96,10 +106,11 @@ function normalizeVotecountRow(row) {
   });
 }
 
-function commandButton({ action, label, primary = false }) {
+function commandButton({ action, label, primary = false, disabled = false }) {
   return Object.freeze({
     action,
     label: String(label ?? action),
+    disabled,
     className: primary
       ? "fm-touch-button"
       : "fm-touch-button fm-touch-button--secondary",
@@ -116,6 +127,7 @@ function actionCommandButton(command) {
     action,
     commandKind: String(command?.commandKind ?? action),
     label: String(command?.label ?? action),
+    disabled: false,
     detail: String(command?.detail ?? ""),
     className: "fm-touch-button fm-touch-button--secondary",
     data: Object.freeze({

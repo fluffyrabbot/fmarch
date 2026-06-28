@@ -1298,6 +1298,8 @@ struct PlayerCommandStateQuery {
 pub struct PlayerCommandStateResponse {
     pub game: Uuid,
     pub actor_slot: Option<String>,
+    pub actor_alive: bool,
+    pub actor_status: String,
     pub role_key: Option<String>,
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
@@ -1404,6 +1406,8 @@ async fn player_command_state(
     Ok(Json(PlayerCommandStateResponse {
         game,
         actor_slot: Some(actor_slot),
+        actor_alive: actor.alive,
+        actor_status: actor.status.clone(),
         role_key,
         phase: phase_view,
         actions,

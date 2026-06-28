@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 10,
+        scenarioCount: 11,
       },
       {
         id: "proof-lanes-carried",
@@ -153,6 +153,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "player-vote-recovery",
     "player-action-denied",
     "resolution-receipt",
+    "dead-player-recovery",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",
@@ -231,6 +232,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "deniedPlayer",
       provenBy: ["browser-entry", "resolution-receipts"].filter(hasLane),
       note: "Killed player opens the seeded role URL after N01 resolves and sees only the target-scoped player_killed factional_kill notice.",
+    }),
+    scenario({
+      id: "dead-player-recovery",
+      title: "Dead player recovery",
+      role: "deniedPlayer",
+      provenBy: ["browser-entry", "dead-player-recovery"].filter(hasLane),
+      note: "Killed player opens the seeded D02 role URL with dead state, no legal actions, disabled controls, and SlotNotAlive recovery from direct vote, post, and action commands.",
     }),
     scenario({
       id: "night-action-loop",
