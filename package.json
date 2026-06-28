@@ -24,6 +24,7 @@
     "test:dev-test-game-admin-spine-admin-proof": "node tools/dev_test_game_admin_spine_admin_proof.mjs",
     "test:dev-test-game-spine-manifest": "node tools/dev_test_game_spine_manifest.mjs",
     "test:dev-test-game-next-action": "node tools/dev_test_game_next_action.mjs",
+    "test:dev-test-game-next-action-admin-proof": "node tools/dev_test_game_next_action_admin_proof.mjs",
     "test:dev-test-game-spine-manifest-admin-proof": "node tools/dev_test_game_spine_manifest_admin_proof.mjs",
     "test:dev-test-game-proof-freshness-admin-proof": "node tools/dev_test_game_proof_freshness_admin_proof.mjs",
     "test:dev-test-game-admin-spine": "node tools/dev_test_game_admin_spine.mjs",

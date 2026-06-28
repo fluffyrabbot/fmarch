@@ -28,6 +28,7 @@ export async function buildAdminRouteData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  nextAction = null,
   proofFreshness = null,
 }) {
   const access = resolveSurfaceAccess({
@@ -126,41 +127,45 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalProofFreshnessAudit(
-        appendLocalAdminSpineAudit(
-          appendLocalSpineManifestAudit(
-            appendLocalIdentityAdapterAudit(
-              appendLocalBackupRestoreAudit(
-                appendLocalReleaseReadinessAudit(
-                  appendLocalSeedFixtureAudit(
-                    appendLocalOpsArtifactsAudit(
-                      appendLocalHardeningAudit(
-                        appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                        proofRun,
+      appendLocalNextActionAudit(
+        appendLocalProofFreshnessAudit(
+          appendLocalAdminSpineAudit(
+            appendLocalSpineManifestAudit(
+              appendLocalIdentityAdapterAudit(
+                appendLocalBackupRestoreAudit(
+                  appendLocalReleaseReadinessAudit(
+                    appendLocalSeedFixtureAudit(
+                      appendLocalOpsArtifactsAudit(
+                        appendLocalHardeningAudit(
+                          appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                          proofRun,
+                          { game },
+                        ),
+                        opsArtifacts,
                         { game },
                       ),
-                      opsArtifacts,
+                      seedFixtureSummary,
                       { game },
                     ),
-                    seedFixtureSummary,
+                    releaseReadinessChecklist,
                     { game },
                   ),
-                  releaseReadinessChecklist,
+                  backupRestoreProof,
                   { game },
                 ),
-                backupRestoreProof,
+                identityAdapterProof,
                 { game },
               ),
-              identityAdapterProof,
+              spineManifest,
               { game },
             ),
-            spineManifest,
+            adminSpineProof,
             { game },
           ),
-          adminSpineProof,
+          proofFreshness,
           { game },
         ),
-        proofFreshness,
+        nextAction,
         { game },
       ),
       { game },
@@ -216,6 +221,7 @@ export async function buildAdminAuditDetailData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  nextAction = null,
   proofFreshness = null,
 }) {
   const data = await buildAdminRouteData({
@@ -234,6 +240,7 @@ export async function buildAdminAuditDetailData({
     identityAdapterProof,
     spineManifest,
     adminSpineProof,
+    nextAction,
     proofFreshness,
   });
   const auditId = requiredAuditId(audit);
@@ -370,6 +377,87 @@ export function appendLocalProofFreshnessAudit(audit, proofFreshness, { game }) 
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalNextActionAudit(audit, nextAction, { game }) {
+  const row = normalizeLocalNextActionAudit(nextAction, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalNextActionAudit(nextAction, { game }) {
+  if (
+    nextAction === null ||
+    typeof nextAction !== "object" ||
+    nextAction.version !== 1 ||
+    nextAction.proof !== "dev-test-game-next-action" ||
+    nextAction.status !== "passed" ||
+    nextAction.scope !== "local-dev-test-game-next-action" ||
+    nextAction.releaseReady !== false ||
+    nextAction.productionReady !== false
+  ) {
+    return null;
+  }
+  const action = nextAction.nextAction ?? {};
+  const command = String(action.command ?? "");
+  const reason = String(action.reason ?? "unknown");
+  const actionStatus = String(action.status ?? "unknown");
+  const artifact =
+    action.artifact !== null && typeof action.artifact === "object"
+      ? action.artifact
+      : null;
+  const checks = [
+    Object.freeze({
+      id: "next-command",
+      status: command === "" ? "missing" : "available",
+    }),
+    Object.freeze({
+      id: reason,
+      status: actionStatus,
+    }),
+    ...(artifact === null
+      ? []
+      : [
+          Object.freeze({
+            id: String(artifact.id),
+            status: String(artifact.status ?? "unknown"),
+          }),
+        ]),
+  ];
+  const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
+  return Object.freeze({
+    id: "local-next-action",
+    label: "Local next action",
+    status:
+      command === ""
+        ? `${actionStatus}: command missing`
+        : `${actionStatus}: ${command}`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local next-action receipt",
+    boundaryDetail:
+      nextAction.proofBoundary ??
+      "Local dev-test-game next-action receipt without hosted, release, or production claims.",
+    href: "target/dev-test-game/next-action.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
+    checks: Object.freeze(checks),
+    artifactSummary: Object.freeze({
+      command,
+      reason,
+      actionStatus,
+      sourceManifest: String(nextAction.generatedFrom?.spineManifest ?? ""),
+      artifactFreshnessStatus: String(
+        nextAction.generatedFrom?.artifactFreshnessStatus ?? "unknown",
+      ),
+      artifactCount: Number(freshnessSummary.artifactCount ?? 0),
+      freshCount: Number(freshnessSummary.freshCount ?? 0),
+      staleCount: Number(freshnessSummary.staleCount ?? 0),
+      missingCount: Number(freshnessSummary.missingCount ?? 0),
+      releaseReady: nextAction.releaseReady === true,
+      productionReady: nextAction.productionReady === true,
+    }),
+  });
 }
 
 export function normalizeLocalProofFreshnessAudit(proofFreshness, { game }) {

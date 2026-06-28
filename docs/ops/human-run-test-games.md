@@ -94,6 +94,7 @@ target/dev-test-game/admin-spine-proof.json
 target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
 target/dev-test-game/next-action.json
+target/dev-test-game/next-action-admin-proof.json
 target/dev-test-game/spine-manifest-admin-proof.json
 target/dev-test-game/admin-spine-admin-proof.json
 target/dev-test-game/proof-freshness-admin-proof.json
@@ -197,6 +198,12 @@ readiness, is:
 
 ```sh
 npm run test:dev-test-game-next-action
+```
+
+The seeded admin overview-to-local-next-action detail browser proof is:
+
+```sh
+npm run test:dev-test-game-next-action-admin-proof
 ```
 
 The seeded admin overview-to-local-spine-manifest detail browser proof is:

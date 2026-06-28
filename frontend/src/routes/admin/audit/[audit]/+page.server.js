@@ -4,6 +4,7 @@ import {
   readLocalAdminSpineProof,
   readLocalDevTestGameProofRun,
   readLocalIdentityAdapterProof,
+  readLocalNextAction,
   readLocalOpsArtifacts,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
@@ -36,6 +37,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     identityAdapterProof: await readLocalIdentityAdapterProof(),
     spineManifest: await readLocalSpineManifest(),
     adminSpineProof: await readLocalAdminSpineProof(),
+    nextAction: await readLocalNextAction(),
     proofFreshness: await readLocalProofFreshness(),
   });
 

@@ -774,6 +774,75 @@ test("admin local proof freshness detail data carries stale and missing rows", a
   );
 });
 
+test("admin route data exposes local next action as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture(),
+  });
+
+  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  assert.equal(nextAction.label, "Local next action");
+  assert.equal(
+    nextAction.status,
+    "ready: test:dev-test-game-proof-freshness-admin-proof",
+  );
+  assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(nextAction.inspectHref, "/admin/audit/local-next-action?game=midsummer");
+  assert.deepEqual(
+    nextAction.checks.map((check) => [check.id, check.status]),
+    [
+      ["next-command", "available"],
+      ["all-artifacts-fresh", "ready"],
+    ],
+  );
+  assert.deepEqual(nextAction.artifactSummary, {
+    command: "test:dev-test-game-proof-freshness-admin-proof",
+    reason: "all-artifacts-fresh",
+    actionStatus: "ready",
+    sourceManifest: "target/dev-test-game/spine-manifest.json",
+    artifactFreshnessStatus: "passed",
+    artifactCount: 18,
+    freshCount: 18,
+    staleCount: 0,
+    missingCount: 0,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local next action detail data carries recovery check rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-next-action",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "artifact-not-fresh",
+      command: "npm run test:dev-test-game-core-loop-admin-proof",
+      artifact: {
+        id: "core-loop",
+        label: "Core loop admin proof",
+        path: "target/dev-test-game/core-loop-admin-proof.json",
+        status: "stale",
+        refreshSource: "admin-spine-recovery",
+      },
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local next action");
+  assert.equal(data.audit.id, "local-next-action");
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["next-command", "available"],
+      ["artifact-not-fresh", "blocked"],
+      ["core-loop", "stale"],
+    ],
+  );
+});
+
 test("admin route data exposes local hardening proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1474,6 +1543,41 @@ function freshnessArtifact(id, status) {
           ageSeconds: status === "fresh" ? 120 : 172800,
           sizeBytes: 42,
         }),
+  };
+}
+
+function nextActionFixture({
+  actionStatus = "ready",
+  reason = "all-artifacts-fresh",
+  command = "test:dev-test-game-proof-freshness-admin-proof",
+  artifact,
+} = {}) {
+  return {
+    version: 1,
+    proof: "dev-test-game-next-action",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-next-action",
+    proofBoundary: "Local next-action receipt.",
+    generatedFrom: {
+      spineManifest: "target/dev-test-game/spine-manifest.json",
+      manifestGeneratedAt: "2026-06-26T00:00:00.000Z",
+      artifactFreshnessStatus: "passed",
+      artifactFreshnessSummary: {
+        artifactCount: 18,
+        freshCount: 18,
+        staleCount: 0,
+        missingCount: 0,
+      },
+    },
+    nextAction: {
+      command,
+      reason,
+      status: actionStatus,
+      ...(artifact === undefined ? {} : { artifact }),
+    },
   };
 }
 
