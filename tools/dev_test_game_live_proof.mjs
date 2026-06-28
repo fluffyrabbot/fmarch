@@ -858,6 +858,10 @@ assert.match(
   session.verification.replacementConsole.staleReplacementAfterSuccess.activityStatusText,
   /Reject InvalidTarget/,
 );
+assert.match(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.activityStatusText,
+  /replacement target is stale, refresh the host console and use the current slot occupant/,
+);
 assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess.activityRow.actionId,
   "process_replacement_stale_success",

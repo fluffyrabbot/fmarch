@@ -940,6 +940,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "replacement-session-refresh-recovery",
     "replacement-stale-session-after-refresh",
     "replacement-reconnect-recovery",
+    "replacement-stale-conflict-message",
     "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",

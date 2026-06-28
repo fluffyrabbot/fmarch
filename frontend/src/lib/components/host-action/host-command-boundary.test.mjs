@@ -297,6 +297,32 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
   );
 
+  const staleReplacementReject = await sendHostActionCommand({
+    actionEvent: REPLACEMENT_EVENT,
+    principalUserId: "host_h",
+    commandIdFactory: () => "55555555-5555-4555-8555-555555555555",
+    envelopeIdFactory: () => 11,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 11,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "InvalidTarget",
+            retryable: false,
+            message: "invalid target",
+          },
+        },
+      }),
+  });
+
+  assert.equal(staleReplacementReject.state, "reject");
+  assert.equal(
+    staleReplacementReject.message,
+    "Reject InvalidTarget: invalid target; replacement target is stale, refresh the host console and use the current slot occupant",
+  );
+
   const retryableReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
     principalUserId: "host_h",

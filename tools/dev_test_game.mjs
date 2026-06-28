@@ -2670,6 +2670,8 @@ function replacementAttemptVisibleReject(attempt, actionId) {
   return (
     attempt.commandOutcomes.some((outcome) => outcome.actionId === actionId) === true &&
     attempt.activityStatusText.includes("Reject InvalidTarget") &&
+    attempt.activityStatusText.includes("replacement target is stale") &&
+    attempt.activityStatusText.includes("current slot occupant") &&
     attempt.activityRow.source === "outcome" &&
     attempt.activityRow.actionId === actionId &&
     attempt.activityRow.dispatchKind === "process_replacement" &&

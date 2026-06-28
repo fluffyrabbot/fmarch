@@ -24,6 +24,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-session-refresh-recovery",
   "replacement-stale-session-after-refresh",
   "replacement-reconnect-recovery",
+  "replacement-stale-conflict-message",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -532,6 +533,49 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementReconnectRecovery
           ?.recoveredCommandState?.actorAlive === true,
     }),
+    lane("replacement-stale-conflict-message", "Stale replacement conflict message is explicit", {
+      rejectError:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.reject?.error ??
+        null,
+      activityStatus:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText ?? null,
+      actionId:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.actionId ?? null,
+      dispatchKind:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.dispatchKind ?? null,
+      commandOutgoing:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.invalidReplacement?.requestEnvelope?.body?.body?.command
+          ?.ProcessReplacement?.outgoing_user ?? null,
+      currentOccupant:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.apiSlotAfterReject?.occupant_user_id ?? null,
+      passed:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.status ===
+          "passed" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.reject
+          ?.error === "InvalidTarget" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("replacement target is stale") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("current slot occupant") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.source === "outcome" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.actionId === "process_replacement_stale_success" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.dispatchKind === "process_replacement" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.invalidReplacement?.requestEnvelope?.body?.body?.command
+          ?.ProcessReplacement?.outgoing_user === "player-mira" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.apiSlotAfterReject?.occupant_user_id === "player-rowan",
+    }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:
         verification.replacementConsole?.invalidReplacementRecovery?.reject?.error ?? null,
@@ -726,6 +770,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.ProcessReplacement?.outgoing_user === "player-mira" &&
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("replacement target is stale") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("current slot occupant") === true &&
         verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
           ?.source === "outcome" &&
         verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow

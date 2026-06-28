@@ -1016,7 +1016,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
           message: "invalid target",
           retryable: false,
         },
-        activityStatusText: "Reject InvalidTarget: invalid target",
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; replacement target is stale, refresh the host console and use the current slot occupant",
         activityRow: {
           source: "outcome",
           actionId: "process_replacement_invalid_target",
@@ -1205,7 +1206,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
           message: "invalid target",
           retryable: false,
         },
-        activityStatusText: "Reject InvalidTarget: invalid target",
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; replacement target is stale, refresh the host console and use the current slot occupant",
         activityRow: {
           source: "outcome",
           actionId: "process_replacement_stale_success",
@@ -1493,6 +1495,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-session-refresh-recovery",
       "replacement-stale-session-after-refresh",
       "replacement-reconnect-recovery",
+      "replacement-stale-conflict-message",
       "replacement-invalid-target-recovery",
       "replacement-console",
       "replacement-idempotent-retry",
@@ -1577,7 +1580,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 29);
+  assert.equal(opsArtifacts.proofRun.laneCount, 30);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1679,6 +1682,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-session-refresh-recovery",
       "replacement-stale-session-after-refresh",
       "replacement-reconnect-recovery",
+      "replacement-stale-conflict-message",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
@@ -2089,6 +2093,7 @@ function hardeningAdminProofFixture() {
         "replacement-session-refresh-recovery",
         "replacement-stale-session-after-refresh",
         "replacement-reconnect-recovery",
+        "replacement-stale-conflict-message",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -2175,6 +2180,7 @@ function seedAdminProofFixture() {
         "replacement-session-refresh-recovery",
         "replacement-stale-session-after-refresh",
         "replacement-reconnect-recovery",
+        "replacement-stale-conflict-message",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",

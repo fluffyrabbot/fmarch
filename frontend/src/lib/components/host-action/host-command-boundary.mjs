@@ -203,7 +203,7 @@ export function normalizeServerCommandEnvelope({
       httpStatus: response.status,
       error: reject.error,
       retryable,
-      message: rejectMessage(reject, retryable),
+      message: rejectMessage(reject, retryable, { requestEnvelope }),
       requestEnvelope,
       serverEnvelope,
     });
@@ -212,10 +212,16 @@ export function normalizeServerCommandEnvelope({
   throw new TypeError("server response must be a wire Ack or Reject envelope");
 }
 
-function rejectMessage(reject, retryable) {
+function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   const base = `Reject ${reject.error}: ${reject.message}`;
   if (reject.error === "PhaseLocked") {
     return `${base}; stale phase state, refresh and use current controls`;
+  }
+  if (
+    reject.error === "InvalidTarget" &&
+    requestEnvelope?.body?.body?.command?.ProcessReplacement !== undefined
+  ) {
+    return `${base}; replacement target is stale, refresh the host console and use the current slot occupant`;
   }
   return retryable ? `${base}; reload and retry` : base;
 }
