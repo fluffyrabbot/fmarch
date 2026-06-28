@@ -43,6 +43,7 @@
   import "$lib/components/host-action/host-console-critical-path.css";
 
   export let data;
+  export let form;
 
   let dispatched = [];
   let commandOutcomes = [];
@@ -242,6 +243,44 @@
       {votecount}
       {hostPrompts}
     />
+
+    <section
+      class="host-console-critical-path__replacement-invite"
+      data-testid="host-replacement-invite-panel"
+    >
+      <header>
+        <p class="host-console-critical-path__eyebrow">Replacement invite</p>
+        <strong data-testid="host-replacement-invite-target">Slot 7 / player-rowan</strong>
+      </header>
+      <form method="POST" action="?/issueReplacementInvite">
+        <input type="hidden" name="principalUserId" value="player-rowan" />
+        <button
+          class="fm-touch-control"
+          type="submit"
+          data-testid="host-replacement-invite-submit"
+        >
+          Issue invite
+        </button>
+      </form>
+      {#if form?.replacementInvite}
+        <p
+          class="host-console-critical-path__replacement-invite-status"
+          data-state={form.replacementInvite.state}
+          data-testid="host-replacement-invite-status"
+        >
+          {form.replacementInvite.message}
+        </p>
+        {#if form.replacementInvite.state === "ack"}
+          <a
+            class="host-console-critical-path__replacement-invite-url"
+            href={form.replacementInvite.loginUrl}
+            data-testid="host-replacement-invite-url"
+          >
+            {form.replacementInvite.loginUrl}
+          </a>
+        {/if}
+      {/if}
+    </section>
 
     <HostControlSurface
       groups={moderatorActionGroups}

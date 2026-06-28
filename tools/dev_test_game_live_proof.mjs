@@ -284,6 +284,40 @@ assert.equal(session.verification.playerActionBoundary.phaseAfterReject.phaseId,
 assert.equal(session.verification.playerActionBoundary.actionVisibleAfterReject, false);
 assert.equal(session.verification.replacementConsole.status, "passed");
 assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.targetLabel,
+  "Slot 7 / player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.session.principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.session.issuedBy
+    .principalUserId,
+  "host_h",
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.session.issuedBy
+    .capabilityKind,
+  "HostOf",
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.session.issuedBy.game,
+  session.game,
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.session.returnTo,
+  `/g/${session.game}`,
+);
+assert.equal(
+  session.verification.replacementConsole.hostIssuedInvite.tokenPresent,
+  true,
+);
+assert.equal(
   session.verification.replacementConsole.processReplacement.commandStatus.state,
   "ack",
 );

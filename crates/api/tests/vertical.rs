@@ -2529,6 +2529,162 @@ async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) 
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn host_issued_invite_redeems_through_game_role_projection(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            2,
+            "host_h",
+            Command::AddSlot {
+                game,
+                slot: "slot-7".into(),
+            },
+        )
+        .await,
+    );
+    expect_ack(
+        post_command(
+            app.clone(),
+            3,
+            "host_h",
+            Command::AssignSlot {
+                game,
+                slot: "slot-7".into(),
+                user: "player-rowan".into(),
+            },
+        )
+        .await,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": "host-issuer-session",
+                        "principal_user_id": "host_h",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer host-issuer-session")
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "rowan-replacement-invite",
+                        "principal_user_id": "player-rowan",
+                        "expires_at": 4_102_444_800i64,
+                        "game": game
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let invite: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(invite["principal_user_id"], "player-rowan");
+    assert_eq!(invite["game"], game.to_string());
+    assert_eq!(invite["invited_by_user_id"], "host_h");
+    assert_eq!(invite["global_capabilities"].as_array().unwrap().len(), 0);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites/redeem")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "rowan-replacement-invite",
+                        "session_token": "rowan-replacement-session"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", "Bearer rowan-replacement-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(session["principal_user_id"], "player-rowan");
+    assert_eq!(session["capabilities"][0]["kind"], "SlotOccupant");
+    assert_eq!(session["capabilities"][0]["body"]["slot"], "slot-7");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/invites")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer rowan-replacement-session")
+                .body(Body::from(
+                    serde_json::json!({
+                        "invite_token": "forbidden-global",
+                        "principal_user_id": "other",
+                        "expires_at": 4_102_444_800i64,
+                        "game": game,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn auth_lifecycle_rotates_sessions_and_revokes_invites(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();

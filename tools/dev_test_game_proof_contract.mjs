@@ -17,6 +17,7 @@ const requiredLaneIds = Object.freeze([
   "dead-player-recovery",
   "player-action-boundary",
   "private-channel",
+  "replacement-host-issued-invite",
   "replacement-console",
   "replacement-stale-player",
   "replacement-incoming-player",
@@ -231,6 +232,37 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.privateChannel?.channel === "private:mafia_day_chat" &&
         verification.privateChannel?.allowed?.submitPost?.state === "ack" &&
         verification.privateChannel?.denied?.status === 403,
+    }),
+    lane("replacement-host-issued-invite", "Host issues incoming replacement role URL", {
+      principalUserId:
+        verification.replacementConsole?.hostIssuedInvite?.session?.principalUserId ??
+        null,
+      issuedBy:
+        verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
+          ?.principalUserId ?? null,
+      issuedByCapability:
+        verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
+          ?.capabilityKind ?? null,
+      returnTo: verification.replacementConsole?.hostIssuedInvite?.session?.returnTo ?? null,
+      tokenPresent:
+        verification.replacementConsole?.hostIssuedInvite?.tokenPresent ?? null,
+      targetLabel:
+        verification.replacementConsole?.hostIssuedInvite?.targetLabel ?? null,
+      passed:
+        verification.replacementConsole?.hostIssuedInvite?.status === "passed" &&
+        verification.replacementConsole?.hostIssuedInvite?.session?.principalUserId ===
+          "player-rowan" &&
+        verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
+          ?.principalUserId === "host_h" &&
+        verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy
+          ?.capabilityKind === "HostOf" &&
+        verification.replacementConsole?.hostIssuedInvite?.session?.issuedBy?.game ===
+          session?.game &&
+        verification.replacementConsole?.hostIssuedInvite?.session?.returnTo ===
+          `/g/${session?.game ?? ""}` &&
+        verification.replacementConsole?.hostIssuedInvite?.targetLabel ===
+          "Slot 7 / player-rowan" &&
+        verification.replacementConsole?.hostIssuedInvite?.tokenPresent === true,
     }),
     lane("replacement-console", "Host replacement preserves slot history", {
       commandState:

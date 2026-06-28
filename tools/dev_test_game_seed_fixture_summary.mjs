@@ -157,6 +157,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "dead-player-recovery",
     "night-action-loop",
     "host-replacement-console",
+    "replacement-host-issued-invite",
     "replacement-stale-player",
     "replacement-incoming-player",
     "private-channel-member",
@@ -264,6 +265,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "host",
       provenBy: ["replacement-console"].filter(hasLane),
       note: "Host opens the seeded role URL, processes the Slot 7 replacement, updates the projected occupant, and preserves stable slot history.",
+    }),
+    scenario({
+      id: "replacement-host-issued-invite",
+      title: "Host-issued replacement invite",
+      role: "host",
+      provenBy: ["replacement-host-issued-invite"].filter(hasLane),
+      note: "Host opens the seeded role URL, issues the local player-rowan replacement invite from the host surface, and the generated URL becomes the replacementPlayer role entry.",
     }),
     scenario({
       id: "replacement-stale-player",

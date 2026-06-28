@@ -331,12 +331,6 @@ async function createSessions() {
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
-    replacementPlayer: await createInviteCredential({
-      inviteToken: tokens.replacementPlayer,
-      principalUserId: "player-rowan",
-      returnTo: `/g/${game}`,
-      expectedCapabilityKind: "SlotOccupant",
-    }),
     cohost: await createInviteCredential({
       inviteToken: tokens.cohost,
       principalUserId: "cohost_c",
@@ -656,6 +650,8 @@ export function markdownSessionCard(card) {
         "",
         `Proof: ${card.verification.replacementConsole.proof}`,
         "",
+        `Host-issued invite: ${card.verification.replacementConsole.hostIssuedInvite.statusText}`,
+        "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
         "",
         `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
@@ -778,11 +774,11 @@ async function verifySessionCard(card) {
       browser,
       hostPage: roleEntries.host.page,
       staleOutgoingPage: staleReplacementPage,
-      replacementSession: card.sessions.replacementPlayer,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
+    card.sessions.replacementPlayer = replacementConsole.hostIssuedInvite.session;
     sessions.replacementPlayer = replacementConsole.incomingPlayer.browserEntry;
     roles.push("replacementPlayer");
   } finally {
@@ -1878,11 +1874,15 @@ async function verifySeededReplacementConsole({
   browser,
   hostPage,
   staleOutgoingPage,
-  replacementSession,
   game,
   apiBaseUrl,
   frontendBaseUrl,
 }) {
+  const hostIssuedInvite = await issueReplacementInviteFromHost({
+    hostPage,
+    game,
+    frontendBaseUrl,
+  });
   const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
     staleOutgoingPage,
     game,
@@ -1909,12 +1909,17 @@ async function verifySeededReplacementConsole({
   });
   const incomingPlayer = await verifyIncomingReplacementPlayer({
     browser,
-    replacementSession,
+    replacementSession: hostIssuedInvite.session,
     game,
     apiBaseUrl,
     frontendBaseUrl,
   });
   if (
+    hostIssuedInvite?.status !== "passed" ||
+    hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
+    hostIssuedInvite?.session?.issuedBy?.principalUserId !== "host_h" ||
+    hostIssuedInvite?.session?.issuedBy?.capabilityKind !== "HostOf" ||
+    hostIssuedInvite?.session?.returnTo !== `/g/${game}` ||
     processReplacement.commandStatus?.state !== "ack" ||
     command?.ProcessReplacement?.game !== game ||
     command?.ProcessReplacement?.slot !== "slot-7" ||
@@ -1936,6 +1941,7 @@ async function verifySeededReplacementConsole({
   ) {
     throw new Error(
       `replacement console proof drifted: ${JSON.stringify({
+        hostIssuedInvite,
         processReplacement,
         projectedReplacement,
         apiSlot,
@@ -1946,13 +1952,86 @@ async function verifySeededReplacementConsole({
   }
   return {
     status: "passed",
+    hostIssuedInvite,
     processReplacement,
     projectedReplacement,
     apiSlot,
     staleOutgoingPlayer,
     incomingPlayer,
     proof:
-      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, and proved the incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+      "The seeded host role URL issued the player-rowan replacement invite, processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, and proved the incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+  };
+}
+
+async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl }) {
+  await hostPage.getByTestId("host-replacement-invite-panel").waitFor({
+    state: "visible",
+  });
+  const targetLabel = await hostPage
+    .getByTestId("host-replacement-invite-target")
+    .innerText();
+  await hostPage.getByTestId("host-replacement-invite-submit").click();
+  await hostPage.getByTestId("host-replacement-invite-url").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const statusText = await hostPage.getByTestId("host-replacement-invite-status").innerText();
+  const statusState = await hostPage
+    .getByTestId("host-replacement-invite-status")
+    .getAttribute("data-state");
+  const href = await hostPage.getByTestId("host-replacement-invite-url").getAttribute("href");
+  const loginUrl = new URL(href, frontendBaseUrl);
+  const inviteToken = loginUrl.searchParams.get("invite");
+  const returnTo = loginUrl.searchParams.get("returnTo");
+  const session = {
+    principalUserId: "player-rowan",
+    credentialKind: "invite",
+    token: inviteToken,
+    inviteToken,
+    loginUrl: loginUrl.toString(),
+    directUrl: `${frontendBaseUrl}${returnTo}`,
+    returnTo,
+    expectedCapabilityKind: "SlotOccupant",
+    globalCapabilities: [],
+    issuedBy: {
+      principalUserId: "host_h",
+      capabilityKind: "HostOf",
+      game,
+      surface: "host-replacement-invite-panel",
+    },
+  };
+  if (
+    statusState !== "ack" ||
+    !statusText.includes("Replacement invite issued") ||
+    targetLabel !== "Slot 7 / player-rowan" ||
+    loginUrl.origin !== frontendBaseUrl ||
+    loginUrl.pathname !== "/auth/login" ||
+    returnTo !== `/g/${game}` ||
+    typeof inviteToken !== "string" ||
+    !inviteToken.startsWith(`replacement-${game}-`)
+  ) {
+    throw new Error(
+      `host replacement invite proof drifted: ${JSON.stringify({
+        statusState,
+        statusText,
+        targetLabel,
+        loginUrl: loginUrl.toString(),
+        returnTo,
+        inviteTokenPrefix: inviteToken?.slice(0, `replacement-${game}-`.length),
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    targetLabel,
+    statusText,
+    loginUrl: loginUrl.toString(),
+    returnTo,
+    inviteTokenPrefix: `replacement-${game}-`,
+    tokenPresent: true,
+    session,
+    proof:
+      "The seeded host role URL issued a local replacement invite for player-rowan through the host page action and rendered the resulting role URL before replacement processing.",
   };
 }
 

@@ -229,6 +229,45 @@ body {
   overflow-wrap: anywhere;
 }
 
+.host-console-critical-path__replacement-invite {
+  align-items: center;
+  border-block-start: 4px solid #53606f;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-inline-size: 0;
+  padding-block-start: 14px;
+}
+
+.host-console-critical-path__replacement-invite header {
+  min-inline-size: 0;
+}
+
+.host-console-critical-path__replacement-invite strong,
+.host-console-critical-path__replacement-invite-url,
+.host-console-critical-path__replacement-invite-status {
+  overflow-wrap: anywhere;
+}
+
+.host-console-critical-path__replacement-invite form {
+  margin: 0;
+}
+
+.host-console-critical-path__replacement-invite-url {
+  color: #214f62;
+  font-size: 14px;
+  font-weight: 700;
+  grid-column: 1 / -1;
+}
+
+.host-console-critical-path__replacement-invite-status {
+  color: #425063;
+  font-size: 14px;
+  font-weight: 700;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .host-console-critical-path__control-bay {
   border-block-start: 4px solid #557f68;
   display: grid;

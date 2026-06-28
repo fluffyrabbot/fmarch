@@ -801,6 +801,32 @@ test("session card and markdown include role invite URLs and tokens", () => {
     replacementConsole: {
       status: "passed",
       proof: "host processed replacement",
+      hostIssuedInvite: {
+        status: "passed",
+        targetLabel: "Slot 7 / player-rowan",
+        statusText: "Replacement invite issued",
+        loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
+        returnTo: `/g/${game}`,
+        inviteTokenPrefix: `replacement-${game}-`,
+        tokenPresent: true,
+        session: {
+          principalUserId: "player-rowan",
+          credentialKind: "invite",
+          token: `replacement-${game}-fixture`,
+          inviteToken: `replacement-${game}-fixture`,
+          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=replacement-${game}-fixture`,
+          directUrl: `http://127.0.0.1:4102/g/${game}`,
+          returnTo: `/g/${game}`,
+          expectedCapabilityKind: "SlotOccupant",
+          globalCapabilities: [],
+          issuedBy: {
+            principalUserId: "host_h",
+            capabilityKind: "HostOf",
+            game,
+            surface: "host-replacement-invite-panel",
+          },
+        },
+      },
       processReplacement: {
         statusMessage: "Ack: stream seqs 44",
         commandStatus: {
@@ -1073,6 +1099,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("## Private Channel Proof"));
   assert(markdown.includes("Denied route: 403 Back to board"));
   assert(markdown.includes("## Replacement Console Proof"));
+  assert(markdown.includes("Host-issued invite: Replacement invite issued"));
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
   assert(markdown.includes("Projected occupant: player-rowan"));
   assert(
@@ -1108,6 +1135,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "dead-player-recovery",
       "player-action-boundary",
       "private-channel",
+      "replacement-host-issued-invite",
       "replacement-console",
       "replacement-stale-player",
       "replacement-incoming-player",
@@ -1189,7 +1217,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 19);
+  assert.equal(opsArtifacts.proofRun.laneCount, 20);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1258,6 +1286,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "dead-player-recovery",
       "night-action-loop",
       "host-replacement-console",
+      "replacement-host-issued-invite",
       "replacement-stale-player",
       "replacement-incoming-player",
       "private-channel-member",
@@ -1623,6 +1652,7 @@ function coreLoopAdminProofFixture() {
         "dead-player-recovery",
         "player-action-boundary",
         "private-channel",
+        "replacement-host-issued-invite",
         "replacement-console",
         "replacement-stale-player",
         "replacement-incoming-player",
@@ -1733,6 +1763,7 @@ function seedAdminProofFixture() {
         "dead-player-recovery",
         "night-action-loop",
         "host-replacement-console",
+        "replacement-host-issued-invite",
         "replacement-stale-player",
         "replacement-incoming-player",
         "private-channel-member",

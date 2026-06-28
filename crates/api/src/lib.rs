@@ -170,6 +170,7 @@ struct CreateAuthInvite {
     invite_token: String,
     principal_user_id: String,
     expires_at: i64,
+    game: Option<Uuid>,
     #[serde(default)]
     global_capabilities: Vec<String>,
 }
@@ -178,7 +179,9 @@ struct CreateAuthInvite {
 struct AuthInviteResponse {
     principal_user_id: String,
     expires_at: i64,
+    game: Option<Uuid>,
     global_capabilities: Vec<String>,
+    invited_by_user_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -511,16 +514,9 @@ async fn create_auth_invite(
     let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
     let (invited_by_user_id, caller_global_capabilities) =
         active_session_principal_and_globals(&state, caller_token).await?;
-    if !caller_global_capabilities
+    let caller_is_global_admin = caller_global_capabilities
         .iter()
-        .any(|capability| capability == "GlobalAdmin")
-    {
-        return Err(ApiError::Reject {
-            status: StatusCode::FORBIDDEN,
-            error: RejectCode::NotAuthorized,
-            message: "invite issuance requires GlobalAdmin".to_string(),
-        });
-    }
+        .any(|capability| capability == "GlobalAdmin");
 
     let invite_token = request.invite_token.trim();
     if invite_token.is_empty() || request.principal_user_id.trim().is_empty() {
@@ -539,6 +535,35 @@ async fn create_auth_invite(
         });
     }
     let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
+    if !caller_is_global_admin {
+        let Some(game) = request.game else {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "invite issuance requires GlobalAdmin or HostOf(game)".to_string(),
+            });
+        };
+        if !global_capabilities.is_empty() {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "host-issued invites cannot grant global capabilities".to_string(),
+            });
+        }
+        let caps = caps::resolve(
+            &state.pool,
+            &Principal::user(invited_by_user_id.as_str()),
+            game,
+        )
+        .await?;
+        if !caps.grants(&Capability::HostOf(game)) {
+            return Err(ApiError::Reject {
+                status: StatusCode::FORBIDDEN,
+                error: RejectCode::NotAuthorized,
+                message: "invite issuance requires GlobalAdmin or HostOf(game)".to_string(),
+            });
+        }
+    }
 
     let inserted = sqlx::query(
         r#"
@@ -561,7 +586,7 @@ async fn create_auth_invite(
     .bind(now)
     .bind(request.expires_at)
     .bind(&global_capabilities)
-    .bind(invited_by_user_id)
+    .bind(&invited_by_user_id)
     .execute(&state.pool)
     .await?;
 
@@ -576,7 +601,9 @@ async fn create_auth_invite(
     Ok(Json(AuthInviteResponse {
         principal_user_id: request.principal_user_id,
         expires_at: request.expires_at,
+        game: request.game,
         global_capabilities,
+        invited_by_user_id,
     }))
 }
 

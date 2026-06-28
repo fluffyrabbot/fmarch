@@ -862,6 +862,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     "dead-player-recovery",
     "player-action-boundary",
     "private-channel",
+    "replacement-host-issued-invite",
     "replacement-console",
     "replacement-stale-player",
     "replacement-incoming-player",
