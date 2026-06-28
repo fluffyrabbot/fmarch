@@ -286,6 +286,12 @@ D01 and advances to N01, the `actionPlayer` page renders a live `factional_kill`
 action, recovers from an invalid self-action, submits the legal action, and then
 the host page resolves N01 and advances to D02.
 
+The player action-boundary proof keeps the seeded `player` role URL on the same
+local game at N01, verifies that the player command surface has no unowned
+`factional_kill` action, submits a direct browser `/commands` `SubmitAction`
+attempt for that unowned action, and records `Reject InvalidTarget` while the
+player surface stays on N01 without adding the action.
+
 The private-channel proof uses the same invite-backed role surfaces: the player
 page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
@@ -293,7 +299,8 @@ board` recovery for that same channel.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
-the `core-loop`, `action-loop`, and `private-channel` rows.
+the `core-loop`, `action-loop`, `player-action-boundary`, and `private-channel`
+rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

@@ -12,6 +12,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-console",
   "core-loop",
   "action-loop",
+  "player-action-boundary",
   "private-channel",
   "idempotent-retry",
   "reconnect-recovery",
@@ -85,6 +86,36 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
+    }),
+    lane("player-action-boundary", "Player role URL hides and rejects unowned night actions", {
+      phase: verification.playerActionBoundary?.phase?.phaseId ?? null,
+      commandActionCount:
+        verification.playerActionBoundary?.commandActions?.length ?? null,
+      factionalKillVisible:
+        verification.playerActionBoundary?.factionalKillVisible ?? null,
+      directRejectError:
+        verification.playerActionBoundary?.directFactionalKill?.serverEnvelope?.body?.body
+          ?.error ?? null,
+      directRejectPrincipal:
+        verification.playerActionBoundary?.directFactionalKill?.requestEnvelope?.body?.body
+          ?.principal_user_id ?? null,
+      phaseAfterReject:
+        verification.playerActionBoundary?.phaseAfterReject?.phaseId ?? null,
+      actionVisibleAfterReject:
+        verification.playerActionBoundary?.actionVisibleAfterReject ?? null,
+      passed:
+        verification.playerActionBoundary?.status === "passed" &&
+        verification.playerActionBoundary?.phase?.phaseId === "N01" &&
+        verification.playerActionBoundary?.commandActions?.length === 0 &&
+        verification.playerActionBoundary?.factionalKillVisible === false &&
+        verification.playerActionBoundary?.directFactionalKill?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        verification.playerActionBoundary?.directFactionalKill?.serverEnvelope?.body?.body
+          ?.error === "InvalidTarget" &&
+        verification.playerActionBoundary?.directFactionalKill?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-mira" &&
+        verification.playerActionBoundary?.phaseAfterReject?.phaseId === "N01" &&
+        verification.playerActionBoundary?.actionVisibleAfterReject === false,
     }),
     lane("private-channel", "Private channel member post and denied recovery", {
       channel: verification.privateChannel?.channel ?? null,

@@ -15,7 +15,12 @@ const proofRunPath = path.resolve(
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
-const requiredChecks = ["core-loop", "action-loop", "private-channel"];
+const requiredChecks = [
+  "core-loop",
+  "action-loop",
+  "player-action-boundary",
+  "private-channel",
+];
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-core-loop-admin-proof",

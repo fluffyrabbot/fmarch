@@ -189,7 +189,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       label: "Host controls, player actions, private channels, and day/night loop",
       status: "passed",
       evidence: sourcePath,
-      laneIds: ["core-loop", "action-loop", "private-channel"],
+      laneIds: [
+        "core-loop",
+        "action-loop",
+        "player-action-boundary",
+        "private-channel",
+      ],
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: coreLoopAdminProofEvidence }),
@@ -633,7 +638,12 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
 }
 
 export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
-  const requiredChecks = ["core-loop", "action-loop", "private-channel"];
+  const requiredChecks = [
+    "core-loop",
+    "action-loop",
+    "player-action-boundary",
+    "private-channel",
+  ];
   if (proof?.version !== 1) {
     throw new Error(`core-loop admin proof version drifted: ${proof?.version}`);
   }
@@ -867,7 +877,9 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   ];
   const requiredScenarios = [
     "host-phase-controls",
+    "cohost-deadline-control",
     "player-vote-recovery",
+    "player-action-denied",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",
@@ -927,7 +939,9 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
 export function validateDevTestGameSeedAdminProof(proof, options = {}) {
   const requiredScenarios = [
     "host-phase-controls",
+    "cohost-deadline-control",
     "player-vote-recovery",
+    "player-action-denied",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",

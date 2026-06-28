@@ -17,7 +17,9 @@ const seedFixtureRelativePath = path.relative(repoRoot, seedFixturePath);
 const evidencePath = path.join(artifactDir, "seed-admin-proof.json");
 const requiredScenarios = [
   "host-phase-controls",
+  "cohost-deadline-control",
   "player-vote-recovery",
+  "player-action-denied",
   "night-action-loop",
   "private-channel-member",
   "private-channel-denied",

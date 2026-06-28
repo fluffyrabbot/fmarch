@@ -854,7 +854,12 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   ) {
     return null;
   }
-  const requiredLaneIds = ["core-loop", "action-loop", "private-channel"];
+  const requiredLaneIds = [
+    "core-loop",
+    "action-loop",
+    "player-action-boundary",
+    "private-channel",
+  ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
   if (

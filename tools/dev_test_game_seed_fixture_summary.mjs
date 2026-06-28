@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 8,
+        scenarioCount: 9,
       },
       {
         id: "proof-lanes-carried",
@@ -149,7 +149,9 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
   }
   const requiredScenarios = [
     "host-phase-controls",
+    "cohost-deadline-control",
     "player-vote-recovery",
+    "player-action-denied",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",
@@ -214,6 +216,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["browser-entry", "core-loop", "stale-player-vote"].filter(hasLane),
       note: "Player opens the seeded role URL, submits votes, and sees clear PhaseLocked recovery from stale state.",
+    }),
+    scenario({
+      id: "player-action-denied",
+      title: "Player action denied",
+      role: "player",
+      provenBy: ["browser-entry", "player-action-boundary"].filter(hasLane),
+      note: "Player keeps private-channel capability but does not see factional_kill, and a direct factional_kill SubmitAction rejects through /commands.",
     }),
     scenario({
       id: "night-action-loop",

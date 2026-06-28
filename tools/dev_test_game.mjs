@@ -565,6 +565,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.playerActionBoundary !== undefined) {
+      lines.push(
+        "## Player Action Boundary Proof",
+        "",
+        `Status: ${card.verification.playerActionBoundary.status}`,
+        "",
+        `Proof: ${card.verification.playerActionBoundary.proof}`,
+        "",
+        `Factional kill visible: ${card.verification.playerActionBoundary.factionalKillVisible}`,
+        "",
+        `Direct factional kill: ${card.verification.playerActionBoundary.directFactionalKill.statusMessage}`,
+        "",
+      );
+    }
     if (card.verification.privateChannel !== undefined) {
       lines.push(
         "## Private Channel Proof",
@@ -615,6 +629,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let privateChannel;
   let actionLoop;
+  let playerActionBoundary;
   let multiplayerHardening;
   let staleActionPage;
   try {
@@ -647,11 +662,13 @@ async function verifySessionCard(card) {
     });
     actionLoop = await verifySeededActionLoop({
       hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
       staleActionPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
+    playerActionBoundary = actionLoop.playerActionBoundary;
     multiplayerHardening = await verifySeededMultiplayerHardening({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
@@ -674,6 +691,7 @@ async function verifySessionCard(card) {
     coreLoop,
     privateChannel,
     actionLoop,
+    playerActionBoundary,
     multiplayerHardening,
   };
 }
@@ -861,6 +879,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
 
 async function verifySeededActionLoop({
   hostPage,
+  playerPage,
   actionPage,
   staleActionPage,
   game,
@@ -872,6 +891,10 @@ async function verifySeededActionLoop({
   await expectHostPhaseActions(hostPage, ["unlock_thread", "advance_phase"]);
   const advanceNight = await confirmHostAction(hostPage, "advance_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
+  const playerActionBoundary = await verifySeededPlayerActionBoundary({
+    playerPage,
+    game,
+  });
 
   await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').waitFor({
     state: "visible",
@@ -934,6 +957,7 @@ async function verifySeededActionLoop({
     n01Phase,
     invalidAction,
     legalAction,
+    playerActionBoundary,
     resolveNight,
     resolvedTargetSlot: targetState,
     advanceDay,
@@ -942,6 +966,87 @@ async function verifySeededActionLoop({
     staleActionConflict,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function verifySeededPlayerActionBoundary({ playerPage, game }) {
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01",
+  );
+  await playerPage.waitForFunction(
+    () =>
+      Array.isArray(window.__fmarchPlayerProjection?.commandState?.actions) &&
+      window.__fmarchPlayerProjection.commandState.actions.length === 0,
+  );
+  const phase = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  const commandActions = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.actions ?? [],
+  );
+  const factionalKillVisible = await playerPage
+    .locator('[data-action="submit_action:factional_kill"]')
+    .isVisible()
+    .catch(() => false);
+  if (factionalKillVisible) {
+    throw new Error("player role exposed factional_kill action control");
+  }
+  const commandId = crypto.randomUUID();
+  const directRaw = await sendBrowserCommand(playerPage, {
+    principalUserId: "player-mira",
+    commandId,
+    command: {
+      SubmitAction: {
+        game,
+        action_id: "player-boundary-factional-kill",
+        actor_slot: "slot-7",
+        template_id: "factional_kill",
+        targets: ["slot-2"],
+        grant_id: null,
+      },
+    },
+  });
+  const rejectBody = directRaw.serverEnvelope?.body;
+  if (
+    rejectBody?.kind !== "Reject" ||
+    rejectBody?.body?.error !== "InvalidTarget" ||
+    directRaw.requestEnvelope?.body?.body?.principal_user_id !== "player-mira"
+  ) {
+    throw new Error(
+      `player direct factional_kill did not reject as InvalidTarget: ${JSON.stringify(
+        directRaw,
+      )}`,
+    );
+  }
+  const phaseAfterReject = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  const actionVisibleAfterReject = await playerPage
+    .locator('[data-action="submit_action:factional_kill"]')
+    .isVisible()
+    .catch(() => false);
+  if (phaseAfterReject?.phaseId !== "N01" || actionVisibleAfterReject) {
+    throw new Error(
+      `player action boundary reject drifted: ${JSON.stringify({
+        phaseAfterReject,
+        actionVisibleAfterReject,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    phase,
+    commandActions,
+    factionalKillVisible,
+    directFactionalKill: {
+      ...directRaw,
+      statusMessage: `Reject ${rejectBody.body.error}: ${rejectBody.body.message}`,
+    },
+    phaseAfterReject,
+    actionVisibleAfterReject,
+    proof:
+      "The seeded player role URL reached N01 with private-channel capability but no factional_kill control, and a direct SubmitAction factional_kill command from that browser session rejected as InvalidTarget without adding the action to the player surface.",
   };
 }
 

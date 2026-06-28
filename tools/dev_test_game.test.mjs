@@ -628,6 +628,41 @@ test("session card and markdown include role invite URLs and tokens", () => {
       resolvedTargetSlot: { alive: false },
       d02Phase: { phaseId: "D02" },
     },
+    playerActionBoundary: {
+      status: "passed",
+      proof: "player did not see factional kill and direct command rejected",
+      phase: { phaseId: "N01" },
+      commandActions: [],
+      factionalKillVisible: false,
+      directFactionalKill: {
+        statusMessage: "Reject InvalidTarget: invalid target",
+        requestEnvelope: {
+          body: {
+            body: {
+              principal_user_id: "player-mira",
+              command: {
+                SubmitAction: {
+                  game,
+                  template_id: "factional_kill",
+                },
+              },
+            },
+          },
+        },
+        serverEnvelope: {
+          body: {
+            kind: "Reject",
+            body: {
+              error: "InvalidTarget",
+              message: "invalid target",
+              retryable: false,
+            },
+          },
+        },
+      },
+      phaseAfterReject: { phaseId: "N01" },
+      actionVisibleAfterReject: false,
+    },
     privateChannel: {
       status: "passed",
       proof: "player posted privately and denied player recovered",
@@ -703,6 +738,9 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
+  assert(markdown.includes("## Player Action Boundary Proof"));
+  assert(markdown.includes("Factional kill visible: false"));
+  assert(markdown.includes("Direct factional kill: Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Private Channel Proof"));
   assert(markdown.includes("Denied route: 403 Back to board"));
   assert(markdown.includes("## Multiplayer Hardening Proof"));
@@ -726,6 +764,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "cohost-console",
       "core-loop",
       "action-loop",
+      "player-action-boundary",
       "private-channel",
       "idempotent-retry",
       "reconnect-recovery",
@@ -804,7 +843,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 11);
+  assert.equal(opsArtifacts.proofRun.laneCount, 12);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -867,6 +906,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "host-phase-controls",
       "cohost-deadline-control",
       "player-vote-recovery",
+      "player-action-denied",
       "night-action-loop",
       "private-channel-member",
       "private-channel-denied",
@@ -1223,7 +1263,12 @@ function coreLoopAdminProofFixture() {
       linkTestId: "admin-audit-link-local-core-loop",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
-      visibleChecks: ["core-loop", "action-loop", "private-channel"],
+      visibleChecks: [
+        "core-loop",
+        "action-loop",
+        "player-action-boundary",
+        "private-channel",
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -1321,7 +1366,9 @@ function seedAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleScenarios: [
         "host-phase-controls",
+        "cohost-deadline-control",
         "player-vote-recovery",
+        "player-action-denied",
         "night-action-loop",
         "private-channel-member",
         "private-channel-denied",

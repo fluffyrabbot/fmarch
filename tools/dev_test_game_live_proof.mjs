@@ -161,6 +161,30 @@ assert.equal(session.verification.actionLoop.resolveNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.resolvedTargetSlot.alive, false);
 assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
+assert.equal(session.verification.playerActionBoundary.status, "passed");
+assert.equal(session.verification.playerActionBoundary.phase.phaseId, "N01");
+assert.equal(session.verification.playerActionBoundary.commandActions.length, 0);
+assert.equal(session.verification.playerActionBoundary.factionalKillVisible, false);
+assert.equal(
+  session.verification.playerActionBoundary.directFactionalKill.serverEnvelope.body.kind,
+  "Reject",
+);
+assert.equal(
+  session.verification.playerActionBoundary.directFactionalKill.serverEnvelope.body.body.error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.playerActionBoundary.directFactionalKill.requestEnvelope.body.body
+    .principal_user_id,
+  "player-mira",
+);
+assert.equal(
+  session.verification.playerActionBoundary.directFactionalKill.requestEnvelope.body.body.command
+    .SubmitAction.template_id,
+  "factional_kill",
+);
+assert.equal(session.verification.playerActionBoundary.phaseAfterReject.phaseId, "N01");
+assert.equal(session.verification.playerActionBoundary.actionVisibleAfterReject, false);
 assert.equal(session.verification.multiplayerHardening.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.idempotentRetry.channel,
