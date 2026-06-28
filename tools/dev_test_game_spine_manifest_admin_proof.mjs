@@ -25,6 +25,8 @@ const requiredChecks = [
   "live-spine-order-recorded",
   "sub-spine-orders-recorded",
   "evidence-env-wiring-recorded",
+  "freshness-proof-recorded",
+  "artifact-refresh-status-recorded",
   "release-boundary-carried",
 ];
 
@@ -55,7 +57,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-spine-manifest-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game spine manifest. Proves the current proof order and evidence env wiring manifest is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game spine manifest. Proves the current proof order, evidence env wiring, and artifact refresh status manifest is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestRelativePath,
       proofRun: proofRunRelativePath,

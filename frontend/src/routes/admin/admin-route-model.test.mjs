@@ -570,7 +570,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
   const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
   assert.equal(manifest.label, "Local spine manifest");
-  assert.equal(manifest.status, "4 manifest checks passed");
+  assert.equal(manifest.status, "6 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
   assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
   assert.deepEqual(
@@ -579,13 +579,21 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "live-spine-order-recorded",
       "sub-spine-orders-recorded",
       "evidence-env-wiring-recorded",
+      "freshness-proof-recorded",
+      "artifact-refresh-status-recorded",
       "release-boundary-carried",
     ],
   );
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 4,
-    artifactCount: 3,
+    commandCount: 5,
+    artifactCount: 4,
     adminSpineStepCount: 8,
+    artifactFreshnessStatus: "blocked",
+    freshCount: 1,
+    staleCount: 1,
+    missingCount: 0,
+    nextCommand:
+      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
     releaseReady: false,
     productionReady: false,
   });
@@ -602,13 +610,15 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 4);
+  assert.equal(data.audit.checks.length, 6);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["live-spine-order-recorded", "passed"],
       ["sub-spine-orders-recorded", "passed"],
       ["evidence-env-wiring-recorded", "passed"],
+      ["freshness-proof-recorded", "passed"],
+      ["artifact-refresh-status-recorded", "passed"],
       ["release-boundary-carried", "passed"],
     ],
   );
@@ -1321,16 +1331,59 @@ function spineManifestFixture() {
           { script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" },
         ],
       },
+      proofFreshness: {
+        script: "test:dev-test-game-proof-freshness-admin-proof",
+        proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+      },
+    },
+    artifactFreshness: {
+      status: "blocked",
+      proof: "dev-test-game-proof-freshness",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      summary: {
+        artifactCount: 2,
+        freshCount: 1,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      proofCommand: "test:dev-test-game-proof-freshness-admin-proof",
+      proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+      nextCommand:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      proofBoundary: "Local proof freshness dashboard.",
+      artifacts: [
+        {
+          id: "proof-run",
+          label: "Dev test-game proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "stale",
+          refreshCommand:
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+          nextCommand:
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        },
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          refreshCommand: "npm run test:dev-test-game-spine-manifest",
+        },
+      ],
     },
     artifacts: [
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/spine-manifest.md",
       "target/dev-test-game/spine-manifest-admin-proof.json",
+      "target/dev-test-game/proof-freshness-admin-proof.json",
     ],
     checks: [
       { id: "live-spine-order-recorded", status: "passed" },
       { id: "sub-spine-orders-recorded", status: "passed" },
       { id: "evidence-env-wiring-recorded", status: "passed" },
+      { id: "freshness-proof-recorded", status: "passed" },
+      { id: "artifact-refresh-status-recorded", status: "passed" },
       {
         id: "release-boundary-carried",
         status: "passed",

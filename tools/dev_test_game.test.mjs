@@ -183,6 +183,40 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
 test("dev test-game spine manifest records command order and evidence wiring", () => {
   const manifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 2,
+        freshCount: 1,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "proof-run",
+          label: "Dev test-game proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 90000,
+          maxAgeSeconds: 86400,
+        },
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
   });
   assertDevTestGameSpineManifest(manifest);
   assert.equal(manifest.status, "passed");
@@ -216,6 +250,35 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/release-readiness-checklist.json",
     ],
   });
+  assert.equal(manifest.artifactFreshness.status, "blocked");
+  assert.equal(
+    manifest.artifactFreshness.nextCommand,
+    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+  );
+  assert.deepEqual(
+    manifest.artifactFreshness.artifacts.map((artifact) => ({
+      id: artifact.id,
+      status: artifact.status,
+      refreshCommand: artifact.refreshCommand,
+      nextCommand: artifact.nextCommand,
+    })),
+    [
+      {
+        id: "proof-run",
+        status: "stale",
+        refreshCommand:
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        nextCommand:
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      },
+      {
+        id: "spine-manifest",
+        status: "fresh",
+        refreshCommand: "npm run test:dev-test-game-spine-manifest",
+        nextCommand: undefined,
+      },
+    ],
+  );
   assert.deepEqual(manifest.evidenceEnv.identity.identityReadinessEnv, identityReadinessEnv);
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.json"));
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));

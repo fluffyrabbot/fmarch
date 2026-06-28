@@ -491,6 +491,15 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
   const artifacts = Array.isArray(spineManifest.artifacts)
     ? spineManifest.artifacts
     : [];
+  const artifactFreshness =
+    spineManifest.artifactFreshness !== null &&
+    typeof spineManifest.artifactFreshness === "object"
+      ? spineManifest.artifactFreshness
+      : {};
+  const freshnessSummary =
+    artifactFreshness.summary !== null && typeof artifactFreshness.summary === "object"
+      ? artifactFreshness.summary
+      : {};
   return Object.freeze({
     id: "local-spine-manifest",
     label: "Local spine manifest",
@@ -516,6 +525,11 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       adminSpineStepCount: Number(
         spineManifest.commands?.adminSpine?.plan?.length ?? 0,
       ),
+      artifactFreshnessStatus: String(artifactFreshness.status ?? "unknown"),
+      freshCount: Number(freshnessSummary.freshCount ?? 0),
+      staleCount: Number(freshnessSummary.staleCount ?? 0),
+      missingCount: Number(freshnessSummary.missingCount ?? 0),
+      nextCommand: String(artifactFreshness.nextCommand ?? ""),
       releaseReady: spineManifest.releaseReady === true,
       productionReady: spineManifest.productionReady === true,
     }),

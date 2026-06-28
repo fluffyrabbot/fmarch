@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { readLocalProofFreshness } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
 import {
   adminSpineProofPath,
   adminSpineReadinessEvidenceEnv,
@@ -35,6 +36,7 @@ const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
 
 export function buildDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
+  proofFreshness,
 } = {}) {
   const evidenceEnv = {
     backupRestore: {
@@ -60,7 +62,7 @@ export function buildDevTestGameSpineManifest({
     generatedAt,
     scope: "local-dev-test-game-spine-manifest",
     proofBoundary:
-      "Generated local dev-test-game orchestration manifest. It records proof command order and evidence env wiring; it does not prove hosted deployment, hosted identity, hosted operations, production readiness, beta readiness, or release readiness.",
+      "Generated local dev-test-game orchestration manifest. It records proof command order, evidence env wiring, and current local proof freshness status; it does not prove hosted deployment, hosted identity, hosted operations, production readiness, beta readiness, or release readiness.",
     commands: {
       live: {
         script: "test:dev-test-game-live",
@@ -91,6 +93,7 @@ export function buildDevTestGameSpineManifest({
       },
     },
     evidenceEnv,
+    artifactFreshness: buildArtifactFreshnessReport(proofFreshness),
     artifacts: uniqueSorted([
       spineManifestPath,
       spineManifestMarkdownPath,
@@ -131,6 +134,15 @@ export function buildDevTestGameSpineManifest({
         evidence: [proofFreshnessAdminProofCommand, proofFreshnessAdminProofPath],
       },
       {
+        id: "artifact-refresh-status-recorded",
+        status: "passed",
+        evidence: [
+          "manifest.artifactFreshness",
+          proofFreshnessAdminProofCommand,
+          proofFreshnessAdminProofPath,
+        ],
+      },
+      {
         id: "release-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -158,6 +170,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.releaseReady !== false || manifest.productionReady !== false) {
     throw new Error("spine manifest must not claim production or release readiness");
   }
+  assertArtifactFreshnessReport(manifest.artifactFreshness);
   const livePlan = manifest.commands?.live?.plan ?? [];
   assertPlanScripts(livePlan, [
     "dev:test-game:prebuild",
@@ -228,6 +241,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "sub-spine-orders-recorded",
     "evidence-env-wiring-recorded",
     "freshness-proof-recorded",
+    "artifact-refresh-status-recorded",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {
@@ -240,7 +254,8 @@ export function assertDevTestGameSpineManifest(manifest) {
 export async function writeDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
 } = {}) {
-  const manifest = buildDevTestGameSpineManifest({ generatedAt });
+  const proofFreshness = await readLocalProofFreshness();
+  const manifest = buildDevTestGameSpineManifest({ generatedAt, proofFreshness });
   await mkdir(path.dirname(manifestJsonPath), { recursive: true });
   await writeFile(manifestJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(manifestMarkdownPath, markdownSpineManifest(manifest));
@@ -275,6 +290,106 @@ function uniqueSorted(values) {
   return Array.from(new Set(values)).sort();
 }
 
+function buildArtifactFreshnessReport(proofFreshness) {
+  if (proofFreshness === undefined || proofFreshness === null) {
+    return {
+      status: "unknown",
+      proof: "dev-test-game-proof-freshness",
+      proofCommand: proofFreshnessAdminProofCommand,
+      proofArtifact: proofFreshnessAdminProofPath,
+      nextCommand: proofFreshnessAdminProofCommand,
+      proofBoundary:
+        "No local proof freshness dashboard was readable while generating this manifest.",
+      artifacts: [],
+    };
+  }
+  const artifacts = (proofFreshness.artifacts ?? []).map((artifact) => {
+    const refreshCommand = refreshCommandForArtifact(artifact);
+    return {
+      id: artifact.id,
+      label: artifact.label,
+      path: artifact.path,
+      status: artifact.status,
+      ...(artifact.mtime === undefined ? {} : { mtime: artifact.mtime }),
+      ...(artifact.ageSeconds === undefined ? {} : { ageSeconds: artifact.ageSeconds }),
+      ...(artifact.maxAgeSeconds === undefined
+        ? {}
+        : { maxAgeSeconds: artifact.maxAgeSeconds }),
+      refreshCommand,
+      ...(artifact.status === "fresh" ? {} : { nextCommand: refreshCommand }),
+    };
+  });
+  return {
+    status: proofFreshness.status,
+    proof: proofFreshness.proof,
+    generatedAt: proofFreshness.generatedAt,
+    maxAgeHours: proofFreshness.maxAgeHours,
+    summary: { ...proofFreshness.summary },
+    proofCommand: proofFreshnessAdminProofCommand,
+    proofArtifact: proofFreshnessAdminProofPath,
+    nextCommand:
+      proofFreshness.status === "passed"
+        ? proofFreshnessAdminProofCommand
+        : firstNextCommand(artifacts) ?? proofFreshnessAdminProofCommand,
+    proofBoundary: proofFreshness.proofBoundary,
+    artifacts,
+  };
+}
+
+function assertArtifactFreshnessReport(report) {
+  if (!["passed", "blocked", "unknown"].includes(report?.status)) {
+    throw new Error(`spine manifest artifact freshness status drifted: ${report?.status}`);
+  }
+  if (report.proofCommand !== proofFreshnessAdminProofCommand) {
+    throw new Error(
+      `spine manifest artifact freshness proof command drifted: ${report.proofCommand}`,
+    );
+  }
+  if (report.proofArtifact !== proofFreshnessAdminProofPath) {
+    throw new Error(
+      `spine manifest artifact freshness proof artifact drifted: ${report.proofArtifact}`,
+    );
+  }
+  for (const artifact of report.artifacts ?? []) {
+    if (typeof artifact.id !== "string" || artifact.id.trim() === "") {
+      throw new Error("spine manifest artifact freshness entry is missing an id");
+    }
+    if (typeof artifact.refreshCommand !== "string" || artifact.refreshCommand === "") {
+      throw new Error(`spine manifest artifact ${artifact.id} is missing refresh command`);
+    }
+    if (artifact.status !== "fresh" && artifact.nextCommand !== artifact.refreshCommand) {
+      throw new Error(`spine manifest artifact ${artifact.id} is missing next command`);
+    }
+  }
+}
+
+function firstNextCommand(artifacts) {
+  return artifacts.find((artifact) => artifact.nextCommand)?.nextCommand;
+}
+
+function refreshCommandForArtifact(artifact) {
+  return (
+    artifactRefreshCommands[artifact.id] ??
+    artifactRefreshCommands[artifact.path] ??
+    "npm run test:dev-test-game-admin-spine"
+  );
+}
+
+const localDatabasePrefix = "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch";
+
+const artifactRefreshCommands = Object.freeze({
+  session: `${localDatabasePrefix} npm run test:dev-test-game-live`,
+  "proof-run": `${localDatabasePrefix} npm run test:dev-test-game-live`,
+  "backup-restore": "npm run test:dev-test-game-backup-restore",
+  "ops-artifacts": "npm run test:dev-test-game-ops",
+  "seed-fixture": "npm run test:dev-test-game-seed-fixture",
+  "release-readiness": "npm run test:dev-test-game-readiness",
+  "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
+  "spine-manifest": "npm run test:dev-test-game-spine-manifest",
+  "admin-spine": "npm run test:dev-test-game-admin-spine",
+  "admin-spine-admin": "npm run test:dev-test-game-admin-spine",
+});
+
 function markdownSpineManifest(manifest) {
   const lines = [
     "# fmarch Dev Test Game Spine Manifest",
@@ -298,6 +413,19 @@ function markdownSpineManifest(manifest) {
   manifest.commands.live.plan.forEach((step, index) => {
     lines.push(`| ${index + 1} | ${step.kind} | ${step.script} |`);
   });
+  lines.push(
+    "",
+    "## Artifact Freshness",
+    "",
+    `- status: ${manifest.artifactFreshness.status}`,
+    `- nextCommand: ${manifest.artifactFreshness.nextCommand}`,
+    "",
+    "| Artifact | Status | Refresh Command |",
+    "| --- | --- | --- |",
+  );
+  for (const artifact of manifest.artifactFreshness.artifacts) {
+    lines.push(`| ${artifact.id} | ${artifact.status} | ${artifact.refreshCommand} |`);
+  }
   lines.push("", "## Artifacts", "");
   for (const artifact of manifest.artifacts) {
     lines.push(`- ${artifact}`);
