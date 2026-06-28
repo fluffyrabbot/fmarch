@@ -1678,7 +1678,10 @@ async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) 
       window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
   );
   const reject = await staleActionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
-  if (!reject.message.includes("stale projection")) {
+  if (
+    !reject.message.includes("stale action state") ||
+    !reject.message.includes("current action controls")
+  ) {
     throw new Error(`stale action message drifted: ${JSON.stringify(reject)}`);
   }
   await staleActionPage.waitForFunction(

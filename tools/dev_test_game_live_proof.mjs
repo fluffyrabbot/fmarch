@@ -1089,6 +1089,38 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.actionConfig.templateId,
+  "factional_kill",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleActionConflict.reject.message,
+  /stale action state/,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleActionConflict.reject.message,
+  /current action controls/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.staleN01Phase.phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.phaseAfterReject.phaseId,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleActionConflict.actionVisibleAfterRefresh,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostControl.status,
   "passed",
 );

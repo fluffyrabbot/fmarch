@@ -28,6 +28,7 @@ const requiredChecks = [
   "stale-player-vote",
   "concurrent-vote-race",
   "stale-action-conflict",
+  "stale-action-conflict-message",
   "stale-host-control",
   "stale-cohost-deadline",
 ];

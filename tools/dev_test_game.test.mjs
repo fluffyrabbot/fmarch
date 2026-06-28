@@ -1325,11 +1325,14 @@ test("session card and markdown include role credential URLs and tokens", () => 
       },
       staleActionConflict: {
         status: "passed",
+        actionConfig: {
+          templateId: "factional_kill",
+        },
         staleN01Phase: { phaseId: "N01" },
         reject: {
           error: "PhaseLocked",
           message:
-            "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
         },
         phaseAfterReject: { phaseId: "D02" },
         actionVisibleAfterRefresh: false,
@@ -1507,6 +1510,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-vote",
       "concurrent-vote-race",
       "stale-action-conflict",
+      "stale-action-conflict-message",
       "stale-host-control",
       "stale-cohost-deadline",
     ],
@@ -1580,7 +1584,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 30);
+  assert.equal(opsArtifacts.proofRun.laneCount, 31);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1674,6 +1678,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
+      "stale-action-conflict-message",
       "host-replacement-console",
       "replacement-host-issued-invite",
       "replacement-pending-player",
@@ -2100,6 +2105,7 @@ function hardeningAdminProofFixture() {
         "stale-player-vote",
         "concurrent-vote-race",
         "stale-action-conflict",
+        "stale-action-conflict-message",
         "stale-host-control",
         "stale-cohost-deadline",
       ],
@@ -2186,6 +2192,7 @@ function seedAdminProofFixture() {
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-incoming-player",
+        "stale-action-conflict-message",
         "private-channel-member",
         "private-channel-denied",
         "multiplayer-hardening",

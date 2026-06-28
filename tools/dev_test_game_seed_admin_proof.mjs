@@ -38,6 +38,7 @@ const requiredScenarios = [
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-incoming-player",
+  "stale-action-conflict-message",
   "private-channel-member",
   "private-channel-denied",
   "multiplayer-hardening",

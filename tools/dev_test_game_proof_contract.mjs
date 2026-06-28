@@ -36,6 +36,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote",
   "concurrent-vote-race",
   "stale-action-conflict",
+  "stale-action-conflict-message",
   "stale-host-control",
   "stale-cohost-deadline",
 ]);
@@ -954,6 +955,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     }),
     lane("stale-action-conflict", "Stale player action rejects and refreshes command state", {
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,
+      rejectMessage: hardening.staleActionConflict?.reject?.message ?? null,
       stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
       refreshedPhase: hardening.staleActionConflict?.phaseAfterReject?.phaseId ?? null,
       actionVisibleAfterRefresh:
@@ -961,6 +963,33 @@ export function buildDevTestGameProofRun(session, options = {}) {
       passed:
         hardening.staleActionConflict?.status === "passed" &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict?.reject?.message?.includes(
+          "stale action state",
+        ) === true &&
+        hardening.staleActionConflict?.reject?.message?.includes(
+          "current action controls",
+        ) === true &&
+        hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
+        hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
+        hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
+    }),
+    lane("stale-action-conflict-message", "Stale player action conflict message is explicit", {
+      rejectError: hardening.staleActionConflict?.reject?.error ?? null,
+      rejectMessage: hardening.staleActionConflict?.reject?.message ?? null,
+      templateId: hardening.staleActionConflict?.actionConfig?.templateId ?? null,
+      stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
+      refreshedPhase: hardening.staleActionConflict?.phaseAfterReject?.phaseId ?? null,
+      passed:
+        hardening.staleActionConflict?.status === "passed" &&
+        hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict?.reject?.message?.includes(
+          "stale action state",
+        ) === true &&
+        hardening.staleActionConflict?.reject?.message?.includes(
+          "current action controls",
+        ) === true &&
+        hardening.staleActionConflict?.actionConfig?.templateId ===
+          "factional_kill" &&
         hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
         hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,

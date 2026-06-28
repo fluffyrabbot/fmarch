@@ -250,6 +250,39 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
   );
 
+  const staleActionReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "submit_action",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot_4",
+      actionConfig: {
+        actionId: "browser_factional_kill_n01",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+      },
+    }),
+    commandIdFactory: () => "44444444-4444-4444-8444-444444444444",
+    envelopeIdFactory: () => 13,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 13,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "PhaseLocked",
+            retryable: false,
+            message: "phase locked",
+          },
+        },
+      }),
+  });
+  assert.equal(
+    staleActionReject.message,
+    "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+  );
+
   const alreadySubmittedReject = await sendCommand({
     principalUserId: "player_mira",
     command: buildPlayerCommand({

@@ -172,7 +172,7 @@ export function normalizeCommandResponse({
       httpStatus: response.status,
       error: reject.error,
       retryable,
-      message: rejectMessage(reject, retryable),
+      message: rejectMessage(reject, retryable, { requestEnvelope }),
       requestEnvelope,
       serverEnvelope,
     });
@@ -181,8 +181,14 @@ export function normalizeCommandResponse({
   throw new TypeError("server response must be a wire Ack or Reject envelope");
 }
 
-function rejectMessage(reject, retryable) {
+function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   const base = `Reject ${reject.error}: ${reject.message}`;
+  if (
+    reject.error === "PhaseLocked" &&
+    requestEnvelope?.body?.body?.command?.SubmitAction !== undefined
+  ) {
+    return `${base}; stale action state, refresh and use current action controls`;
+  }
   if (reject.error === "PhaseLocked") {
     return `${base}; stale projection, refresh and use current controls`;
   }
