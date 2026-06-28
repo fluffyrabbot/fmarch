@@ -93,6 +93,7 @@ target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/admin-spine-proof.json
 target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
+target/dev-test-game/next-action.json
 target/dev-test-game/spine-manifest-admin-proof.json
 target/dev-test-game/admin-spine-admin-proof.json
 target/dev-test-game/proof-freshness-admin-proof.json
@@ -188,6 +189,14 @@ command/artifact without claiming release or production readiness, is:
 
 ```sh
 npm run test:dev-test-game-spine-manifest
+```
+
+The generated next-action receipt, which reads the spine manifest and emits one
+local recovery or freshness command without claiming release or production
+readiness, is:
+
+```sh
+npm run test:dev-test-game-next-action
 ```
 
 The seeded admin overview-to-local-spine-manifest detail browser proof is:
@@ -330,6 +339,7 @@ After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 admin browser proof set as a single development-spine evidence signal while
 keeping release readiness `not_ready`. The same command also writes
 `target/dev-test-game/spine-manifest.{json,md}` and
+`target/dev-test-game/next-action.json`, then writes
 `target/dev-test-game/spine-manifest-admin-proof.json`, proving the current local
 proof order, evidence env wiring, artifact freshness summary, stale-artifact
 next command, admin-spine recovery-command vocabulary, and proof-freshness

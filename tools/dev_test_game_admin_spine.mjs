@@ -45,4 +45,5 @@ export async function runDevTestGameAdminSpine() {
   });
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   await runNodeScript("tools/dev_test_game_proof_freshness_admin_proof.mjs");
+  await runNodeScript("tools/dev_test_game_next_action.mjs");
 }

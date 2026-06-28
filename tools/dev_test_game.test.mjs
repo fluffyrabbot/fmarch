@@ -44,6 +44,10 @@ import {
   proofFreshnessAdminProofCommand,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_manifest.mjs";
+import {
+  assertDevTestGameNextAction,
+  buildDevTestGameNextAction,
+} from "./dev_test_game_next_action.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -310,6 +314,102 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     ),
   );
+});
+
+test("dev test-game next-action derives one local recovery command from the manifest", () => {
+  const staleManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 0,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "core-loop",
+          label: "Core loop admin proof",
+          path: "target/dev-test-game/core-loop-admin-proof.json",
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 90000,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+    adminSpineProof: {
+      recovery: {
+        surfaces: [
+          {
+            id: "core-loop",
+            path: "target/dev-test-game/core-loop-admin-proof.json",
+            rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+          },
+        ],
+      },
+    },
+  });
+  const staleAction = buildDevTestGameNextAction(staleManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+  assertDevTestGameNextAction(staleAction);
+  assert.deepEqual(staleAction.nextAction, {
+    command: "npm run test:dev-test-game-core-loop-admin-proof",
+    reason: "artifact-not-fresh",
+    status: "blocked",
+    artifact: {
+      id: "core-loop",
+      label: "Core loop admin proof",
+      path: "target/dev-test-game/core-loop-admin-proof.json",
+      status: "stale",
+      refreshSource: "admin-spine-recovery",
+    },
+  });
+
+  const freshManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+  const freshAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+  assertDevTestGameNextAction(freshAction);
+  assert.deepEqual(freshAction.nextAction, {
+    command: "test:dev-test-game-proof-freshness-admin-proof",
+    reason: "all-artifacts-fresh",
+    status: "ready",
+  });
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {
