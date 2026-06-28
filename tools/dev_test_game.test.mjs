@@ -794,6 +794,10 @@ test("session card and markdown include role invite URLs and tokens", () => {
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
     8,
   );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
+    "npm run test:dev-test-game-admin-spine",
+  );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
     "hardening",
@@ -1196,6 +1200,8 @@ function spineManifestFixture() {
       { id: "live-spine-order-recorded", status: "passed" },
       { id: "sub-spine-orders-recorded", status: "passed" },
       { id: "evidence-env-wiring-recorded", status: "passed" },
+      { id: "freshness-proof-recorded", status: "passed" },
+      { id: "artifact-refresh-status-recorded", status: "passed" },
       {
         id: "release-boundary-carried",
         status: "passed",
@@ -1231,6 +1237,8 @@ function spineManifestAdminProofFixture() {
         "live-spine-order-recorded",
         "sub-spine-orders-recorded",
         "evidence-env-wiring-recorded",
+        "freshness-proof-recorded",
+        "artifact-refresh-status-recorded",
         "release-boundary-carried",
       ],
       rawInviteTokensVisible: false,
@@ -1280,6 +1288,7 @@ function adminSpineAdminProofFixture() {
         "seed",
         "release",
         "spine-manifest",
+        "recovery",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -1317,18 +1326,41 @@ function adminSpineProofFixture() {
       proof: proof.proof,
       status: "passed",
       path: proofPathFor(id),
+      rerunCommand: adminProofRerunCommandFor(id),
+      refreshedInCurrentRun: true,
       game: proof.generatedFrom.game,
       overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
       detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
       releaseReady: false,
       productionReady: false,
     })),
+    recovery: {
+      status: "passed",
+      surfaceCount: fixtures.length,
+      refreshedCount: fixtures.length,
+      nextCommand: "npm run test:dev-test-game-admin-spine",
+      proofBoundary: "Local aggregate recovery commands only.",
+      surfaces: fixtures.map(([id]) => ({
+        id,
+        label: `${id} admin proof`,
+        status: "passed",
+        path: proofPathFor(id),
+        rerunCommand: adminProofRerunCommandFor(id),
+        refreshedInCurrentRun: true,
+        mtime: "2026-06-26T00:00:00.000Z",
+        sizeBytes: 42,
+      })),
+    },
     proofBoundary: "Local aggregate admin spine proof only.",
   };
 }
 
 function proofPathFor(id) {
   return `target/dev-test-game/${id === "core-loop" ? "core-loop" : id}-admin-proof.json`;
+}
+
+function adminProofRerunCommandFor(id) {
+  return `npm run test:dev-test-game-${id}-admin-proof`;
 }
 
 function identityRole({ role, loginUrl, principalUserId, capabilityKinds }) {

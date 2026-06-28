@@ -1298,6 +1298,9 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     throw new Error("admin spine proof leaked an invite URL token");
   }
   const entries = new Map((proof.adminProofs ?? []).map((entry) => [entry.id, entry]));
+  const recoveryEntries = new Map(
+    (proof.recovery?.surfaces ?? []).map((entry) => [entry.id, entry]),
+  );
   for (const id of requiredProofs) {
     const entry = entries.get(id);
     if (entry?.status !== "passed") {
@@ -1309,6 +1312,27 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     if (entry.releaseReady !== false || entry.productionReady !== false) {
       throw new Error(`admin spine proof entry ${id} made readiness claims`);
     }
+    if (typeof entry.rerunCommand !== "string" || entry.rerunCommand.trim() === "") {
+      throw new Error(`admin spine proof entry ${id} is missing rerun command`);
+    }
+    if (entry.refreshedInCurrentRun !== true) {
+      throw new Error(`admin spine proof entry ${id} did not record refresh status`);
+    }
+    const recovery = recoveryEntries.get(id);
+    if (recovery?.path !== entry.path || recovery.rerunCommand !== entry.rerunCommand) {
+      throw new Error(`admin spine proof recovery entry ${id} drifted from proof entry`);
+    }
+  }
+  if (proof.recovery?.status !== "passed") {
+    throw new Error(`admin spine proof recovery status drifted: ${proof.recovery?.status}`);
+  }
+  if (proof.recovery?.nextCommand !== "npm run test:dev-test-game-admin-spine") {
+    throw new Error(
+      `admin spine proof recovery next command drifted: ${proof.recovery?.nextCommand}`,
+    );
+  }
+  if (Number(proof.recovery?.surfaceCount) !== requiredProofs.length) {
+    throw new Error(`admin spine proof recovery surface count drifted`);
   }
   return {
     status: "passed",
@@ -1316,6 +1340,19 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     proofCount: requiredProofs.length,
     proofIds: requiredProofs,
     proofBoundary: proof.proofBoundary,
+    recovery: {
+      status: proof.recovery.status,
+      surfaceCount: proof.recovery.surfaceCount,
+      refreshedCount: proof.recovery.refreshedCount,
+      nextCommand: proof.recovery.nextCommand,
+      surfaces: proof.recovery.surfaces.map((surface) => ({
+        id: surface.id,
+        status: surface.status,
+        path: surface.path,
+        rerunCommand: surface.rerunCommand,
+        refreshedInCurrentRun: surface.refreshedInCurrentRun === true,
+      })),
+    },
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -1330,6 +1367,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "seed",
     "release",
     "spine-manifest",
+    "recovery",
   ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine admin proof version drifted: ${proof?.version}`);

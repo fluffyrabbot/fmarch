@@ -30,6 +30,7 @@ const requiredChecks = [
   "seed",
   "release",
   "spine-manifest",
+  "recovery",
 ];
 
 await runAdminAuditProof({
@@ -59,7 +60,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-admin-spine-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the aggregate dev-test-game admin-spine proof. Proves the ordered aggregate admin proof artifact is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the aggregate dev-test-game admin-spine proof. Proves the ordered aggregate admin proof artifact and recovery command summary are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       adminSpineProof: adminSpineProofRelativePath,
       proofRun: proofRunRelativePath,

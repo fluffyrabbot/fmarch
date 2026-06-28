@@ -560,6 +560,10 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
   const proofs = Array.isArray(adminSpineProof.adminProofs)
     ? adminSpineProof.adminProofs
     : [];
+  const recovery =
+    adminSpineProof.recovery !== null && typeof adminSpineProof.recovery === "object"
+      ? adminSpineProof.recovery
+      : {};
   return Object.freeze({
     id: "local-admin-spine",
     label: "Local admin spine",
@@ -572,16 +576,32 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
     href: "target/dev-test-game/admin-spine-proof.json",
     inspectHref: adminAuditInspectHref({ game, audit: "local-admin-spine" }),
     checks: Object.freeze(
-      proofs.map((proof) =>
+      [
+        ...proofs.map((proof) =>
+          Object.freeze({
+            id: String(proof.id),
+            status: String(proof.status),
+            ...(proof.rerunCommand === undefined
+              ? {}
+              : { rerunCommand: String(proof.rerunCommand) }),
+            ...(proof.refreshedInCurrentRun === undefined
+              ? {}
+              : { refreshedInCurrentRun: proof.refreshedInCurrentRun === true }),
+          }),
+        ),
         Object.freeze({
-          id: String(proof.id),
-          status: String(proof.status),
+          id: "recovery",
+          status: String(recovery.status ?? "unknown"),
+          nextCommand: String(recovery.nextCommand ?? ""),
         }),
-      ),
+      ],
     ),
     artifactSummary: Object.freeze({
       game: String(adminSpineProof.generatedFrom?.game ?? ""),
       proofCount: proofs.length,
+      recoveryStatus: String(recovery.status ?? "unknown"),
+      refreshedCount: Number(recovery.refreshedCount ?? 0),
+      nextCommand: String(recovery.nextCommand ?? ""),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),

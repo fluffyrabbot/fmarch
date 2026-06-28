@@ -246,7 +246,8 @@ and a local proof boundary. It then writes
 seeded slots, local demo scenarios, and proof-lane mappings, then runs the
 backup/restore and identity-adapter proof lanes. The final aggregate admin-spine
 pass writes the core-loop, hardening, identity, backup, ops, seed, and
-release-readiness admin browser proofs, then records
+release-readiness admin browser proofs, records per-surface recovery commands in
+`target/dev-test-game/admin-spine-proof.json`, then records
 `target/dev-test-game/admin-spine-proof.json` in the readiness checklist while
 keeping release readiness `not_ready`.
 
@@ -334,8 +335,9 @@ proof order, evidence env wiring, artifact freshness summary, stale-artifact
 next command, and proof-freshness command/artifact are inspectable from the
 seeded admin role surface without reading the orchestration code. It also writes
 `target/dev-test-game/admin-spine-admin-proof.json`, proving the aggregate
-`admin-spine-proof.json` is itself inspectable from the seeded admin overview in
-the native local-admin-spine detail route. Finally, it writes
+`admin-spine-proof.json` and its per-surface recovery command summary are
+inspectable from the seeded admin overview in the native local-admin-spine detail
+route. Finally, it writes
 `target/dev-test-game/proof-freshness-admin-proof.json`, proving the generated
 artifact freshness dashboard is reachable from the seeded admin overview and
 shows the current local proof bundle as fresh before the run is treated as green.

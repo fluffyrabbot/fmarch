@@ -23,6 +23,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "core-loop",
     label: "Core loop admin role surface",
     script: "tools/dev_test_game_core_loop_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
     path: "target/dev-test-game/core-loop-admin-proof.json",
     validate: validateDevTestGameCoreLoopAdminProof,
   },
@@ -30,6 +31,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "hardening",
     label: "Multiplayer hardening admin role surface",
     script: "tools/dev_test_game_hardening_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-hardening-admin-proof",
     path: "target/dev-test-game/hardening-admin-proof.json",
     validate: validateDevTestGameHardeningAdminProof,
   },
@@ -37,6 +39,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "identity",
     label: "Identity adapter admin role surface",
     script: "tools/dev_test_game_identity_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-identity-admin-proof",
     path: "target/dev-test-game/identity-admin-proof.json",
     validate: validateDevTestGameIdentityAdminProof,
   },
@@ -44,6 +47,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "backup",
     label: "Backup/restore admin role surface",
     script: "tools/dev_test_game_backup_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-backup-admin-proof",
     path: "target/dev-test-game/backup-admin-proof.json",
     validate: validateDevTestGameBackupAdminProof,
   },
@@ -51,6 +55,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "ops",
     label: "Ops artifact admin role surface",
     script: "tools/dev_test_game_ops_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-ops-admin-proof",
     path: "target/dev-test-game/ops-admin-proof.json",
     validate: validateDevTestGameOpsAdminProof,
   },
@@ -58,6 +63,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "seed",
     label: "Seed/demo fixture admin role surface",
     script: "tools/dev_test_game_seed_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-seed-admin-proof",
     path: "target/dev-test-game/seed-admin-proof.json",
     validate: validateDevTestGameSeedAdminProof,
   },
@@ -65,6 +71,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "release",
     label: "Release-readiness admin role surface",
     script: "tools/dev_test_game_release_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-release-admin-proof",
     path: "target/dev-test-game/release-admin-proof.json",
     validate: validateDevTestGameReleaseAdminProof,
   },
@@ -72,6 +79,7 @@ export const devTestGameAdminSpineProofPlan = [
     id: "spine-manifest",
     label: "Spine manifest admin role surface",
     script: "tools/dev_test_game_spine_manifest_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
     path: "target/dev-test-game/spine-manifest-admin-proof.json",
     validate: validateDevTestGameSpineManifestAdminProof,
   },
@@ -98,6 +106,8 @@ export async function runAdminSpineProof() {
       proof: proof.proof,
       status: validated.status,
       path: validated.path,
+      rerunCommand: spec.rerunCommand,
+      refreshedInCurrentRun: true,
       game: proof.generatedFrom?.game,
       artifact,
       overviewRoleUrl: validated.overviewRoleUrl,
@@ -133,12 +143,37 @@ export async function runAdminSpineProof() {
     adminProofs: entries,
     proofBoundary:
       "Runs the local dev-test-game admin browser proof scripts in readiness-spine order and validates the saved admin role-surface artifacts. Passing means the seeded local admin surfaces are reachable and coherent; it does not prove hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
+    recovery: buildAdminSpineRecovery(entries),
   };
   validateDevTestGameAdminSpineProof(evidence, {
     path: "target/dev-test-game/admin-spine-proof.json",
   });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   return evidence;
+}
+
+function buildAdminSpineRecovery(entries) {
+  const surfaces = entries.map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    status: entry.status,
+    path: entry.path,
+    rerunCommand: entry.rerunCommand,
+    refreshedInCurrentRun: entry.refreshedInCurrentRun === true,
+    ...(entry.artifact?.mtime === undefined ? {} : { mtime: entry.artifact.mtime }),
+    ...(entry.artifact?.sizeBytes === undefined
+      ? {}
+      : { sizeBytes: entry.artifact.sizeBytes }),
+  }));
+  return {
+    status: "passed",
+    surfaceCount: surfaces.length,
+    refreshedCount: surfaces.filter((surface) => surface.refreshedInCurrentRun).length,
+    nextCommand: "npm run test:dev-test-game-admin-spine",
+    proofBoundary:
+      "Local recovery map for aggregate admin proof surfaces. Commands rerun local browser proof lanes only; they do not prove hosted operations, beta readiness, release readiness, or production readiness.",
+    surfaces,
+  };
 }
 
 function runNodeScript(scriptPath) {

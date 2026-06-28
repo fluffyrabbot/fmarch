@@ -647,11 +647,15 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "seed",
       "release",
       "spine-manifest",
+      "recovery",
     ],
   );
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
     proofCount: 8,
+    recoveryStatus: "passed",
+    refreshedCount: 8,
+    nextCommand: "npm run test:dev-test-game-admin-spine",
     releaseReady: false,
     productionReady: false,
   });
@@ -668,7 +672,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, "local-admin-spine");
-  assert.equal(data.audit.checks.length, 8);
+  assert.equal(data.audit.checks.length, 9);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -680,7 +684,16 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["seed", "passed"],
       ["release", "passed"],
       ["spine-manifest", "passed"],
+      ["recovery", "passed"],
     ],
+  );
+  assert.equal(
+    data.audit.checks.find((check) => check.id === "core-loop").rerunCommand,
+    "npm run test:dev-test-game-core-loop-admin-proof",
+  );
+  assert.equal(
+    data.audit.checks.find((check) => check.id === "recovery").nextCommand,
+    "npm run test:dev-test-game-admin-spine",
   );
 });
 
@@ -1480,6 +1493,23 @@ function adminSpineProofFixture() {
       adminSpineProofRow("release"),
       adminSpineProofRow("spine-manifest"),
     ],
+    recovery: {
+      status: "passed",
+      surfaceCount: 8,
+      refreshedCount: 8,
+      nextCommand: "npm run test:dev-test-game-admin-spine",
+      proofBoundary: "Local aggregate recovery commands only.",
+      surfaces: [
+        adminSpineRecoveryRow("core-loop"),
+        adminSpineRecoveryRow("hardening"),
+        adminSpineRecoveryRow("identity"),
+        adminSpineRecoveryRow("backup"),
+        adminSpineRecoveryRow("ops"),
+        adminSpineRecoveryRow("seed"),
+        adminSpineRecoveryRow("release"),
+        adminSpineRecoveryRow("spine-manifest"),
+      ],
+    },
     proofBoundary: "Local aggregate admin spine proof only.",
   };
 }
@@ -1491,9 +1521,24 @@ function adminSpineProofRow(id) {
     proof: `dev-test-game-${id}-admin-proof`,
     status: "passed",
     path: `target/dev-test-game/${id}-admin-proof.json`,
+    rerunCommand: `npm run test:dev-test-game-${id}-admin-proof`,
+    refreshedInCurrentRun: true,
     game: "game-a",
     releaseReady: false,
     productionReady: false,
+  };
+}
+
+function adminSpineRecoveryRow(id) {
+  return {
+    id,
+    label: `${id} admin proof`,
+    status: "passed",
+    path: `target/dev-test-game/${id}-admin-proof.json`,
+    rerunCommand: `npm run test:dev-test-game-${id}-admin-proof`,
+    refreshedInCurrentRun: true,
+    mtime: "2026-06-26T00:00:00.000Z",
+    sizeBytes: 42,
   };
 }
 
