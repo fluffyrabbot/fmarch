@@ -570,7 +570,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
   const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
   assert.equal(manifest.label, "Local spine manifest");
-  assert.equal(manifest.status, "6 manifest checks passed");
+  assert.equal(manifest.status, "7 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
   assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
   assert.deepEqual(
@@ -581,12 +581,14 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "evidence-env-wiring-recorded",
       "freshness-proof-recorded",
       "artifact-refresh-status-recorded",
+      "terminal-artifacts-recorded",
       "release-boundary-carried",
     ],
   );
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 5,
-    artifactCount: 4,
+    commandCount: 7,
+    artifactCount: 6,
+    terminalArtifactCount: 2,
     adminSpineStepCount: 8,
     artifactFreshnessStatus: "blocked",
     freshCount: 1,
@@ -610,7 +612,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 6);
+  assert.equal(data.audit.checks.length, 7);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -619,6 +621,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["evidence-env-wiring-recorded", "passed"],
       ["freshness-proof-recorded", "passed"],
       ["artifact-refresh-status-recorded", "passed"],
+      ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
     ],
   );
@@ -1425,7 +1428,29 @@ function spineManifestFixture() {
         script: "test:dev-test-game-proof-freshness-admin-proof",
         proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
       },
+      nextAction: {
+        script: "test:dev-test-game-next-action",
+        proofArtifact: "target/dev-test-game/next-action.json",
+      },
+      nextActionAdminProof: {
+        script: "test:dev-test-game-next-action-admin-proof",
+        proofArtifact: "target/dev-test-game/next-action-admin-proof.json",
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
     },
+    terminalArtifacts: [
+      {
+        id: "next-action",
+        command: "test:dev-test-game-next-action",
+        path: "target/dev-test-game/next-action.json",
+      },
+      {
+        id: "next-action-admin-proof",
+        command: "test:dev-test-game-next-action-admin-proof",
+        path: "target/dev-test-game/next-action-admin-proof.json",
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
+    ],
     artifactFreshness: {
       status: "blocked",
       proof: "dev-test-game-proof-freshness",
@@ -1467,6 +1492,8 @@ function spineManifestFixture() {
       "target/dev-test-game/spine-manifest.md",
       "target/dev-test-game/spine-manifest-admin-proof.json",
       "target/dev-test-game/proof-freshness-admin-proof.json",
+      "target/dev-test-game/next-action.json",
+      "target/dev-test-game/next-action-admin-proof.json",
     ],
     checks: [
       { id: "live-spine-order-recorded", status: "passed" },
@@ -1474,6 +1501,7 @@ function spineManifestFixture() {
       { id: "evidence-env-wiring-recorded", status: "passed" },
       { id: "freshness-proof-recorded", status: "passed" },
       { id: "artifact-refresh-status-recorded", status: "passed" },
+      { id: "terminal-artifacts-recorded", status: "passed" },
       {
         id: "release-boundary-carried",
         status: "passed",

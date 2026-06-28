@@ -41,6 +41,10 @@ import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
 import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
+  nextActionAdminProofCommand,
+  nextActionAdminProofPath,
+  nextActionCommand,
+  nextActionPath,
   proofFreshnessAdminProofCommand,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_manifest.mjs";
@@ -265,6 +269,42 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/release-readiness-checklist.json",
     ],
   });
+  assert.deepEqual(manifest.commands.nextAction, {
+    script: nextActionCommand,
+    proofArtifact: nextActionPath,
+    dependsOn: ["target/dev-test-game/spine-manifest.json"],
+  });
+  assert.deepEqual(manifest.commands.nextActionAdminProof, {
+    script: nextActionAdminProofCommand,
+    proofArtifact: nextActionAdminProofPath,
+    dependsOn: [
+      "target/dev-test-game/next-action.json",
+      "target/dev-test-game/proof-run.json",
+    ],
+    roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+  });
+  assert.deepEqual(
+    manifest.terminalArtifacts.map((artifact) => ({
+      id: artifact.id,
+      command: artifact.command,
+      path: artifact.path,
+      roleUrl: artifact.roleUrl,
+    })),
+    [
+      {
+        id: "next-action",
+        command: nextActionCommand,
+        path: nextActionPath,
+        roleUrl: undefined,
+      },
+      {
+        id: "next-action-admin-proof",
+        command: nextActionAdminProofCommand,
+        path: nextActionAdminProofPath,
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
+    ],
+  );
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
@@ -300,6 +340,8 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
+  assert(manifest.artifacts.includes(nextActionPath));
+  assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
   assert(
     manifest.artifacts.includes(

@@ -579,6 +579,9 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
   const artifacts = Array.isArray(spineManifest.artifacts)
     ? spineManifest.artifacts
     : [];
+  const terminalArtifacts = Array.isArray(spineManifest.terminalArtifacts)
+    ? spineManifest.terminalArtifacts
+    : [];
   const artifactFreshness =
     spineManifest.artifactFreshness !== null &&
     typeof spineManifest.artifactFreshness === "object"
@@ -610,6 +613,7 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
     artifactSummary: Object.freeze({
       commandCount: commands.length,
       artifactCount: artifacts.length,
+      terminalArtifactCount: terminalArtifacts.length,
       adminSpineStepCount: Number(
         spineManifest.commands?.adminSpine?.plan?.length ?? 0,
       ),

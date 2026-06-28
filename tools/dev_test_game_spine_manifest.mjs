@@ -33,6 +33,12 @@ export const proofFreshnessAdminProofPath =
   "target/dev-test-game/proof-freshness-admin-proof.json";
 export const proofFreshnessAdminProofCommand =
   "test:dev-test-game-proof-freshness-admin-proof";
+export const nextActionPath = "target/dev-test-game/next-action.json";
+export const nextActionCommand = "test:dev-test-game-next-action";
+export const nextActionAdminProofPath =
+  "target/dev-test-game/next-action-admin-proof.json";
+export const nextActionAdminProofCommand =
+  "test:dev-test-game-next-action-admin-proof";
 
 const manifestJsonPath = path.join(repoRoot, spineManifestPath);
 const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
@@ -96,16 +102,50 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/release-readiness-checklist.json",
         ],
       },
+      nextAction: {
+        script: nextActionCommand,
+        proofArtifact: nextActionPath,
+        dependsOn: [spineManifestPath],
+      },
+      nextActionAdminProof: {
+        script: nextActionAdminProofCommand,
+        proofArtifact: nextActionAdminProofPath,
+        dependsOn: [nextActionPath, "target/dev-test-game/proof-run.json"],
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
     },
     evidenceEnv,
     artifactFreshness: buildArtifactFreshnessReport(proofFreshness, {
       recoveryCommands: adminSpineRecoveryCommands,
     }),
+    terminalArtifacts: [
+      {
+        id: "next-action",
+        label: "Next action receipt",
+        command: nextActionCommand,
+        path: nextActionPath,
+        dependsOn: [spineManifestPath],
+        boundary:
+          "Terminal local receipt that chooses one upstream freshness or recovery command from the manifest.",
+      },
+      {
+        id: "next-action-admin-proof",
+        label: "Next action admin proof",
+        command: nextActionAdminProofCommand,
+        path: nextActionAdminProofPath,
+        dependsOn: [nextActionPath, "target/dev-test-game/proof-run.json"],
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        boundary:
+          "Terminal local admin role proof for the generated next-action receipt. It is recorded separately from artifact freshness inputs to avoid making the receipt depend on its own browser proof.",
+      },
+    ],
     artifacts: uniqueSorted([
       spineManifestPath,
       spineManifestMarkdownPath,
       adminSpineProofPath,
       proofFreshnessAdminProofPath,
+      nextActionPath,
+      nextActionAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
       ...envValues(evidenceEnv.backupRestore.backupRestoreEvidenceEnv),
       ...envValues(evidenceEnv.backupRestore.backupAwareOpsEnv),
@@ -148,6 +188,11 @@ export function buildDevTestGameSpineManifest({
           proofFreshnessAdminProofCommand,
           proofFreshnessAdminProofPath,
         ],
+      },
+      {
+        id: "terminal-artifacts-recorded",
+        status: "passed",
+        evidence: [nextActionPath, nextActionAdminProofPath],
       },
       {
         id: "release-boundary-carried",
@@ -224,11 +269,34 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest proof freshness artifact drifted: ${manifest.commands.proofFreshness.proofArtifact}`,
     );
   }
+  if (manifest.commands?.nextAction?.script !== nextActionCommand) {
+    throw new Error(
+      `spine manifest next-action command drifted: ${manifest.commands?.nextAction?.script}`,
+    );
+  }
+  if (manifest.commands.nextAction.proofArtifact !== nextActionPath) {
+    throw new Error(
+      `spine manifest next-action artifact drifted: ${manifest.commands.nextAction.proofArtifact}`,
+    );
+  }
+  if (manifest.commands?.nextActionAdminProof?.script !== nextActionAdminProofCommand) {
+    throw new Error(
+      `spine manifest next-action admin proof command drifted: ${manifest.commands?.nextActionAdminProof?.script}`,
+    );
+  }
+  if (manifest.commands.nextActionAdminProof.proofArtifact !== nextActionAdminProofPath) {
+    throw new Error(
+      `spine manifest next-action admin proof artifact drifted: ${manifest.commands.nextActionAdminProof.proofArtifact}`,
+    );
+  }
+  assertTerminalArtifacts(manifest.terminalArtifacts);
   for (const path of [
     spineManifestPath,
     spineManifestMarkdownPath,
     "target/dev-test-game/admin-spine-proof.json",
     proofFreshnessAdminProofPath,
+    nextActionPath,
+    nextActionAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
@@ -249,6 +317,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "evidence-env-wiring-recorded",
     "freshness-proof-recorded",
     "artifact-refresh-status-recorded",
+    "terminal-artifacts-recorded",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {
@@ -256,6 +325,31 @@ export function assertDevTestGameSpineManifest(manifest) {
     }
   }
   return manifest;
+}
+
+function assertTerminalArtifacts(terminalArtifacts) {
+  const artifacts = new Map(
+    (terminalArtifacts ?? []).map((artifact) => [artifact.id, artifact]),
+  );
+  const nextAction = artifacts.get("next-action");
+  if (
+    nextAction?.command !== nextActionCommand ||
+    nextAction.path !== nextActionPath ||
+    !Array.isArray(nextAction.dependsOn) ||
+    !nextAction.dependsOn.includes(spineManifestPath)
+  ) {
+    throw new Error("spine manifest next-action terminal artifact drifted");
+  }
+  const adminProof = artifacts.get("next-action-admin-proof");
+  if (
+    adminProof?.command !== nextActionAdminProofCommand ||
+    adminProof.path !== nextActionAdminProofPath ||
+    adminProof.roleUrl !== "/admin/audit/local-next-action?game=<seeded-game>" ||
+    !Array.isArray(adminProof.dependsOn) ||
+    !adminProof.dependsOn.includes(nextActionPath)
+  ) {
+    throw new Error("spine manifest next-action admin terminal artifact drifted");
+  }
 }
 
 export async function writeDevTestGameSpineManifest({
@@ -456,6 +550,16 @@ function markdownSpineManifest(manifest) {
   manifest.commands.live.plan.forEach((step, index) => {
     lines.push(`| ${index + 1} | ${step.kind} | ${step.script} |`);
   });
+  lines.push(
+    "",
+    "## Terminal Artifacts",
+    "",
+    "| Artifact | Command | Boundary |",
+    "| --- | --- | --- |",
+  );
+  for (const artifact of manifest.terminalArtifacts ?? []) {
+    lines.push(`| ${artifact.id} | ${artifact.command} | ${artifact.boundary} |`);
+  }
   lines.push(
     "",
     "## Artifact Freshness",

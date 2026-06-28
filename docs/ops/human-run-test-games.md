@@ -185,8 +185,9 @@ npm run test:dev-test-game-proof-freshness-admin-proof
 
 The generated spine manifest, which records proof command order, evidence env
 wiring, current artifact freshness statuses, per-artifact refresh commands for
-the aggregate bundle and each admin proof surface, and the final proof-freshness
-command/artifact without claiming release or production readiness, is:
+the aggregate bundle and each admin proof surface, terminal next-action
+artifacts, and the final proof-freshness command/artifact without claiming
+release or production readiness, is:
 
 ```sh
 npm run test:dev-test-game-spine-manifest
@@ -344,21 +345,27 @@ credential echoes.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while
-keeping release readiness `not_ready`. The same command also writes
-`target/dev-test-game/spine-manifest.{json,md}` and
-`target/dev-test-game/next-action.json`, then writes
-`target/dev-test-game/spine-manifest-admin-proof.json`, proving the current local
-proof order, evidence env wiring, artifact freshness summary, stale-artifact
-next command, admin-spine recovery-command vocabulary, and proof-freshness
-command/artifact are inspectable from the seeded admin role surface without
-reading the orchestration code. It also writes
+keeping release readiness `not_ready`. The generated
+`target/dev-test-game/spine-manifest.{json,md}` records
+`target/dev-test-game/next-action.json` and
+`target/dev-test-game/next-action-admin-proof.json` as terminal next-action
+artifacts, separate from age-based freshness inputs, to avoid making the receipt
+depend on its own browser proof. The
+`target/dev-test-game/spine-manifest-admin-proof.json` proof shows the current
+local proof order, evidence env wiring, terminal-artifact vocabulary, artifact
+freshness summary, stale-artifact next command, admin-spine recovery-command
+vocabulary, and proof-freshness command/artifact are inspectable from the seeded
+admin role surface without reading the orchestration code. It also writes
 `target/dev-test-game/admin-spine-admin-proof.json`, proving the aggregate
 `admin-spine-proof.json` and its per-surface recovery command summary are
 inspectable from the seeded admin overview in the native local-admin-spine detail
-route. Finally, it writes
+route. The tail of the command writes
 `target/dev-test-game/proof-freshness-admin-proof.json`, proving the generated
-artifact freshness dashboard is reachable from the seeded admin overview and
-shows the current local proof bundle as fresh before the run is treated as green.
+artifact freshness dashboard is reachable from the seeded admin overview, then
+regenerates `target/dev-test-game/next-action.json` and writes
+`target/dev-test-game/next-action-admin-proof.json`, proving the generated
+next-action receipt is reachable from the seeded admin overview in the native
+local-next-action detail route before the run is treated as green.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,
