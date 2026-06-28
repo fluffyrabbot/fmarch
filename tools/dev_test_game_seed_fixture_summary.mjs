@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 7,
+        scenarioCount: 8,
       },
       {
         id: "proof-lanes-carried",
@@ -200,6 +200,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "host",
       provenBy: ["browser-entry", "core-loop"].filter(hasLane),
       note: "Host opens the seeded role URL, locks D01, recovers stale controls, resolves phases, and advances the local game.",
+    }),
+    scenario({
+      id: "cohost-deadline-control",
+      title: "Cohost deadline control",
+      role: "cohost",
+      provenBy: ["browser-entry", "cohost-console"].filter(hasLane),
+      note: "Cohost opens the seeded host-console role URL with CohostOf authority and extends the active deadline through /commands.",
     }),
     scenario({
       id: "player-vote-recovery",

@@ -46,6 +46,7 @@ assert.deepEqual(session.verification.roles, [
   "player",
   "actionPlayer",
   "deniedPlayer",
+  "cohost",
 ]);
 assert.match(session.frontendBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
 assert.match(session.apiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
@@ -65,6 +66,30 @@ assert.equal(
 );
 assert.equal(session.verification.sessions.host.cookie.valuePrefix, "invite-session-");
 assert.equal(session.verification.sessions.player.cookie.valuePrefix, "invite-session-");
+assert.equal(session.verification.sessions.cohost.cookie.valuePrefix, "invite-session-");
+assert.equal(
+  session.verification.sessions.cohost.capabilityKinds.includes("CohostOf"),
+  true,
+);
+assert.equal(session.verification.cohostConsole.status, "passed");
+assert.equal(
+  session.verification.cohostConsole.capabilityLabel,
+  `CohostOf(${session.game})`,
+);
+assert.equal(
+  session.verification.cohostConsole.extendDeadline.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.cohostConsole.extendDeadline.commandStatus.requestEnvelope.body.body
+    .principal_user_id,
+  "cohost_c",
+);
+assert.equal(
+  session.verification.cohostConsole.extendDeadline.commandStatus.requestEnvelope.body.body
+    .command.ExtendDeadline.phase,
+  "D01",
+);
 assert.equal(session.verification.coreLoop.status, "passed");
 assert.equal(session.verification.coreLoop.lock.commandStatus.state, "ack");
 assert.equal(session.verification.coreLoop.rejectedVote.state, "reject");

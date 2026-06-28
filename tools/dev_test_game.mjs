@@ -535,6 +535,18 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.cohostConsole !== undefined) {
+      lines.push(
+        "## Cohost Console Proof",
+        "",
+        `Status: ${card.verification.cohostConsole.status}`,
+        "",
+        `Proof: ${card.verification.cohostConsole.proof}`,
+        "",
+        `Extend deadline: ${card.verification.cohostConsole.extendDeadline.statusMessage}`,
+        "",
+      );
+    }
     if (card.verification.actionLoop !== undefined) {
       lines.push(
         "## Action Loop Proof",
@@ -595,13 +607,14 @@ async function verifySessionCard(card) {
   const roles = [];
   const sessions = {};
   const roleEntries = {};
+  let cohostConsole;
   let coreLoop;
   let privateChannel;
   let actionLoop;
   let multiplayerHardening;
   let staleActionPage;
   try {
-    for (const role of ["host", "player", "actionPlayer", "deniedPlayer"]) {
+    for (const role of ["host", "player", "actionPlayer", "deniedPlayer", "cohost"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
         browser,
         session: card.sessions[role],
@@ -613,6 +626,10 @@ async function verifySessionCard(card) {
       roles.push(role);
     }
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
+    cohostConsole = await verifySeededCohostConsole({
+      cohostPage: roleEntries.cohost.page,
+      game: card.game,
+    });
     coreLoop = await verifySeededCoreLoop({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
@@ -649,6 +666,7 @@ async function verifySessionCard(card) {
     status: "passed",
     roles,
     sessions,
+    cohostConsole,
     coreLoop,
     privateChannel,
     actionLoop,
@@ -719,6 +737,30 @@ async function openVerifiedRoleEntry({
     await context.close();
     throw error;
   }
+}
+
+async function verifySeededCohostConsole({ cohostPage, game }) {
+  await cohostPage.getByTestId("host-console-surface").waitFor({ state: "visible" });
+  const capability = await cohostPage.getByTestId("host-console-capability").innerText();
+  if (!capability.includes(`CohostOf(${game})`)) {
+    throw new Error(`cohost console capability drifted: ${capability}`);
+  }
+  const extendDeadline = await confirmHostAction(cohostPage, "extend_deadline");
+  const command = extendDeadline.commandStatus?.requestEnvelope?.body?.body?.command;
+  if (
+    extendDeadline.commandStatus?.state !== "ack" ||
+    command?.ExtendDeadline?.game !== game ||
+    command?.ExtendDeadline?.phase !== "D01"
+  ) {
+    throw new Error(`cohost ExtendDeadline drifted: ${JSON.stringify(extendDeadline)}`);
+  }
+  return {
+    status: "passed",
+    capabilityLabel: capability,
+    extendDeadline,
+    proof:
+      "The seeded cohost role URL opened the host console with CohostOf authority and extended the D01 deadline through the hydrated host-console command path.",
+  };
 }
 
 async function verifySeededCoreLoop({ hostPage, playerPage }) {

@@ -529,6 +529,14 @@ test("session card and markdown include role invite URLs and tokens", () => {
         returnTo: `/g/${game}`,
         expectedCapabilityKind: "SlotOccupant",
       },
+      cohost: {
+        principalUserId: "cohost_c",
+        credentialKind: "invite",
+        token: tokens.cohost,
+        inviteToken: tokens.cohost,
+        returnTo: `/g/${game}/host`,
+        expectedCapabilityKind: "CohostOf",
+      },
     },
   });
 
@@ -543,7 +551,37 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(card.sessions.player.token, "dev-test-card-player");
   card.verification = {
     status: "passed",
-    roles: ["host", "player", "actionPlayer", "deniedPlayer"],
+    roles: ["host", "player", "actionPlayer", "deniedPlayer", "cohost"],
+    sessions: {
+      cohost: {
+        capabilityKinds: ["CohostOf"],
+        cookie: { valuePrefix: "invite-session-" },
+      },
+    },
+    cohostConsole: {
+      status: "passed",
+      capabilityLabel: `CohostOf(${game})`,
+      proof: "cohost opened the host console and extended deadline",
+      extendDeadline: {
+        statusMessage: "Ack: stream seqs 41",
+        commandStatus: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "cohost_c",
+                command: {
+                  ExtendDeadline: {
+                    game,
+                    phase: "D01",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     coreLoop: {
       status: "passed",
       proof: "host locked D01 and player recovered from PhaseLocked",
@@ -623,8 +661,11 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("# fmarch Dev Test Game"));
   assert(markdown.includes("Open a role invite URL"));
   assert(markdown.includes("dev-test-card-host"));
+  assert(markdown.includes("dev-test-card-cohost"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
   assert(markdown.includes("Invite token: dev-test-card-player"));
+  assert(markdown.includes("## Cohost Console Proof"));
+  assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
   assert(markdown.includes("## Core Loop Proof"));
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Action Loop Proof"));
@@ -649,6 +690,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
     proofRun.lanes.map((lane) => lane.id),
     [
       "browser-entry",
+      "cohost-console",
       "core-loop",
       "action-loop",
       "private-channel",
@@ -729,7 +771,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 10);
+  assert.equal(opsArtifacts.proofRun.laneCount, 11);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -790,6 +832,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
     seedFixture.demoScenarios.map((scenario) => scenario.id),
     [
       "host-phase-controls",
+      "cohost-deadline-control",
       "player-vote-recovery",
       "night-action-loop",
       "private-channel-member",

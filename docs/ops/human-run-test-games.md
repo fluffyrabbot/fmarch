@@ -249,12 +249,12 @@ clicking from the seeded admin overview into the native local backup/restore
 detail route, where dump/restore checks and restored role sessions are visible.
 
 That live gate first runs `npm run dev:test-game:prebuild`, then starts the API
-and frontend, seeds a fresh `live-proof` game, verifies host and player browser
-entry through `/auth/login`, checks that those browser sessions came from
-invite-issued `fmarch_session` cookies, verifies host/player capabilities
-through `/auth/session?game=...`, drives a small core-loop proof, then checks
-the generated session artifact and validates `target/dev-test-game/proof-run.json`
-against the current `session.json`. It writes
+and frontend, seeds a fresh `live-proof` game, verifies host, player,
+action-player, denied-player, and cohost browser entry through `/auth/login`,
+checks that those browser sessions came from invite-issued `fmarch_session`
+cookies, verifies role capabilities through `/auth/session?game=...`, drives a
+small core-loop proof, then checks the generated session artifact and validates
+`target/dev-test-game/proof-run.json` against the current `session.json`. It writes
 `target/dev-test-game/release-readiness-checklist.{json,md}` from the validated
 proof run, then writes `target/dev-test-game/ops-artifacts.{json,md}` with
 redacted role entry URLs, source artifact checksums, command and lane counts,
@@ -267,6 +267,12 @@ release-readiness admin browser proofs, records per-surface recovery commands in
 `target/dev-test-game/admin-spine-proof.json`, then records
 `target/dev-test-game/admin-spine-proof.json` in the readiness checklist while
 keeping release readiness `not_ready`.
+
+The cohost proof uses the generated cohost role URL to open the host console
+with `CohostOf(<game>)`, runs the delegated D01 `ExtendDeadline` host action,
+and records the ACK as the `cohost-console` proof lane. That proves the local
+capability shape for delegated host controls without claiming production
+identity or exhaustive cohost policy coverage.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
 through the hydrated phase control, the player page submits a vote into the
@@ -376,10 +382,11 @@ proof.
 ## Boundary
 
 This proves a local seeded browser test-game workflow for one developer, plus
-specific duplicate-command, player reconnect, concurrent vote race, stale player
-vote, stale action conflict, stale host control recovery, local artifact-bundle,
-local seed/demo fixture inventory, local identity-adapter shape, and local
-backup/restore lanes. It does not prove hosted production account lifecycle,
+specific cohost deadline delegation, duplicate-command, player reconnect,
+concurrent vote race, stale player vote, stale action conflict, stale host
+control recovery, local artifact-bundle, local seed/demo fixture inventory,
+local identity-adapter shape, and local backup/restore lanes. It does not prove
+hosted production account lifecycle,
 invite delivery, account recovery, rate limits, abuse controls, production
 session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted

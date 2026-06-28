@@ -9,6 +9,7 @@ const defaultSessionPath = path.join(repoRoot, "target", "dev-test-game", "sessi
 const defaultProofPath = path.join(repoRoot, "target", "dev-test-game", "proof-run.json");
 const requiredLaneIds = Object.freeze([
   "browser-entry",
+  "cohost-console",
   "core-loop",
   "action-loop",
   "private-channel",
@@ -29,6 +30,21 @@ export function buildDevTestGameProofRun(session, options = {}) {
       roles: verification.roles ?? [],
       sessionRoles: Object.keys(verification.sessions ?? {}),
       passed: verification.status === "passed" && requiredRolesPresent(verification),
+    }),
+    lane("cohost-console", "Cohost role URL opens host console and extends deadline", {
+      capabilityLabel: verification.cohostConsole?.capabilityLabel ?? null,
+      extendDeadlineState:
+        verification.cohostConsole?.extendDeadline?.commandStatus?.state ?? null,
+      extendDeadlinePrincipal:
+        verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id ?? null,
+      passed:
+        verification.cohostConsole?.status === "passed" &&
+        verification.cohostConsole?.capabilityLabel ===
+          `CohostOf(${session?.game ?? ""})` &&
+        verification.cohostConsole?.extendDeadline?.commandStatus?.state === "ack" &&
+        verification.cohostConsole?.extendDeadline?.commandStatus?.requestEnvelope?.body
+          ?.body?.principal_user_id === "cohost_c",
     }),
     lane("core-loop", "Host phase controls and player locked-vote recovery", {
       rejectedVoteError: verification.coreLoop?.rejectedVote?.error ?? null,
@@ -217,7 +233,7 @@ function lane(id, label, evidence) {
 }
 
 function requiredRolesPresent(verification) {
-  return ["host", "player", "actionPlayer", "deniedPlayer"].every((role) =>
+  return ["host", "player", "actionPlayer", "deniedPlayer", "cohost"].every((role) =>
     (verification.roles ?? []).includes(role),
   );
 }
