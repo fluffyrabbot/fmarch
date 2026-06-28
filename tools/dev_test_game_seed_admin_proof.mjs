@@ -30,6 +30,7 @@ const requiredScenarios = [
   "replacement-redeemed-invite-recovery",
   "replacement-session-revocation-recovery",
   "replacement-session-refresh-recovery",
+  "replacement-stale-session-after-refresh",
   "replacement-invalid-target-recovery",
   "replacement-idempotent-retry",
   "replacement-stale-success-recovery",

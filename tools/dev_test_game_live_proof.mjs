@@ -500,6 +500,55 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .apiSessionStatus,
+  401,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .routeErrorStatus,
+  403,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .routeErrorActionHref,
+  "/",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .playerSurfaceVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .controlCounts.primaryButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .controlCounts.actionButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .staleCookie.valuePrefix,
+  "invite-session-",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .freshCredentialKind,
+  "session",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementStaleSessionAfterRefresh
+    .freshRoleUrlHasInvite,
+  false,
+);
+assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.status,
   "passed",
 );

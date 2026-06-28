@@ -1939,6 +1939,7 @@ async function verifySeededReplacementConsole({
     frontendBaseUrl,
   });
   let pendingIncomingPlayer;
+  let replacementSessionRevocation;
   try {
     pendingIncomingPlayer = await verifyPendingReplacementPlayer({
       browser,
@@ -2005,8 +2006,9 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
-    const replacementSessionRevocation =
+    replacementSessionRevocation =
       await verifyReplacementSessionRevocationRecovery({
+        browser,
         replacementSession: hostIssuedInvite.session,
         replacementEntry: pendingIncomingPlayer.replacementEntry,
         game,
@@ -2016,6 +2018,14 @@ async function verifySeededReplacementConsole({
     const replacementSessionRefresh =
       await verifyReplacementSessionRefreshRecovery({
         replacementEntry: pendingIncomingPlayer.replacementEntry,
+        game,
+        apiBaseUrl,
+        frontendBaseUrl,
+      });
+    const replacementStaleSessionAfterRefresh =
+      await verifyReplacementStaleSessionAfterRefresh({
+        staleEntry: replacementSessionRevocation.staleEntry,
+        replacementSessionRefresh,
         game,
         apiBaseUrl,
         frontendBaseUrl,
@@ -2087,7 +2097,17 @@ async function verifySeededReplacementConsole({
       ) !== true ||
       replacementSessionRefresh?.commandState?.actorSlot !== "slot-7" ||
       replacementSessionRefresh?.postStatus?.state !== "ack" ||
-      replacementSessionRefresh?.privateReceiptIsolation?.targetKillVisible !== false
+      replacementSessionRefresh?.privateReceiptIsolation?.targetKillVisible !== false ||
+      replacementStaleSessionAfterRefresh?.status !== "passed" ||
+      replacementStaleSessionAfterRefresh?.apiSessionStatus !== 401 ||
+      replacementStaleSessionAfterRefresh?.routeErrorStatus !== 403 ||
+      replacementStaleSessionAfterRefresh?.playerSurfaceVisible !== false ||
+      replacementStaleSessionAfterRefresh?.controlCounts?.primaryButtons !== 0 ||
+      replacementStaleSessionAfterRefresh?.controlCounts?.actionButtons !== 0 ||
+      replacementStaleSessionAfterRefresh?.freshCredentialKind !== "session" ||
+      replacementStaleSessionAfterRefresh?.freshRoleUrlHasInvite !== false ||
+      replacementStaleSessionAfterRefresh?.staleCookie?.valuePrefix !==
+        "invite-session-"
     ) {
       throw new Error(
         `replacement console proof drifted: ${JSON.stringify({
@@ -2102,8 +2122,10 @@ async function verifySeededReplacementConsole({
           staleOutgoingPlayer,
           staleReplacementAfterSuccess,
           incomingPlayer,
-          replacementSessionRevocation,
+          replacementSessionRevocation:
+            withoutStaleReplacementEntry(replacementSessionRevocation),
           replacementSessionRefresh,
+          replacementStaleSessionAfterRefresh,
         })}`,
       );
     }
@@ -2120,18 +2142,26 @@ async function verifySeededReplacementConsole({
       staleOutgoingPlayer,
       staleReplacementAfterSuccess,
       incomingPlayer,
-      replacementSessionRevocation,
+      replacementSessionRevocation:
+        withoutStaleReplacementEntry(replacementSessionRevocation),
       replacementSessionRefresh,
+      replacementStaleSessionAfterRefresh,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, then granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, then proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere.",
     };
   } finally {
+    await replacementSessionRevocation?.staleEntry?.context.close().catch(() => {});
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
   }
 }
 
 function withoutReplacementEntry(pendingIncomingPlayer) {
   const { replacementEntry, ...serializable } = pendingIncomingPlayer;
+  return serializable;
+}
+
+function withoutStaleReplacementEntry(replacementSessionRevocation) {
+  const { staleEntry, ...serializable } = replacementSessionRevocation;
   return serializable;
 }
 
@@ -2884,6 +2914,7 @@ async function verifyIncomingReplacementPlayer({
 }
 
 async function verifyReplacementSessionRevocationRecovery({
+  browser,
   replacementSession,
   replacementEntry,
   game,
@@ -2903,6 +2934,23 @@ async function verifyReplacementSessionRevocationRecovery({
   const revocation = await revokeAuthSession({
     apiBaseUrl,
     token: sessionCookie.value,
+  });
+  const staleContext = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  await staleContext.addCookies([
+    {
+      name: "fmarch_session",
+      value: sessionCookie.value,
+      url: frontendBaseUrl,
+      httpOnly: sessionCookie.httpOnly,
+      secure: sessionCookie.secure,
+      sameSite: sessionCookie.sameSite,
+    },
+  ]);
+  const stalePage = await staleContext.newPage();
+  await stalePage.goto(replacementSession.directUrl, { waitUntil: "networkidle" });
+  await stalePage.getByTestId("route-error-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
   });
   const revokedPrincipalUserId =
     revocation.principal_user_id ?? revocation.principalUserId ?? null;
@@ -2972,8 +3020,113 @@ async function verifyReplacementSessionRevocationRecovery({
       secure: sessionCookie.secure,
       valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
     },
+    staleEntry: {
+      context: staleContext,
+      page: stalePage,
+      sessionCookie: {
+        value: sessionCookie.value,
+        httpOnly: sessionCookie.httpOnly,
+        sameSite: sessionCookie.sameSite,
+        secure: sessionCookie.secure,
+      },
+      directUrl: replacementSession.directUrl,
+    },
     proof:
       "After the incoming replacement player proved Slot 7 ownership, the same browser session was revoked through /auth/session-revocations; the API rejected the old cookie, and reloading the role path rendered the shared 403 recovery surface without player controls.",
+  };
+}
+
+async function verifyReplacementStaleSessionAfterRefresh({
+  staleEntry,
+  replacementSessionRefresh,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const page = staleEntry?.page;
+  const context = staleEntry?.context;
+  const sessionCookie = staleEntry?.sessionCookie;
+  if (page === undefined || context === undefined || sessionCookie?.value === undefined) {
+    throw new Error("stale replacement session proof requires an open stale browser entry");
+  }
+  const unauthorized = await fetchWithTimeout(
+    `${apiBaseUrl}/auth/session?game=${game}`,
+    {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
+    },
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByTestId("route-error-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const routeErrorStatus = Number(
+    await page.getByTestId("route-error-surface").getAttribute("data-status"),
+  );
+  const routeErrorText = await page.getByTestId("route-error-panel").innerText();
+  const routeErrorActionHref = await page
+    .getByTestId("route-error-action")
+    .getAttribute("href");
+  const playerSurfaceVisible = await page
+    .getByTestId("player-surface")
+    .isVisible()
+    .catch(() => false);
+  const controlCounts = {
+    primaryButtons: await page.locator("[data-action]").count(),
+    actionButtons: await page.locator("[data-template-id]").count(),
+  };
+  const cookies = await context.cookies(frontendBaseUrl);
+  const staleCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+  const freshRoleUrlHasInvite =
+    replacementSessionRefresh?.session?.loginUrl?.includes("invite=") === true;
+  if (
+    replacementSessionRefresh?.status !== "passed" ||
+    unauthorized.status !== 401 ||
+    routeErrorStatus !== 403 ||
+    !routeErrorText.includes(
+      `Game ${game} requires SlotOccupant, ChannelMember, or DeadViewer capability.`,
+    ) ||
+    routeErrorActionHref !== "/" ||
+    playerSurfaceVisible !== false ||
+    controlCounts.primaryButtons !== 0 ||
+    controlCounts.actionButtons !== 0 ||
+    staleCookie?.value !== sessionCookie.value ||
+    replacementSessionRefresh?.session?.credentialKind !== "session" ||
+    freshRoleUrlHasInvite !== false
+  ) {
+    throw new Error(
+      `stale replacement session after refresh drifted: ${JSON.stringify({
+        refreshStatus: replacementSessionRefresh?.status,
+        apiSessionStatus: unauthorized.status,
+        routeErrorStatus,
+        routeErrorText,
+        routeErrorActionHref,
+        playerSurfaceVisible,
+        controlCounts,
+        staleCookiePresent: staleCookie !== undefined,
+        staleCookieValuePrefix: staleCookie?.value?.slice(0, "invite-session-".length),
+        freshCredentialKind: replacementSessionRefresh?.session?.credentialKind,
+        freshRoleUrlHasInvite,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    apiSessionStatus: unauthorized.status,
+    routeErrorStatus,
+    routeErrorActionHref,
+    playerSurfaceVisible,
+    controlCounts,
+    staleCookie: {
+      httpOnly: staleCookie.httpOnly,
+      sameSite: staleCookie.sameSite,
+      secure: staleCookie.secure,
+      valuePrefix: staleCookie.value.slice(0, "invite-session-".length),
+    },
+    freshCredentialKind: replacementSessionRefresh.session.credentialKind,
+    freshRoleUrlHasInvite,
+    proof:
+      "A separate browser context kept the revoked replacement cookie while a fresh replacement session was granted elsewhere; reloading the stale role path still rendered the shared 403 recovery boundary without controls, and the old cookie remained unauthorized.",
   };
 }
 

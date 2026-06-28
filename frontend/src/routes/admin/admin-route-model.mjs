@@ -938,6 +938,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "replacement-redeemed-invite-recovery",
     "replacement-session-revocation-recovery",
     "replacement-session-refresh-recovery",
+    "replacement-stale-session-after-refresh",
     "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",

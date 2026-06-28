@@ -22,6 +22,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-redeemed-invite-recovery",
   "replacement-session-revocation-recovery",
   "replacement-session-refresh-recovery",
+  "replacement-stale-session-after-refresh",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -432,6 +433,56 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.privateReceiptIsolation?.targetKillVisible === false &&
         verification.replacementConsole?.replacementSessionRefresh
           ?.privateReceiptIsolation?.actionResultVisible === false,
+    }),
+    lane("replacement-stale-session-after-refresh", "Stale revoked replacement session stays inert", {
+      apiSessionStatus:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.apiSessionStatus ?? null,
+      routeErrorStatus:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.routeErrorStatus ?? null,
+      routeErrorActionHref:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.routeErrorActionHref ?? null,
+      playerSurfaceVisible:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.playerSurfaceVisible ?? null,
+      primaryButtons:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.controlCounts?.primaryButtons ?? null,
+      actionButtons:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.controlCounts?.actionButtons ?? null,
+      staleCookieValuePrefix:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.staleCookie?.valuePrefix ?? null,
+      freshCredentialKind:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshCredentialKind ?? null,
+      freshRoleUrlHasInvite:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshRoleUrlHasInvite ?? null,
+      passed:
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.status === "passed" &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.apiSessionStatus === 401 &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.routeErrorStatus === 403 &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.routeErrorActionHref === "/" &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.playerSurfaceVisible === false &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.controlCounts?.primaryButtons === 0 &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.controlCounts?.actionButtons === 0 &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.staleCookie?.valuePrefix === "invite-session-" &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshCredentialKind === "session" &&
+        verification.replacementConsole?.replacementStaleSessionAfterRefresh
+          ?.freshRoleUrlHasInvite === false,
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:
