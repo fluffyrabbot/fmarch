@@ -882,6 +882,21 @@ test("session card and markdown include role invite URLs and tokens", () => {
           message: "invalid target",
           retryable: false,
         },
+        activityStatusText: "Reject InvalidTarget: invalid target",
+        activityRow: {
+          source: "outcome",
+          actionId: "process_replacement_invalid_target",
+          dispatchKind: "process_replacement",
+          statusKey: "process_replacement_invalid_target",
+        },
+        dispatchPlan: {
+          finalState: "reject",
+          projectionRefreshKeys: [],
+        },
+        hostProjectionAfterReject: {
+          slotId: "slot-7",
+          occupantLabel: "player-mira",
+        },
         apiSlotAfterReject: {
           slot_id: "slot-7",
           occupant_user_id: "player-mira",

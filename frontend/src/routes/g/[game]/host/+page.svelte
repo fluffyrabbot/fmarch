@@ -144,10 +144,12 @@
     window.__fmarchDropHostLiveProjection = () => {
       connection?.drop?.();
     };
+    window.__fmarchDispatchHostAction = handleDispatch;
     return () => {
       delete window.__fmarchTriggerHostResync;
       delete window.__fmarchCloseHostLiveProjection;
       delete window.__fmarchDropHostLiveProjection;
+      delete window.__fmarchDispatchHostAction;
       connection?.close();
     };
   });

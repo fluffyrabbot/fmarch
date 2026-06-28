@@ -2141,19 +2141,65 @@ async function verifyInvalidReplacementRecovery({
   apiBaseUrl,
   frontendBaseUrl,
 }) {
-  const invalidReplacement = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
-    commandId: crypto.randomUUID(),
-    command: {
-      ProcessReplacement: {
-        game,
-        slot: "slot-7",
-        outgoing_user: "player-rowan",
-        incoming_user: "player-rowan",
-      },
+  const invalidActionId = "process_replacement_invalid_target";
+  await hostPage.evaluate(
+    async ({ actionId, gameId }) => {
+      await window.__fmarchDispatchHostAction?.({
+        type: "host-action/dispatch",
+        actionId,
+        label: "Invalid replacement",
+        objectLabel: "Slot 7 / player-rowan",
+        outcomeLabel: "Reject invalid replacement",
+        payload: {
+          kind: "process_replacement",
+          gameId,
+          slotId: "slot-7",
+          outgoingPlayerId: "player-rowan",
+          incomingPlayerId: "player-rowan",
+        },
+        confirmationTrace: {
+          kind: "confirmation-command-trace",
+          confirmationKind: "confirmation-action",
+          surface: "moderator-host",
+          actionId,
+          statusKey: actionId,
+          dispatchKind: "process_replacement",
+        },
+      });
     },
-  });
+    { actionId: invalidActionId, gameId: game },
+  );
+  await hostPage.waitForFunction(
+    (actionId) =>
+      window.__fmarchHostCommandStatuses?.[actionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[actionId]?.error === "InvalidTarget",
+    invalidActionId,
+  );
+  const invalidReplacement = await hostPage.evaluate(
+    (actionId) => window.__fmarchHostCommandStatuses?.[actionId],
+    invalidActionId,
+  );
+  const commandOutcomes = await hostPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const activityStatusText = await hostPage
+    .getByTestId(`host-command-activity-status-${invalidActionId}`)
+    .innerText();
+  const activityRow = await hostPage
+    .getByTestId(`host-command-activity-${invalidActionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      statusKey: node.getAttribute("data-confirmation-status-key"),
+    }));
+  const dispatchPlan = await hostPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
   const reject = invalidReplacement.serverEnvelope?.body?.body ?? null;
+  const hostProjectionAfterReject = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
   const apiStateAfterReject = await fetchHostConsoleState({
     apiBaseUrl,
     game,
@@ -2174,10 +2220,19 @@ async function verifyInvalidReplacementRecovery({
 
   if (
     invalidReplacement.serverEnvelope?.body?.kind !== "Reject" ||
+    invalidReplacement.actionId !== invalidActionId ||
     reject?.error !== "InvalidTarget" ||
     invalidReplacement.requestEnvelope?.body?.body?.principal_user_id !== "host_h" ||
     invalidReplacement.requestEnvelope?.body?.body?.command?.ProcessReplacement
       ?.outgoing_user !== "player-rowan" ||
+    commandOutcomes.some((outcome) => outcome.actionId === invalidActionId) !== true ||
+    !activityStatusText.includes("Reject InvalidTarget") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== invalidActionId ||
+    activityRow.dispatchKind !== "process_replacement" ||
+    dispatchPlan?.finalState !== "reject" ||
+    dispatchPlan?.projectionRefreshKeys?.length !== 0 ||
+    hostProjectionAfterReject?.occupantLabel !== "player-mira" ||
     apiSlotAfterReject?.slot_id !== "slot-7" ||
     apiSlotAfterReject?.occupant_user_id !== "player-mira" ||
     pendingAfterReject.principalUserId !== "player-rowan" ||
@@ -2191,6 +2246,11 @@ async function verifyInvalidReplacementRecovery({
     throw new Error(
       `invalid replacement recovery drifted: ${JSON.stringify({
         invalidReplacement,
+        commandOutcomes,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        hostProjectionAfterReject,
         apiSlotAfterReject,
         pendingAfterReject,
       })}`,
@@ -2201,10 +2261,15 @@ async function verifyInvalidReplacementRecovery({
     status: "passed",
     invalidReplacement,
     reject,
+    commandOutcomes,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    hostProjectionAfterReject,
     apiSlotAfterReject,
     pendingAfterReject,
     proof:
-      "An invalid host ProcessReplacement with a stale outgoing user rejected as InvalidTarget, left Slot 7 owned by player-mira, and left the host-issued player-rowan URL pending with no SlotOccupant authority or controls.",
+      "An invalid host ProcessReplacement with a stale outgoing user rejected as InvalidTarget, rendered a host command-activity recovery receipt, left Slot 7 owned by player-mira, and left the host-issued player-rowan URL pending with no SlotOccupant authority or controls.",
   };
 }
 

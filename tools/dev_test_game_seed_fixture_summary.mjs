@@ -287,7 +287,7 @@ function demoScenarios({ roles, laneIds }) {
       title: "Invalid replacement recovery",
       role: "replacementPlayer",
       provenBy: ["replacement-invalid-target-recovery"].filter(hasLane),
-      note: "Host sends a stale replacement command with the wrong outgoing user, receives InvalidTarget, and the incoming replacement URL stays pending without slot authority or controls.",
+      note: "Host sends a stale replacement command with the wrong outgoing user, receives a visible InvalidTarget command-activity receipt, and the incoming replacement URL stays pending without slot authority or controls.",
     }),
     scenario({
       id: "replacement-stale-player",

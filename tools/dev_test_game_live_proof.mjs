@@ -388,6 +388,36 @@ assert.equal(
     .occupant_user_id,
   "player-mira",
 );
+assert.match(
+  session.verification.replacementConsole.invalidReplacementRecovery.activityStatusText,
+  /Reject InvalidTarget/,
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.activityRow.source,
+  "outcome",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.activityRow.actionId,
+  "process_replacement_invalid_target",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.activityRow.dispatchKind,
+  "process_replacement",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.dispatchPlan.finalState,
+  "reject",
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery.dispatchPlan
+    .projectionRefreshKeys.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.invalidReplacementRecovery
+    .hostProjectionAfterReject.occupantLabel,
+  "player-mira",
+);
 assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.pendingAfterReject
     .principalUserId,

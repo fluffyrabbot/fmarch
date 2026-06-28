@@ -314,6 +314,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
       apiOccupant:
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
           ?.occupant_user_id ?? null,
+      hostActivityStatus:
+        verification.replacementConsole?.invalidReplacementRecovery?.activityStatusText ??
+        null,
+      hostActivityAction:
+        verification.replacementConsole?.invalidReplacementRecovery?.activityRow
+          ?.actionId ?? null,
+      hostProjectionOccupant:
+        verification.replacementConsole?.invalidReplacementRecovery
+          ?.hostProjectionAfterReject?.occupantLabel ?? null,
       pendingActorStatus:
         verification.replacementConsole?.invalidReplacementRecovery?.pendingAfterReject
           ?.commandState?.actorStatus ?? null,
@@ -334,6 +343,20 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.invalidReplacementRecovery?.invalidReplacement
           ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
           "player-rowan" &&
+        verification.replacementConsole?.invalidReplacementRecovery
+          ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
+        verification.replacementConsole?.invalidReplacementRecovery?.activityRow
+          ?.source === "outcome" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.activityRow
+          ?.actionId === "process_replacement_invalid_target" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.activityRow
+          ?.dispatchKind === "process_replacement" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.dispatchPlan
+          ?.finalState === "reject" &&
+        verification.replacementConsole?.invalidReplacementRecovery?.dispatchPlan
+          ?.projectionRefreshKeys?.length === 0 &&
+        verification.replacementConsole?.invalidReplacementRecovery
+          ?.hostProjectionAfterReject?.occupantLabel === "player-mira" &&
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
           ?.slot_id === "slot-7" &&
         verification.replacementConsole?.invalidReplacementRecovery?.apiSlotAfterReject
