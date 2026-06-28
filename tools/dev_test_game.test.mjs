@@ -628,6 +628,29 @@ test("session card and markdown include role invite URLs and tokens", () => {
       resolvedTargetSlot: { alive: false },
       d02Phase: { phaseId: "D02" },
     },
+    invalidActionRecovery: {
+      status: "passed",
+      proof: "invalid action receipt kept legal action available",
+      reject: {
+        state: "reject",
+        error: "InvalidTarget",
+        message: "Reject InvalidTarget: invalid target",
+      },
+      commandState: {
+        phase: { phaseId: "N01" },
+        actions: [{ templateId: "factional_kill" }],
+      },
+      legalActionVisible: true,
+      currentReceipt: {
+        actionId: "submit_invalid_action:factional_kill",
+        state: "reject",
+        message: "Reject InvalidTarget: invalid target",
+        commandTrace: {
+          projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
+        },
+      },
+      receiptStatusText: "Reject InvalidTarget: invalid target",
+    },
     resolutionReceipts: {
       status: "passed",
       proof: "target player saw death notice and other players did not",
@@ -830,6 +853,9 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
+  assert(markdown.includes("## Invalid Action Recovery Proof"));
+  assert(markdown.includes("Receipt: Reject InvalidTarget: invalid target"));
+  assert(markdown.includes("Legal action visible: true"));
   assert(markdown.includes("## Resolution Receipt Proof"));
   assert(markdown.includes("Target notice: player_killed factional_kill"));
   assert(markdown.includes("Normal player notice leaked: false"));
@@ -864,6 +890,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "cohost-console",
       "core-loop",
       "action-loop",
+      "invalid-action-recovery",
       "resolution-receipts",
       "dead-player-recovery",
       "player-action-boundary",
@@ -945,7 +972,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 14);
+  assert.equal(opsArtifacts.proofRun.laneCount, 15);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1009,6 +1036,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "cohost-deadline-control",
       "player-vote-recovery",
       "player-action-denied",
+      "invalid-action-recovery",
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
@@ -1370,6 +1398,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [
         "core-loop",
         "action-loop",
+        "invalid-action-recovery",
         "resolution-receipts",
         "dead-player-recovery",
         "player-action-boundary",
@@ -1475,6 +1504,7 @@ function seedAdminProofFixture() {
         "cohost-deadline-control",
         "player-vote-recovery",
         "player-action-denied",
+        "invalid-action-recovery",
         "resolution-receipt",
         "dead-player-recovery",
         "night-action-loop",

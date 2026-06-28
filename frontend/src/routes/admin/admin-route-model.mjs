@@ -857,6 +857,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   const requiredLaneIds = [
     "core-loop",
     "action-loop",
+    "invalid-action-recovery",
     "resolution-receipts",
     "dead-player-recovery",
     "player-action-boundary",

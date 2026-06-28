@@ -18,6 +18,7 @@ const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
 const requiredChecks = [
   "core-loop",
   "action-loop",
+  "invalid-action-recovery",
   "resolution-receipts",
   "dead-player-recovery",
   "player-action-boundary",

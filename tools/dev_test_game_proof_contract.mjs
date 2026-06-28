@@ -12,6 +12,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-console",
   "core-loop",
   "action-loop",
+  "invalid-action-recovery",
   "resolution-receipts",
   "dead-player-recovery",
   "player-action-boundary",
@@ -88,6 +89,34 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
+    }),
+    lane("invalid-action-recovery", "Invalid action reject keeps legal controls usable", {
+      rejectError: verification.invalidActionRecovery?.reject?.error ?? null,
+      receiptActionId: verification.invalidActionRecovery?.currentReceipt?.actionId ?? null,
+      receiptState: verification.invalidActionRecovery?.currentReceipt?.state ?? null,
+      phase: verification.invalidActionRecovery?.commandState?.phase?.phaseId ?? null,
+      actionCount: verification.invalidActionRecovery?.commandState?.actions?.length ?? null,
+      legalActionVisible: verification.invalidActionRecovery?.legalActionVisible ?? null,
+      refreshKeys:
+        verification.invalidActionRecovery?.currentReceipt?.commandTrace
+          ?.projectionRefreshKeys ?? null,
+      passed:
+        verification.invalidActionRecovery?.status === "passed" &&
+        verification.invalidActionRecovery?.reject?.error === "InvalidTarget" &&
+        verification.invalidActionRecovery?.currentReceipt?.actionId ===
+          "submit_invalid_action:factional_kill" &&
+        verification.invalidActionRecovery?.currentReceipt?.state === "reject" &&
+        verification.invalidActionRecovery?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        verification.invalidActionRecovery?.commandState?.phase?.phaseId === "N01" &&
+        verification.invalidActionRecovery?.commandState?.actions?.some(
+          (action) => action.templateId === "factional_kill",
+        ) === true &&
+        verification.invalidActionRecovery?.legalActionVisible === true &&
+        verification.invalidActionRecovery?.receiptStatusText?.includes(
+          "Reject InvalidTarget",
+        ) === true,
     }),
     lane("resolution-receipts", "Role-scoped resolution receipts after night kill", {
       targetSlot: verification.resolutionReceipts?.targetSlot ?? null,

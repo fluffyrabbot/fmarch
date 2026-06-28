@@ -554,7 +554,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 14,
+    laneCount: 15,
     roleCount: 6,
     releaseReady: false,
     productionReady: false,
@@ -872,7 +872,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 5,
-    laneCount: 14,
+    laneCount: 15,
     releaseReady: false,
     productionReady: false,
   });
@@ -887,7 +887,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
   const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
   assert.equal(coreLoop.label, "Local core loop");
-  assert.equal(coreLoop.status, "6 core loop lanes passed");
+  assert.equal(coreLoop.status, "7 core loop lanes passed");
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
   assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
   assert.deepEqual(
@@ -895,6 +895,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     [
       "core-loop",
       "action-loop",
+      "invalid-action-recovery",
       "resolution-receipts",
       "dead-player-recovery",
       "player-action-boundary",
@@ -904,7 +905,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 5,
-    laneCount: 14,
+    laneCount: 15,
     releaseReady: false,
     productionReady: false,
   });
@@ -921,12 +922,13 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
-  assert.equal(data.audit.checks.length, 6);
+  assert.equal(data.audit.checks.length, 7);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["core-loop", "passed"],
       ["action-loop", "passed"],
+      ["invalid-action-recovery", "passed"],
       ["resolution-receipts", "passed"],
       ["dead-player-recovery", "passed"],
       ["player-action-boundary", "passed"],
@@ -992,7 +994,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "11 demo scenarios available locally");
+  assert.equal(seed.status, "12 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1002,6 +1004,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "cohost-deadline-control",
       "player-vote-recovery",
       "player-action-denied",
+      "invalid-action-recovery",
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
@@ -1013,7 +1016,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 11,
+    scenarioCount: 12,
     roleCount: 6,
     slotCount: 5,
     releaseReady: false,
@@ -1032,7 +1035,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 11);
+  assert.equal(data.audit.scenarios.length, 12);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1040,6 +1043,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["cohost-deadline-control", "available_locally"],
       ["player-vote-recovery", "available_locally"],
       ["player-action-denied", "available_locally"],
+      ["invalid-action-recovery", "available_locally"],
       ["resolution-receipt", "available_locally"],
       ["dead-player-recovery", "available_locally"],
       ["night-action-loop", "available_locally"],
@@ -1323,6 +1327,7 @@ function proofRunFixture() {
     "cohost-console",
     "core-loop",
     "action-loop",
+    "invalid-action-recovery",
     "resolution-receipts",
     "dead-player-recovery",
     "player-action-boundary",
@@ -1368,7 +1373,7 @@ function localOpsArtifactsFixture() {
       roleCount: 6,
     },
     proofRun: {
-      laneCount: 14,
+      laneCount: 15,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
@@ -1404,6 +1409,7 @@ function seedFixtureSummaryFixture() {
       seedScenario("cohost-deadline-control", "Cohost deadline control", "cohost"),
       seedScenario("player-vote-recovery", "Player vote recovery", "player"),
       seedScenario("player-action-denied", "Player action denied", "player"),
+      seedScenario("invalid-action-recovery", "Invalid action recovery", "actionPlayer"),
       seedScenario("resolution-receipt", "Resolution receipt", "deniedPlayer"),
       seedScenario("dead-player-recovery", "Dead player recovery", "deniedPlayer"),
       seedScenario("night-action-loop", "Night action loop", "actionPlayer"),

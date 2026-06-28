@@ -151,6 +151,31 @@ assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.n01Phase.phaseId, "N01");
 assert.equal(session.verification.actionLoop.invalidAction.state, "reject");
 assert.equal(session.verification.actionLoop.invalidAction.error, "InvalidTarget");
+assert.equal(session.verification.invalidActionRecovery.status, "passed");
+assert.equal(session.verification.invalidActionRecovery.reject.error, "InvalidTarget");
+assert.equal(
+  session.verification.invalidActionRecovery.currentReceipt.actionId,
+  "submit_invalid_action:factional_kill",
+);
+assert.equal(session.verification.invalidActionRecovery.currentReceipt.state, "reject");
+assert.equal(
+  session.verification.invalidActionRecovery.currentReceipt.commandTrace.projectionRefreshKeys.includes(
+    "commandState",
+  ),
+  true,
+);
+assert.equal(session.verification.invalidActionRecovery.commandState.phase.phaseId, "N01");
+assert.equal(
+  session.verification.invalidActionRecovery.commandState.actions.some(
+    (action) => action.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(session.verification.invalidActionRecovery.legalActionVisible, true);
+assert.match(
+  session.verification.invalidActionRecovery.receiptStatusText,
+  /Reject InvalidTarget/,
+);
 assert.equal(session.verification.actionLoop.legalAction.state, "ack");
 assert.equal(
   session.verification.actionLoop.legalAction.requestEnvelope.body.body.command.SubmitAction

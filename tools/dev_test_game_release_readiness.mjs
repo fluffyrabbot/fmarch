@@ -192,6 +192,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [
         "core-loop",
         "action-loop",
+        "invalid-action-recovery",
         "resolution-receipts",
         "dead-player-recovery",
         "player-action-boundary",
@@ -643,6 +644,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
     "action-loop",
+    "invalid-action-recovery",
     "resolution-receipts",
     "dead-player-recovery",
     "player-action-boundary",
@@ -884,6 +886,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "invalid-action-recovery",
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",
@@ -948,6 +951,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "invalid-action-recovery",
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",

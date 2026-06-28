@@ -273,7 +273,38 @@ test("player route controller refreshes command state after stale phase rejects"
   );
 });
 
-test("player route controller preserves non-phase reject outcomes without refresh", async () => {
+test("player route controller refreshes action state after invalid target rejects", async () => {
+  const refreshed = [];
+  const result = await submitPlayerRouteCommand({
+    action: "submit_invalid_action:factional_kill",
+    composerBody: "",
+    data: fixtureData(),
+    fetchImpl: async () => null,
+    projectionStore: fakeProjectionStore({
+      refresh: async (keys) => {
+        refreshed.push(keys);
+      },
+    }),
+    sendCommandImpl: async () => ({
+      state: "reject",
+      error: "InvalidTarget",
+      message: "Reject InvalidTarget",
+    }),
+  });
+
+  assert.deepEqual(refreshed, [["notifications", "investigationResults", "commandState"]]);
+  assert.equal(result.commandStatus.message, "Reject InvalidTarget");
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_invalid_action:factional_kill",
+      commandStatus: { state: "reject", error: "InvalidTarget" },
+    }),
+    ["notifications", "investigationResults", "commandState"],
+  );
+});
+
+test("player route controller preserves unrelated non-phase rejects without refresh", async () => {
   const refreshed = [];
   const result = await submitPlayerRouteCommand({
     action: "withdraw_vote",
@@ -507,6 +538,13 @@ function fixtureData(overrides = {}) {
           actionId: "browser_factional_kill_n01",
           templateId: "factional_kill",
           targets: ["slot-2"],
+        },
+        {
+          action: "submit_invalid_action:factional_kill",
+          commandKind: "submit_invalid_action",
+          actionId: "invalid_self_factional_kill",
+          templateId: "factional_kill",
+          targets: ["slot-7"],
         },
       ],
     },

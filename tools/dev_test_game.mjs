@@ -565,6 +565,22 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.invalidActionRecovery !== undefined) {
+      lines.push(
+        "## Invalid Action Recovery Proof",
+        "",
+        `Status: ${card.verification.invalidActionRecovery.status}`,
+        "",
+        `Proof: ${card.verification.invalidActionRecovery.proof}`,
+        "",
+        `Reject: ${card.verification.invalidActionRecovery.reject.message}`,
+        "",
+        `Receipt: ${card.verification.invalidActionRecovery.currentReceipt.message}`,
+        "",
+        `Legal action visible: ${card.verification.invalidActionRecovery.legalActionVisible}`,
+        "",
+      );
+    }
     if (card.verification.resolutionReceipts !== undefined) {
       lines.push(
         "## Resolution Receipt Proof",
@@ -661,6 +677,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let privateChannel;
   let actionLoop;
+  let invalidActionRecovery;
   let resolutionReceipts;
   let deadPlayerRecovery;
   let playerActionBoundary;
@@ -703,6 +720,7 @@ async function verifySessionCard(card) {
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
+    invalidActionRecovery = actionLoop.invalidActionRecovery;
     resolutionReceipts = actionLoop.resolutionReceipts;
     deadPlayerRecovery = actionLoop.deadPlayerRecovery;
     playerActionBoundary = actionLoop.playerActionBoundary;
@@ -728,6 +746,7 @@ async function verifySessionCard(card) {
     coreLoop,
     privateChannel,
     actionLoop,
+    invalidActionRecovery,
     resolutionReceipts,
     deadPlayerRecovery,
     playerActionBoundary,
@@ -943,13 +962,10 @@ async function verifySeededActionLoop({
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
   const staleActionSetup = await freezeStaleActionPage({ staleActionPage, game });
-  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').click();
-  await actionPage.waitForFunction(
-    () =>
-      window.__fmarchPlayerCommandStatus?.state === "reject" &&
-      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget",
-  );
-  const invalidAction = await actionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const invalidActionRecovery = await verifySeededInvalidActionRecovery({
+    actionPage,
+  });
+  const invalidAction = invalidActionRecovery.reject;
 
   await actionPage.locator('[data-action="submit_action:factional_kill"]').click();
   await actionPage.waitForFunction(
@@ -1010,6 +1026,7 @@ async function verifySeededActionLoop({
     advanceNight,
     n01Phase,
     invalidAction,
+    invalidActionRecovery,
     legalAction,
     playerActionBoundary,
     resolutionReceipts,
@@ -1022,6 +1039,63 @@ async function verifySeededActionLoop({
     staleActionConflict,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function verifySeededInvalidActionRecovery({ actionPage }) {
+  await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').click();
+  await actionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget",
+  );
+  const reject = await actionPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  await actionPage.waitForFunction(
+    () =>
+      Array.isArray(window.__fmarchPlayerProjection?.commandState?.actions) &&
+      window.__fmarchPlayerProjection.commandState.actions.some(
+        (action) => action.templateId === "factional_kill",
+      ),
+  );
+  const commandState = await actionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const legalActionVisible = await actionPage
+    .locator('[data-action="submit_action:factional_kill"]')
+    .isVisible();
+  const currentReceipt = await actionPage.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await actionPage.getByTestId("player-command-status").innerText();
+  if (
+    reject?.error !== "InvalidTarget" ||
+    commandState?.phase?.phaseId !== "N01" ||
+    !commandState?.actions?.some((action) => action.templateId === "factional_kill") ||
+    legalActionVisible !== true ||
+    currentReceipt?.actionId !== "submit_invalid_action:factional_kill" ||
+    currentReceipt?.state !== "reject" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !== true ||
+    !receiptStatusText.includes("Reject InvalidTarget")
+  ) {
+    throw new Error(
+      `invalid action recovery drifted: ${JSON.stringify({
+        reject,
+        commandState,
+        legalActionVisible,
+        currentReceipt,
+        receiptStatusText,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    reject,
+    commandState,
+    legalActionVisible,
+    currentReceipt,
+    receiptStatusText,
+    proof:
+      "The action-player role URL submitted the seeded invalid self-action, rendered a current InvalidTarget command receipt, refreshed commandState, and kept the legal factional_kill action available without advancing phase.",
   };
 }
 

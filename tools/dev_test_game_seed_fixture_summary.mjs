@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 11,
+        scenarioCount: 12,
       },
       {
         id: "proof-lanes-carried",
@@ -152,6 +152,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "invalid-action-recovery",
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",
@@ -225,6 +226,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["browser-entry", "player-action-boundary"].filter(hasLane),
       note: "Player keeps private-channel capability but does not see factional_kill, and a direct factional_kill SubmitAction rejects through /commands.",
+    }),
+    scenario({
+      id: "invalid-action-recovery",
+      title: "Invalid action recovery",
+      role: "actionPlayer",
+      provenBy: ["browser-entry", "invalid-action-recovery"].filter(hasLane),
+      note: "Action player submits the seeded invalid self-action, sees a current InvalidTarget receipt, refreshes command state, and keeps the legal factional_kill control available.",
     }),
     scenario({
       id: "resolution-receipt",
