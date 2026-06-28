@@ -674,6 +674,75 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   );
 });
 
+test("admin route data exposes local proof freshness as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofFreshness: proofFreshnessFixture(),
+  });
+
+  const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
+  assert.equal(freshness.label, "Local proof freshness");
+  assert.equal(freshness.status, "10 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    freshness.inspectHref,
+    "/admin/audit/local-proof-freshness?game=midsummer",
+  );
+  assert.deepEqual(
+    freshness.checks.map((check) => check.id),
+    [
+      "session",
+      "proof-run",
+      "backup-restore",
+      "ops-artifacts",
+      "seed-fixture",
+      "release-readiness",
+      "identity-adapter",
+      "spine-manifest",
+      "admin-spine",
+      "admin-spine-admin",
+    ],
+  );
+  assert.deepEqual(freshness.artifactSummary, {
+    artifactCount: 10,
+    freshCount: 10,
+    staleCount: 0,
+    missingCount: 0,
+    maxAgeHours: 24,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local proof freshness detail data carries stale and missing rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-proof-freshness",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofFreshness: proofFreshnessFixture({
+      status: "blocked",
+      artifacts: [
+        freshnessArtifact("session", "fresh"),
+        freshnessArtifact("proof-run", "stale"),
+        freshnessArtifact("backup-restore", "missing"),
+      ],
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local proof freshness");
+  assert.equal(data.audit.id, "local-proof-freshness");
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["session", "fresh"],
+      ["proof-run", "stale"],
+      ["backup-restore", "missing"],
+    ],
+  );
+});
+
 test("admin route data exposes local hardening proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1269,6 +1338,60 @@ function spineManifestFixture() {
         productionReady: false,
       },
     ],
+  };
+}
+
+function proofFreshnessFixture({
+  status = "passed",
+  artifacts = [
+    freshnessArtifact("session", "fresh"),
+    freshnessArtifact("proof-run", "fresh"),
+    freshnessArtifact("backup-restore", "fresh"),
+    freshnessArtifact("ops-artifacts", "fresh"),
+    freshnessArtifact("seed-fixture", "fresh"),
+    freshnessArtifact("release-readiness", "fresh"),
+    freshnessArtifact("identity-adapter", "fresh"),
+    freshnessArtifact("spine-manifest", "fresh"),
+    freshnessArtifact("admin-spine", "fresh"),
+    freshnessArtifact("admin-spine-admin", "fresh"),
+  ],
+} = {}) {
+  const summary = {
+    artifactCount: artifacts.length,
+    freshCount: artifacts.filter((artifact) => artifact.status === "fresh").length,
+    staleCount: artifacts.filter((artifact) => artifact.status === "stale").length,
+    missingCount: artifacts.filter((artifact) => artifact.status === "missing").length,
+  };
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-freshness",
+    status,
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-proof-freshness",
+    proofBoundary: "Local proof freshness dashboard.",
+    maxAgeHours: 24,
+    maxAgeSeconds: 86400,
+    summary,
+    artifacts,
+  };
+}
+
+function freshnessArtifact(id, status) {
+  return {
+    id,
+    label: id,
+    path: `target/dev-test-game/${id}.json`,
+    status,
+    maxAgeSeconds: 86400,
+    ...(status === "missing"
+      ? {}
+      : {
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: status === "fresh" ? 120 : 172800,
+          sizeBytes: 42,
+        }),
   };
 }
 

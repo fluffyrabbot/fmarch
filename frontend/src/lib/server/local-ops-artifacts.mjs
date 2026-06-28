@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
@@ -12,6 +12,72 @@ const DEFAULT_IDENTITY_ADAPTER_PROOF =
   "target/auth-invite-role-proof/invite-role-proof.json";
 const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
 const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
+const DEFAULT_ADMIN_SPINE_ADMIN_PROOF =
+  "target/dev-test-game/admin-spine-admin-proof.json";
+const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
+
+const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
+  Object.freeze({
+    id: "session",
+    label: "Dev test-game session",
+    env: "FMARCH_DEV_TEST_GAME_SESSION",
+    fallback: "target/dev-test-game/session.json",
+  }),
+  Object.freeze({
+    id: "proof-run",
+    label: "Dev test-game proof run",
+    env: "FMARCH_DEV_TEST_GAME_PROOF_RUN",
+    fallback: DEFAULT_DEV_TEST_GAME_PROOF_RUN,
+  }),
+  Object.freeze({
+    id: "backup-restore",
+    label: "Backup restore proof",
+    env: "FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF",
+    fallback: DEFAULT_BACKUP_RESTORE_PROOF,
+  }),
+  Object.freeze({
+    id: "ops-artifacts",
+    label: "Ops artifacts",
+    env: "FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS",
+    fallback: DEFAULT_OPS_ARTIFACTS,
+  }),
+  Object.freeze({
+    id: "seed-fixture",
+    label: "Seed fixture summary",
+    env: "FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY",
+    fallback: DEFAULT_SEED_FIXTURE_SUMMARY,
+  }),
+  Object.freeze({
+    id: "release-readiness",
+    label: "Release readiness checklist",
+    env: "FMARCH_DEV_TEST_GAME_RELEASE_READINESS",
+    fallback: DEFAULT_RELEASE_READINESS_CHECKLIST,
+  }),
+  Object.freeze({
+    id: "identity-adapter",
+    label: "Identity adapter proof",
+    env: "FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF",
+    fallback: DEFAULT_IDENTITY_ADAPTER_PROOF,
+  }),
+  Object.freeze({
+    id: "spine-manifest",
+    label: "Spine manifest",
+    env: "FMARCH_DEV_TEST_GAME_SPINE_MANIFEST",
+    fallback: DEFAULT_SPINE_MANIFEST,
+  }),
+  Object.freeze({
+    id: "admin-spine",
+    label: "Admin spine proof",
+    env: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF",
+    fallback: DEFAULT_ADMIN_SPINE_PROOF,
+  }),
+  Object.freeze({
+    id: "admin-spine-admin",
+    label: "Admin spine role proof",
+    env: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF",
+    fallback: DEFAULT_ADMIN_SPINE_ADMIN_PROOF,
+  }),
+]);
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
@@ -71,6 +137,48 @@ export async function readLocalAdminSpineProof({ env = process.env } = {}) {
   });
 }
 
+export async function readLocalProofFreshness({
+  env = process.env,
+  now = new Date(),
+} = {}) {
+  const maxAgeHours = Number.parseFloat(
+    env.FMARCH_DEV_TEST_GAME_FRESHNESS_MAX_ARTIFACT_AGE_HOURS ??
+      String(DEFAULT_MAX_ARTIFACT_AGE_HOURS),
+  );
+  if (!Number.isFinite(maxAgeHours) || maxAgeHours <= 0) {
+    return null;
+  }
+  const maxAgeSeconds = Math.round(maxAgeHours * 60 * 60);
+  const artifacts = await Promise.all(
+    LOCAL_PROOF_FRESHNESS_ARTIFACTS.map((artifact) =>
+      summarizeArtifactFreshness({ artifact, env, now, maxAgeSeconds }),
+    ),
+  );
+  const freshCount = artifacts.filter((artifact) => artifact.status === "fresh").length;
+  const staleCount = artifacts.filter((artifact) => artifact.status === "stale").length;
+  const missingCount = artifacts.filter((artifact) => artifact.status === "missing").length;
+  return Object.freeze({
+    version: 1,
+    proof: "dev-test-game-proof-freshness",
+    status: staleCount === 0 && missingCount === 0 ? "passed" : "blocked",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: now.toISOString(),
+    scope: "local-dev-test-game-proof-freshness",
+    proofBoundary:
+      "Local proof freshness dashboard for generated dev-test-game artifacts. It checks file presence and mtime age only; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+    maxAgeHours,
+    maxAgeSeconds,
+    summary: Object.freeze({
+      artifactCount: artifacts.length,
+      freshCount,
+      staleCount,
+      missingCount,
+    }),
+    artifacts: Object.freeze(artifacts),
+  });
+}
+
 async function readLocalJsonArtifact({ pathValue, fallback }) {
   const artifactPath =
     typeof pathValue === "string" && pathValue.trim() !== "" ? pathValue : fallback;
@@ -80,4 +188,36 @@ async function readLocalJsonArtifact({ pathValue, fallback }) {
   } catch {
     return null;
   }
+}
+
+async function summarizeArtifactFreshness({ artifact, env, now, maxAgeSeconds }) {
+  const artifactPath = artifactPathForEnv({ env, name: artifact.env, fallback: artifact.fallback });
+  const resolved = path.resolve(process.cwd(), artifactPath);
+  try {
+    const metadata = await stat(resolved);
+    const ageSeconds = Math.max(0, Math.round((now.getTime() - metadata.mtime.getTime()) / 1000));
+    return Object.freeze({
+      id: artifact.id,
+      label: artifact.label,
+      path: artifactPath,
+      status: ageSeconds <= maxAgeSeconds ? "fresh" : "stale",
+      mtime: metadata.mtime.toISOString(),
+      ageSeconds,
+      maxAgeSeconds,
+      sizeBytes: metadata.size,
+    });
+  } catch {
+    return Object.freeze({
+      id: artifact.id,
+      label: artifact.label,
+      path: artifactPath,
+      status: "missing",
+      maxAgeSeconds,
+    });
+  }
+}
+
+function artifactPathForEnv({ env, name, fallback }) {
+  const value = env[name];
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
 }

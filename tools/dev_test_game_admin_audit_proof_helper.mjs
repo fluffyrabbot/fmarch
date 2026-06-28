@@ -94,6 +94,7 @@ export async function proveAdminAuditDetail({
   game,
   auditId,
   requiredChecks = [],
+  requiredCheckStatuses = {},
   requiredScenarios = [],
   requiredSessions = [],
   requiredUnproven = [],
@@ -139,6 +140,7 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-check",
       ids: requiredChecks,
+      expectedStatuses: requiredCheckStatuses,
     });
     const visibleScenarios = await waitForRows({
       page,
@@ -184,13 +186,21 @@ export async function proveAdminAuditDetail({
   }
 }
 
-async function waitForRows({ page, prefix, ids }) {
+async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
   const visible = [];
   for (const id of ids) {
-    await page.getByTestId(`${prefix}-${id}`).waitFor({
+    const row = page.getByTestId(`${prefix}-${id}`);
+    await row.waitFor({
       state: "visible",
       timeout: 15000,
     });
+    const expectedStatus = expectedStatuses[id];
+    if (expectedStatus !== undefined) {
+      const text = await row.innerText();
+      if (!text.includes(expectedStatus)) {
+        throw new Error(`${prefix}-${id} missing status ${expectedStatus}: ${text}`);
+      }
+    }
     visible.push(id);
   }
   return visible;

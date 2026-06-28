@@ -95,6 +95,7 @@ target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
 target/dev-test-game/spine-manifest-admin-proof.json
 target/dev-test-game/admin-spine-admin-proof.json
+target/dev-test-game/proof-freshness-admin-proof.json
 target/auth-invite-role-proof/invite-role-proof.json
 target/live-stack-backup-restore-drill/local-backup-restore-proof.json
 target/live-stack-backup-restore-drill/local-live-stack.dump
@@ -172,6 +173,12 @@ The seeded admin overview-to-local-admin-spine detail browser proof is:
 
 ```sh
 npm run test:dev-test-game-admin-spine-admin-proof
+```
+
+The seeded admin overview-to-local-proof-freshness detail browser proof is:
+
+```sh
+npm run test:dev-test-game-proof-freshness-admin-proof
 ```
 
 The generated spine manifest, which records proof command order and evidence
@@ -325,7 +332,10 @@ proof order and evidence env wiring are inspectable from the seeded admin role
 surface without reading the orchestration code. It also writes
 `target/dev-test-game/admin-spine-admin-proof.json`, proving the aggregate
 `admin-spine-proof.json` is itself inspectable from the seeded admin overview in
-the native local-admin-spine detail route.
+the native local-admin-spine detail route. Finally, it writes
+`target/dev-test-game/proof-freshness-admin-proof.json`, proving the generated
+artifact freshness dashboard is reachable from the seeded admin overview and
+shows the current local proof bundle as fresh before the run is treated as green.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

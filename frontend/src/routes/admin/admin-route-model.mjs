@@ -28,6 +28,7 @@ export async function buildAdminRouteData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  proofFreshness = null,
 }) {
   const access = resolveSurfaceAccess({
     surface: "admin",
@@ -125,37 +126,41 @@ export async function buildAdminRouteData({
     ]),
     ...coldData,
     audit: withAdminAuditInspectLinks(
-      appendLocalAdminSpineAudit(
-        appendLocalSpineManifestAudit(
-          appendLocalIdentityAdapterAudit(
-            appendLocalBackupRestoreAudit(
-              appendLocalReleaseReadinessAudit(
-                appendLocalSeedFixtureAudit(
-                  appendLocalOpsArtifactsAudit(
-                    appendLocalHardeningAudit(
-                      appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                      proofRun,
+      appendLocalProofFreshnessAudit(
+        appendLocalAdminSpineAudit(
+          appendLocalSpineManifestAudit(
+            appendLocalIdentityAdapterAudit(
+              appendLocalBackupRestoreAudit(
+                appendLocalReleaseReadinessAudit(
+                  appendLocalSeedFixtureAudit(
+                    appendLocalOpsArtifactsAudit(
+                      appendLocalHardeningAudit(
+                        appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                        proofRun,
+                        { game },
+                      ),
+                      opsArtifacts,
                       { game },
                     ),
-                    opsArtifacts,
+                    seedFixtureSummary,
                     { game },
                   ),
-                  seedFixtureSummary,
+                  releaseReadinessChecklist,
                   { game },
                 ),
-                releaseReadinessChecklist,
+                backupRestoreProof,
                 { game },
               ),
-              backupRestoreProof,
+              identityAdapterProof,
               { game },
             ),
-            identityAdapterProof,
+            spineManifest,
             { game },
           ),
-          spineManifest,
+          adminSpineProof,
           { game },
         ),
-        adminSpineProof,
+        proofFreshness,
         { game },
       ),
       { game },
@@ -211,6 +216,7 @@ export async function buildAdminAuditDetailData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  proofFreshness = null,
 }) {
   const data = await buildAdminRouteData({
     principalUserId,
@@ -228,6 +234,7 @@ export async function buildAdminAuditDetailData({
     identityAdapterProof,
     spineManifest,
     adminSpineProof,
+    proofFreshness,
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
@@ -355,6 +362,63 @@ export function appendLocalOpsArtifactsAudit(audit, opsArtifacts, { game }) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalProofFreshnessAudit(audit, proofFreshness, { game }) {
+  const row = normalizeLocalProofFreshnessAudit(proofFreshness, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalProofFreshnessAudit(proofFreshness, { game }) {
+  if (
+    proofFreshness === null ||
+    typeof proofFreshness !== "object" ||
+    proofFreshness.version !== 1 ||
+    proofFreshness.proof !== "dev-test-game-proof-freshness" ||
+    proofFreshness.scope !== "local-dev-test-game-proof-freshness" ||
+    proofFreshness.releaseReady !== false ||
+    proofFreshness.productionReady !== false
+  ) {
+    return null;
+  }
+  const artifacts = Array.isArray(proofFreshness.artifacts)
+    ? proofFreshness.artifacts
+    : [];
+  const summary = proofFreshness.summary ?? {};
+  return Object.freeze({
+    id: "local-proof-freshness",
+    label: "Local proof freshness",
+    status: `${Number(summary.freshCount ?? 0)} fresh, ${Number(
+      summary.staleCount ?? 0,
+    )} stale, ${Number(summary.missingCount ?? 0)} missing`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local proof freshness dashboard",
+    boundaryDetail:
+      proofFreshness.proofBoundary ??
+      "Local dev-test-game artifact age dashboard without content validation or release claims.",
+    href: "target/dev-test-game/release-readiness-checklist.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-proof-freshness" }),
+    checks: Object.freeze(
+      artifacts.map((artifact) =>
+        Object.freeze({
+          id: String(artifact.id),
+          status: String(artifact.status),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      artifactCount: Number(summary.artifactCount ?? artifacts.length),
+      freshCount: Number(summary.freshCount ?? 0),
+      staleCount: Number(summary.staleCount ?? 0),
+      missingCount: Number(summary.missingCount ?? 0),
+      maxAgeHours: Number(proofFreshness.maxAgeHours ?? 0),
+      releaseReady: proofFreshness.releaseReady === true,
+      productionReady: proofFreshness.productionReady === true,
+    }),
+  });
 }
 
 export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
