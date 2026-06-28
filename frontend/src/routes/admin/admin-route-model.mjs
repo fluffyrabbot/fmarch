@@ -857,6 +857,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   const requiredLaneIds = [
     "core-loop",
     "action-loop",
+    "resolution-receipts",
     "player-action-boundary",
     "private-channel",
   ];

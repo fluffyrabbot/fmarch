@@ -591,6 +591,59 @@ async fn player_command_state_derives_phase_valid_role_actions(pool: sqlx::PgPoo
             app.clone(),
             13,
             "host_h",
+            Command::ResolvePhase { game, seed: 930901 },
+        )
+        .await,
+    );
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/notifications?principal_user_id=action-target"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let target_notifications: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(target_notifications.len(), 1);
+    assert_eq!(target_notifications[0].audience_slot, "slot-2");
+    assert_eq!(target_notifications[0].effect, "player_killed");
+    assert_eq!(target_notifications[0].status, "factional_kill");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/notifications?principal_user_id=action-goon"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let actor_notifications: Vec<PlayerNotification> = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        actor_notifications
+            .iter()
+            .all(|notice| notice.effect != "player_killed"),
+        "actor should not receive target-only death notice"
+    );
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            14,
+            "host_h",
             Command::OpenDayPhase {
                 game,
                 phase: "D01".into(),

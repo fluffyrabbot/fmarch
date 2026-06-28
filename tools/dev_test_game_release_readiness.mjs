@@ -192,6 +192,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [
         "core-loop",
         "action-loop",
+        "resolution-receipts",
         "player-action-boundary",
         "private-channel",
       ],
@@ -641,6 +642,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
     "action-loop",
+    "resolution-receipts",
     "player-action-boundary",
     "private-channel",
   ];
@@ -880,6 +882,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "resolution-receipt",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",
@@ -942,6 +945,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "resolution-receipt",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",

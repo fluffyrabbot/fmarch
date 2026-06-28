@@ -565,6 +565,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.resolutionReceipts !== undefined) {
+      lines.push(
+        "## Resolution Receipt Proof",
+        "",
+        `Status: ${card.verification.resolutionReceipts.status}`,
+        "",
+        `Proof: ${card.verification.resolutionReceipts.proof}`,
+        "",
+        `Target notice: ${card.verification.resolutionReceipts.targetNotice.effect} ${card.verification.resolutionReceipts.targetNotice.status}`,
+        "",
+        `Normal player notice leaked: ${card.verification.resolutionReceipts.normalPlayerNoticeVisible}`,
+        "",
+      );
+    }
     if (card.verification.playerActionBoundary !== undefined) {
       lines.push(
         "## Player Action Boundary Proof",
@@ -629,6 +643,7 @@ async function verifySessionCard(card) {
   let coreLoop;
   let privateChannel;
   let actionLoop;
+  let resolutionReceipts;
   let playerActionBoundary;
   let multiplayerHardening;
   let staleActionPage;
@@ -664,10 +679,12 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
+      targetPage: roleEntries.deniedPlayer.page,
       staleActionPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
+    resolutionReceipts = actionLoop.resolutionReceipts;
     playerActionBoundary = actionLoop.playerActionBoundary;
     multiplayerHardening = await verifySeededMultiplayerHardening({
       hostPage: roleEntries.host.page,
@@ -691,6 +708,7 @@ async function verifySessionCard(card) {
     coreLoop,
     privateChannel,
     actionLoop,
+    resolutionReceipts,
     playerActionBoundary,
     multiplayerHardening,
   };
@@ -881,6 +899,7 @@ async function verifySeededActionLoop({
   hostPage,
   playerPage,
   actionPage,
+  targetPage,
   staleActionPage,
   game,
   apiBaseUrl,
@@ -945,6 +964,15 @@ async function verifySeededActionLoop({
   const d02Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const resolutionReceipts = await verifySeededResolutionReceipts({
+    playerPage,
+    actionPage,
+    targetPage,
+    game,
+    apiBaseUrl,
+    resolvedTargetSlot: targetState,
+    legalAction,
+  });
   const staleActionConflict = await submitStaleActionConflict({
     staleActionPage,
     staleActionSetup,
@@ -958,6 +986,7 @@ async function verifySeededActionLoop({
     invalidAction,
     legalAction,
     playerActionBoundary,
+    resolutionReceipts,
     resolveNight,
     resolvedTargetSlot: targetState,
     advanceDay,
@@ -966,6 +995,123 @@ async function verifySeededActionLoop({
     staleActionConflict,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function verifySeededResolutionReceipts({
+  playerPage,
+  actionPage,
+  targetPage,
+  game,
+  apiBaseUrl,
+  resolvedTargetSlot,
+  legalAction,
+}) {
+  const targetSlot = resolvedTargetSlot?.slot_id ?? resolvedTargetSlot?.slotId;
+  if (targetSlot !== "slot-2") {
+    throw new Error(`resolution receipt proof expected slot-2 target, got ${targetSlot}`);
+  }
+  const hostState = await fetchHostConsoleState({ apiBaseUrl, game, slot: targetSlot });
+  const hostSlotReceipt = hostState?.slots?.find((row) => row.slot_id === targetSlot) ?? null;
+
+  await gotoPlayerBoard(targetPage, game);
+  await targetPage.waitForFunction(
+    (slot) =>
+      window.__fmarchPlayerProjection?.notifications?.some(
+        (notice) =>
+          notice.audience_slot === slot &&
+          notice.effect === "player_killed" &&
+          notice.status === "factional_kill",
+      ),
+    targetSlot,
+  );
+  const targetNotice = await targetPage.evaluate(
+    (slot) =>
+      window.__fmarchPlayerProjection?.notifications?.find(
+        (notice) =>
+          notice.audience_slot === slot &&
+          notice.effect === "player_killed" &&
+          notice.status === "factional_kill",
+      ) ?? null,
+    targetSlot,
+  );
+  const targetPrivateQueueItem = await targetPage.evaluate(
+    () =>
+      window.__fmarchPlayerProjection?.notifications?.find(
+        (notice) => notice.effect === "player_killed",
+      ) ?? null,
+  );
+  const targetCommandState = await targetPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02",
+  );
+  const normalPlayerNoticeVisible = await playerPage.evaluate(
+    () =>
+      window.__fmarchPlayerProjection?.notifications?.some(
+        (notice) => notice.effect === "player_killed",
+      ) === true,
+  );
+  if (normalPlayerNoticeVisible) {
+    throw new Error("normal player role received a private player_killed notice");
+  }
+
+  await gotoPlayerBoard(actionPage, game);
+  await actionPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02",
+  );
+  const actionPlayerNoticeVisible = await actionPage.evaluate(
+    () =>
+      window.__fmarchPlayerProjection?.notifications?.some(
+        (notice) => notice.effect === "player_killed",
+      ) === true,
+  );
+  if (actionPlayerNoticeVisible) {
+    throw new Error("action player role received target-only player_killed notice");
+  }
+  const actionReceipt = {
+    state: legalAction?.state ?? null,
+    templateId:
+      legalAction?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id ?? null,
+    target:
+      legalAction?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] ?? null,
+  };
+
+  if (
+    hostSlotReceipt?.alive !== false ||
+    hostSlotReceipt?.status !== "dead" ||
+    targetNotice === null ||
+    targetCommandState?.actorSlot !== targetSlot ||
+    targetCommandState?.actions?.length !== 0 ||
+    actionReceipt.state !== "ack" ||
+    actionReceipt.templateId !== "factional_kill" ||
+    actionReceipt.target !== targetSlot
+  ) {
+    throw new Error(
+      `resolution receipt proof drifted: ${JSON.stringify({
+        hostSlotReceipt,
+        targetNotice,
+        targetCommandState,
+        actionReceipt,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    targetSlot,
+    hostSlotReceipt,
+    targetNotice,
+    targetPrivateQueueItem,
+    targetCommandState,
+    actionReceipt,
+    normalPlayerNoticeVisible,
+    actionPlayerNoticeVisible,
+    proof:
+      "After N01 resolution, the seeded host role URL showed slot-2 dead, the killed player role URL loaded a principal-scoped player_killed factional_kill notice with no remaining actions, and the normal player plus action-player role URLs did not receive that target-only private notice while the action-player kept the submitted action ACK.",
   };
 }
 

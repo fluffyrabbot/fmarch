@@ -12,6 +12,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-console",
   "core-loop",
   "action-loop",
+  "resolution-receipts",
   "player-action-boundary",
   "private-channel",
   "idempotent-retry",
@@ -86,6 +87,35 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
+    }),
+    lane("resolution-receipts", "Role-scoped resolution receipts after night kill", {
+      targetSlot: verification.resolutionReceipts?.targetSlot ?? null,
+      hostSlotAlive: verification.resolutionReceipts?.hostSlotReceipt?.alive ?? null,
+      targetNoticeEffect: verification.resolutionReceipts?.targetNotice?.effect ?? null,
+      targetNoticeStatus: verification.resolutionReceipts?.targetNotice?.status ?? null,
+      targetCommandActionCount:
+        verification.resolutionReceipts?.targetCommandState?.actions?.length ?? null,
+      actionReceiptState: verification.resolutionReceipts?.actionReceipt?.state ?? null,
+      actionReceiptTarget: verification.resolutionReceipts?.actionReceipt?.target ?? null,
+      normalPlayerNoticeVisible:
+        verification.resolutionReceipts?.normalPlayerNoticeVisible ?? null,
+      actionPlayerNoticeVisible:
+        verification.resolutionReceipts?.actionPlayerNoticeVisible ?? null,
+      passed:
+        verification.resolutionReceipts?.status === "passed" &&
+        verification.resolutionReceipts?.targetSlot === "slot-2" &&
+        verification.resolutionReceipts?.hostSlotReceipt?.alive === false &&
+        verification.resolutionReceipts?.hostSlotReceipt?.status === "dead" &&
+        verification.resolutionReceipts?.targetNotice?.audience_slot === "slot-2" &&
+        verification.resolutionReceipts?.targetNotice?.effect === "player_killed" &&
+        verification.resolutionReceipts?.targetNotice?.status === "factional_kill" &&
+        verification.resolutionReceipts?.targetCommandState?.actorSlot === "slot-2" &&
+        verification.resolutionReceipts?.targetCommandState?.actions?.length === 0 &&
+        verification.resolutionReceipts?.actionReceipt?.state === "ack" &&
+        verification.resolutionReceipts?.actionReceipt?.templateId === "factional_kill" &&
+        verification.resolutionReceipts?.actionReceipt?.target === "slot-2" &&
+        verification.resolutionReceipts?.normalPlayerNoticeVisible === false &&
+        verification.resolutionReceipts?.actionPlayerNoticeVisible === false,
     }),
     lane("player-action-boundary", "Player role URL hides and rejects unowned night actions", {
       phase: verification.playerActionBoundary?.phase?.phaseId ?? null,

@@ -286,6 +286,13 @@ D01 and advances to N01, the `actionPlayer` page renders a live `factional_kill`
 action, recovers from an invalid self-action, submits the legal action, and then
 the host page resolves N01 and advances to D02.
 
+The resolution-receipt proof uses the same seeded N01 kill: the target
+`deniedPlayer` role URL opens the player board after resolution and loads the
+principal-scoped `player_killed` / `factional_kill` notice, while the normal
+player and action-player role URLs do not receive that target-only notice. The
+host-side lifecycle receipt is limited to the focused local host-console state
+endpoint for the killed slot.
+
 The player action-boundary proof keeps the seeded `player` role URL on the same
 local game at N01, verifies that the player command surface has no unowned
 `factional_kill` action, submits a direct browser `/commands` `SubmitAction`
@@ -299,8 +306,8 @@ board` recovery for that same channel.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
-the `core-loop`, `action-loop`, `player-action-boundary`, and `private-channel`
-rows.
+the `core-loop`, `action-loop`, `resolution-receipts`,
+`player-action-boundary`, and `private-channel` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

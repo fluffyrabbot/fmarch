@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 9,
+        scenarioCount: 10,
       },
       {
         id: "proof-lanes-carried",
@@ -152,6 +152,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
+    "resolution-receipt",
     "night-action-loop",
     "private-channel-member",
     "private-channel-denied",
@@ -223,6 +224,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["browser-entry", "player-action-boundary"].filter(hasLane),
       note: "Player keeps private-channel capability but does not see factional_kill, and a direct factional_kill SubmitAction rejects through /commands.",
+    }),
+    scenario({
+      id: "resolution-receipt",
+      title: "Resolution receipt",
+      role: "deniedPlayer",
+      provenBy: ["browser-entry", "resolution-receipts"].filter(hasLane),
+      note: "Killed player opens the seeded role URL after N01 resolves and sees only the target-scoped player_killed factional_kill notice.",
     }),
     scenario({
       id: "night-action-loop",

@@ -18,6 +18,7 @@ const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
 const requiredChecks = [
   "core-loop",
   "action-loop",
+  "resolution-receipts",
   "player-action-boundary",
   "private-channel",
 ];

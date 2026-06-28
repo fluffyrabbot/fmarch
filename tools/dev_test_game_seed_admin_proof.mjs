@@ -20,6 +20,7 @@ const requiredScenarios = [
   "cohost-deadline-control",
   "player-vote-recovery",
   "player-action-denied",
+  "resolution-receipt",
   "night-action-loop",
   "private-channel-member",
   "private-channel-denied",

@@ -28,7 +28,7 @@
 //! - `sheriff_badge`  — folded badge ownership/weight state from
 //!   `BadgeChanged`, so sheriff vote weight is rebuildable and inspectable.
 //! - `player_notification` — explicit-audience player-facing notices folded
-//!   from `EffectNotification`, one row per recipient slot.
+//!   from `PlayerKilled` and `EffectNotification`, one row per recipient slot.
 //! - `player_info_result` — private non-investigative info results folded from
 //!   `InfoResult`, one row per recipient slot.
 //! - `host_prompt` — host/admin intervention prompts folded from
@@ -736,12 +736,23 @@ async fn fold_inner(
     match ev {
         PlayerKilled {
             slot_id,
+            cause,
             death_reveal,
             ..
         } => {
             ensure_slot(tx, game_id, slot_id).await?;
             set_slot_status(tx, game_id, slot_id, "dead").await?;
             reveal_slot_death(tx, game_id, slot_id, *death_reveal).await?;
+            upsert_player_notification(
+                tx,
+                game_id,
+                phase_id,
+                event_index,
+                slot_id,
+                "player_killed",
+                cause,
+            )
+            .await?;
         }
         SlotStatusTagged { slot_id, tag, .. } => {
             ensure_slot(tx, game_id, slot_id).await?;
@@ -1244,22 +1255,15 @@ async fn fold_inner(
             audience,
         } => {
             for audience_slot in audience {
-                ensure_slot(tx, game_id, audience_slot).await?;
-                sqlx::query(
-                    "INSERT INTO player_notification \
-                     (game_id, phase_id, event_index, audience_slot, effect, status) \
-                     VALUES ($1, $2, $3, $4, $5, $6) \
-                     ON CONFLICT (game_id, phase_id, event_index, audience_slot) DO UPDATE SET \
-                     effect = EXCLUDED.effect, \
-                     status = EXCLUDED.status",
+                upsert_player_notification(
+                    tx,
+                    game_id,
+                    phase_id,
+                    event_index,
+                    audience_slot,
+                    effect,
+                    status,
                 )
-                .bind(game_id)
-                .bind(phase_id)
-                .bind(event_index)
-                .bind(audience_slot)
-                .bind(effect)
-                .bind(status)
-                .execute(&mut **tx)
                 .await?;
             }
         }
@@ -2613,6 +2617,35 @@ async fn set_slot_status(
     .bind(game_id)
     .bind(slot_id)
     .bind(alive)
+    .bind(status)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn upsert_player_notification(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    phase_id: &str,
+    event_index: i32,
+    audience_slot: &str,
+    effect: &str,
+    status: &str,
+) -> Result<(), ProjectionError> {
+    ensure_slot(tx, game_id, audience_slot).await?;
+    sqlx::query(
+        "INSERT INTO player_notification \
+         (game_id, phase_id, event_index, audience_slot, effect, status) \
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (game_id, phase_id, event_index, audience_slot) DO UPDATE SET \
+         effect = EXCLUDED.effect, \
+         status = EXCLUDED.status",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(event_index)
+    .bind(audience_slot)
+    .bind(effect)
     .bind(status)
     .execute(&mut **tx)
     .await?;
