@@ -1883,84 +1883,108 @@ async function verifySeededReplacementConsole({
     game,
     frontendBaseUrl,
   });
-  const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
-    staleOutgoingPage,
-    game,
-  });
-  const processReplacement = await confirmHostAction(hostPage, "process_replacement");
-  const command = processReplacement.commandStatus?.requestEnvelope?.body?.body?.command;
-  await hostPage.waitForFunction(
-    () =>
-      window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-      window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
-  );
-  const projectedReplacement = await hostPage.evaluate(
-    () => window.__fmarchHostProjection?.replacement,
-  );
-  const apiState = await fetchHostConsoleState({
-    apiBaseUrl,
-    game,
-    slot: "slot-7",
-  });
-  const apiSlot = apiState.slots?.find?.((slot) => slot.slot_id === "slot-7");
-  const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
-    staleOutgoingPage,
-    staleOutgoingSetup,
-  });
-  const incomingPlayer = await verifyIncomingReplacementPlayer({
-    browser,
-    replacementSession: hostIssuedInvite.session,
-    game,
-    apiBaseUrl,
-    frontendBaseUrl,
-  });
-  if (
-    hostIssuedInvite?.status !== "passed" ||
-    hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
-    hostIssuedInvite?.session?.issuedBy?.principalUserId !== "host_h" ||
-    hostIssuedInvite?.session?.issuedBy?.capabilityKind !== "HostOf" ||
-    hostIssuedInvite?.session?.returnTo !== `/g/${game}` ||
-    processReplacement.commandStatus?.state !== "ack" ||
-    command?.ProcessReplacement?.game !== game ||
-    command?.ProcessReplacement?.slot !== "slot-7" ||
-    command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
-    command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
-    projectedReplacement?.slotId !== "slot-7" ||
-    projectedReplacement?.occupantLabel !== "player-rowan" ||
-    !projectedReplacement?.historyLabel?.includes("slot-7") ||
-    apiSlot?.slot_id !== "slot-7" ||
-    apiSlot?.occupant_user_id !== "player-rowan" ||
-    staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
-    staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
-    staleOutgoingPlayer?.buttonsDisabled !== true ||
-    incomingPlayer?.browserEntry?.principalUserId !== "player-rowan" ||
-    incomingPlayer?.commandState?.actorSlot !== "slot-7" ||
-    incomingPlayer?.postStatus?.state !== "ack" ||
-    incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
-    incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false
-  ) {
-    throw new Error(
-      `replacement console proof drifted: ${JSON.stringify({
-        hostIssuedInvite,
-        processReplacement,
-        projectedReplacement,
-        apiSlot,
-        staleOutgoingPlayer,
-        incomingPlayer,
-      })}`,
+  let pendingIncomingPlayer;
+  try {
+    pendingIncomingPlayer = await verifyPendingReplacementPlayer({
+      browser,
+      replacementSession: hostIssuedInvite.session,
+      game,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+    const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
+      staleOutgoingPage,
+      game,
+    });
+    const processReplacement = await confirmHostAction(hostPage, "process_replacement");
+    const command = processReplacement.commandStatus?.requestEnvelope?.body?.body?.command;
+    await hostPage.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
+        window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
     );
+    const projectedReplacement = await hostPage.evaluate(
+      () => window.__fmarchHostProjection?.replacement,
+    );
+    const apiState = await fetchHostConsoleState({
+      apiBaseUrl,
+      game,
+      slot: "slot-7",
+    });
+    const apiSlot = apiState.slots?.find?.((slot) => slot.slot_id === "slot-7");
+    const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
+      staleOutgoingPage,
+      staleOutgoingSetup,
+    });
+    const incomingPlayer = await verifyIncomingReplacementPlayer({
+      browser,
+      replacementSession: hostIssuedInvite.session,
+      replacementEntry: pendingIncomingPlayer.replacementEntry,
+      game,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+    if (
+      hostIssuedInvite?.status !== "passed" ||
+      hostIssuedInvite?.session?.principalUserId !== "player-rowan" ||
+      hostIssuedInvite?.session?.issuedBy?.principalUserId !== "host_h" ||
+      hostIssuedInvite?.session?.issuedBy?.capabilityKind !== "HostOf" ||
+      hostIssuedInvite?.session?.returnTo !== `/g/${game}` ||
+      pendingIncomingPlayer?.status !== "passed" ||
+      pendingIncomingPlayer?.capabilityLabel !== `PendingReplacement(${game})` ||
+      pendingIncomingPlayer?.commandState?.actorStatus !== "pending_replacement" ||
+      pendingIncomingPlayer?.controlCounts?.primaryButtons !== 0 ||
+      processReplacement.commandStatus?.state !== "ack" ||
+      command?.ProcessReplacement?.game !== game ||
+      command?.ProcessReplacement?.slot !== "slot-7" ||
+      command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
+      command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
+      projectedReplacement?.slotId !== "slot-7" ||
+      projectedReplacement?.occupantLabel !== "player-rowan" ||
+      !projectedReplacement?.historyLabel?.includes("slot-7") ||
+      apiSlot?.slot_id !== "slot-7" ||
+      apiSlot?.occupant_user_id !== "player-rowan" ||
+      staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
+      staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
+      staleOutgoingPlayer?.buttonsDisabled !== true ||
+      incomingPlayer?.browserEntry?.principalUserId !== "player-rowan" ||
+      incomingPlayer?.commandState?.actorSlot !== "slot-7" ||
+      incomingPlayer?.postStatus?.state !== "ack" ||
+      incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
+      incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false
+    ) {
+      throw new Error(
+        `replacement console proof drifted: ${JSON.stringify({
+          hostIssuedInvite,
+          pendingIncomingPlayer,
+          processReplacement,
+          projectedReplacement,
+          apiSlot,
+          staleOutgoingPlayer,
+          incomingPlayer,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      hostIssuedInvite,
+      pendingIncomingPlayer: withoutReplacementEntry(pendingIncomingPlayer),
+      processReplacement,
+      projectedReplacement,
+      apiSlot,
+      staleOutgoingPlayer,
+      incomingPlayer,
+      proof:
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+    };
+  } finally {
+    await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
   }
-  return {
-    status: "passed",
-    hostIssuedInvite,
-    processReplacement,
-    projectedReplacement,
-    apiSlot,
-    staleOutgoingPlayer,
-    incomingPlayer,
-    proof:
-      "The seeded host role URL issued the player-rowan replacement invite, processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, and proved the incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
-  };
+}
+
+function withoutReplacementEntry(pendingIncomingPlayer) {
+  const { replacementEntry, ...serializable } = pendingIncomingPlayer;
+  return serializable;
 }
 
 async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl }) {
@@ -2035,22 +2059,134 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
   };
 }
 
-async function verifyIncomingReplacementPlayer({
+async function verifyPendingReplacementPlayer({
   browser,
   replacementSession,
   game,
   apiBaseUrl,
   frontendBaseUrl,
 }) {
-  let replacementEntry;
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
   try {
-    replacementEntry = await openVerifiedRoleEntry({
-      browser,
-      session: replacementSession,
-      game,
-      apiBaseUrl,
-      frontendBaseUrl,
+    await page.goto(replacementSession.loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    const prefilled = await page.getByTestId("auth-login-token").inputValue();
+    if (prefilled !== replacementSession.inviteToken) {
+      await page.getByTestId("auth-login-token").fill(replacementSession.inviteToken);
+    }
+    await Promise.all([
+      page.waitForURL(replacementSession.directUrl, { timeout: 15000 }),
+      page.getByTestId("auth-login-submit").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await page.getByTestId("player-surface").waitFor({ state: "visible" });
+    await page.getByTestId("route-state-player-empty").waitFor({ state: "visible" });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorStatus ===
+        "pending_replacement",
+    );
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    if (sessionCookie === undefined) {
+      throw new Error("pending replacement login did not set fmarch_session cookie");
+    }
+    const resolved = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
     });
+    const capabilityKinds = (resolved.capabilities ?? []).map((capability) => capability.kind);
+    const capabilityLabel = await page.getByTestId("player-capability").innerText();
+    const routeStateText = await page.getByTestId("route-state-player-empty").innerText();
+    const commandState = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const controlCounts = {
+      primaryButtons: await page.locator("[data-action]").count(),
+      actionButtons: await page.locator("[data-template-id]").count(),
+    };
+    const coldLoadEndpoints = await page.evaluate(
+      () => window.__fmarchPlayerColdLoadEndpoints,
+    );
+    if (
+      resolved.principal_user_id !== "player-rowan" ||
+      capabilityKinds.length !== 0 ||
+      capabilityLabel !== `PendingReplacement(${game})` ||
+      !routeStateText.includes("Replacement invite accepted") ||
+      commandState?.actorStatus !== "pending_replacement" ||
+      commandState?.actions?.length !== 0 ||
+      coldLoadEndpoints?.commandStateEndpoint !== null ||
+      controlCounts.primaryButtons !== 0 ||
+      controlCounts.actionButtons !== 0
+    ) {
+      throw new Error(
+        `pending replacement player proof drifted: ${JSON.stringify({
+          resolved,
+          capabilityKinds,
+          capabilityLabel,
+          routeStateText,
+          commandState,
+          coldLoadEndpoints,
+          controlCounts,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      principalUserId: resolved.principal_user_id,
+      capabilityKinds,
+      capabilityLabel,
+      routeStateText,
+      commandState,
+      coldLoadEndpoints,
+      controlCounts,
+      replacementEntry: {
+        context,
+        page,
+        verification: {
+          principalUserId: resolved.principal_user_id,
+          capabilityKinds,
+          cookie: {
+            httpOnly: sessionCookie.httpOnly,
+            sameSite: sessionCookie.sameSite,
+            secure: sessionCookie.secure,
+            valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+          },
+        },
+      },
+      proof:
+        "The host-issued player-rowan replacement URL opens before ProcessReplacement as an authenticated pending replacement surface with no current SlotOccupant capability, no command-state endpoint, and no player controls.",
+    };
+  } catch (error) {
+    await context.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function verifyIncomingReplacementPlayer({
+  browser,
+  replacementSession,
+  replacementEntry = null,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  let ownedReplacementEntry = false;
+  try {
+    if (replacementEntry === null) {
+      replacementEntry = await openVerifiedRoleEntry({
+        browser,
+        session: replacementSession,
+        game,
+        apiBaseUrl,
+        frontendBaseUrl,
+      });
+      ownedReplacementEntry = true;
+    } else {
+      await replacementEntry.page.goto(replacementSession.directUrl, {
+        waitUntil: "networkidle",
+      });
+    }
     const page = replacementEntry.page;
     await gotoPlayerBoard(page, game);
     await page.waitForFunction(
@@ -2058,7 +2194,24 @@ async function verifyIncomingReplacementPlayer({
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
     );
-    const browserEntry = replacementEntry.verification;
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    if (sessionCookie === undefined) {
+      throw new Error("incoming replacement login did not set fmarch_session cookie");
+    }
+    const resolved = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
+    });
+    const browserEntry = {
+      principalUserId: resolved.principal_user_id,
+      capabilityKinds: (resolved.capabilities ?? []).map((capability) => capability.kind),
+      cookie: {
+        httpOnly: sessionCookie.httpOnly,
+        sameSite: sessionCookie.sameSite,
+        secure: sessionCookie.secure,
+        valuePrefix: sessionCookie.value.slice(0, "invite-session-".length),
+      },
+    };
     const commandState = await page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
@@ -2186,7 +2339,9 @@ async function verifyIncomingReplacementPlayer({
         "The incoming player-rowan role URL opened after replacement with SlotOccupant authority for slot-7, preserved Slot 7 thread history, submitted a new Slot 7 post and vote, and did not receive target-only kill or action private receipts.",
     };
   } finally {
-    await replacementEntry?.context.close().catch(() => {});
+    if (ownedReplacementEntry) {
+      await replacementEntry?.context.close().catch(() => {});
+    }
   }
 }
 

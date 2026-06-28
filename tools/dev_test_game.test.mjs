@@ -827,6 +827,27 @@ test("session card and markdown include role invite URLs and tokens", () => {
           },
         },
       },
+      pendingIncomingPlayer: {
+        status: "passed",
+        principalUserId: "player-rowan",
+        capabilityKinds: [],
+        capabilityLabel: `PendingReplacement(${game})`,
+        routeStateText:
+          "Replacement invite accepted. Slot authority is pending host replacement; refresh this role URL after the host processes the replacement.",
+        commandState: {
+          actorSlot: "slot-7",
+          actorAlive: false,
+          actorStatus: "pending_replacement",
+          actions: [],
+        },
+        coldLoadEndpoints: {
+          commandStateEndpoint: null,
+        },
+        controlCounts: {
+          primaryButtons: 0,
+          actionButtons: 0,
+        },
+      },
       processReplacement: {
         statusMessage: "Ack: stream seqs 44",
         commandStatus: {
@@ -1136,6 +1157,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "player-action-boundary",
       "private-channel",
       "replacement-host-issued-invite",
+      "replacement-pending-player",
       "replacement-console",
       "replacement-stale-player",
       "replacement-incoming-player",
@@ -1217,7 +1239,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 20);
+  assert.equal(opsArtifacts.proofRun.laneCount, 21);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1287,6 +1309,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "night-action-loop",
       "host-replacement-console",
       "replacement-host-issued-invite",
+      "replacement-pending-player",
       "replacement-stale-player",
       "replacement-incoming-player",
       "private-channel-member",
@@ -1653,6 +1676,7 @@ function coreLoopAdminProofFixture() {
         "player-action-boundary",
         "private-channel",
         "replacement-host-issued-invite",
+        "replacement-pending-player",
         "replacement-console",
         "replacement-stale-player",
         "replacement-incoming-player",
@@ -1764,6 +1788,7 @@ function seedAdminProofFixture() {
         "night-action-loop",
         "host-replacement-console",
         "replacement-host-issued-invite",
+        "replacement-pending-player",
         "replacement-stale-player",
         "replacement-incoming-player",
         "private-channel-member",

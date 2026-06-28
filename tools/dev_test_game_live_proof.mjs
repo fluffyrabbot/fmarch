@@ -318,6 +318,49 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.capabilityKinds.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.capabilityLabel,
+  `PendingReplacement(${session.game})`,
+);
+assert.match(
+  session.verification.replacementConsole.pendingIncomingPlayer.routeStateText,
+  /Replacement invite accepted/,
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.commandState.actorStatus,
+  "pending_replacement",
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.commandState.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.coldLoadEndpoints
+    .commandStateEndpoint,
+  null,
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.controlCounts
+    .primaryButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.pendingIncomingPlayer.controlCounts
+    .actionButtons,
+  0,
+);
+assert.equal(
   session.verification.replacementConsole.processReplacement.commandStatus.state,
   "ack",
 );

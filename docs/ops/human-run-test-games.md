@@ -316,24 +316,27 @@ board` recovery for that same channel.
 
 The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
-surface, clicks the hydrated `ProcessReplacement` control for Slot 7, records
-the ACK, verifies the host projection now shows `player-rowan`, and checks the
-slot-scoped host-console API still reports the stable `slot-7` history
-boundary. It also opens a separate stale `player` role URL as
+surface, opens that host-issued `replacementPlayer` role URL before replacement
+as an authenticated pending player with no current SlotOccupant authority and no
+player controls, clicks the hydrated `ProcessReplacement` control for Slot 7,
+records the ACK, verifies the host projection now shows `player-rowan`, and
+checks the slot-scoped host-console API still reports the stable `slot-7`
+history boundary. It also opens a separate stale `player` role URL as
 `player-mira` before replacement, submits an old Slot 7 vote after replacement,
 records the `NotYourSlot` recovery receipt, and verifies the old vote/post
 controls are disabled with `No current SlotOccupant(slot-7)` context. Finally,
-it opens the host-issued `replacementPlayer` role URL for `player-rowan` after
-replacement, verifies current Slot 7 authority, preserves the earlier Slot 7
-thread history, submits a new Slot 7 post and vote, and checks target-only
-private receipts did not leak to the incoming player.
+it reopens the same host-issued `replacementPlayer` role URL for `player-rowan`
+after replacement, verifies current Slot 7 authority, preserves the earlier
+Slot 7 thread history, submits a new Slot 7 post and vote, and checks
+target-only private receipts did not leak to the incoming player.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
 the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
-`private-channel`, `replacement-host-issued-invite`, `replacement-console`,
-`replacement-stale-player`, and `replacement-incoming-player` rows.
+`private-channel`, `replacement-host-issued-invite`,
+`replacement-pending-player`, `replacement-console`, `replacement-stale-player`,
+and `replacement-incoming-player` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

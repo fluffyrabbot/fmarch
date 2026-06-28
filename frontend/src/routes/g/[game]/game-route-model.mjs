@@ -2,6 +2,7 @@ import { buildAppShell } from "../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../lib/app/app-surface-header-model.mjs";
 import {
   capabilityLabel,
+  normalizeCapabilities,
   resolveSurfaceAccess,
 } from "../../../lib/app/capabilities.mjs";
 import {
@@ -58,26 +59,32 @@ export async function buildGameRouteData({
   const gameId = normalizeGame(game);
   const channelId = normalizeChannel(activeChannel);
   const hasPrincipal = hasPrincipalUserId(principalUserId);
-  const access = resolveSurfaceAccess({
+  const normalizedCapabilities = normalizeCapabilities(capabilities);
+  const pendingReplacement = hasPrincipal && normalizedCapabilities.length === 0;
+  const access = pendingReplacement ? pendingPlayerAccess(gameId) : resolveSurfaceAccess({
     surface: "player",
     game: gameId,
-    capabilities,
+    capabilities: normalizedCapabilities,
   });
   const channelAccess = resolvePlayerChannelAccess({
     game: gameId,
     channel: channelId,
-    capabilities,
+    capabilities: normalizedCapabilities,
   });
   const canColdLoadActiveChannel =
-    channelId === "main" || (channelAccess.supported && channelAccess.allowed);
+    !pendingReplacement &&
+    (channelId === "main" || (channelAccess.supported && channelAccess.allowed));
 
-  const slotCapability = capabilities.find(
+  const slotCapability = normalizedCapabilities.find(
     (capability) =>
       capability.kind === "SlotOccupant" &&
       (capability.game === gameId || capability.game === undefined),
   );
   const playerSlotId = slotCapability?.slot ?? "slot-7";
   const playerCommandStateSlot = slotCapability === undefined ? null : playerSlotId;
+  const coldLoadFallback = pendingReplacement
+    ? pendingReplacementColdLoad(gameId, playerSlotId)
+    : PLAYER_FIXTURE_COLD_LOAD;
 
   const coldLoad = await loadPlayerColdData({
     game: gameId,
@@ -86,7 +93,7 @@ export async function buildGameRouteData({
     actorSlot: playerCommandStateSlot,
     fetchImpl: canColdLoadActiveChannel ? fetchImpl : null,
     apiBaseUrl,
-    fallback: PLAYER_FIXTURE_COLD_LOAD,
+    fallback: coldLoadFallback,
   });
 
   const privateQueue = buildPrivateQueueRouteItems(coldLoad, {
@@ -116,13 +123,21 @@ export async function buildGameRouteData({
       game: gameId,
       activeSurface: "player",
       principalUserId,
-      capabilities,
+      capabilities: normalizedCapabilities,
     }),
     game: Object.freeze({
       id: gameId,
       label: "Midsummer Invitational",
     }),
     access,
+    pendingReplacement,
+    emptyState: pendingReplacement
+      ? Object.freeze({
+          message:
+            "Replacement invite accepted. Slot authority is pending host replacement; refresh this role URL after the host processes the replacement.",
+          actionHref: `/g/${encodeURIComponent(gameId)}`,
+        })
+      : null,
     player: Object.freeze({
       principalUserId,
       slotId: playerSlotId,
@@ -142,7 +157,7 @@ export async function buildGameRouteData({
     channel: channelAccess,
     channels: buildPlayerChannels({
       game: gameId,
-      capabilities,
+      capabilities: normalizedCapabilities,
       activeChannel: channelId,
     }),
     phase,
@@ -213,6 +228,44 @@ export async function buildGameRouteData({
     }),
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
     composer,
+  });
+}
+
+function pendingPlayerAccess(game) {
+  return Object.freeze({
+    surface: "player",
+    allowed: true,
+    pending: true,
+    capability: null,
+    capabilityLabel: `PendingReplacement(${game})`,
+    required: Object.freeze([
+      `SlotOccupant(${game})`,
+      `ChannelMember(${game})`,
+      `DeadViewer(${game})`,
+    ]),
+  });
+}
+
+function pendingReplacementColdLoad(game, slotId) {
+  return Object.freeze({
+    commandState: Object.freeze({
+      game,
+      actorSlot: slotId,
+      actorAlive: false,
+      actorStatus: "pending_replacement",
+      roleKey: null,
+      phase: null,
+      actions: Object.freeze([]),
+      boundary:
+        "Replacement invite has no current SlotOccupant authority until the host processes replacement.",
+    }),
+    votecount: Object.freeze([]),
+    thread: Object.freeze({
+      nextBeforeSeq: null,
+      posts: Object.freeze([]),
+    }),
+    notifications: Object.freeze([]),
+    investigationResults: Object.freeze([]),
   });
 }
 

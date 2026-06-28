@@ -158,6 +158,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "night-action-loop",
     "host-replacement-console",
     "replacement-host-issued-invite",
+    "replacement-pending-player",
     "replacement-stale-player",
     "replacement-incoming-player",
     "private-channel-member",
@@ -272,6 +273,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "host",
       provenBy: ["replacement-host-issued-invite"].filter(hasLane),
       note: "Host opens the seeded role URL, issues the local player-rowan replacement invite from the host surface, and the generated URL becomes the replacementPlayer role entry.",
+    }),
+    scenario({
+      id: "replacement-pending-player",
+      title: "Pending replacement player",
+      role: "replacementPlayer",
+      provenBy: ["replacement-pending-player"].filter(hasLane),
+      note: "Incoming player opens the host-issued role URL before replacement, lands on an authenticated pending surface, has no current SlotOccupant authority, and sees no player controls.",
     }),
     scenario({
       id: "replacement-stale-player",

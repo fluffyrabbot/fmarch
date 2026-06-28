@@ -76,11 +76,13 @@
       expandedPrivateRouteKey = nextExpandedPrivateRouteKey;
     }
   }
-  $: playerSurfaceEmpty = isPlayerRouteEmpty({
-    thread,
-    votecount,
-    privateQueue,
-  });
+  $: playerSurfaceEmpty =
+    data.pendingReplacement === true ||
+    isPlayerRouteEmpty({
+      thread,
+      votecount,
+      privateQueue,
+    });
   $: playerForcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)
     : null;
@@ -95,6 +97,8 @@
   $: playerEmptyState = buildRouteStateViewModel({
     surface: "player",
     state: "empty",
+    message: data.emptyState?.message ?? null,
+    actionHref: data.emptyState?.actionHref ?? null,
   });
   const projectionStore = createProjectionStore({
     initialSnapshot: buildPlayerProjectionInitialSnapshot(data),

@@ -26,6 +26,7 @@ const requiredScenarios = [
   "night-action-loop",
   "host-replacement-console",
   "replacement-host-issued-invite",
+  "replacement-pending-player",
   "replacement-stale-player",
   "replacement-incoming-player",
   "private-channel-member",

@@ -18,6 +18,7 @@ const requiredLaneIds = Object.freeze([
   "player-action-boundary",
   "private-channel",
   "replacement-host-issued-invite",
+  "replacement-pending-player",
   "replacement-console",
   "replacement-stale-player",
   "replacement-incoming-player",
@@ -263,6 +264,44 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.hostIssuedInvite?.targetLabel ===
           "Slot 7 / player-rowan" &&
         verification.replacementConsole?.hostIssuedInvite?.tokenPresent === true,
+    }),
+    lane("replacement-pending-player", "Incoming replacement URL waits without slot authority", {
+      principalUserId:
+        verification.replacementConsole?.pendingIncomingPlayer?.principalUserId ?? null,
+      capabilityKinds:
+        verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds ?? null,
+      capabilityLabel:
+        verification.replacementConsole?.pendingIncomingPlayer?.capabilityLabel ?? null,
+      actorStatus:
+        verification.replacementConsole?.pendingIncomingPlayer?.commandState?.actorStatus ??
+        null,
+      commandStateEndpoint:
+        verification.replacementConsole?.pendingIncomingPlayer?.coldLoadEndpoints
+          ?.commandStateEndpoint ?? null,
+      primaryButtons:
+        verification.replacementConsole?.pendingIncomingPlayer?.controlCounts
+          ?.primaryButtons ?? null,
+      passed:
+        verification.replacementConsole?.pendingIncomingPlayer?.status === "passed" &&
+        verification.replacementConsole?.pendingIncomingPlayer?.principalUserId ===
+          "player-rowan" &&
+        verification.replacementConsole?.pendingIncomingPlayer?.capabilityKinds?.length ===
+          0 &&
+        verification.replacementConsole?.pendingIncomingPlayer?.capabilityLabel ===
+          `PendingReplacement(${session?.game ?? ""})` &&
+        verification.replacementConsole?.pendingIncomingPlayer?.routeStateText?.includes(
+          "Replacement invite accepted",
+        ) === true &&
+        verification.replacementConsole?.pendingIncomingPlayer?.commandState
+          ?.actorStatus === "pending_replacement" &&
+        verification.replacementConsole?.pendingIncomingPlayer?.commandState?.actions
+          ?.length === 0 &&
+        verification.replacementConsole?.pendingIncomingPlayer?.coldLoadEndpoints
+          ?.commandStateEndpoint === null &&
+        verification.replacementConsole?.pendingIncomingPlayer?.controlCounts
+          ?.primaryButtons === 0 &&
+        verification.replacementConsole?.pendingIncomingPlayer?.controlCounts
+          ?.actionButtons === 0,
     }),
     lane("replacement-console", "Host replacement preserves slot history", {
       commandState:

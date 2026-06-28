@@ -587,6 +587,39 @@ test("player load rejects sessions without scoped read/play capability", async (
   );
 });
 
+test("player load renders pending replacement state for authenticated no-slot sessions", async () => {
+  const data = await load({
+    params: { game: "midsummer" },
+    locals: {
+      principalUserId: "player-rowan",
+      resolvedCapabilities: [],
+    },
+    fetch: async () => {
+      throw new Error("pending replacement route must not fetch scoped projections");
+    },
+  });
+
+  assert.equal(data.shell.activeSurface, "player");
+  assert.equal(data.shellOwner, "layout");
+  assert.equal(data.access.allowed, true);
+  assert.equal(data.access.pending, true);
+  assert.equal(data.access.capabilityLabel, "PendingReplacement(midsummer)");
+  assert.equal(data.pendingReplacement, true);
+  assert.equal(data.player.principalUserId, "player-rowan");
+  assert.equal(data.player.slotId, "slot-7");
+  assert.equal(data.player.status, "pending_replacement");
+  assert.equal(data.commandState.actorStatus, "pending_replacement");
+  assert.equal(data.commandState.actions.length, 0);
+  assert.deepEqual(data.thread.posts, []);
+  assert.deepEqual(data.votecount, []);
+  assert.deepEqual(data.channels, []);
+  assert.equal(data.coldLoad.commandStateEndpoint, null);
+  assert.equal(
+    data.emptyState.message,
+    "Replacement invite accepted. Slot authority is pending host replacement; refresh this role URL after the host processes the replacement.",
+  );
+});
+
 test("player load rejects signed-out sessions without private scoped requests", async () => {
   const seen = [];
   await assert.rejects(
