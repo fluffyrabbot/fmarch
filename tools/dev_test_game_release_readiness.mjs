@@ -186,7 +186,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     },
     {
       id: "local-core-loop-proof",
-      label: "Host controls, player actions, private channels, and day/night loop",
+      label: "Host controls, replacement, player actions, private channels, and day/night loop",
       status: "passed",
       evidence: sourcePath,
       laneIds: [
@@ -197,6 +197,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "dead-player-recovery",
         "player-action-boundary",
         "private-channel",
+        "replacement-console",
       ],
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
@@ -650,6 +651,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     "dead-player-recovery",
     "player-action-boundary",
     "private-channel",
+    "replacement-console",
   ];
   if (proof?.version !== 1) {
     throw new Error(`core-loop admin proof version drifted: ${proof?.version}`);
@@ -892,6 +894,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",
+    "host-replacement-console",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",
@@ -957,6 +960,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",
+    "host-replacement-console",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",

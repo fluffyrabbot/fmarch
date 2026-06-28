@@ -785,6 +785,40 @@ test("session card and markdown include role invite URLs and tokens", () => {
       allowed: { submitPost: { state: "ack", message: "Ack: stream seqs 43" } },
       denied: { status: 403, actionLabel: "Back to board" },
     },
+    replacementConsole: {
+      status: "passed",
+      proof: "host processed replacement",
+      processReplacement: {
+        statusMessage: "Ack: stream seqs 44",
+        commandStatus: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "host_h",
+                command: {
+                  ProcessReplacement: {
+                    game,
+                    slot: "slot-7",
+                    outgoing_user: "player-mira",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      projectedReplacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-rowan",
+        historyLabel: "Slot slot-7 history preserved",
+      },
+      apiSlot: {
+        slot_id: "slot-7",
+        occupant_user_id: "player-rowan",
+      },
+    },
     multiplayerHardening: {
       status: "passed",
       proof: "duplicate command id returned one post and stale host control recovered",
@@ -932,6 +966,9 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Direct factional kill: Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Private Channel Proof"));
   assert(markdown.includes("Denied route: 403 Back to board"));
+  assert(markdown.includes("## Replacement Console Proof"));
+  assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
+  assert(markdown.includes("Projected occupant: player-rowan"));
   assert(markdown.includes("## Multiplayer Hardening Proof"));
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
@@ -959,6 +996,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "dead-player-recovery",
       "player-action-boundary",
       "private-channel",
+      "replacement-console",
       "idempotent-retry",
       "reconnect-recovery",
       "stale-player-vote",
@@ -1037,7 +1075,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 16);
+  assert.equal(opsArtifacts.proofRun.laneCount, 17);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1105,6 +1143,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
+      "host-replacement-console",
       "private-channel-member",
       "private-channel-denied",
       "multiplayer-hardening",
@@ -1468,6 +1507,7 @@ function coreLoopAdminProofFixture() {
         "dead-player-recovery",
         "player-action-boundary",
         "private-channel",
+        "replacement-console",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -1574,6 +1614,7 @@ function seedAdminProofFixture() {
         "resolution-receipt",
         "dead-player-recovery",
         "night-action-loop",
+        "host-replacement-console",
         "private-channel-member",
         "private-channel-denied",
         "multiplayer-hardening",

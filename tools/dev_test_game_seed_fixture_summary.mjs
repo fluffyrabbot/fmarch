@@ -156,6 +156,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "resolution-receipt",
     "dead-player-recovery",
     "night-action-loop",
+    "host-replacement-console",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",
@@ -254,6 +255,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "actionPlayer",
       provenBy: ["action-loop", "stale-action-conflict"].filter(hasLane),
       note: "Action player sees a live factional_kill control, rejects an invalid self-action, submits a legal action, and refreshes out of stale N01.",
+    }),
+    scenario({
+      id: "host-replacement-console",
+      title: "Host replacement console",
+      role: "host",
+      provenBy: ["replacement-console"].filter(hasLane),
+      note: "Host opens the seeded role URL, processes the Slot 7 replacement, updates the projected occupant, and preserves stable slot history.",
     }),
     scenario({
       id: "private-channel-member",

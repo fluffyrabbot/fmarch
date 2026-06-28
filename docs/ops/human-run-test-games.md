@@ -313,12 +313,18 @@ The private-channel proof uses the same invite-backed role surfaces: the player
 page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
 board` recovery for that same channel.
+
+The replacement proof uses the seeded `host` role URL after the player-owned
+lanes finish, clicks the hydrated `ProcessReplacement` control for Slot 7,
+records the ACK, verifies the host projection now shows `player-rowan`, and
+checks the slot-scoped host-console API still reports the stable `slot-7`
+history boundary.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
 the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`, and
-`private-channel` rows.
+`private-channel`, and `replacement-console` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the
@@ -416,6 +422,7 @@ proof.
 
 This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
+host replacement,
 duplicate-command, player reconnect,
 concurrent vote race, stale player vote, stale action conflict, stale host
 control recovery, stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,

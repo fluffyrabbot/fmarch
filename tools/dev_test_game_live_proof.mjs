@@ -273,6 +273,48 @@ assert.equal(
 );
 assert.equal(session.verification.playerActionBoundary.phaseAfterReject.phaseId, "N01");
 assert.equal(session.verification.playerActionBoundary.actionVisibleAfterReject, false);
+assert.equal(session.verification.replacementConsole.status, "passed");
+assert.equal(
+  session.verification.replacementConsole.processReplacement.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
+    .body.principal_user_id,
+  "host_h",
+);
+assert.equal(
+  session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
+    .body.command.ProcessReplacement.slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
+    .body.command.ProcessReplacement.outgoing_user,
+  "player-mira",
+);
+assert.equal(
+  session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope.body
+    .body.command.ProcessReplacement.incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.projectedReplacement.slotId,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.projectedReplacement.occupantLabel,
+  "player-rowan",
+);
+assert.match(
+  session.verification.replacementConsole.projectedReplacement.historyLabel,
+  /slot-7/,
+);
+assert.equal(session.verification.replacementConsole.apiSlot.slot_id, "slot-7");
+assert.equal(
+  session.verification.replacementConsole.apiSlot.occupant_user_id,
+  "player-rowan",
+);
 assert.equal(session.verification.multiplayerHardening.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.idempotentRetry.channel,

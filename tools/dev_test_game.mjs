@@ -641,6 +641,20 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.replacementConsole !== undefined) {
+      lines.push(
+        "## Replacement Console Proof",
+        "",
+        `Status: ${card.verification.replacementConsole.status}`,
+        "",
+        `Proof: ${card.verification.replacementConsole.proof}`,
+        "",
+        `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
+        "",
+        `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
+        "",
+      );
+    }
     if (card.verification.multiplayerHardening !== undefined) {
       lines.push(
         "## Multiplayer Hardening Proof",
@@ -684,6 +698,7 @@ async function verifySessionCard(card) {
   let deadPlayerRecovery;
   let playerActionBoundary;
   let multiplayerHardening;
+  let replacementConsole;
   let staleActionPage;
   let staleHostPage;
   let staleCohostPage;
@@ -746,6 +761,11 @@ async function verifySessionCard(card) {
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
+    replacementConsole = await verifySeededReplacementConsole({
+      hostPage: roleEntries.host.page,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+    });
   } finally {
     await staleActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
@@ -768,6 +788,7 @@ async function verifySessionCard(card) {
     deadPlayerRecovery,
     playerActionBoundary,
     multiplayerHardening,
+    replacementConsole,
   };
 }
 
@@ -1830,6 +1851,53 @@ async function verifySeededMultiplayerHardening({
     staleCohostDeadline,
     proof:
       "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+  };
+}
+
+async function verifySeededReplacementConsole({ hostPage, game, apiBaseUrl }) {
+  const processReplacement = await confirmHostAction(hostPage, "process_replacement");
+  const command = processReplacement.commandStatus?.requestEnvelope?.body?.body?.command;
+  await hostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
+      window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+  );
+  const projectedReplacement = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const apiState = await fetchHostConsoleState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const apiSlot = apiState.slots?.find?.((slot) => slot.slot_id === "slot-7");
+  if (
+    processReplacement.commandStatus?.state !== "ack" ||
+    command?.ProcessReplacement?.game !== game ||
+    command?.ProcessReplacement?.slot !== "slot-7" ||
+    command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
+    command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
+    projectedReplacement?.slotId !== "slot-7" ||
+    projectedReplacement?.occupantLabel !== "player-rowan" ||
+    !projectedReplacement?.historyLabel?.includes("slot-7") ||
+    apiSlot?.slot_id !== "slot-7" ||
+    apiSlot?.occupant_user_id !== "player-rowan"
+  ) {
+    throw new Error(
+      `replacement console proof drifted: ${JSON.stringify({
+        processReplacement,
+        projectedReplacement,
+        apiSlot,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    processReplacement,
+    projectedReplacement,
+    apiSlot,
+    proof:
+      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, and preserved the stable slot history boundary.",
   };
 }
 

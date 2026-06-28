@@ -17,6 +17,7 @@ const requiredLaneIds = Object.freeze([
   "dead-player-recovery",
   "player-action-boundary",
   "private-channel",
+  "replacement-console",
   "idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
@@ -228,6 +229,37 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.privateChannel?.channel === "private:mafia_day_chat" &&
         verification.privateChannel?.allowed?.submitPost?.state === "ack" &&
         verification.privateChannel?.denied?.status === 403,
+    }),
+    lane("replacement-console", "Host replacement preserves slot history", {
+      commandState:
+        verification.replacementConsole?.processReplacement?.commandStatus?.state ?? null,
+      commandSlot:
+        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.slot ?? null,
+      projectedOccupant:
+        verification.replacementConsole?.projectedReplacement?.occupantLabel ?? null,
+      apiOccupant: verification.replacementConsole?.apiSlot?.occupant_user_id ?? null,
+      historyLabel: verification.replacementConsole?.projectedReplacement?.historyLabel ?? null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.processReplacement?.commandStatus?.state ===
+          "ack" &&
+        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
+          ?.body?.body?.principal_user_id === "host_h" &&
+        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
+        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.outgoing_user === "player-mira" &&
+        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.incoming_user === "player-rowan" &&
+        verification.replacementConsole?.projectedReplacement?.slotId === "slot-7" &&
+        verification.replacementConsole?.projectedReplacement?.occupantLabel ===
+          "player-rowan" &&
+        verification.replacementConsole?.projectedReplacement?.historyLabel?.includes(
+          "slot-7",
+        ) === true &&
+        verification.replacementConsole?.apiSlot?.slot_id === "slot-7" &&
+        verification.replacementConsole?.apiSlot?.occupant_user_id === "player-rowan",
     }),
     lane("idempotent-retry", "Duplicate command id returns original ACK", {
       channel: hardening.idempotentRetry?.channel ?? null,
