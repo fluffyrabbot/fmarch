@@ -278,6 +278,35 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
   );
 
+  const notYourSlotReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "submit_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      target: "slot-2",
+    }),
+    commandIdFactory: () => "66666666-6666-4666-8666-666666666666",
+    envelopeIdFactory: () => 15,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 15,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "NotYourSlot",
+            retryable: false,
+            message: "not your slot",
+          },
+        },
+      }),
+  });
+  assert.equal(
+    notYourSlotReject.message,
+    "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+  );
+
   const retryableReject = await sendCommand({
     principalUserId: "player_mira",
     command: buildPlayerCommand({

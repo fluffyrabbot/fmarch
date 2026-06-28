@@ -18,6 +18,7 @@ import {
   playerThreadErrorStatus,
   playerThreadNoOlderStatus,
   playerThreadPendingStatus,
+  staleSlotOwnershipCommandState,
   submitPlayerRouteCommand,
   togglePrivateItemExpansion,
 } from "./player-route-controller.mjs";
@@ -301,6 +302,50 @@ test("player route controller refreshes action state after invalid target reject
       commandStatus: { state: "reject", error: "InvalidTarget" },
     }),
     ["notifications", "investigationResults", "commandState"],
+  );
+});
+
+test("player route controller clears local commands after slot ownership rejects", async () => {
+  const refreshed = [];
+  const patches = [];
+  const result = await submitPlayerRouteCommand({
+    action: "submit_vote",
+    composerBody: "",
+    data: fixtureData(),
+    fetchImpl: async () => null,
+    projectionStore: fakeProjectionStore({
+      refresh: async (keys) => {
+        refreshed.push(keys);
+      },
+      applySnapshot: (patch) => {
+        patches.push(patch);
+        return patch;
+      },
+      getSnapshot: () => ({
+        commandState: patches.at(-1)?.commandState,
+      }),
+    }),
+    sendCommandImpl: async () => ({
+      state: "reject",
+      error: "NotYourSlot",
+      message:
+        "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+    }),
+  });
+
+  assert.deepEqual(refreshed, []);
+  assert.equal(result.commandStatus.error, "NotYourSlot");
+  assert.equal(result.snapshot.commandState.actorSlot, "slot-7");
+  assert.equal(result.snapshot.commandState.actorAlive, false);
+  assert.equal(result.snapshot.commandState.actorStatus, "replaced");
+  assert.deepEqual(result.snapshot.commandState.actions, []);
+  assert.match(result.snapshot.commandState.boundary, /no longer owns slot-7/);
+  assert.deepEqual(
+    staleSlotOwnershipCommandState({
+      data: fixtureData(),
+      commandStatus: result.commandStatus,
+    }),
+    result.snapshot.commandState,
   );
 });
 

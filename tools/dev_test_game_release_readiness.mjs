@@ -198,6 +198,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "player-action-boundary",
         "private-channel",
         "replacement-console",
+        "replacement-stale-player",
       ],
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
@@ -652,6 +653,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     "player-action-boundary",
     "private-channel",
     "replacement-console",
+    "replacement-stale-player",
   ];
   if (proof?.version !== 1) {
     throw new Error(`core-loop admin proof version drifted: ${proof?.version}`);
@@ -895,6 +897,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "dead-player-recovery",
     "night-action-loop",
     "host-replacement-console",
+    "replacement-stale-player",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",
@@ -961,6 +964,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "dead-player-recovery",
     "night-action-loop",
     "host-replacement-console",
+    "replacement-stale-player",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",

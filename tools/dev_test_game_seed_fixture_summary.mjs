@@ -157,6 +157,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "dead-player-recovery",
     "night-action-loop",
     "host-replacement-console",
+    "replacement-stale-player",
     "private-channel-member",
     "private-channel-denied",
     "multiplayer-hardening",
@@ -262,6 +263,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "host",
       provenBy: ["replacement-console"].filter(hasLane),
       note: "Host opens the seeded role URL, processes the Slot 7 replacement, updates the projected occupant, and preserves stable slot history.",
+    }),
+    scenario({
+      id: "replacement-stale-player",
+      title: "Replacement stale player recovery",
+      role: "player",
+      provenBy: ["replacement-stale-player"].filter(hasLane),
+      note: "Outgoing player opens the seeded role URL before replacement, submits a stale Slot 7 vote after replacement, receives NotYourSlot recovery, and loses old Slot 7 controls.",
     }),
     scenario({
       id: "private-channel-member",

@@ -58,6 +58,7 @@
   let thread = data.thread;
   let votecount = data.votecount;
   let commandState = data.commandState;
+  let player = data.player;
   let phase = data.phase;
   let composer = data.composer;
   let surfaceHeader = data.surfaceHeader;
@@ -86,6 +87,7 @@
   $: currentData = Object.freeze({
     ...data,
     commandState,
+    player,
     phase,
     composer,
     surfaceHeader,
@@ -104,6 +106,15 @@
     thread = snapshot.thread;
     votecount = snapshot.votecount;
     commandState = snapshot.commandState;
+    player = Object.freeze({
+      ...data.player,
+      alive: commandState?.actorAlive ?? data.player.alive,
+      status: commandState?.actorStatus ?? data.player.status,
+      capabilityLabel:
+        commandState?.actorStatus === "replaced"
+          ? `No current SlotOccupant(${data.player.slotId})`
+          : data.player.capabilityLabel,
+    });
     phase = buildPlayerPhaseView(commandState);
     composer = buildPlayerComposerView(data.composer, commandState, data.player.slotId);
     surfaceHeader = Object.freeze({
@@ -327,7 +338,7 @@
           {phase}
           {votecount}
           channel={data.channel}
-          player={data.player}
+          {player}
           bind:body={composerBody}
           onCommand={submitPlayerCommand}
         />

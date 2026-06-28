@@ -863,6 +863,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     "player-action-boundary",
     "private-channel",
     "replacement-console",
+    "replacement-stale-player",
   ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));

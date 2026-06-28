@@ -25,6 +25,7 @@ const requiredScenarios = [
   "dead-player-recovery",
   "night-action-loop",
   "host-replacement-console",
+  "replacement-stale-player",
   "private-channel-member",
   "private-channel-denied",
   "multiplayer-hardening",

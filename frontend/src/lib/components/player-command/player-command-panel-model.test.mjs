@@ -141,6 +141,48 @@ test("player command panel model disables command controls for dead actors", () 
   assert.deepEqual(view.composer.actionButtons, []);
 });
 
+test("player command panel model surfaces replaced slot recovery context", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      postCommandLabel: "Post",
+      actionCommands: [],
+    },
+    channel: {
+      channel: "main",
+      label: "Main thread",
+      capabilityLabel: "SlotOccupant or ChannelMember(main)",
+    },
+    player: {
+      slotId: "slot-7",
+      alive: false,
+      status: "replaced",
+      capabilityLabel: "No current SlotOccupant(slot-7)",
+    },
+  });
+
+  assert.deepEqual(view.composer.channelContext, {
+    testId: PLAYER_COMMAND_PANEL_CONTRACT.channelContextTestId,
+    channelId: "main",
+    channelLabel: "Main thread",
+    capabilityLabel: "No current SlotOccupant(slot-7)",
+    slotId: "slot-7",
+    actorAlive: "false",
+    actorStatus: "replaced",
+    label: "Posting target",
+    value: "Main thread as slot-7 (replaced)",
+  });
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [
+      ["submit_vote", true],
+      ["withdraw_vote", true],
+      ["submit_post", true],
+    ],
+  );
+});
+
 test("player command panel model normalizes missing row and label data", () => {
   const view = buildPlayerCommandPanelViewModel({
     composer: {},

@@ -18,6 +18,7 @@ const requiredLaneIds = Object.freeze([
   "player-action-boundary",
   "private-channel",
   "replacement-console",
+  "replacement-stale-player",
   "idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
@@ -260,6 +261,48 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.replacementConsole?.apiSlot?.slot_id === "slot-7" &&
         verification.replacementConsole?.apiSlot?.occupant_user_id === "player-rowan",
+    }),
+    lane("replacement-stale-player", "Outgoing replacement player recovers stale controls", {
+      rejectError:
+        verification.replacementConsole?.staleOutgoingPlayer?.reject?.error ?? null,
+      rejectMessage:
+        verification.replacementConsole?.staleOutgoingPlayer?.reject?.message ?? null,
+      recoveredActorStatus:
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actorStatus ?? null,
+      recoveredActorAlive:
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actorAlive ?? null,
+      buttonsDisabled:
+        verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled ?? null,
+      capabilityLabel:
+        verification.replacementConsole?.staleOutgoingPlayer?.contextState
+          ?.capabilityLabel ?? null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.status === "passed" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.setup?.commandState
+          ?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.reject?.error ===
+          "NotYourSlot" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.reject?.message?.includes(
+          "slot ownership changed",
+        ) === true &&
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actorAlive === false &&
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actorStatus === "replaced" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.recoveredCommandState
+          ?.actions?.length === 0 &&
+        verification.replacementConsole?.staleOutgoingPlayer?.contextState
+          ?.actorAlive === "false" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.contextState
+          ?.actorStatus === "replaced" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.contextState
+          ?.capabilityLabel?.includes("No current SlotOccupant(slot-7)") === true &&
+        verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled === true,
     }),
     lane("idempotent-retry", "Duplicate command id returns original ACK", {
       channel: hardening.idempotentRetry?.channel ?? null,

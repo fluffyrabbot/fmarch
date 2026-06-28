@@ -244,6 +244,15 @@ export async function submitPlayerRouteCommand({
     commandIdFactory,
     fetchImpl,
   });
+  if (commandStatus?.state === "reject" && commandStatus?.error === "NotYourSlot") {
+    projectionStore.applySnapshot({
+      commandState: staleSlotOwnershipCommandState({ data, commandStatus }),
+    });
+    return Object.freeze({
+      commandStatus,
+      snapshot: projectionStore.getSnapshot(),
+    });
+  }
   const refreshKeys = playerRefreshKeysForCommandOutcome({
     data,
     action,
@@ -282,6 +291,21 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     return playerRefreshKeysForDataAction(data, action);
   }
   return Object.freeze([]);
+}
+
+export function staleSlotOwnershipCommandState({ data, commandStatus }) {
+  const previous = data.commandState ?? {};
+  const slotId = data.player?.slotId ?? previous.actorSlot ?? null;
+  return Object.freeze({
+    ...previous,
+    game: data.game?.id ?? previous.game ?? null,
+    actorSlot: slotId,
+    actorAlive: false,
+    actorStatus: "replaced",
+    roleKey: null,
+    actions: Object.freeze([]),
+    boundary: `${commandStatus?.message ?? "Reject NotYourSlot"}. The current session no longer owns ${slotId ?? "this slot"}; reload with a current role URL.`,
+  });
 }
 
 function playerRefreshKeysForDataAction(data, action) {

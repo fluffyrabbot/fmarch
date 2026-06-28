@@ -818,6 +818,42 @@ test("session card and markdown include role invite URLs and tokens", () => {
         slot_id: "slot-7",
         occupant_user_id: "player-rowan",
       },
+      staleOutgoingPlayer: {
+        status: "passed",
+        setup: {
+          commandState: {
+            actorSlot: "slot-7",
+            actorAlive: true,
+          },
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          error: "NotYourSlot",
+          message:
+            "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+        },
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          actorAlive: false,
+          actorStatus: "replaced",
+          actions: [],
+          boundary: "Reject NotYourSlot: not your slot; The current session no longer owns slot-7.",
+        },
+        contextState: {
+          actorAlive: "false",
+          actorStatus: "replaced",
+          capabilityLabel: "No current SlotOccupant(slot-7)",
+        },
+        buttonsDisabled: true,
+        commandReceipts: [
+          {
+            actionId: "submit_vote",
+            current: true,
+            message:
+              "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+          },
+        ],
+      },
     },
     multiplayerHardening: {
       status: "passed",
@@ -969,6 +1005,11 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("## Replacement Console Proof"));
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
   assert(markdown.includes("Projected occupant: player-rowan"));
+  assert(
+    markdown.includes(
+      "Stale outgoing recovery: Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+    ),
+  );
   assert(markdown.includes("## Multiplayer Hardening Proof"));
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
@@ -997,6 +1038,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "player-action-boundary",
       "private-channel",
       "replacement-console",
+      "replacement-stale-player",
       "idempotent-retry",
       "reconnect-recovery",
       "stale-player-vote",
@@ -1075,7 +1117,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 17);
+  assert.equal(opsArtifacts.proofRun.laneCount, 18);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1144,6 +1186,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "dead-player-recovery",
       "night-action-loop",
       "host-replacement-console",
+      "replacement-stale-player",
       "private-channel-member",
       "private-channel-denied",
       "multiplayer-hardening",
@@ -1508,6 +1551,7 @@ function coreLoopAdminProofFixture() {
         "player-action-boundary",
         "private-channel",
         "replacement-console",
+        "replacement-stale-player",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -1615,6 +1659,7 @@ function seedAdminProofFixture() {
         "dead-player-recovery",
         "night-action-loop",
         "host-replacement-console",
+        "replacement-stale-player",
         "private-channel-member",
         "private-channel-denied",
         "multiplayer-hardening",

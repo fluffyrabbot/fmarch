@@ -2192,6 +2192,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::UnlockThread { .. }
             | wire::Command::ResolvePhase { .. }
             | wire::Command::CompleteGame { .. }
+            | wire::Command::ProcessReplacement { .. }
     )
 }
 

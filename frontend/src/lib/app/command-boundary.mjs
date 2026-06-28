@@ -189,6 +189,9 @@ function rejectMessage(reject, retryable) {
   if (reject.error === "ActionAlreadySubmitted") {
     return `${base}; refresh and use current controls`;
   }
+  if (reject.error === "NotYourSlot") {
+    return `${base}; slot ownership changed, refresh and use current role surface`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 

@@ -873,7 +873,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 5,
-    laneCount: 17,
+    laneCount: 18,
     releaseReady: false,
     productionReady: false,
   });
@@ -888,7 +888,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
   const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
   assert.equal(coreLoop.label, "Local core loop");
-  assert.equal(coreLoop.status, "8 core loop lanes passed");
+  assert.equal(coreLoop.status, "9 core loop lanes passed");
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
   assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
   assert.deepEqual(
@@ -902,12 +902,13 @@ test("admin route data exposes local core loop proof as a native audit row", asy
       "player-action-boundary",
       "private-channel",
       "replacement-console",
+      "replacement-stale-player",
     ],
   );
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 5,
-    laneCount: 17,
+    laneCount: 18,
     releaseReady: false,
     productionReady: false,
   });
@@ -924,7 +925,7 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
-  assert.equal(data.audit.checks.length, 8);
+  assert.equal(data.audit.checks.length, 9);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -936,6 +937,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["player-action-boundary", "passed"],
       ["private-channel", "passed"],
       ["replacement-console", "passed"],
+      ["replacement-stale-player", "passed"],
     ],
   );
 });
@@ -998,7 +1000,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "13 demo scenarios available locally");
+  assert.equal(seed.status, "14 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1013,6 +1015,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "dead-player-recovery",
       "night-action-loop",
       "host-replacement-console",
+      "replacement-stale-player",
       "private-channel-member",
       "private-channel-denied",
       "multiplayer-hardening",
@@ -1021,7 +1024,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 13,
+    scenarioCount: 14,
     roleCount: 6,
     slotCount: 5,
     releaseReady: false,
@@ -1040,7 +1043,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 13);
+  assert.equal(data.audit.scenarios.length, 14);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1053,6 +1056,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["dead-player-recovery", "available_locally"],
       ["night-action-loop", "available_locally"],
       ["host-replacement-console", "available_locally"],
+      ["replacement-stale-player", "available_locally"],
       ["private-channel-member", "available_locally"],
       ["private-channel-denied", "available_locally"],
       ["multiplayer-hardening", "available_locally"],
@@ -1339,6 +1343,7 @@ function proofRunFixture() {
     "player-action-boundary",
     "private-channel",
     "replacement-console",
+    "replacement-stale-player",
     "idempotent-retry",
     "reconnect-recovery",
     "stale-player-vote",
@@ -1422,6 +1427,7 @@ function seedFixtureSummaryFixture() {
       seedScenario("dead-player-recovery", "Dead player recovery", "deniedPlayer"),
       seedScenario("night-action-loop", "Night action loop", "actionPlayer"),
       seedScenario("host-replacement-console", "Host replacement console", "host"),
+      seedScenario("replacement-stale-player", "Replacement stale player recovery", "player"),
       seedScenario("private-channel-member", "Private channel member", "player"),
       seedScenario("private-channel-denied", "Private channel denial", "deniedPlayer"),
       seedScenario("multiplayer-hardening", "Multiplayer hardening", "player"),

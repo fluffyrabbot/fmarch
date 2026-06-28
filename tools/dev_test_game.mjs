@@ -653,6 +653,8 @@ export function markdownSessionCard(card) {
         "",
         `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
         "",
+        `Stale outgoing recovery: ${card.verification.replacementConsole.staleOutgoingPlayer.reject.message}`,
+        "",
       );
     }
     if (card.verification.multiplayerHardening !== undefined) {
@@ -702,6 +704,7 @@ async function verifySessionCard(card) {
   let staleActionPage;
   let staleHostPage;
   let staleCohostPage;
+  let staleReplacementPage;
   try {
     for (const role of ["host", "player", "actionPlayer", "deniedPlayer", "cohost"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
@@ -717,6 +720,7 @@ async function verifySessionCard(card) {
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
+    staleReplacementPage = await roleEntries.player.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
       staleCohostPage,
@@ -763,6 +767,7 @@ async function verifySessionCard(card) {
     });
     replacementConsole = await verifySeededReplacementConsole({
       hostPage: roleEntries.host.page,
+      staleOutgoingPage: staleReplacementPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
@@ -770,6 +775,7 @@ async function verifySessionCard(card) {
     await staleActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
+    await staleReplacementPage?.close().catch(() => {});
     await Promise.all(
       Object.values(roleEntries).map((entry) => entry.context.close()),
     );
@@ -1854,7 +1860,16 @@ async function verifySeededMultiplayerHardening({
   };
 }
 
-async function verifySeededReplacementConsole({ hostPage, game, apiBaseUrl }) {
+async function verifySeededReplacementConsole({
+  hostPage,
+  staleOutgoingPage,
+  game,
+  apiBaseUrl,
+}) {
+  const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
+    staleOutgoingPage,
+    game,
+  });
   const processReplacement = await confirmHostAction(hostPage, "process_replacement");
   const command = processReplacement.commandStatus?.requestEnvelope?.body?.body?.command;
   await hostPage.waitForFunction(
@@ -1871,6 +1886,10 @@ async function verifySeededReplacementConsole({ hostPage, game, apiBaseUrl }) {
     slot: "slot-7",
   });
   const apiSlot = apiState.slots?.find?.((slot) => slot.slot_id === "slot-7");
+  const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
+    staleOutgoingPage,
+    staleOutgoingSetup,
+  });
   if (
     processReplacement.commandStatus?.state !== "ack" ||
     command?.ProcessReplacement?.game !== game ||
@@ -1881,13 +1900,17 @@ async function verifySeededReplacementConsole({ hostPage, game, apiBaseUrl }) {
     projectedReplacement?.occupantLabel !== "player-rowan" ||
     !projectedReplacement?.historyLabel?.includes("slot-7") ||
     apiSlot?.slot_id !== "slot-7" ||
-    apiSlot?.occupant_user_id !== "player-rowan"
+    apiSlot?.occupant_user_id !== "player-rowan" ||
+    staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
+    staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
+    staleOutgoingPlayer?.buttonsDisabled !== true
   ) {
     throw new Error(
       `replacement console proof drifted: ${JSON.stringify({
         processReplacement,
         projectedReplacement,
         apiSlot,
+        staleOutgoingPlayer,
       })}`,
     );
   }
@@ -1896,8 +1919,107 @@ async function verifySeededReplacementConsole({ hostPage, game, apiBaseUrl }) {
     processReplacement,
     projectedReplacement,
     apiSlot,
+    staleOutgoingPlayer,
     proof:
-      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, and preserved the stable slot history boundary.",
+      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, and recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls.",
+  };
+}
+
+async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
+  await gotoPlayerBoard(staleOutgoingPage, game);
+  await staleOutgoingPage.locator('[data-action="submit_vote"]').waitFor({
+    state: "visible",
+  });
+  await staleOutgoingPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+  );
+  await staleOutgoingPage.waitForFunction(
+    () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+  );
+  const commandState = await staleOutgoingPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const closedStatus = await staleOutgoingPage.evaluate(
+    () => window.__fmarchClosePlayerLiveProjection(),
+  );
+  return { commandState, closedStatus };
+}
+
+async function submitStaleOutgoingReplacementRecovery({
+  staleOutgoingPage,
+  staleOutgoingSetup,
+}) {
+  await staleOutgoingPage.locator('[data-action="submit_vote"]').click();
+  await staleOutgoingPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "NotYourSlot",
+  );
+  await staleOutgoingPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "replaced" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+  );
+  const reject = await staleOutgoingPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const recoveredCommandState = await staleOutgoingPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const commandReceipts = await staleOutgoingPage.evaluate(
+    () => window.__fmarchPlayerCommandReceipts ?? [],
+  );
+  const contextState = await staleOutgoingPage
+    .getByTestId("player-command-channel-context")
+    .evaluate((node) => ({
+      actorAlive: node.getAttribute("data-actor-alive"),
+      actorStatus: node.getAttribute("data-actor-status"),
+      capabilityLabel: node.getAttribute("data-capability-label"),
+    }));
+  const buttonsDisabled = await staleOutgoingPage.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        "[data-action='submit_vote'], [data-action='withdraw_vote'], [data-action='submit_post']",
+      ),
+    ].every((button) => button.disabled === true),
+  );
+  if (
+    !reject.message.includes("slot ownership changed") ||
+    recoveredCommandState?.actorSlot !== "slot-7" ||
+    recoveredCommandState?.actorAlive !== false ||
+    recoveredCommandState?.actorStatus !== "replaced" ||
+    !recoveredCommandState?.boundary?.includes("no longer owns slot-7") ||
+    contextState.actorAlive !== "false" ||
+    contextState.actorStatus !== "replaced" ||
+    !contextState.capabilityLabel?.includes("No current SlotOccupant(slot-7)") ||
+    buttonsDisabled !== true ||
+    !commandReceipts.some(
+      (receipt) =>
+        receipt.actionId === "submit_vote" &&
+        receipt.current === true &&
+        receipt.message?.includes("slot ownership changed"),
+    )
+  ) {
+    throw new Error(
+      `stale outgoing replacement recovery drifted: ${JSON.stringify({
+        staleOutgoingSetup,
+        reject,
+        recoveredCommandState,
+        contextState,
+        buttonsDisabled,
+        commandReceipts,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    setup: staleOutgoingSetup,
+    reject,
+    recoveredCommandState,
+    contextState,
+    buttonsDisabled,
+    commandReceipts,
   };
 }
 

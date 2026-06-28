@@ -315,6 +315,59 @@ assert.equal(
   session.verification.replacementConsole.apiSlot.occupant_user_id,
   "player-rowan",
 );
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.setup.commandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.reject.error,
+  "NotYourSlot",
+);
+assert.match(
+  session.verification.replacementConsole.staleOutgoingPlayer.reject.message,
+  /slot ownership changed/,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.recoveredCommandState
+    .actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.recoveredCommandState
+    .actorAlive,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.recoveredCommandState
+    .actorStatus,
+  "replaced",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.recoveredCommandState
+    .actions.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.contextState.actorAlive,
+  "false",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.contextState.actorStatus,
+  "replaced",
+);
+assert.match(
+  session.verification.replacementConsole.staleOutgoingPlayer.contextState
+    .capabilityLabel,
+  /No current SlotOccupant\(slot-7\)/,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.buttonsDisabled,
+  true,
+);
 assert.equal(session.verification.multiplayerHardening.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.idempotentRetry.channel,

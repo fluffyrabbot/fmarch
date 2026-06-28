@@ -64,11 +64,13 @@ export function buildPlayerCommandPanelViewModel({
 function buildChannelContextViewModel({ channel = {}, player = {} }) {
   const channelId = String(channel.channel ?? "main");
   const channelLabel = String(channel.label ?? "Main thread");
+  const actorStatus = String(player.status ?? "").trim();
   const capabilityLabel = String(
-    channel.capabilityLabel ?? player.capabilityLabel ?? "Scoped player capability",
+    actorStatus === "replaced"
+      ? player.capabilityLabel ?? channel.capabilityLabel ?? "Scoped player capability"
+      : channel.capabilityLabel ?? player.capabilityLabel ?? "Scoped player capability",
   );
   const slotId = String(player.slotId ?? "slot");
-  const actorStatus = String(player.status ?? "").trim();
   const actorAlive = player.alive === false ? "false" : player.alive === true ? "true" : "unknown";
   const lifecycleSuffix =
     actorStatus !== "" && actorStatus !== "alive" ? ` (${actorStatus})` : "";
