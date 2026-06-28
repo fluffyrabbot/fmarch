@@ -329,7 +329,11 @@ checks the slot-scoped host-console API still reports the stable `slot-7`
 history boundary. It also opens a separate stale `player` role URL as
 `player-mira` before replacement, submits an old Slot 7 vote after replacement,
 records the `NotYourSlot` recovery receipt, and verifies the old vote/post
-controls are disabled with `No current SlotOccupant(slot-7)` context. Finally,
+controls are disabled with `No current SlotOccupant(slot-7)` context. The host
+then submits a stale post-success `ProcessReplacement` with `player-mira` as the
+old outgoing user, records the visible `InvalidTarget` command-activity receipt,
+and verifies Slot 7 stays on `player-rowan` while Mira's old URL remains
+replaced and disabled. Finally,
 it reopens the same host-issued `replacementPlayer` role URL for `player-rowan`
 after replacement, verifies current Slot 7 authority, preserves the earlier
 Slot 7 thread history, submits a new Slot 7 post and vote, and checks
@@ -341,8 +345,8 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
-`replacement-console`, `replacement-stale-player`, and
-`replacement-incoming-player` rows.
+`replacement-console`, `replacement-stale-success-recovery`,
+`replacement-stale-player`, and `replacement-incoming-player` rows.
 
 The multiplayer-hardening proof promotes the first retry, reconnect,
 concurrent-vote, and stale-client behaviors into the same browser harness: the

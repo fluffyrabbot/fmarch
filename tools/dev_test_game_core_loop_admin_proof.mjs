@@ -27,6 +27,7 @@ const requiredChecks = [
   "replacement-pending-player",
   "replacement-invalid-target-recovery",
   "replacement-console",
+  "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-incoming-player",
 ];

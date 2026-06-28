@@ -28,6 +28,7 @@ const requiredScenarios = [
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-invalid-target-recovery",
+  "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-incoming-player",
   "private-channel-member",

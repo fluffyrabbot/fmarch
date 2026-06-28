@@ -160,6 +160,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-invalid-target-recovery",
+    "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-incoming-player",
     "private-channel-member",
@@ -288,6 +289,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "replacementPlayer",
       provenBy: ["replacement-invalid-target-recovery"].filter(hasLane),
       note: "Host sends a stale replacement command with the wrong outgoing user, receives a visible InvalidTarget command-activity receipt, and the incoming replacement URL stays pending without slot authority or controls.",
+    }),
+    scenario({
+      id: "replacement-stale-success-recovery",
+      title: "Stale replacement after success",
+      role: "host",
+      provenBy: ["replacement-stale-success-recovery"].filter(hasLane),
+      note: "After Slot 7 transfers to player-rowan, host sends a stale replacement for player-mira, receives a visible InvalidTarget receipt, Slot 7 remains with Rowan, and Mira's old URL stays replaced and disabled.",
     }),
     scenario({
       id: "replacement-stale-player",

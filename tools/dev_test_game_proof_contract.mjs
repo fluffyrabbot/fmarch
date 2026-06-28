@@ -21,6 +21,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-pending-player",
   "replacement-invalid-target-recovery",
   "replacement-console",
+  "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-incoming-player",
   "idempotent-retry",
@@ -406,6 +407,65 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.replacementConsole?.apiSlot?.slot_id === "slot-7" &&
         verification.replacementConsole?.apiSlot?.occupant_user_id === "player-rowan",
+    }),
+    lane("replacement-stale-success-recovery", "Stale replacement after success recovers", {
+      rejectError:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.reject?.error ??
+        null,
+      commandOutgoing:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.invalidReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ??
+        null,
+      hostActivityStatus:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText ?? null,
+      hostProjectionOccupant:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.hostProjectionAfterReject?.occupantLabel ?? null,
+      apiOccupant:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.apiSlotAfterReject?.occupant_user_id ?? null,
+      outgoingActorStatus:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.staleOutgoingPlayer?.recoveredCommandState?.actorStatus ?? null,
+      outgoingButtonsDisabled:
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.staleOutgoingPlayer?.buttonsDisabled ?? null,
+      passed:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.status ===
+          "passed" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.invalidReplacement?.serverEnvelope?.body?.kind === "Reject" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.reject
+          ?.error === "InvalidTarget" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.invalidReplacement?.requestEnvelope?.body?.body?.principal_user_id ===
+          "host_h" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.invalidReplacement?.requestEnvelope?.body?.body?.command
+          ?.ProcessReplacement?.outgoing_user === "player-mira" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.activityStatusText?.includes("Reject InvalidTarget") === true &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.source === "outcome" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.actionId === "process_replacement_stale_success" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.dispatchKind === "process_replacement" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.dispatchPlan
+          ?.finalState === "reject" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess?.dispatchPlan
+          ?.projectionRefreshKeys?.length === 0 &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.hostProjectionAfterReject?.occupantLabel === "player-rowan" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.apiSlotAfterReject?.slot_id === "slot-7" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.apiSlotAfterReject?.occupant_user_id === "player-rowan" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.staleOutgoingPlayer?.recoveredCommandState?.actorStatus === "replaced" &&
+        verification.replacementConsole?.staleReplacementAfterSuccess
+          ?.staleOutgoingPlayer?.buttonsDisabled === true,
     }),
     lane("replacement-stale-player", "Outgoing replacement player recovers stale controls", {
       rejectError:

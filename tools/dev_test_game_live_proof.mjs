@@ -542,6 +542,66 @@ assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.buttonsDisabled,
   true,
 );
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.invalidReplacement
+    .serverEnvelope.body.kind,
+  "Reject",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.reject.error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.invalidReplacement
+    .requestEnvelope.body.body.command.ProcessReplacement.outgoing_user,
+  "player-mira",
+);
+assert.match(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.activityStatusText,
+  /Reject InvalidTarget/,
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.activityRow.actionId,
+  "process_replacement_stale_success",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.activityRow.dispatchKind,
+  "process_replacement",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.dispatchPlan
+    .finalState,
+  "reject",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.dispatchPlan
+    .projectionRefreshKeys.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess
+    .hostProjectionAfterReject.occupantLabel,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.apiSlotAfterReject
+    .occupant_user_id,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.staleOutgoingPlayer
+    .recoveredCommandState.actorStatus,
+  "replaced",
+);
+assert.equal(
+  session.verification.replacementConsole.staleReplacementAfterSuccess.staleOutgoingPlayer
+    .buttonsDisabled,
+  true,
+);
 assert.equal(session.verification.sessions.replacementPlayer.principalUserId, "player-rowan");
 assert(
   session.verification.sessions.replacementPlayer.capabilityKinds.includes("SlotOccupant"),
