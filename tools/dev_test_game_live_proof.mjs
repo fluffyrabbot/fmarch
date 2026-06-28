@@ -361,6 +361,26 @@ assert.equal(
   0,
 );
 assert.equal(
+  session.verification.replacementConsole.redeemedInviteRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.redeemedInviteRecovery.message,
+  "Session or invite token is missing, expired, or revoked",
+);
+assert.equal(
+  session.verification.replacementConsole.redeemedInviteRecovery.prefilledInviteToken,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.redeemedInviteRecovery.sessionCookiePresent,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.redeemedInviteRecovery.stayedOnLogin,
+  true,
+);
+assert.equal(
   session.verification.replacementConsole.invalidReplacementRecovery.status,
   "passed",
 );

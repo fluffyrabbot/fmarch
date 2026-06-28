@@ -27,6 +27,7 @@ const requiredScenarios = [
   "host-replacement-console",
   "replacement-host-issued-invite",
   "replacement-pending-player",
+  "replacement-redeemed-invite-recovery",
   "replacement-invalid-target-recovery",
   "replacement-idempotent-retry",
   "replacement-stale-success-recovery",

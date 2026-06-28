@@ -19,6 +19,7 @@ const requiredLaneIds = Object.freeze([
   "private-channel",
   "replacement-host-issued-invite",
   "replacement-pending-player",
+  "replacement-redeemed-invite-recovery",
   "replacement-invalid-target-recovery",
   "replacement-console",
   "replacement-idempotent-retry",
@@ -305,6 +306,29 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.primaryButtons === 0 &&
         verification.replacementConsole?.pendingIncomingPlayer?.controlCounts
           ?.actionButtons === 0,
+    }),
+    lane("replacement-redeemed-invite-recovery", "Redeemed replacement invite cannot mint another session", {
+      message:
+        verification.replacementConsole?.redeemedInviteRecovery?.message ?? null,
+      prefilledInviteToken:
+        verification.replacementConsole?.redeemedInviteRecovery
+          ?.prefilledInviteToken ?? null,
+      sessionCookiePresent:
+        verification.replacementConsole?.redeemedInviteRecovery
+          ?.sessionCookiePresent ?? null,
+      stayedOnLogin:
+        verification.replacementConsole?.redeemedInviteRecovery?.stayedOnLogin ??
+        null,
+      passed:
+        verification.replacementConsole?.redeemedInviteRecovery?.status === "passed" &&
+        verification.replacementConsole?.redeemedInviteRecovery?.message ===
+          "Session or invite token is missing, expired, or revoked" &&
+        verification.replacementConsole?.redeemedInviteRecovery
+          ?.prefilledInviteToken === true &&
+        verification.replacementConsole?.redeemedInviteRecovery
+          ?.sessionCookiePresent === false &&
+        verification.replacementConsole?.redeemedInviteRecovery?.stayedOnLogin ===
+          true,
     }),
     lane("replacement-invalid-target-recovery", "Invalid replacement leaves URL pending", {
       rejectError:

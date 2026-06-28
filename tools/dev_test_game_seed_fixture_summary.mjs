@@ -159,6 +159,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "host-replacement-console",
     "replacement-host-issued-invite",
     "replacement-pending-player",
+    "replacement-redeemed-invite-recovery",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
@@ -285,6 +286,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Incoming player opens the host-issued role URL before replacement, lands on an authenticated pending surface, has no current SlotOccupant authority, and sees no player controls.",
     }),
     scenario({
+      id: "replacement-redeemed-invite-recovery",
+      title: "Redeemed replacement invite recovery",
+      role: "replacementPlayer",
+      provenBy: ["replacement-redeemed-invite-recovery"].filter(hasLane),
+      note: "A fresh browser opens the already-redeemed replacement invite URL, receives a clear login rejection, and does not get an fmarch_session cookie.",
+    }),
+    scenario({
       id: "replacement-invalid-target-recovery",
       title: "Invalid replacement recovery",
       role: "replacementPlayer",
@@ -338,6 +346,7 @@ function demoScenarios({ roles, laneIds }) {
       title: "Multiplayer hardening",
       role: "player",
       provenBy: [
+        "replacement-redeemed-invite-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -345,7 +354,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-control",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

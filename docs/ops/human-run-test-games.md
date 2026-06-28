@@ -318,11 +318,13 @@ The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
 surface, opens that host-issued `replacementPlayer` role URL before replacement
 as an authenticated pending player with no current SlotOccupant authority and no
-player controls, sends a stale direct `ProcessReplacement` from the host browser
-with `player-rowan` as the wrong outgoing user, records the `InvalidTarget`
-reject as a visible host command-activity receipt, and verifies the
-host-console API still shows Slot 7 owned by `player-mira` while the
-`replacementPlayer` URL remains pending with no controls. It then clicks the
+player controls, then opens that already-redeemed invite URL in a fresh browser
+and verifies the login surface rejects it without setting an `fmarch_session`
+cookie. It sends a stale direct `ProcessReplacement` from the host browser with
+`player-rowan` as the wrong outgoing user, records the `InvalidTarget` reject as
+a visible host command-activity receipt, and verifies the host-console API still
+shows Slot 7 owned by `player-mira` while the `replacementPlayer` URL remains
+pending with no controls. It then clicks the
 hydrated `ProcessReplacement` control for Slot 7,
 records the ACK, verifies the host projection now shows `player-rowan`, and
 checks the slot-scoped host-console API still reports the stable `slot-7`
@@ -447,7 +449,7 @@ proof.
 
 This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
-host replacement, stale outgoing-player replacement recovery, and incoming
+host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, and replacement-player ownership,
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale action conflict, stale host

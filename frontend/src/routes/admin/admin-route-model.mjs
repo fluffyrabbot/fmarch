@@ -935,6 +935,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     return null;
   }
   const requiredLaneIds = [
+    "replacement-redeemed-invite-recovery",
     "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",

@@ -16,6 +16,7 @@ const proofRunPath = path.resolve(
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "hardening-admin-proof.json");
 const requiredChecks = [
+  "replacement-redeemed-invite-recovery",
   "replacement-idempotent-retry",
   "idempotent-retry",
   "reconnect-recovery",

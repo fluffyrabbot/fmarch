@@ -652,6 +652,8 @@ export function markdownSessionCard(card) {
         "",
         `Host-issued invite: ${card.verification.replacementConsole.hostIssuedInvite.statusText}`,
         "",
+        `Redeemed invite recovery: ${card.verification.replacementConsole.redeemedInviteRecovery.message}`,
+        "",
         `Invalid replacement recovery: ${card.verification.replacementConsole.invalidReplacementRecovery.reject.error}`,
         "",
         `Process replacement: ${card.verification.replacementConsole.processReplacement.statusMessage}`,
@@ -1898,6 +1900,11 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
+    const redeemedInviteRecovery = await verifyRedeemedReplacementInviteRecovery({
+      browser,
+      replacementSession: hostIssuedInvite.session,
+      frontendBaseUrl,
+    });
     const invalidReplacementRecovery = await verifyInvalidReplacementRecovery({
       hostPage,
       pendingIncomingPlayer,
@@ -1961,6 +1968,10 @@ async function verifySeededReplacementConsole({
       pendingIncomingPlayer?.capabilityLabel !== `PendingReplacement(${game})` ||
       pendingIncomingPlayer?.commandState?.actorStatus !== "pending_replacement" ||
       pendingIncomingPlayer?.controlCounts?.primaryButtons !== 0 ||
+      redeemedInviteRecovery?.status !== "passed" ||
+      redeemedInviteRecovery?.message !==
+        "Session or invite token is missing, expired, or revoked" ||
+      redeemedInviteRecovery?.sessionCookiePresent !== false ||
       invalidReplacementRecovery?.status !== "passed" ||
       invalidReplacementRecovery?.reject?.error !== "InvalidTarget" ||
       invalidReplacementRecovery?.apiSlotAfterReject?.occupant_user_id !==
@@ -2002,6 +2013,7 @@ async function verifySeededReplacementConsole({
         `replacement console proof drifted: ${JSON.stringify({
           hostIssuedInvite,
           pendingIncomingPlayer,
+          redeemedInviteRecovery,
           invalidReplacementRecovery,
           processReplacement,
           projectedReplacement,
@@ -2017,6 +2029,7 @@ async function verifySeededReplacementConsole({
       status: "passed",
       hostIssuedInvite,
       pendingIncomingPlayer: withoutReplacementEntry(pendingIncomingPlayer),
+      redeemedInviteRecovery,
       invalidReplacementRecovery,
       processReplacement,
       projectedReplacement,
@@ -2026,7 +2039,7 @@ async function verifySeededReplacementConsole({
       staleReplacementAfterSuccess,
       incomingPlayer,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
     };
   } finally {
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
@@ -2162,6 +2175,57 @@ async function verifyPendingReplacementPlayer({
   } catch (error) {
     await context.close().catch(() => {});
     throw error;
+  }
+}
+
+async function verifyRedeemedReplacementInviteRecovery({
+  browser,
+  replacementSession,
+  frontendBaseUrl,
+}) {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(replacementSession.loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    const prefilled = await page.getByTestId("auth-login-token").inputValue();
+    await page.getByTestId("auth-login-submit").click();
+    await page.getByTestId("auth-login-reject").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const message = await page.getByTestId("auth-login-reject").innerText();
+    const cookies = await context.cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    const currentUrl = page.url();
+    if (
+      prefilled !== replacementSession.inviteToken ||
+      message !== "Session or invite token is missing, expired, or revoked" ||
+      sessionCookie !== undefined ||
+      currentUrl === replacementSession.directUrl
+    ) {
+      throw new Error(
+        `redeemed replacement invite recovery drifted: ${JSON.stringify({
+          prefilled,
+          expectedInviteToken: replacementSession.inviteToken,
+          message,
+          sessionCookiePresent: sessionCookie !== undefined,
+          currentUrl,
+          directUrl: replacementSession.directUrl,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      message,
+      prefilledInviteToken: true,
+      sessionCookiePresent: false,
+      stayedOnLogin: currentUrl !== replacementSession.directUrl,
+      proof:
+        "A fresh browser opened the already-redeemed host-issued replacement invite URL, received the login reject message, and did not receive an fmarch_session cookie.",
+    };
+  } finally {
+    await context.close().catch(() => {});
   }
 }
 

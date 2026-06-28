@@ -848,6 +848,13 @@ test("session card and markdown include role invite URLs and tokens", () => {
           actionButtons: 0,
         },
       },
+      redeemedInviteRecovery: {
+        status: "passed",
+        message: "Session or invite token is missing, expired, or revoked",
+        prefilledInviteToken: true,
+        sessionCookiePresent: false,
+        stayedOnLogin: true,
+      },
       invalidReplacementRecovery: {
         status: "passed",
         invalidReplacement: {
@@ -1304,6 +1311,11 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Denied route: 403 Back to board"));
   assert(markdown.includes("## Replacement Console Proof"));
   assert(markdown.includes("Host-issued invite: Replacement invite issued"));
+  assert(
+    markdown.includes(
+      "Redeemed invite recovery: Session or invite token is missing, expired, or revoked",
+    ),
+  );
   assert(markdown.includes("Invalid replacement recovery: InvalidTarget"));
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
   assert(markdown.includes("Projected occupant: player-rowan"));
@@ -1344,6 +1356,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "private-channel",
       "replacement-host-issued-invite",
       "replacement-pending-player",
+      "replacement-redeemed-invite-recovery",
       "replacement-invalid-target-recovery",
       "replacement-console",
       "replacement-idempotent-retry",
@@ -1428,7 +1441,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 24);
+  assert.equal(opsArtifacts.proofRun.laneCount, 25);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1499,6 +1512,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "host-replacement-console",
       "replacement-host-issued-invite",
       "replacement-pending-player",
+      "replacement-redeemed-invite-recovery",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
@@ -1904,6 +1918,7 @@ function hardeningAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        "replacement-redeemed-invite-recovery",
         "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
@@ -1985,6 +2000,7 @@ function seedAdminProofFixture() {
         "host-replacement-console",
         "replacement-host-issued-invite",
         "replacement-pending-player",
+        "replacement-redeemed-invite-recovery",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",
