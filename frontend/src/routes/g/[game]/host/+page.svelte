@@ -130,7 +130,25 @@
       liveStatus = recovery.liveStatus;
       return recovery.snapshot;
     };
-    return () => connection?.close();
+    window.__fmarchCloseHostLiveProjection = () => {
+      connection?.close();
+      liveStatus = recordHostLiveProjectionEvent({
+        windowRef: window,
+        message: { kind: "close" },
+        snapshot: null,
+        currentStatus: liveStatus,
+      });
+      return liveStatus;
+    };
+    window.__fmarchDropHostLiveProjection = () => {
+      connection?.drop?.();
+    };
+    return () => {
+      delete window.__fmarchTriggerHostResync;
+      delete window.__fmarchCloseHostLiveProjection;
+      delete window.__fmarchDropHostLiveProjection;
+      connection?.close();
+    };
   });
 
   async function handleDispatch(event) {

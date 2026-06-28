@@ -303,12 +303,36 @@ export function buildDevTestGameProofRun(session, options = {}) {
     }),
     lane("stale-host-control", "Stale host phase control rejects without drift", {
       rejectError: hardening.staleHostControl?.reject?.error ?? null,
-      phaseId: hardening.staleHostControl?.phaseAfterReject?.phase_id ?? null,
+      stalePhase: hardening.staleHostControl?.setup?.stalePhase?.id ?? null,
+      phaseId: hardening.staleHostControl?.phaseAfterReject?.id ?? null,
       locked: hardening.staleHostControl?.phaseAfterReject?.locked ?? null,
+      activitySource: hardening.staleHostControl?.activityRow?.source ?? null,
+      currentActions: hardening.staleHostControl?.visibleActionsAfterReject ?? null,
       passed:
+        hardening.staleHostControl?.status === "passed" &&
+        hardening.staleHostControl?.setup?.stalePhase?.id === "N01" &&
+        hardening.staleHostControl?.setup?.stalePhase?.locked === true &&
         hardening.staleHostControl?.reject?.error === "PhaseLocked" &&
-        hardening.staleHostControl?.phaseAfterReject?.phase_id === "D02" &&
-        hardening.staleHostControl?.phaseAfterReject?.locked === false,
+        hardening.staleHostControl?.reject?.message?.includes("stale phase state") ===
+          true &&
+        hardening.staleHostControl?.phaseAfterReject?.id === "D02" &&
+        hardening.staleHostControl?.phaseAfterReject?.locked === false &&
+        hardening.staleHostControl?.activityRow?.source === "outcome" &&
+        hardening.staleHostControl?.activityRow?.actionId === "unlock_thread" &&
+        hardening.staleHostControl?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleHostControl?.visibleActionsAfterReject?.includes(
+          "resolve_phase",
+        ) === true &&
+        hardening.staleHostControl?.visibleActionsAfterReject?.includes(
+          "lock_thread",
+        ) === true &&
+        hardening.staleHostControl?.visibleActionsAfterReject?.includes(
+          "unlock_thread",
+        ) === false &&
+        hardening.staleHostControl?.apiPhaseAfterReject?.phase_id === "D02" &&
+        hardening.staleHostControl?.apiPhaseAfterReject?.locked === false,
     }),
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";

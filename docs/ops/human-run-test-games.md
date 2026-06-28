@@ -329,8 +329,10 @@ lands, refreshes command state after a stale locked-phase vote reject, submits
 two concurrent D02 votes from separate role pages and verifies converged browser
 plus API votecount, keeps a second action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` and refreshes to D02
-without the stale action control, and the host page sends a stale `UnlockThread`
-and verifies the `Reject PhaseLocked` recovery message while D02 remains open.
+without the stale action control, and keeps a second host page frozen on the N01
+locked controls until its stale `UnlockThread` click renders a host command
+activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
+`resolve_phase` / `lock_thread` controls.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and

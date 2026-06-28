@@ -387,6 +387,18 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.setup.stalePhase.id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.setup.stalePhase.locked,
+  true,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostControl.reject.state,
   "reject",
 );
@@ -399,11 +411,51 @@ assert.match(
   /stale phase state/,
 );
 assert.equal(
-  session.verification.multiplayerHardening.staleHostControl.phaseAfterReject.phase_id,
+  session.verification.multiplayerHardening.staleHostControl.phaseAfterReject.id,
   "D02",
 );
 assert.equal(
   session.verification.multiplayerHardening.staleHostControl.phaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.activityRow.source,
+  "outcome",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.activityRow.actionId,
+  "unlock_thread",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.visibleActionsAfterReject.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.visibleActionsAfterReject.includes(
+    "lock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.visibleActionsAfterReject.includes(
+    "unlock_thread",
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.apiPhaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostControl.apiPhaseAfterReject.locked,
   false,
 );
 

@@ -683,6 +683,7 @@ async function verifySessionCard(card) {
   let playerActionBoundary;
   let multiplayerHardening;
   let staleActionPage;
+  let staleHostPage;
   try {
     for (const role of ["host", "player", "actionPlayer", "deniedPlayer", "cohost"]) {
       roleEntries[role] = await openVerifiedRoleEntry({
@@ -696,6 +697,7 @@ async function verifySessionCard(card) {
       roles.push(role);
     }
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
+    staleHostPage = await roleEntries.host.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
       game: card.game,
@@ -717,8 +719,10 @@ async function verifySessionCard(card) {
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
       staleActionPage,
+      staleHostPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
     invalidActionRecovery = actionLoop.invalidActionRecovery;
     resolutionReceipts = actionLoop.resolutionReceipts;
@@ -729,10 +733,14 @@ async function verifySessionCard(card) {
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
       staleActionConflict: actionLoop.staleActionConflict,
+      staleHostPage,
+      staleHostControlSetup: actionLoop.staleHostControlSetup,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
     });
   } finally {
+    await staleActionPage?.close().catch(() => {});
+    await staleHostPage?.close().catch(() => {});
     await Promise.all(
       Object.values(roleEntries).map((entry) => entry.context.close()),
     );
@@ -941,8 +949,10 @@ async function verifySeededActionLoop({
   actionPage,
   targetPage,
   staleActionPage,
+  staleHostPage,
   game,
   apiBaseUrl,
+  frontendBaseUrl,
 }) {
   await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
@@ -990,6 +1000,11 @@ async function verifySeededActionLoop({
   if (targetState?.alive !== false || targetState?.status !== "dead") {
     throw new Error(`resolved action did not kill ${targetSlot}: ${JSON.stringify(targetState)}`);
   }
+  const staleHostControlSetup = await freezeStaleHostControlPage({
+    staleHostPage,
+    game,
+    frontendBaseUrl,
+  });
   const advanceDay = await confirmHostAction(hostPage, "advance_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   await actionPage.waitForFunction(() =>
@@ -1037,8 +1052,46 @@ async function verifySeededActionLoop({
     d02Phase,
     d02PhaseText,
     staleActionConflict,
+    staleHostControlSetup,
     proof:
       "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function freezeStaleHostControlPage({ staleHostPage, game, frontendBaseUrl }) {
+  await staleHostPage.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
+  await staleHostPage.locator('[data-testid="critical-host-action-unlock_thread"]').waitFor({
+    state: "visible",
+  });
+  await staleHostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "N01" &&
+      window.__fmarchHostProjection?.phase?.locked === true,
+  );
+  const stalePhase = await staleHostPage.evaluate(() => window.__fmarchHostProjection?.phase);
+  const visibleActions = await visibleHostPhaseActions(staleHostPage);
+  const closedStatus = await staleHostPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "N01" ||
+    stalePhase?.locked !== true ||
+    !visibleActions.includes("unlock_thread") ||
+    !visibleActions.includes("advance_phase") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host setup drifted: ${JSON.stringify({
+        stalePhase,
+        visibleActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    visibleActions,
+    closedStatus,
   };
 }
 
@@ -1595,6 +1648,8 @@ async function verifySeededMultiplayerHardening({
   playerPage,
   actionPage,
   staleActionConflict,
+  staleHostPage,
+  staleHostControlSetup,
   game,
   apiBaseUrl,
 }) {
@@ -1682,37 +1737,12 @@ async function verifySeededMultiplayerHardening({
   });
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
-  const staleCommandId = crypto.randomUUID();
-  const staleUnlockRaw = await sendBrowserCommand(hostPage, {
-    principalUserId: "host_h",
-    command: { UnlockThread: { game } },
-    commandId: staleCommandId,
+  const staleHostControl = await submitStaleHostControlRecovery({
+    staleHostPage,
+    staleHostControlSetup,
+    apiBaseUrl,
+    game,
   });
-  const staleUnlock = normalizeServerCommandEnvelope({
-    actionId: "unlock_thread",
-    commandId: staleCommandId,
-    requestEnvelope: staleUnlockRaw.requestEnvelope,
-    response: { status: staleUnlockRaw.httpStatus },
-    serverEnvelope: staleUnlockRaw.serverEnvelope,
-  });
-  if (
-    staleUnlock.state !== "reject" ||
-    staleUnlock.error !== "PhaseLocked" ||
-    !staleUnlock.message.includes("stale phase state")
-  ) {
-    throw new Error(`stale host control did not surface recovery: ${JSON.stringify(staleUnlock)}`);
-  }
-  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
-  if (
-    hostStateAfterReject.phase?.phase_id !== "D02" ||
-    hostStateAfterReject.phase?.locked !== false
-  ) {
-    throw new Error(
-      `stale host control changed phase projection: ${JSON.stringify(
-        hostStateAfterReject.phase,
-      )}`,
-    );
-  }
 
   return {
     status: "passed",
@@ -1728,14 +1758,102 @@ async function verifySeededMultiplayerHardening({
     stalePlayerVote,
     concurrentVoteRace,
     staleActionConflict,
-    staleHostControl: {
-      commandId: staleCommandId,
-      actionId: "unlock_thread",
-      reject: staleUnlock,
-      phaseAfterReject: hostStateAfterReject.phase,
-    },
+    staleHostControl,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then the seeded host role URL sent a stale UnlockThread and received a PhaseLocked recovery message while D02 stayed open.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then a stale seeded host role URL clicked UnlockThread, rendered a PhaseLocked command-activity receipt, refreshed to D02, and exposed the current valid phase controls.",
+  };
+}
+
+async function submitStaleHostControlRecovery({
+  staleHostPage,
+  staleHostControlSetup,
+  apiBaseUrl,
+  game,
+}) {
+  const staleActionRoot = staleHostPage.getByTestId("critical-host-action-unlock_thread");
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostPage.waitForFunction(
+    () =>
+      window.__fmarchHostCommandStatuses?.unlock_thread?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.unlock_thread?.error === "PhaseLocked",
+  );
+  await staleHostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const reject = await staleHostPage.evaluate(
+    () => window.__fmarchHostCommandStatuses?.unlock_thread,
+  );
+  const commandOutcomes = await staleHostPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const phaseAfterReject = await staleHostPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const visibleActionsAfterReject = await visibleHostPhaseActions(staleHostPage);
+  const activityStatusText = await staleHostPage
+    .getByTestId("host-command-activity-status-unlock_thread")
+    .innerText();
+  const activityRow = await staleHostPage
+    .getByTestId("host-command-activity-unlock_thread")
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    !reject?.message?.includes("stale phase state") ||
+    phaseAfterReject?.id !== "D02" ||
+    phaseAfterReject?.locked !== false ||
+    !visibleActionsAfterReject.includes("resolve_phase") ||
+    !visibleActionsAfterReject.includes("lock_thread") ||
+    visibleActionsAfterReject.includes("unlock_thread") ||
+    !activityStatusText.includes("Reject PhaseLocked") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== "unlock_thread" ||
+    activityRow.dispatchKind !== "unlock_thread" ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    hostStateAfterReject.phase?.phase_id !== "D02" ||
+    hostStateAfterReject.phase?.locked !== false
+  ) {
+    throw new Error(
+      `stale host control recovery drifted: ${JSON.stringify({
+        staleHostControlSetup,
+        reject,
+        commandOutcomes,
+        phaseAfterReject,
+        visibleActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPhase: hostStateAfterReject.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId: "unlock_thread",
+    setup: staleHostControlSetup,
+    reject,
+    commandOutcomes,
+    phaseAfterReject,
+    visibleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
   };
 }
 
@@ -2149,6 +2267,23 @@ async function expectHostPhaseActions(page, expectedActions) {
       .sort();
     return JSON.stringify(actual) === JSON.stringify([...expected].sort());
   }, expectedActions);
+}
+
+async function visibleHostPhaseActions(page) {
+  return await page.evaluate(() => {
+    const phaseGroup = document.querySelector('[data-testid="moderator-control-phase"]');
+    if (phaseGroup === null) {
+      return [];
+    }
+    return [...phaseGroup.querySelectorAll('[data-testid^="critical-host-action-"]')]
+      .map((node) => node.getAttribute("data-testid")?.replace("critical-host-action-", ""))
+      .filter(
+        (id) =>
+          id !== undefined &&
+          !["trigger", "confirmation", "confirmation-message", "confirm", "cancel"].includes(id),
+      )
+      .sort();
+  });
 }
 
 async function waitForHostProjectionPhaseLocked(page, locked) {

@@ -829,12 +829,38 @@ test("session card and markdown include role invite URLs and tokens", () => {
         actionVisibleAfterRefresh: false,
       },
       staleHostControl: {
+        status: "passed",
+        setup: {
+          stalePhase: { id: "N01", locked: true },
+          visibleActions: ["unlock_thread", "advance_phase"],
+          closedStatus: { state: "closed" },
+        },
         reject: {
+          state: "reject",
           error: "PhaseLocked",
           message:
             "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
         },
-        phaseAfterReject: { phase_id: "D02", locked: false },
+        commandOutcomes: [
+          {
+            actionId: "unlock_thread",
+            state: "reject",
+            error: "PhaseLocked",
+          },
+        ],
+        phaseAfterReject: { id: "D02", locked: false },
+        visibleActionsAfterReject: ["lock_thread", "resolve_phase"],
+        activityStatusText:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "unlock_thread",
+          dispatchKind: "unlock_thread",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: { phase_id: "D02", locked: false },
       },
     },
   };
