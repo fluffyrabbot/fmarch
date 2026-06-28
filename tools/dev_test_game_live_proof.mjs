@@ -47,10 +47,19 @@ assert.deepEqual(session.verification.roles, [
   "actionPlayer",
   "deniedPlayer",
   "cohost",
+  "replacementPlayer",
 ]);
 assert.match(session.frontendBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
 assert.match(session.apiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
-for (const role of ["admin", "cohost", "host", "player", "actionPlayer", "deniedPlayer"]) {
+for (const role of [
+  "admin",
+  "cohost",
+  "host",
+  "player",
+  "actionPlayer",
+  "deniedPlayer",
+  "replacementPlayer",
+]) {
   assert.equal(typeof session.sessions[role]?.token, "string", `${role} token`);
   assert.equal(session.sessions[role].credentialKind, "invite", `${role} credential kind`);
   assert.equal(session.sessions[role].inviteToken, session.sessions[role].token);
@@ -367,6 +376,81 @@ assert.match(
 assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.buttonsDisabled,
   true,
+);
+assert.equal(session.verification.sessions.replacementPlayer.principalUserId, "player-rowan");
+assert(
+  session.verification.sessions.replacementPlayer.capabilityKinds.includes("SlotOccupant"),
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.browserEntry.principalUserId,
+  "player-rowan",
+);
+assert(
+  session.verification.replacementConsole.incomingPlayer.browserEntry.capabilityKinds.includes(
+    "SlotOccupant",
+  ),
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.commandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.commandState.actorAlive,
+  true,
+);
+assert.match(
+  session.verification.replacementConsole.incomingPlayer.capabilityLabel,
+  /SlotOccupant/,
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.stableHistoryVisible,
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.postStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.postStatus.requestEnvelope.body.body
+    .principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.postStatus.requestEnvelope.body.body
+    .command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.rowanProjectedPost.authorSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.vote.requestEnvelope.body.body
+    .principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.vote.requestEnvelope.body.body
+    .command.SubmitVote.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.vote.serverEnvelope.body.kind,
+  "Ack",
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.privateReceiptIsolation
+    .targetKillVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.incomingPlayer.privateReceiptIsolation
+    .actionResultVisible,
+  false,
 );
 assert.equal(session.verification.multiplayerHardening.status, "passed");
 assert.equal(

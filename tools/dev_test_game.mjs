@@ -331,6 +331,12 @@ async function createSessions() {
       returnTo: `/g/${game}`,
       expectedCapabilityKind: "SlotOccupant",
     }),
+    replacementPlayer: await createInviteCredential({
+      inviteToken: tokens.replacementPlayer,
+      principalUserId: "player-rowan",
+      returnTo: `/g/${game}`,
+      expectedCapabilityKind: "SlotOccupant",
+    }),
     cohost: await createInviteCredential({
       inviteToken: tokens.cohost,
       principalUserId: "cohost_c",
@@ -348,6 +354,7 @@ export function createTokenSet(prefix) {
     player: `${prefix}-player`,
     actionPlayer: `${prefix}-action-player`,
     deniedPlayer: `${prefix}-denied-player`,
+    replacementPlayer: `${prefix}-replacement-player`,
     cohost: `${prefix}-cohost`,
   });
 }
@@ -655,6 +662,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale outgoing recovery: ${card.verification.replacementConsole.staleOutgoingPlayer.reject.message}`,
         "",
+        `Incoming replacement: ${card.verification.replacementConsole.incomingPlayer.browserEntry.principalUserId} ${card.verification.replacementConsole.incomingPlayer.postStatus.message}`,
+        "",
       );
     }
     if (card.verification.multiplayerHardening !== undefined) {
@@ -766,11 +775,16 @@ async function verifySessionCard(card) {
       apiBaseUrl: card.apiBaseUrl,
     });
     replacementConsole = await verifySeededReplacementConsole({
+      browser,
       hostPage: roleEntries.host.page,
       staleOutgoingPage: staleReplacementPage,
+      replacementSession: card.sessions.replacementPlayer,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
+    sessions.replacementPlayer = replacementConsole.incomingPlayer.browserEntry;
+    roles.push("replacementPlayer");
   } finally {
     await staleActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
@@ -1861,10 +1875,13 @@ async function verifySeededMultiplayerHardening({
 }
 
 async function verifySeededReplacementConsole({
+  browser,
   hostPage,
   staleOutgoingPage,
+  replacementSession,
   game,
   apiBaseUrl,
+  frontendBaseUrl,
 }) {
   const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
     staleOutgoingPage,
@@ -1890,6 +1907,13 @@ async function verifySeededReplacementConsole({
     staleOutgoingPage,
     staleOutgoingSetup,
   });
+  const incomingPlayer = await verifyIncomingReplacementPlayer({
+    browser,
+    replacementSession,
+    game,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   if (
     processReplacement.commandStatus?.state !== "ack" ||
     command?.ProcessReplacement?.game !== game ||
@@ -1903,7 +1927,12 @@ async function verifySeededReplacementConsole({
     apiSlot?.occupant_user_id !== "player-rowan" ||
     staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
     staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
-    staleOutgoingPlayer?.buttonsDisabled !== true
+    staleOutgoingPlayer?.buttonsDisabled !== true ||
+    incomingPlayer?.browserEntry?.principalUserId !== "player-rowan" ||
+    incomingPlayer?.commandState?.actorSlot !== "slot-7" ||
+    incomingPlayer?.postStatus?.state !== "ack" ||
+    incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
+    incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false
   ) {
     throw new Error(
       `replacement console proof drifted: ${JSON.stringify({
@@ -1911,6 +1940,7 @@ async function verifySeededReplacementConsole({
         projectedReplacement,
         apiSlot,
         staleOutgoingPlayer,
+        incomingPlayer,
       })}`,
     );
   }
@@ -1920,9 +1950,165 @@ async function verifySeededReplacementConsole({
     projectedReplacement,
     apiSlot,
     staleOutgoingPlayer,
+    incomingPlayer,
     proof:
-      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, and recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls.",
+      "The seeded host role URL processed the Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, and proved the incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
   };
+}
+
+async function verifyIncomingReplacementPlayer({
+  browser,
+  replacementSession,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  let replacementEntry;
+  try {
+    replacementEntry = await openVerifiedRoleEntry({
+      browser,
+      session: replacementSession,
+      game,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+    const page = replacementEntry.page;
+    await gotoPlayerBoard(page, game);
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+    );
+    const browserEntry = replacementEntry.verification;
+    const commandState = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const capabilityLabel = await page
+      .getByTestId("player-command-channel-context")
+      .getAttribute("data-capability-label");
+    const stableHistoryVisible = await page
+      .getByText("Seeded browser test-game thread post from dev:test-game.", {
+        exact: true,
+      })
+      .isVisible()
+      .catch(() => false);
+    const rowanPostBody = `Replacement Rowan post from dev:test-game ${crypto.randomUUID()}.`;
+    await page.locator("textarea").fill(rowanPostBody);
+    await page.locator('[data-action="submit_post"]').click();
+    await page.waitForFunction(
+      (expectedBody) =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitPost?.body === expectedBody,
+      rowanPostBody,
+    );
+    await page.waitForFunction(
+      (expectedBody) =>
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+        ),
+      rowanPostBody,
+    );
+    const postStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const rowanProjectedPost = await page.evaluate((expectedBody) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.find(
+        (post) => post.body === expectedBody,
+      ),
+    rowanPostBody);
+    const vote = await sendBrowserCommand(page, {
+      principalUserId: "player-rowan",
+      commandId: crypto.randomUUID(),
+      command: {
+        SubmitVote: {
+          game,
+          actor_slot: "slot-7",
+          target: { Slot: "slot_5" },
+        },
+      },
+    });
+    if (vote.serverEnvelope?.body?.kind !== "Ack") {
+      throw new Error(`incoming replacement vote did not ack: ${JSON.stringify(vote)}`);
+    }
+    await page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.votecount?.some(
+          (row) => row.target?.includes("slot_5") && Number(row.count) >= 2,
+        ),
+    );
+    const votecountAfterVote = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount,
+    );
+    const notifications = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.notifications ?? [],
+    );
+    const investigationResults = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.investigationResults ?? [],
+    );
+    const privateReceiptIsolation = {
+      targetKillVisible: notifications.some(
+        (item) =>
+          item.effect === "player_killed" ||
+          item.status === "factional_kill" ||
+          item.audience_slot === "slot-2",
+      ),
+      actionResultVisible: investigationResults.some(
+        (item) =>
+          item.actor_slot === "slot_4" ||
+          item.action_id === "browser_factional_kill_n01" ||
+          item.status === "factional_kill",
+      ),
+      notificationCount: notifications.length,
+      investigationResultCount: investigationResults.length,
+    };
+    if (
+      !browserEntry.capabilityKinds.includes("SlotOccupant") ||
+      commandState?.actorSlot !== "slot-7" ||
+      commandState?.actorAlive !== true ||
+      !capabilityLabel?.includes("SlotOccupant") ||
+      stableHistoryVisible !== true ||
+      postStatus?.state !== "ack" ||
+      postStatus?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      postStatus?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+        "slot-7" ||
+      rowanProjectedPost?.authorSlot !== "slot-7" ||
+      vote.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      vote.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !== "slot-7" ||
+      vote.serverEnvelope?.body?.kind !== "Ack" ||
+      privateReceiptIsolation.targetKillVisible !== false ||
+      privateReceiptIsolation.actionResultVisible !== false
+    ) {
+      throw new Error(
+        `incoming replacement player proof drifted: ${JSON.stringify({
+          browserEntry,
+          commandState,
+          capabilityLabel,
+          stableHistoryVisible,
+          postStatus,
+          rowanProjectedPost,
+          vote,
+          votecountAfterVote,
+          privateReceiptIsolation,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      browserEntry,
+      commandState,
+      capabilityLabel,
+      stableHistoryVisible,
+      postStatus,
+      rowanProjectedPost,
+      vote,
+      votecountAfterVote,
+      privateReceiptIsolation,
+      proof:
+        "The incoming player-rowan role URL opened after replacement with SlotOccupant authority for slot-7, preserved Slot 7 thread history, submitted a new Slot 7 post and vote, and did not receive target-only kill or action private receipts.",
+    };
+  } finally {
+    await replacementEntry?.context.close().catch(() => {});
+  }
 }
 
 async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {

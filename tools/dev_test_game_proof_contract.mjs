@@ -19,6 +19,7 @@ const requiredLaneIds = Object.freeze([
   "private-channel",
   "replacement-console",
   "replacement-stale-player",
+  "replacement-incoming-player",
   "idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
@@ -304,6 +305,61 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.capabilityLabel?.includes("No current SlotOccupant(slot-7)") === true &&
         verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled === true,
     }),
+    lane("replacement-incoming-player", "Incoming replacement player owns stable slot", {
+      principalUserId:
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalUserId ??
+        null,
+      capabilityKinds:
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.capabilityKinds ??
+        null,
+      commandStateSlot:
+        verification.replacementConsole?.incomingPlayer?.commandState?.actorSlot ?? null,
+      postState:
+        verification.replacementConsole?.incomingPlayer?.postStatus?.state ?? null,
+      voteState:
+        verification.replacementConsole?.incomingPlayer?.vote?.serverEnvelope?.body?.kind ??
+        null,
+      stableHistoryVisible:
+        verification.replacementConsole?.incomingPlayer?.stableHistoryVisible ?? null,
+      targetKillVisible:
+        verification.replacementConsole?.incomingPlayer?.privateReceiptIsolation
+          ?.targetKillVisible ?? null,
+      actionResultVisible:
+        verification.replacementConsole?.incomingPlayer?.privateReceiptIsolation
+          ?.actionResultVisible ?? null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.incomingPlayer?.status === "passed" &&
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.principalUserId ===
+          "player-rowan" &&
+        verification.replacementConsole?.incomingPlayer?.browserEntry?.capabilityKinds?.includes(
+          "SlotOccupant",
+        ) === true &&
+        verification.replacementConsole?.incomingPlayer?.commandState?.actorSlot ===
+          "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.commandState?.actorAlive === true &&
+        verification.replacementConsole?.incomingPlayer?.capabilityLabel?.includes(
+          "SlotOccupant",
+        ) === true &&
+        verification.replacementConsole?.incomingPlayer?.stableHistoryVisible === true &&
+        verification.replacementConsole?.incomingPlayer?.postStatus?.state === "ack" &&
+        verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
+          ?.body?.principal_user_id === "player-rowan" &&
+        verification.replacementConsole?.incomingPlayer?.postStatus?.requestEnvelope?.body
+          ?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.rowanProjectedPost?.authorSlot ===
+          "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-rowan" &&
+        verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.actor_slot === "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.vote?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        verification.replacementConsole?.incomingPlayer?.privateReceiptIsolation
+          ?.targetKillVisible === false &&
+        verification.replacementConsole?.incomingPlayer?.privateReceiptIsolation
+          ?.actionResultVisible === false,
+    }),
     lane("idempotent-retry", "Duplicate command id returns original ACK", {
       channel: hardening.idempotentRetry?.channel ?? null,
       firstState: hardening.idempotentRetry?.firstPost?.state ?? null,
@@ -517,9 +573,14 @@ function lane(id, label, evidence) {
 }
 
 function requiredRolesPresent(verification) {
-  return ["host", "player", "actionPlayer", "deniedPlayer", "cohost"].every((role) =>
-    (verification.roles ?? []).includes(role),
-  );
+  return [
+    "host",
+    "player",
+    "actionPlayer",
+    "deniedPlayer",
+    "cohost",
+    "replacementPlayer",
+  ].every((role) => (verification.roles ?? []).includes(role));
 }
 
 function sameArray(left, right) {
