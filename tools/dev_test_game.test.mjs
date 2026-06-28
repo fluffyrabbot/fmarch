@@ -924,6 +924,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
           requestEnvelope: {
             body: {
               body: {
+                command_id: "replacement-command-id",
                 principal_user_id: "host_h",
                 command: {
                   ProcessReplacement: {
@@ -933,6 +934,14 @@ test("session card and markdown include role invite URLs and tokens", () => {
                     incoming_user: "player-rowan",
                   },
                 },
+              },
+            },
+          },
+          serverEnvelope: {
+            body: {
+              kind: "Ack",
+              body: {
+                stream_seqs: [44],
               },
             },
           },
@@ -946,6 +955,51 @@ test("session card and markdown include role invite URLs and tokens", () => {
       apiSlot: {
         slot_id: "slot-7",
         occupant_user_id: "player-rowan",
+      },
+      replacementIdempotentRetry: {
+        status: "passed",
+        commandId: "replacement-command-id",
+        originalStreamSeqs: [44],
+        retryStreamSeqs: [44],
+        sameStreamSeqs: true,
+        retryReplacement: {
+          state: "ack",
+          message: "Ack: stream seqs 44",
+          httpStatus: 200,
+          requestEnvelope: {
+            body: {
+              body: {
+                command_id: "replacement-command-id",
+                principal_user_id: "host_h",
+                command: {
+                  ProcessReplacement: {
+                    game,
+                    slot: "slot-7",
+                    outgoing_user: "player-mira",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+          serverEnvelope: {
+            body: {
+              kind: "Ack",
+              body: {
+                stream_seqs: [44],
+              },
+            },
+          },
+        },
+        hostProjectionAfterRetry: {
+          slotId: "slot-7",
+          occupantLabel: "player-rowan",
+          historyLabel: "Slot slot-7 history preserved",
+        },
+        apiSlotAfterRetry: {
+          slot_id: "slot-7",
+          occupant_user_id: "player-rowan",
+        },
       },
       staleOutgoingPlayer: {
         status: "passed",
@@ -1253,6 +1307,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert(markdown.includes("Invalid replacement recovery: InvalidTarget"));
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
   assert(markdown.includes("Projected occupant: player-rowan"));
+  assert(markdown.includes("Replacement duplicate retry: Ack: stream seqs 44"));
   assert(
     markdown.includes(
       "Stale outgoing recovery: Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
@@ -1291,6 +1346,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-pending-player",
       "replacement-invalid-target-recovery",
       "replacement-console",
+      "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
       "replacement-stale-player",
       "replacement-incoming-player",
@@ -1372,7 +1428,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 23);
+  assert.equal(opsArtifacts.proofRun.laneCount, 24);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1444,6 +1500,7 @@ test("session card and markdown include role invite URLs and tokens", () => {
       "replacement-host-issued-invite",
       "replacement-pending-player",
       "replacement-invalid-target-recovery",
+      "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
       "replacement-stale-player",
       "replacement-incoming-player",
@@ -1814,6 +1871,7 @@ function coreLoopAdminProofFixture() {
         "replacement-pending-player",
         "replacement-invalid-target-recovery",
         "replacement-console",
+        "replacement-idempotent-retry",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-incoming-player",
@@ -1846,6 +1904,7 @@ function hardeningAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
         "stale-player-vote",
@@ -1927,6 +1986,7 @@ function seedAdminProofFixture() {
         "replacement-host-issued-invite",
         "replacement-pending-player",
         "replacement-invalid-target-recovery",
+        "replacement-idempotent-retry",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-incoming-player",

@@ -658,6 +658,8 @@ export function markdownSessionCard(card) {
         "",
         `Projected occupant: ${card.verification.replacementConsole.projectedReplacement.occupantLabel}`,
         "",
+        `Replacement duplicate retry: ${card.verification.replacementConsole.replacementIdempotentRetry.retryReplacement.message}`,
+        "",
         `Stale outgoing recovery: ${card.verification.replacementConsole.staleOutgoingPlayer.reject.message}`,
         "",
         `Stale replacement recovery: ${card.verification.replacementConsole.staleReplacementAfterSuccess.reject.error}`,
@@ -1924,6 +1926,13 @@ async function verifySeededReplacementConsole({
       slot: "slot-7",
     });
     const apiSlot = apiState.slots?.find?.((slot) => slot.slot_id === "slot-7");
+    const replacementIdempotentRetry = await verifyReplacementIdempotentRetry({
+      hostPage,
+      processReplacement,
+      apiSlot,
+      game,
+      apiBaseUrl,
+    });
     const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
       staleOutgoingPage,
       staleOutgoingSetup,
@@ -1969,6 +1978,11 @@ async function verifySeededReplacementConsole({
       !projectedReplacement?.historyLabel?.includes("slot-7") ||
       apiSlot?.slot_id !== "slot-7" ||
       apiSlot?.occupant_user_id !== "player-rowan" ||
+      replacementIdempotentRetry?.status !== "passed" ||
+      replacementIdempotentRetry?.retryReplacement?.state !== "ack" ||
+      replacementIdempotentRetry?.sameStreamSeqs !== true ||
+      replacementIdempotentRetry?.apiSlotAfterRetry?.occupant_user_id !==
+        "player-rowan" ||
       staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
       staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
       staleOutgoingPlayer?.buttonsDisabled !== true ||
@@ -1992,6 +2006,7 @@ async function verifySeededReplacementConsole({
           processReplacement,
           projectedReplacement,
           apiSlot,
+          replacementIdempotentRetry,
           staleOutgoingPlayer,
           staleReplacementAfterSuccess,
           incomingPlayer,
@@ -2006,11 +2021,12 @@ async function verifySeededReplacementConsole({
       processReplacement,
       projectedReplacement,
       apiSlot,
+      replacementIdempotentRetry,
       staleOutgoingPlayer,
       staleReplacementAfterSuccess,
       incomingPlayer,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, and proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts.",
     };
   } finally {
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
@@ -2279,6 +2295,88 @@ async function verifyStaleReplacementAfterSuccess({
     staleOutgoingPlayer,
     proof:
       "After Slot 7 transferred to player-rowan, a stale host ProcessReplacement using player-mira as outgoing rejected as InvalidTarget, rendered a host command-activity receipt, left Slot 7 on player-rowan, and preserved the outgoing Mira page's replaced disabled recovery.",
+  };
+}
+
+async function verifyReplacementIdempotentRetry({
+  hostPage,
+  processReplacement,
+  apiSlot,
+  game,
+  apiBaseUrl,
+}) {
+  const originalBody = processReplacement.commandStatus?.requestEnvelope?.body?.body;
+  const originalAck = processReplacement.commandStatus?.serverEnvelope?.body?.body;
+  const commandId = originalBody?.command_id;
+  const command = originalBody?.command;
+  const retry = await sendBrowserCommand(hostPage, {
+    principalUserId: "host_h",
+    commandId,
+    command,
+  });
+  const retryAck = retry.serverEnvelope?.body?.body;
+  await hostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
+      window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+  );
+  const hostProjectionAfterRetry = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const apiStateAfterRetry = await fetchHostConsoleState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const apiSlotAfterRetry = apiStateAfterRetry.slots?.find?.(
+    (slot) => slot.slot_id === "slot-7",
+  );
+  const sameStreamSeqs = sameArray(originalAck?.stream_seqs, retryAck?.stream_seqs);
+  if (
+    processReplacement.commandStatus?.state !== "ack" ||
+    retry.serverEnvelope?.body?.kind !== "Ack" ||
+    retry.httpStatus !== 200 ||
+    commandId === undefined ||
+    command?.ProcessReplacement?.game !== game ||
+    command?.ProcessReplacement?.slot !== "slot-7" ||
+    command?.ProcessReplacement?.outgoing_user !== "player-mira" ||
+    command?.ProcessReplacement?.incoming_user !== "player-rowan" ||
+    sameStreamSeqs !== true ||
+    apiSlot?.occupant_user_id !== "player-rowan" ||
+    apiSlotAfterRetry?.slot_id !== "slot-7" ||
+    apiSlotAfterRetry?.occupant_user_id !== "player-rowan" ||
+    hostProjectionAfterRetry?.slotId !== "slot-7" ||
+    hostProjectionAfterRetry?.occupantLabel !== "player-rowan" ||
+    !hostProjectionAfterRetry?.historyLabel?.includes("slot-7")
+  ) {
+    throw new Error(
+      `replacement idempotent retry drifted: ${JSON.stringify({
+        processReplacement,
+        retry,
+        sameStreamSeqs,
+        apiSlot,
+        apiSlotAfterRetry,
+        hostProjectionAfterRetry,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    commandId,
+    originalStreamSeqs: originalAck.stream_seqs,
+    retryStreamSeqs: retryAck.stream_seqs,
+    sameStreamSeqs,
+    retryReplacement: {
+      state: "ack",
+      message: `Ack: stream seqs ${retryAck.stream_seqs.join(", ")}`,
+      httpStatus: retry.httpStatus,
+      requestEnvelope: retry.requestEnvelope,
+      serverEnvelope: retry.serverEnvelope,
+    },
+    hostProjectionAfterRetry,
+    apiSlotAfterRetry,
+    proof:
+      "Replaying the successful ProcessReplacement command_id through /commands returned the original ACK stream seqs, left Slot 7 occupied by player-rowan, and preserved the stable slot-history projection.",
   };
 }
 

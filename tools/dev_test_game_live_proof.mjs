@@ -490,6 +490,55 @@ assert.equal(
   "player-rowan",
 );
 assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.retryReplacement
+    .state,
+  "ack",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.retryReplacement
+    .httpStatus,
+  200,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.sameStreamSeqs,
+  true,
+);
+assert.deepEqual(
+  session.verification.replacementConsole.replacementIdempotentRetry
+    .originalStreamSeqs,
+  session.verification.replacementConsole.replacementIdempotentRetry.retryStreamSeqs,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.retryReplacement
+    .requestEnvelope.body.body.command_id,
+  session.verification.replacementConsole.processReplacement.commandStatus.requestEnvelope
+    .body.body.command_id,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.retryReplacement
+    .requestEnvelope.body.body.command.ProcessReplacement.outgoing_user,
+  "player-mira",
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry
+    .hostProjectionAfterRetry.occupantLabel,
+  "player-rowan",
+);
+assert.match(
+  session.verification.replacementConsole.replacementIdempotentRetry
+    .hostProjectionAfterRetry.historyLabel,
+  /slot-7/,
+);
+assert.equal(
+  session.verification.replacementConsole.replacementIdempotentRetry.apiSlotAfterRetry
+    .occupant_user_id,
+  "player-rowan",
+);
+assert.equal(
   session.verification.replacementConsole.staleOutgoingPlayer.status,
   "passed",
 );

@@ -21,6 +21,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-pending-player",
   "replacement-invalid-target-recovery",
   "replacement-console",
+  "replacement-idempotent-retry",
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-incoming-player",
@@ -407,6 +408,59 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.replacementConsole?.apiSlot?.slot_id === "slot-7" &&
         verification.replacementConsole?.apiSlot?.occupant_user_id === "player-rowan",
+    }),
+    lane("replacement-idempotent-retry", "Duplicate replacement command id returns original ACK", {
+      commandId:
+        verification.replacementConsole?.replacementIdempotentRetry?.commandId ?? null,
+      retryState:
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.state ?? null,
+      sameStreamSeqs:
+        verification.replacementConsole?.replacementIdempotentRetry?.sameStreamSeqs ??
+        null,
+      hostProjectionOccupant:
+        verification.replacementConsole?.replacementIdempotentRetry
+          ?.hostProjectionAfterRetry?.occupantLabel ?? null,
+      apiOccupant:
+        verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
+          ?.occupant_user_id ?? null,
+      historyLabel:
+        verification.replacementConsole?.replacementIdempotentRetry
+          ?.hostProjectionAfterRetry?.historyLabel ?? null,
+      passed:
+        verification.replacementConsole?.replacementIdempotentRetry?.status ===
+          "passed" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.state === "ack" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.httpStatus === 200 &&
+        verification.replacementConsole?.replacementIdempotentRetry?.sameStreamSeqs ===
+          true &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.requestEnvelope?.body?.body?.principal_user_id === "host_h" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.requestEnvelope?.body?.body?.command_id ===
+          verification.replacementConsole?.processReplacement?.commandStatus
+            ?.requestEnvelope?.body?.body?.command_id &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot ===
+          "slot-7" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
+          "player-mira" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
+          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+          "player-rowan" &&
+        verification.replacementConsole?.replacementIdempotentRetry
+          ?.hostProjectionAfterRetry?.slotId === "slot-7" &&
+        verification.replacementConsole?.replacementIdempotentRetry
+          ?.hostProjectionAfterRetry?.occupantLabel === "player-rowan" &&
+        verification.replacementConsole?.replacementIdempotentRetry
+          ?.hostProjectionAfterRetry?.historyLabel?.includes("slot-7") === true &&
+        verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
+          ?.slot_id === "slot-7" &&
+        verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
+          ?.occupant_user_id === "player-rowan",
     }),
     lane("replacement-stale-success-recovery", "Stale replacement after success recovers", {
       rejectError:

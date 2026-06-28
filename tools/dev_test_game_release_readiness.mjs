@@ -215,6 +215,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: sourcePath,
       laneIds: [
+        "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
         "stale-player-vote",
@@ -704,6 +705,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 
 export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
   const requiredChecks = [
+    "replacement-idempotent-retry",
     "idempotent-retry",
     "reconnect-recovery",
     "stale-player-vote",
@@ -910,6 +912,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-invalid-target-recovery",
+    "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-incoming-player",
@@ -982,6 +985,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-invalid-target-recovery",
+    "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-incoming-player",

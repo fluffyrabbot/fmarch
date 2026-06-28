@@ -160,6 +160,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-invalid-target-recovery",
+    "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-incoming-player",
@@ -291,6 +292,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Host sends a stale replacement command with the wrong outgoing user, receives a visible InvalidTarget command-activity receipt, and the incoming replacement URL stays pending without slot authority or controls.",
     }),
     scenario({
+      id: "replacement-idempotent-retry",
+      title: "Replacement duplicate retry",
+      role: "host",
+      provenBy: ["replacement-idempotent-retry"].filter(hasLane),
+      note: "Host replays the successful ProcessReplacement command id through /commands, receives the original ACK stream seqs, and Slot 7 remains with Rowan.",
+    }),
+    scenario({
       id: "replacement-stale-success-recovery",
       title: "Stale replacement after success",
       role: "host",
@@ -330,13 +338,14 @@ function demoScenarios({ roles, laneIds }) {
       title: "Multiplayer hardening",
       role: "player",
       provenBy: [
+        "replacement-idempotent-retry",
         "idempotent-retry",
         "reconnect-recovery",
         "concurrent-vote-race",
         "stale-host-control",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise duplicate command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

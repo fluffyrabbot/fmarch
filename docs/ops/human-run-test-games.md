@@ -326,7 +326,10 @@ host-console API still shows Slot 7 owned by `player-mira` while the
 hydrated `ProcessReplacement` control for Slot 7,
 records the ACK, verifies the host projection now shows `player-rowan`, and
 checks the slot-scoped host-console API still reports the stable `slot-7`
-history boundary. It also opens a separate stale `player` role URL as
+history boundary. It replays the same successful `ProcessReplacement`
+`command_id` through `/commands`, verifies the original ACK stream seqs return,
+and checks Slot 7 remains with `player-rowan`. It also opens a separate stale
+`player` role URL as
 `player-mira` before replacement, submits an old Slot 7 vote after replacement,
 records the `NotYourSlot` recovery receipt, and verifies the old vote/post
 controls are disabled with `No current SlotOccupant(slot-7)` context. The host
@@ -446,7 +449,7 @@ This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
 host replacement, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, and replacement-player ownership,
-duplicate-command, player reconnect,
+duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale action conflict, stale host
 control recovery, stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
