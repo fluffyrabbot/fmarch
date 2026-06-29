@@ -281,6 +281,8 @@ export function projectHostConsoleState(state, fallback) {
   }
 
   const phase = state.phase ?? null;
+  const phaseCarriesDeadline =
+    phase !== null && Object.prototype.hasOwnProperty.call(phase, "deadline");
   const slots = Array.isArray(state.slots)
     ? state.slots.map((slot) => normalizeHostConsoleSlot(slot))
     : [];
@@ -316,10 +318,14 @@ export function projectHostConsoleState(state, fallback) {
       deadlineLabel:
         typeof phase?.deadline === "number"
           ? formatDeadline(phase.deadline)
+          : phaseCarriesDeadline
+            ? "No deadline extension committed"
           : fallback.phase.deadlineLabel,
       deadline:
         typeof phase?.deadline === "number"
           ? phase.deadline
+          : phaseCarriesDeadline
+            ? null
           : fallback.phase.deadline ?? null,
     }),
     replacement: Object.freeze({

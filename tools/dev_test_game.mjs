@@ -783,6 +783,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent host advance race: ${card.verification.multiplayerHardening.concurrentHostAdvanceRace.reject.message}`,
         "",
+        `Concurrent host deadline race: ${card.verification.multiplayerHardening.concurrentHostDeadlineAdvanceRace.reject.message}`,
+        "",
         `Stale host resolve: ${card.verification.multiplayerHardening.staleHostResolve.reject.message}`,
         "",
         `Stale host advance: ${card.verification.multiplayerHardening.staleHostAdvance.reject.message}`,
@@ -4089,6 +4091,11 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     frontendBaseUrl,
   });
+  const concurrentHostDeadlineAdvanceRace = await verifyConcurrentHostDeadlineAdvanceRace({
+    hostPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   const staleHostResolveSetup = await freezeStaleHostResolvePage({
     staleHostResolvePage,
     game,
@@ -4189,6 +4196,7 @@ async function verifySeededMultiplayerHardening({
     staleHostControl,
     concurrentHostResolveRace,
     concurrentHostAdvanceRace,
+    concurrentHostDeadlineAdvanceRace,
     staleHostResolve,
     staleHostAdvance,
     staleHostPrompt,
@@ -4197,7 +4205,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -8067,6 +8075,49 @@ async function verifyConcurrentHostAdvanceRace({ hostPage, apiBaseUrl, frontendB
   }
 }
 
+async function verifyConcurrentHostDeadlineAdvanceRace({
+  hostPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const raceGame = crypto.randomUUID();
+  const seed = await seedConcurrentHostDeadlineAdvanceRaceGame({ raceGame });
+  const context = hostPage.context();
+  const liveRacePage = await context.newPage();
+  const concurrentRacePage = await context.newPage();
+  try {
+    await liveRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await liveRacePage
+      .getByTestId("critical-host-action-advance_phase_by_deadline")
+      .waitFor({ state: "visible" });
+    await waitForHostProjectionPhase(liveRacePage, { phaseId: "D01", locked: true });
+    const setup = await freezeStaleDeadlineAdvancePage({
+      staleHostPage: concurrentRacePage,
+      game: raceGame,
+      frontendBaseUrl,
+    });
+    const race = await submitConcurrentHostDeadlineAdvanceRace({
+      hostPage: liveRacePage,
+      concurrentHostDeadlinePage: concurrentRacePage,
+      concurrentHostDeadlineSetup: setup,
+      apiBaseUrl,
+      game: raceGame,
+    });
+    return {
+      ...race,
+      game: raceGame,
+      seed,
+      proof:
+        "A disposable seeded local game resolved D01 with deadline evidence available, opened two host role pages, raced D01 advance_phase_by_deadline with distinct command ids, proved one evidence+advance ACK plus one InvalidTarget stale-deadline recovery, and converged both host projections plus API phase state to open N01.",
+    };
+  } finally {
+    await liveRacePage.close().catch(() => {});
+    await concurrentRacePage.close().catch(() => {});
+  }
+}
+
 async function seedConcurrentHostAdvanceRaceGame({ raceGame }) {
   const plan = [
     ...seedCommandPlanForGame(raceGame),
@@ -8082,6 +8133,32 @@ async function seedConcurrentHostAdvanceRaceGame({ raceGame }) {
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent host advance seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game: raceGame,
+    commands,
+  };
+}
+
+async function seedConcurrentHostDeadlineAdvanceRaceGame({ raceGame }) {
+  const plan = [
+    ...seedCommandPlanForGame(raceGame),
+    ["host_h", { ExtendDeadline: { game: raceGame, phase: "D01", at: 918_300 } }],
+    ["host_h", { ResolvePhase: { game: raceGame, seed: 918_301 } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `concurrent host deadline advance seed command rejected: ${JSON.stringify({
           principalUserId,
           command,
           result,
@@ -8579,6 +8656,254 @@ async function submitConcurrentHostAdvanceRace({
     apiPhaseAfterRace: hostStateAfterRace.phase,
     proof:
       "Two seeded host role pages submitted D02 advance_phase concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget stale-state recovery, and both browser projections plus the API converged to open N02.",
+  };
+}
+
+async function submitConcurrentHostDeadlineAdvanceRace({
+  hostPage,
+  concurrentHostDeadlinePage,
+  concurrentHostDeadlineSetup,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "advance_phase_by_deadline";
+  const expectedDeadline = concurrentHostDeadlineSetup?.stalePhase?.deadline ?? null;
+  const liveBefore = await hostPage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    actionId,
+  );
+  const concurrentBefore = await concurrentHostDeadlinePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    actionId,
+  );
+
+  const liveActionRoot = hostPage.getByTestId(`critical-host-action-${actionId}`);
+  const concurrentActionRoot = concurrentHostDeadlinePage.getByTestId(
+    `critical-host-action-${actionId}`,
+  );
+  await Promise.all([
+    liveActionRoot.getByTestId("critical-host-action-trigger").click(),
+    concurrentActionRoot.getByTestId("critical-host-action-trigger").click(),
+  ]);
+  await Promise.all([
+    liveActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+    concurrentActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+  ]);
+  const [liveConfirmationMessage, concurrentConfirmationMessage] = await Promise.all([
+    liveActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+    concurrentActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+  ]);
+  await Promise.all([
+    liveActionRoot.getByTestId("critical-host-action-confirm").click(),
+    concurrentActionRoot.getByTestId("critical-host-action-confirm").click(),
+  ]);
+  await Promise.all([
+    hostPage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      { expectedActionId: actionId, beforeCommandId: liveBefore?.commandId ?? null },
+    ),
+    concurrentHostDeadlinePage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      {
+        expectedActionId: actionId,
+        beforeCommandId: concurrentBefore?.commandId ?? null,
+      },
+    ),
+  ]);
+
+  const [liveOutcome, concurrentOutcome] = await Promise.all([
+    hostPage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      actionId,
+    ),
+    concurrentHostDeadlinePage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      actionId,
+    ),
+  ]);
+  const outcomes = [
+    { pageRole: "live", outcome: liveOutcome },
+    { pageRole: "concurrent", outcome: concurrentOutcome },
+  ];
+  const ackEntries = outcomes.filter((entry) => entry.outcome?.state === "ack");
+  const rejectEntries = outcomes.filter((entry) => entry.outcome?.state === "reject");
+  const ackEntry = ackEntries[0] ?? null;
+  const rejectEntry = rejectEntries[0] ?? null;
+  const ack = ackEntry?.outcome ?? null;
+  const reject = rejectEntry?.outcome ?? null;
+  const ackCommand = ack?.requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline;
+  const rejectCommand = reject?.requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline;
+  if (
+    concurrentHostDeadlineSetup?.stalePhase?.id !== "D01" ||
+    concurrentHostDeadlineSetup?.stalePhase?.locked !== true ||
+    typeof expectedDeadline !== "number" ||
+    ackEntries.length !== 1 ||
+    rejectEntries.length !== 1 ||
+    ack?.serverEnvelope?.body?.kind !== "Ack" ||
+    !Array.isArray(ack?.streamSeqs) ||
+    ack.streamSeqs.length !== 2 ||
+    reject?.error !== "InvalidTarget" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    !reject?.message?.includes("deadline target is stale") ||
+    ack?.commandId === reject?.commandId ||
+    ackCommand?.game !== game ||
+    ackCommand?.phase !== "D01" ||
+    ackCommand?.observed_at !== expectedDeadline + 1 ||
+    rejectCommand?.game !== game ||
+    rejectCommand?.phase !== "D01" ||
+    rejectCommand?.observed_at !== expectedDeadline + 1
+  ) {
+    throw new Error(
+      `concurrent host deadline advance race outcomes drifted: ${JSON.stringify({
+        concurrentHostDeadlineSetup,
+        liveOutcome,
+        concurrentOutcome,
+        expectedDeadline,
+      })}`,
+    );
+  }
+
+  await Promise.all([
+    waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false }),
+    concurrentHostDeadlinePage.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.phase?.id === "N01" &&
+        window.__fmarchHostProjection?.phase?.locked === false,
+    ),
+  ]);
+  const [
+    livePhaseAfterRace,
+    concurrentPhaseAfterRace,
+    livePhaseActionsAfterRace,
+    concurrentPhaseActionsAfterRace,
+    liveDeadlineActionsAfterRace,
+    concurrentDeadlineActionsAfterRace,
+    liveActivityStatusText,
+    concurrentActivityStatusText,
+    liveActivityRow,
+    concurrentActivityRow,
+  ] = await Promise.all([
+    hostPage.evaluate(() => window.__fmarchHostProjection?.phase),
+    concurrentHostDeadlinePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    visibleHostControlActions(hostPage, "phase"),
+    visibleHostControlActions(concurrentHostDeadlinePage, "phase"),
+    visibleHostControlActions(hostPage, "deadline"),
+    visibleHostControlActions(concurrentHostDeadlinePage, "deadline"),
+    hostPage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    concurrentHostDeadlinePage
+      .getByTestId(`host-command-activity-status-${actionId}`)
+      .innerText(),
+    hostPage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    })),
+    concurrentHostDeadlinePage
+      .getByTestId(`host-command-activity-${actionId}`)
+      .evaluate((node) => ({
+        source: node.getAttribute("data-source"),
+        actionId: node.getAttribute("data-confirmation-action-id"),
+        dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+        text: node.textContent,
+      })),
+  ]);
+  const hostStateAfterRace = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    livePhaseAfterRace?.id !== "N01" ||
+    livePhaseAfterRace?.locked !== false ||
+    livePhaseAfterRace?.deadline !== null ||
+    concurrentPhaseAfterRace?.id !== "N01" ||
+    concurrentPhaseAfterRace?.locked !== false ||
+    concurrentPhaseAfterRace?.deadline !== null ||
+    !livePhaseActionsAfterRace.includes("resolve_phase") ||
+    !livePhaseActionsAfterRace.includes("lock_thread") ||
+    livePhaseActionsAfterRace.includes("advance_phase") ||
+    livePhaseActionsAfterRace.includes("unlock_thread") ||
+    livePhaseActionsAfterRace.includes("advance_phase_by_deadline") ||
+    !concurrentPhaseActionsAfterRace.includes("resolve_phase") ||
+    !concurrentPhaseActionsAfterRace.includes("lock_thread") ||
+    concurrentPhaseActionsAfterRace.includes("advance_phase") ||
+    concurrentPhaseActionsAfterRace.includes("unlock_thread") ||
+    concurrentPhaseActionsAfterRace.includes("advance_phase_by_deadline") ||
+    !liveDeadlineActionsAfterRace.includes("extend_deadline") ||
+    !concurrentDeadlineActionsAfterRace.includes("extend_deadline") ||
+    ![liveActivityStatusText, concurrentActivityStatusText].some((text) =>
+      text.includes("Ack"),
+    ) ||
+    ![liveActivityStatusText, concurrentActivityStatusText].some((text) =>
+      text.includes("Reject InvalidTarget"),
+    ) ||
+    ![liveActivityStatusText, concurrentActivityStatusText].some((text) =>
+      text.includes("deadline target is stale"),
+    ) ||
+    liveActivityRow.actionId !== actionId ||
+    concurrentActivityRow.actionId !== actionId ||
+    hostStateAfterRace.phase?.phase_id !== "N01" ||
+    hostStateAfterRace.phase?.locked !== false ||
+    hostStateAfterRace.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `concurrent host deadline advance convergence drifted: ${JSON.stringify({
+        livePhaseAfterRace,
+        concurrentPhaseAfterRace,
+        livePhaseActionsAfterRace,
+        concurrentPhaseActionsAfterRace,
+        liveDeadlineActionsAfterRace,
+        concurrentDeadlineActionsAfterRace,
+        liveActivityStatusText,
+        concurrentActivityStatusText,
+        liveActivityRow,
+        concurrentActivityRow,
+        apiPhase: hostStateAfterRace.phase,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    actionId,
+    setup: concurrentHostDeadlineSetup,
+    liveConfirmationMessage,
+    concurrentConfirmationMessage,
+    ackPageRole: ackEntry.pageRole,
+    rejectPageRole: rejectEntry.pageRole,
+    ack,
+    reject,
+    liveOutcome,
+    concurrentOutcome,
+    livePhaseAfterRace,
+    concurrentPhaseAfterRace,
+    livePhaseActionsAfterRace,
+    concurrentPhaseActionsAfterRace,
+    liveDeadlineActionsAfterRace,
+    concurrentDeadlineActionsAfterRace,
+    liveActivityStatusText,
+    concurrentActivityStatusText,
+    liveActivityRow,
+    concurrentActivityRow,
+    apiPhaseAfterRace: hostStateAfterRace.phase,
+    proof:
+      "Two seeded host role pages submitted D01 advance_phase_by_deadline concurrently with distinct command ids; one ACKed with deadline evidence plus phase advance, one rejected with InvalidTarget stale-deadline recovery, and both browser projections plus the API converged to open N01 with no carried deadline.",
   };
 }
 

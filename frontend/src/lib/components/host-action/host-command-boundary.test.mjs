@@ -565,6 +565,36 @@ test("host console projection maps deadline and stable slot history to labels", 
   );
 });
 
+test("host console projection clears explicit null deadlines", () => {
+  const projection = projectHostConsoleState(
+    {
+      completed: false,
+      phase: { phase_id: "day-3", locked: false, deadline: null },
+      slots: [],
+      thread_posts: [],
+    },
+    {
+      phase: {
+        id: "day-2",
+        deadline: 1781928000,
+        deadlineLabel: "Jun 19, 2026, 9:00 PM",
+        lockedLabel: "Thread locked",
+      },
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+        lifecycleLabel: "Alive",
+        historyLabel: "Waiting for replacement command proof",
+      },
+    },
+  );
+
+  assert.equal(projection.phase.id, "day-3");
+  assert.equal(projection.phase.locked, false);
+  assert.equal(projection.phase.deadline, null);
+  assert.equal(projection.phase.deadlineLabel, "No deadline extension committed");
+});
+
 test("host console state endpoint is scoped by principal and slot", () => {
   assert.equal(
     buildHostConsoleStateEndpoint({

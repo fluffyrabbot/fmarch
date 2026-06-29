@@ -333,6 +333,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D02 advance_phase concurrently with distinct command ids, prove one ACK plus one InvalidTarget recovery, and converge to the next open phase.",
     }),
     scenario({
+      id: "concurrent-host-deadline-advance-race",
+      title: "Concurrent host deadline advance race",
+      role: "host",
+      provenBy: ["concurrent-host-deadline-advance-race"].filter(hasLane),
+      note: "Two host role pages submit D01 advance_phase_by_deadline concurrently with distinct command ids, prove one deadline evidence ACK plus one InvalidTarget recovery, and converge to the next open phase.",
+    }),
+    scenario({
       id: "stale-same-action-recovery",
       title: "Stale same action recovery",
       role: "actionPlayer",
@@ -523,12 +530,13 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-control",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
+        "concurrent-host-deadline-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection plus stale player completed-game command closure, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, host resolve/advance/deadline-advance races, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection plus stale player completed-game command closure, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

@@ -531,7 +531,11 @@ projections plus the API converge to locked D02, restores that disposable D02
 open, advances another disposable seeded game to locked D02 and races two host
 role pages on `AdvancePhase` until exactly one ACKs and one renders stale
 `Reject InvalidTarget` recovery, verifies both browser projections plus the API
-converge to open N02, keeps a full host page frozen on D02
+converge to open N02, advances another disposable seeded game to locked D01
+with a deadline and races two host role pages on `AdvancePhaseByDeadline` until
+exactly one ACKs with deadline evidence plus phase advance and one renders stale
+`Reject InvalidTarget` recovery, verifies both browser projections plus the API
+converge to open N01 with no carried deadline, keeps a full host page frozen on D02
 `ResolvePhase` until the live host resolves and locks D02, then renders a stale
 `Reject PhaseLocked` receipt with no ACK stream seqs, refreshes to locked D02
 controls, keeps a player page frozen on a legal D02 vote target until the host
@@ -656,7 +660,7 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale player vote-after-change recovery, stale player withdraw-after-change recovery, stale player withdraw-after-phase-closure recovery, stale player vote-after-phase-closure recovery, stale player post-after-phase-closure recovery, stale dead-target vote recovery,
 dead-current-vote cleanup with stale host publish-after-clear recovery, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
-stale deadline advance recovery, stale host resolve recovery, stale host publish-after-change recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
+concurrent host resolve/advance/deadline-advance races, stale deadline advance recovery, stale host resolve recovery, stale host publish-after-change recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,

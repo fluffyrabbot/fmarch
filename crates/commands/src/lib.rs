@@ -1006,6 +1006,21 @@ async fn advance_phase_by_deadline(
     observed_at: i64,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_advance_phase_lock(pool, game).await?;
+    let result =
+        advance_phase_by_deadline_locked(pool, principal, game, phase_id, observed_at, receipt)
+            .await;
+    release_advance_phase_lock(&mut lock, game, result).await
+}
+
+async fn advance_phase_by_deadline_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    phase_id: String,
+    observed_at: i64,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;

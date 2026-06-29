@@ -42,6 +42,7 @@ const requiredChecks = [
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-advance-race",
+  "concurrent-host-deadline-advance-race",
   "stale-host-resolve",
   "stale-host-advance",
   "stale-host-deadline",

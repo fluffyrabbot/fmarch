@@ -3422,6 +3422,82 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterRace: { phase_id: "N02", locked: false },
       },
+      concurrentHostDeadlineAdvanceRace: {
+        status: "passed",
+        game: "deadline-advance-race-game-a",
+        actionId: "advance_phase_by_deadline",
+        setup: {
+          stalePhase: { id: "D01", locked: true, deadline: 918300 },
+          visibleActions: [
+            "unlock_thread",
+            "advance_phase",
+            "advance_phase_by_deadline",
+          ],
+          closedStatus: { state: "closed" },
+        },
+        ackPageRole: "live",
+        rejectPageRole: "concurrent",
+        ack: {
+          state: "ack",
+          commandId: "77777777-7777-4777-8777-777777777777",
+          streamSeqs: [54, 55],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  AdvancePhaseByDeadline: {
+                    game: "deadline-advance-race-game-a",
+                    phase: "D01",
+                    observed_at: 918301,
+                  },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "88888888-8888-4888-8888-888888888888",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: deadline target is stale; refresh and use the current deadline controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  AdvancePhaseByDeadline: {
+                    game: "deadline-advance-race-game-a",
+                    phase: "D01",
+                    observed_at: 918301,
+                  },
+                },
+              },
+            },
+          },
+        },
+        livePhaseAfterRace: { id: "N01", locked: false, deadline: null },
+        concurrentPhaseAfterRace: { id: "N01", locked: false, deadline: null },
+        livePhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        concurrentPhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        liveDeadlineActionsAfterRace: ["extend_deadline"],
+        concurrentDeadlineActionsAfterRace: ["extend_deadline"],
+        liveActivityStatusText: "Ack: stream seqs 54, 55",
+        concurrentActivityStatusText:
+          "Reject InvalidTarget: deadline target is stale; refresh and use the current deadline controls",
+        liveActivityRow: {
+          source: "status",
+          actionId: "advance_phase_by_deadline",
+          dispatchKind: "advance_phase_by_deadline",
+        },
+        concurrentActivityRow: {
+          source: "outcome",
+          actionId: "advance_phase_by_deadline",
+          dispatchKind: "advance_phase_by_deadline",
+        },
+        apiPhaseAfterRace: { phase_id: "N01", locked: false, deadline: null },
+      },
       staleHostResolve: {
         status: "passed",
         actionId: "resolve_phase",
@@ -3933,6 +4009,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-control",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
+      "concurrent-host-deadline-advance-race",
       "stale-host-resolve",
       "stale-host-advance",
       "stale-host-deadline",
@@ -4008,7 +4085,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 65);
+  assert.equal(opsArtifacts.proofRun.laneCount, 66);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4108,6 +4185,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-action-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
+      "concurrent-host-deadline-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -4591,6 +4669,7 @@ function hardeningAdminProofFixture() {
         "stale-host-control",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
+        "concurrent-host-deadline-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
@@ -4687,6 +4766,7 @@ function seedAdminProofFixture() {
         "concurrent-action-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
+        "concurrent-host-deadline-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

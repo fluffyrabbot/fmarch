@@ -70187,6 +70187,108 @@ async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    handle(
+        &pool,
+        &host,
+        Command::ExtendDeadline {
+            game,
+            phase: "D01".into(),
+            at: 100,
+        },
+    )
+    .await
+    .expect("set D01 deadline before racing deadline advance");
+    handle(&pool, &host, Command::ResolvePhase { game, seed: 72_101 })
+        .await
+        .expect("resolve D01 before racing deadline advance");
+
+    let (first, second) = tokio::join!(
+        handle(
+            &pool,
+            &host,
+            Command::AdvancePhaseByDeadline {
+                game,
+                phase: "D01".into(),
+                observed_at: 101,
+            },
+        ),
+        handle(
+            &pool,
+            &host,
+            Command::AdvancePhaseByDeadline {
+                game,
+                phase: "D01".into(),
+                observed_at: 101,
+            },
+        ),
+    );
+
+    let results = [first, second];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let invalid_target_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::InvalidTarget)))
+        .count();
+    assert_eq!(
+        ack_count, 1,
+        "exactly one concurrent deadline advance should ACK"
+    );
+    assert_eq!(
+        invalid_target_count, 1,
+        "the losing concurrent deadline advance should revalidate after the winner advances"
+    );
+    let ack = results
+        .iter()
+        .find_map(|result| result.as_ref().ok())
+        .expect("one deadline advance ACK");
+    assert_eq!(
+        ack.stream_seqs.len(),
+        2,
+        "deadline advance appends elapsed evidence plus the phase transition atomically"
+    );
+
+    let deadline_evidence_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseDeadlineElapsed' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        deadline_evidence_count, 1,
+        "concurrent deadline advance must not append duplicate deadline evidence"
+    );
+    let advance_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
+         AND payload->>'source_phase_id' = 'D01' \
+         AND payload->>'reason' = 'deadline_elapsed'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        advance_count, 1,
+        "concurrent deadline advance must not append duplicate phase transitions"
+    );
+
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(phase.phase_id, "N01");
+    assert!(
+        !phase.locked,
+        "winning deadline advance should leave the next phase open"
+    );
+    assert_eq!(
+        phase.deadline, None,
+        "deadline-derived advance must clear the phase deadline on the next phase"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");

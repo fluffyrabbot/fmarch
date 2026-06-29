@@ -69,6 +69,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-advance-race",
+  "concurrent-host-deadline-advance-race",
   "stale-host-resolve",
   "stale-host-advance",
   "stale-host-deadline",
@@ -3328,6 +3329,125 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentHostAdvanceRace?.apiPhaseAfterRace?.phase_id === "N02" &&
         hardening.concurrentHostAdvanceRace?.apiPhaseAfterRace?.locked === false,
     }),
+    lane(
+      "concurrent-host-deadline-advance-race",
+      "Concurrent host deadline advances converge",
+      {
+        ackPageRole: hardening.concurrentHostDeadlineAdvanceRace?.ackPageRole ?? null,
+        rejectPageRole: hardening.concurrentHostDeadlineAdvanceRace?.rejectPageRole ?? null,
+        game: hardening.concurrentHostDeadlineAdvanceRace?.game ?? null,
+        ackState: hardening.concurrentHostDeadlineAdvanceRace?.ack?.state ?? null,
+        rejectError: hardening.concurrentHostDeadlineAdvanceRace?.reject?.error ?? null,
+        phaseAfterRace:
+          hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.phase_id ??
+          null,
+        passed:
+          hardening.concurrentHostDeadlineAdvanceRace?.status === "passed" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase?.id ===
+            "D01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase?.locked ===
+            true &&
+          typeof hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase
+            ?.deadline === "number" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
+            "advance_phase_by_deadline",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
+            "advance_phase",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
+            "unlock_thread",
+          ) === true &&
+          ["live", "concurrent"].includes(
+            hardening.concurrentHostDeadlineAdvanceRace?.ackPageRole,
+          ) &&
+          ["live", "concurrent"].includes(
+            hardening.concurrentHostDeadlineAdvanceRace?.rejectPageRole,
+          ) &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ackPageRole !==
+            hardening.concurrentHostDeadlineAdvanceRace?.rejectPageRole &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.state === "ack" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          Array.isArray(
+            hardening.concurrentHostDeadlineAdvanceRace?.ack?.streamSeqs,
+          ) &&
+          hardening.concurrentHostDeadlineAdvanceRace.ack.streamSeqs.length === 2 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.state === "reject" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.error ===
+            "InvalidTarget" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.serverEnvelope?.body
+            ?.kind === "Reject" &&
+          Array.isArray(
+            hardening.concurrentHostDeadlineAdvanceRace?.reject?.streamSeqs,
+          ) === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.message?.includes(
+            "deadline target is stale",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.commandId !==
+            hardening.concurrentHostDeadlineAdvanceRace?.reject?.commandId &&
+          typeof hardening.concurrentHostDeadlineAdvanceRace?.game === "string" &&
+          hardening.concurrentHostDeadlineAdvanceRace.game.length > 0 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.game ===
+            hardening.concurrentHostDeadlineAdvanceRace?.game &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.phase === "D01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.ack?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.observed_at ===
+            hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase?.deadline +
+              1 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.game ===
+            hardening.concurrentHostDeadlineAdvanceRace?.game &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.phase === "D01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.AdvancePhaseByDeadline?.observed_at ===
+            hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase?.deadline +
+              1 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseAfterRace?.id ===
+            "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseAfterRace?.locked ===
+            false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseAfterRace?.deadline ===
+            null &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseAfterRace?.id ===
+            "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseAfterRace
+            ?.locked === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseAfterRace
+            ?.deadline === null &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
+            "lock_thread",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
+            "advance_phase_by_deadline",
+          ) === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
+            "lock_thread",
+          ) === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
+            "advance_phase_by_deadline",
+          ) === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.liveActivityRow?.actionId ===
+            "advance_phase_by_deadline" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.concurrentActivityRow?.actionId ===
+            "advance_phase_by_deadline" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.phase_id ===
+            "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.locked ===
+            false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.deadline ===
+            null,
+      },
+    ),
     lane("stale-host-resolve", "Stale host resolve rejects after live resolution", {
       rejectError: hardening.staleHostResolve?.reject?.error ?? null,
       stalePhase: hardening.staleHostResolve?.setup?.stalePhase?.id ?? null,
