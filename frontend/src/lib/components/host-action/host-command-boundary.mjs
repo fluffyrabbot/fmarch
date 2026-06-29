@@ -235,7 +235,7 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
     reject.error === "InvalidTarget" &&
     requestEnvelope?.body?.body?.command?.SetSlotStatus !== undefined
   ) {
-    return `${base}; slot lifecycle is already current, refresh the slot controls before retrying`;
+    return `${base}; slot lifecycle changed or is already current, refresh the slot controls before retrying`;
   }
   if (
     reject.error === "InvalidTarget" &&

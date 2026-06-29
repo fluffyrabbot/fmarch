@@ -70458,6 +70458,18 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
         Command::SetSlotStatus {
             game,
             slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Alive,
+        },
+    )
+    .await
+    .expect("restore alive before modkill status");
+
+    handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
             status: domain::SlotLifecycle::Modkilled,
         },
     )
@@ -70514,7 +70526,7 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
     assert_eq!(
         lifecycle_events,
         vec![
-            ("alive".into(), 1),
+            ("alive".into(), 2),
             ("dead".into(), 1),
             ("modkilled".into(), 1)
         ],
@@ -70530,6 +70542,88 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
     assert!(
         slot.alive && slot.status == "alive",
         "duplicate alive rejection must preserve restored alive projection"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_host_lifecycle_collision_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+
+    let (dead, modkilled) = tokio::join!(
+        handle(
+            &pool,
+            &host,
+            Command::SetSlotStatus {
+                game,
+                slot: "slot_1".into(),
+                status: domain::SlotLifecycle::Dead,
+            },
+        ),
+        handle(
+            &pool,
+            &host,
+            Command::SetSlotStatus {
+                game,
+                slot: "slot_1".into(),
+                status: domain::SlotLifecycle::Modkilled,
+            },
+        ),
+    );
+
+    let results = [dead, modkilled];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let invalid_target_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::InvalidTarget)))
+        .count();
+    assert_eq!(
+        ack_count, 1,
+        "exactly one lifecycle collision command should ACK"
+    );
+    assert_eq!(
+        invalid_target_count, 1,
+        "losing lifecycle collision command should revalidate after the winner changes the slot"
+    );
+
+    let lifecycle_events = sqlx::query_as::<_, (String, i64)>(
+        "SELECT payload->>'status' AS status, count(*) AS count \
+         FROM events \
+         WHERE stream_id = $1 AND kind = 'SlotStatusChanged' \
+         GROUP BY payload->>'status' \
+         ORDER BY payload->>'status'",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lifecycle_events.len(),
+        1,
+        "lifecycle collision must append only the winning terminal status"
+    );
+    assert_eq!(
+        lifecycle_events[0].1, 1,
+        "winning lifecycle status must be appended once"
+    );
+    assert!(
+        lifecycle_events[0].0 == "dead" || lifecycle_events[0].0 == "modkilled",
+        "winning lifecycle status should be terminal"
+    );
+
+    let slot = slot_state(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|row| row.slot_id == "slot_1")
+        .expect("slot projection");
+    assert!(
+        !slot.alive,
+        "winning lifecycle command should kill the slot"
+    );
+    assert_eq!(
+        slot.status, lifecycle_events[0].0,
+        "slot projection should converge to the single winning terminal status"
     );
 }
 

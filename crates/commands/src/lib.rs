@@ -1099,6 +1099,22 @@ async fn host_slot_lifecycle(
     game: Uuid,
     slot: String,
     kind: &str,
+    payload: serde_json::Value,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let lock_key = slot_lifecycle_lock_key(game, &slot);
+    let mut lock = acquire_slot_lifecycle_lock(pool, lock_key).await?;
+    let result =
+        host_slot_lifecycle_locked(pool, principal, game, slot, kind, payload, receipt).await;
+    release_slot_lifecycle_lock(&mut lock, lock_key, result).await
+}
+
+async fn host_slot_lifecycle_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    slot: String,
+    kind: &str,
     mut payload: serde_json::Value,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
@@ -1108,8 +1124,13 @@ async fn host_slot_lifecycle(
     let current_status = current_slot_lifecycle_status(pool, game, &slot)
         .await?
         .ok_or(Reject::UnknownSlot)?;
-    if kind == "SlotStatusChanged" && payload["status"].as_str() == Some(current_status.as_str()) {
-        return Err(Reject::InvalidTarget);
+    if kind == "SlotStatusChanged" {
+        let requested_status = payload["status"].as_str().ok_or(Reject::InvalidTarget)?;
+        if requested_status == current_status.as_str()
+            || (current_status.as_str() != "alive" && requested_status != "alive")
+        {
+            return Err(Reject::InvalidTarget);
+        }
     }
     payload["slot_id"] = serde_json::Value::String(slot);
     persist(
@@ -1119,6 +1140,56 @@ async fn host_slot_lifecycle(
         receipt,
     )
     .await
+}
+
+async fn acquire_slot_lifecycle_lock(
+    pool: &PgPool,
+    lock_key: i64,
+) -> Result<PoolConnection<Postgres>, Reject> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(conn)
+}
+
+async fn release_slot_lifecycle_lock(
+    conn: &mut PoolConnection<Postgres>,
+    lock_key: i64,
+    result: Result<Ack, Reject>,
+) -> Result<Ack, Reject> {
+    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .fetch_one(&mut **conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    if !released {
+        return Err(Reject::Internal(
+            "slot lifecycle lock was not held at release".to_string(),
+        ));
+    }
+    result
+}
+
+fn slot_lifecycle_lock_key(game: Uuid, slot: &str) -> i64 {
+    let bytes = game.as_bytes();
+    let high = u64::from_be_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]);
+    let low = u64::from_be_bytes([
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+    ]);
+    let mut slot_hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in slot.as_bytes() {
+        slot_hash ^= u64::from(*byte);
+        slot_hash = slot_hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    (high ^ low ^ slot_hash ^ 0x6d66_6172_6368_0004) as i64
 }
 
 async fn current_slot_lifecycle_status(

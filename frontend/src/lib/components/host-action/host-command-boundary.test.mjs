@@ -392,7 +392,7 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
   assert.equal(staleLifecycleReject.error, "InvalidTarget");
   assert.equal(
     staleLifecycleReject.message,
-    "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+    "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
   );
 
   const staleReplacementReject = await sendHostActionCommand({

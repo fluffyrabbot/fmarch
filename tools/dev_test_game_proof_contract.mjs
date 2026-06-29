@@ -59,6 +59,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-lifecycle",
   "host-modkill-control",
   "stale-host-modkill",
+  "concurrent-host-lifecycle-race",
   "stale-host-prompt",
   "stale-host-complete",
   "stale-player-complete",
@@ -2590,7 +2591,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         Array.isArray(hardening.staleHostLifecycle?.reject?.streamSeqs) ===
           false &&
         hardening.staleHostLifecycle?.reject?.message?.includes(
-          "slot lifecycle is already current",
+          "slot lifecycle changed or is already current",
         ) === true &&
         hardening.staleHostLifecycle?.replacementAfterReject?.lifecycleLabel ===
           "Alive" &&
@@ -2688,7 +2689,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         Array.isArray(hardening.staleHostModkill?.reject?.streamSeqs) ===
           false &&
         hardening.staleHostModkill?.reject?.message?.includes(
-          "slot lifecycle is already current",
+          "slot lifecycle changed or is already current",
         ) === true &&
         hardening.staleHostModkill?.replacementAfterReject?.lifecycleLabel ===
           "Alive" &&
@@ -2708,6 +2709,138 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostModkill?.playerCommandStateAfterReject?.actorStatus ===
           "modkilled",
     }),
+    lane(
+      "concurrent-host-lifecycle-race",
+      "Concurrent host lifecycle commands converge",
+      {
+        ackRaceRole: hardening.concurrentHostLifecycleRace?.ackRaceRole ?? null,
+        rejectRaceRole:
+          hardening.concurrentHostLifecycleRace?.rejectRaceRole ?? null,
+        ackActionId: hardening.concurrentHostLifecycleRace?.ackActionId ?? null,
+        rejectActionId:
+          hardening.concurrentHostLifecycleRace?.rejectActionId ?? null,
+        game: hardening.concurrentHostLifecycleRace?.game ?? null,
+        winningStatus: hardening.concurrentHostLifecycleRace?.winningStatus ?? null,
+        rejectError: hardening.concurrentHostLifecycleRace?.reject?.error ?? null,
+        apiStatus:
+          hardening.concurrentHostLifecycleRace?.apiSlotAfterRace?.status ?? null,
+        passed:
+          hardening.concurrentHostLifecycleRace?.status === "passed" &&
+          hardening.concurrentHostLifecycleRace?.setup?.deadPagePhase?.id === "D02" &&
+          hardening.concurrentHostLifecycleRace?.setup?.deadPagePhase?.locked ===
+            false &&
+          hardening.concurrentHostLifecycleRace?.setup?.modkillPagePhase?.id ===
+            "D02" &&
+          hardening.concurrentHostLifecycleRace?.setup?.modkillPagePhase?.locked ===
+            false &&
+          hardening.concurrentHostLifecycleRace?.setup?.deadPageReplacement
+            ?.lifecycleLabel === "Alive" &&
+          hardening.concurrentHostLifecycleRace?.setup?.modkillPageReplacement
+            ?.lifecycleLabel === "Alive" &&
+          hardening.concurrentHostLifecycleRace?.setup?.deadPageLifecycleActions?.includes(
+            "mark_dead",
+          ) === true &&
+          hardening.concurrentHostLifecycleRace?.setup?.modkillPageLifecycleActions?.includes(
+            "modkill_slot",
+          ) === true &&
+          hardening.concurrentHostLifecycleRace?.setup?.affectedPlayerCommandState
+            ?.actorSlot === "slot-7" &&
+          hardening.concurrentHostLifecycleRace?.setup?.affectedPlayerCommandState
+            ?.actorAlive === true &&
+          ["dead", "modkill"].includes(
+            hardening.concurrentHostLifecycleRace?.ackRaceRole,
+          ) &&
+          ["dead", "modkill"].includes(
+            hardening.concurrentHostLifecycleRace?.rejectRaceRole,
+          ) &&
+          hardening.concurrentHostLifecycleRace?.ackRaceRole !==
+            hardening.concurrentHostLifecycleRace?.rejectRaceRole &&
+          ["mark_dead", "modkill_slot"].includes(
+            hardening.concurrentHostLifecycleRace?.ackActionId,
+          ) &&
+          ["mark_dead", "modkill_slot"].includes(
+            hardening.concurrentHostLifecycleRace?.rejectActionId,
+          ) &&
+          hardening.concurrentHostLifecycleRace?.ackActionId !==
+            hardening.concurrentHostLifecycleRace?.rejectActionId &&
+          ["dead", "modkilled"].includes(
+            hardening.concurrentHostLifecycleRace?.winningStatus,
+          ) &&
+          hardening.concurrentHostLifecycleRace?.winningLabel ===
+            (hardening.concurrentHostLifecycleRace?.winningStatus === "dead"
+              ? "Dead"
+              : "Modkilled") &&
+          hardening.concurrentHostLifecycleRace?.ack?.state === "ack" &&
+          hardening.concurrentHostLifecycleRace?.ack?.serverEnvelope?.body?.kind ===
+            "Ack" &&
+          Array.isArray(hardening.concurrentHostLifecycleRace?.ack?.streamSeqs) &&
+          hardening.concurrentHostLifecycleRace.ack.streamSeqs.length === 1 &&
+          hardening.concurrentHostLifecycleRace?.reject?.state === "reject" &&
+          hardening.concurrentHostLifecycleRace?.reject?.error ===
+            "InvalidTarget" &&
+          hardening.concurrentHostLifecycleRace?.reject?.serverEnvelope?.body?.kind ===
+            "Reject" &&
+          Array.isArray(hardening.concurrentHostLifecycleRace?.reject?.streamSeqs) ===
+            false &&
+          hardening.concurrentHostLifecycleRace?.reject?.message?.includes(
+            "slot lifecycle changed or is already current",
+          ) === true &&
+          hardening.concurrentHostLifecycleRace?.ack?.commandId !==
+            hardening.concurrentHostLifecycleRace?.reject?.commandId &&
+          typeof hardening.concurrentHostLifecycleRace?.game === "string" &&
+          hardening.concurrentHostLifecycleRace.game.length > 0 &&
+          hardening.concurrentHostLifecycleRace?.ack?.requestEnvelope?.body?.body
+            ?.command?.SetSlotStatus?.game ===
+            hardening.concurrentHostLifecycleRace?.game &&
+          hardening.concurrentHostLifecycleRace?.ack?.requestEnvelope?.body?.body
+            ?.command?.SetSlotStatus?.slot === "slot-7" &&
+          hardening.concurrentHostLifecycleRace?.ack?.requestEnvelope?.body?.body
+            ?.command?.SetSlotStatus?.status ===
+            hardening.concurrentHostLifecycleRace?.winningStatus &&
+          hardening.concurrentHostLifecycleRace?.reject?.requestEnvelope?.body?.body
+            ?.command?.SetSlotStatus?.game ===
+            hardening.concurrentHostLifecycleRace?.game &&
+          hardening.concurrentHostLifecycleRace?.reject?.requestEnvelope?.body?.body
+            ?.command?.SetSlotStatus?.slot === "slot-7" &&
+          hardening.concurrentHostLifecycleRace?.deadReplacementAfterRace
+            ?.lifecycleLabel === hardening.concurrentHostLifecycleRace?.winningLabel &&
+          hardening.concurrentHostLifecycleRace?.modkillReplacementAfterRace
+            ?.lifecycleLabel === hardening.concurrentHostLifecycleRace?.winningLabel &&
+          hardening.concurrentHostLifecycleRace?.deadLifecycleActionsAfterRace?.includes(
+            "mark_dead",
+          ) === false &&
+          hardening.concurrentHostLifecycleRace?.deadLifecycleActionsAfterRace?.includes(
+            "modkill_slot",
+          ) === false &&
+          hardening.concurrentHostLifecycleRace?.modkillLifecycleActionsAfterRace?.includes(
+            "mark_dead",
+          ) === false &&
+          hardening.concurrentHostLifecycleRace?.modkillLifecycleActionsAfterRace?.includes(
+            "modkill_slot",
+          ) === false &&
+          hardening.concurrentHostLifecycleRace?.deadActivityRow?.actionId ===
+            "mark_dead" &&
+          hardening.concurrentHostLifecycleRace?.modkillActivityRow?.actionId ===
+            "modkill_slot" &&
+          hardening.concurrentHostLifecycleRace?.affectedPlayerCommandStateAfterRace
+            ?.actorAlive === false &&
+          hardening.concurrentHostLifecycleRace?.affectedPlayerCommandStateAfterRace
+            ?.actorStatus === hardening.concurrentHostLifecycleRace?.winningStatus &&
+          hardening.concurrentHostLifecycleRace?.disabledControls?.vote?.disabled ===
+            true &&
+          hardening.concurrentHostLifecycleRace?.disabledControls?.withdraw
+            ?.disabled === true &&
+          hardening.concurrentHostLifecycleRace?.disabledControls?.post?.disabled ===
+            true &&
+          hardening.concurrentHostLifecycleRace?.actionControlCount === 0 &&
+          hardening.concurrentHostLifecycleRace?.directPost?.state === "reject" &&
+          hardening.concurrentHostLifecycleRace?.directPost?.error ===
+            "SlotNotAlive" &&
+          hardening.concurrentHostLifecycleRace?.apiSlotAfterRace?.alive === false &&
+          hardening.concurrentHostLifecycleRace?.apiSlotAfterRace?.status ===
+            hardening.concurrentHostLifecycleRace?.winningStatus,
+      },
+    ),
     lane("stale-host-prompt", "Stale host prompt rejects after live resolution", {
       rejectError: hardening.staleHostPrompt?.reject?.error ?? null,
       promptId: hardening.staleHostPrompt?.promptId ?? null,

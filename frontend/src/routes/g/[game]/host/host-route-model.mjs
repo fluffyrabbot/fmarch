@@ -49,10 +49,17 @@ export async function buildHostConsoleRouteData({
   const pendingPromptCount = coldLoad.hostPrompts.filter(
     (prompt) => prompt.status === "pending",
   ).length;
+  const replacement = Object.freeze({
+    slotId: "slot-7",
+    occupantLabel: "player-mira",
+    lifecycleLabel: "Alive",
+    historyLabel: "Waiting for replacement command proof",
+  });
 
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts: coldLoad.hostPrompts,
     phase: HOST_FIXTURE_PHASE,
+    replacement,
     capabilityKind: access.capability?.kind,
   });
   const moderatorControls = buildModeratorControls({
@@ -118,12 +125,7 @@ export async function buildHostConsoleRouteData({
     projectionBoundary: LIVE_TRANSPORT_BOUNDARY,
     access,
     phase: HOST_FIXTURE_PHASE,
-    replacement: Object.freeze({
-      slotId: "slot-7",
-      occupantLabel: "player-mira",
-      lifecycleLabel: "Alive",
-      historyLabel: "Waiting for replacement command proof",
-    }),
+    replacement,
     inviteTargets: buildHostInviteTargets({
       replacement: {
         slotId: "slot-7",

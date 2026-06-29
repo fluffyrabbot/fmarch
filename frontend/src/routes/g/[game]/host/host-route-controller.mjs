@@ -75,6 +75,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts,
     phase: projection.phase,
+    replacement: projection.replacement,
     completed: projection.completed,
     capabilityKind,
   });

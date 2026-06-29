@@ -1563,7 +1563,7 @@ assert.equal(
 );
 assert.match(
   session.verification.multiplayerHardening.staleHostLifecycle.reject.message,
-  /slot lifecycle is already current/,
+  /slot lifecycle changed or is already current/,
 );
 assert.equal(
   Array.isArray(
@@ -1667,7 +1667,7 @@ assert.equal(
 );
 assert.match(
   session.verification.multiplayerHardening.staleHostModkill.reject.message,
-  /slot lifecycle is already current/,
+  /slot lifecycle changed or is already current/,
 );
 assert.equal(
   Array.isArray(
@@ -1693,6 +1693,126 @@ assert.equal(
   session.verification.multiplayerHardening.staleHostModkill.playerCommandStateAfterReject
     .actorStatus,
   "modkilled",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.status,
+  "passed",
+);
+assert(
+  ["dead", "modkill"].includes(
+    session.verification.multiplayerHardening.concurrentHostLifecycleRace.ackRaceRole,
+  ),
+);
+assert(
+  ["dead", "modkill"].includes(
+    session.verification.multiplayerHardening.concurrentHostLifecycleRace.rejectRaceRole,
+  ),
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ackRaceRole,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.rejectRaceRole,
+);
+assert(
+  ["mark_dead", "modkill_slot"].includes(
+    session.verification.multiplayerHardening.concurrentHostLifecycleRace.ackActionId,
+  ),
+);
+assert(
+  ["mark_dead", "modkill_slot"].includes(
+    session.verification.multiplayerHardening.concurrentHostLifecycleRace.rejectActionId,
+  ),
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ackActionId,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.rejectActionId,
+);
+assert(
+  ["dead", "modkilled"].includes(
+    session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
+  ),
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.streamSeqs
+    .length,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.error,
+  "InvalidTarget",
+);
+assert.match(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.message,
+  /slot lifecycle changed or is already current/,
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.commandId,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.commandId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.requestEnvelope
+    .body.body.command.SetSlotStatus.game,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.requestEnvelope
+    .body.body.command.SetSlotStatus.slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.ack.requestEnvelope
+    .body.body.command.SetSlotStatus.status,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject
+    .requestEnvelope.body.body.command.SetSlotStatus.game,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.reject
+    .requestEnvelope.body.body.command.SetSlotStatus.slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .deadReplacementAfterRace.lifecycleLabel,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningLabel,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .modkillReplacementAfterRace.lifecycleLabel,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningLabel,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .affectedPlayerCommandStateAfterRace.actorStatus,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.disabledControls.post
+    .disabled,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.actionControlCount,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.directPost.error,
+  "SlotNotAlive",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.apiSlotAfterRace
+    .status,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
 );
 assert.equal(
   session.verification.multiplayerHardening.staleDeadActionConflict.status,

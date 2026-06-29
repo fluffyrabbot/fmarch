@@ -771,6 +771,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host modkill: ${card.verification.multiplayerHardening.staleHostModkill.reject.message}`,
         "",
+        `Concurrent host lifecycle race: ${card.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.message}`,
+        "",
         `Action idempotent retry: ${card.verification.multiplayerHardening.actionIdempotentRetry.retry.message}`,
         "",
         `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
@@ -4063,6 +4065,13 @@ async function verifySeededMultiplayerHardening({
     staleHostLifecycleSetup: staleHostModkillSetup,
   });
   const staleHostModkill = hostModkillControl.staleDuplicateStatus;
+  const concurrentHostLifecycleRace = await verifyConcurrentHostLifecycleRace({
+    hostPage,
+    playerPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+    normalizeCommandResponse,
+  });
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleHostControl = await submitStaleHostControlRecovery({
@@ -4195,6 +4204,7 @@ async function verifySeededMultiplayerHardening({
     hostLifecycleControl,
     hostModkillControl,
     staleHostModkill,
+    concurrentHostLifecycleRace,
     concurrentActionRace,
     actionIdempotentRetry,
     staleSameActionRecovery,
@@ -4213,7 +4223,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -5753,7 +5763,7 @@ async function submitStaleHostLifecycleRecovery({
     reject?.error !== "InvalidTarget" ||
     reject?.serverEnvelope?.body?.kind !== "Reject" ||
     Array.isArray(reject?.streamSeqs) ||
-    !reject?.message?.includes("slot lifecycle is already current") ||
+    !reject?.message?.includes("slot lifecycle changed or is already current") ||
     commandOutcomes.find(
       (outcome) =>
         outcome.actionId === actionId &&
@@ -8016,6 +8026,120 @@ async function verifyConcurrentHostResolveRace({ hostPage, apiBaseUrl, frontendB
   }
 }
 
+async function verifyConcurrentHostLifecycleRace({
+  hostPage,
+  playerPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const raceGame = crypto.randomUUID();
+  const seed = await seedConcurrentHostLifecycleRaceGame({ raceGame });
+  const hostContext = hostPage.context();
+  const playerContext = playerPage.context();
+  const deadRacePage = await hostContext.newPage();
+  const modkillRacePage = await hostContext.newPage();
+  const affectedPlayerPage = await playerContext.newPage();
+  try {
+    await deadRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await modkillRacePage.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await Promise.all([
+      deadRacePage
+        .getByTestId("critical-host-action-mark_dead")
+        .waitFor({ state: "visible" }),
+      modkillRacePage
+        .getByTestId("critical-host-action-modkill_slot")
+        .waitFor({ state: "visible" }),
+    ]);
+    await Promise.all([
+      waitForHostProjectionPhase(deadRacePage, { phaseId: "D02", locked: false }),
+      waitForHostProjectionPhase(modkillRacePage, { phaseId: "D02", locked: false }),
+    ]);
+    await gotoPlayerBoard(affectedPlayerPage, raceGame);
+    await affectedPlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+        window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive",
+    );
+    const setup = {
+      deadPagePhase: await deadRacePage.evaluate(() => window.__fmarchHostProjection?.phase),
+      modkillPagePhase: await modkillRacePage.evaluate(
+        () => window.__fmarchHostProjection?.phase,
+      ),
+      deadPageReplacement: await deadRacePage.evaluate(
+        () => window.__fmarchHostProjection?.replacement,
+      ),
+      modkillPageReplacement: await modkillRacePage.evaluate(
+        () => window.__fmarchHostProjection?.replacement,
+      ),
+      deadPageLifecycleActions: await visibleHostControlActions(
+        deadRacePage,
+        "slot-lifecycle",
+      ),
+      modkillPageLifecycleActions: await visibleHostControlActions(
+        modkillRacePage,
+        "slot-lifecycle",
+      ),
+      affectedPlayerCommandState: await affectedPlayerPage.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+    };
+    const race = await submitConcurrentHostLifecycleRace({
+      deadRacePage,
+      modkillRacePage,
+      affectedPlayerPage,
+      setup,
+      apiBaseUrl,
+      game: raceGame,
+      normalizeCommandResponse,
+    });
+    return {
+      ...race,
+      game: raceGame,
+      seed,
+      proof:
+        "A disposable seeded local game advanced to open D02, opened two host role pages plus the Slot 7 player role URL, raced Mark dead against Modkill slot with distinct command ids, proved one ACK plus one InvalidTarget lifecycle recovery, and converged both host pages, the affected player page, and the API to one terminal slot status.",
+    };
+  } finally {
+    await deadRacePage.close().catch(() => {});
+    await modkillRacePage.close().catch(() => {});
+    await affectedPlayerPage.close().catch(() => {});
+  }
+}
+
+async function seedConcurrentHostLifecycleRaceGame({ raceGame }) {
+  const plan = [
+    ...seedCommandPlanForGame(raceGame),
+    ["host_h", { ResolvePhase: { game: raceGame, seed: 918_401 } }],
+    ["host_h", { AdvancePhase: { game: raceGame } }],
+    ["host_h", { ResolvePhase: { game: raceGame, seed: 918_402 } }],
+    ["host_h", { AdvancePhase: { game: raceGame } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `concurrent host lifecycle seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game: raceGame,
+    commands,
+  };
+}
+
 async function seedConcurrentHostResolveRaceGame({ raceGame }) {
   const plan = [
     ...seedCommandPlanForGame(raceGame),
@@ -8224,6 +8348,310 @@ async function seedConcurrentHostDeadlineAdvanceRaceGame({ raceGame }) {
   return {
     game: raceGame,
     commands,
+  };
+}
+
+async function submitConcurrentHostLifecycleRace({
+  deadRacePage,
+  modkillRacePage,
+  affectedPlayerPage,
+  setup,
+  apiBaseUrl,
+  game,
+  normalizeCommandResponse,
+}) {
+  const deadActionId = "mark_dead";
+  const modkillActionId = "modkill_slot";
+  const deadBefore = await deadRacePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    deadActionId,
+  );
+  const modkillBefore = await modkillRacePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    modkillActionId,
+  );
+
+  const deadActionRoot = deadRacePage.getByTestId(`critical-host-action-${deadActionId}`);
+  const modkillActionRoot = modkillRacePage.getByTestId(
+    `critical-host-action-${modkillActionId}`,
+  );
+  await Promise.all([
+    deadActionRoot.getByTestId("critical-host-action-trigger").click(),
+    modkillActionRoot.getByTestId("critical-host-action-trigger").click(),
+  ]);
+  await Promise.all([
+    deadActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+    modkillActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+  ]);
+  const [deadConfirmationMessage, modkillConfirmationMessage] = await Promise.all([
+    deadActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+    modkillActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+  ]);
+  await Promise.all([
+    deadActionRoot.getByTestId("critical-host-action-confirm").click(),
+    modkillActionRoot.getByTestId("critical-host-action-confirm").click(),
+  ]);
+  await Promise.all([
+    deadRacePage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.SetSlotStatus !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      { expectedActionId: deadActionId, beforeCommandId: deadBefore?.commandId ?? null },
+    ),
+    modkillRacePage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.SetSlotStatus !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      {
+        expectedActionId: modkillActionId,
+        beforeCommandId: modkillBefore?.commandId ?? null,
+      },
+    ),
+  ]);
+
+  const [deadOutcome, modkillOutcome] = await Promise.all([
+    deadRacePage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      deadActionId,
+    ),
+    modkillRacePage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      modkillActionId,
+    ),
+  ]);
+  const outcomes = [
+    { raceRole: "dead", actionId: deadActionId, expectedStatus: "dead", outcome: deadOutcome },
+    {
+      raceRole: "modkill",
+      actionId: modkillActionId,
+      expectedStatus: "modkilled",
+      outcome: modkillOutcome,
+    },
+  ];
+  const ackEntries = outcomes.filter((entry) => entry.outcome?.state === "ack");
+  const rejectEntries = outcomes.filter((entry) => entry.outcome?.state === "reject");
+  const ackEntry = ackEntries[0] ?? null;
+  const rejectEntry = rejectEntries[0] ?? null;
+  const ack = ackEntry?.outcome ?? null;
+  const reject = rejectEntry?.outcome ?? null;
+  const ackCommand = ack?.requestEnvelope?.body?.body?.command?.SetSlotStatus;
+  const rejectCommand = reject?.requestEnvelope?.body?.body?.command?.SetSlotStatus;
+  const winningStatus = ackCommand?.status ?? null;
+  const winningLabel = winningStatus === "dead" ? "Dead" : "Modkilled";
+  if (
+    setup?.deadPagePhase?.id !== "D02" ||
+    setup?.deadPagePhase?.locked !== false ||
+    setup?.modkillPagePhase?.id !== "D02" ||
+    setup?.modkillPagePhase?.locked !== false ||
+    setup?.deadPageReplacement?.lifecycleLabel !== "Alive" ||
+    setup?.modkillPageReplacement?.lifecycleLabel !== "Alive" ||
+    setup?.deadPageLifecycleActions?.includes(deadActionId) !== true ||
+    setup?.modkillPageLifecycleActions?.includes(modkillActionId) !== true ||
+    setup?.affectedPlayerCommandState?.actorSlot !== "slot-7" ||
+    setup?.affectedPlayerCommandState?.actorAlive !== true ||
+    ackEntries.length !== 1 ||
+    rejectEntries.length !== 1 ||
+    ack?.serverEnvelope?.body?.kind !== "Ack" ||
+    !Array.isArray(ack?.streamSeqs) ||
+    ack.streamSeqs.length !== 1 ||
+    reject?.error !== "InvalidTarget" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    !reject?.message?.includes("slot lifecycle changed or is already current") ||
+    ack?.commandId === reject?.commandId ||
+    ackCommand?.game !== game ||
+    ackCommand?.slot !== "slot-7" ||
+    ackCommand?.status !== ackEntry?.expectedStatus ||
+    rejectCommand?.game !== game ||
+    rejectCommand?.slot !== "slot-7" ||
+    rejectCommand?.status !== rejectEntry?.expectedStatus ||
+    !["dead", "modkilled"].includes(winningStatus)
+  ) {
+    throw new Error(
+      `concurrent host lifecycle race outcomes drifted: ${JSON.stringify({
+        setup,
+        deadOutcome,
+        modkillOutcome,
+        winningStatus,
+      })}`,
+    );
+  }
+
+  await Promise.all([
+    deadRacePage.waitForFunction(
+      (expectedLabel) =>
+        window.__fmarchHostProjection?.replacement?.lifecycleLabel === expectedLabel,
+      winningLabel,
+    ),
+    modkillRacePage.waitForFunction(
+      (expectedLabel) =>
+        window.__fmarchHostProjection?.replacement?.lifecycleLabel === expectedLabel,
+      winningLabel,
+    ),
+    affectedPlayerPage.waitForFunction(
+      (expectedStatus) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.commandState?.actorStatus === expectedStatus &&
+        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      winningStatus,
+    ),
+  ]);
+  const [
+    deadReplacementAfterRace,
+    modkillReplacementAfterRace,
+    deadLifecycleActionsAfterRace,
+    modkillLifecycleActionsAfterRace,
+    deadActivityStatusText,
+    modkillActivityStatusText,
+    deadActivityRow,
+    modkillActivityRow,
+    affectedPlayerCommandStateAfterRace,
+  ] = await Promise.all([
+    deadRacePage.evaluate(() => window.__fmarchHostProjection?.replacement),
+    modkillRacePage.evaluate(() => window.__fmarchHostProjection?.replacement),
+    visibleHostControlActions(deadRacePage, "slot-lifecycle"),
+    visibleHostControlActions(modkillRacePage, "slot-lifecycle"),
+    deadRacePage.getByTestId(`host-command-activity-status-${deadActionId}`).innerText(),
+    modkillRacePage
+      .getByTestId(`host-command-activity-status-${modkillActionId}`)
+      .innerText(),
+    deadRacePage.getByTestId(`host-command-activity-${deadActionId}`).evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    })),
+    modkillRacePage
+      .getByTestId(`host-command-activity-${modkillActionId}`)
+      .evaluate((node) => ({
+        source: node.getAttribute("data-source"),
+        actionId: node.getAttribute("data-confirmation-action-id"),
+        dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+        text: node.textContent,
+      })),
+    affectedPlayerPage.evaluate(() => window.__fmarchPlayerProjection?.commandState),
+  ]);
+  const disabledControls = {
+    vote: await playerCommandControlState(affectedPlayerPage, "submit_vote"),
+    withdraw: await playerCommandControlState(affectedPlayerPage, "withdraw_vote"),
+    post: await playerCommandControlState(affectedPlayerPage, "submit_post"),
+  };
+  const actionControlCount = await affectedPlayerPage
+    .locator('[data-action^="submit_action"]')
+    .count();
+  const directPostCommandId = crypto.randomUUID();
+  const directPostRaw = await sendBrowserCommand(affectedPlayerPage, {
+    principalUserId: "player-mira",
+    commandId: directPostCommandId,
+    command: {
+      SubmitPost: {
+        game,
+        channel_id: "main",
+        actor_slot: "slot-7",
+        body: "Concurrent lifecycle affected-player recovery proof.",
+        media: null,
+      },
+    },
+  });
+  const directPost = normalizeCommandResponse({
+    commandId: directPostCommandId,
+    requestEnvelope: directPostRaw.requestEnvelope,
+    response: { status: directPostRaw.httpStatus },
+    serverEnvelope: directPostRaw.serverEnvelope,
+  });
+  const apiSlotAfterRace = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const activityTexts = [deadActivityStatusText, modkillActivityStatusText];
+  if (
+    deadReplacementAfterRace?.lifecycleLabel !== winningLabel ||
+    modkillReplacementAfterRace?.lifecycleLabel !== winningLabel ||
+    deadLifecycleActionsAfterRace.includes(deadActionId) ||
+    deadLifecycleActionsAfterRace.includes(modkillActionId) ||
+    modkillLifecycleActionsAfterRace.includes(deadActionId) ||
+    modkillLifecycleActionsAfterRace.includes(modkillActionId) ||
+    !activityTexts.some((text) => text.includes("Ack")) ||
+    !activityTexts.some((text) => text.includes("Reject InvalidTarget")) ||
+    deadActivityRow.actionId !== deadActionId ||
+    modkillActivityRow.actionId !== modkillActionId ||
+    affectedPlayerCommandStateAfterRace?.actorAlive !== false ||
+    affectedPlayerCommandStateAfterRace?.actorStatus !== winningStatus ||
+    !Object.values(disabledControls).every((control) => control.disabled === true) ||
+    actionControlCount !== 0 ||
+    directPost.state !== "reject" ||
+    directPost.error !== "SlotNotAlive" ||
+    !directPost.message.includes("slot is no longer alive") ||
+    apiSlotAfterRace?.alive !== false ||
+    apiSlotAfterRace?.status !== winningStatus
+  ) {
+    throw new Error(
+      `concurrent host lifecycle convergence drifted: ${JSON.stringify({
+        winningStatus,
+        deadReplacementAfterRace,
+        modkillReplacementAfterRace,
+        deadLifecycleActionsAfterRace,
+        modkillLifecycleActionsAfterRace,
+        deadActivityStatusText,
+        modkillActivityStatusText,
+        deadActivityRow,
+        modkillActivityRow,
+        affectedPlayerCommandStateAfterRace,
+        disabledControls,
+        actionControlCount,
+        directPost,
+        apiSlotAfterRace,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    actionId: "mixed_slot_lifecycle",
+    setup,
+    deadConfirmationMessage,
+    modkillConfirmationMessage,
+    ackRaceRole: ackEntry.raceRole,
+    rejectRaceRole: rejectEntry.raceRole,
+    ackActionId: ackEntry.actionId,
+    rejectActionId: rejectEntry.actionId,
+    winningStatus,
+    winningLabel,
+    ack,
+    reject,
+    deadOutcome,
+    modkillOutcome,
+    deadReplacementAfterRace,
+    modkillReplacementAfterRace,
+    deadLifecycleActionsAfterRace,
+    modkillLifecycleActionsAfterRace,
+    deadActivityStatusText,
+    modkillActivityStatusText,
+    deadActivityRow,
+    modkillActivityRow,
+    affectedPlayerCommandStateAfterRace,
+    disabledControls,
+    actionControlCount,
+    directPost,
+    apiSlotAfterRace,
+    proof:
+      "Two seeded host role pages submitted Mark dead and Modkill slot concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget lifecycle recovery, both host projections plus the API converged to one terminal Slot 7 status, and the affected player role URL disabled commands with SlotNotAlive recovery.",
   };
 }
 

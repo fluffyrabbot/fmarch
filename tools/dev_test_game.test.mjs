@@ -2898,7 +2898,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
           state: "reject",
           error: "InvalidTarget",
           message:
-            "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+            "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
           serverEnvelope: { body: { kind: "Reject" } },
         },
         commandOutcomes: [
@@ -2911,7 +2911,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         replacementAfterReject: { lifecycleLabel: "Alive" },
         lifecycleActionsAfterReject: ["mark_dead", "modkill_slot"],
         activityStatusText:
-          "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+          "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
         activityRow: {
           source: "outcome",
           actionId: "mark_dead",
@@ -2980,7 +2980,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
           state: "reject",
           error: "InvalidTarget",
           message:
-            "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+            "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
           serverEnvelope: { body: { kind: "Reject" } },
         },
         commandOutcomes: [
@@ -2993,7 +2993,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         replacementAfterReject: { lifecycleLabel: "Alive" },
         lifecycleActionsAfterReject: ["mark_dead", "modkill_slot"],
         activityStatusText:
-          "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+          "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
         activityRow: {
           source: "outcome",
           actionId: "modkill_slot",
@@ -3005,6 +3005,135 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorAlive: false,
           actorStatus: "modkilled",
         },
+      },
+      concurrentHostLifecycleRace: {
+        status: "passed",
+        game: "lifecycle-race-game-a",
+        actionId: "mixed_slot_lifecycle",
+        setup: {
+          deadPagePhase: { id: "D02", locked: false },
+          modkillPagePhase: { id: "D02", locked: false },
+          deadPageReplacement: { lifecycleLabel: "Alive" },
+          modkillPageReplacement: { lifecycleLabel: "Alive" },
+          deadPageLifecycleActions: ["mark_dead", "modkill_slot"],
+          modkillPageLifecycleActions: ["mark_dead", "modkill_slot"],
+          affectedPlayerCommandState: {
+            actorSlot: "slot-7",
+            actorAlive: true,
+            actorStatus: "alive",
+          },
+        },
+        ackRaceRole: "dead",
+        rejectRaceRole: "modkill",
+        ackActionId: "mark_dead",
+        rejectActionId: "modkill_slot",
+        winningStatus: "dead",
+        winningLabel: "Dead",
+        ack: {
+          state: "ack",
+          commandId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          streamSeqs: [50],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SetSlotStatus: {
+                    game: "lifecycle-race-game-a",
+                    slot: "slot-7",
+                    status: "dead",
+                  },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SetSlotStatus: {
+                    game: "lifecycle-race-game-a",
+                    slot: "slot-7",
+                    status: "modkilled",
+                  },
+                },
+              },
+            },
+          },
+        },
+        deadOutcome: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SetSlotStatus: {
+                    game: "lifecycle-race-game-a",
+                    slot: "slot-7",
+                    status: "dead",
+                  },
+                },
+              },
+            },
+          },
+        },
+        modkillOutcome: {
+          state: "reject",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SetSlotStatus: {
+                    game: "lifecycle-race-game-a",
+                    slot: "slot-7",
+                    status: "modkilled",
+                  },
+                },
+              },
+            },
+          },
+        },
+        deadReplacementAfterRace: { lifecycleLabel: "Dead" },
+        modkillReplacementAfterRace: { lifecycleLabel: "Dead" },
+        deadLifecycleActionsAfterRace: [],
+        modkillLifecycleActionsAfterRace: [],
+        deadActivityStatusText: "Ack: stream seqs 50",
+        modkillActivityStatusText:
+          "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
+        deadActivityRow: {
+          source: "status",
+          actionId: "mark_dead",
+          dispatchKind: "mark_dead",
+        },
+        modkillActivityRow: {
+          source: "outcome",
+          actionId: "modkill_slot",
+          dispatchKind: "modkill_slot",
+        },
+        affectedPlayerCommandStateAfterRace: {
+          actorAlive: false,
+          actorStatus: "dead",
+          actions: [],
+        },
+        disabledControls: {
+          vote: { disabled: true },
+          withdraw: { disabled: true },
+          post: { disabled: true },
+        },
+        actionControlCount: 0,
+        directPost: {
+          state: "reject",
+          error: "SlotNotAlive",
+        },
+        apiSlotAfterRace: { alive: false, status: "dead" },
       },
       concurrentActionRace: {
         status: "passed",
@@ -4076,6 +4205,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Stale host lifecycle: Reject InvalidTarget"));
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
   assert(markdown.includes("Stale host modkill: Reject InvalidTarget"));
+  assert(markdown.includes("Concurrent host lifecycle race: Reject InvalidTarget"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
@@ -4145,6 +4275,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-lifecycle",
       "host-modkill-control",
       "stale-host-modkill",
+      "concurrent-host-lifecycle-race",
       "stale-host-prompt",
       "stale-host-complete",
       "stale-player-complete",
@@ -4232,7 +4363,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 67);
+  assert.equal(opsArtifacts.proofRun.laneCount, 68);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4333,6 +4464,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
+      "concurrent-host-lifecycle-race",
       "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
@@ -4853,6 +4985,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-lifecycle-race",
         "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
@@ -4951,6 +5084,7 @@ function seedAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-lifecycle-race",
         "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",

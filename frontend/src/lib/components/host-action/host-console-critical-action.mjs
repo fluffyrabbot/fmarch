@@ -1,11 +1,18 @@
 export function buildHostConsoleCriticalActions(
   gameId,
-  { hostPrompts = [], phase = null, completed = false, capabilityKind = "HostOf" } = {},
+  {
+    hostPrompts = [],
+    phase = null,
+    replacement = null,
+    completed = false,
+    capabilityKind = "HostOf",
+  } = {},
 ) {
   if (completed === true) {
     return Object.freeze([]);
   }
   const phaseActions = buildPhaseActions(gameId, phase);
+  const lifecycleActions = buildSlotLifecycleActions(gameId, replacement);
   const actions = [
     freezeHostAction({
       id: "extend_deadline",
@@ -53,35 +60,7 @@ export function buildHostConsoleCriticalActions(
         gameId,
       },
     }),
-    freezeHostAction({
-      id: "mark_dead",
-      label: "Mark dead",
-      objectLabel: "Slot 7",
-      outcomeLabel: "set lifecycle to dead",
-      confirmationText: "Mark Slot 7 dead: set lifecycle to dead for Slot 7.",
-      irreversible: true,
-      payload: {
-        kind: "mark_dead",
-        gameId,
-        slotId: "slot-7",
-        status: "dead",
-      },
-    }),
-    freezeHostAction({
-      id: "modkill_slot",
-      label: "Modkill slot",
-      objectLabel: "Slot 7",
-      outcomeLabel: "set lifecycle to modkilled",
-      confirmationText:
-        "Modkill Slot 7: set lifecycle to modkilled for Slot 7.",
-      irreversible: true,
-      payload: {
-        kind: "modkill_slot",
-        gameId,
-        slotId: "slot-7",
-        status: "modkilled",
-      },
-    }),
+    ...lifecycleActions,
     freezeHostAction({
       id: "complete_game",
       label: "Reveal roles",
@@ -123,6 +102,50 @@ export function buildHostConsoleCriticalActions(
       hostActionAllowedForCapability(action, capabilityKind),
     ),
   );
+}
+
+function buildSlotLifecycleActions(gameId, replacement) {
+  if (!replacementAllowsTerminalLifecycleActions(replacement)) {
+    return [];
+  }
+  return [
+    freezeHostAction({
+      id: "mark_dead",
+      label: "Mark dead",
+      objectLabel: "Slot 7",
+      outcomeLabel: "set lifecycle to dead",
+      confirmationText: "Mark Slot 7 dead: set lifecycle to dead for Slot 7.",
+      irreversible: true,
+      payload: {
+        kind: "mark_dead",
+        gameId,
+        slotId: "slot-7",
+        status: "dead",
+      },
+    }),
+    freezeHostAction({
+      id: "modkill_slot",
+      label: "Modkill slot",
+      objectLabel: "Slot 7",
+      outcomeLabel: "set lifecycle to modkilled",
+      confirmationText:
+        "Modkill Slot 7: set lifecycle to modkilled for Slot 7.",
+      irreversible: true,
+      payload: {
+        kind: "modkill_slot",
+        gameId,
+        slotId: "slot-7",
+        status: "modkilled",
+      },
+    }),
+  ];
+}
+
+function replacementAllowsTerminalLifecycleActions(replacement) {
+  const lifecycleLabel = String(replacement?.lifecycleLabel ?? "Alive")
+    .trim()
+    .toLowerCase();
+  return lifecycleLabel === "" || lifecycleLabel === "alive";
 }
 
 function buildPhaseActions(gameId, phase) {

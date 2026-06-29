@@ -386,6 +386,38 @@ test("host console exposes deadline advance only for locked phases with deadline
   });
 });
 
+test("host console hides terminal slot lifecycle commands", () => {
+  const aliveActions = buildHostConsoleCriticalActions("midsummer", {
+    replacement: { lifecycleLabel: "Alive" },
+  });
+  assert.deepEqual(
+    aliveActions
+      .filter((action) => ["mark_dead", "modkill_slot"].includes(action.id))
+      .map((action) => action.id),
+    ["mark_dead", "modkill_slot"],
+  );
+
+  const deadActions = buildHostConsoleCriticalActions("midsummer", {
+    replacement: { lifecycleLabel: "Dead" },
+  });
+  assert.deepEqual(
+    deadActions
+      .filter((action) => ["mark_dead", "modkill_slot"].includes(action.id))
+      .map((action) => action.id),
+    [],
+  );
+
+  const modkilledActions = buildHostConsoleCriticalActions("midsummer", {
+    replacement: { lifecycleLabel: "Modkilled" },
+  });
+  assert.deepEqual(
+    modkilledActions
+      .filter((action) => ["mark_dead", "modkill_slot"].includes(action.id))
+      .map((action) => action.id),
+    [],
+  );
+});
+
 test("host console hides mutating controls after game completion", () => {
   assert.deepEqual(
     buildHostConsoleCriticalActions("midsummer", {
