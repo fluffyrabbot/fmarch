@@ -631,7 +631,7 @@ private-channel recovery, stale outgoing-player private-receipt recovery, and re
 projection-driven host player-invite retargeting after replacement, stale host player-invite recovery to the current occupant,
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead-target vote recovery,
-dead-current-vote cleanup, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
+dead-current-vote cleanup with stale host publish-after-clear recovery, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
 stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove

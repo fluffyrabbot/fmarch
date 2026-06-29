@@ -1352,6 +1352,69 @@ async function freezeStaleHostPublishPage({
   };
 }
 
+async function freezeStaleHostPublishAfterClearPage({
+  staleHostPublishPage,
+  game,
+  frontendBaseUrl,
+  targetSlot,
+}) {
+  await staleHostPublishPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostPublishPage
+    .locator('[data-testid="critical-host-action-publish_votecount"]')
+    .waitFor({ state: "visible" });
+  await staleHostPublishPage.waitForFunction(
+    (expectedTarget) =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false &&
+      window.__fmarchHostVotecountProjection?.some(
+        (row) => row.target === expectedTarget && Number(row.count) >= 1,
+      ),
+    targetSlot,
+  );
+  const stalePhase = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const votecountRows = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostVotecountProjection ?? [],
+  );
+  const votecountActions = await visibleHostControlActions(staleHostPublishPage, "votecount");
+  const closedStatus = await staleHostPublishPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  const targetRow = votecountRows.find((row) => row.target === targetSlot);
+  const staleBody =
+    targetRow === undefined ? null : `Official votecount for D02\n- ${targetSlot}: ${targetRow.count}`;
+  if (
+    stalePhase?.id !== "D02" ||
+    stalePhase?.locked !== false ||
+    targetRow === undefined ||
+    Number(targetRow.count) < 1 ||
+    !votecountActions.includes("publish_votecount") ||
+    closedStatus?.state !== "closed" ||
+    staleBody === null
+  ) {
+    throw new Error(
+      `stale host publish-after-clear setup drifted: ${JSON.stringify({
+        targetSlot,
+        stalePhase,
+        votecountRows,
+        votecountActions,
+        closedStatus,
+        staleBody,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    votecountRows,
+    votecountActions,
+    closedStatus,
+    staleBody,
+  };
+}
+
 async function freezeStaleHostLifecyclePage({
   staleHostLifecyclePage,
   game,
@@ -3302,6 +3365,7 @@ async function verifySeededMultiplayerHardening({
     playerPage,
     game,
     apiBaseUrl,
+    frontendBaseUrl,
   });
   const concurrentVoteRace = await verifyConcurrentVoteRace({
     playerPage,
@@ -4357,6 +4421,137 @@ async function submitStaleHostPublishRecovery({
     dispatchPlan,
     apiOfficialPostCount: apiOfficialPosts.length,
     playerOfficialPostCount,
+  };
+}
+
+async function submitStaleHostPublishAfterClearRecovery({
+  staleHostPublishPage,
+  staleHostPublishSetup,
+  playerPage,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "publish_votecount";
+  const expectedBody = "Official votecount for D02\n\nNo active ballots.";
+  const staleBody = staleHostPublishSetup.staleBody;
+  const staleActionRoot = staleHostPublishPage.getByTestId(`critical-host-action-${actionId}`);
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostPublishPage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
+    actionId,
+  );
+  const publish = await staleHostPublishPage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  await playerPage.waitForFunction(
+    (body) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.some(
+        (post) => post.body === body && post.authorLabel === "host",
+      ),
+    expectedBody,
+  );
+  const commandOutcomes = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const votecountActionsAfterPublish = await visibleHostControlActions(
+    staleHostPublishPage,
+    "votecount",
+  );
+  const activityStatusText = await staleHostPublishPage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostPublishPage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+  );
+  const apiExpectedPosts = (apiThread.posts ?? []).filter(
+    (post) => post.body === expectedBody && post.author_user === "host",
+  );
+  const apiStalePosts = (apiThread.posts ?? []).filter(
+    (post) => post.body === staleBody && post.author_user === "host",
+  );
+  const playerExpectedPostCount = await playerPage.evaluate(
+    (body) =>
+      (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
+        (post) => post.body === body && post.authorLabel === "host",
+      ).length,
+    expectedBody,
+  );
+  const playerStalePostCount = await playerPage.evaluate(
+    (body) =>
+      (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
+        (post) => post.body === body && post.authorLabel === "host",
+      ).length,
+    staleBody,
+  );
+  if (
+    publish?.state !== "ack" ||
+    publish?.requestEnvelope?.body?.body?.command?.PublishVotecount?.game !== game ||
+    commandOutcomes.find(
+      (outcome) => outcome.actionId === actionId && outcome.state === "ack",
+    ) === undefined ||
+    !votecountActionsAfterPublish.includes(actionId) ||
+    !activityStatusText.includes("Ack: stream seqs") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    !Array.isArray(dispatchPlan?.projectionRefreshKeys) ||
+    dispatchPlan.projectionRefreshKeys.length !== 0 ||
+    apiExpectedPosts.length !== 1 ||
+    apiStalePosts.length !== 0 ||
+    playerExpectedPostCount !== 1 ||
+    playerStalePostCount !== 0
+  ) {
+    throw new Error(
+      `stale host publish-after-clear recovery drifted: ${JSON.stringify({
+        staleHostPublishSetup,
+        publish,
+        commandOutcomes,
+        votecountActionsAfterPublish,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiExpectedPosts,
+        apiStalePosts,
+        playerExpectedPostCount,
+        playerStalePostCount,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    setup: staleHostPublishSetup,
+    expectedBody,
+    staleBody,
+    publish,
+    commandOutcomes,
+    votecountActionsAfterPublish,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiExpectedPostCount: apiExpectedPosts.length,
+    apiStalePostCount: apiStalePosts.length,
+    playerExpectedPostCount,
+    playerStalePostCount,
+    proof:
+      "A stale seeded host page froze a non-empty D02 Publish count control, the live host killed the voted target so the server votecount became empty, then the stale PublishVotecount click ACKed from server truth and appended the empty official count without publishing the stale ballot row.",
   };
 }
 
@@ -7760,6 +7955,7 @@ async function verifyDeadCurrentVoteRecovery({
   playerPage,
   game,
   apiBaseUrl,
+  frontendBaseUrl,
 }) {
   await gotoPlayerBoard(playerPage, game);
   await playerPage.waitForFunction(
@@ -7822,6 +8018,13 @@ async function verifyDeadCurrentVoteRecovery({
     () => window.__fmarchPlayerProjection?.votecount ?? [],
   );
   const apiVotecountAfterVote = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+  const staleHostPublishAfterClearPage = await hostPage.context().newPage();
+  const staleHostPublishAfterClearSetup = await freezeStaleHostPublishAfterClearPage({
+    staleHostPublishPage: staleHostPublishAfterClearPage,
+    game,
+    frontendBaseUrl,
+    targetSlot: target.slotId,
+  });
 
   const markDead = await setSlotLifecycleViaHost({
     hostPage,
@@ -7871,6 +8074,14 @@ async function verifyDeadCurrentVoteRecovery({
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
   );
   const apiVotecountAfterDead = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+  const staleHostPublishAfterClear = await submitStaleHostPublishAfterClearRecovery({
+    staleHostPublishPage: staleHostPublishAfterClearPage,
+    staleHostPublishSetup: staleHostPublishAfterClearSetup,
+    playerPage,
+    apiBaseUrl,
+    game,
+  });
+  await staleHostPublishAfterClearPage.close();
   if (
     vote?.state !== "ack" ||
     commandStateAfterVote?.currentVote?.slotId !== target.slotId ||
@@ -7974,11 +8185,12 @@ async function verifyDeadCurrentVoteRecovery({
     hostVotecountAfterDead,
     apiCommandStateAfterDead,
     apiVotecountAfterDead,
+    staleHostPublishAfterClear,
     restoreAlive,
     apiSlotAfterRestore,
     commandStateAfterRestore,
     proof:
-      "The seeded player role URL cast a legal current vote, the host marked that voted target dead, player commandState refreshed to currentVote null, the dead target disappeared from legal vote controls, and player/host/API votecount projections cleared the dead-target ballot before the seed target was restored alive without resurrecting the old vote.",
+      "The seeded player role URL cast a legal current vote, a stale host Publish count page froze the non-empty votecount, the host marked that voted target dead, player commandState refreshed to currentVote null, player/host/API votecount projections cleared the dead-target ballot, and the stale host publish ACKed only the server-recomputed empty official count before the seed target was restored alive without resurrecting the old vote.",
   };
 }
 

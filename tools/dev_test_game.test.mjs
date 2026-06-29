@@ -2165,6 +2165,50 @@ test("session card and markdown include role credential URLs and tokens", () => 
           ],
         },
         apiVotecountAfterDead: [],
+        staleHostPublishAfterClear: {
+          status: "passed",
+          actionId: "publish_votecount",
+          setup: {
+            stalePhase: { id: "D02", locked: false },
+            votecountRows: [{ target: "slot-3", count: 1 }],
+            votecountActions: ["publish_votecount"],
+            closedStatus: { state: "closed" },
+            staleBody: "Official votecount for D02\n- slot-3: 1",
+          },
+          expectedBody: "Official votecount for D02\n\nNo active ballots.",
+          staleBody: "Official votecount for D02\n- slot-3: 1",
+          publish: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    PublishVotecount: { game },
+                  },
+                },
+              },
+            },
+          },
+          commandOutcomes: [
+            {
+              source: "outcome",
+              actionId: "publish_votecount",
+              state: "ack",
+            },
+          ],
+          votecountActionsAfterPublish: ["publish_votecount"],
+          activityStatusText: "Ack: stream seqs 45",
+          activityRow: {
+            source: "outcome",
+            actionId: "publish_votecount",
+            dispatchKind: "publish_votecount",
+          },
+          dispatchPlan: { projectionRefreshKeys: [] },
+          apiExpectedPostCount: 1,
+          apiStalePostCount: 0,
+          playerExpectedPostCount: 1,
+          playerStalePostCount: 0,
+        },
         restoreAlive: { state: "ack", slot: "slot-3", status: "alive" },
         apiSlotAfterRestore: { alive: true, status: "alive" },
         commandStateAfterRestore: {

@@ -1540,6 +1540,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.deadCurrentVote?.commandStateAfterDead?.currentVote ?? null,
       playerVotecountAfterDead:
         hardening.deadCurrentVote?.playerVotecountAfterDead ?? null,
+      stalePublishState:
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.publish?.state ?? null,
+      stalePublishExpectedBody:
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.expectedBody ?? null,
+      stalePublishStalePostCount:
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.apiStalePostCount ?? null,
       restoreAlive:
         hardening.deadCurrentVote?.apiSlotAfterRestore?.alive ?? null,
       passed:
@@ -1592,6 +1598,38 @@ export function buildDevTestGameProofRun(session, options = {}) {
         normalizedVotecountRows(hardening.deadCurrentVote?.apiVotecountAfterDead).some(
           (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
         ) === false &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.status ===
+          "passed" &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.setup?.stalePhase
+          ?.id === "D02" &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.setup?.stalePhase
+          ?.locked === false &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.setup?.votecountRows?.some(
+          (row) =>
+            row.target === hardening.deadCurrentVote?.target?.slotId &&
+            Number(row.count) >= 1,
+        ) === true &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.setup?.staleBody?.includes(
+          `- ${hardening.deadCurrentVote?.target?.slotId}:`,
+        ) === true &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.publish?.state ===
+          "ack" &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.publish?.requestEnvelope
+          ?.body?.body?.command?.PublishVotecount?.game === session?.game &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.expectedBody ===
+          "Official votecount for D02\n\nNo active ballots." &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.apiExpectedPostCount ===
+          1 &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.apiStalePostCount ===
+          0 &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.playerExpectedPostCount ===
+          1 &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.playerStalePostCount ===
+          0 &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.activityRow?.source ===
+          "outcome" &&
+        hardening.deadCurrentVote?.staleHostPublishAfterClear?.activityRow?.actionId ===
+          "publish_votecount" &&
         hardening.deadCurrentVote?.restoreAlive?.state === "ack" &&
         hardening.deadCurrentVote?.apiSlotAfterRestore?.alive === true &&
         hardening.deadCurrentVote?.apiSlotAfterRestore?.status === "alive" &&
