@@ -111,6 +111,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
       unlockState: verification.coreLoop?.unlock?.commandStatus?.state ?? null,
       passed:
         verification.coreLoop?.status === "passed" &&
+        verification.coreLoop?.lockedVoteControl?.exists === false &&
+        verification.coreLoop?.lockedVoteControl?.disabled === true &&
         verification.coreLoop?.rejectedVote?.error === "PhaseLocked" &&
         verification.coreLoop?.lock?.commandStatus?.state === "ack" &&
         verification.coreLoop?.unlock?.commandStatus?.state === "ack",
@@ -1416,11 +1418,42 @@ export function buildDevTestGameProofRun(session, options = {}) {
     lane("stale-player-vote", "Stale player vote rejects and refreshes command state", {
       rejectError: hardening.stalePlayerVote?.reject?.error ?? null,
       phaseAfterRejectLocked: hardening.stalePlayerVote?.phaseAfterReject?.locked ?? null,
+      voteTargetsAfterReject:
+        hardening.stalePlayerVote?.commandStateAfterReject?.voteTargets?.length ?? null,
+      voteControlAfterReject:
+        hardening.stalePlayerVote?.voteControlAfterReject ?? null,
       cleanupLocked: hardening.stalePlayerVote?.hostPhaseAfterUnlock?.locked ?? null,
       passed:
         hardening.stalePlayerVote?.status === "passed" &&
         hardening.stalePlayerVote?.reject?.error === "PhaseLocked" &&
+        hardening.stalePlayerVote?.commandStateBeforeClose?.voteTargets?.some(
+          (target) => target.kind === "slot",
+        ) === true &&
+        hardening.stalePlayerVote?.commandStateBeforeClose?.currentVote === null &&
+        hardening.stalePlayerVote?.voteControlBeforeClose?.exists === true &&
+        hardening.stalePlayerVote?.voteControlBeforeClose?.disabled === false &&
+        hardening.stalePlayerVote?.withdrawBeforeClose?.exists === true &&
+        hardening.stalePlayerVote?.withdrawBeforeClose?.disabled === true &&
+        hardening.stalePlayerVote?.withdrawBeforeClose?.reason ===
+          "No current vote" &&
         hardening.stalePlayerVote?.phaseAfterReject?.locked === true &&
+        hardening.stalePlayerVote?.commandStateAfterReject?.phase?.locked === true &&
+        hardening.stalePlayerVote?.commandStateAfterReject?.voteTargets?.length ===
+          0 &&
+        hardening.stalePlayerVote?.commandStateAfterReject?.currentVote === null &&
+        hardening.stalePlayerVote?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.stalePlayerVote?.voteControlAfterReject?.exists === false &&
+        hardening.stalePlayerVote?.voteControlAfterReject?.disabled === true &&
+        hardening.stalePlayerVote?.withdrawAfterReject?.exists === true &&
+        hardening.stalePlayerVote?.withdrawAfterReject?.disabled === true &&
+        hardening.stalePlayerVote?.withdrawAfterReject?.reason ===
+          "No current vote" &&
+        hardening.stalePlayerVote?.currentVoteAfterReject?.hasVote === "false" &&
+        hardening.stalePlayerVote?.currentVoteAfterReject?.text?.includes(
+          "No current vote",
+        ) &&
         hardening.stalePlayerVote?.hostPhaseAfterUnlock?.locked === false,
     }),
     lane("concurrent-vote-race", "Concurrent player votes converge in projections", {

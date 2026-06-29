@@ -313,9 +313,10 @@ open. That proves the local capability shape for delegated host controls without
 claiming production identity or exhaustive cohost policy coverage.
 
 The core-loop proof uses the generated role URLs: the host page locks D01
-through the hydrated phase control, the player page submits a vote into the
-locked phase and renders `Reject PhaseLocked` recovery, and the host page unlocks
-D01 again so the human-run game remains usable after verification.
+through the hydrated phase control, the player page removes current vote
+controls while locked, a direct role-browser `SubmitVote` rejects as
+`PhaseLocked`, and the host page unlocks D01 again so the human-run game remains
+usable after verification.
 
 The day-vote resolution proof uses a disposable seeded game with the same local
 role capabilities: `/player-command-state` exposes the action player's live
@@ -486,9 +487,12 @@ replacement host conflict copy is carried as
 player page replays one `SubmitPost` with the same durable `command_id` and
 verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
-lands, refreshes command state after a stale locked-phase vote reject, submits
-two concurrent D02 votes from separate role pages and verifies converged browser
-plus API votecount, marks Slot 7 dead and modkilled from the hydrated host role
+lands, refreshes command state after a stale locked-phase vote reject, and
+asserts the refreshed player command state has no legal vote targets, no current
+vote, the old vote control removed, and Withdraw still disabled with
+current-state copy, submits two concurrent D02 votes from separate role pages
+and verifies converged browser plus API votecount, marks Slot 7 dead and
+modkilled from the hydrated host role
 URL, verifies the affected player role URL loses controls with `SlotNotAlive`
 recovery after each host action, and restores Slot 7 alive before replacement
 continues, keeps one action-player page frozen on N01 until its stale

@@ -10,6 +10,7 @@ import {
   buildPrivateQueueBoundary,
   buildPrivateQueueRouteItems,
   buildGameRouteData,
+  buildPlayerVoteCommands,
   playerChannelForbiddenMessage,
   playerChannelNotFoundMessage,
   mergeThreadPage,
@@ -187,6 +188,25 @@ test("player route data exposes thread, channel, votecount, and touch command la
     },
   });
   assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
+});
+
+test("player vote commands honor explicitly empty live command-state targets", () => {
+  assert.deepEqual(
+    buildPlayerVoteCommands(
+      {
+        voteCommands: [
+          {
+            action: "submit_vote",
+            commandKind: "submit_vote",
+            label: "Vote stale target",
+            voteTarget: { Slot: "slot-2" },
+          },
+        ],
+      },
+      { voteTargets: [] },
+    ),
+    [],
+  );
 });
 
 test("player route data marks active private channel access without host data", async () => {

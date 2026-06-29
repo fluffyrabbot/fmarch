@@ -190,13 +190,13 @@ export function playerRefreshKeysForAction(action) {
     normalizedAction === "submit_vote" ||
     normalizedAction.startsWith("submit_vote:")
   ) {
-    return Object.freeze(["votecount"]);
+    return Object.freeze(["votecount", "commandState"]);
   }
   switch (normalizedAction) {
     case "submit_post":
       return Object.freeze(["thread", "votecount"]);
     case "withdraw_vote":
-      return Object.freeze(["votecount"]);
+      return Object.freeze(["votecount", "commandState"]);
     default:
       return Object.freeze([]);
   }
@@ -306,9 +306,11 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
   if (
     commandStatus?.state === "reject" &&
     commandStatus?.error === "InvalidTarget" &&
-    playerRefreshKeysForAction(action).includes("commandState")
+    (String(action).startsWith("submit_action") ||
+      String(action).startsWith("submit_invalid_action") ||
+      String(action).startsWith("submit_vote"))
   ) {
-    return playerRefreshKeysForDataAction(data, action);
+    return playerRefreshKeysForDataActionWithCommandState(data, action);
   }
   if (
     commandStatus?.state === "reject" &&
@@ -336,7 +338,7 @@ export function staleSlotOwnershipCommandState({ data, commandStatus }) {
 
 function playerRefreshKeysForDataAction(data, action) {
   const keys = playerRefreshKeysForAction(action);
-  if (data.coldLoad.commandStateEndpoint != null) {
+  if (data.coldLoad?.commandStateEndpoint != null) {
     return keys;
   }
   return Object.freeze(keys.filter((key) => key !== "commandState"));

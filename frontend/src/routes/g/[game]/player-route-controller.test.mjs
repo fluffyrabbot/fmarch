@@ -199,14 +199,14 @@ test("player route controller derives dispatch bridge plans from command request
       actionId: "submit_vote",
       statusKey: "submit_vote",
       dispatchKind: "submit_vote",
-      projectionRefreshKeys: ["votecount"],
+      projectionRefreshKeys: ["votecount", "commandState"],
     },
     commandKind: "SubmitVote",
     commandEndpoint: "/commands",
     principalUserId: "player_mira",
     optimisticState: "pending",
     finalState: "ack",
-    projectionRefreshKeys: ["votecount"],
+    projectionRefreshKeys: ["votecount", "commandState"],
   });
 });
 
@@ -234,13 +234,16 @@ test("player route controller refreshes only projections touched by acked comman
     },
   });
 
-  assert.deepEqual(refreshed, [["votecount"]]);
+  assert.deepEqual(refreshed, [["votecount", "commandState"]]);
   assert.equal(commandRequests[0].commandIdFactory(), "11111111-1111-4111-8111-111111111111");
   assert.equal(result.commandStatus.state, "ack");
   assert.deepEqual(result.snapshot, projectionStore.getSnapshot());
 
   assert.deepEqual(playerRefreshKeysForAction("submit_post"), ["thread", "votecount"]);
-  assert.deepEqual(playerRefreshKeysForAction("submit_vote:no_lynch"), ["votecount"]);
+  assert.deepEqual(playerRefreshKeysForAction("submit_vote:no_lynch"), [
+    "votecount",
+    "commandState",
+  ]);
   assert.deepEqual(playerRefreshKeysForAction("submit_action"), [
     "notifications",
     "investigationResults",
@@ -251,7 +254,10 @@ test("player route controller refreshes only projections touched by acked comman
     "investigationResults",
     "commandState",
   ]);
-  assert.deepEqual(playerRefreshKeysForAction("withdraw_vote"), ["votecount"]);
+  assert.deepEqual(playerRefreshKeysForAction("withdraw_vote"), [
+    "votecount",
+    "commandState",
+  ]);
 });
 
 test("player route controller refreshes command state after stale phase rejects", async () => {
@@ -297,7 +303,7 @@ test("player route controller refreshes command state after stale phase rejects"
       action: "submit_vote",
       commandStatus: { state: "reject", error: "StreamConflict", retryable: true },
     }),
-    ["votecount"],
+    ["votecount", "commandState"],
   );
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({
@@ -369,6 +375,14 @@ test("player route controller refreshes action state after invalid target reject
       commandStatus: { state: "reject", error: "InvalidTarget" },
     }),
     ["notifications", "investigationResults", "commandState"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_vote:slot-2",
+      commandStatus: { state: "reject", error: "InvalidTarget" },
+    }),
+    ["votecount", "commandState"],
   );
 });
 
@@ -527,7 +541,7 @@ test("player route controller handles no-older and local view statuses", async (
       actionId: "submit_vote",
       statusKey: "submit_vote",
       dispatchKind: "submit_vote",
-      projectionRefreshKeys: ["votecount"],
+      projectionRefreshKeys: ["votecount", "commandState"],
     },
   });
   assert.deepEqual(playerCommandErrorStatus(new Error("boom")), {
@@ -552,7 +566,7 @@ test("player route controller handles no-older and local view statuses", async (
     actionId: "withdraw_vote",
     statusKey: "withdraw_vote",
     dispatchKind: "withdraw_vote",
-    projectionRefreshKeys: ["votecount"],
+    projectionRefreshKeys: ["votecount", "commandState"],
   });
   assert.deepEqual(playerCommandTrace("submit_action"), {
     kind: "command-trace",
@@ -614,7 +628,7 @@ test("player route controller records one current command receipt per action", (
         actionId: "submit_vote",
         statusKey: "submit_vote",
         dispatchKind: "submit_vote",
-        projectionRefreshKeys: ["votecount"],
+        projectionRefreshKeys: ["votecount", "commandState"],
       },
       current: true,
     },

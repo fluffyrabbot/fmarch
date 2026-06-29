@@ -339,10 +339,10 @@ export function playerCurrentVoteLabel(currentVote) {
 }
 
 export function buildPlayerVoteCommands(baseComposer, commandState) {
-  const targets = commandState?.voteTargets ?? [];
-  if (targets.length === 0) {
+  if (!Array.isArray(commandState?.voteTargets)) {
     return Object.freeze(baseComposer.voteCommands ?? []);
   }
+  const targets = commandState.voteTargets;
   return Object.freeze(
     targets.map((target, index) => {
       if (target.kind === "no_lynch") {

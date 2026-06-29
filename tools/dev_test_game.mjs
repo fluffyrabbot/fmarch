@@ -1410,16 +1410,48 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
   await playerPage.waitForFunction(
     () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
   );
-  const playerLockedBeforeVote = await playerPage.evaluate(
-    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  const playerCommandStateLockedBeforeVote = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
   );
-  await playerPage.locator('[data-action="submit_vote"]').click();
-  await playerPage.waitForFunction(
-    () =>
-      window.__fmarchPlayerCommandStatus?.state === "reject" &&
-      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
-  );
-  const rejectedVote = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const playerLockedBeforeVote = playerCommandStateLockedBeforeVote?.phase;
+  const lockedVoteControl = await playerCommandControlState(playerPage, "submit_vote");
+  const staleVoteCommandId = crypto.randomUUID();
+  const staleVoteRaw = await sendBrowserCommand(playerPage, {
+    principalUserId: "player-mira",
+    commandId: staleVoteCommandId,
+    command: {
+      SubmitVote: {
+        game: playerCommandStateLockedBeforeVote?.game,
+        actor_slot: "slot-7",
+        target: { Slot: "slot-2" },
+      },
+    },
+  });
+  const rejectBody = staleVoteRaw.serverEnvelope?.body;
+  const rejectedVote = {
+    state: rejectBody?.kind === "Reject" ? "reject" : "unknown",
+    error: rejectBody?.body?.error ?? null,
+    message:
+      rejectBody?.kind === "Reject"
+        ? `Reject ${rejectBody.body.error}: ${rejectBody.body.message}`
+        : "",
+    requestEnvelope: staleVoteRaw.requestEnvelope,
+    serverEnvelope: staleVoteRaw.serverEnvelope,
+  };
+  if (
+    lockedVoteControl.exists !== false ||
+    rejectedVote.error !== "PhaseLocked" ||
+    staleVoteRaw.requestEnvelope?.body?.body?.command?.SubmitVote?.game !==
+      playerCommandStateLockedBeforeVote?.game
+  ) {
+    throw new Error(
+      `locked player vote boundary drifted: ${JSON.stringify({
+        playerCommandStateLockedBeforeVote,
+        lockedVoteControl,
+        rejectedVote,
+      })}`,
+    );
+  }
   const playerProjectionAfterReject = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
@@ -1445,6 +1477,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
       restored: ["resolve_phase", "lock_thread"],
     },
     lock,
+    lockedVoteControl,
     rejectedVote,
     unlock,
     playerPhases: {
@@ -1453,7 +1486,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
       unlockedAfterRecovery: playerUnlockedAfterRecovery,
     },
     proof:
-      "The seeded host role URL locked D01 through the hydrated host phase control, the seeded player role URL submitted a vote while the phase was locked and rendered Reject PhaseLocked recovery, then the host role URL unlocked D01 so the human-run game remains usable.",
+      "The seeded host role URL locked D01 through the hydrated host phase control, the seeded player role URL removed current vote controls while locked, a direct role-browser SubmitVote rejected as PhaseLocked, then the host role URL unlocked D01 so the human-run game remains usable.",
   };
 }
 
@@ -7368,6 +7401,11 @@ async function verifyStalePlayerVoteRecovery({
   const phaseBeforeClose = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const commandStateBeforeClose = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const voteControlBeforeClose = await playerCommandControlState(playerPage, "submit_vote");
+  const withdrawBeforeClose = await playerCommandControlState(playerPage, "withdraw_vote");
   await playerPage.waitForFunction(
     () => typeof window.__fmarchClosePlayerLiveProjection === "function",
   );
@@ -7400,6 +7438,7 @@ async function verifyStalePlayerVoteRecovery({
   await playerPage.waitForFunction(
     () => window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
   );
+  await playerPage.locator('[data-action="submit_vote"]').waitFor({ state: "detached" });
   const reject = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
   if (!reject.message.includes("stale projection")) {
     throw new Error(`stale player vote message drifted: ${JSON.stringify(reject)}`);
@@ -7407,6 +7446,54 @@ async function verifyStalePlayerVoteRecovery({
   const phaseAfterReject = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const commandStateAfterReject = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const dispatchPlan = await playerPage.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const voteControlAfterReject = await playerCommandControlState(playerPage, "submit_vote");
+  const withdrawAfterReject = await playerCommandControlState(playerPage, "withdraw_vote");
+  const currentVoteAfterReject = await playerPage
+    .getByTestId("player-current-vote")
+    .evaluate((node) => ({
+      hasVote: node.getAttribute("data-has-vote"),
+      text: node.textContent?.trim() ?? "",
+    }));
+  if (
+    commandStateBeforeClose?.voteTargets?.some((target) => target.kind === "slot") !==
+      true ||
+    commandStateBeforeClose?.currentVote !== null ||
+    voteControlBeforeClose.exists !== true ||
+    voteControlBeforeClose.disabled !== false ||
+    withdrawBeforeClose.exists !== true ||
+    withdrawBeforeClose.disabled !== true ||
+    withdrawBeforeClose.reason !== "No current vote" ||
+    commandStateAfterReject?.phase?.locked !== true ||
+    commandStateAfterReject?.voteTargets?.length !== 0 ||
+    commandStateAfterReject?.currentVote !== null ||
+    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+    voteControlAfterReject.exists !== false ||
+    voteControlAfterReject.disabled !== true ||
+    withdrawAfterReject.exists !== true ||
+    withdrawAfterReject.disabled !== true ||
+    withdrawAfterReject.reason !== "No current vote" ||
+    currentVoteAfterReject.hasVote !== "false" ||
+    !currentVoteAfterReject.text.includes("No current vote")
+  ) {
+    throw new Error(
+      `stale player vote recovery state drifted: ${JSON.stringify({
+        commandStateBeforeClose,
+        voteControlBeforeClose,
+        withdrawBeforeClose,
+        commandStateAfterReject,
+        dispatchPlan,
+        voteControlAfterReject,
+        withdrawAfterReject,
+        currentVoteAfterReject,
+      })}`,
+    );
+  }
 
   const unlockCommandId = crypto.randomUUID();
   const unlockRaw = await sendBrowserCommand(hostPage, {
@@ -7432,10 +7519,18 @@ async function verifyStalePlayerVoteRecovery({
   return {
     status: "passed",
     phaseBeforeClose,
+    commandStateBeforeClose,
+    voteControlBeforeClose,
+    withdrawBeforeClose,
     closedStatus,
     lock,
     reject,
     phaseAfterReject,
+    commandStateAfterReject,
+    dispatchPlan,
+    voteControlAfterReject,
+    withdrawAfterReject,
+    currentVoteAfterReject,
     unlock,
     hostPhaseAfterUnlock: hostStateAfterUnlock.phase,
   };

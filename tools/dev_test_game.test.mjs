@@ -909,6 +909,12 @@ test("session card and markdown include role credential URLs and tokens", () => 
       status: "passed",
       proof: "host locked D01 and player recovered from PhaseLocked",
       lock: { commandStatus: { state: "ack" } },
+      lockedVoteControl: {
+        exists: false,
+        disabled: true,
+        reason: "control absent",
+        text: "",
+      },
       rejectedVote: { error: "PhaseLocked", message: "Reject PhaseLocked: phase locked" },
       unlock: { commandStatus: { state: "ack" } },
     },
@@ -1978,12 +1984,55 @@ test("session card and markdown include role credential URLs and tokens", () => 
       },
       stalePlayerVote: {
         status: "passed",
+        commandStateBeforeClose: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        voteControlBeforeClose: {
+          exists: true,
+          disabled: false,
+          reason: "",
+          text: "Vote Slot 3",
+        },
+        withdrawBeforeClose: {
+          exists: true,
+          disabled: true,
+          reason: "No current vote",
+          text: "Withdraw vote",
+        },
         reject: {
           error: "PhaseLocked",
           message:
             "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
         },
         phaseAfterReject: { locked: true },
+        commandStateAfterReject: {
+          phase: { locked: true },
+          currentVote: null,
+          voteTargets: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+        voteControlAfterReject: {
+          exists: false,
+          disabled: true,
+          reason: "control absent",
+          text: "",
+        },
+        withdrawAfterReject: {
+          exists: true,
+          disabled: true,
+          reason: "No current vote",
+          text: "Withdraw vote",
+        },
+        currentVoteAfterReject: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
         hostPhaseAfterUnlock: { locked: false },
       },
       concurrentVoteRace: {
