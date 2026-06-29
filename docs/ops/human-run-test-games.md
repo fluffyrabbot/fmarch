@@ -335,7 +335,9 @@ and checks Slot 7 remains with `player-rowan`. It also opens a separate stale
 `player` role URL as
 `player-mira` before replacement, submits an old Slot 7 vote after replacement,
 records the `NotYourSlot` recovery receipt, and verifies the old vote/post
-controls are disabled with `No current SlotOccupant(slot-7)` context. The host
+controls are disabled with `No current SlotOccupant(slot-7)` context; the same
+old role URL then submits an action-shaped stale `SubmitAction`, receives the
+same `NotYourSlot` recovery copy, and keeps no stale action controls. The host
 then submits a stale post-success `ProcessReplacement` with `player-mira` as the
 old outgoing user, records the visible `InvalidTarget` command-activity receipt,
 and verifies Slot 7 stays on `player-rowan` while Mira's old URL remains
@@ -362,7 +364,8 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `private-channel`, `replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
 `replacement-console`, `replacement-stale-success-recovery`,
-`replacement-stale-player`, and `replacement-incoming-player` rows.
+`replacement-stale-player`, `replacement-stale-action`, and
+`replacement-incoming-player` rows.
 
 The multiplayer-hardening proof promotes the first auth revocation, retry,
 reconnect, concurrent-vote, and stale-client behaviors into the same browser
@@ -472,7 +475,7 @@ proof.
 This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
 host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
-host-issued replacement invite, and replacement-player ownership,
+host-issued replacement invite, stale outgoing-player action recovery, and replacement-player ownership,
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,

@@ -837,6 +837,46 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.staleAction.state,
+  "reject",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.staleAction.error,
+  "NotYourSlot",
+);
+assert.match(
+  session.verification.replacementConsole.staleOutgoingPlayer.staleAction.message,
+  /slot ownership changed/,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.staleAction
+    .requestEnvelope.body.body.command.SubmitAction.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.staleAction
+    .requestEnvelope.body.body.command.SubmitAction.template_id,
+  "factional_kill",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.commandStateAfterStaleAction
+    .actorStatus,
+  "replaced",
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.commandStateAfterStaleAction
+    .actions.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.actionControlCountAfterStaleAction,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.staleOutgoingPlayer.buttonsDisabledAfterStaleAction,
+  true,
+);
+assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess.status,
   "passed",
 );

@@ -2125,6 +2125,7 @@ async function verifySeededReplacementConsole({
     const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
       staleOutgoingPage,
       staleOutgoingSetup,
+      game,
     });
     const staleReplacementAfterSuccess = await verifyStaleReplacementAfterSuccess({
       hostPage,
@@ -3514,6 +3515,7 @@ async function freezeStaleOutgoingReplacementPage({ staleOutgoingPage, game }) {
 async function submitStaleOutgoingReplacementRecovery({
   staleOutgoingPage,
   staleOutgoingSetup,
+  game,
 }) {
   await staleOutgoingPage.locator('[data-action="submit_vote"]').click();
   await staleOutgoingPage.waitForFunction(
@@ -3548,6 +3550,43 @@ async function submitStaleOutgoingReplacementRecovery({
       ),
     ].every((button) => button.disabled === true),
   );
+  const { normalizeCommandResponse } = await importFrontendModule(
+    "src/lib/app/command-boundary.mjs",
+  );
+  const staleActionCommandId = crypto.randomUUID();
+  const staleActionRaw = await sendBrowserCommand(staleOutgoingPage, {
+    principalUserId: "player-mira",
+    commandId: staleActionCommandId,
+    command: {
+      SubmitAction: {
+        game,
+        action_id: "stale-replaced-factional-kill",
+        actor_slot: "slot-7",
+        template_id: "factional_kill",
+        targets: ["slot-2"],
+        grant_id: null,
+      },
+    },
+  });
+  const staleAction = normalizeCommandResponse({
+    commandId: staleActionCommandId,
+    requestEnvelope: staleActionRaw.requestEnvelope,
+    response: { status: staleActionRaw.httpStatus },
+    serverEnvelope: staleActionRaw.serverEnvelope,
+  });
+  const commandStateAfterStaleAction = await staleOutgoingPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const actionControlCountAfterStaleAction = await staleOutgoingPage
+    .locator('[data-action^="submit_action:"]')
+    .count();
+  const buttonsDisabledAfterStaleAction = await staleOutgoingPage.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        "[data-action='submit_vote'], [data-action='withdraw_vote'], [data-action='submit_post']",
+      ),
+    ].every((button) => button.disabled === true),
+  );
   if (
     !reject.message.includes("slot ownership changed") ||
     recoveredCommandState?.actorSlot !== "slot-7" ||
@@ -3563,7 +3602,16 @@ async function submitStaleOutgoingReplacementRecovery({
         receipt.actionId === "submit_vote" &&
         receipt.current === true &&
         receipt.message?.includes("slot ownership changed"),
-    )
+    ) ||
+    staleAction?.state !== "reject" ||
+    staleAction?.error !== "NotYourSlot" ||
+    !staleAction?.message?.includes("slot ownership changed") ||
+    staleAction?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+      "slot-7" ||
+    commandStateAfterStaleAction?.actorStatus !== "replaced" ||
+    commandStateAfterStaleAction?.actions?.length !== 0 ||
+    actionControlCountAfterStaleAction !== 0 ||
+    buttonsDisabledAfterStaleAction !== true
   ) {
     throw new Error(
       `stale outgoing replacement recovery drifted: ${JSON.stringify({
@@ -3573,6 +3621,10 @@ async function submitStaleOutgoingReplacementRecovery({
         contextState,
         buttonsDisabled,
         commandReceipts,
+        staleAction,
+        commandStateAfterStaleAction,
+        actionControlCountAfterStaleAction,
+        buttonsDisabledAfterStaleAction,
       })}`,
     );
   }
@@ -3584,6 +3636,10 @@ async function submitStaleOutgoingReplacementRecovery({
     contextState,
     buttonsDisabled,
     commandReceipts,
+    staleAction,
+    commandStateAfterStaleAction,
+    actionControlCountAfterStaleAction,
+    buttonsDisabledAfterStaleAction,
   };
 }
 

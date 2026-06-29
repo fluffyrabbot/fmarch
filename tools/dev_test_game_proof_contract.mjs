@@ -30,6 +30,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-idempotent-retry",
   "replacement-stale-success-recovery",
   "replacement-stale-player",
+  "replacement-stale-action",
   "replacement-incoming-player",
   "idempotent-retry",
   "reconnect-recovery",
@@ -838,6 +839,51 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleOutgoingPlayer?.contextState
           ?.capabilityLabel?.includes("No current SlotOccupant(slot-7)") === true &&
         verification.replacementConsole?.staleOutgoingPlayer?.buttonsDisabled === true,
+    }),
+    lane("replacement-stale-action", "Outgoing replacement action command recovers stale role", {
+      rejectError:
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction?.error ??
+        null,
+      rejectMessage:
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction?.message ??
+        null,
+      actionActorSlot:
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction
+          ?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot ?? null,
+      recoveredActorStatus:
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.commandStateAfterStaleAction?.actorStatus ?? null,
+      actionControlCount:
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.actionControlCountAfterStaleAction ?? null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.status === "passed" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction?.state ===
+          "reject" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction?.error ===
+          "NotYourSlot" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction?.message?.includes(
+          "slot ownership changed",
+        ) === true &&
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction
+          ?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot ===
+          "slot-7" &&
+        verification.replacementConsole?.staleOutgoingPlayer?.staleAction
+          ?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id ===
+          "factional_kill" &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.commandStateAfterStaleAction?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.commandStateAfterStaleAction?.actorAlive === false &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.commandStateAfterStaleAction?.actorStatus === "replaced" &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.commandStateAfterStaleAction?.actions?.length === 0 &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.actionControlCountAfterStaleAction === 0 &&
+        verification.replacementConsole?.staleOutgoingPlayer
+          ?.buttonsDisabledAfterStaleAction === true,
     }),
     lane("replacement-incoming-player", "Incoming replacement player owns stable slot", {
       principalUserId:

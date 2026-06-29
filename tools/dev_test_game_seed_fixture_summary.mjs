@@ -169,6 +169,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-idempotent-retry",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
+    "replacement-stale-action",
     "replacement-incoming-player",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
@@ -387,6 +388,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["replacement-stale-player"].filter(hasLane),
       note: "Outgoing player opens the seeded role URL before replacement, submits a stale Slot 7 vote after replacement, receives NotYourSlot recovery, and loses old Slot 7 controls.",
+    }),
+    scenario({
+      id: "replacement-stale-action",
+      title: "Replacement stale action recovery",
+      role: "player",
+      provenBy: ["replacement-stale-action"].filter(hasLane),
+      note: "Outgoing player submits an action-shaped stale Slot 7 command after replacement, receives NotYourSlot recovery, and the old role URL keeps no action controls.",
     }),
     scenario({
       id: "replacement-incoming-player",

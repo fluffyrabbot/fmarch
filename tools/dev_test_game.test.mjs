@@ -1171,6 +1171,32 @@ test("session card and markdown include role credential URLs and tokens", () => 
               "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
           },
         ],
+        staleAction: {
+          state: "reject",
+          error: "NotYourSlot",
+          message:
+            "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot-7",
+                    template_id: "factional_kill",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterStaleAction: {
+          actorSlot: "slot-7",
+          actorAlive: false,
+          actorStatus: "replaced",
+          actions: [],
+        },
+        actionControlCountAfterStaleAction: 0,
+        buttonsDisabledAfterStaleAction: true,
       },
       staleReplacementAfterSuccess: {
         status: "passed",
@@ -1531,6 +1557,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
       "replacement-stale-player",
+      "replacement-stale-action",
       "replacement-incoming-player",
       "idempotent-retry",
       "reconnect-recovery",
@@ -1612,7 +1639,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 32);
+  assert.equal(opsArtifacts.proofRun.laneCount, 33);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1721,6 +1748,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-idempotent-retry",
       "replacement-stale-success-recovery",
       "replacement-stale-player",
+      "replacement-stale-action",
       "replacement-incoming-player",
       "private-channel-member",
       "private-channel-denied",
@@ -2092,6 +2120,7 @@ function coreLoopAdminProofFixture() {
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
+        "replacement-stale-action",
         "replacement-incoming-player",
       ],
       rawInviteTokensVisible: false,
@@ -2221,6 +2250,7 @@ function seedAdminProofFixture() {
         "replacement-idempotent-retry",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
+        "replacement-stale-action",
         "replacement-incoming-player",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",
