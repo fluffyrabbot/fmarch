@@ -3507,6 +3507,61 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         staleOutgoingRouteAfterAck: { status: 403 },
         staleOutgoingThreadAfterAck: { status: 403 },
+        privateReconnectAfterAck: {
+          status: "passed",
+          reconnectCommandStateBeforeDrop: {
+            actorSlot: "slot-7",
+            phase: { phaseId: "D01", locked: true },
+          },
+          reconnectChannelContextBeforeDrop: {
+            channelId: "private:mafia_day_chat",
+            actorSlot: "slot-7",
+          },
+          reconnectButtonsBeforeDrop: [
+            { action: "withdraw_vote", disabled: true },
+            { action: "submit_post", disabled: false },
+          ],
+          reconnectingStatus: { state: "reconnecting" },
+          reconnectPostBody:
+            "Replacement stale private post reconnect fixture",
+          reconnectCommand: {
+            principalUserId: "player-rowan",
+            command: {
+              SubmitPost: {
+                channel_id: "private:mafia_day_chat",
+                actor_slot: "slot-7",
+                body: "Replacement stale private post reconnect fixture",
+              },
+            },
+          },
+          reconnectRecoveryEvent: {
+            attempt: 1,
+            state: "recovered",
+          },
+          recoveredCommandState: {
+            actorSlot: "slot-7",
+            phase: { phaseId: "D01", locked: true },
+            voteTargets: [],
+          },
+          recoveredSnapshotContainsPost: true,
+          reconnectChannelContextAfterRecovery: {
+            channelId: "private:mafia_day_chat",
+            actorSlot: "slot-7",
+          },
+          reconnectButtonsAfterRecovery: [
+            { action: "withdraw_vote", disabled: true },
+            { action: "submit_post", disabled: false },
+          ],
+          apiThreadPostBodiesAfterReconnect: [
+            "Replacement stale private post after resolve fixture",
+            "Replacement stale private post reconnect fixture",
+          ],
+          apiCommandStateAfterReconnect: {
+            phase: { phase_id: "D01", locked: true },
+            vote_targets: [],
+          },
+          staleOutgoingThreadAfterReconnect: { status: 403 },
+        },
         outcomeSummary:
           "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
       },
@@ -5249,6 +5304,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5349,7 +5405,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 80);
+  assert.equal(opsArtifacts.proofRun.laneCount, 81);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5457,6 +5513,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5977,6 +6034,7 @@ function hardeningAdminProofFixture() {
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
         "replacement-stale-private-post-after-resolve",
+        "replacement-stale-private-post-reconnect",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -6103,6 +6161,7 @@ function seedAdminProofFixture() {
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
         "replacement-stale-private-post-after-resolve",
+        "replacement-stale-private-post-reconnect",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

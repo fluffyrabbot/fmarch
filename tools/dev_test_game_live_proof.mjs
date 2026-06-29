@@ -2201,6 +2201,102 @@ assert.equal(
   403,
 );
 assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.status,
+  "passed",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectCommandStateBeforeDrop.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectCommandStateBeforeDrop.phase.locked,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectChannelContextBeforeDrop.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectButtonsBeforeDrop.some((button) =>
+      button.action?.startsWith("submit_vote"),
+    ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.reconnectingStatus
+    .state,
+  "reconnecting",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.reconnectCommand
+    .principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.reconnectCommand
+    .command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck.reconnectCommand
+    .command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectRecoveryEvent.state,
+  "recovered",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .reconnectRecoveryEvent.attempt,
+  1,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .recoveredSnapshotContainsPost,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .recoveredCommandState.phase.phaseId,
+  "D01",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .recoveredCommandState.phase.locked,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .recoveredCommandState.voteTargets.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .apiThreadPostBodiesAfterReconnect.includes(
+      replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+        .reconnectPostBody,
+    ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .apiThreadPostBodiesAfterReconnect.includes(
+      replacementStalePrivatePostAfterResolve.postBody,
+    ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
+    .staleOutgoingThreadAfterReconnect.status,
+  403,
+);
+assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",
 );

@@ -13823,6 +13823,144 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
     const staleOutgoingThreadAfterAck = await fetchJsonStatus(
       `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
     );
+    await replacementEntry.page.goto(privateUrl, { waitUntil: "networkidle" });
+    await replacementEntry.page
+      .getByTestId("player-command-channel-context")
+      .waitFor({ state: "visible" });
+    await replacementEntry.page.waitForFunction(
+      ({ expectedChannelId, expectedPostBody }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) => post.body === expectedPostBody && post.authorSlot === "slot-7",
+        ) &&
+        document
+          .querySelector("[data-testid='player-command-channel-context']")
+          ?.getAttribute("data-channel-id") === expectedChannelId,
+      { expectedChannelId: factionDayChatChannel, expectedPostBody: postBody },
+    );
+    const reconnectCommandStateBeforeDrop = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const reconnectChannelContextBeforeDrop = {
+      channelId: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-channel-id"),
+      actorSlot: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-slot"),
+      actorStatus: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-status"),
+    };
+    const reconnectButtonsBeforeDrop = await playerCommandButtons(
+      replacementEntry.page,
+    );
+    await replacementEntry.page.waitForFunction(
+      () => typeof window.__fmarchDropPlayerLiveProjection === "function",
+    );
+    await replacementEntry.page.evaluate(() => window.__fmarchDropPlayerLiveProjection());
+    await replacementEntry.page.waitForFunction(
+      () => window.__fmarchLiveProjectionStatus?.state === "reconnecting",
+    );
+    const reconnectingStatus = await replacementEntry.page.evaluate(
+      () => window.__fmarchLiveProjectionStatus,
+    );
+    const reconnectPostBody = `Replacement private reconnect post after D01 resolve ${crypto.randomUUID()}.`;
+    const reconnectCommand = await sendCommand("player-rowan", {
+      SubmitPost: {
+        game: privatePostGame,
+        channel_id: factionDayChatChannel,
+        actor_slot: "slot-7",
+        body: reconnectPostBody,
+      },
+    });
+    await replacementEntry.page.waitForFunction(
+      () =>
+        (window.__fmarchLiveProjectionEvents ?? []).some(
+          (event) =>
+            event?.kind === "reconnect" &&
+            event.attempt === 1 &&
+            event.state === "recovered",
+        ),
+    );
+    await replacementEntry.page.waitForFunction(
+      ({ expectedBody, expectedActorSlot }) =>
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) =>
+            post.body === expectedBody && post.authorSlot === expectedActorSlot,
+        ) &&
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedActorSlot &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+      { expectedBody: reconnectPostBody, expectedActorSlot: "slot-7" },
+    );
+    await replacementEntry.page.getByText(reconnectPostBody, { exact: true }).waitFor({
+      state: "visible",
+    });
+    const reconnectRecoveryEvent = await replacementEntry.page.evaluate(() =>
+      (window.__fmarchLiveProjectionEvents ?? []).find(
+        (event) =>
+          event?.kind === "reconnect" &&
+          event.attempt === 1 &&
+          event.state === "recovered",
+      ),
+    );
+    const recoveredStatus = await replacementEntry.page.evaluate(
+      () => window.__fmarchLiveProjectionStatus,
+    );
+    const reconnectedProjection = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection,
+    );
+    const reconnectChannelContextAfterRecovery = {
+      channelId: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-channel-id"),
+      actorSlot: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-slot"),
+      actorStatus: await replacementEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-status"),
+    };
+    const reconnectButtonsAfterRecovery = await playerCommandButtons(
+      replacementEntry.page,
+    );
+    const apiThreadAfterReconnect = await fetchJson(
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+    );
+    const apiThreadPostBodiesAfterReconnect = (
+      apiThreadAfterReconnect.posts ?? []
+    ).map((post) => post.body);
+    const apiCommandStateAfterReconnect = await fetchJson(
+      `${apiBaseUrl}/games/${privatePostGame}/player-command-state?principal_user_id=player-rowan&slot_id=slot-7`,
+    );
+    const staleOutgoingThreadAfterReconnect = await fetchJsonStatus(
+      `${apiBaseUrl}/games/${privatePostGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
+    );
+    const privateReconnectAfterAck = {
+      status: "passed",
+      reconnectCommandStateBeforeDrop,
+      reconnectChannelContextBeforeDrop,
+      reconnectButtonsBeforeDrop,
+      reconnectingStatus,
+      reconnectPostBody,
+      reconnectCommand,
+      reconnectRecoveryEvent,
+      recoveredStatus,
+      recoveredCommandState: reconnectedProjection?.commandState ?? null,
+      recoveredSnapshotContainsPost:
+        reconnectedProjection?.thread?.posts?.some(
+          (post) =>
+            post.body === reconnectPostBody && post.authorSlot === "slot-7",
+        ) === true,
+      reconnectChannelContextAfterRecovery,
+      reconnectButtonsAfterRecovery,
+      apiThreadPostBodiesAfterReconnect,
+      apiCommandStateAfterReconnect,
+      staleOutgoingThreadAfterReconnect,
+    };
 
     if (
       replacement?.state !== "ack" ||
@@ -13893,7 +14031,53 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       !staleOutgoingRouteAfterAck.message.includes(
         "requires scoped channel capability",
       ) ||
-      staleOutgoingThreadAfterAck.status !== 403
+      staleOutgoingThreadAfterAck.status !== 403 ||
+      privateReconnectAfterAck.reconnectCommandStateBeforeDrop?.actorSlot !==
+        "slot-7" ||
+      privateReconnectAfterAck.reconnectCommandStateBeforeDrop?.phase?.locked !==
+        true ||
+      privateReconnectAfterAck.reconnectChannelContextBeforeDrop.channelId !==
+        factionDayChatChannel ||
+      privateReconnectAfterAck.reconnectButtonsBeforeDrop.some((button) =>
+        button.action?.startsWith("submit_vote"),
+      ) ||
+      privateReconnectAfterAck.reconnectingStatus?.state !== "reconnecting" ||
+      privateReconnectAfterAck.reconnectCommand?.principalUserId !== "player-rowan" ||
+      privateReconnectAfterAck.reconnectCommand?.command?.SubmitPost?.channel_id !==
+        factionDayChatChannel ||
+      privateReconnectAfterAck.reconnectCommand?.command?.SubmitPost?.actor_slot !==
+        "slot-7" ||
+      privateReconnectAfterAck.reconnectCommand?.command?.SubmitPost?.body !==
+        reconnectPostBody ||
+      privateReconnectAfterAck.reconnectRecoveryEvent?.state !== "recovered" ||
+      privateReconnectAfterAck.reconnectRecoveryEvent?.attempt !== 1 ||
+      privateReconnectAfterAck.recoveredSnapshotContainsPost !== true ||
+      privateReconnectAfterAck.recoveredCommandState?.actorSlot !== "slot-7" ||
+      privateReconnectAfterAck.recoveredCommandState?.phase?.phaseId !== "D01" ||
+      privateReconnectAfterAck.recoveredCommandState?.phase?.locked !== true ||
+      privateReconnectAfterAck.recoveredCommandState?.voteTargets?.length !== 0 ||
+      privateReconnectAfterAck.reconnectChannelContextAfterRecovery.channelId !==
+        factionDayChatChannel ||
+      privateReconnectAfterAck.reconnectChannelContextAfterRecovery.actorSlot !==
+        "slot-7" ||
+      privateReconnectAfterAck.reconnectButtonsAfterRecovery.some((button) =>
+        button.action?.startsWith("submit_vote"),
+      ) ||
+      !privateReconnectAfterAck.reconnectButtonsAfterRecovery.some(
+        (button) => button.action === "submit_post" && button.disabled === false,
+      ) ||
+      !privateReconnectAfterAck.apiThreadPostBodiesAfterReconnect.includes(
+        reconnectPostBody,
+      ) ||
+      !privateReconnectAfterAck.apiThreadPostBodiesAfterReconnect.includes(
+        postBody,
+      ) ||
+      privateReconnectAfterAck.apiCommandStateAfterReconnect?.phase?.phase_id !==
+        "D01" ||
+      privateReconnectAfterAck.apiCommandStateAfterReconnect?.phase?.locked !== true ||
+      privateReconnectAfterAck.apiCommandStateAfterReconnect?.vote_targets?.length !==
+        0 ||
+      privateReconnectAfterAck.staleOutgoingThreadAfterReconnect?.status !== 403
     ) {
       throw new Error(
         `stale replacement private-post after resolve proof drifted: ${JSON.stringify({
@@ -13922,6 +14106,7 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
           apiThreadPostBodies,
           staleOutgoingRouteAfterAck,
           staleOutgoingThreadAfterAck,
+          privateReconnectAfterAck,
           postBody,
         })}`,
       );
@@ -13961,10 +14146,11 @@ async function verifyStaleReplacementPrivatePostAfterResolve({
       apiThreadPostBodies,
       staleOutgoingRouteAfterAck,
       staleOutgoingThreadAfterAck,
+      privateReconnectAfterAck,
       outcomeSummary:
         "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
       proof:
-        "After Rowan replaced into Slot 7 and opened the private mafia channel, the replacement role URL froze, the host resolved D01, and Rowan's stale private SubmitPost ACKed while refreshing to locked D01 channel and command-state truth; Mira's outgoing role still could not read the private channel.",
+        "After Rowan replaced into Slot 7 and opened the private mafia channel, the replacement role URL froze, the host resolved D01, and Rowan's stale private SubmitPost ACKed while refreshing to locked D01 channel and command-state truth; the private channel route then reconnected to another Rowan post with locked controls while Mira's outgoing role still could not read the private channel.",
     };
   } finally {
     await replacementEntry?.context?.close().catch(() => {});

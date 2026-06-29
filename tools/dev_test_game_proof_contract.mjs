@@ -59,6 +59,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
   "replacement-stale-private-post-after-resolve",
+  "replacement-stale-private-post-reconnect",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -3301,6 +3302,105 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.staleOutgoingRouteAfterAck?.status === 403 &&
           hardening.replacementStalePrivatePostAfterResolve
             ?.staleOutgoingThreadAfterAck?.status === 403,
+      },
+    ),
+    lane(
+      "replacement-stale-private-post-reconnect",
+      "Replacement private channel reconnects after stale post",
+      {
+        game: hardening.replacementStalePrivatePostAfterResolve?.game ?? null,
+        channel:
+          hardening.replacementStalePrivatePostAfterResolve?.channel ?? null,
+        reconnectState:
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectRecoveryEvent?.state ?? null,
+        recoveredPhase:
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.phase?.phaseId ?? null,
+        recoveredLocked:
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.phase?.locked ?? null,
+        staleThreadStatus:
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.staleOutgoingThreadAfterReconnect?.status ?? null,
+        passed:
+          hardening.replacementStalePrivatePostAfterResolve?.status === "passed" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.status === "passed" &&
+          hardening.replacementStalePrivatePostAfterResolve?.channel ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommandStateBeforeDrop?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommandStateBeforeDrop?.phase?.phaseId === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommandStateBeforeDrop?.phase?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectChannelContextBeforeDrop?.channelId ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectChannelContextBeforeDrop?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectButtonsBeforeDrop?.some((button) =>
+              button.action?.startsWith("submit_vote"),
+            ) === false &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectingStatus?.state === "reconnecting" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommand?.principalUserId === "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommand?.command?.SubmitPost?.channel_id ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommand?.command?.SubmitPost?.actor_slot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectCommand?.command?.SubmitPost?.body ===
+            hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+              ?.reconnectPostBody &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectRecoveryEvent?.state === "recovered" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectRecoveryEvent?.attempt === 1 &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredSnapshotContainsPost === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.phase?.phaseId === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.phase?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.recoveredCommandState?.voteTargets?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectChannelContextAfterRecovery?.channelId ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectChannelContextAfterRecovery?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectButtonsAfterRecovery?.some((button) =>
+              button.action?.startsWith("submit_vote"),
+            ) === false &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.reconnectButtonsAfterRecovery?.some(
+              (button) => button.action === "submit_post" && button.disabled === false,
+            ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.apiThreadPostBodiesAfterReconnect?.includes(
+              hardening.replacementStalePrivatePostAfterResolve?.postBody,
+            ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.apiThreadPostBodiesAfterReconnect?.includes(
+              hardening.replacementStalePrivatePostAfterResolve
+                ?.privateReconnectAfterAck?.reconnectPostBody,
+            ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.apiCommandStateAfterReconnect?.phase?.phase_id === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.apiCommandStateAfterReconnect?.phase?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.apiCommandStateAfterReconnect?.vote_targets?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
+            ?.staleOutgoingThreadAfterReconnect?.status === 403,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
