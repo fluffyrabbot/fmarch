@@ -1332,10 +1332,10 @@ async function drivePlayerBrowser(frontendBaseUrl) {
     window.__fmarchPlayerCommandIdFactory = () => commandId;
   }, duplicateVoteCommandId);
   await installVoteInsertDelayTrigger();
-  const voteButton = page.getByText("Vote slot-2", { exact: true });
+  const voteButton = page.locator('[data-action="submit_vote"]');
   const voteButtonBox = await voteButton.boundingBox();
   assertHitTarget(voteButtonBox, "player vote button");
-  const raceVoteButton = raceVoteSession.page.getByText("Vote slot-2", { exact: true });
+  const raceVoteButton = raceVoteSession.page.locator('[data-action="submit_vote"]');
   assertHitTarget(await raceVoteButton.boundingBox(), "racing player vote button");
   const raceStatus = raceVoteSession.page.getByTestId("player-command-status");
   const status = page.getByTestId("player-command-status");
@@ -1745,7 +1745,7 @@ async function drivePlayerBrowser(frontendBaseUrl) {
       recovery: staleVoteRecovery,
       unlockCommand: staleVoteUnlockCommand,
       proof:
-        "A stale seeded player page loaded /g/{game} with live WebSocket disabled before LockThread, kept the old Vote slot-2 control, submitted it after the host locked D01, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to D01 locked for slot-7, and the host unlocked the phase before the moderator proof continued.",
+        "A stale seeded player page loaded /g/{game} with live WebSocket disabled before LockThread, kept the old vote control, submitted it after the host locked D01, rendered Reject PhaseLocked with stale-projection recovery guidance, refreshed /player-command-state to D01 locked for slot-7, and the host unlocked the phase before the moderator proof continued.",
     },
   };
 }
@@ -1758,7 +1758,7 @@ async function submitDuplicatePlayerVote(
   await page.evaluate((fixedCommandId) => {
     window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
   }, commandId);
-  const staleButton = page.getByText("Vote slot-2", { exact: true });
+  const staleButton = page.locator('[data-action="submit_vote"]');
   assertHitTarget(await staleButton.boundingBox(), "duplicate player vote button");
   await staleButton.click();
   const status = page.getByTestId("player-command-status");
@@ -1862,7 +1862,7 @@ async function openStalePlayerVoteBrowser(
     );
   }
   await page.getByTestId("player-surface").waitFor({ state: "visible" });
-  await page.getByText("Vote slot-2", { exact: true }).waitFor({
+  await page.locator('[data-action="submit_vote"]').waitFor({
     state: "visible",
   });
   return {
@@ -1877,7 +1877,7 @@ async function openStalePlayerVoteBrowser(
 async function submitStalePlayerVote(staleSession) {
   const { page, commandStateRequests, commandStateResponses, commandStateResponseTasks } =
     staleSession;
-  const staleButton = page.getByText("Vote slot-2", { exact: true });
+  const staleButton = page.locator('[data-action="submit_vote"]');
   assertHitTarget(await staleButton.boundingBox(), "stale player vote button");
   await staleButton.click();
   const status = page.getByTestId("player-command-status");

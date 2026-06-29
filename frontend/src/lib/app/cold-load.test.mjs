@@ -346,6 +346,10 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
               label: "Submit factional kill",
             },
           ],
+          vote_targets: [
+            { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
+            { kind: "no_lynch", slot_id: null, label: "No lynch" },
+          ],
           boundary: "live role actions",
         });
       }
@@ -369,6 +373,10 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   assert.equal(data.commandState.actorStatus, "alive");
   assert.equal(data.commandState.actions[0].templateId, "factional_kill");
   assert.deepEqual(data.commandState.actions[0].targets, ["slot-2"]);
+  assert.deepEqual(data.commandState.voteTargets, [
+    { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+    { kind: "no_lynch", slotId: null, label: "No lynch" },
+  ]);
 });
 
 test("normalizes player command state into route action configs", () => {
@@ -396,6 +404,11 @@ test("normalizes player command state into route action configs", () => {
             targets: ["slot-2"],
             target_options: ["slot-2", "slot-3"],
           },
+        ],
+        vote_targets: [
+          { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
+          { kind: "slot", slot_id: "slot-3", label: "Slot 3" },
+          { kind: "no_lynch", slot_id: null, label: "No lynch" },
         ],
         boundary: "live command state",
       },
@@ -430,6 +443,11 @@ test("normalizes player command state into route action configs", () => {
           ability: "Kill",
           window: "Night",
         },
+      ],
+      voteTargets: [
+        { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+        { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        { kind: "no_lynch", slotId: null, label: "No lynch" },
       ],
       boundary: "live command state",
     },

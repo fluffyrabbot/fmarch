@@ -1333,6 +1333,7 @@ pub struct PlayerCommandStateResponse {
     pub game_completed: bool,
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
+    pub vote_targets: Vec<PlayerVoteTarget>,
     pub boundary: String,
 }
 
@@ -1356,6 +1357,13 @@ pub struct PlayerCommandAction {
     pub targets: Vec<String>,
     pub target_options: Vec<String>,
     pub grant_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayerVoteTarget {
+    pub kind: String,
+    pub slot_id: Option<String>,
+    pub label: String,
 }
 
 async fn player_command_state(
@@ -1408,6 +1416,19 @@ async fn player_command_state(
     let phase_view = phase
         .as_ref()
         .and_then(|phase| player_phase_state(phase).ok());
+    let vote_targets = if actor.alive && !game_completed {
+        match phase.as_ref() {
+            Some(phase)
+                if !phase.locked
+                    && phase_kind_for_id(&phase.phase_id)? == domain::pack::PhaseKind::Day =>
+            {
+                available_vote_targets(&state, game, &slots, actor).await?
+            }
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
     let actions = if actor.alive && !game_completed {
         match (phase.as_ref(), role_key.as_deref()) {
             (Some(phase), Some(role_key)) if !phase.locked => {
@@ -1445,12 +1466,40 @@ async fn player_command_state(
         game_completed,
         phase: phase_view,
         actions,
+        vote_targets,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {
             "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string()
         },
     }))
+}
+
+async fn available_vote_targets(
+    state: &ApiState,
+    game: Uuid,
+    slots: &[projections::SlotStateRow],
+    actor: &projections::SlotStateRow,
+) -> Result<Vec<PlayerVoteTarget>, ApiError> {
+    let pack = load_pack_for_game(state, game).await?;
+    let mut targets: Vec<PlayerVoteTarget> = slots
+        .iter()
+        .filter(|slot| slot.alive)
+        .filter(|slot| pack.vote.self_vote_allowed || slot.slot_id != actor.slot_id)
+        .map(|slot| PlayerVoteTarget {
+            kind: "slot".to_string(),
+            slot_id: Some(slot.slot_id.clone()),
+            label: slot_label(&slot.slot_id),
+        })
+        .collect();
+    if pack.vote.no_lynch_allowed {
+        targets.push(PlayerVoteTarget {
+            kind: "no_lynch".to_string(),
+            slot_id: None,
+            label: "No lynch".to_string(),
+        });
+    }
+    Ok(targets)
 }
 
 async fn available_role_actions(
@@ -1554,6 +1603,15 @@ fn action_label(action: &domain::pack::ActionTemplate) -> String {
         domain::IrAbility::Protect => format!("Submit {action_name}"),
         domain::IrAbility::Investigate => format!("Submit {action_name}"),
         _ => format!("Submit {action_name}"),
+    }
+}
+
+fn slot_label(slot_id: &str) -> String {
+    let suffix: String = slot_id.chars().filter(|ch| ch.is_ascii_digit()).collect();
+    if suffix.is_empty() {
+        slot_id.to_string()
+    } else {
+        format!("Slot {suffix}")
     }
 }
 

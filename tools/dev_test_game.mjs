@@ -1413,7 +1413,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
   const playerLockedBeforeVote = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
-  await playerPage.getByText("Vote slot-2", { exact: true }).click();
+  await playerPage.locator('[data-action="submit_vote"]').click();
   await playerPage.waitForFunction(
     () =>
       window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -1499,6 +1499,15 @@ async function verifySeededDayVoteResolution({
     const voterBeforeVote = await voterPage.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
+    const voterVoteButtons = await voterPage
+      .locator('[data-action^="submit_vote"]')
+      .evaluateAll((nodes) =>
+        nodes.map((node) => ({
+          action: node.getAttribute("data-action"),
+          text: node.textContent?.trim() ?? "",
+          disabled: node.disabled === true,
+        })),
+      );
     await voterPage.locator('[data-action="submit_vote"]').click();
     await voterPage.waitForFunction(
       () => window.__fmarchPlayerCommandStatus?.state === "ack",
@@ -1599,6 +1608,22 @@ async function verifySeededDayVoteResolution({
         "slot_4" ||
       finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
         "slot-2" ||
+      !voterBeforeVote?.voteTargets?.some(
+        (target) => target.kind === "slot" && target.slotId === "slot-2",
+      ) ||
+      !voterBeforeVote?.voteTargets?.some((target) => target.kind === "no_lynch") ||
+      !voterVoteButtons.some(
+        (button) =>
+          button.action === "submit_vote" &&
+          button.text.includes("Vote Slot 2") &&
+          button.disabled === false,
+      ) ||
+      !voterVoteButtons.some(
+        (button) =>
+          button.action === "submit_vote:no_lynch" &&
+          button.text.includes("Vote no lynch") &&
+          button.disabled === false,
+      ) ||
       !voterVotecountAfterVote.some(
         (row) => row.target === "slot-2" && row.count === 4,
       ) ||
@@ -1643,6 +1668,7 @@ async function verifySeededDayVoteResolution({
           seed,
           hostBeforeVote,
           voterBeforeVote,
+          voterVoteButtons,
           finalVote,
           voterVotecountAfterVote,
           resolveDay,
@@ -1665,6 +1691,7 @@ async function verifySeededDayVoteResolution({
       seed,
       hostBeforeVote,
       voterBeforeVote,
+      voterVoteButtons,
       finalVote,
       voterVotecountAfterVote,
       resolveDay,
@@ -1678,7 +1705,7 @@ async function verifySeededDayVoteResolution({
       targetOutcomePanel,
       targetOutcomeTally,
       proof:
-        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host and target player role URLs rendered the official day-vote outcome panel, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
+        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser rendered projection-derived slot and no-lynch vote controls, cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host and target player role URLs rendered the official day-vote outcome panel, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
     };
   } finally {
     await hostProofPage.close().catch(() => {});
@@ -3899,6 +3926,9 @@ async function verifyStalePlayerCompleteRecovery({
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const setupButtons = await playerCommandButtons(stalePlayerPage);
+    const staleVoteButton = setupButtons.find(
+      (button) => button.action?.startsWith("submit_vote") && button.disabled === false,
+    );
     const closedStatus = await stalePlayerPage.evaluate(
       () => window.__fmarchClosePlayerLiveProjection?.(),
     );
@@ -3916,8 +3946,8 @@ async function verifyStalePlayerCompleteRecovery({
     });
     if (
       setupCommandState?.actions?.length !== 0 ||
-      setupButtons.find((button) => button.action === "submit_vote")?.disabled !==
-        false ||
+      !setupCommandState?.voteTargets?.some((target) => target.kind === "no_lynch") ||
+      staleVoteButton === undefined ||
       closedStatus?.state !== "closed" ||
       liveComplete?.state !== "ack"
     ) {
@@ -3927,13 +3957,14 @@ async function verifyStalePlayerCompleteRecovery({
           seed,
           setupCommandState,
           setupButtons,
+          staleVoteButton,
           closedStatus,
           liveComplete,
         })}`,
       );
     }
 
-    await stalePlayerPage.locator('[data-action="submit_vote"]').click();
+    await stalePlayerPage.locator(`[data-action="${staleVoteButton.action}"]`).click();
     await stalePlayerPage.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
@@ -3968,11 +3999,13 @@ async function verifyStalePlayerCompleteRecovery({
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
       commandStateAfterReject?.gameCompleted !== true ||
       commandStateAfterReject?.actions?.length !== 0 ||
+      commandStateAfterReject?.voteTargets?.length !== 0 ||
       !commandStateAfterReject?.boundary?.includes("game is complete") ||
       buttonsAfterReject.some((button) => button.disabled !== true) ||
       phaseAfterReject?.phaseId !== "D01" ||
       apiCommandStateAfterReject?.game_completed !== true ||
-      apiCommandStateAfterReject?.actions?.length !== 0
+      apiCommandStateAfterReject?.actions?.length !== 0 ||
+      apiCommandStateAfterReject?.vote_targets?.length !== 0
     ) {
       throw new Error(
         `stale player complete recovery drifted: ${JSON.stringify({
@@ -3980,6 +4013,7 @@ async function verifyStalePlayerCompleteRecovery({
           seed,
           setupCommandState,
           setupButtons,
+          staleVoteButton,
           closedStatus,
           liveComplete,
           reject,
@@ -3997,6 +4031,7 @@ async function verifyStalePlayerCompleteRecovery({
       seed,
       setupCommandState,
       setupButtons,
+      staleVoteButton,
       closedStatus,
       liveComplete,
       reject,
@@ -4006,7 +4041,7 @@ async function verifyStalePlayerCompleteRecovery({
       phaseAfterReject,
       apiCommandStateAfterReject,
       proof:
-        "A disposable player role URL froze before completion, the game completed from another browser command, then the stale player Vote control rejected with GameAlreadyCompleted, refreshed commandState, disabled vote/post controls, and exposed no role actions.",
+        "A disposable player role URL froze before completion with a projection-derived vote control, the game completed from another browser command, then that stale player vote control rejected with GameAlreadyCompleted, refreshed commandState, disabled vote/post controls, and exposed no role actions or vote targets.",
     };
   } finally {
     await stalePlayerPage.close().catch(() => {});

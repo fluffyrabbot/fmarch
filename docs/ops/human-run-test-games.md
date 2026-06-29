@@ -318,12 +318,14 @@ locked phase and renders `Reject PhaseLocked` recovery, and the host page unlock
 D01 again so the human-run game remains usable after verification.
 
 The day-vote resolution proof uses a disposable seeded game with the same local
-role capabilities: the `actionPlayer` role URL casts the fourth Slot 2 vote from
-the browser, the host role URL resolves D01, `/day-vote-outcomes` records the
-official `Lynch` result, the host projection marks Slot 2 dead, and the target
-player role URL sees the `player_killed` / `day_vote` notice with disabled
-controls, and both the host and target player role URLs render the official
-day-vote outcome panel from the `/day-vote-outcomes` projection.
+role capabilities: `/player-command-state` exposes the action player's live
+slot-vote targets plus no-lynch, the `actionPlayer` role URL renders those
+target-derived controls and casts the fourth Slot 2 vote from the browser, the
+host role URL resolves D01, `/day-vote-outcomes` records the official `Lynch`
+result, the host projection marks Slot 2 dead, and the target player role URL
+sees the `player_killed` / `day_vote` notice with disabled controls, and both
+the host and target player role URLs render the official day-vote outcome panel
+from the `/day-vote-outcomes` projection.
 
 The day-vote no-lynch proof uses a second disposable seeded game: two player role
 URLs click the `Vote no lynch` control before the host role URL resolves D01, the

@@ -83,7 +83,7 @@ test("player route data exposes thread, channel, votecount, and touch command la
     {
       action: "submit_vote",
       commandKind: "submit_vote",
-      label: "Vote slot-2",
+      label: "Vote Slot 2",
       voteTarget: { Slot: "slot-2" },
     },
     {

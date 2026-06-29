@@ -915,6 +915,26 @@ test("session card and markdown include role credential URLs and tokens", () => 
     dayVoteResolution: {
       status: "passed",
       proof: "action-player cast the majority day vote and host resolved the lynch",
+      voterBeforeVote: {
+        voteTargets: [
+          { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+          { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+          { kind: "no_lynch", slotId: null, label: "No lynch" },
+        ],
+      },
+      voterVoteButtons: [
+        { action: "submit_vote", text: "Vote Slot 2", disabled: false },
+        {
+          action: "submit_vote:slot-3",
+          text: "Vote Slot 3",
+          disabled: false,
+        },
+        {
+          action: "submit_vote:no_lynch",
+          text: "Vote no lynch",
+          disabled: false,
+        },
+      ],
       finalVote: {
         state: "ack",
         requestEnvelope: {
@@ -2488,12 +2508,14 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorSlot: "slot-7",
           gameCompleted: false,
           actions: [],
+          voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
         },
         setupButtons: [
-          { action: "submit_vote", disabled: false },
+          { action: "submit_vote:no_lynch", disabled: false },
           { action: "withdraw_vote", disabled: false },
           { action: "submit_post", disabled: false },
         ],
+        staleVoteButton: { action: "submit_vote:no_lynch", disabled: false },
         closedStatus: { state: "closed" },
         liveComplete: {
           state: "ack",
@@ -2508,6 +2530,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         commandStateAfterReject: {
           gameCompleted: true,
           actions: [],
+          voteTargets: [],
           boundary: "The game is complete; role actions, votes, and posts are closed.",
         },
         dispatchPlan: {
@@ -2521,6 +2544,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         apiCommandStateAfterReject: {
           game_completed: true,
           actions: [],
+          vote_targets: [],
         },
       },
       staleHostDeadline: {

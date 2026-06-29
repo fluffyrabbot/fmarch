@@ -464,6 +464,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   gameCompleted: false,
   phase: null,
   actions: Object.freeze([]),
+  voteTargets: Object.freeze([]),
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -473,6 +474,11 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     return fallback;
   }
   const actions = Array.isArray(payload.actions) ? payload.actions : [];
+  const voteTargets = Array.isArray(payload.vote_targets)
+    ? payload.vote_targets
+    : Array.isArray(payload.voteTargets)
+      ? payload.voteTargets
+      : [];
   return Object.freeze({
     game: payload.game ?? fallback.game ?? null,
     actorSlot: payload.actor_slot ?? payload.actorSlot ?? fallback.actorSlot ?? null,
@@ -494,6 +500,9 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
           : fallback.gameCompleted === true,
     phase: normalizePlayerCommandPhase(payload.phase ?? null),
     actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),
+    voteTargets: Object.freeze(
+      voteTargets.map(normalizePlayerVoteTarget).filter(Boolean),
+    ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
   });
 }
@@ -536,6 +545,32 @@ function normalizePlayerCommandAction(action) {
     ability: String(action.ability ?? ""),
     window: String(action.window ?? ""),
   });
+}
+
+function normalizePlayerVoteTarget(target) {
+  if (target === null || typeof target !== "object") {
+    return null;
+  }
+  const kind = String(target.kind ?? "").trim();
+  if (kind === "slot") {
+    const slotId = String(target.slot_id ?? target.slotId ?? "").trim();
+    if (slotId === "") {
+      return null;
+    }
+    return Object.freeze({
+      kind,
+      slotId,
+      label: String(target.label ?? slotId),
+    });
+  }
+  if (kind === "no_lynch") {
+    return Object.freeze({
+      kind,
+      slotId: null,
+      label: String(target.label ?? "No lynch"),
+    });
+  }
+  return null;
 }
 
 function normalizeStringArray(value) {

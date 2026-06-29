@@ -112,20 +112,6 @@ export async function buildGameRouteData({
       voteCommandLabel: "Vote slot-2",
       withdrawCommandLabel: "Withdraw vote",
       voteTargetSlot: "slot-2",
-      voteCommands: [
-        {
-          action: "submit_vote",
-          commandKind: "submit_vote",
-          label: "Vote slot-2",
-          voteTarget: { Slot: "slot-2" },
-        },
-        {
-          action: "submit_vote:no_lynch",
-          commandKind: "submit_vote",
-          label: "Vote no lynch",
-          voteTarget: "NoLynch",
-        },
-      ],
       commandEndpoint: "/commands",
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
     },
@@ -319,8 +305,34 @@ export function buildPlayerPhaseView(commandState) {
 export function buildPlayerComposerView(baseComposer, commandState, actorSlot) {
   return Object.freeze({
     ...baseComposer,
+    voteCommands: buildPlayerVoteCommands(baseComposer, commandState),
     actionCommands: buildPlayerActionCommands(commandState, actorSlot),
   });
+}
+
+export function buildPlayerVoteCommands(baseComposer, commandState) {
+  const targets = commandState?.voteTargets ?? [];
+  if (targets.length === 0) {
+    return Object.freeze(baseComposer.voteCommands ?? []);
+  }
+  return Object.freeze(
+    targets.map((target, index) => {
+      if (target.kind === "no_lynch") {
+        return Object.freeze({
+          action: "submit_vote:no_lynch",
+          commandKind: "submit_vote",
+          label: "Vote no lynch",
+          voteTarget: "NoLynch",
+        });
+      }
+      return Object.freeze({
+        action: index === 0 ? "submit_vote" : `submit_vote:${target.slotId}`,
+        commandKind: "submit_vote",
+        label: `Vote ${target.label}`,
+        voteTarget: { Slot: target.slotId },
+      });
+    }),
+  );
 }
 
 export function buildPlayerActionCommands(commandState, actorSlot) {
@@ -437,6 +449,10 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     roleKey: null,
     phase: null,
     actions: Object.freeze([]),
+    voteTargets: Object.freeze([
+      Object.freeze({ kind: "slot", slotId: "slot-2", label: "Slot 2" }),
+      Object.freeze({ kind: "no_lynch", slotId: null, label: "No lynch" }),
+    ]),
     boundary:
       "Fixture player route data does not invent role action availability.",
   }),

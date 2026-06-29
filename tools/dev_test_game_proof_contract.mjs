@@ -123,6 +123,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       hostOutcomePanel: verification.dayVoteResolution?.hostAfterResolve?.outcomePanel ?? null,
       targetOutcomePanel: verification.dayVoteResolution?.targetOutcomePanel ?? null,
       targetNoticeStatus: verification.dayVoteResolution?.targetNotice?.status ?? null,
+      voteTargetCount: verification.dayVoteResolution?.voterBeforeVote?.voteTargets?.length ?? null,
+      voteButtonActions:
+        verification.dayVoteResolution?.voterVoteButtons?.map((button) => button.action) ?? null,
       passed:
         verification.dayVoteResolution?.status === "passed" &&
         verification.dayVoteResolution?.finalVote?.state === "ack" &&
@@ -130,6 +133,24 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.command?.SubmitVote?.actor_slot === "slot_4" &&
         verification.dayVoteResolution?.finalVote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.target?.Slot === "slot-2" &&
+        verification.dayVoteResolution?.voterBeforeVote?.voteTargets?.some(
+          (target) => target.kind === "slot" && target.slotId === "slot-2",
+        ) &&
+        verification.dayVoteResolution?.voterBeforeVote?.voteTargets?.some(
+          (target) => target.kind === "no_lynch",
+        ) &&
+        verification.dayVoteResolution?.voterVoteButtons?.some(
+          (button) =>
+            button.action === "submit_vote" &&
+            button.text?.includes("Vote Slot 2") &&
+            button.disabled === false,
+        ) &&
+        verification.dayVoteResolution?.voterVoteButtons?.some(
+          (button) =>
+            button.action === "submit_vote:no_lynch" &&
+            button.text?.includes("Vote no lynch") &&
+            button.disabled === false,
+        ) &&
         verification.dayVoteResolution?.dayVoteOutcome?.phase_id === "D01" &&
         verification.dayVoteResolution?.dayVoteOutcome?.status === "Lynch" &&
         verification.dayVoteResolution?.dayVoteOutcome?.winner_slot === "slot-2" &&
@@ -1759,12 +1780,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.stalePlayerComplete?.buttonsAfterReject?.filter(
           (button) => button.disabled === true,
         ).length ?? null,
+      voteTargetsAfterReject:
+        hardening.stalePlayerComplete?.commandStateAfterReject?.voteTargets?.length ?? null,
       passed:
         hardening.stalePlayerComplete?.status === "passed" &&
         hardening.stalePlayerComplete?.setupCommandState?.gameCompleted === false &&
-        hardening.stalePlayerComplete?.setupButtons?.find(
-          (button) => button.action === "submit_vote",
-        )?.disabled === false &&
+        hardening.stalePlayerComplete?.setupCommandState?.voteTargets?.some(
+          (target) => target.kind === "no_lynch",
+        ) &&
+        hardening.stalePlayerComplete?.staleVoteButton?.action?.startsWith(
+          "submit_vote",
+        ) === true &&
+        hardening.stalePlayerComplete?.staleVoteButton?.disabled === false &&
         hardening.stalePlayerComplete?.liveComplete?.state === "ack" &&
         hardening.stalePlayerComplete?.reject?.state === "reject" &&
         hardening.stalePlayerComplete?.reject?.error === "GameAlreadyCompleted" &&
@@ -1779,12 +1806,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
           true &&
         hardening.stalePlayerComplete?.commandStateAfterReject?.actions?.length ===
           0 &&
+        hardening.stalePlayerComplete?.commandStateAfterReject?.voteTargets?.length ===
+          0 &&
         hardening.stalePlayerComplete?.buttonsAfterReject?.every(
           (button) => button.disabled === true,
         ) === true &&
         hardening.stalePlayerComplete?.apiCommandStateAfterReject?.game_completed ===
           true &&
         hardening.stalePlayerComplete?.apiCommandStateAfterReject?.actions?.length ===
+          0 &&
+        hardening.stalePlayerComplete?.apiCommandStateAfterReject?.vote_targets?.length ===
           0,
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
