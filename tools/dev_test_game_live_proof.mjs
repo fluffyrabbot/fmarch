@@ -299,6 +299,8 @@ assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ac
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+const replacementPrivatePostRace =
+  session.verification.multiplayerHardening.concurrentReplacementPrivatePostRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1486,6 +1488,73 @@ assert.equal(
   ),
   true,
 );
+assert.equal(replacementPrivatePostRace.status, "passed");
+assert.equal(
+  replacementPrivatePostRace.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementPrivatePostRace.playerEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(replacementPrivatePostRace.setupHostReplacement.occupantLabel, "player-mira");
+assert.equal(replacementPrivatePostRace.setupCommandState.actorSlot, "slot-7");
+assert.equal(replacementPrivatePostRace.setupCommandState.actorStatus, "alive");
+assert.equal(replacementPrivatePostRace.setupChannelContext.channelId, "private:mafia_day_chat");
+assert.equal(replacementPrivatePostRace.setupChannelContext.actorSlot, "slot-7");
+assert.equal(replacementPrivatePostRace.setupChannelContext.actorStatus, "alive");
+assert.equal(replacementPrivatePostRace.replacement.state, "ack");
+assert.equal(
+  replacementPrivatePostRace.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.slot,
+  "slot-7",
+);
+assert.equal(
+  replacementPrivatePostRace.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementPrivatePostRace.post.requestEnvelope.body.body.command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementPrivatePostRace.post.requestEnvelope.body.body.command.SubmitPost.actor_slot,
+  "slot-7",
+);
+if (replacementPrivatePostRace.post.state === "ack") {
+  assert.equal(replacementPrivatePostRace.post.serverEnvelope.body.kind, "Ack");
+  assert.equal(replacementPrivatePostRace.postSeq < replacementPrivatePostRace.replacementSeq, true);
+  assert.equal(
+    replacementPrivatePostRace.apiThreadPostBodies.includes(
+      replacementPrivatePostRace.postBody,
+    ),
+    true,
+  );
+} else {
+  assert.equal(replacementPrivatePostRace.post.state, "reject");
+  assert.equal(replacementPrivatePostRace.post.error, "NotYourSlot");
+  assert.equal(replacementPrivatePostRace.post.serverEnvelope.body.kind, "Reject");
+  assert.equal(
+    replacementPrivatePostRace.apiThreadPostBodies.includes(
+      replacementPrivatePostRace.postBody,
+    ),
+    false,
+  );
+}
+assert.equal(replacementPrivatePostRace.commandStateAfterRace.status, 403);
+assert.equal(replacementPrivatePostRace.commandStateAfterRace.error, "NotYourSlot");
+assert.equal(
+  replacementPrivatePostRace.buttonsAfterRace.some(
+    (button) =>
+      (button.action === "submit_post" || button.action?.startsWith("submit_action")) &&
+      button.disabled === false,
+  ),
+  false,
+);
+assert.equal(replacementPrivatePostRace.hostReplacementAfterRace.occupantLabel, "player-rowan");
+assert.equal(replacementPrivatePostRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
+assert.equal(replacementPrivatePostRace.staleRoute.status, 403);
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",

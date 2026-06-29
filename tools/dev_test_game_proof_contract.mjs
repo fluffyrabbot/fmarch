@@ -52,6 +52,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-player-vote-resolve-race",
   "concurrent-player-action-advance-race",
   "concurrent-cohost-deadline-resolve-race",
+  "concurrent-replacement-private-post-race",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -2514,6 +2515,92 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.phase_id === "D01" &&
           hardening.concurrentCohostDeadlineResolveRace?.cohostStateAfterRace?.phase
             ?.locked === true,
+      },
+    ),
+    lane(
+      "concurrent-replacement-private-post-race",
+      "Concurrent replacement and private post converge",
+      {
+        game: hardening.concurrentReplacementPrivatePostRace?.game ?? null,
+        postState: hardening.concurrentReplacementPrivatePostRace?.post?.state ?? null,
+        postError: hardening.concurrentReplacementPrivatePostRace?.post?.error ?? null,
+        postSeq: hardening.concurrentReplacementPrivatePostRace?.postSeq ?? null,
+        replacementSeq:
+          hardening.concurrentReplacementPrivatePostRace?.replacementSeq ?? null,
+        apiOccupant:
+          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
+            ?.occupant_user_id ?? null,
+        passed:
+          hardening.concurrentReplacementPrivatePostRace?.status === "passed" &&
+          hardening.concurrentReplacementPrivatePostRace?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.concurrentReplacementPrivatePostRace?.playerEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.concurrentReplacementPrivatePostRace?.setupHostReplacement
+            ?.occupantLabel === "player-mira" &&
+          hardening.concurrentReplacementPrivatePostRace?.setupCommandState
+            ?.actorSlot === "slot-7" &&
+          hardening.concurrentReplacementPrivatePostRace?.setupCommandState
+            ?.actorStatus === "alive" &&
+          hardening.concurrentReplacementPrivatePostRace?.setupChannelContext
+            ?.channelId === "private:mafia_day_chat" &&
+          hardening.concurrentReplacementPrivatePostRace?.setupChannelContext
+            ?.actorSlot === "slot-7" &&
+          hardening.concurrentReplacementPrivatePostRace?.setupChannelContext
+            ?.actorStatus === "alive" &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.state ===
+            "ack" &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.serverEnvelope
+            ?.body?.kind === "Ack" &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
+            ?.body?.body?.command?.ProcessReplacement?.game ===
+            hardening.concurrentReplacementPrivatePostRace?.game &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
+            ?.body?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
+            ?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
+            "player-mira" &&
+          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
+            ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+            "player-rowan" &&
+          hardening.concurrentReplacementPrivatePostRace?.post?.requestEnvelope?.body
+            ?.body?.command?.SubmitPost?.channel_id === "private:mafia_day_chat" &&
+          hardening.concurrentReplacementPrivatePostRace?.post?.requestEnvelope?.body
+            ?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
+          ((hardening.concurrentReplacementPrivatePostRace?.post?.state === "ack" &&
+            hardening.concurrentReplacementPrivatePostRace?.post?.serverEnvelope
+              ?.body?.kind === "Ack" &&
+            hardening.concurrentReplacementPrivatePostRace?.postSeq <
+              hardening.concurrentReplacementPrivatePostRace?.replacementSeq &&
+            hardening.concurrentReplacementPrivatePostRace?.apiThreadPostBodies?.includes(
+              hardening.concurrentReplacementPrivatePostRace?.postBody,
+            ) === true) ||
+            (hardening.concurrentReplacementPrivatePostRace?.post?.state ===
+              "reject" &&
+              hardening.concurrentReplacementPrivatePostRace?.post?.error ===
+                "NotYourSlot" &&
+              hardening.concurrentReplacementPrivatePostRace?.post?.serverEnvelope
+                ?.body?.kind === "Reject" &&
+              hardening.concurrentReplacementPrivatePostRace?.apiThreadPostBodies?.includes(
+                hardening.concurrentReplacementPrivatePostRace?.postBody,
+              ) === false)) &&
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.status === 403 &&
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.error === "NotYourSlot" &&
+          hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.some(
+            (button) =>
+              (button.action === "submit_post" ||
+                button.action?.startsWith("submit_action")) &&
+              button.disabled === false,
+          ) === false &&
+          hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
+            ?.occupantLabel === "player-rowan" &&
+          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
+            ?.occupant_user_id === "player-rowan" &&
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status === 403,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

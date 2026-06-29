@@ -2910,6 +2910,66 @@ test("session card and markdown include role credential URLs and tokens", () => 
           phase: { phase_id: "D01", locked: true, deadline: 1781928000 },
         },
       },
+      concurrentReplacementPrivatePostRace: {
+        status: "passed",
+        game: "replacement-private-post-race-game-a",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        playerEntry: { capabilityKinds: ["SlotOccupant"] },
+        setupHostReplacement: { occupantLabel: "player-mira" },
+        setupCommandState: { actorSlot: "slot-7", actorStatus: "alive" },
+        setupChannelContext: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+          actorStatus: "alive",
+        },
+        post: {
+          state: "ack",
+          streamSeqs: [53],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitPost: {
+                    game: "replacement-private-post-race-game-a",
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                  },
+                },
+              },
+            },
+          },
+        },
+        replacement: {
+          state: "ack",
+          streamSeqs: [54],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-private-post-race-game-a",
+                    slot: "slot-7",
+                    outgoing_user: "player-mira",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        postSeq: 53,
+        replacementSeq: 54,
+        outcomeSummary: "private post seq 53 before replacement seq 54",
+        commandStateAfterRace: { status: 403, error: "NotYourSlot" },
+        buttonsAfterRace: [{ action: "submit_post", disabled: true }],
+        hostReplacementAfterRace: { occupantLabel: "player-rowan" },
+        apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        staleRoute: { status: 403 },
+        postBody: "Replacement race private post fixture.",
+        apiThreadPostBodies: ["Replacement race private post fixture."],
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4642,6 +4702,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-replacement-private-post-race",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4742,7 +4803,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 73);
+  assert.equal(opsArtifacts.proofRun.laneCount, 74);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4843,6 +4904,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-replacement-private-post-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5356,6 +5418,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
         "concurrent-cohost-deadline-resolve-race",
+        "concurrent-replacement-private-post-race",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5475,6 +5538,7 @@ function seedAdminProofFixture() {
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
         "concurrent-cohost-deadline-resolve-race",
+        "concurrent-replacement-private-post-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

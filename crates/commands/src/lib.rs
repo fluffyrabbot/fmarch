@@ -1645,6 +1645,24 @@ async fn submit_post(
     media: Vec<model::ThreadPostMedia>,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = submit_post_locked(
+        pool, principal, game, channel_id, actor_slot, body, media, receipt,
+    )
+    .await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn submit_post_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    channel_id: String,
+    actor_slot: String,
+    body: String,
+    media: Vec<model::ThreadPostMedia>,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
@@ -1789,6 +1807,29 @@ async fn extend_deadline_locked(
 /// posts, role, and lifecycle (all keyed by slot_id) are preserved. Requires
 /// `HostOf` (doc 06: replacements are host authority).
 async fn process_replacement(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    slot: String,
+    outgoing_user: String,
+    incoming_user: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = process_replacement_locked(
+        pool,
+        principal,
+        game,
+        slot,
+        outgoing_user,
+        incoming_user,
+        receipt,
+    )
+    .await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn process_replacement_locked(
     pool: &PgPool,
     principal: &Principal,
     game: Uuid,

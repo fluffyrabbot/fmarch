@@ -2857,6 +2857,124 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
     );
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) {
+    let host_id = "host_h";
+    let slot = "slot_7";
+    let outgoing = "user_a";
+    let incoming = "user_b";
+    let game = setup_game(&pool, host_id, slot, outgoing).await;
+    let post_body = "outgoing post that started before replacement";
+
+    let lock_key = 41_006_i64;
+    install_post_insert_blocker(&pool, game, lock_key).await;
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let post_pool = pool.clone();
+    let post_task = tokio::spawn(async move {
+        handle(
+            &post_pool,
+            &user(outgoing),
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: slot.into(),
+                body: post_body.into(),
+                media: Vec::new(),
+            },
+        )
+        .await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+
+    let replacement_pool = pool.clone();
+    let replacement_task = tokio::spawn(async move {
+        handle(
+            &replacement_pool,
+            &user(host_id),
+            Command::ProcessReplacement {
+                game,
+                slot: slot.into(),
+                outgoing_user: outgoing.into(),
+                incoming_user: incoming.into(),
+            },
+        )
+        .await
+    });
+    let early_replacement = tokio::time::timeout(std::time::Duration::from_millis(250), async {
+        loop {
+            if replacement_task.is_finished() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await;
+    assert!(
+        early_replacement.is_err(),
+        "replacement must wait while the outgoing post is in flight"
+    );
+
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let post_ack = post_task
+        .await
+        .unwrap()
+        .expect("post that already passed outgoing authority check wins first");
+    let replacement_ack = replacement_task
+        .await
+        .unwrap()
+        .expect("replacement proceeds after the in-flight post commits");
+    assert_eq!(post_ack.stream_seqs.len(), 1);
+    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    assert!(
+        post_ack.stream_seqs[0] < replacement_ack.stream_seqs[0],
+        "replacement must not commit between outgoing authority check and post append"
+    );
+
+    let post_after_replacement = handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: slot.into(),
+            body: "stale post after replacement".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect_err("outgoing user loses slot authority after replacement");
+    assert_eq!(post_after_replacement, Reject::NotYourSlot);
+
+    let events = eventstore::load_stream(&pool, game).await.unwrap();
+    let post_event = events
+        .iter()
+        .find(|event| {
+            event.kind == "PostSubmitted" && event.payload["body"].as_str() == Some(post_body)
+        })
+        .expect("winning post event exists");
+    let replacement_event = events
+        .iter()
+        .find(|event| event.kind == "ReplacementCompleted")
+        .expect("replacement event exists");
+    assert_eq!(post_event.payload["slot_or_user"]["slot"], slot);
+    assert!(
+        post_event.stream_seq < replacement_event.stream_seq,
+        "post remains a legitimate Slot 7 write before replacement"
+    );
+    drop_post_insert_blocker(&pool).await;
+}
+
 // ───────────────────────── capability enforcement ─────────────────────────
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -71856,6 +71974,48 @@ async fn drop_forced_deadline_stream_conflict(pool: &PgPool) {
         .await
         .unwrap();
     sqlx::query("DROP FUNCTION IF EXISTS test_force_deadline_stream_conflict()")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn install_post_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
+    let function_sql = format!(
+        r#"
+        CREATE OR REPLACE FUNCTION test_block_post_insert() RETURNS trigger AS $$
+        BEGIN
+            IF NEW.stream_id = '{game}'::uuid AND NEW.kind = 'PostSubmitted' THEN
+                PERFORM pg_advisory_lock({lock_key});
+                PERFORM pg_advisory_unlock({lock_key});
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        "#
+    );
+    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_post_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER test_block_post_insert
+            BEFORE INSERT ON events
+            FOR EACH ROW EXECUTE FUNCTION test_block_post_insert()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn drop_post_insert_blocker(pool: &PgPool) {
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_post_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION IF EXISTS test_block_post_insert()")
         .execute(pool)
         .await
         .unwrap();

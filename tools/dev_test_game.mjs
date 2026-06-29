@@ -769,6 +769,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent cohost deadline/resolve race: ${card.verification.multiplayerHardening.concurrentCohostDeadlineResolveRace.outcomeSummary}`,
         "",
+        `Concurrent replacement private-post race: ${card.verification.multiplayerHardening.concurrentReplacementPrivatePostRace.outcomeSummary}`,
+        "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
         "",
         `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
@@ -4020,6 +4022,13 @@ async function verifySeededMultiplayerHardening({
       apiBaseUrl,
       frontendBaseUrl,
     });
+  const concurrentReplacementPrivatePostRace =
+    await verifyConcurrentReplacementPrivatePostRace({
+      browser: playerPage.context().browser(),
+      apiBaseUrl,
+      frontendBaseUrl,
+      normalizeCommandResponse,
+    });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -4244,6 +4253,7 @@ async function verifySeededMultiplayerHardening({
     concurrentPlayerVoteResolveRace,
     concurrentPlayerActionAdvanceRace,
     concurrentCohostDeadlineResolveRace,
+    concurrentReplacementPrivatePostRace,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -13169,6 +13179,315 @@ async function seedCohostDeadlineResolveRaceGame({ raceGame }) {
     if (result.body?.kind === "Reject") {
       throw new Error(
         `concurrent cohost deadline/resolve seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game: raceGame,
+    commands,
+  };
+}
+
+async function verifyConcurrentReplacementPrivatePostRace({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("concurrent replacement private-post proof requires a Playwright browser");
+  }
+  const raceGame = crypto.randomUUID();
+  const seed = await seedReplacementPrivatePostRaceGame({ raceGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-replacement-post-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${raceGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const stalePlayerSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-replacement-post-player-${crypto.randomUUID()}`,
+    principalUserId: "player-mira",
+    returnTo: `/g/${raceGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: raceGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const playerEntry = await openVerifiedRoleEntry({
+    browser,
+    session: stalePlayerSession,
+    game: raceGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  try {
+    const channelRoute = encodeURIComponent(factionDayChatChannel);
+    const privateUrl = `${frontendBaseUrl}/g/${raceGame}/c/${channelRoute}`;
+    await Promise.all([
+      hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+      playerEntry.page.goto(privateUrl, { waitUntil: "networkidle" }),
+    ]);
+    await Promise.all([
+      hostEntry.page.waitForFunction(
+        () =>
+          window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
+          window.__fmarchHostProjection?.replacement?.occupantLabel === "player-mira",
+      ),
+      playerEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+          window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive",
+      ),
+      playerEntry.page
+        .getByTestId("player-command-channel-context")
+        .waitFor({ state: "visible" }),
+    ]);
+    const setupHostReplacement = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.replacement,
+    );
+    const setupCommandState = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const setupChannelContext = {
+      channelId: await playerEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-channel-id"),
+      actorSlot: await playerEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-slot"),
+      actorStatus: await playerEntry.page
+        .getByTestId("player-command-channel-context")
+        .getAttribute("data-actor-status"),
+    };
+    const setupButtons = await playerCommandButtons(playerEntry.page);
+    const postBody = `Replacement race private post ${crypto.randomUUID()}.`;
+    const postCommandId = crypto.randomUUID();
+    const replacementCommandId = crypto.randomUUID();
+    const [postRaw, replacementRaw] = await Promise.all([
+      sendBrowserCommand(playerEntry.page, {
+        principalUserId: "player-mira",
+        commandId: postCommandId,
+        command: {
+          SubmitPost: {
+            game: raceGame,
+            channel_id: factionDayChatChannel,
+            actor_slot: "slot-7",
+            body: postBody,
+          },
+        },
+      }),
+      sendBrowserCommand(hostEntry.page, {
+        principalUserId: "host_h",
+        commandId: replacementCommandId,
+        command: {
+          ProcessReplacement: {
+            game: raceGame,
+            slot: "slot-7",
+            outgoing_user: "player-mira",
+            incoming_user: "player-rowan",
+          },
+        },
+      }),
+    ]);
+    const post = normalizeCommandResponse({
+      commandId: postCommandId,
+      requestEnvelope: postRaw.requestEnvelope,
+      response: { status: postRaw.httpStatus },
+      serverEnvelope: postRaw.serverEnvelope,
+    });
+    const replacement = normalizeCommandResponse({
+      commandId: replacementCommandId,
+      requestEnvelope: replacementRaw.requestEnvelope,
+      response: { status: replacementRaw.httpStatus },
+      serverEnvelope: replacementRaw.serverEnvelope,
+    });
+    const postAcked = post?.state === "ack";
+    const postRejected = post?.state === "reject" && post?.error === "NotYourSlot";
+    const postSeq = postAcked ? post.streamSeqs?.[0] : null;
+    const replacementSeq = replacement?.streamSeqs?.[0] ?? null;
+    const acceptedPostBeforeReplacement =
+      postAcked === true &&
+      Number.isInteger(postSeq) &&
+      Number.isInteger(replacementSeq) &&
+      postSeq < replacementSeq;
+    if (
+      setupHostReplacement?.occupantLabel !== "player-mira" ||
+      setupCommandState?.actorSlot !== "slot-7" ||
+      setupCommandState?.actorStatus !== "alive" ||
+      setupChannelContext?.channelId !== factionDayChatChannel ||
+      setupChannelContext?.actorSlot !== "slot-7" ||
+      setupChannelContext?.actorStatus !== "alive" ||
+      setupButtons.some(
+        (button) => button.action === "submit_post" && button.disabled === false,
+      ) !== true ||
+      replacement?.state !== "ack" ||
+      replacement?.serverEnvelope?.body?.kind !== "Ack" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.game !==
+        raceGame ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
+        "slot-7" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+        ?.outgoing_user !== "player-mira" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+        ?.incoming_user !== "player-rowan" ||
+      post?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
+        factionDayChatChannel ||
+      post?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+        "slot-7" ||
+      (acceptedPostBeforeReplacement !== true && postRejected !== true)
+    ) {
+      throw new Error(
+        `concurrent replacement private-post race outcomes drifted: ${JSON.stringify({
+          raceGame,
+          setupHostReplacement,
+          setupCommandState,
+          setupChannelContext,
+          setupButtons,
+          post,
+          replacement,
+          postSeq,
+          replacementSeq,
+        })}`,
+      );
+    }
+
+    await hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
+        window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+    );
+    const hostReplacementAfterRace = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.replacement,
+    );
+    const apiCommandStateAfterRace = await fetchJsonStatus(
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const commandStateAfterRace = {
+      status: apiCommandStateAfterRace.status,
+      error: apiCommandStateAfterRace.body?.error,
+      message: apiCommandStateAfterRace.body?.message,
+    };
+    const apiSlotAfterRace = (
+      await fetchHostConsoleState({ apiBaseUrl, game: raceGame, slot: "slot-7" })
+    ).slots?.find?.((slot) => slot.slot_id === "slot-7");
+    const staleRouteResponse = await playerEntry.page.goto(privateUrl, {
+      waitUntil: "networkidle",
+    });
+    await playerEntry.page.getByTestId("route-error-surface").waitFor({
+      state: "visible",
+    });
+    const staleRoute = {
+      status: Number(
+        await playerEntry.page
+          .getByTestId("route-error-surface")
+          .getAttribute("data-status"),
+      ),
+      responseStatus: staleRouteResponse?.status() ?? null,
+      message: await playerEntry.page.getByTestId("route-error-surface").innerText(),
+    };
+    const buttonsAfterRace = await playerCommandButtons(playerEntry.page);
+    const apiThread = await fetchJson(
+      `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+    );
+    const apiThreadPostBodies = (apiThread.posts ?? []).map((item) => item.body);
+    if (
+      commandStateAfterRace?.status !== 403 ||
+      commandStateAfterRace?.error !== "NotYourSlot" ||
+      buttonsAfterRace.some(
+        (button) =>
+          (button.action === "submit_post" || button.action?.startsWith("submit_action")) &&
+          button.disabled === false,
+      ) ||
+      hostReplacementAfterRace?.occupantLabel !== "player-rowan" ||
+      apiSlotAfterRace?.occupant_user_id !== "player-rowan" ||
+      staleRoute.status !== 403 ||
+      staleRoute.responseStatus !== 403 ||
+      !staleRoute.message.includes("requires scoped channel capability") ||
+      apiThreadPostBodies.includes(postBody) !== postAcked
+    ) {
+      throw new Error(
+        `concurrent replacement private-post convergence drifted: ${JSON.stringify({
+          raceGame,
+          post,
+          replacement,
+          commandStateAfterRace,
+          buttonsAfterRace,
+          hostReplacementAfterRace,
+          apiCommandStateAfterRace,
+          apiSlotAfterRace,
+          staleRoute,
+          apiThreadPostBodies,
+          postBody,
+        })}`,
+      );
+    }
+    const outcomeSummary = postAcked
+      ? `private post seq ${postSeq} before replacement seq ${replacementSeq}`
+      : "private post rejected NotYourSlot after replacement";
+    return {
+      status: "passed",
+      game: raceGame,
+      seed,
+      hostEntry: hostEntry.verification,
+      playerEntry: playerEntry.verification,
+      setupHostReplacement,
+      setupCommandState,
+      setupChannelContext,
+      setupButtons,
+      post,
+      replacement,
+      postSeq,
+      replacementSeq,
+      outcomeSummary,
+      commandStateAfterRace,
+      buttonsAfterRace,
+      hostReplacementAfterRace,
+      apiCommandStateAfterRace,
+      apiSlotAfterRace,
+      staleRoute,
+      postBody,
+      apiThreadPostBodies,
+      proof:
+        "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
+    };
+  } finally {
+    await hostEntry.context.close().catch(() => {});
+    await playerEntry.context.close().catch(() => {});
+  }
+}
+
+async function seedReplacementPrivatePostRaceGame({ raceGame }) {
+  const commands = [];
+  for (const [principalUserId, command] of seedCommandPlanForGame(raceGame)) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `concurrent replacement private-post seed command rejected: ${JSON.stringify({
           principalUserId,
           command,
           result,

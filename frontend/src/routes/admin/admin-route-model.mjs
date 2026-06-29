@@ -1268,6 +1268,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "concurrent-player-vote-resolve-race",
     "concurrent-player-action-advance-race",
     "concurrent-cohost-deadline-resolve-race",
+    "concurrent-replacement-private-post-race",
     "stale-host-publish",
     "stale-host-lifecycle",
     "stale-host-modkill",
