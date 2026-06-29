@@ -2242,6 +2242,64 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
+      staleHostPublishAfterChange: {
+        status: "passed",
+        actionId: "publish_votecount",
+        setup: {
+          stalePhase: { id: "D02", locked: false },
+          votecountRows: [{ target: "slot-3", count: 2 }],
+          votecountActions: ["publish_votecount"],
+          closedStatus: { state: "closed" },
+        },
+        staleBody: "Official votecount for D02\n- slot-3: 2",
+        changeVote: { state: "ack" },
+        apiVotecountAfterChange: [
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "no_lynch", count: 1 },
+          },
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "slot-3", count: 1 },
+          },
+        ],
+        currentRows: [
+          { phaseId: "D02", target: "no_lynch", count: 1 },
+          { phaseId: "D02", target: "slot-3", count: 1 },
+        ],
+        expectedBody: "Official votecount for D02\n- no_lynch: 1\n- slot-3: 1",
+        publish: {
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    PublishVotecount: { game },
+                  },
+                },
+              },
+            },
+          },
+        },
+        apiExpectedPostCount: 1,
+        apiStalePostCount: 0,
+        playerExpectedPostCount: 1,
+        playerStalePostCount: 0,
+        activityStatusText: "Ack: stream seqs 47",
+        activityRow: {
+          source: "outcome",
+          actionId: "publish_votecount",
+          dispatchKind: "publish_votecount",
+        },
+        restoreVote: { state: "ack" },
+        apiVotecountAfterRestore: [
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "slot-3", count: 2 },
+          },
+        ],
+      },
       hostVotecountPublication: {
         status: "passed",
         expectedBody: "Official votecount for D02\n- slot-3: 2",
@@ -3029,6 +3087,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
+      "stale-host-publish-after-change",
       "host-votecount-publication",
       "stale-host-publish",
       "host-lifecycle-control",
@@ -3117,7 +3176,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 54);
+  assert.equal(opsArtifacts.proofRun.laneCount, 55);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3674,6 +3733,7 @@ function hardeningAdminProofFixture() {
         "reconnect-recovery",
         "stale-player-vote",
         "concurrent-vote-race",
+        "stale-host-publish-after-change",
         "stale-host-publish",
         "stale-host-lifecycle",
         "stale-host-modkill",

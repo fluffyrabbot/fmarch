@@ -3374,6 +3374,15 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     normalizeCommandResponse,
   });
+  const staleHostPublishAfterChange = await verifyStaleHostPublishAfterVotecountChange({
+    hostPage,
+    playerPage,
+    game,
+    apiBaseUrl,
+    frontendBaseUrl,
+    concurrentVoteRace,
+    normalizeCommandResponse,
+  });
   const staleHostPublishSetup = await freezeStaleHostPublishPage({
     staleHostPublishPage,
     game,
@@ -3525,6 +3534,7 @@ async function verifySeededMultiplayerHardening({
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
+    staleHostPublishAfterChange,
     hostVotecountPublication,
     staleHostPublish,
     staleHostLifecycle,
@@ -3542,7 +3552,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -4311,6 +4321,229 @@ async function verifyHostVotecountPublication({
     proof:
       "The seeded host role URL clicked the hydrated Publish count control after D02 votes existed, sent a PublishVotecount command through /commands, rendered the ACK in host command activity, and the official projection-derived votecount post appeared in the player browser thread and API thread.",
   };
+}
+
+async function verifyStaleHostPublishAfterVotecountChange({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+  concurrentVoteRace,
+  normalizeCommandResponse,
+}) {
+  const actionId = "publish_votecount";
+  const staleHostPublishPage = await hostPage.context().newPage();
+  try {
+    const setup = await freezeStaleHostPublishPage({
+      staleHostPublishPage,
+      game,
+      frontendBaseUrl,
+      concurrentVoteRace,
+    });
+    const staleBody = officialVotecountBodyFromRows("D02", setup.votecountRows);
+    const changeCommandId = crypto.randomUUID();
+    const changeVoteRaw = await sendBrowserCommand(playerPage, {
+      principalUserId: "player-mira",
+      command: {
+        SubmitVote: {
+          game,
+          actor_slot: "slot-7",
+          target: "NoLynch",
+        },
+      },
+      commandId: changeCommandId,
+    });
+    const changeVote = normalizeCommandResponse({
+      commandId: changeCommandId,
+      requestEnvelope: changeVoteRaw.requestEnvelope,
+      response: { status: changeVoteRaw.httpStatus },
+      serverEnvelope: changeVoteRaw.serverEnvelope,
+    });
+    if (changeVote.state !== "ack") {
+      throw new Error(`votecount-change setup vote did not ack: ${JSON.stringify(changeVote)}`);
+    }
+    await hostPage.waitForFunction(
+      (expected) => {
+        const rows = window.__fmarchHostVotecountProjection ?? [];
+        return (
+          rows.some((row) => row.target === expected.target && row.count === 1) &&
+          rows.some((row) => row.target === "no_lynch" && row.count === 1)
+        );
+      },
+      { target: concurrentVoteRace.targetSlot },
+    );
+    await playerPage.waitForFunction(
+      (expected) => {
+        const rows = window.__fmarchPlayerProjection?.votecount ?? [];
+        return (
+          rows.some((row) => row.target === expected.target && row.count === 1) &&
+          rows.some((row) => row.target === "no_lynch" && row.count === 1)
+        );
+      },
+      { target: concurrentVoteRace.targetSlot },
+    );
+    const apiVotecountAfterChange = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+    const currentRows = normalizedVotecountRows(apiVotecountAfterChange).filter(
+      (row) => row.phaseId === "D02",
+    );
+    const expectedBody = officialVotecountBodyFromRows("D02", currentRows);
+    if (
+      staleBody === expectedBody ||
+      !currentRows.some((row) => row.target === concurrentVoteRace.targetSlot && row.count === 1) ||
+      !currentRows.some((row) => row.target === "no_lynch" && row.count === 1)
+    ) {
+      throw new Error(
+        `votecount-change setup did not create a distinct current body: ${JSON.stringify({
+          staleBody,
+          expectedBody,
+          currentRows,
+          apiVotecountAfterChange,
+        })}`,
+      );
+    }
+
+    const publish = await confirmHostAction(staleHostPublishPage, actionId);
+    await playerPage.waitForFunction(
+      (body) =>
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) => post.body === body && post.authorLabel === "host",
+        ),
+      expectedBody,
+    );
+    const apiThread = await fetchJson(
+      `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+    );
+    const apiExpectedPosts = (apiThread.posts ?? []).filter(
+      (post) => post.body === expectedBody && post.author_user === "host",
+    );
+    const apiStalePosts = (apiThread.posts ?? []).filter(
+      (post) => post.body === staleBody && post.author_user === "host",
+    );
+    const playerExpectedPostCount = await playerPage.evaluate(
+      (body) =>
+        (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
+          (post) => post.body === body && post.authorLabel === "host",
+        ).length,
+      expectedBody,
+    );
+    const playerStalePostCount = await playerPage.evaluate(
+      (body) =>
+        (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
+          (post) => post.body === body && post.authorLabel === "host",
+        ).length,
+      staleBody,
+    );
+    const activityStatusText = await staleHostPublishPage
+      .getByTestId(`host-command-activity-status-${actionId}`)
+      .innerText();
+    const activityRow = await staleHostPublishPage
+      .getByTestId(`host-command-activity-${actionId}`)
+      .evaluate((node) => ({
+        source: node.getAttribute("data-source"),
+        actionId: node.getAttribute("data-confirmation-action-id"),
+        dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+        text: node.textContent,
+      }));
+    const restoreCommandId = crypto.randomUUID();
+    const restoreVoteRaw = await sendBrowserCommand(playerPage, {
+      principalUserId: "player-mira",
+      command: {
+        SubmitVote: {
+          game,
+          actor_slot: "slot-7",
+          target: { Slot: concurrentVoteRace.targetSlot },
+        },
+      },
+      commandId: restoreCommandId,
+    });
+    const restoreVote = normalizeCommandResponse({
+      commandId: restoreCommandId,
+      requestEnvelope: restoreVoteRaw.requestEnvelope,
+      response: { status: restoreVoteRaw.httpStatus },
+      serverEnvelope: restoreVoteRaw.serverEnvelope,
+    });
+    if (
+      publish.commandStatus?.state !== "ack" ||
+      publish.commandStatus?.requestEnvelope?.body?.body?.command?.PublishVotecount?.game !==
+        game ||
+      apiExpectedPosts.length !== 1 ||
+      apiStalePosts.length !== 0 ||
+      playerExpectedPostCount !== 1 ||
+      playerStalePostCount !== 0 ||
+      !activityStatusText.includes("Ack: stream seqs") ||
+      activityRow.source !== "outcome" ||
+      activityRow.actionId !== actionId ||
+      restoreVote.state !== "ack"
+    ) {
+      throw new Error(
+        `stale host publish-after-change recovery drifted: ${JSON.stringify({
+          setup,
+          staleBody,
+          changeVote,
+          apiVotecountAfterChange,
+          expectedBody,
+          publish,
+          apiExpectedPosts,
+          apiStalePosts,
+          playerExpectedPostCount,
+          playerStalePostCount,
+          activityStatusText,
+          activityRow,
+          restoreVote,
+        })}`,
+      );
+    }
+    await waitForPlayerVotecount(playerPage, {
+      target: concurrentVoteRace.targetSlot,
+      count: concurrentVoteRace.apiProjection.count,
+    });
+    await hostPage.waitForFunction(
+      (expected) =>
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === expected.target && row.count === expected.count,
+        ),
+      {
+        target: concurrentVoteRace.targetSlot,
+        count: concurrentVoteRace.apiProjection.count,
+      },
+    );
+    const apiVotecountAfterRestore = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+    const restoredRow = normalizedVotecountRows(apiVotecountAfterRestore).find(
+      (row) => row.phaseId === "D02" && row.target === concurrentVoteRace.targetSlot,
+    );
+    if (restoredRow?.count !== concurrentVoteRace.apiProjection.count) {
+      throw new Error(
+        `stale publish-after-change restore did not return original count: ${JSON.stringify({
+          restoredRow,
+          apiVotecountAfterRestore,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      actionId,
+      setup,
+      staleBody,
+      changeVote,
+      apiVotecountAfterChange,
+      currentRows,
+      expectedBody,
+      publish,
+      apiExpectedPostCount: apiExpectedPosts.length,
+      apiStalePostCount: apiStalePosts.length,
+      playerExpectedPostCount,
+      playerStalePostCount,
+      activityStatusText,
+      activityRow,
+      restoreVote,
+      apiVotecountAfterRestore,
+      proof:
+        "A stale seeded host page froze a non-empty D02 Publish count control, a live player changed the votecount to a different non-empty projection, then stale PublishVotecount ACKed from server truth and appended only the current official count before the original vote count was restored for the duplicate-publish proof.",
+    };
+  } finally {
+    await staleHostPublishPage.close().catch(() => {});
+  }
 }
 
 async function submitStaleHostPublishRecovery({
@@ -8363,6 +8596,17 @@ function normalizedVotecountRows(apiVotecount) {
       count: Number(delta.count ?? 0),
       needed: Number(delta.majority ?? 0),
     }));
+}
+
+function officialVotecountBodyFromRows(phase, rows) {
+  const currentRows = Array.isArray(rows) ? rows : [];
+  if (currentRows.length === 0) {
+    return `Official votecount for ${phase}\n\nNo active ballots.`;
+  }
+  return [
+    `Official votecount for ${phase}`,
+    ...currentRows.map((row) => `- ${row.target}: ${row.count}`),
+  ].join("\n");
 }
 
 async function fetchHostConsoleState({ apiBaseUrl, game, slot, principalUserId = "host_h" }) {

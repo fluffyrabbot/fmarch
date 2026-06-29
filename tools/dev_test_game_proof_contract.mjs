@@ -45,6 +45,7 @@ const requiredLaneIds = Object.freeze([
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
+  "stale-host-publish-after-change",
   "host-votecount-publication",
   "stale-host-publish",
   "host-lifecycle-control",
@@ -1671,6 +1672,74 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) &&
         hardening.concurrentVoteRace?.apiProjection?.count === 2,
     }),
+    lane(
+      "stale-host-publish-after-change",
+      "Stale host publish uses current changed votecount",
+      {
+        staleBody: hardening.staleHostPublishAfterChange?.staleBody ?? null,
+        expectedBody: hardening.staleHostPublishAfterChange?.expectedBody ?? null,
+        publishState:
+          hardening.staleHostPublishAfterChange?.publish?.commandStatus?.state ??
+          null,
+        apiExpectedPostCount:
+          hardening.staleHostPublishAfterChange?.apiExpectedPostCount ?? null,
+        apiStalePostCount:
+          hardening.staleHostPublishAfterChange?.apiStalePostCount ?? null,
+        restoredCount: normalizedVotecountRows(
+          hardening.staleHostPublishAfterChange?.apiVotecountAfterRestore,
+        ).find(
+          (row) =>
+            row.target === hardening.concurrentVoteRace?.targetSlot &&
+            row.phaseId === "D02",
+        )?.count ?? null,
+        passed:
+          hardening.staleHostPublishAfterChange?.status === "passed" &&
+          hardening.staleHostPublishAfterChange?.setup?.stalePhase?.id ===
+            "D02" &&
+          hardening.staleHostPublishAfterChange?.setup?.stalePhase?.locked ===
+            false &&
+          hardening.staleHostPublishAfterChange?.setup?.votecountRows?.some(
+            (row) =>
+              row.target === hardening.concurrentVoteRace?.targetSlot &&
+              Number(row.count) === hardening.concurrentVoteRace?.apiProjection?.count,
+          ) === true &&
+          hardening.staleHostPublishAfterChange?.staleBody ===
+            `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetSlot}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
+          hardening.staleHostPublishAfterChange?.changeVote?.state === "ack" &&
+          hardening.staleHostPublishAfterChange?.currentRows?.some(
+            (row) =>
+              row.target === hardening.concurrentVoteRace?.targetSlot &&
+              row.count === 1,
+          ) === true &&
+          hardening.staleHostPublishAfterChange?.currentRows?.some(
+            (row) => row.target === "no_lynch" && row.count === 1,
+          ) === true &&
+          hardening.staleHostPublishAfterChange?.expectedBody !==
+            hardening.staleHostPublishAfterChange?.staleBody &&
+          hardening.staleHostPublishAfterChange?.publish?.commandStatus?.state ===
+            "ack" &&
+          hardening.staleHostPublishAfterChange?.publish?.commandStatus?.requestEnvelope
+            ?.body?.body?.command?.PublishVotecount?.game === session?.game &&
+          hardening.staleHostPublishAfterChange?.apiExpectedPostCount === 1 &&
+          hardening.staleHostPublishAfterChange?.apiStalePostCount === 0 &&
+          hardening.staleHostPublishAfterChange?.playerExpectedPostCount ===
+            1 &&
+          hardening.staleHostPublishAfterChange?.playerStalePostCount === 0 &&
+          hardening.staleHostPublishAfterChange?.activityRow?.source ===
+            "outcome" &&
+          hardening.staleHostPublishAfterChange?.activityRow?.actionId ===
+            "publish_votecount" &&
+          hardening.staleHostPublishAfterChange?.restoreVote?.state === "ack" &&
+          normalizedVotecountRows(
+            hardening.staleHostPublishAfterChange?.apiVotecountAfterRestore,
+          ).some(
+            (row) =>
+              row.target === hardening.concurrentVoteRace?.targetSlot &&
+              row.phaseId === "D02" &&
+              row.count === hardening.concurrentVoteRace?.apiProjection?.count,
+          ) === true,
+      },
+    ),
     lane("host-votecount-publication", "Host publishes projection-derived votecount", {
       publishState: hardening.hostVotecountPublication?.publish?.commandStatus?.state ?? null,
       commandGame:
@@ -2478,6 +2547,7 @@ function normalizedVotecountRows(apiVotecount) {
     .filter(Boolean)
     .map((delta) => ({
       target: delta.candidate_slot ?? delta.candidateSlot ?? "unknown",
+      phaseId: delta.phase_id ?? delta.phaseId ?? "unknown",
       count: Number(delta.count ?? 0),
     }));
 }
