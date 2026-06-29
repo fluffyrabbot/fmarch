@@ -19,6 +19,7 @@ const requiredChecks = [
   "core-loop",
   "action-loop",
   "host-deadline-advance",
+  "stale-deadline-advance",
   "invalid-action-recovery",
   "resolution-receipts",
   "dead-player-recovery",

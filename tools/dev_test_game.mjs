@@ -1125,12 +1125,23 @@ async function verifySeededActionLoop({
   await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D01", locked: true });
+  const staleDeadlineAdvanceSetup = await freezeStaleDeadlineAdvancePage({
+    staleHostPage,
+    game,
+    frontendBaseUrl,
+  });
   const deadlineAdvance = await verifyHostDeadlineAdvance({
     hostPage,
     game,
     apiBaseUrl,
   });
   const advanceNight = deadlineAdvance.advance;
+  const staleDeadlineAdvance = await submitStaleDeadlineAdvanceRecovery({
+    staleHostPage,
+    staleDeadlineAdvanceSetup,
+    apiBaseUrl,
+    game,
+  });
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
   const playerActionBoundary = await verifySeededPlayerActionBoundary({
     playerPage,
@@ -1229,6 +1240,7 @@ async function verifySeededActionLoop({
     legalAction,
     playerActionBoundary,
     deadlineAdvance,
+    staleDeadlineAdvance,
     resolutionReceipts,
     deadPlayerRecovery,
     resolveNight,
@@ -1240,7 +1252,7 @@ async function verifySeededActionLoop({
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
   };
 }
 
@@ -1297,6 +1309,148 @@ async function verifyHostDeadlineAdvance({ hostPage, game, apiBaseUrl }) {
     apiPhaseAfterAdvance: hostStateAfterAdvance.phase,
     proof:
       "The seeded host role URL resolved D01 into a locked phase with the previously extended deadline, clicked the hydrated Advance by deadline control, sent AdvancePhaseByDeadline with observed_at one second after the stored deadline, and both browser/API host projections advanced to unlocked N01 with no carried deadline.",
+  };
+}
+
+async function freezeStaleDeadlineAdvancePage({ staleHostPage, game, frontendBaseUrl }) {
+  await staleHostPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostPage
+    .locator('[data-testid="critical-host-action-advance_phase_by_deadline"]')
+    .waitFor({ state: "visible" });
+  await staleHostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D01" &&
+      window.__fmarchHostProjection?.phase?.locked === true &&
+      typeof window.__fmarchHostProjection?.phase?.deadline === "number",
+  );
+  const stalePhase = await staleHostPage.evaluate(() => window.__fmarchHostProjection?.phase);
+  const visibleActions = await visibleHostPhaseActions(staleHostPage);
+  const closedStatus = await staleHostPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D01" ||
+    stalePhase?.locked !== true ||
+    typeof stalePhase?.deadline !== "number" ||
+    !visibleActions.includes("advance_phase_by_deadline") ||
+    !visibleActions.includes("unlock_thread") ||
+    !visibleActions.includes("advance_phase") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale deadline advance setup drifted: ${JSON.stringify({
+        stalePhase,
+        visibleActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    visibleActions,
+    closedStatus,
+  };
+}
+
+async function submitStaleDeadlineAdvanceRecovery({
+  staleHostPage,
+  staleDeadlineAdvanceSetup,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "advance_phase_by_deadline";
+  const staleActionRoot = staleHostPage.getByTestId(`critical-host-action-${actionId}`);
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostPage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "InvalidTarget",
+    actionId,
+  );
+  await staleHostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "N01" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const reject = await staleHostPage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  const commandOutcomes = await staleHostPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const phaseAfterReject = await staleHostPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const visibleActionsAfterReject = await visibleHostPhaseActions(staleHostPage);
+  const activityStatusText = await staleHostPage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostPage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "InvalidTarget" ||
+    !reject?.message?.includes("deadline target is stale") ||
+    phaseAfterReject?.id !== "N01" ||
+    phaseAfterReject?.locked !== false ||
+    !visibleActionsAfterReject.includes("resolve_phase") ||
+    !visibleActionsAfterReject.includes("lock_thread") ||
+    visibleActionsAfterReject.includes("advance_phase_by_deadline") ||
+    !activityStatusText.includes("Reject InvalidTarget") ||
+    !activityStatusText.includes("deadline target is stale") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    hostStateAfterReject.phase?.phase_id !== "N01" ||
+    hostStateAfterReject.phase?.locked !== false ||
+    hostStateAfterReject.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `stale deadline advance recovery drifted: ${JSON.stringify({
+        staleDeadlineAdvanceSetup,
+        reject,
+        commandOutcomes,
+        phaseAfterReject,
+        visibleActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPhase: hostStateAfterReject.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    setup: staleDeadlineAdvanceSetup,
+    reject,
+    commandOutcomes,
+    phaseAfterReject,
+    visibleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+    proof:
+      "A stale seeded host role URL kept the old D01 Advance by deadline control, clicked it after the live host had advanced to N01, rendered Reject InvalidTarget with deadline-stale recovery copy, refreshed to current N01 controls, and did not append deadline evidence or move the phase again.",
   };
 }
 

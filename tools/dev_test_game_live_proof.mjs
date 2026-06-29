@@ -198,6 +198,67 @@ assert.equal(
   session.verification.actionLoop.deadlineAdvance.apiPhaseAfterAdvance.deadline,
   null,
 );
+assert.equal(session.verification.actionLoop.staleDeadlineAdvance.status, "passed");
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.setup.stalePhase.id,
+  "D01",
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.setup.stalePhase.locked,
+  true,
+);
+assert.equal(
+  Number.isInteger(
+    session.verification.actionLoop.staleDeadlineAdvance.setup.stalePhase.deadline,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.reject.error,
+  "InvalidTarget",
+);
+assert.match(
+  session.verification.actionLoop.staleDeadlineAdvance.reject.message,
+  /deadline target is stale/,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.phaseAfterReject.id,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.phaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.activityRow.actionId,
+  "advance_phase_by_deadline",
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.visibleActionsAfterReject.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.visibleActionsAfterReject.includes(
+    "advance_phase_by_deadline",
+  ),
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.apiPhaseAfterReject.phase_id,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.staleDeadlineAdvance.apiPhaseAfterReject.deadline,
+  null,
+);
 assert.equal(session.verification.actionLoop.n01Phase.phaseId, "N01");
 assert.equal(session.verification.actionLoop.invalidAction.state, "reject");
 assert.equal(session.verification.actionLoop.invalidAction.error, "InvalidTarget");

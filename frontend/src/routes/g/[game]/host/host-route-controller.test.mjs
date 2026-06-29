@@ -464,6 +464,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({
+      event: { payload: { kind: "advance_phase_by_deadline" } },
+      outcome: { state: "reject", error: "InvalidTarget" },
+    }),
+    ["host"],
+  );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
       event: { payload: { kind: "process_replacement" } },
       outcome: { state: "reject", error: "InvalidTarget" },
     }),
@@ -497,6 +504,37 @@ test("host route controller refreshes host projection after stale phase rejects"
   });
 
   assert.equal(result.outcome.message, "Reject PhaseLocked");
+  assert.deepEqual(projectionStore.applied, []);
+  assert.deepEqual(projectionStore.refreshed, [["host"]]);
+  assert.deepEqual(result.snapshot.host.phase, {
+    id: "D01",
+    locked: true,
+    state: "locked",
+  });
+});
+
+test("host route controller refreshes host projection after stale deadline target rejects", async () => {
+  const projectionStore = fakeProjectionStore({
+    host: { phase: { id: "D01", locked: true, deadline: 1781928000 }, replacement: null },
+  });
+
+  const result = await sendHostRouteAction({
+    event: {
+      actionId: "advance_phase_by_deadline",
+      payload: { kind: "advance_phase_by_deadline" },
+    },
+    data: fixtureData(),
+    fetchImpl: async () => null,
+    projectionStore,
+    sendHostActionCommandImpl: async () => ({
+      state: "reject",
+      actionId: "advance_phase_by_deadline",
+      error: "InvalidTarget",
+      message: "Reject InvalidTarget",
+    }),
+  });
+
+  assert.equal(result.outcome.message, "Reject InvalidTarget");
   assert.deepEqual(projectionStore.applied, []);
   assert.deepEqual(projectionStore.refreshed, [["host"]]);
   assert.deepEqual(result.snapshot.host.phase, {

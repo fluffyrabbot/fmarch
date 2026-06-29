@@ -13,6 +13,7 @@ const requiredLaneIds = Object.freeze([
   "core-loop",
   "action-loop",
   "host-deadline-advance",
+  "stale-deadline-advance",
   "invalid-action-recovery",
   "resolution-receipts",
   "dead-player-recovery",
@@ -147,6 +148,62 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "N01" &&
         verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.locked === false &&
         verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.deadline === null,
+    }),
+    lane("stale-deadline-advance", "Stale deadline advance rejects and refreshes", {
+      rejectError:
+        verification.actionLoop?.staleDeadlineAdvance?.reject?.error ?? null,
+      stalePhase:
+        verification.actionLoop?.staleDeadlineAdvance?.setup?.stalePhase?.id ?? null,
+      phaseAfterReject:
+        verification.actionLoop?.staleDeadlineAdvance?.phaseAfterReject?.id ?? null,
+      currentActions:
+        verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject ?? null,
+      activitySource:
+        verification.actionLoop?.staleDeadlineAdvance?.activityRow?.source ?? null,
+      passed:
+        verification.actionLoop?.staleDeadlineAdvance?.status === "passed" &&
+        verification.actionLoop?.staleDeadlineAdvance?.setup?.stalePhase?.id ===
+          "D01" &&
+        verification.actionLoop?.staleDeadlineAdvance?.setup?.stalePhase?.locked ===
+          true &&
+        Number.isInteger(
+          verification.actionLoop?.staleDeadlineAdvance?.setup?.stalePhase
+            ?.deadline,
+        ) &&
+        verification.actionLoop?.staleDeadlineAdvance?.setup?.visibleActions?.includes(
+          "advance_phase_by_deadline",
+        ) === true &&
+        verification.actionLoop?.staleDeadlineAdvance?.reject?.error ===
+          "InvalidTarget" &&
+        verification.actionLoop?.staleDeadlineAdvance?.reject?.message?.includes(
+          "deadline target is stale",
+        ) === true &&
+        verification.actionLoop?.staleDeadlineAdvance?.phaseAfterReject?.id ===
+          "N01" &&
+        verification.actionLoop?.staleDeadlineAdvance?.phaseAfterReject?.locked ===
+          false &&
+        verification.actionLoop?.staleDeadlineAdvance?.activityRow?.source ===
+          "outcome" &&
+        verification.actionLoop?.staleDeadlineAdvance?.activityRow?.actionId ===
+          "advance_phase_by_deadline" &&
+        verification.actionLoop?.staleDeadlineAdvance?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
+          "resolve_phase",
+        ) === true &&
+        verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
+          "lock_thread",
+        ) === true &&
+        verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
+          "advance_phase_by_deadline",
+        ) === false &&
+        verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.phase_id ===
+          "N01" &&
+        verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.locked ===
+          false &&
+        verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.deadline ===
+          null,
     }),
     lane("invalid-action-recovery", "Invalid action reject keeps legal controls usable", {
       rejectError: verification.invalidActionRecovery?.reject?.error ?? null,

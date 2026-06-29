@@ -415,7 +415,8 @@ recovers current Slot 7 command state plus a new Rowan post through reconnect.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
-the `core-loop`, `action-loop`, `host-deadline-advance`, `invalid-action-recovery`,
+the `core-loop`, `action-loop`, `host-deadline-advance`,
+`stale-deadline-advance`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `host-votecount-publication`,
 `host-lifecycle-control`,
@@ -475,7 +476,10 @@ recovery after each host action, and restores Slot 7 alive before replacement
 continues, keeps one action-player page frozen on N01 until its stale
 `factional_kill` rejects with `Reject SlotNotAlive` copy that names actor death
 plus current action controls and refreshes out of stale action controls, keeps a
-second action-player page frozen on N01 until its
+second host page frozen on D01 locked controls until its stale
+`AdvancePhaseByDeadline` click renders `Reject InvalidTarget` copy that names a
+stale deadline target, refreshes to N01, and exposes current phase controls,
+keeps a second action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` copy that names stale
 action state plus current action controls, refreshes to D02 without the stale
 action control, and keeps a second host page frozen on the N01
@@ -579,7 +583,8 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
-stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
+stale deadline advance recovery, stale cohost deadline recovery,
+local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
 invite delivery, account recovery, rate limits, abuse controls, production

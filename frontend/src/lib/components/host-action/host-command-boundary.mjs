@@ -231,6 +231,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   ) {
     return `${base}; replacement target is stale, refresh the host console and use the current slot occupant`;
   }
+  if (
+    reject.error === "InvalidTarget" &&
+    requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline !== undefined
+  ) {
+    return `${base}; deadline target is stale, refresh the host console and use current phase controls`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 

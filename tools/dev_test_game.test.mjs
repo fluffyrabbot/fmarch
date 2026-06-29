@@ -954,6 +954,46 @@ test("session card and markdown include role credential URLs and tokens", () => 
           deadline: null,
         },
       },
+      staleDeadlineAdvance: {
+        status: "passed",
+        actionId: "advance_phase_by_deadline",
+        setup: {
+          stalePhase: {
+            id: "D01",
+            locked: true,
+            deadline: 1781928000,
+          },
+          visibleActions: [
+            "unlock_thread",
+            "advance_phase",
+            "advance_phase_by_deadline",
+          ],
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; deadline target is stale, refresh the host console and use current phase controls",
+        },
+        phaseAfterReject: { id: "N01", locked: false },
+        visibleActionsAfterReject: ["resolve_phase", "lock_thread"],
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; deadline target is stale, refresh the host console and use current phase controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "advance_phase_by_deadline",
+          dispatchKind: "advance_phase_by_deadline",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: {
+          phase_id: "N01",
+          locked: false,
+          deadline: null,
+        },
+      },
       resolvedTargetSlot: { alive: false },
       d02Phase: { phaseId: "D02" },
     },
@@ -2091,6 +2131,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "core-loop",
       "action-loop",
       "host-deadline-advance",
+      "stale-deadline-advance",
       "invalid-action-recovery",
       "resolution-receipts",
       "dead-player-recovery",
@@ -2197,7 +2238,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 40);
+  assert.equal(opsArtifacts.proofRun.laneCount, 41);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2689,6 +2730,7 @@ function coreLoopAdminProofFixture() {
         "core-loop",
         "action-loop",
         "host-deadline-advance",
+        "stale-deadline-advance",
         "invalid-action-recovery",
         "resolution-receipts",
         "dead-player-recovery",
