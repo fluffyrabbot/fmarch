@@ -169,6 +169,20 @@ test("route empty helpers use role-owned visible work queues", () => {
       thread: { posts: [] },
       votecount: [],
       privateQueue: [],
+      commandState: {
+        actorAlive: true,
+        voteTargets: [{ kind: "no_lynch" }],
+        actions: [],
+        currentVote: null,
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    isPlayerRouteEmpty({
+      thread: { posts: [] },
+      votecount: [],
+      privateQueue: [],
     }),
     true,
   );

@@ -361,13 +361,28 @@ export function normalizeVotecount(deltas, fallback) {
       }),
     );
 
-  return Object.freeze(rows.length === 0 ? fallback : rows);
+  if (rows.length === 0 && deltas.length > 0) {
+    const normalizedRows = deltas
+      .filter((delta) => typeof delta?.target === "string")
+      .map((delta) =>
+        Object.freeze({
+          target: delta.target,
+          count: Number(delta.count ?? 0),
+          needed: Number(delta.needed ?? 7),
+        }),
+      );
+    if (normalizedRows.length > 0) {
+      return Object.freeze(normalizedRows);
+    }
+  }
+
+  return Object.freeze(rows);
 }
 
 export function normalizeDayVoteOutcomes(payload, fallback = []) {
   const rows = normalizeDayVoteOutcomePayload(payload);
   if (rows.length === 0) {
-    return fallback;
+    return Array.isArray(payload) ? Object.freeze([]) : fallback;
   }
   if (Array.isArray(payload)) {
     return sortDayVoteOutcomeRows(rows);

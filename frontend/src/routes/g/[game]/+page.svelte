@@ -84,6 +84,7 @@
       thread,
       votecount,
       privateQueue,
+      commandState,
     });
   $: playerForcedRouteState = data.routeState
     ? buildRouteStateViewModel(data.routeState)

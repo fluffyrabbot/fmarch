@@ -407,7 +407,7 @@ async function createSessionGrantCredential({
   if (
     expectedCapabilityKind !== undefined &&
     !capabilityKinds.includes(expectedCapabilityKind) &&
-    expectedCapabilityKind !== "SlotOccupant"
+    !["HostOf", "CohostOf", "SlotOccupant"].includes(expectedCapabilityKind)
   ) {
     throw new Error(
       `${principalUserId} session grant missing ${expectedCapabilityKind}: ${JSON.stringify(
@@ -873,9 +873,6 @@ async function verifySessionCard(card) {
     });
     dayVoteNoLynch = await verifySeededDayVoteNoLynch({
       browser,
-      hostPage: roleEntries.host.page,
-      playerPage: roleEntries.player.page,
-      survivorPage: roleEntries.deniedPlayer.page,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
@@ -1909,14 +1906,33 @@ async function seedDayVoteResolutionGame({ game }) {
 
 async function verifySeededDayVoteNoLynch({
   browser,
-  hostPage,
-  playerPage,
-  survivorPage,
   apiBaseUrl,
   frontendBaseUrl,
 }) {
   const noLynchGame = crypto.randomUUID();
   const seed = await seedDayVoteNoLynchGame({ game: noLynchGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-no-lynch-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${noLynchGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const miraVoterSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-no-lynch-mira-voter-${crypto.randomUUID()}`,
+    principalUserId: "player-mira",
+    returnTo: `/g/${noLynchGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
   const seedVoterSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-no-lynch-seed-voter-${crypto.randomUUID()}`,
     principalUserId: "player-seed",
@@ -1928,6 +1944,31 @@ async function verifySeededDayVoteNoLynch({
       surface: "/auth/session-grants",
     },
   });
+  const survivorSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-no-lynch-survivor-${crypto.randomUUID()}`,
+    principalUserId: "player-target",
+    returnTo: `/g/${noLynchGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: noLynchGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const miraVoterEntry = await openVerifiedRoleEntry({
+    browser,
+    session: miraVoterSession,
+    game: noLynchGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   const seedVoterEntry = await openVerifiedRoleEntry({
     browser,
     session: seedVoterSession,
@@ -1935,23 +1976,29 @@ async function verifySeededDayVoteNoLynch({
     apiBaseUrl,
     frontendBaseUrl,
   });
-  const hostProofPage = await hostPage.context().newPage();
-  const miraVoterPage = await playerPage.context().newPage();
-  const survivorProofPage = await survivorPage.context().newPage();
+  const survivorEntry = await openVerifiedRoleEntry({
+    browser,
+    session: survivorSession,
+    game: noLynchGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   try {
-    await gotoPlayerBoard(miraVoterPage, noLynchGame);
-    await miraVoterPage.waitForFunction(
+    await gotoPlayerBoard(miraVoterEntry.page, noLynchGame);
+    await miraVoterEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
     );
+    await waitForEnabledNoLynchVoteControl(miraVoterEntry.page, "slot-7");
     await seedVoterEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2" &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
     );
-    await miraVoterPage.locator('[data-action="submit_vote:no_lynch"]').click();
-    await miraVoterPage.waitForFunction(
+    await waitForEnabledNoLynchVoteControl(seedVoterEntry.page, "slot-2");
+    await miraVoterEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await miraVoterEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
@@ -1959,11 +2006,11 @@ async function verifySeededDayVoteNoLynch({
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target === "NoLynch",
     );
-    await waitForPlayerVotecount(miraVoterPage, { target: "no_lynch", count: 1 });
-    const miraNoLynchVote = await miraVoterPage.evaluate(
+    await waitForPlayerVotecount(miraVoterEntry.page, { target: "no_lynch", count: 1 });
+    const miraNoLynchVote = await miraVoterEntry.page.evaluate(
       () => window.__fmarchPlayerCommandStatus,
     );
-    const miraVotecountAfterVote = await miraVoterPage.evaluate(
+    const miraVotecountAfterVote = await miraVoterEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.votecount ?? [],
     );
 
@@ -1987,10 +2034,10 @@ async function verifySeededDayVoteNoLynch({
       () => window.__fmarchPlayerProjection?.votecount ?? [],
     );
 
-    await hostProofPage.goto(`${frontendBaseUrl}/g/${noLynchGame}/host`, {
+    await hostEntry.page.goto(`${frontendBaseUrl}/g/${noLynchGame}/host`, {
       waitUntil: "networkidle",
     });
-    await hostProofPage.waitForFunction(
+    await hostEntry.page.waitForFunction(
       () =>
         window.__fmarchHostProjection?.phase?.id === "D01" &&
         window.__fmarchHostProjection?.phase?.locked === false &&
@@ -1999,16 +2046,16 @@ async function verifySeededDayVoteNoLynch({
         ),
     );
     const hostBeforeResolve = {
-      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
-      votecount: await hostProofPage.evaluate(
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      votecount: await hostEntry.page.evaluate(
         () => window.__fmarchHostVotecountProjection ?? [],
       ),
-      phaseActions: await visibleHostPhaseActions(hostProofPage),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
     };
 
-    const resolveDay = await confirmHostAction(hostProofPage, "resolve_phase");
-    await waitForHostProjectionPhase(hostProofPage, { phaseId: "D01", locked: true });
-    await hostProofPage.waitForFunction(
+    const resolveDay = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "D01", locked: true });
+    await hostEntry.page.waitForFunction(
       () =>
         window.__fmarchHostDayVoteOutcomesProjection?.some(
           (row) =>
@@ -2018,21 +2065,21 @@ async function verifySeededDayVoteNoLynch({
         ),
     );
     const hostAfterResolve = {
-      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostProofPage),
-      dayVoteOutcomes: await hostProofPage.evaluate(
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      dayVoteOutcomes: await hostEntry.page.evaluate(
         () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
       ),
-      outcomePanel: await hostProofPage
+      outcomePanel: await hostEntry.page
         .locator('[data-testid="host-day-vote-outcome-latest"]')
         .innerText(),
-      outcomeTally: await hostProofPage
+      outcomeTally: await hostEntry.page
         .locator('[data-testid="host-day-vote-outcome-tally-no_lynch"]')
         .innerText(),
     };
 
-    await gotoPlayerBoard(survivorProofPage, noLynchGame);
-    await survivorProofPage.waitForFunction(
+    await gotoPlayerBoard(survivorEntry.page, noLynchGame);
+    await survivorEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_3" &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
@@ -2043,19 +2090,19 @@ async function verifySeededDayVoteNoLynch({
             row.winnerSlot === null,
         ),
     );
-    const survivorCommandState = await survivorProofPage.evaluate(
+    const survivorCommandState = await survivorEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
-    const survivorNotifications = await survivorProofPage.evaluate(
+    const survivorNotifications = await survivorEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.notifications ?? [],
     );
-    const survivorDayVoteOutcomes = await survivorProofPage.evaluate(
+    const survivorDayVoteOutcomes = await survivorEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const survivorOutcomePanel = await survivorProofPage
+    const survivorOutcomePanel = await survivorEntry.page
       .locator('[data-testid="player-day-vote-outcome-latest"]')
       .innerText();
-    const survivorOutcomeTally = await survivorProofPage
+    const survivorOutcomeTally = await survivorEntry.page
       .locator('[data-testid="player-day-vote-outcome-tally-no_lynch"]')
       .innerText();
 
@@ -2182,9 +2229,9 @@ async function verifySeededDayVoteNoLynch({
         "A disposable seeded no-lynch game loaded two player role URLs, both players clicked the Vote no lynch control through /commands, the host role URL resolved those no_lynch votes, /day-vote-outcomes exposed the official NoLynch result, both host and surviving-player role URLs rendered the no-elimination outcome panel, and the surviving player stayed alive without a day_vote death notice.",
     };
   } finally {
-    await hostProofPage.close().catch(() => {});
-    await miraVoterPage.close().catch(() => {});
-    await survivorProofPage.close().catch(() => {});
+    await hostEntry.context.close().catch(() => {});
+    await miraVoterEntry.context.close().catch(() => {});
+    await survivorEntry.context.close().catch(() => {});
     await seedVoterEntry.context.close().catch(() => {});
   }
 }
@@ -3362,6 +3409,12 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     normalizeCommandResponse,
   });
+  const stalePlayerWithdrawAfterChange = await verifyStalePlayerWithdrawAfterVoteChange({
+    playerPage,
+    game,
+    apiBaseUrl,
+    normalizeCommandResponse,
+  });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -3540,6 +3593,7 @@ async function verifySeededMultiplayerHardening({
     reconnect,
     stalePlayerVote,
     stalePlayerVoteAfterChange,
+    stalePlayerWithdrawAfterChange,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -3561,7 +3615,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -8271,6 +8325,235 @@ async function verifyStalePlayerVoteAfterVotecountChange({
   }
 }
 
+async function verifyStalePlayerWithdrawAfterVoteChange({
+  playerPage,
+  game,
+  apiBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const stalePlayerPage = await playerPage.context().newPage();
+  try {
+    await gotoPlayerBoard(stalePlayerPage, game);
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote === null,
+    );
+    const commandStateBeforeVote = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const staleVoteTarget = commandStateBeforeVote?.voteTargets?.find(
+      (candidate) => candidate.kind === "slot",
+    );
+    const staleVoteButton = staleVoteTarget
+      ? (await playerCommandButtons(stalePlayerPage)).find(
+          (button) =>
+            button.action?.startsWith("submit_vote") &&
+            button.text?.includes(staleVoteTarget.label) &&
+            button.disabled === false,
+        )
+      : undefined;
+    if (staleVoteTarget?.slotId === undefined || staleVoteButton === undefined) {
+      throw new Error(
+        `stale player withdraw setup found no legal vote target: ${JSON.stringify({
+          commandStateBeforeVote,
+          staleVoteButton,
+        })}`,
+      );
+    }
+
+    await stalePlayerPage
+      .locator(`[data-action="${staleVoteButton.action}"]`, {
+        hasText: staleVoteTarget.label,
+      })
+      .first()
+      .click();
+    await stalePlayerPage.waitForFunction(
+      (targetSlot) =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "slot" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+          targetSlot &&
+        window.__fmarchPlayerProjection?.votecount?.some(
+          (row) => row.target === targetSlot && row.count === 1,
+        ),
+      staleVoteTarget.slotId,
+    );
+    const initialVote = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const commandStateBeforeClose = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const currentVoteBeforeClose = await stalePlayerPage
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const withdrawBeforeClose = await playerCommandControlState(
+      stalePlayerPage,
+      "withdraw_vote",
+    );
+    const closedStatus = await stalePlayerPage.evaluate(
+      () => window.__fmarchClosePlayerLiveProjection?.(),
+    );
+    const liveChangeCommandId = crypto.randomUUID();
+    const liveChangeRaw = await sendBrowserCommand(playerPage, {
+      principalUserId: "player-mira",
+      command: {
+        SubmitVote: {
+          game,
+          actor_slot: "slot-7",
+          target: "NoLynch",
+        },
+      },
+      commandId: liveChangeCommandId,
+    });
+    const liveChangeVote = normalizeCommandResponse({
+      commandId: liveChangeCommandId,
+      requestEnvelope: liveChangeRaw.requestEnvelope,
+      response: { status: liveChangeRaw.httpStatus },
+      serverEnvelope: liveChangeRaw.serverEnvelope,
+    });
+    const apiCommandStateAfterLiveChange = await fetchJson(
+      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiVotecountAfterLiveChange = await fetchJson(
+      `${apiBaseUrl}/games/${game}/votecount`,
+    );
+    if (
+      initialVote?.state !== "ack" ||
+      commandStateBeforeClose?.currentVote?.slotId !== staleVoteTarget.slotId ||
+      currentVoteBeforeClose.hasVote !== "true" ||
+      !currentVoteBeforeClose.text.includes(staleVoteTarget.label) ||
+      withdrawBeforeClose.exists !== true ||
+      withdrawBeforeClose.disabled !== false ||
+      closedStatus?.state !== "closed" ||
+      liveChangeVote.state !== "ack" ||
+      apiCommandStateAfterLiveChange?.current_vote?.kind !== "no_lynch" ||
+      !normalizedVotecountRows(apiVotecountAfterLiveChange).some(
+        (row) => row.phaseId === "D02" && row.target === "no_lynch" && row.count === 1,
+      ) ||
+      normalizedVotecountRows(apiVotecountAfterLiveChange).some(
+        (row) => row.phaseId === "D02" && row.target === staleVoteTarget.slotId,
+      )
+    ) {
+      throw new Error(
+        `stale player withdraw-after-change setup drifted: ${JSON.stringify({
+          staleVoteTarget,
+          initialVote,
+          commandStateBeforeClose,
+          currentVoteBeforeClose,
+          withdrawBeforeClose,
+          closedStatus,
+          liveChangeVote,
+          apiCommandStateAfterLiveChange,
+          apiVotecountAfterLiveChange,
+        })}`,
+      );
+    }
+
+    await stalePlayerPage.locator('[data-action="withdraw_vote"]').click();
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.WithdrawVote !== undefined &&
+        ["ack", "reject"].includes(window.__fmarchPlayerCommandStatus?.state),
+    );
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote === null,
+    );
+    const staleWithdraw = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const commandStateAfterWithdraw = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const votecountAfterWithdraw = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount ?? [],
+    );
+    const dispatchPlan = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const currentVoteAfterWithdraw = await stalePlayerPage
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const withdrawAfterAck = await playerCommandControlState(
+      stalePlayerPage,
+      "withdraw_vote",
+    );
+    const apiCommandStateAfterWithdraw = await fetchJson(
+      `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiVotecountAfterWithdraw = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+    if (
+      staleWithdraw?.state !== "ack" ||
+      staleWithdraw?.requestEnvelope?.body?.body?.command?.WithdrawVote?.actor_slot !==
+        "slot-7" ||
+      commandStateAfterWithdraw?.currentVote !== null ||
+      votecountAfterWithdraw.length !== 0 ||
+      dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
+      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+      currentVoteAfterWithdraw.hasVote !== "false" ||
+      !currentVoteAfterWithdraw.text.includes("No current vote") ||
+      withdrawAfterAck.exists !== true ||
+      withdrawAfterAck.disabled !== true ||
+      withdrawAfterAck.reason !== "No current vote" ||
+      apiCommandStateAfterWithdraw?.current_vote !== null ||
+      normalizedVotecountRows(apiVotecountAfterWithdraw).length !== 0
+    ) {
+      throw new Error(
+        `stale player withdraw-after-change recovery drifted: ${JSON.stringify({
+          staleVoteTarget,
+          staleWithdraw,
+          commandStateAfterWithdraw,
+          votecountAfterWithdraw,
+          dispatchPlan,
+          currentVoteAfterWithdraw,
+          withdrawAfterAck,
+          apiCommandStateAfterWithdraw,
+          apiVotecountAfterWithdraw,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      commandStateBeforeVote,
+      staleVoteTarget,
+      staleVoteButton,
+      initialVote,
+      commandStateBeforeClose,
+      currentVoteBeforeClose,
+      withdrawBeforeClose,
+      closedStatus,
+      liveChangeVote,
+      apiCommandStateAfterLiveChange,
+      apiVotecountAfterLiveChange,
+      staleWithdraw,
+      commandStateAfterWithdraw,
+      votecountAfterWithdraw,
+      dispatchPlan,
+      currentVoteAfterWithdraw,
+      withdrawAfterAck,
+      apiCommandStateAfterWithdraw,
+      apiVotecountAfterWithdraw,
+      proof:
+        "A seeded player role URL froze with an enabled Withdraw vote control for a slot vote, the same slot's live ballot changed to no_lynch through /commands, then stale WithdrawVote ACKed against the current server ballot and refreshed currentVote plus votecount to empty without preserving the stale slot vote display.",
+    };
+  } finally {
+    await stalePlayerPage.close().catch(() => {});
+  }
+}
+
 async function verifyStaleDeadTargetVoteRecovery({
   hostPage,
   playerPage,
@@ -8851,6 +9134,40 @@ async function waitForPlayerVotecount(page, { target, count }) {
       ),
     { target, count },
   );
+}
+
+async function waitForEnabledNoLynchVoteControl(page, actorSlot) {
+  try {
+    await page.waitForFunction((expectedActorSlot) => {
+      const commandState = window.__fmarchPlayerProjection?.commandState;
+      const button = document.querySelector('[data-action="submit_vote:no_lynch"]');
+      return (
+        commandState?.actorSlot === expectedActorSlot &&
+        commandState?.actorAlive === true &&
+        commandState?.voteTargets?.some((target) => target.kind === "no_lynch") &&
+        button !== null &&
+        button.disabled === false
+      );
+    }, actorSlot);
+  } catch (error) {
+    const evidence = await page.evaluate(() => ({
+      href: window.location.href,
+      projection: window.__fmarchPlayerProjection ?? null,
+      buttons: Array.from(document.querySelectorAll("[data-action]")).map((node) => ({
+        action: node.getAttribute("data-action"),
+        disabled: node.hasAttribute("disabled"),
+        reason: node.getAttribute("data-disabled-reason"),
+        text: node.textContent?.trim() ?? "",
+      })),
+      body: document.body?.innerText?.slice(0, 1000) ?? "",
+    }));
+    throw new Error(
+      `no-lynch vote control did not hydrate for ${actorSlot}: ${JSON.stringify(
+        evidence,
+      )}`,
+      { cause: error },
+    );
+  }
 }
 
 function normalizedVotecountRows(apiVotecount) {

@@ -228,6 +228,19 @@ test("normalizes thread and votecount projection payloads for the player view", 
   );
 
   assert.deepEqual(
+    normalizeVotecount([], [{ target: "slot-3", count: 1, needed: 7 }]),
+    [],
+  );
+
+  assert.deepEqual(
+    normalizeVotecount(
+      [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
+      FALLBACK.votecount,
+    ),
+    [{ target: "slot-2 / Ilya", count: 4, needed: 7 }],
+  );
+
+  assert.deepEqual(
     normalizeDayVoteOutcomes(
       [
         {
@@ -258,6 +271,26 @@ test("normalizes thread and votecount projection payloads for the player view", 
         reason: null,
       },
     ],
+  );
+
+  assert.deepEqual(
+    normalizeDayVoteOutcomes(
+      [],
+      [
+        {
+          game: null,
+          phaseId: "D01",
+          sourceSeq: 8,
+          eventIndex: 1,
+          status: "Lynch",
+          winnerSlot: "slot-2",
+          tallies: { "slot-2": 4 },
+          majority: 4,
+          reason: null,
+        },
+      ],
+    ),
+    [],
   );
 });
 

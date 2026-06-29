@@ -193,11 +193,20 @@ export function isAdminRouteEmpty(data) {
   );
 }
 
-export function isPlayerRouteEmpty({ thread, votecount, privateQueue } = {}) {
+export function isPlayerRouteEmpty({
+  thread,
+  votecount,
+  privateQueue,
+  commandState,
+} = {}) {
   return (
     arrayLength(thread?.posts) === 0 &&
     arrayLength(votecount) === 0 &&
-    arrayLength(privateQueue) === 0
+    arrayLength(privateQueue) === 0 &&
+    commandState?.actorAlive !== true &&
+    commandState?.currentVote == null &&
+    arrayLength(commandState?.voteTargets) === 0 &&
+    arrayLength(commandState?.actions) === 0
   );
 }
 

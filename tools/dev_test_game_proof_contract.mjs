@@ -43,6 +43,7 @@ const requiredLaneIds = Object.freeze([
   "reconnect-recovery",
   "stale-player-vote",
   "stale-player-vote-after-change",
+  "stale-player-withdraw-after-change",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -1562,6 +1563,95 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ).length === 0 &&
           hardening.stalePlayerVoteAfterChange?.apiCommandStateAfterCleanup
             ?.current_vote === null,
+      },
+    ),
+    lane(
+      "stale-player-withdraw-after-change",
+      "Stale player withdraw ACK clears changed ballot",
+      {
+        targetSlot:
+          hardening.stalePlayerWithdrawAfterChange?.staleVoteTarget?.slotId ??
+          null,
+        liveCurrentVote:
+          hardening.stalePlayerWithdrawAfterChange?.apiCommandStateAfterLiveChange
+            ?.current_vote ?? null,
+        withdrawState:
+          hardening.stalePlayerWithdrawAfterChange?.staleWithdraw?.state ?? null,
+        currentVoteAfterWithdraw:
+          hardening.stalePlayerWithdrawAfterChange?.commandStateAfterWithdraw
+            ?.currentVote ?? null,
+        cleanupRows: normalizedVotecountRows(
+          hardening.stalePlayerWithdrawAfterChange?.apiVotecountAfterWithdraw,
+        ).length,
+        passed:
+          hardening.stalePlayerWithdrawAfterChange?.status === "passed" &&
+          hardening.stalePlayerWithdrawAfterChange?.commandStateBeforeVote
+            ?.currentVote === null &&
+          hardening.stalePlayerWithdrawAfterChange?.staleVoteTarget?.kind ===
+            "slot" &&
+          hardening.stalePlayerWithdrawAfterChange?.staleVoteButton?.disabled ===
+            false &&
+          hardening.stalePlayerWithdrawAfterChange?.initialVote?.state ===
+            "ack" &&
+          hardening.stalePlayerWithdrawAfterChange?.commandStateBeforeClose
+            ?.currentVote?.slotId ===
+            hardening.stalePlayerWithdrawAfterChange?.staleVoteTarget?.slotId &&
+          hardening.stalePlayerWithdrawAfterChange?.currentVoteBeforeClose
+            ?.hasVote === "true" &&
+          hardening.stalePlayerWithdrawAfterChange?.withdrawBeforeClose?.exists ===
+            true &&
+          hardening.stalePlayerWithdrawAfterChange?.withdrawBeforeClose?.disabled ===
+            false &&
+          hardening.stalePlayerWithdrawAfterChange?.closedStatus?.state ===
+            "closed" &&
+          hardening.stalePlayerWithdrawAfterChange?.liveChangeVote?.state ===
+            "ack" &&
+          hardening.stalePlayerWithdrawAfterChange?.apiCommandStateAfterLiveChange
+            ?.current_vote?.kind === "no_lynch" &&
+          normalizedVotecountRows(
+            hardening.stalePlayerWithdrawAfterChange?.apiVotecountAfterLiveChange,
+          ).some(
+            (row) =>
+              row.phaseId === "D02" &&
+              row.target === "no_lynch" &&
+              row.count === 1,
+          ) === true &&
+          normalizedVotecountRows(
+            hardening.stalePlayerWithdrawAfterChange?.apiVotecountAfterLiveChange,
+          ).some(
+            (row) =>
+              row.phaseId === "D02" &&
+              row.target ===
+                hardening.stalePlayerWithdrawAfterChange?.staleVoteTarget?.slotId,
+          ) === false &&
+          hardening.stalePlayerWithdrawAfterChange?.staleWithdraw?.state ===
+            "ack" &&
+          hardening.stalePlayerWithdrawAfterChange?.staleWithdraw?.requestEnvelope
+            ?.body?.body?.command?.WithdrawVote?.actor_slot === "slot-7" &&
+          hardening.stalePlayerWithdrawAfterChange?.commandStateAfterWithdraw
+            ?.currentVote === null &&
+          hardening.stalePlayerWithdrawAfterChange?.votecountAfterWithdraw
+            ?.length === 0 &&
+          hardening.stalePlayerWithdrawAfterChange?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "votecount",
+          ) === true &&
+          hardening.stalePlayerWithdrawAfterChange?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "commandState",
+          ) === true &&
+          hardening.stalePlayerWithdrawAfterChange?.currentVoteAfterWithdraw
+            ?.hasVote === "false" &&
+          hardening.stalePlayerWithdrawAfterChange?.currentVoteAfterWithdraw?.text?.includes(
+            "No current vote",
+          ) === true &&
+          hardening.stalePlayerWithdrawAfterChange?.withdrawAfterAck?.disabled ===
+            true &&
+          hardening.stalePlayerWithdrawAfterChange?.withdrawAfterAck?.reason ===
+            "No current vote" &&
+          hardening.stalePlayerWithdrawAfterChange?.apiCommandStateAfterWithdraw
+            ?.current_vote === null &&
+          normalizedVotecountRows(
+            hardening.stalePlayerWithdrawAfterChange?.apiVotecountAfterWithdraw,
+          ).length === 0,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
