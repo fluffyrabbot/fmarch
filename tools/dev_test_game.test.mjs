@@ -3196,6 +3196,114 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         outcomeSummary: "Rowan submitted factional_kill as Slot 4 and killed slot-2",
       },
+      replacementActionReconnect: {
+        status: "passed",
+        game: "replacement-action-reconnect-game-a",
+        targetSlot: "slot-2",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        targetEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacement: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-action-reconnect-game-a",
+                    slot: "slot_4",
+                    outgoing_user: "player-goon-a",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateBeforeAction: {
+          actorSlot: "slot_4",
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [{ templateId: "factional_kill" }],
+        },
+        action: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitAction: {
+                    game: "replacement-action-reconnect-game-a",
+                    action_id: "replacement_action_reconnect_factional_kill",
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        resolveNight: { commandStatus: { state: "ack" } },
+        targetSlotAfterResolve: { slot_id: "slot-2", alive: false, status: "dead" },
+        targetCommandState: {
+          actorSlot: "slot-2",
+          actorAlive: false,
+          actorStatus: "dead",
+        },
+        targetNoticeBeforeReconnect: {
+          audience_slot: "slot-2",
+          effect: "player_killed",
+          status: "factional_kill",
+        },
+        reconnect: {
+          status: "passed",
+          principalUserId: "player-rowan",
+          actorSlot: "slot_4",
+          reconnectingStatus: { state: "reconnecting" },
+          reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+          recoveredSnapshotContainsPost: true,
+          reconnectCommand: {
+            principalUserId: "player-rowan",
+            command: {
+              SubmitPost: {
+                actor_slot: "slot_4",
+                body: "Replacement action reconnect proof from dev:test-game fixture",
+              },
+            },
+            streamSeqs: [60],
+          },
+          recoveredCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phase: { phaseId: "N01", locked: true },
+            actions: [],
+          },
+        },
+        commandStateAfterReconnect: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: true },
+          actions: [],
+        },
+        buttonsAfterReconnect: [],
+        rowanPrivateIsolationAfterReconnect: {
+          targetKillVisible: false,
+          notificationCount: 0,
+        },
+        targetNoticeAfterReconnect: {
+          audience_slot: "slot-2",
+          effect: "player_killed",
+          status: "factional_kill",
+        },
+        outcomeSummary:
+          "Rowan reconnected after resolved Slot 4 factional_kill to locked N01 with no actions",
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4932,6 +5040,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
+      "replacement-action-reconnect",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5032,7 +5141,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 77);
+  assert.equal(opsArtifacts.proofRun.laneCount, 78);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5137,6 +5246,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
+      "replacement-action-reconnect",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5654,6 +5764,7 @@ function hardeningAdminProofFixture() {
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
+        "replacement-action-reconnect",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5777,6 +5888,7 @@ function seedAdminProofFixture() {
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
+        "replacement-action-reconnect",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

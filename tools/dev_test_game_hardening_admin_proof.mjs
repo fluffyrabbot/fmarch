@@ -36,6 +36,7 @@ const requiredChecks = [
   "concurrent-replacement-vote-race",
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
+  "replacement-action-reconnect",
   "stale-host-publish",
   "stale-host-lifecycle",
   "stale-host-modkill",

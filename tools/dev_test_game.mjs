@@ -777,6 +777,8 @@ export function markdownSessionCard(card) {
         "",
         `Incoming replacement action: ${card.verification.multiplayerHardening.replacementIncomingAction.outcomeSummary}`,
         "",
+        `Replacement action reconnect: ${card.verification.multiplayerHardening.replacementActionReconnect.outcomeSummary}`,
+        "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
         "",
         `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
@@ -4055,6 +4057,13 @@ async function verifySeededMultiplayerHardening({
       frontendBaseUrl,
       normalizeCommandResponse,
     });
+  const replacementActionReconnect =
+    await verifyReplacementActionReconnectRecovery({
+      browser: playerPage.context().browser(),
+      apiBaseUrl,
+      frontendBaseUrl,
+      normalizeCommandResponse,
+    });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -4283,6 +4292,7 @@ async function verifySeededMultiplayerHardening({
     concurrentReplacementVoteRace,
     concurrentReplacementActionRace,
     replacementIncomingAction,
+    replacementActionReconnect,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -4314,7 +4324,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked while both role URLs converge to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending while both role URLs converge to open D02, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked while both role URLs converge to locked D01, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted while the role URL refreshes to disabled completed-game controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked while both role URLs converge to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending while both role URLs converge to open D02, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked while both role URLs converge to locked D01, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted while the role URL refreshes to disabled completed-game controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -14496,6 +14506,291 @@ async function seedIncomingReplacementActionGame({ actionGame }) {
     game: actionGame,
     commands,
   };
+}
+
+async function verifyReplacementActionReconnectRecovery({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("replacement action reconnect proof requires a Playwright browser");
+  }
+  const actionGame = crypto.randomUUID();
+  const seed = await seedIncomingReplacementActionGame({ actionGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-replacement-action-reconnect-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${actionGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const replacementSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-replacement-action-reconnect-rowan-${crypto.randomUUID()}`,
+    principalUserId: "player-rowan",
+    returnTo: `/g/${actionGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const targetSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-replacement-action-reconnect-target-${crypto.randomUUID()}`,
+    principalUserId: "player-target",
+    returnTo: `/g/${actionGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: actionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const targetEntry = await openVerifiedRoleEntry({
+    browser,
+    session: targetSession,
+    game: actionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  let replacementEntry;
+  try {
+    await hostEntry.page.goto(`${frontendBaseUrl}/g/${actionGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false });
+    const replacementCommandId = crypto.randomUUID();
+    const replacementRaw = await sendBrowserCommand(hostEntry.page, {
+      principalUserId: "host_h",
+      commandId: replacementCommandId,
+      command: {
+        ProcessReplacement: {
+          game: actionGame,
+          slot: "slot_4",
+          outgoing_user: "player-goon-a",
+          incoming_user: "player-rowan",
+        },
+      },
+    });
+    const replacement = normalizeCommandResponse({
+      commandId: replacementCommandId,
+      requestEnvelope: replacementRaw.requestEnvelope,
+      response: { status: replacementRaw.httpStatus },
+      serverEnvelope: replacementRaw.serverEnvelope,
+    });
+    replacementEntry = await openVerifiedRoleEntry({
+      browser,
+      session: replacementSession,
+      game: actionGame,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+
+    await gotoPlayerBoard(replacementEntry.page, actionGame);
+    await replacementEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+        window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.actions?.some(
+          (action) => action.templateId === "factional_kill",
+        ),
+    );
+    const commandStateBeforeAction = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const targetSlot = "slot-2";
+    const actionCommandId = crypto.randomUUID();
+    const actionRaw = await sendBrowserCommand(replacementEntry.page, {
+      principalUserId: "player-rowan",
+      commandId: actionCommandId,
+      command: {
+        SubmitAction: {
+          game: actionGame,
+          action_id: "replacement_action_reconnect_factional_kill",
+          actor_slot: "slot_4",
+          template_id: "factional_kill",
+          targets: [targetSlot],
+        },
+      },
+    });
+    const action = normalizeCommandResponse({
+      commandId: actionCommandId,
+      requestEnvelope: actionRaw.requestEnvelope,
+      response: { status: actionRaw.httpStatus },
+      serverEnvelope: actionRaw.serverEnvelope,
+    });
+    const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    const targetSlotAfterResolve = await fetchResolvedSlotState({
+      apiBaseUrl,
+      game: actionGame,
+      slot: targetSlot,
+    });
+
+    await gotoPlayerBoard(targetEntry.page, actionGame);
+    await targetEntry.page.waitForFunction(
+      (expectedSlot) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedSlot &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.notifications?.some(
+          (notice) =>
+            notice.audience_slot === expectedSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "factional_kill",
+        ),
+      targetSlot,
+    );
+    const targetCommandState = await targetEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const targetNoticeBeforeReconnect = await targetEntry.page.evaluate(
+      (expectedSlot) =>
+        window.__fmarchPlayerProjection?.notifications?.find(
+          (notice) =>
+            notice.audience_slot === expectedSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "factional_kill",
+        ) ?? null,
+      targetSlot,
+    );
+
+    const reconnect = await verifyRoleReconnectRecovery({
+      page: replacementEntry.page,
+      game: actionGame,
+      principalUserId: "player-rowan",
+      actorSlot: "slot_4",
+      postPrefix: "Replacement action reconnect proof",
+    });
+    const commandStateAfterReconnect = reconnect.recoveredCommandState;
+    const buttonsAfterReconnect = await playerCommandButtons(replacementEntry.page);
+    const rowanNotificationsAfterReconnect = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.notifications ?? [],
+    );
+    const rowanPrivateIsolationAfterReconnect = {
+      targetKillVisible: rowanNotificationsAfterReconnect.some(
+        (notice) =>
+          notice.audience_slot === targetSlot ||
+          notice.effect === "player_killed" ||
+          notice.status === "factional_kill",
+      ),
+      notificationCount: rowanNotificationsAfterReconnect.length,
+    };
+    const targetNoticeAfterReconnect = await targetEntry.page.evaluate(
+      (expectedSlot) =>
+        window.__fmarchPlayerProjection?.notifications?.find(
+          (notice) =>
+            notice.audience_slot === expectedSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "factional_kill",
+        ) ?? null,
+      targetSlot,
+    );
+    if (
+      replacement?.state !== "ack" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
+        "slot_4" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+        ?.incoming_user !== "player-rowan" ||
+      commandStateBeforeAction?.actorSlot !== "slot_4" ||
+      commandStateBeforeAction?.actions?.some(
+        (candidate) => candidate.templateId === "factional_kill",
+      ) !== true ||
+      action?.state !== "ack" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+        "slot_4" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.action_id !==
+        "replacement_action_reconnect_factional_kill" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
+        targetSlot ||
+      resolveNight?.commandStatus?.state !== "ack" ||
+      targetSlotAfterResolve?.alive !== false ||
+      targetSlotAfterResolve?.status !== "dead" ||
+      targetCommandState?.actorSlot !== targetSlot ||
+      targetCommandState?.actorAlive !== false ||
+      targetNoticeBeforeReconnect === null ||
+      reconnect?.status !== "passed" ||
+      reconnect?.principalUserId !== "player-rowan" ||
+      reconnect?.actorSlot !== "slot_4" ||
+      reconnect?.reconnectingStatus?.state !== "reconnecting" ||
+      reconnect?.reconnectRecoveryEvent?.state !== "recovered" ||
+      reconnect?.reconnectRecoveryEvent?.attempt !== 1 ||
+      reconnect?.recoveredSnapshotContainsPost !== true ||
+      reconnect?.reconnectCommand?.principalUserId !== "player-rowan" ||
+      reconnect?.reconnectCommand?.command?.SubmitPost?.actor_slot !== "slot_4" ||
+      commandStateAfterReconnect?.actorSlot !== "slot_4" ||
+      commandStateAfterReconnect?.actorAlive !== true ||
+      commandStateAfterReconnect?.actorStatus !== "alive" ||
+      commandStateAfterReconnect?.phase?.phaseId !== "N01" ||
+      commandStateAfterReconnect?.phase?.locked !== true ||
+      commandStateAfterReconnect?.actions?.length !== 0 ||
+      buttonsAfterReconnect.some(
+        (button) => button.action === "submit_action:factional_kill",
+      ) ||
+      rowanPrivateIsolationAfterReconnect.targetKillVisible !== false ||
+      targetNoticeAfterReconnect === null
+    ) {
+      throw new Error(
+        `replacement action reconnect proof drifted: ${JSON.stringify({
+          actionGame,
+          replacement,
+          commandStateBeforeAction,
+          action,
+          resolveNight,
+          targetSlotAfterResolve,
+          targetCommandState,
+          targetNoticeBeforeReconnect,
+          reconnect,
+          commandStateAfterReconnect,
+          buttonsAfterReconnect,
+          rowanPrivateIsolationAfterReconnect,
+          targetNoticeAfterReconnect,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: actionGame,
+      seed,
+      targetSlot,
+      hostEntry: hostEntry.verification,
+      replacementEntry: replacementEntry.verification,
+      targetEntry: targetEntry.verification,
+      replacement,
+      commandStateBeforeAction,
+      action,
+      resolveNight,
+      targetSlotAfterResolve,
+      targetCommandState,
+      targetNoticeBeforeReconnect,
+      reconnect,
+      commandStateAfterReconnect,
+      buttonsAfterReconnect,
+      rowanPrivateIsolationAfterReconnect,
+      targetNoticeAfterReconnect,
+      outcomeSummary:
+        "Rowan reconnected after resolved Slot 4 factional_kill to locked N01 with no actions",
+      proof:
+        "After Rowan replaced into Slot 4, submitted factional_kill, and host resolved N01, Rowan's replacement role URL dropped its live projection and reconnected to locked N01 with no remaining actions while the target role URL retained the private kill receipt.",
+    };
+  } finally {
+    await targetEntry.context.close().catch(() => {});
+    await replacementEntry?.context?.close().catch(() => {});
+    await hostEntry.context.close().catch(() => {});
+  }
 }
 
 async function verifyStaleDeadTargetVoteRecovery({

@@ -56,6 +56,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-replacement-vote-race",
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
+  "replacement-action-reconnect",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -2888,6 +2889,129 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "factional_kill" &&
         hardening.replacementIncomingAction?.replacementPrivateIsolation
           ?.targetKillVisible === false,
+    }),
+    lane("replacement-action-reconnect", "Replacement action reconnect recovers locked state", {
+      game: hardening.replacementActionReconnect?.game ?? null,
+      targetSlot: hardening.replacementActionReconnect?.targetSlot ?? null,
+      replacementState:
+        hardening.replacementActionReconnect?.replacement?.state ?? null,
+      actionState: hardening.replacementActionReconnect?.action?.state ?? null,
+      reconnectState:
+        hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
+          ?.state ?? null,
+      phaseLocked:
+        hardening.replacementActionReconnect?.commandStateAfterReconnect?.phase
+          ?.locked ?? null,
+      actionCount:
+        hardening.replacementActionReconnect?.commandStateAfterReconnect?.actions
+          ?.length ?? null,
+      rowanPrivateKillVisible:
+        hardening.replacementActionReconnect
+          ?.rowanPrivateIsolationAfterReconnect?.targetKillVisible ?? null,
+      targetNoticeStatus:
+        hardening.replacementActionReconnect?.targetNoticeAfterReconnect?.status ??
+        null,
+      passed:
+        hardening.replacementActionReconnect?.status === "passed" &&
+        hardening.replacementActionReconnect?.targetSlot === "slot-2" &&
+        hardening.replacementActionReconnect?.hostEntry?.capabilityKinds?.includes(
+          "HostOf",
+        ) === true &&
+        hardening.replacementActionReconnect?.replacementEntry?.capabilityKinds?.includes(
+          "SlotOccupant",
+        ) === true &&
+        hardening.replacementActionReconnect?.targetEntry?.capabilityKinds?.includes(
+          "SlotOccupant",
+        ) === true &&
+        hardening.replacementActionReconnect?.replacement?.state === "ack" &&
+        hardening.replacementActionReconnect?.replacement?.serverEnvelope?.body
+          ?.kind === "Ack" &&
+        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
+          ?.body?.command?.ProcessReplacement?.slot === "slot_4" &&
+        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
+          ?.body?.command?.ProcessReplacement?.outgoing_user === "player-goon-a" &&
+        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
+          ?.body?.command?.ProcessReplacement?.incoming_user === "player-rowan" &&
+        hardening.replacementActionReconnect?.commandStateBeforeAction
+          ?.actorSlot === "slot_4" &&
+        hardening.replacementActionReconnect?.commandStateBeforeAction
+          ?.actorStatus === "alive" &&
+        hardening.replacementActionReconnect?.commandStateBeforeAction?.actions?.some(
+          (candidate) => candidate.templateId === "factional_kill",
+        ) === true &&
+        hardening.replacementActionReconnect?.action?.state === "ack" &&
+        hardening.replacementActionReconnect?.action?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-rowan" &&
+        hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.action_id ===
+          "replacement_action_reconnect_factional_kill" &&
+        hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.template_id === "factional_kill" &&
+        hardening.replacementActionReconnect?.action?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.targets?.[0] === "slot-2" &&
+        hardening.replacementActionReconnect?.resolveNight?.commandStatus?.state ===
+          "ack" &&
+        hardening.replacementActionReconnect?.targetSlotAfterResolve?.slot_id ===
+          "slot-2" &&
+        hardening.replacementActionReconnect?.targetSlotAfterResolve?.alive ===
+          false &&
+        hardening.replacementActionReconnect?.targetSlotAfterResolve?.status ===
+          "dead" &&
+        hardening.replacementActionReconnect?.targetCommandState?.actorSlot ===
+          "slot-2" &&
+        hardening.replacementActionReconnect?.targetCommandState?.actorAlive ===
+          false &&
+        hardening.replacementActionReconnect?.targetCommandState?.actorStatus ===
+          "dead" &&
+        hardening.replacementActionReconnect?.targetNoticeBeforeReconnect
+          ?.audience_slot === "slot-2" &&
+        hardening.replacementActionReconnect?.targetNoticeBeforeReconnect
+          ?.effect === "player_killed" &&
+        hardening.replacementActionReconnect?.targetNoticeBeforeReconnect
+          ?.status === "factional_kill" &&
+        hardening.replacementActionReconnect?.reconnect?.status === "passed" &&
+        hardening.replacementActionReconnect?.reconnect?.principalUserId ===
+          "player-rowan" &&
+        hardening.replacementActionReconnect?.reconnect?.actorSlot === "slot_4" &&
+        hardening.replacementActionReconnect?.reconnect?.reconnectingStatus?.state ===
+          "reconnecting" &&
+        hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
+          ?.attempt === 1 &&
+        hardening.replacementActionReconnect?.reconnect?.reconnectRecoveryEvent
+          ?.state === "recovered" &&
+        hardening.replacementActionReconnect?.reconnect
+          ?.recoveredSnapshotContainsPost === true &&
+        hardening.replacementActionReconnect?.reconnect?.reconnectCommand
+          ?.principalUserId === "player-rowan" &&
+        hardening.replacementActionReconnect?.reconnect?.reconnectCommand?.command
+          ?.SubmitPost?.actor_slot === "slot_4" &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect
+          ?.actorSlot === "slot_4" &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect
+          ?.actorAlive === true &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect
+          ?.actorStatus === "alive" &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect?.phase
+          ?.phaseId === "N01" &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect?.phase
+          ?.locked === true &&
+        hardening.replacementActionReconnect?.commandStateAfterReconnect?.actions
+          ?.length === 0 &&
+        hardening.replacementActionReconnect?.buttonsAfterReconnect?.some(
+          (button) => button.action === "submit_action:factional_kill",
+        ) === false &&
+        hardening.replacementActionReconnect?.rowanPrivateIsolationAfterReconnect
+          ?.targetKillVisible === false &&
+        hardening.replacementActionReconnect?.targetNoticeAfterReconnect
+          ?.audience_slot === "slot-2" &&
+        hardening.replacementActionReconnect?.targetNoticeAfterReconnect?.effect ===
+          "player_killed" &&
+        hardening.replacementActionReconnect?.targetNoticeAfterReconnect?.status ===
+          "factional_kill",
     }),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
       targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,

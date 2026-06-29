@@ -307,6 +307,8 @@ const replacementActionRace =
   session.verification.multiplayerHardening.concurrentReplacementActionRace;
 const replacementIncomingAction =
   session.verification.multiplayerHardening.replacementIncomingAction;
+const replacementActionReconnect =
+  session.verification.multiplayerHardening.replacementActionReconnect;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1775,6 +1777,140 @@ assert.equal(replacementIncomingAction.targetNotice.audience_slot, "slot-2");
 assert.equal(replacementIncomingAction.targetNotice.effect, "player_killed");
 assert.equal(replacementIncomingAction.targetNotice.status, "factional_kill");
 assert.equal(replacementIncomingAction.replacementPrivateIsolation.targetKillVisible, false);
+assert.equal(replacementActionReconnect.status, "passed");
+assert.equal(replacementActionReconnect.targetSlot, "slot-2");
+assert.equal(
+  replacementActionReconnect.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementActionReconnect.replacementEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(
+  replacementActionReconnect.targetEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(replacementActionReconnect.replacement.state, "ack");
+assert.equal(
+  replacementActionReconnect.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .slot,
+  "slot_4",
+);
+assert.equal(
+  replacementActionReconnect.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .incoming_user,
+  "player-rowan",
+);
+assert.equal(replacementActionReconnect.commandStateBeforeAction.actorSlot, "slot_4");
+assert.equal(
+  replacementActionReconnect.commandStateBeforeAction.actions.some(
+    (candidate) => candidate.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(replacementActionReconnect.action.state, "ack");
+assert.equal(
+  replacementActionReconnect.action.requestEnvelope.body.body.principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  replacementActionReconnect.action.requestEnvelope.body.body.command.SubmitAction
+    .actor_slot,
+  "slot_4",
+);
+assert.equal(
+  replacementActionReconnect.action.requestEnvelope.body.body.command.SubmitAction
+    .action_id,
+  "replacement_action_reconnect_factional_kill",
+);
+assert.equal(
+  replacementActionReconnect.action.requestEnvelope.body.body.command.SubmitAction
+    .template_id,
+  "factional_kill",
+);
+assert.equal(
+  replacementActionReconnect.action.requestEnvelope.body.body.command.SubmitAction.targets[0],
+  "slot-2",
+);
+assert.equal(replacementActionReconnect.resolveNight.commandStatus.state, "ack");
+assert.equal(replacementActionReconnect.targetSlotAfterResolve.slot_id, "slot-2");
+assert.equal(replacementActionReconnect.targetSlotAfterResolve.alive, false);
+assert.equal(replacementActionReconnect.targetSlotAfterResolve.status, "dead");
+assert.equal(replacementActionReconnect.targetCommandState.actorSlot, "slot-2");
+assert.equal(replacementActionReconnect.targetCommandState.actorAlive, false);
+assert.equal(replacementActionReconnect.targetCommandState.actorStatus, "dead");
+assert.equal(
+  replacementActionReconnect.targetNoticeBeforeReconnect.audience_slot,
+  "slot-2",
+);
+assert.equal(
+  replacementActionReconnect.targetNoticeBeforeReconnect.effect,
+  "player_killed",
+);
+assert.equal(
+  replacementActionReconnect.targetNoticeBeforeReconnect.status,
+  "factional_kill",
+);
+assert.equal(replacementActionReconnect.reconnect.status, "passed");
+assert.equal(replacementActionReconnect.reconnect.principalUserId, "player-rowan");
+assert.equal(replacementActionReconnect.reconnect.actorSlot, "slot_4");
+assert.equal(
+  replacementActionReconnect.reconnect.reconnectingStatus.state,
+  "reconnecting",
+);
+assert.equal(
+  replacementActionReconnect.reconnect.reconnectRecoveryEvent.attempt,
+  1,
+);
+assert.equal(
+  replacementActionReconnect.reconnect.reconnectRecoveryEvent.state,
+  "recovered",
+);
+assert.equal(replacementActionReconnect.reconnect.recoveredSnapshotContainsPost, true);
+assert.equal(
+  replacementActionReconnect.reconnect.reconnectCommand.principalUserId,
+  "player-rowan",
+);
+assert.equal(
+  replacementActionReconnect.reconnect.reconnectCommand.command.SubmitPost.actor_slot,
+  "slot_4",
+);
+assert.match(
+  replacementActionReconnect.reconnect.reconnectCommand.command.SubmitPost.body,
+  /^Replacement action reconnect proof from dev:test-game /,
+);
+assert.equal(replacementActionReconnect.commandStateAfterReconnect.actorSlot, "slot_4");
+assert.equal(replacementActionReconnect.commandStateAfterReconnect.actorAlive, true);
+assert.equal(replacementActionReconnect.commandStateAfterReconnect.actorStatus, "alive");
+assert.equal(
+  replacementActionReconnect.commandStateAfterReconnect.phase.phaseId,
+  "N01",
+);
+assert.equal(replacementActionReconnect.commandStateAfterReconnect.phase.locked, true);
+assert.equal(replacementActionReconnect.commandStateAfterReconnect.actions.length, 0);
+assert.equal(
+  replacementActionReconnect.buttonsAfterReconnect.some(
+    (button) => button.action === "submit_action:factional_kill",
+  ),
+  false,
+);
+assert.equal(
+  replacementActionReconnect.rowanPrivateIsolationAfterReconnect.targetKillVisible,
+  false,
+);
+assert.equal(
+  replacementActionReconnect.targetNoticeAfterReconnect.audience_slot,
+  "slot-2",
+);
+assert.equal(
+  replacementActionReconnect.targetNoticeAfterReconnect.effect,
+  "player_killed",
+);
+assert.equal(
+  replacementActionReconnect.targetNoticeAfterReconnect.status,
+  "factional_kill",
+);
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",
