@@ -3034,6 +3034,86 @@ test("session card and markdown include role credential URLs and tokens", () => 
         ],
         targetVotecount: { phaseId: "D01", target: "slot-2", count: 1 },
       },
+      concurrentReplacementActionRace: {
+        status: "passed",
+        game: "replacement-action-race-game-a",
+        targetSlot: "slot-2",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        playerEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        setupHostPhase: { id: "N01", locked: false },
+        setupSlot: { occupant_user_id: "player-goon-a" },
+        setupCommandState: {
+          actorSlot: "slot_4",
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [{ templateId: "factional_kill" }],
+        },
+        setupButtons: [{ action: "submit_action:factional_kill", disabled: false }],
+        action: {
+          state: "ack",
+          streamSeqs: [55],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    game: "replacement-action-race-game-a",
+                    action_id: "replacement_race_factional_kill",
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        replacement: {
+          state: "ack",
+          streamSeqs: [56],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-action-race-game-a",
+                    slot: "slot_4",
+                    outgoing_user: "player-goon-a",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        actionSeq: 55,
+        replacementSeq: 56,
+        outcomeSummary: "action seq 55 before replacement seq 56",
+        commandStateAfterRace: { status: 403, error: "NotYourSlot" },
+        staleRetry: {
+          state: "reject",
+          error: "NotYourSlot",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        hostPhaseAfterRace: { id: "N01", locked: false },
+        apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        currentCommandStateAfterRace: {
+          actor_slot: "slot_4",
+          actor_status: "alive",
+          phase: { phase_id: "N01", locked: false },
+          actions: [],
+        },
+        currentRoleCommandState: {
+          actorSlot: "slot_4",
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [],
+        },
+        currentRoleButtons: [],
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4768,6 +4848,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
+      "concurrent-replacement-action-race",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4868,7 +4949,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 75);
+  assert.equal(opsArtifacts.proofRun.laneCount, 76);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4971,6 +5052,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
+      "concurrent-replacement-action-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5486,6 +5568,7 @@ function hardeningAdminProofFixture() {
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
+        "concurrent-replacement-action-race",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5607,6 +5690,7 @@ function seedAdminProofFixture() {
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
+        "concurrent-replacement-action-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

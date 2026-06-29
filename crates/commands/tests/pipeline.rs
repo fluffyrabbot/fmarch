@@ -3094,6 +3094,179 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) 
     drop_vote_insert_blocker(&pool).await;
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
+    let host_id = "host_h";
+    let slot = "slot_4";
+    let outgoing = "action-goon";
+    let incoming = "replacement-goon";
+    let target = "slot-2";
+    let host = user(host_id);
+    let game = Uuid::new_v4();
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot_id, occupant, role) in [
+        (slot, outgoing, "mafia_goon"),
+        (target, "town-target", "vanilla_townie"),
+        ("slot-3", "town-backup", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot_id.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot_id.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot_id.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let action_pool = pool.clone();
+    let action_task = tokio::spawn(async move {
+        handle(
+            &action_pool,
+            &user(outgoing),
+            Command::SubmitAction {
+                game,
+                action_id: "replacement_race_action".into(),
+                actor_slot: slot.into(),
+                template_id: "factional_kill".into(),
+                targets: vec![target.into()],
+                grant_id: None,
+            },
+        )
+        .await
+    });
+
+    let replacement_pool = pool.clone();
+    let replacement_task = tokio::spawn(async move {
+        handle(
+            &replacement_pool,
+            &user(host_id),
+            Command::ProcessReplacement {
+                game,
+                slot: slot.into(),
+                outgoing_user: outgoing.into(),
+                incoming_user: incoming.into(),
+            },
+        )
+        .await
+    });
+
+    let replacement_ack = replacement_task
+        .await
+        .unwrap()
+        .expect("replacement should converge successfully");
+    let action_result = action_task.await.unwrap();
+    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    match &action_result {
+        Ok(action_ack) => {
+            assert_eq!(action_ack.stream_seqs.len(), 1);
+            assert!(
+                action_ack.stream_seqs[0] < replacement_ack.stream_seqs[0],
+                "accepted outgoing action must serialize before replacement"
+            );
+        }
+        Err(err) => assert_eq!(
+            *err,
+            Reject::NotYourSlot,
+            "late outgoing action should revalidate against replacement"
+        ),
+    }
+
+    let action_after_replacement = handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitAction {
+            game,
+            action_id: "stale_action_after_replacement".into(),
+            actor_slot: slot.into(),
+            template_id: "factional_kill".into(),
+            targets: vec![target.into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect_err("outgoing user loses slot authority after replacement");
+    assert_eq!(action_after_replacement, Reject::NotYourSlot);
+
+    let incoming_caps = caps::resolve(&pool, &user(incoming), game).await.unwrap();
+    assert!(
+        incoming_caps.grants(&caps::Capability::SlotOccupant(slot.to_string())),
+        "incoming user gains SlotOccupant authority for the action slot"
+    );
+
+    let events = eventstore::load_stream(&pool, game).await.unwrap();
+    let replacement_event = events
+        .iter()
+        .find(|event| event.kind == "ReplacementCompleted")
+        .expect("replacement event exists");
+    let action_events: Vec<_> = events
+        .iter()
+        .filter(|event| event.kind == "ActionSubmitted")
+        .collect();
+    match action_result {
+        Ok(_) => {
+            assert_eq!(action_events.len(), 1);
+            assert_eq!(action_events[0].payload["actor"], slot);
+            assert_eq!(action_events[0].payload["template_id"], "factional_kill");
+            assert_eq!(
+                action_events[0].payload["targets"],
+                serde_json::json!([target])
+            );
+            assert!(
+                action_events[0].stream_seq < replacement_event.stream_seq,
+                "action remains a legitimate Slot 4 write before replacement"
+            );
+        }
+        Err(_) => assert!(
+            action_events.is_empty(),
+            "rejected stale action must not append"
+        ),
+    }
+}
+
 // ───────────────────────── capability enforcement ─────────────────────────
 
 #[sqlx::test(migrations = "../projections/migrations")]

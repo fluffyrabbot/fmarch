@@ -303,6 +303,8 @@ const replacementPrivatePostRace =
   session.verification.multiplayerHardening.concurrentReplacementPrivatePostRace;
 const replacementVoteRace =
   session.verification.multiplayerHardening.concurrentReplacementVoteRace;
+const replacementActionRace =
+  session.verification.multiplayerHardening.concurrentReplacementActionRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1609,6 +1611,92 @@ assert.equal(replacementVoteRace.commandStateAfterRace.status, 403);
 assert.equal(replacementVoteRace.commandStateAfterRace.error, "NotYourSlot");
 assert.equal(replacementVoteRace.hostReplacementAfterRace.occupantLabel, "player-rowan");
 assert.equal(replacementVoteRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
+assert.equal(replacementActionRace.status, "passed");
+assert.equal(replacementActionRace.targetSlot, "slot-2");
+assert.equal(
+  replacementActionRace.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementActionRace.playerEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(
+  replacementActionRace.replacementEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(replacementActionRace.setupHostPhase.id, "N01");
+assert.equal(replacementActionRace.setupHostPhase.locked, false);
+assert.equal(replacementActionRace.setupSlot.occupant_user_id, "player-goon-a");
+assert.equal(replacementActionRace.setupCommandState.actorSlot, "slot_4");
+assert.equal(replacementActionRace.setupCommandState.actorStatus, "alive");
+assert.equal(replacementActionRace.setupCommandState.phase.phaseId, "N01");
+assert.equal(
+  replacementActionRace.setupCommandState.actions.some(
+    (candidate) => candidate.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(replacementActionRace.replacement.state, "ack");
+assert.equal(
+  replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .slot,
+  "slot_4",
+);
+assert.equal(
+  replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction
+    .template_id,
+  "factional_kill",
+);
+assert.equal(
+  replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction.targets[0],
+  "slot-2",
+);
+if (replacementActionRace.action.state === "ack") {
+  assert.equal(replacementActionRace.action.serverEnvelope.body.kind, "Ack");
+  assert.equal(
+    replacementActionRace.actionSeq < replacementActionRace.replacementSeq,
+    true,
+  );
+  assert.equal(replacementActionRace.currentCommandStateAfterRace.actions.length, 0);
+  assert.equal(replacementActionRace.currentRoleCommandState.actions.length, 0);
+} else {
+  assert.equal(replacementActionRace.action.state, "reject");
+  assert.equal(replacementActionRace.action.error, "NotYourSlot");
+  assert.equal(replacementActionRace.action.serverEnvelope.body.kind, "Reject");
+  assert.equal(
+    replacementActionRace.currentCommandStateAfterRace.actions.some(
+      (candidate) => candidate.template_id === "factional_kill",
+    ),
+    true,
+  );
+  assert.equal(
+    replacementActionRace.currentRoleCommandState.actions.some(
+      (candidate) => candidate.templateId === "factional_kill",
+    ),
+    true,
+  );
+}
+assert.equal(replacementActionRace.commandStateAfterRace.status, 403);
+assert.equal(replacementActionRace.commandStateAfterRace.error, "NotYourSlot");
+assert.equal(replacementActionRace.staleRetry.state, "reject");
+assert.equal(replacementActionRace.staleRetry.error, "NotYourSlot");
+assert.equal(replacementActionRace.hostPhaseAfterRace.id, "N01");
+assert.equal(replacementActionRace.hostPhaseAfterRace.locked, false);
+assert.equal(replacementActionRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
+assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_slot, "slot_4");
+assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_status, "alive");
+assert.equal(replacementActionRace.currentRoleCommandState.actorSlot, "slot_4");
+assert.equal(replacementActionRace.currentRoleCommandState.actorStatus, "alive");
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",

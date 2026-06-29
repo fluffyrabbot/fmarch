@@ -31,6 +31,7 @@ const requiredScenarios = [
   "concurrent-cohost-deadline-resolve-race",
   "concurrent-replacement-private-post-race",
   "concurrent-replacement-vote-race",
+  "concurrent-replacement-action-race",
   "concurrent-host-resolve-race",
   "concurrent-host-advance-race",
   "concurrent-host-deadline-advance-race",
