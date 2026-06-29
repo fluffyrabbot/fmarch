@@ -204,6 +204,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-stale-action",
+        "replacement-stale-private-channel",
         "replacement-incoming-player",
       ],
       ...(coreLoopAdminProofEvidence === undefined
@@ -674,6 +675,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
+    "replacement-stale-private-channel",
     "replacement-incoming-player",
   ];
   if (proof?.version !== 1) {
@@ -940,6 +942,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
+    "replacement-stale-private-channel",
     "replacement-incoming-player",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
@@ -1022,6 +1025,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
+    "replacement-stale-private-channel",
     "replacement-incoming-player",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",

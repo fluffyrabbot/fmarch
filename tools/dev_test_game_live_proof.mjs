@@ -877,6 +877,105 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.channel,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.stalePost.error,
+  "NotYourSlot",
+);
+assert.match(
+  session.verification.replacementConsole.stalePrivateChannel.stalePost.message,
+  /slot ownership changed/,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.stalePost
+    .requestEnvelope.body.body.command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.stalePost
+    .requestEnvelope.body.body.command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel
+    .commandStateAfterStalePost.actorStatus,
+  "replaced",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel
+    .commandStateAfterStalePost.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.staleRoute.status,
+  403,
+);
+assert.match(
+  session.verification.replacementConsole.stalePrivateChannel.staleRoute.message,
+  /requires scoped channel capability/,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.staleControlCounts
+    .primaryButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.staleControlCounts
+    .actionButtons,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanRoute
+    .channelContextId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanRoute.actorSlot,
+  "slot-7",
+);
+assert.match(
+  session.verification.replacementConsole.stalePrivateChannel.rowanRoute
+    .capabilityLabel,
+  /ChannelMember\(private:mafia_day_chat\)/,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanPost.state,
+  "ack",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanPost
+    .requestEnvelope.body.body.principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanPost
+    .requestEnvelope.body.body.command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.rowanPost
+    .requestEnvelope.body.body.command.SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.apiThreadPostBodies.includes(
+    session.verification.replacementConsole.stalePrivateChannel.rowanPostBody,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateChannel.apiThreadPostBodies.includes(
+    session.verification.replacementConsole.stalePrivateChannel.stalePostBody,
+  ),
+  false,
+);
+assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess.status,
   "passed",
 );

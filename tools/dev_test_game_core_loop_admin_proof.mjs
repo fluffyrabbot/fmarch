@@ -30,6 +30,7 @@ const requiredChecks = [
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-stale-action",
+  "replacement-stale-private-channel",
   "replacement-incoming-player",
 ];
 

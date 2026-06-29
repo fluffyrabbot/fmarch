@@ -869,6 +869,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
+    "replacement-stale-private-channel",
     "replacement-incoming-player",
   ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];

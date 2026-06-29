@@ -31,6 +31,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-stale-action",
+  "replacement-stale-private-channel",
   "replacement-incoming-player",
   "idempotent-retry",
   "reconnect-recovery",
@@ -884,6 +885,78 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.actionControlCountAfterStaleAction === 0 &&
         verification.replacementConsole?.staleOutgoingPlayer
           ?.buttonsDisabledAfterStaleAction === true,
+    }),
+    lane("replacement-stale-private-channel", "Replacement private channel authority follows current slot", {
+      channel: verification.replacementConsole?.stalePrivateChannel?.channel ?? null,
+      staleRejectError:
+        verification.replacementConsole?.stalePrivateChannel?.stalePost?.error ?? null,
+      staleRouteStatus:
+        verification.replacementConsole?.stalePrivateChannel?.staleRoute?.status ??
+        null,
+      rowanChannelContext:
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.channelContextId ?? null,
+      rowanCapabilityLabel:
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.capabilityLabel ?? null,
+      rowanPostState:
+        verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ??
+        null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.stalePrivateChannel?.status === "passed" &&
+        verification.replacementConsole?.stalePrivateChannel?.channel ===
+          "private:mafia_day_chat" &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost?.state ===
+          "reject" &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost?.error ===
+          "NotYourSlot" &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost?.message?.includes(
+          "slot ownership changed",
+        ) === true &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost
+          ?.requestEnvelope?.body?.body?.principal_user_id === "player-mira" &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost
+          ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
+          "private:mafia_day_chat" &&
+        verification.replacementConsole?.stalePrivateChannel?.stalePost
+          ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
+          "slot-7" &&
+        verification.replacementConsole?.stalePrivateChannel
+          ?.commandStateAfterStalePost?.actorStatus === "replaced" &&
+        verification.replacementConsole?.stalePrivateChannel
+          ?.commandStateAfterStalePost?.actions?.length === 0 &&
+        verification.replacementConsole?.stalePrivateChannel?.staleControlCounts
+          ?.primaryButtons === 0 &&
+        verification.replacementConsole?.stalePrivateChannel?.staleControlCounts
+          ?.actionButtons === 0 &&
+        verification.replacementConsole?.stalePrivateChannel?.staleRoute?.status ===
+          403 &&
+        verification.replacementConsole?.stalePrivateChannel?.staleRoute?.message?.includes(
+          "requires scoped channel capability",
+        ) === true &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.channelContextId === "private:mafia_day_chat" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.actorSlot === "slot-7" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanRoute
+          ?.capabilityLabel?.includes("ChannelMember(private:mafia_day_chat)") === true &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanPost?.state ===
+          "ack" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanPost
+          ?.requestEnvelope?.body?.body?.principal_user_id === "player-rowan" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanPost
+          ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
+          "private:mafia_day_chat" &&
+        verification.replacementConsole?.stalePrivateChannel?.rowanPost
+          ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
+          "slot-7" &&
+        verification.replacementConsole?.stalePrivateChannel?.apiThreadPostBodies?.includes(
+          verification.replacementConsole?.stalePrivateChannel?.rowanPostBody,
+        ) === true &&
+        verification.replacementConsole?.stalePrivateChannel?.apiThreadPostBodies?.includes(
+          verification.replacementConsole?.stalePrivateChannel?.stalePostBody,
+        ) === false,
     }),
     lane("replacement-incoming-player", "Incoming replacement player owns stable slot", {
       principalUserId:

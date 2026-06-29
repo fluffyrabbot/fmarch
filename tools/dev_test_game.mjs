@@ -2141,6 +2141,13 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
+    const stalePrivateChannel = await verifyReplacementStalePrivateChannel({
+      staleOutgoingPage,
+      replacementEntry: pendingIncomingPlayer.replacementEntry,
+      game,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
     replacementSessionRevocation =
       await verifyReplacementSessionRevocationRecovery({
         browser,
@@ -2219,6 +2226,22 @@ async function verifySeededReplacementConsole({
       incomingPlayer?.postStatus?.state !== "ack" ||
       incomingPlayer?.vote?.serverEnvelope?.body?.kind !== "Ack" ||
       incomingPlayer?.privateReceiptIsolation?.targetKillVisible !== false ||
+      stalePrivateChannel?.status !== "passed" ||
+      stalePrivateChannel?.stalePost?.error !== "NotYourSlot" ||
+      stalePrivateChannel?.staleRoute?.status !== 403 ||
+      stalePrivateChannel?.staleControlCounts?.primaryButtons !== 0 ||
+      stalePrivateChannel?.staleControlCounts?.actionButtons !== 0 ||
+      stalePrivateChannel?.rowanRoute?.channelContextId !== factionDayChatChannel ||
+      stalePrivateChannel?.rowanPost?.state !== "ack" ||
+      stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.principal_user_id !==
+        "player-rowan" ||
+      stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost
+        ?.channel_id !== factionDayChatChannel ||
+      stalePrivateChannel?.rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost
+        ?.actor_slot !== "slot-7" ||
+      stalePrivateChannel?.apiThreadPostBodies?.includes(
+        stalePrivateChannel.rowanPostBody,
+      ) !== true ||
       replacementSessionRevocation?.status !== "passed" ||
       replacementSessionRevocation?.revokedPrincipalUserId !== "player-rowan" ||
       replacementSessionRevocation?.apiSessionStatus !== 401 ||
@@ -2269,6 +2292,7 @@ async function verifySeededReplacementConsole({
           staleOutgoingPlayer,
           staleReplacementAfterSuccess,
           incomingPlayer,
+          stalePrivateChannel,
           replacementSessionRevocation:
             withoutStaleReplacementEntry(replacementSessionRevocation),
           replacementSessionRefresh,
@@ -2290,13 +2314,14 @@ async function verifySeededReplacementConsole({
       staleOutgoingPlayer,
       staleReplacementAfterSuccess,
       incomingPlayer,
+      stalePrivateChannel,
       replacementSessionRevocation:
         withoutStaleReplacementEntry(replacementSessionRevocation),
       replacementSessionRefresh,
       replacementStaleSessionAfterRefresh,
       replacementReconnectRecovery,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, proved Mira's stale browser cannot keep private-channel authority while Rowan can post in the same private channel as current Slot 7, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
     };
   } finally {
     await replacementSessionRevocation?.staleEntry?.context.close().catch(() => {});
@@ -3062,6 +3087,177 @@ async function verifyIncomingReplacementPlayer({
       await replacementEntry?.context.close().catch(() => {});
     }
   }
+}
+
+async function verifyReplacementStalePrivateChannel({
+  staleOutgoingPage,
+  replacementEntry,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const channelRoute = encodeURIComponent(factionDayChatChannel);
+  const privateUrl = `${frontendBaseUrl}/g/${game}/c/${channelRoute}`;
+  const { normalizeCommandResponse } = await importFrontendModule(
+    "src/lib/app/command-boundary.mjs",
+  );
+  const stalePostBody = `Stale Mira private post after replacement ${crypto.randomUUID()}.`;
+  const stalePostCommandId = crypto.randomUUID();
+  const stalePostRaw = await sendBrowserCommand(staleOutgoingPage, {
+    principalUserId: "player-mira",
+    commandId: stalePostCommandId,
+    command: {
+      SubmitPost: {
+        game,
+        channel_id: factionDayChatChannel,
+        actor_slot: "slot-7",
+        body: stalePostBody,
+      },
+    },
+  });
+  const stalePost = normalizeCommandResponse({
+    commandId: stalePostCommandId,
+    requestEnvelope: stalePostRaw.requestEnvelope,
+    response: { status: stalePostRaw.httpStatus },
+    serverEnvelope: stalePostRaw.serverEnvelope,
+  });
+  const commandStateAfterStalePost = await staleOutgoingPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const staleControlCounts = {
+    primaryButtons: await staleOutgoingPage
+      .locator("[data-action='submit_vote'], [data-action='withdraw_vote'], [data-action='submit_post']")
+      .evaluateAll((nodes) => nodes.filter((node) => !node.disabled).length),
+    actionButtons: await staleOutgoingPage
+      .locator('[data-action^="submit_action:"]')
+      .count(),
+  };
+  const staleRouteResponse = await staleOutgoingPage.goto(privateUrl, {
+    waitUntil: "networkidle",
+  });
+  await staleOutgoingPage.getByTestId("route-error-surface").waitFor({
+    state: "visible",
+  });
+  const staleRoute = {
+    url: privateUrl,
+    status: Number(
+      await staleOutgoingPage
+        .getByTestId("route-error-surface")
+        .getAttribute("data-status"),
+    ),
+    responseStatus: staleRouteResponse?.status() ?? null,
+    message: await staleOutgoingPage.getByTestId("route-error-surface").innerText(),
+    actionLabel: await staleOutgoingPage.getByTestId("route-error-action").innerText(),
+    actionHref: await staleOutgoingPage
+      .getByTestId("route-error-action")
+      .getAttribute("href"),
+  };
+
+  const rowanPage = replacementEntry?.page;
+  if (rowanPage === undefined) {
+    throw new Error("replacement stale private-channel proof requires replacement entry");
+  }
+  const rowanResponse = await rowanPage.goto(privateUrl, { waitUntil: "networkidle" });
+  if (rowanResponse === null || !rowanResponse.ok()) {
+    throw new Error(
+      `replacement private channel route failed with ${
+        rowanResponse?.status() ?? "no response"
+      }`,
+    );
+  }
+  await rowanPage.getByTestId("player-surface").waitFor({ state: "visible" });
+  const rowanChannelContext = rowanPage.getByTestId("player-command-channel-context");
+  await rowanChannelContext.waitFor({ state: "visible" });
+  const rowanRoute = {
+    url: privateUrl,
+    channelContextId: await rowanChannelContext.getAttribute("data-channel-id"),
+    actorSlot: await rowanChannelContext.getAttribute("data-actor-slot"),
+    capabilityLabel: await rowanChannelContext.getAttribute("data-capability-label"),
+  };
+  const rowanPostBody = `Replacement Rowan private-channel post ${crypto.randomUUID()}.`;
+  await rowanPage.locator('[data-testid="player-composer"] textarea').fill(rowanPostBody);
+  await rowanPage.locator('[data-action="submit_post"]').click();
+  await rowanPage.waitForFunction(
+    (expectedBody) =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+        ?.SubmitPost?.body === expectedBody,
+    rowanPostBody,
+  );
+  await rowanPage.waitForFunction(
+    (expectedBody) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.some(
+        (post) => post.body === expectedBody && post.authorSlot === "slot-7",
+      ),
+    rowanPostBody,
+  );
+  const rowanPost = await rowanPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+  );
+  const apiThreadPostBodies = (apiThread.posts ?? []).map((post) => post.body);
+
+  if (
+    stalePost?.state !== "reject" ||
+    stalePost?.error !== "NotYourSlot" ||
+    !stalePost?.message?.includes("slot ownership changed") ||
+    stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
+      factionDayChatChannel ||
+    stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+      "slot-7" ||
+    commandStateAfterStalePost?.actorStatus !== "replaced" ||
+    commandStateAfterStalePost?.actions?.length !== 0 ||
+    staleControlCounts.primaryButtons !== 0 ||
+    staleControlCounts.actionButtons !== 0 ||
+    staleRoute.status !== 403 ||
+    staleRoute.responseStatus !== 403 ||
+    !staleRoute.message.includes("requires scoped channel capability") ||
+    staleRoute.actionLabel !== "Back to board" ||
+    staleRoute.actionHref !== "/" ||
+    rowanRoute.channelContextId !== factionDayChatChannel ||
+    rowanRoute.actorSlot !== "slot-7" ||
+    !rowanRoute.capabilityLabel?.includes(
+      `ChannelMember(${factionDayChatChannel})`,
+    ) ||
+    rowanPost?.state !== "ack" ||
+    rowanPost?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+    rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
+      factionDayChatChannel ||
+    rowanPost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+      "slot-7" ||
+    !apiThreadPostBodies.includes(rowanPostBody) ||
+    apiThreadPostBodies.includes(stalePostBody)
+  ) {
+    throw new Error(
+      `replacement stale private-channel proof drifted: ${JSON.stringify({
+        stalePost,
+        commandStateAfterStalePost,
+        staleControlCounts,
+        staleRoute,
+        rowanRoute,
+        rowanPost,
+        stalePostBody,
+        rowanPostBody,
+        apiThreadPostBodies,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    channel: factionDayChatChannel,
+    stalePost,
+    commandStateAfterStalePost,
+    staleControlCounts,
+    staleRoute,
+    rowanRoute,
+    rowanPost,
+    stalePostBody,
+    rowanPostBody,
+    apiThreadPostBodies,
+    proof:
+      "After Slot 7 replacement, Mira's stale browser cannot submit or route into the Slot 7 private channel, while Rowan's current replacement role URL opens the same channel and ACKs a private Slot 7 post.",
+  };
 }
 
 async function verifyReplacementSessionRevocationRecovery({

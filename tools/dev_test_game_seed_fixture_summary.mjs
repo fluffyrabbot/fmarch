@@ -170,6 +170,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
+    "replacement-stale-private-channel",
     "replacement-incoming-player",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
@@ -395,6 +396,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["replacement-stale-action"].filter(hasLane),
       note: "Outgoing player submits an action-shaped stale Slot 7 command after replacement, receives NotYourSlot recovery, and the old role URL keeps no action controls.",
+    }),
+    scenario({
+      id: "replacement-stale-private-channel",
+      title: "Replacement stale private channel",
+      role: "player",
+      provenBy: ["replacement-stale-private-channel"].filter(hasLane),
+      note: "Outgoing player loses Slot 7 private-channel authority after replacement, while the incoming replacement role URL can post in that same private channel.",
     }),
     scenario({
       id: "replacement-incoming-player",

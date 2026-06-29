@@ -1316,6 +1316,66 @@ test("session card and markdown include role credential URLs and tokens", () => 
           investigationResultCount: 0,
         },
       },
+      stalePrivateChannel: {
+        status: "passed",
+        channel: "private:mafia_day_chat",
+        stalePost: {
+          state: "reject",
+          error: "NotYourSlot",
+          message:
+            "Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-mira",
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterStalePost: {
+          actorStatus: "replaced",
+          actions: [],
+        },
+        staleControlCounts: {
+          primaryButtons: 0,
+          actionButtons: 0,
+        },
+        staleRoute: {
+          status: 403,
+          message:
+            "Game game-a channel private:mafia_day_chat requires scoped channel capability.",
+        },
+        rowanRoute: {
+          channelContextId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+        },
+        rowanPost: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                  },
+                },
+              },
+            },
+          },
+        },
+        stalePostBody: "Stale Mira private post after replacement",
+        rowanPostBody: "Replacement Rowan private-channel post",
+        apiThreadPostBodies: ["Replacement Rowan private-channel post"],
+      },
     },
     multiplayerHardening: {
       status: "passed",
@@ -1558,6 +1618,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-success-recovery",
       "replacement-stale-player",
       "replacement-stale-action",
+      "replacement-stale-private-channel",
       "replacement-incoming-player",
       "idempotent-retry",
       "reconnect-recovery",
@@ -1639,7 +1700,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 33);
+  assert.equal(opsArtifacts.proofRun.laneCount, 34);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1749,6 +1810,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-success-recovery",
       "replacement-stale-player",
       "replacement-stale-action",
+      "replacement-stale-private-channel",
       "replacement-incoming-player",
       "private-channel-member",
       "private-channel-denied",
@@ -2121,6 +2183,7 @@ function coreLoopAdminProofFixture() {
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-stale-action",
+        "replacement-stale-private-channel",
         "replacement-incoming-player",
       ],
       rawInviteTokensVisible: false,
@@ -2251,6 +2314,7 @@ function seedAdminProofFixture() {
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-stale-action",
+        "replacement-stale-private-channel",
         "replacement-incoming-player",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

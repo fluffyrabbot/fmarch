@@ -38,6 +38,7 @@ const requiredScenarios = [
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-stale-action",
+  "replacement-stale-private-channel",
   "replacement-incoming-player",
   "stale-action-conflict-message",
   "stale-dead-action-conflict",
