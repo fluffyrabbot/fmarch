@@ -743,6 +743,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
+        `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
+        "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
         "",
       );
@@ -770,6 +772,7 @@ async function verifySessionCard(card) {
   let staleActionPage;
   let staleDeadActionPage;
   let staleHostPage;
+  let staleHostDeadlinePage;
   let staleCohostPage;
   let staleReplacementPage;
   try {
@@ -787,11 +790,17 @@ async function verifySessionCard(card) {
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleDeadActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
+    staleHostDeadlinePage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
     cohostConsole = await verifySeededCohostConsole({
       cohostPage: roleEntries.cohost.page,
       staleCohostPage,
+      game: card.game,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    const staleHostDeadlineSetup = await freezeStaleHostDeadlinePage({
+      staleHostDeadlinePage,
       game: card.game,
       frontendBaseUrl: card.frontendBaseUrl,
     });
@@ -830,6 +839,8 @@ async function verifySessionCard(card) {
       staleDeadActionConflict: actionLoop.staleDeadActionConflict,
       staleHostPage,
       staleHostControlSetup: actionLoop.staleHostControlSetup,
+      staleHostDeadlinePage,
+      staleHostDeadlineSetup,
       staleCohostPage,
       staleCohostDeadlineSetup: cohostConsole.staleDeadlineSetup,
       game: card.game,
@@ -850,6 +861,7 @@ async function verifySessionCard(card) {
     await staleActionPage?.close().catch(() => {});
     await staleDeadActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
+    await staleHostDeadlinePage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
     await Promise.all(
@@ -1041,6 +1053,53 @@ async function freezeStaleCohostDeadlinePage({ staleCohostPage, game, frontendBa
   ) {
     throw new Error(
       `stale cohost deadline setup drifted: ${JSON.stringify({
+        stalePhase,
+        deadlineActions,
+        phaseActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    deadlineActions,
+    phaseActions,
+    closedStatus,
+  };
+}
+
+async function freezeStaleHostDeadlinePage({ staleHostDeadlinePage, game, frontendBaseUrl }) {
+  await staleHostDeadlinePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostDeadlinePage
+    .locator('[data-testid="critical-host-action-extend_deadline"]')
+    .waitFor({
+      state: "visible",
+    });
+  await staleHostDeadlinePage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D01" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const stalePhase = await staleHostDeadlinePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const deadlineActions = await visibleHostControlActions(staleHostDeadlinePage, "deadline");
+  const phaseActions = await visibleHostControlActions(staleHostDeadlinePage, "phase");
+  const closedStatus = await staleHostDeadlinePage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D01" ||
+    stalePhase?.locked !== false ||
+    !deadlineActions.includes("extend_deadline") ||
+    !phaseActions.includes("resolve_phase") ||
+    !phaseActions.includes("lock_thread") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host deadline setup drifted: ${JSON.stringify({
         stalePhase,
         deadlineActions,
         phaseActions,
@@ -2160,6 +2219,8 @@ async function verifySeededMultiplayerHardening({
   staleDeadActionConflict,
   staleHostPage,
   staleHostControlSetup,
+  staleHostDeadlinePage,
+  staleHostDeadlineSetup,
   staleCohostPage,
   staleCohostDeadlineSetup,
   game,
@@ -2276,6 +2337,12 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  const staleHostDeadline = await submitStaleHostDeadlineRecovery({
+    staleHostDeadlinePage,
+    staleHostDeadlineSetup,
+    apiBaseUrl,
+    game,
+  });
   const staleCohostDeadline = await submitStaleCohostDeadlineRecovery({
     staleCohostPage,
     staleCohostDeadlineSetup,
@@ -2302,9 +2369,10 @@ async function verifySeededMultiplayerHardening({
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
+    staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -4749,6 +4817,112 @@ async function submitStaleHostControlRecovery({
     commandOutcomes,
     phaseAfterReject,
     visibleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
+}
+
+async function submitStaleHostDeadlineRecovery({
+  staleHostDeadlinePage,
+  staleHostDeadlineSetup,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "extend_deadline";
+  const staleActionRoot = staleHostDeadlinePage.getByTestId(`critical-host-action-${actionId}`);
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostDeadlinePage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "PhaseLocked",
+    actionId,
+  );
+  await staleHostDeadlinePage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const reject = await staleHostDeadlinePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  const commandOutcomes = await staleHostDeadlinePage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const phaseAfterReject = await staleHostDeadlinePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const deadlineActionsAfterReject = await visibleHostControlActions(
+    staleHostDeadlinePage,
+    "deadline",
+  );
+  const phaseActionsAfterReject = await visibleHostControlActions(
+    staleHostDeadlinePage,
+    "phase",
+  );
+  const activityStatusText = await staleHostDeadlinePage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostDeadlinePage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostDeadlinePage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    !reject?.message?.includes("stale phase state") ||
+    phaseAfterReject?.id !== "D02" ||
+    phaseAfterReject?.locked !== false ||
+    !deadlineActionsAfterReject.includes(actionId) ||
+    !phaseActionsAfterReject.includes("resolve_phase") ||
+    !phaseActionsAfterReject.includes("lock_thread") ||
+    !activityStatusText.includes("Reject PhaseLocked") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    hostStateAfterReject.phase?.phase_id !== "D02" ||
+    hostStateAfterReject.phase?.locked !== false ||
+    hostStateAfterReject.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `stale host deadline recovery drifted: ${JSON.stringify({
+        staleHostDeadlineSetup,
+        reject,
+        commandOutcomes,
+        phaseAfterReject,
+        deadlineActionsAfterReject,
+        phaseActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPhase: hostStateAfterReject.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    setup: staleHostDeadlineSetup,
+    reject,
+    commandOutcomes,
+    phaseAfterReject,
+    deadlineActionsAfterReject,
+    phaseActionsAfterReject,
     activityStatusText,
     activityRow,
     dispatchPlan,

@@ -554,7 +554,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 41,
+    laneCount: 42,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1029,7 +1029,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "16 hardening lanes passed");
+  assert.equal(hardening.status, "17 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1050,13 +1050,14 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-host-control",
+      "stale-host-deadline",
       "stale-cohost-deadline",
     ],
   );
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 41,
+    laneCount: 42,
     releaseReady: false,
     productionReady: false,
   });
@@ -1105,7 +1106,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 41,
+    laneCount: 42,
     releaseReady: false,
     productionReady: false,
   });
@@ -1164,7 +1165,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 16);
+  assert.equal(data.audit.checks.length, 17);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1183,6 +1184,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["stale-action-conflict", "passed"],
       ["stale-action-conflict-message", "passed"],
       ["stale-host-control", "passed"],
+      ["stale-host-deadline", "passed"],
       ["stale-cohost-deadline", "passed"],
     ],
   );
@@ -1641,6 +1643,7 @@ function proofRunFixture() {
     "stale-action-conflict",
     "stale-action-conflict-message",
     "stale-host-control",
+    "stale-host-deadline",
     "stale-cohost-deadline",
   ].map((id) => ({ id, label: id, status: "passed", evidence: {} }));
   return {
@@ -1677,7 +1680,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 41,
+      laneCount: 42,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },

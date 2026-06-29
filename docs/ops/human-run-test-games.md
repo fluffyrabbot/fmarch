@@ -485,7 +485,10 @@ action state plus current action controls, refreshes to D02 without the stale
 action control, and keeps a second host page frozen on the N01
 locked controls until its stale `UnlockThread` click renders a host command
 activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
-`resolve_phase` / `lock_thread` controls, and keeps a second cohost page frozen
+`resolve_phase` / `lock_thread` controls, keeps a full host page frozen on the
+D01 deadline control until its stale `ExtendDeadline` click renders a host
+command activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes
+current host phase plus deadline controls, and keeps a second cohost page frozen
 on the D01 delegated deadline control until its stale `ExtendDeadline` click
 renders a host command activity `Reject PhaseLocked` receipt, refreshes to D02,
 and exposes only the current delegated deadline control without mutating the D02
@@ -493,7 +496,7 @@ deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the sixteen hardening lane rows above.
+verifying the seventeen hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -583,7 +586,7 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
-stale deadline advance recovery, stale cohost deadline recovery,
+stale deadline advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,

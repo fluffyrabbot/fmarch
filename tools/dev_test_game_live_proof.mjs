@@ -1704,6 +1704,100 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.setup.stalePhase.id,
+  "D01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.setup.stalePhase.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.setup.deadlineActions.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.setup.phaseActions.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.setup.phaseActions.includes(
+    "lock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostDeadline.reject.message,
+  /stale phase state/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.phaseAfterReject.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.phaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.deadlineActionsAfterReject.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.phaseActionsAfterReject.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.phaseActionsAfterReject.includes(
+    "lock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.activityRow.source,
+  "outcome",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.activityRow.actionId,
+  "extend_deadline",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.apiPhaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.apiPhaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline.apiPhaseAfterReject.deadline,
+  null,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleCohostDeadline.status,
   "passed",
 );

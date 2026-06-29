@@ -2012,6 +2012,43 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterReject: { phase_id: "D02", locked: false },
       },
+      staleHostDeadline: {
+        status: "passed",
+        actionId: "extend_deadline",
+        setup: {
+          stalePhase: { id: "D01", locked: false },
+          deadlineActions: ["extend_deadline"],
+          phaseActions: ["resolve_phase", "lock_thread"],
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        },
+        commandOutcomes: [
+          {
+            actionId: "extend_deadline",
+            state: "reject",
+            error: "PhaseLocked",
+          },
+        ],
+        phaseAfterReject: { id: "D02", locked: false },
+        deadlineActionsAfterReject: ["extend_deadline"],
+        phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
+        activityStatusText:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "extend_deadline",
+          dispatchKind: "extend_deadline",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
+      },
       staleCohostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -2115,6 +2152,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
+  assert(markdown.includes("Stale host deadline: Reject PhaseLocked"));
   assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -2166,6 +2204,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-host-control",
+      "stale-host-deadline",
       "stale-cohost-deadline",
     ],
   );
@@ -2238,7 +2277,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 41);
+  assert.equal(opsArtifacts.proofRun.laneCount, 42);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2795,6 +2834,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict",
         "stale-action-conflict-message",
         "stale-host-control",
+        "stale-host-deadline",
         "stale-cohost-deadline",
       ],
       rawInviteTokensVisible: false,

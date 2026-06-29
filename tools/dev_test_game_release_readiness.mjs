@@ -239,6 +239,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-action-conflict",
         "stale-action-conflict-message",
         "stale-host-control",
+        "stale-host-deadline",
         "stale-cohost-deadline",
       ],
       ...(hardeningAdminProofEvidence === undefined
@@ -746,6 +747,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-action-conflict",
     "stale-action-conflict-message",
     "stale-host-control",
+    "stale-host-deadline",
     "stale-cohost-deadline",
   ];
   if (proof?.version !== 1) {
