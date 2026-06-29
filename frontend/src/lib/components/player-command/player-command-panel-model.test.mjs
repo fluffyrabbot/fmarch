@@ -15,6 +15,9 @@ test("player command panel model exposes tablet touch command contracts", () => 
         { action: "submit_vote:no_lynch", label: "Vote no lynch" },
       ],
       withdrawCommandLabel: "Withdraw vote",
+      currentVoteLabel: "Current vote: Slot 2",
+      hasCurrentVote: true,
+      canWithdrawVote: true,
       postCommandLabel: "Post",
       actionCommands: [
         {
@@ -68,23 +71,49 @@ test("player command panel model exposes tablet touch command contracts", () => 
     isProjected: true,
   });
   assert.deepEqual(view.rows, [{ target: "slot-2 / Ilya", tally: "4/7" }]);
+  assert.deepEqual(view.composer.currentVote, {
+    testId: "player-current-vote",
+    label: "Current vote",
+    value: "Slot 2",
+    hasVote: true,
+  });
   assert.deepEqual(
     view.composer.buttons.map((button) => ({
       action: button.action,
       label: button.label,
       disabled: button.disabled,
+      reason: button.reason,
       minTouchTargetPx: button.data.minTouchTargetPx,
     })),
     [
-      { action: "submit_vote", label: "Vote slot-2", disabled: false, minTouchTargetPx: 44 },
+      {
+        action: "submit_vote",
+        label: "Vote slot-2",
+        disabled: false,
+        reason: "",
+        minTouchTargetPx: 44,
+      },
       {
         action: "submit_vote:no_lynch",
         label: "Vote no lynch",
         disabled: false,
+        reason: "",
         minTouchTargetPx: 44,
       },
-      { action: "withdraw_vote", label: "Withdraw vote", disabled: false, minTouchTargetPx: 44 },
-      { action: "submit_post", label: "Post", disabled: false, minTouchTargetPx: 44 },
+      {
+        action: "withdraw_vote",
+        label: "Withdraw vote",
+        disabled: false,
+        reason: "",
+        minTouchTargetPx: 44,
+      },
+      {
+        action: "submit_post",
+        label: "Post",
+        disabled: false,
+        reason: "",
+        minTouchTargetPx: 44,
+      },
     ],
   );
   assert.deepEqual(
@@ -149,6 +178,76 @@ test("player command panel model disables command controls for dead actors", () 
     ],
   );
   assert.deepEqual(view.composer.actionButtons, []);
+});
+
+test("player command panel disables withdraw until command state has a current vote", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      withdrawDisabledReason: "No current vote",
+      postCommandLabel: "Post",
+      currentVoteLabel: "No current vote",
+      hasCurrentVote: false,
+      canWithdrawVote: false,
+      actionCommands: [],
+    },
+    channel: { channel: "main", label: "Main thread" },
+    player: {
+      slotId: "slot-2",
+      alive: true,
+      status: "alive",
+      capabilityLabel: "SlotOccupant(slot-2)",
+    },
+  });
+
+  assert.deepEqual(view.composer.currentVote, {
+    testId: "player-current-vote",
+    label: "Current vote",
+    value: "No current vote",
+    hasVote: false,
+  });
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [
+      button.action,
+      button.disabled,
+      button.reason,
+    ]),
+    [
+      ["submit_vote", false, ""],
+      ["withdraw_vote", true, "No current vote"],
+      ["submit_post", false, ""],
+    ],
+  );
+});
+
+test("player command panel honors an explicitly empty live vote command list", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommands: [],
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      withdrawDisabledReason: "Phase locked",
+      postCommandLabel: "Post",
+      currentVoteLabel: "Current vote: Slot 2",
+      hasCurrentVote: true,
+      canWithdrawVote: false,
+      actionCommands: [],
+    },
+    player: { alive: true, status: "alive", slotId: "slot-2" },
+  });
+
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [
+      button.action,
+      button.disabled,
+      button.reason,
+    ]),
+    [
+      ["withdraw_vote", true, "Phase locked"],
+      ["submit_post", false, ""],
+    ],
+  );
 });
 
 test("player command panel model disables command controls after completion", () => {

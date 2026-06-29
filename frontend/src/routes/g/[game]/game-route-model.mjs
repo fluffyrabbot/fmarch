@@ -303,11 +303,39 @@ export function buildPlayerPhaseView(commandState) {
 }
 
 export function buildPlayerComposerView(baseComposer, commandState, actorSlot) {
+  const withdrawState = playerWithdrawVoteState(commandState);
   return Object.freeze({
     ...baseComposer,
     voteCommands: buildPlayerVoteCommands(baseComposer, commandState),
+    currentVoteLabel: playerCurrentVoteLabel(commandState?.currentVote ?? null),
+    hasCurrentVote: commandState?.currentVote != null,
+    canWithdrawVote: withdrawState.canWithdrawVote,
+    withdrawDisabledReason: withdrawState.reason,
     actionCommands: buildPlayerActionCommands(commandState, actorSlot),
   });
+}
+
+export function playerWithdrawVoteState(commandState) {
+  if (commandState?.currentVote == null) {
+    return Object.freeze({ canWithdrawVote: false, reason: "No current vote" });
+  }
+  if (commandState?.phase?.locked === true) {
+    return Object.freeze({ canWithdrawVote: false, reason: "Phase locked" });
+  }
+  if (commandState?.gameCompleted === true) {
+    return Object.freeze({ canWithdrawVote: false, reason: "Game complete" });
+  }
+  return Object.freeze({ canWithdrawVote: true, reason: "" });
+}
+
+export function playerCurrentVoteLabel(currentVote) {
+  if (currentVote == null) {
+    return "No current vote";
+  }
+  if (currentVote.kind === "no_lynch") {
+    return "Current vote: No lynch";
+  }
+  return `Current vote: ${currentVote.label}`;
 }
 
 export function buildPlayerVoteCommands(baseComposer, commandState) {
@@ -453,6 +481,7 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
       Object.freeze({ kind: "slot", slotId: "slot-2", label: "Slot 2" }),
       Object.freeze({ kind: "no_lynch", slotId: null, label: "No lynch" }),
     ]),
+    currentVote: null,
     boundary:
       "Fixture player route data does not invent role action availability.",
   }),

@@ -465,6 +465,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   phase: null,
   actions: Object.freeze([]),
   voteTargets: Object.freeze([]),
+  currentVote: null,
   boundary:
     "No live player command-state endpoint was available; the route renders no role action controls.",
 });
@@ -502,6 +503,9 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
     actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),
     voteTargets: Object.freeze(
       voteTargets.map(normalizePlayerVoteTarget).filter(Boolean),
+    ),
+    currentVote: normalizePlayerVoteTarget(
+      payload.current_vote ?? payload.currentVote ?? null,
     ),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),
   });

@@ -1334,6 +1334,7 @@ pub struct PlayerCommandStateResponse {
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
     pub vote_targets: Vec<PlayerVoteTarget>,
+    pub current_vote: Option<PlayerVoteTarget>,
     pub boundary: String,
 }
 
@@ -1416,6 +1417,12 @@ async fn player_command_state(
     let phase_view = phase
         .as_ref()
         .and_then(|phase| player_phase_state(phase).ok());
+    let current_vote = match phase.as_ref() {
+        Some(phase) if actor.alive && !game_completed => {
+            current_player_vote(&state, game, &phase.phase_id, &actor.slot_id).await?
+        }
+        _ => None,
+    };
     let vote_targets = if actor.alive && !game_completed {
         match phase.as_ref() {
             Some(phase)
@@ -1467,6 +1474,7 @@ async fn player_command_state(
         phase: phase_view,
         actions,
         vote_targets,
+        current_vote,
         boundary: if game_completed {
             "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
         } else {
@@ -1500,6 +1508,32 @@ async fn available_vote_targets(
         });
     }
     Ok(targets)
+}
+
+async fn current_player_vote(
+    state: &ApiState,
+    game: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<Option<PlayerVoteTarget>, ApiError> {
+    let ballot = projections::current_ballot(&state.pool, game, phase_id, actor_slot).await?;
+    Ok(ballot.map(|row| player_vote_target_from_projection_target(&row.target)))
+}
+
+fn player_vote_target_from_projection_target(target: &str) -> PlayerVoteTarget {
+    if target == "no_lynch" {
+        PlayerVoteTarget {
+            kind: "no_lynch".to_string(),
+            slot_id: None,
+            label: "No lynch".to_string(),
+        }
+    } else {
+        PlayerVoteTarget {
+            kind: "slot".to_string(),
+            slot_id: Some(target.to_string()),
+            label: slot_label(target),
+        }
+    }
 }
 
 async fn available_role_actions(
@@ -2308,6 +2342,8 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::UnlockThread { .. }
             | wire::Command::ResolvePhase { .. }
             | wire::Command::CompleteGame { .. }
+            | wire::Command::SubmitVote { .. }
+            | wire::Command::WithdrawVote { .. }
             | wire::Command::ProcessReplacement { .. }
     )
 }

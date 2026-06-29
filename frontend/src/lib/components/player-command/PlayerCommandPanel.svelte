@@ -60,6 +60,14 @@
       <strong>{view.composer.channelContext.value}</strong>
       <small>{view.composer.channelContext.capabilityLabel}</small>
     </div>
+    <div
+      class="player-command-panel__current-vote"
+      data-testid={view.composer.currentVote.testId}
+      data-has-vote={view.composer.currentVote.hasVote}
+    >
+      <span>{view.composer.currentVote.label}</span>
+      <strong>{view.composer.currentVote.value}</strong>
+    </div>
     <label>
       <span>{view.composer.label}</span>
       <textarea bind:value={body} rows="3"></textarea>
@@ -71,6 +79,7 @@
           class={button.className}
           data-action={button.data.action}
           data-min-touch-target-px={button.data.minTouchTargetPx}
+          data-disabled-reason={button.reason}
           disabled={button.disabled}
           on:click={() => onCommand(button.action)}
         >
@@ -202,12 +211,23 @@
     padding: 10px 12px;
   }
 
+  .player-command-panel__current-vote {
+    background: #eef4f6;
+    border: 1px solid #9aa7b1;
+    border-radius: 8px;
+    display: grid;
+    gap: 2px;
+    min-block-size: 58px;
+    padding: 10px 12px;
+  }
+
   .player-command-panel__composer label {
     display: grid;
     gap: 6px;
   }
 
   .player-command-panel__composer label span,
+  .player-command-panel__current-vote span,
   .player-command-panel__channel-context span,
   .player-command-panel__channel-context small {
     color: #53606f;
@@ -216,6 +236,13 @@
     line-height: 1.25;
     overflow-wrap: anywhere;
     text-transform: uppercase;
+  }
+
+  .player-command-panel__current-vote strong {
+    color: #17212b;
+    font-size: 16px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
   }
 
   .player-command-panel__channel-context strong {

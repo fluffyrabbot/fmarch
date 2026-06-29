@@ -124,8 +124,14 @@ export function buildDevTestGameProofRun(session, options = {}) {
       targetOutcomePanel: verification.dayVoteResolution?.targetOutcomePanel ?? null,
       targetNoticeStatus: verification.dayVoteResolution?.targetNotice?.status ?? null,
       voteTargetCount: verification.dayVoteResolution?.voterBeforeVote?.voteTargets?.length ?? null,
+      currentVoteBefore:
+        verification.dayVoteResolution?.voterBeforeVote?.currentVote ?? null,
+      currentVoteAfter:
+        verification.dayVoteResolution?.voterAfterVote?.currentVote ?? null,
       voteButtonActions:
         verification.dayVoteResolution?.voterVoteButtons?.map((button) => button.action) ?? null,
+      withdrawBefore: verification.dayVoteResolution?.voterWithdrawBefore ?? null,
+      withdrawAfter: verification.dayVoteResolution?.voterWithdrawAfter ?? null,
       passed:
         verification.dayVoteResolution?.status === "passed" &&
         verification.dayVoteResolution?.finalVote?.state === "ack" &&
@@ -139,6 +145,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.voterBeforeVote?.voteTargets?.some(
           (target) => target.kind === "no_lynch",
         ) &&
+        verification.dayVoteResolution?.voterBeforeVote?.currentVote === null &&
+        verification.dayVoteResolution?.voterCurrentVoteBefore?.hasVote === "false" &&
+        verification.dayVoteResolution?.voterCurrentVoteBefore?.text?.includes(
+          "No current vote",
+        ) &&
+        verification.dayVoteResolution?.voterWithdrawBefore?.exists === true &&
+        verification.dayVoteResolution?.voterWithdrawBefore?.disabled === true &&
+        verification.dayVoteResolution?.voterWithdrawBefore?.reason ===
+          "No current vote" &&
         verification.dayVoteResolution?.voterVoteButtons?.some(
           (button) =>
             button.action === "submit_vote" &&
@@ -151,6 +166,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
             button.text?.includes("Vote no lynch") &&
             button.disabled === false,
         ) &&
+        verification.dayVoteResolution?.voterAfterVote?.currentVote?.kind ===
+          "slot" &&
+        verification.dayVoteResolution?.voterAfterVote?.currentVote?.slotId ===
+          "slot-2" &&
+        verification.dayVoteResolution?.voterCurrentVoteAfter?.hasVote === "true" &&
+        verification.dayVoteResolution?.voterCurrentVoteAfter?.text?.includes(
+          "Slot 2",
+        ) &&
+        verification.dayVoteResolution?.voterWithdrawAfter?.exists === true &&
+        verification.dayVoteResolution?.voterWithdrawAfter?.disabled === false &&
         verification.dayVoteResolution?.dayVoteOutcome?.phase_id === "D01" &&
         verification.dayVoteResolution?.dayVoteOutcome?.status === "Lynch" &&
         verification.dayVoteResolution?.dayVoteOutcome?.winner_slot === "slot-2" &&
@@ -184,7 +209,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.targetOutcomeTally?.includes("4/3") &&
         verification.dayVoteResolution?.targetNotice?.effect === "player_killed" &&
         verification.dayVoteResolution?.targetNotice?.status === "day_vote" &&
-        Object.values(verification.dayVoteResolution?.targetControls ?? {}).every(Boolean),
+        Object.values(verification.dayVoteResolution?.targetControls ?? {}).every(
+          (control) => control?.disabled === true,
+        ),
     }),
     lane("day-vote-no-lynch", "No-lynch day vote resolves without a death", {
       outcomeStatus: verification.dayVoteNoLynch?.dayVoteOutcome?.status ?? null,
@@ -416,8 +443,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
       actorStatus: verification.deadPlayerRecovery?.commandState?.actorStatus ?? null,
       phase: verification.deadPlayerRecovery?.commandState?.phase?.phaseId ?? null,
       actionControlCount: verification.deadPlayerRecovery?.actionControlCount ?? null,
-      voteDisabled: verification.deadPlayerRecovery?.disabledControls?.vote ?? null,
-      postDisabled: verification.deadPlayerRecovery?.disabledControls?.post ?? null,
+      voteDisabled:
+        verification.deadPlayerRecovery?.disabledControls?.vote?.disabled ?? null,
+      postDisabled:
+        verification.deadPlayerRecovery?.disabledControls?.post?.disabled ?? null,
       directVoteError:
         verification.deadPlayerRecovery?.directVote?.serverEnvelope?.body?.body?.error ??
         null,
@@ -438,9 +467,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.deadPlayerRecovery?.commandState?.actions?.length === 0 &&
         verification.deadPlayerRecovery?.channelContext?.actorAlive === "false" &&
         verification.deadPlayerRecovery?.channelContext?.actorStatus === "dead" &&
-        verification.deadPlayerRecovery?.disabledControls?.vote === true &&
-        verification.deadPlayerRecovery?.disabledControls?.withdraw === true &&
-        verification.deadPlayerRecovery?.disabledControls?.post === true &&
+        verification.deadPlayerRecovery?.disabledControls?.vote?.disabled === true &&
+        verification.deadPlayerRecovery?.disabledControls?.withdraw?.disabled ===
+          true &&
+        verification.deadPlayerRecovery?.disabledControls?.post?.disabled === true &&
         verification.deadPlayerRecovery?.actionControlCount === 0 &&
         verification.deadPlayerRecovery?.directVote?.serverEnvelope?.body?.body?.error ===
           "SlotNotAlive" &&
@@ -1513,9 +1543,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "dead" &&
         hardening.hostLifecycleControl?.playerCommandStateAfterDead?.actions?.length ===
           0 &&
-        hardening.hostLifecycleControl?.disabledControls?.vote === true &&
-        hardening.hostLifecycleControl?.disabledControls?.withdraw === true &&
-        hardening.hostLifecycleControl?.disabledControls?.post === true &&
+        hardening.hostLifecycleControl?.disabledControls?.vote?.disabled === true &&
+        hardening.hostLifecycleControl?.disabledControls?.withdraw?.disabled ===
+          true &&
+        hardening.hostLifecycleControl?.disabledControls?.post?.disabled === true &&
         hardening.hostLifecycleControl?.actionControlCount === 0 &&
         hardening.hostLifecycleControl?.directPost?.state === "reject" &&
         hardening.hostLifecycleControl?.directPost?.error === "SlotNotAlive" &&
@@ -1610,9 +1641,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "modkilled" &&
         hardening.hostModkillControl?.playerCommandStateAfterModkill?.actions
           ?.length === 0 &&
-        hardening.hostModkillControl?.disabledControls?.vote === true &&
-        hardening.hostModkillControl?.disabledControls?.withdraw === true &&
-        hardening.hostModkillControl?.disabledControls?.post === true &&
+        hardening.hostModkillControl?.disabledControls?.vote?.disabled === true &&
+        hardening.hostModkillControl?.disabledControls?.withdraw?.disabled ===
+          true &&
+        hardening.hostModkillControl?.disabledControls?.post?.disabled === true &&
         hardening.hostModkillControl?.actionControlCount === 0 &&
         hardening.hostModkillControl?.directPost?.state === "reject" &&
         hardening.hostModkillControl?.directPost?.error === "SlotNotAlive" &&

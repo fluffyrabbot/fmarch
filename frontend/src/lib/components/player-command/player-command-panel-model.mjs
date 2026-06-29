@@ -36,6 +36,7 @@ export function buildPlayerCommandPanelViewModel({
       label: "Post body",
       defaultBody: String(composer.defaultBody ?? ""),
       channelContext,
+      currentVote: buildCurrentVoteViewModel(composer),
       buttons: Object.freeze([
         ...voteCommandButtons({
           composer,
@@ -44,7 +45,11 @@ export function buildPlayerCommandPanelViewModel({
         commandButton({
           action: "withdraw_vote",
           label: composer.withdrawCommandLabel,
-          disabled: playerCommandsDisabled,
+          disabled: playerCommandsDisabled || composer.canWithdrawVote !== true,
+          reason:
+            playerCommandsDisabled || composer.canWithdrawVote === true
+              ? ""
+              : composer.withdrawDisabledReason,
         }),
         commandButton({
           action: "submit_post",
@@ -57,6 +62,16 @@ export function buildPlayerCommandPanelViewModel({
         (composer.actionCommands ?? []).map(actionCommandButton),
       ),
     }),
+  });
+}
+
+function buildCurrentVoteViewModel(composer = {}) {
+  const label = String(composer.currentVoteLabel ?? "No current vote");
+  return Object.freeze({
+    testId: "player-current-vote",
+    label: "Current vote",
+    value: label.replace(/^Current vote:\s*/u, ""),
+    hasVote: composer.hasCurrentVote === true,
   });
 }
 
@@ -107,11 +122,12 @@ function normalizeVotecountRow(row) {
   });
 }
 
-function commandButton({ action, label, primary = false, disabled = false }) {
+function commandButton({ action, label, primary = false, disabled = false, reason = "" }) {
   return Object.freeze({
     action,
     label: String(label ?? action),
     disabled,
+    reason: String(reason ?? ""),
     className: primary
       ? "fm-touch-button"
       : "fm-touch-button fm-touch-button--secondary",
@@ -135,7 +151,7 @@ function voteCommandButtons({ composer, disabled }) {
 }
 
 function normalizeVoteCommands(composer = {}) {
-  if (Array.isArray(composer.voteCommands) && composer.voteCommands.length > 0) {
+  if (Array.isArray(composer.voteCommands)) {
     return composer.voteCommands.map((command) =>
       Object.freeze({
         action: String(command?.action ?? "submit_vote"),

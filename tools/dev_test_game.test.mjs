@@ -916,11 +916,22 @@ test("session card and markdown include role credential URLs and tokens", () => 
       status: "passed",
       proof: "action-player cast the majority day vote and host resolved the lynch",
       voterBeforeVote: {
+        currentVote: null,
         voteTargets: [
           { kind: "slot", slotId: "slot-2", label: "Slot 2" },
           { kind: "slot", slotId: "slot-3", label: "Slot 3" },
           { kind: "no_lynch", slotId: null, label: "No lynch" },
         ],
+      },
+      voterCurrentVoteBefore: {
+        hasVote: "false",
+        text: "Current vote No current vote",
+      },
+      voterWithdrawBefore: {
+        exists: true,
+        disabled: true,
+        reason: "No current vote",
+        text: "Withdraw vote",
       },
       voterVoteButtons: [
         { action: "submit_vote", text: "Vote Slot 2", disabled: false },
@@ -951,6 +962,19 @@ test("session card and markdown include role credential URLs and tokens", () => 
           },
         },
       },
+      voterAfterVote: {
+        currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+      },
+      voterCurrentVoteAfter: {
+        hasVote: "true",
+        text: "Current vote Slot 2",
+      },
+      voterWithdrawAfter: {
+        exists: true,
+        disabled: false,
+        reason: "",
+        text: "Withdraw vote",
+      },
       voterVotecountAfterVote: [{ target: "slot-2", count: 4 }],
       resolveDay: { commandStatus: { state: "ack" } },
       hostAfterResolve: {
@@ -977,7 +1001,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
         effect: "player_killed",
         status: "day_vote",
       },
-      targetControls: { vote: true, withdraw: true, post: true },
+      targetControls: {
+        vote: { exists: false, disabled: true, reason: "control absent", text: "" },
+        withdraw: { exists: true, disabled: true, reason: "", text: "Withdraw vote" },
+        post: { exists: true, disabled: true, reason: "", text: "Post" },
+      },
       targetDayVoteOutcomes: [
         { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
       ],
@@ -1196,7 +1224,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actorStatus: "dead",
         text: "Posting target Main thread as slot-2 (dead)",
       },
-      disabledControls: { vote: true, withdraw: true, post: true },
+      disabledControls: {
+        vote: { exists: false, disabled: true, reason: "control absent", text: "" },
+        withdraw: { exists: true, disabled: true, reason: "", text: "Withdraw vote" },
+        post: { exists: true, disabled: true, reason: "", text: "Post" },
+      },
       actionControlCount: 0,
       directVote: {
         statusMessage: "Reject SlotNotAlive: slot not alive",
@@ -2050,9 +2082,9 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actions: [],
         },
         disabledControls: {
-          vote: true,
-          withdraw: true,
-          post: true,
+          vote: { exists: false, disabled: true, reason: "control absent", text: "" },
+          withdraw: { exists: true, disabled: true, reason: "", text: "Withdraw vote" },
+          post: { exists: true, disabled: true, reason: "", text: "Post" },
         },
         actionControlCount: 0,
         directPost: {
@@ -2132,9 +2164,9 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actions: [],
         },
         disabledControls: {
-          vote: true,
-          withdraw: true,
-          post: true,
+          vote: { exists: false, disabled: true, reason: "control absent", text: "" },
+          withdraw: { exists: true, disabled: true, reason: "", text: "Withdraw vote" },
+          post: { exists: true, disabled: true, reason: "", text: "Post" },
         },
         actionControlCount: 0,
         directPost: {

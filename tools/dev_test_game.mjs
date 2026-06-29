@@ -1499,6 +1499,16 @@ async function verifySeededDayVoteResolution({
     const voterBeforeVote = await voterPage.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
+    const voterCurrentVoteBefore = await voterPage
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const voterWithdrawBefore = await playerCommandControlState(
+      voterPage,
+      "withdraw_vote",
+    );
     const voterVoteButtons = await voterPage
       .locator('[data-action^="submit_vote"]')
       .evaluateAll((nodes) =>
@@ -1518,7 +1528,23 @@ async function verifySeededDayVoteResolution({
           (row) => row.target === "slot-2" && row.count === 4,
         ),
     );
+    await voterPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind === "slot" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+          "slot-2",
+    );
     const finalVote = await voterPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const voterAfterVote = await voterPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const voterCurrentVoteAfter = await voterPage
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const voterWithdrawAfter = await playerCommandControlState(voterPage, "withdraw_vote");
     const voterVotecountAfterVote = await voterPage.evaluate(
       () => window.__fmarchPlayerProjection?.votecount ?? [],
     );
@@ -1575,9 +1601,9 @@ async function verifySeededDayVoteResolution({
         ) ?? null,
     );
     const targetControls = {
-      vote: await targetProofPage.locator('[data-action="submit_vote"]').isDisabled(),
-      withdraw: await targetProofPage.locator('[data-action="withdraw_vote"]').isDisabled(),
-      post: await targetProofPage.locator('[data-action="submit_post"]').isDisabled(),
+      vote: await playerCommandControlState(targetProofPage, "submit_vote"),
+      withdraw: await playerCommandControlState(targetProofPage, "withdraw_vote"),
+      post: await playerCommandControlState(targetProofPage, "submit_post"),
     };
     const targetDayVoteOutcomes = await targetProofPage.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
@@ -1612,6 +1638,12 @@ async function verifySeededDayVoteResolution({
         (target) => target.kind === "slot" && target.slotId === "slot-2",
       ) ||
       !voterBeforeVote?.voteTargets?.some((target) => target.kind === "no_lynch") ||
+      voterBeforeVote?.currentVote !== null ||
+      voterCurrentVoteBefore.hasVote !== "false" ||
+      !voterCurrentVoteBefore.text.includes("No current vote") ||
+      voterWithdrawBefore.exists !== true ||
+      voterWithdrawBefore.disabled !== true ||
+      voterWithdrawBefore.reason !== "No current vote" ||
       !voterVoteButtons.some(
         (button) =>
           button.action === "submit_vote" &&
@@ -1624,6 +1656,12 @@ async function verifySeededDayVoteResolution({
           button.text.includes("Vote no lynch") &&
           button.disabled === false,
       ) ||
+      voterAfterVote?.currentVote?.kind !== "slot" ||
+      voterAfterVote?.currentVote?.slotId !== "slot-2" ||
+      voterCurrentVoteAfter.hasVote !== "true" ||
+      !voterCurrentVoteAfter.text.includes("Slot 2") ||
+      voterWithdrawAfter.exists !== true ||
+      voterWithdrawAfter.disabled !== false ||
       !voterVotecountAfterVote.some(
         (row) => row.target === "slot-2" && row.count === 4,
       ) ||
@@ -1660,7 +1698,7 @@ async function verifySeededDayVoteResolution({
       targetNotice?.audience_slot !== "slot-2" ||
       targetNotice?.effect !== "player_killed" ||
       targetNotice?.status !== "day_vote" ||
-      !Object.values(targetControls).every(Boolean)
+      !Object.values(targetControls).every((control) => control.disabled === true)
     ) {
       throw new Error(
         `day vote resolution proof drifted: ${JSON.stringify({
@@ -1668,8 +1706,13 @@ async function verifySeededDayVoteResolution({
           seed,
           hostBeforeVote,
           voterBeforeVote,
+          voterCurrentVoteBefore,
+          voterWithdrawBefore,
           voterVoteButtons,
           finalVote,
+          voterAfterVote,
+          voterCurrentVoteAfter,
+          voterWithdrawAfter,
           voterVotecountAfterVote,
           resolveDay,
           hostAfterResolve,
@@ -1691,8 +1734,13 @@ async function verifySeededDayVoteResolution({
       seed,
       hostBeforeVote,
       voterBeforeVote,
+      voterCurrentVoteBefore,
+      voterWithdrawBefore,
       voterVoteButtons,
       finalVote,
+      voterAfterVote,
+      voterCurrentVoteAfter,
+      voterWithdrawAfter,
       voterVotecountAfterVote,
       resolveDay,
       hostAfterResolve,
@@ -1705,7 +1753,7 @@ async function verifySeededDayVoteResolution({
       targetOutcomePanel,
       targetOutcomeTally,
       proof:
-        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser rendered projection-derived slot and no-lynch vote controls, cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host and target player role URLs rendered the official day-vote outcome panel, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
+        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser rendered projection-derived slot and no-lynch vote controls, showed no current vote with Withdraw disabled, cast the fourth Slot 2 vote through /commands, refreshed current_vote to Slot 2 with Withdraw enabled, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host and target player role URLs rendered the official day-vote outcome panel, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with closed controls.",
     };
   } finally {
     await hostProofPage.close().catch(() => {});
@@ -2525,9 +2573,9 @@ async function verifySeededDeadPlayerRecovery({ targetPage, game, targetSlot }) 
       text: node.textContent,
     }));
   const disabledControls = {
-    vote: await targetPage.locator('[data-action="submit_vote"]').isDisabled(),
-    withdraw: await targetPage.locator('[data-action="withdraw_vote"]').isDisabled(),
-    post: await targetPage.locator('[data-action="submit_post"]').isDisabled(),
+    vote: await playerCommandControlState(targetPage, "submit_vote"),
+    withdraw: await playerCommandControlState(targetPage, "withdraw_vote"),
+    post: await playerCommandControlState(targetPage, "submit_post"),
   };
   const actionControlCount = await targetPage.locator('[data-action^="submit_action"]').count();
   if (
@@ -2538,7 +2586,7 @@ async function verifySeededDeadPlayerRecovery({ targetPage, game, targetSlot }) 
     commandState?.actions?.length !== 0 ||
     channelContext.actorAlive !== "false" ||
     channelContext.actorStatus !== "dead" ||
-    !Object.values(disabledControls).every(Boolean) ||
+    !Object.values(disabledControls).every((control) => control.disabled === true) ||
     actionControlCount !== 0
   ) {
     throw new Error(
@@ -4058,6 +4106,25 @@ async function playerCommandButtons(page) {
   );
 }
 
+async function playerCommandControlState(page, action) {
+  const locator = page.locator(`[data-action="${action}"]`);
+  const count = await locator.count();
+  if (count === 0) {
+    return {
+      exists: false,
+      disabled: true,
+      reason: "control absent",
+      text: "",
+    };
+  }
+  return locator.first().evaluate((node) => ({
+    exists: true,
+    disabled: node.hasAttribute("disabled"),
+    reason: node.getAttribute("data-disabled-reason") ?? "",
+    text: node.textContent?.trim() ?? "",
+  }));
+}
+
 async function verifyHostVotecountPublication({
   hostPage,
   playerPage,
@@ -4368,9 +4435,9 @@ async function verifyHostSlotLifecycleControl({
     () => window.__fmarchPlayerProjection?.commandState,
   );
   const disabledControls = {
-    vote: await playerPage.locator('[data-action="submit_vote"]').isDisabled(),
-    withdraw: await playerPage.locator('[data-action="withdraw_vote"]').isDisabled(),
-    post: await playerPage.locator('[data-action="submit_post"]').isDisabled(),
+    vote: await playerCommandControlState(playerPage, "submit_vote"),
+    withdraw: await playerCommandControlState(playerPage, "withdraw_vote"),
+    post: await playerCommandControlState(playerPage, "submit_post"),
   };
   const actionControlCount = await playerPage.locator('[data-action^="submit_action"]').count();
   const directPostCommandId = crypto.randomUUID();
@@ -4398,7 +4465,7 @@ async function verifyHostSlotLifecycleControl({
     apiSlotAfterStatus?.status !== lifecycleStatus ||
     playerCommandStateAfterStatus?.actorAlive !== false ||
     playerCommandStateAfterStatus?.actorStatus !== lifecycleStatus ||
-    !Object.values(disabledControls).every(Boolean) ||
+    !Object.values(disabledControls).every((control) => control.disabled === true) ||
     actionControlCount !== 0 ||
     directPost.state !== "reject" ||
     directPost.error !== "SlotNotAlive" ||

@@ -93,6 +93,10 @@ test("player route data exposes thread, channel, votecount, and touch command la
       voteTarget: "NoLynch",
     },
   ]);
+  assert.equal(data.composer.currentVoteLabel, "No current vote");
+  assert.equal(data.composer.hasCurrentVote, false);
+  assert.equal(data.composer.canWithdrawVote, false);
+  assert.equal(data.composer.withdrawDisabledReason, "No current vote");
   assert.deepEqual(data.composer.actionCommands, []);
   assert.equal(data.coldLoad.threadEndpoint, "/games/midsummer/thread?limit=50");
   assert.equal(
@@ -383,6 +387,7 @@ test("player route data uses REST projection cold-loads when available", async (
               target_options: ["slot-2", "slot-3"],
             },
           ],
+          current_vote: { kind: "no_lynch", slot_id: null, label: "No lynch" },
           boundary: "live player command state",
         });
       }
@@ -394,6 +399,15 @@ test("player route data uses REST projection cold-loads when available", async (
   assert.equal(data.surfaceHeader.title, "Night 1");
   assert.equal(data.commandState.actorAlive, true);
   assert.equal(data.commandState.actorStatus, "alive");
+  assert.deepEqual(data.commandState.currentVote, {
+    kind: "no_lynch",
+    slotId: null,
+    label: "No lynch",
+  });
+  assert.equal(data.composer.currentVoteLabel, "Current vote: No lynch");
+  assert.equal(data.composer.hasCurrentVote, true);
+  assert.equal(data.composer.canWithdrawVote, true);
+  assert.equal(data.composer.withdrawDisabledReason, "");
   assert.equal(data.player.alive, true);
   assert.equal(data.player.status, "alive");
   assert.deepEqual(

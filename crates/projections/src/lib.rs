@@ -73,6 +73,15 @@ pub struct VoteCountRow {
     pub count: i64,
 }
 
+/// A single actor slot's CURRENT ballot in one phase.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CurrentBallotRow {
+    pub game_id: Uuid,
+    pub phase_id: String,
+    pub actor_slot: String,
+    pub target: String,
+}
+
 /// The official engine/pack-policy day vote result for one phase.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DayVoteOutcomeRow {
@@ -1606,6 +1615,31 @@ pub async fn votecount(pool: &PgPool, game_id: Uuid) -> Result<Vec<VoteCountRow>
             count: r.get("n"),
         })
         .collect())
+}
+
+/// Read one actor slot's current ballot for a specific phase, if present.
+pub async fn current_ballot(
+    pool: &PgPool,
+    game_id: Uuid,
+    phase_id: &str,
+    actor_slot: &str,
+) -> Result<Option<CurrentBallotRow>, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT game_id, phase_id, actor_slot, target \
+         FROM vote_ballot \
+         WHERE game_id = $1 AND phase_id = $2 AND actor_slot = $3",
+    )
+    .bind(game_id)
+    .bind(phase_id)
+    .bind(actor_slot)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| CurrentBallotRow {
+        game_id: r.get("game_id"),
+        phase_id: r.get("phase_id"),
+        actor_slot: r.get("actor_slot"),
+        target: r.get("target"),
+    }))
 }
 
 /// Read official engine day vote outcomes, ordered by source resolution.

@@ -405,9 +405,13 @@ assert.equal(session.verification.deadPlayerRecovery.commandState.actions.length
 assert.equal(session.verification.deadPlayerRecovery.channelContext.actorSlot, "slot-2");
 assert.equal(session.verification.deadPlayerRecovery.channelContext.actorAlive, "false");
 assert.equal(session.verification.deadPlayerRecovery.channelContext.actorStatus, "dead");
-assert.equal(session.verification.deadPlayerRecovery.disabledControls.vote, true);
-assert.equal(session.verification.deadPlayerRecovery.disabledControls.withdraw, true);
-assert.equal(session.verification.deadPlayerRecovery.disabledControls.post, true);
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.vote.exists, false);
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.vote.disabled, true);
+assert.equal(
+  session.verification.deadPlayerRecovery.disabledControls.withdraw.disabled,
+  true,
+);
+assert.equal(session.verification.deadPlayerRecovery.disabledControls.post.disabled, true);
 assert.equal(session.verification.deadPlayerRecovery.actionControlCount, 0);
 assert.equal(
   session.verification.deadPlayerRecovery.directVote.serverEnvelope.body.body.error,
@@ -1511,7 +1515,8 @@ assert.equal(
   "dead",
 );
 assert.equal(
-  session.verification.multiplayerHardening.hostLifecycleControl.disabledControls.post,
+  session.verification.multiplayerHardening.hostLifecycleControl.disabledControls.post
+    .disabled,
   true,
 );
 assert.equal(
@@ -1614,7 +1619,8 @@ assert.equal(
   "modkilled",
 );
 assert.equal(
-  session.verification.multiplayerHardening.hostModkillControl.disabledControls.post,
+  session.verification.multiplayerHardening.hostModkillControl.disabledControls.post
+    .disabled,
   true,
 );
 assert.equal(

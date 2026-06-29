@@ -350,6 +350,7 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
             { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
             { kind: "no_lynch", slot_id: null, label: "No lynch" },
           ],
+          current_vote: { kind: "slot", slot_id: "slot-2", label: "Slot 2" },
           boundary: "live role actions",
         });
       }
@@ -377,6 +378,11 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
     { kind: "slot", slotId: "slot-2", label: "Slot 2" },
     { kind: "no_lynch", slotId: null, label: "No lynch" },
   ]);
+  assert.deepEqual(data.commandState.currentVote, {
+    kind: "slot",
+    slotId: "slot-2",
+    label: "Slot 2",
+  });
 });
 
 test("normalizes player command state into route action configs", () => {
@@ -410,6 +416,7 @@ test("normalizes player command state into route action configs", () => {
           { kind: "slot", slot_id: "slot-3", label: "Slot 3" },
           { kind: "no_lynch", slot_id: null, label: "No lynch" },
         ],
+        current_vote: { kind: "no_lynch", slot_id: null, label: "No lynch" },
         boundary: "live command state",
       },
       FALLBACK.commandState,
@@ -449,6 +456,7 @@ test("normalizes player command state into route action configs", () => {
         { kind: "slot", slotId: "slot-3", label: "Slot 3" },
         { kind: "no_lynch", slotId: null, label: "No lynch" },
       ],
+      currentVote: { kind: "no_lynch", slotId: null, label: "No lynch" },
       boundary: "live command state",
     },
   );

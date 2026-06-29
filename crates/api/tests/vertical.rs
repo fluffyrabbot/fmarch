@@ -844,9 +844,45 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
             {"kind": "no_lynch", "slot_id": null, "label": "No lynch"}
         ])
     );
+    assert_eq!(state["current_vote"], serde_json::Value::Null);
     assert_eq!(state["actions"], serde_json::json!([]));
 
-    expect_ack(post_command(app.clone(), 12, "host_h", Command::LockThread { game }).await);
+    expect_ack(
+        post_command(
+            app.clone(),
+            12,
+            "action-town",
+            Command::SubmitVote {
+                game,
+                actor_slot: "slot-3".into(),
+                target: VoteTarget::Slot("slot-2".into()),
+            },
+        )
+        .await,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/player-command-state?principal_user_id=action-town&slot_id=slot-3"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        state["current_vote"],
+        serde_json::json!({"kind": "slot", "slot_id": "slot-2", "label": "Slot 2"})
+    );
+
+    expect_ack(post_command(app.clone(), 13, "host_h", Command::LockThread { game }).await);
 
     let response = app
         .clone()
@@ -866,6 +902,10 @@ async fn player_command_state_exposes_day_vote_targets(pool: sqlx::PgPool) {
     let state: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(state["phase"]["locked"], true);
     assert_eq!(state["vote_targets"], serde_json::json!([]));
+    assert_eq!(
+        state["current_vote"],
+        serde_json::json!({"kind": "slot", "slot_id": "slot-2", "label": "Slot 2"})
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
