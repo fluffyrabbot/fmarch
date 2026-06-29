@@ -737,6 +737,8 @@ export function markdownSessionCard(card) {
         "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
         "",
+        `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
+        "",
         `Host modkill: ${card.verification.multiplayerHardening.hostModkillControl.modkill.statusMessage}`,
         "",
         `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
@@ -781,6 +783,7 @@ async function verifySessionCard(card) {
   let staleHostResolvePage;
   let staleHostAdvancePage;
   let staleHostPublishPage;
+  let staleHostLifecyclePage;
   let staleHostDeadlinePage;
   let staleCohostPage;
   let staleReplacementPage;
@@ -802,6 +805,7 @@ async function verifySessionCard(card) {
     staleHostResolvePage = await roleEntries.host.context.newPage();
     staleHostAdvancePage = await roleEntries.host.context.newPage();
     staleHostPublishPage = await roleEntries.host.context.newPage();
+    staleHostLifecyclePage = await roleEntries.host.context.newPage();
     staleHostDeadlinePage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
@@ -854,6 +858,7 @@ async function verifySessionCard(card) {
       staleHostResolvePage,
       staleHostAdvancePage,
       staleHostPublishPage,
+      staleHostLifecyclePage,
       staleHostDeadlinePage,
       staleHostDeadlineSetup,
       staleCohostPage,
@@ -880,6 +885,7 @@ async function verifySessionCard(card) {
     await staleHostResolvePage?.close().catch(() => {});
     await staleHostAdvancePage?.close().catch(() => {});
     await staleHostPublishPage?.close().catch(() => {});
+    await staleHostLifecyclePage?.close().catch(() => {});
     await staleHostDeadlinePage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
@@ -1283,6 +1289,61 @@ async function freezeStaleHostPublishPage({
     stalePhase,
     votecountRows,
     votecountActions,
+    closedStatus,
+  };
+}
+
+async function freezeStaleHostLifecyclePage({
+  staleHostLifecyclePage,
+  game,
+  frontendBaseUrl,
+}) {
+  await staleHostLifecyclePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostLifecyclePage
+    .locator('[data-testid="critical-host-action-mark_dead"]')
+    .waitFor({ state: "visible" });
+  await staleHostLifecyclePage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false &&
+      window.__fmarchHostProjection?.replacement?.lifecycleLabel === "Alive",
+  );
+  const stalePhase = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const replacement = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const lifecycleActions = await visibleHostControlActions(
+    staleHostLifecyclePage,
+    "slot-lifecycle",
+  );
+  const closedStatus = await staleHostLifecyclePage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D02" ||
+    stalePhase?.locked !== false ||
+    replacement?.lifecycleLabel !== "Alive" ||
+    !lifecycleActions.includes("mark_dead") ||
+    !lifecycleActions.includes("modkill_slot") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host lifecycle setup drifted: ${JSON.stringify({
+        stalePhase,
+        replacement,
+        lifecycleActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    replacement,
+    lifecycleActions,
     closedStatus,
   };
 }
@@ -2394,6 +2455,7 @@ async function verifySeededMultiplayerHardening({
   staleHostResolvePage,
   staleHostAdvancePage,
   staleHostPublishPage,
+  staleHostLifecyclePage,
   staleHostDeadlinePage,
   staleHostDeadlineSetup,
   staleCohostPage,
@@ -2505,13 +2567,21 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  const staleHostLifecycleSetup = await freezeStaleHostLifecyclePage({
+    staleHostLifecyclePage,
+    game,
+    frontendBaseUrl,
+  });
   const hostLifecycleControl = await verifyHostLifecycleControl({
     hostPage,
     playerPage,
     game,
     apiBaseUrl,
     normalizeCommandResponse,
+    staleHostLifecyclePage,
+    staleHostLifecycleSetup,
   });
+  const staleHostLifecycle = hostLifecycleControl.staleDuplicateStatus;
   const hostModkillControl = await verifyHostModkillControl({
     hostPage,
     playerPage,
@@ -2601,6 +2671,7 @@ async function verifySeededMultiplayerHardening({
     concurrentVoteRace,
     hostVotecountPublication,
     staleHostPublish,
+    staleHostLifecycle,
     hostLifecycleControl,
     hostModkillControl,
     staleDeadActionConflict,
@@ -2611,7 +2682,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a stale host Mark dead rejects without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -2805,6 +2876,8 @@ async function verifyHostLifecycleControl({
   game,
   apiBaseUrl,
   normalizeCommandResponse,
+  staleHostLifecyclePage,
+  staleHostLifecycleSetup,
 }) {
   const result = await verifyHostSlotLifecycleControl({
     hostPage,
@@ -2816,6 +2889,8 @@ async function verifyHostLifecycleControl({
     lifecycleStatus: "dead",
     lifecycleLabel: "Dead",
     directPostBody: "Host lifecycle dead-slot recovery proof.",
+    staleHostLifecyclePage,
+    staleHostLifecycleSetup,
     proof:
       "The seeded host role URL clicked Mark dead for Slot 7, emitted SetSlotStatus through /commands, host and player browser projections rendered Slot 7 dead, the affected player role URL disabled vote/post/action controls and rejected a direct SubmitPost as SlotNotAlive, then the host restored Slot 7 alive so later seeded proofs continue from the canonical game state.",
   });
@@ -2867,6 +2942,8 @@ async function verifyHostSlotLifecycleControl({
   lifecycleStatus,
   lifecycleLabel,
   directPostBody,
+  staleHostLifecyclePage,
+  staleHostLifecycleSetup,
   proof,
 }) {
   const targetSlot = "slot-7";
@@ -2962,6 +3039,20 @@ async function verifyHostSlotLifecycleControl({
     );
   }
 
+  const staleDuplicateStatus =
+    staleHostLifecyclePage === undefined || staleHostLifecycleSetup === undefined
+      ? undefined
+      : await submitStaleHostLifecycleRecovery({
+          staleHostLifecyclePage,
+          staleHostLifecycleSetup,
+          actionId,
+          lifecycleStatus,
+          lifecycleLabel,
+          apiBaseUrl,
+          game,
+          playerPage,
+        });
+
   const restoreAlive = await setSlotLifecycleViaHost({
     hostPage,
     game,
@@ -3013,11 +3104,123 @@ async function verifyHostSlotLifecycleControl({
     disabledControls,
     actionControlCount,
     directPost,
+    ...(staleDuplicateStatus === undefined ? {} : { staleDuplicateStatus }),
     restoreAlive,
     hostReplacementAfterRestore,
     apiSlotAfterRestore,
     playerCommandStateAfterRestore,
     proof,
+  };
+}
+
+async function submitStaleHostLifecycleRecovery({
+  staleHostLifecyclePage,
+  staleHostLifecycleSetup,
+  actionId,
+  lifecycleStatus,
+  lifecycleLabel,
+  apiBaseUrl,
+  game,
+  playerPage,
+}) {
+  const action = await confirmHostAction(staleHostLifecyclePage, actionId, "reject");
+  await staleHostLifecyclePage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "InvalidTarget",
+    actionId,
+  );
+  const reject = action.commandStatus;
+  const commandOutcomes = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const replacementAfterReject = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const lifecycleActionsAfterReject = await visibleHostControlActions(
+    staleHostLifecyclePage,
+    "slot-lifecycle",
+  );
+  const activityStatusText = await staleHostLifecyclePage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostLifecyclePage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const apiSlotAfterReject = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const playerCommandStateAfterReject = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  if (
+    staleHostLifecycleSetup?.replacement?.lifecycleLabel !== "Alive" ||
+    !staleHostLifecycleSetup?.lifecycleActions?.includes(actionId) ||
+    reject?.state !== "reject" ||
+    reject?.error !== "InvalidTarget" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    !reject?.message?.includes("slot lifecycle is already current") ||
+    commandOutcomes.find(
+      (outcome) =>
+        outcome.actionId === actionId &&
+        outcome.state === "reject" &&
+        outcome.error === "InvalidTarget",
+    ) === undefined ||
+    replacementAfterReject?.lifecycleLabel !==
+      staleHostLifecycleSetup.replacement.lifecycleLabel ||
+    !lifecycleActionsAfterReject.includes(actionId) ||
+    !activityStatusText.includes("Reject InvalidTarget") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    !Array.isArray(dispatchPlan?.projectionRefreshKeys) ||
+    dispatchPlan.projectionRefreshKeys.length !== 0 ||
+    apiSlotAfterReject?.alive !== false ||
+    apiSlotAfterReject?.status !== lifecycleStatus ||
+    playerCommandStateAfterReject?.actorAlive !== false ||
+    playerCommandStateAfterReject?.actorStatus !== lifecycleStatus
+  ) {
+    throw new Error(
+      `stale host lifecycle recovery drifted: ${JSON.stringify({
+        staleHostLifecycleSetup,
+        action,
+        reject,
+        commandOutcomes,
+        replacementAfterReject,
+        lifecycleActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiSlotAfterReject,
+        playerCommandStateAfterReject,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    lifecycleStatus,
+    setup: staleHostLifecycleSetup,
+    reject,
+    commandOutcomes,
+    replacementAfterReject,
+    lifecycleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiSlotAfterReject,
+    playerCommandStateAfterReject,
   };
 }
 

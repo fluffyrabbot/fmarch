@@ -1535,6 +1535,53 @@ assert.equal(
     .playerCommandStateAfterRestore.actorStatus,
   "alive",
 );
+assert.equal(session.verification.multiplayerHardening.staleHostLifecycle.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.actionId,
+  "mark_dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.setup.replacement
+    .lifecycleLabel,
+  "Alive",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.reject.error,
+  "InvalidTarget",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostLifecycle.reject.message,
+  /slot lifecycle is already current/,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.multiplayerHardening.staleHostLifecycle.reject.streamSeqs,
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.replacementAfterReject
+    .lifecycleLabel,
+  "Alive",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.dispatchPlan
+    .projectionRefreshKeys.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.apiSlotAfterReject.status,
+  "dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle.playerCommandStateAfterReject
+    .actorStatus,
+  "dead",
+);
 assert.equal(
   session.verification.multiplayerHardening.hostModkillControl.status,
   "passed",

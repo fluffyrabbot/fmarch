@@ -1931,6 +1931,46 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorStatus: "alive",
         },
       },
+      staleHostLifecycle: {
+        status: "passed",
+        actionId: "mark_dead",
+        lifecycleStatus: "dead",
+        setup: {
+          stalePhase: { id: "D02", locked: false },
+          replacement: { lifecycleLabel: "Alive" },
+          lifecycleActions: ["mark_dead", "modkill_slot"],
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            actionId: "mark_dead",
+            state: "reject",
+            error: "InvalidTarget",
+          },
+        ],
+        replacementAfterReject: { lifecycleLabel: "Alive" },
+        lifecycleActionsAfterReject: ["mark_dead", "modkill_slot"],
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+        activityRow: {
+          source: "outcome",
+          actionId: "mark_dead",
+          dispatchKind: "mark_dead",
+        },
+        dispatchPlan: { projectionRefreshKeys: [] },
+        apiSlotAfterReject: { alive: false, status: "dead" },
+        playerCommandStateAfterReject: {
+          actorAlive: false,
+          actorStatus: "dead",
+        },
+      },
       hostModkillControl: {
         status: "passed",
         targetSlot: "slot-7",
@@ -2294,6 +2334,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
+  assert(markdown.includes("Stale host lifecycle: Reject InvalidTarget"));
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
@@ -2347,6 +2388,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "host-votecount-publication",
       "stale-host-publish",
       "host-lifecycle-control",
+      "stale-host-lifecycle",
       "host-modkill-control",
       "stale-dead-action-conflict",
       "stale-action-conflict",
@@ -2427,7 +2469,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 45);
+  assert.equal(opsArtifacts.proofRun.laneCount, 46);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2981,6 +3023,7 @@ function hardeningAdminProofFixture() {
         "stale-player-vote",
         "concurrent-vote-race",
         "stale-host-publish",
+        "stale-host-lifecycle",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",

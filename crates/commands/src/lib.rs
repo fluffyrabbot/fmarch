@@ -961,8 +961,11 @@ async fn host_slot_lifecycle(
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
-    if !projections::slot_exists(pool, game, &slot).await? {
-        return Err(Reject::UnknownSlot);
+    let current_status = current_slot_lifecycle_status(pool, game, &slot)
+        .await?
+        .ok_or(Reject::UnknownSlot)?;
+    if kind == "SlotStatusChanged" && payload["status"].as_str() == Some(current_status.as_str()) {
+        return Err(Reject::InvalidTarget);
     }
     payload["slot_id"] = serde_json::Value::String(slot);
     persist(
@@ -972,6 +975,21 @@ async fn host_slot_lifecycle(
         receipt,
     )
     .await
+}
+
+async fn current_slot_lifecycle_status(
+    pool: &PgPool,
+    game: Uuid,
+    slot: &str,
+) -> Result<Option<String>, Reject> {
+    sqlx::query_scalar::<_, String>(
+        "SELECT status FROM slot_state WHERE game_id = $1 AND slot_id = $2",
+    )
+    .bind(game)
+    .bind(slot)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))
 }
 
 async fn assign_slot(

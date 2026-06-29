@@ -70054,6 +70054,88 @@ async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+
+    handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect("initial dead status");
+    let duplicate_dead = handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect_err("stale mark-dead control rejects once slot is already dead");
+    assert_eq!(duplicate_dead, Reject::InvalidTarget);
+
+    handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Alive,
+        },
+    )
+    .await
+    .expect("restore alive status");
+    let duplicate_alive = handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Alive,
+        },
+    )
+    .await
+    .expect_err("stale restore-alive control rejects once slot is already alive");
+    assert_eq!(duplicate_alive, Reject::InvalidTarget);
+
+    let lifecycle_events = sqlx::query_as::<_, (String, i64)>(
+        "SELECT payload->>'status' AS status, count(*) AS count \
+         FROM events \
+         WHERE stream_id = $1 AND kind = 'SlotStatusChanged' \
+         GROUP BY payload->>'status' \
+         ORDER BY payload->>'status'",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lifecycle_events,
+        vec![("alive".into(), 1), ("dead".into(), 1)],
+        "stale lifecycle rejection must not append duplicate SlotStatusChanged events"
+    );
+
+    let slot = slot_state(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|row| row.slot_id == "slot_1")
+        .expect("slot projection");
+    assert!(
+        slot.alive && slot.status == "alive",
+        "duplicate alive rejection must preserve restored alive projection"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     let game = setup_game_with_pack(
         &pool,

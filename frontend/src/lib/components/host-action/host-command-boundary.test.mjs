@@ -368,6 +368,33 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     "Reject InvalidTarget: invalid target; official votecount is already published, refresh the thread before retrying",
   );
 
+  const staleLifecycleReject = await sendHostActionCommand({
+    actionEvent: MARK_DEAD_EVENT,
+    principalUserId: "host_h",
+    commandIdFactory: () => "47474747-4747-4747-8747-474747474747",
+    envelopeIdFactory: () => 17,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 17,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "InvalidTarget",
+            retryable: false,
+            message: "invalid target",
+          },
+        },
+      }),
+  });
+
+  assert.equal(staleLifecycleReject.state, "reject");
+  assert.equal(staleLifecycleReject.error, "InvalidTarget");
+  assert.equal(
+    staleLifecycleReject.message,
+    "Reject InvalidTarget: invalid target; slot lifecycle is already current, refresh the slot controls before retrying",
+  );
+
   const staleReplacementReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
     principalUserId: "host_h",
