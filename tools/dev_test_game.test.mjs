@@ -54,7 +54,12 @@ import {
 } from "./dev_test_game_next_action.mjs";
 import {
   assertDevTestGameProofGraph,
+  assertDevTestGameProofGraphCoversAdminSpine,
   buildDevTestGameProofGraph,
+  devTestGameProofGraphAdminProofCommand,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofGraphCommand,
+  devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
@@ -180,6 +185,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/admin-spine-proof.json",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
       "target/dev-test-game/admin-spine-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
+    FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
+      "target/dev-test-game/proof-graph-admin-proof.json",
   });
   assert.deepEqual(devTestGameLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
@@ -287,6 +295,24 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
     roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
   });
+  assert.deepEqual(manifest.commands.proofGraph, {
+    script: devTestGameProofGraphCommand,
+    proofArtifact: devTestGameProofGraphPath,
+    dependsOn: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/admin-spine-proof.json",
+    ],
+  });
+  assert.deepEqual(manifest.commands.proofGraphAdminProof, {
+    script: devTestGameProofGraphAdminProofCommand,
+    proofArtifact: devTestGameProofGraphAdminProofPath,
+    dependsOn: [
+      "target/dev-test-game/proof-graph.json",
+      "target/dev-test-game/admin-spine-proof.json",
+      "target/dev-test-game/proof-run.json",
+    ],
+    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+  });
   assert.deepEqual(
     manifest.terminalArtifacts.map((artifact) => ({
       id: artifact.id,
@@ -306,6 +332,18 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         command: nextActionAdminProofCommand,
         path: nextActionAdminProofPath,
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
+      {
+        id: "proof-graph",
+        command: devTestGameProofGraphCommand,
+        path: devTestGameProofGraphPath,
+        roleUrl: undefined,
+      },
+      {
+        id: "proof-graph-admin-proof",
+        command: devTestGameProofGraphAdminProofCommand,
+        path: devTestGameProofGraphAdminProofPath,
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
       },
     ],
   );
@@ -346,6 +384,8 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
+  assert(manifest.artifacts.includes(devTestGameProofGraphPath));
+  assert(manifest.artifacts.includes(devTestGameProofGraphAdminProofPath));
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
   assert(
     manifest.artifacts.includes(
@@ -613,8 +653,20 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
 
   assertDevTestGameProofGraph(graph);
+  assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
   assert.equal(graph.summary.nodeCount, 12);
   assert.equal(graph.summary.roleUrlCount, 12);
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.kind === "admin-proof-surface")
+      .map((node) => [node.surfaceId, node.artifact, node.roleUrl, node.proofCommand]),
+    adminSpineProof.adminProofs.map((proof) => [
+      proof.id,
+      proof.path,
+      proof.detailRoleUrl,
+      proof.rerunCommand,
+    ]),
+  );
   assert.deepEqual(
     graph.nodes
       .filter((node) =>
@@ -667,6 +719,17 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         edge.to === "next-action" &&
         edge.relationship === "recovers-through",
     ),
+  );
+  assert.throws(
+    () =>
+      assertDevTestGameProofGraphCoversAdminSpine(
+        {
+          ...graph,
+          nodes: graph.nodes.filter((node) => node.id !== "admin-proof:identity"),
+        },
+        adminSpineProof,
+      ),
+    /proof graph admin surface count drifted/,
   );
 });
 

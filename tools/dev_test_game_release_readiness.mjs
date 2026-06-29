@@ -1435,6 +1435,12 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
   const recoveryEntries = new Map(
     (proof.recovery?.surfaces ?? []).map((entry) => [entry.id, entry]),
   );
+  if (entries.size !== requiredProofs.length) {
+    throw new Error(`admin spine proof surface count drifted`);
+  }
+  if (recoveryEntries.size !== requiredProofs.length) {
+    throw new Error(`admin spine proof recovery surface count drifted`);
+  }
   for (const id of requiredProofs) {
     const entry = entries.get(id);
     if (entry?.status !== "passed") {
@@ -1448,6 +1454,19 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     }
     if (typeof entry.rerunCommand !== "string" || entry.rerunCommand.trim() === "") {
       throw new Error(`admin spine proof entry ${id} is missing rerun command`);
+    }
+    if (
+      typeof entry.overviewRoleUrl !== "string" ||
+      entry.overviewRoleUrl !== "/admin?game=<seeded-game>"
+    ) {
+      throw new Error(`admin spine proof entry ${id} has invalid overview role URL`);
+    }
+    if (
+      typeof entry.detailRoleUrl !== "string" ||
+      !entry.detailRoleUrl.startsWith("/admin/audit/") ||
+      !entry.detailRoleUrl.includes("?game=<seeded-game>")
+    ) {
+      throw new Error(`admin spine proof entry ${id} has invalid detail role URL`);
     }
     if (entry.refreshedInCurrentRun !== true) {
       throw new Error(`admin spine proof entry ${id} did not record refresh status`);

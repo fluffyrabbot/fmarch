@@ -16,6 +16,8 @@ const DEFAULT_ADMIN_SPINE_ADMIN_PROOF =
   "target/dev-test-game/admin-spine-admin-proof.json";
 const DEFAULT_NEXT_ACTION = "target/dev-test-game/next-action.json";
 const DEFAULT_PROOF_GRAPH = "target/dev-test-game/proof-graph.json";
+const DEFAULT_PROOF_GRAPH_ADMIN_PROOF =
+  "target/dev-test-game/proof-graph-admin-proof.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -126,6 +128,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     label: "Admin spine role proof",
     env: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF",
     fallback: DEFAULT_ADMIN_SPINE_ADMIN_PROOF,
+  }),
+  Object.freeze({
+    id: "proof-graph",
+    label: "Proof graph",
+    env: "FMARCH_DEV_TEST_GAME_PROOF_GRAPH",
+    fallback: DEFAULT_PROOF_GRAPH,
+  }),
+  Object.freeze({
+    id: "proof-graph-admin",
+    label: "Proof graph admin proof",
+    env: "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
+    fallback: DEFAULT_PROOF_GRAPH_ADMIN_PROOF,
   }),
 ]);
 

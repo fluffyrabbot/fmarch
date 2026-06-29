@@ -11,6 +11,12 @@ import {
 } from "./dev_test_game_admin_spine.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 import {
+  devTestGameProofGraphAdminProofCommand,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofGraphCommand,
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -113,6 +119,21 @@ export function buildDevTestGameSpineManifest({
         dependsOn: [nextActionPath, "target/dev-test-game/proof-run.json"],
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
       },
+      proofGraph: {
+        script: devTestGameProofGraphCommand,
+        proofArtifact: devTestGameProofGraphPath,
+        dependsOn: [spineManifestPath, adminSpineProofPath],
+      },
+      proofGraphAdminProof: {
+        script: devTestGameProofGraphAdminProofCommand,
+        proofArtifact: devTestGameProofGraphAdminProofPath,
+        dependsOn: [
+          devTestGameProofGraphPath,
+          adminSpineProofPath,
+          "target/dev-test-game/proof-run.json",
+        ],
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      },
     },
     evidenceEnv,
     artifactFreshness: buildArtifactFreshnessReport(proofFreshness, {
@@ -138,6 +159,29 @@ export function buildDevTestGameSpineManifest({
         boundary:
           "Terminal local admin role proof for the generated next-action receipt. It is recorded separately from artifact freshness inputs to avoid making the receipt depend on its own browser proof.",
       },
+      {
+        id: "proof-graph",
+        label: "Proof graph",
+        command: devTestGameProofGraphCommand,
+        path: devTestGameProofGraphPath,
+        dependsOn: [spineManifestPath, adminSpineProofPath],
+        boundary:
+          "Machine-readable local graph of proof surfaces, seeded admin role URLs, artifacts, proof commands, and recovery edges.",
+      },
+      {
+        id: "proof-graph-admin-proof",
+        label: "Proof graph admin proof",
+        command: devTestGameProofGraphAdminProofCommand,
+        path: devTestGameProofGraphAdminProofPath,
+        dependsOn: [
+          devTestGameProofGraphPath,
+          adminSpineProofPath,
+          "target/dev-test-game/proof-run.json",
+        ],
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        boundary:
+          "Terminal local admin role proof for the generated proof graph detail route and graph-to-admin-spine coverage invariant.",
+      },
     ],
     artifacts: uniqueSorted([
       spineManifestPath,
@@ -146,6 +190,8 @@ export function buildDevTestGameSpineManifest({
       proofFreshnessAdminProofPath,
       nextActionPath,
       nextActionAdminProofPath,
+      devTestGameProofGraphPath,
+      devTestGameProofGraphAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
       ...envValues(evidenceEnv.backupRestore.backupRestoreEvidenceEnv),
       ...envValues(evidenceEnv.backupRestore.backupAwareOpsEnv),
@@ -192,7 +238,12 @@ export function buildDevTestGameSpineManifest({
       {
         id: "terminal-artifacts-recorded",
         status: "passed",
-        evidence: [nextActionPath, nextActionAdminProofPath],
+        evidence: [
+          nextActionPath,
+          nextActionAdminProofPath,
+          devTestGameProofGraphPath,
+          devTestGameProofGraphAdminProofPath,
+        ],
       },
       {
         id: "release-boundary-carried",
@@ -289,6 +340,32 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest next-action admin proof artifact drifted: ${manifest.commands.nextActionAdminProof.proofArtifact}`,
     );
   }
+  if (manifest.commands?.proofGraph?.script !== devTestGameProofGraphCommand) {
+    throw new Error(
+      `spine manifest proof graph command drifted: ${manifest.commands?.proofGraph?.script}`,
+    );
+  }
+  if (manifest.commands.proofGraph.proofArtifact !== devTestGameProofGraphPath) {
+    throw new Error(
+      `spine manifest proof graph artifact drifted: ${manifest.commands.proofGraph.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.proofGraphAdminProof?.script !==
+    devTestGameProofGraphAdminProofCommand
+  ) {
+    throw new Error(
+      `spine manifest proof graph admin proof command drifted: ${manifest.commands?.proofGraphAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.proofGraphAdminProof.proofArtifact !==
+    devTestGameProofGraphAdminProofPath
+  ) {
+    throw new Error(
+      `spine manifest proof graph admin proof artifact drifted: ${manifest.commands.proofGraphAdminProof.proofArtifact}`,
+    );
+  }
   assertTerminalArtifacts(manifest.terminalArtifacts);
   for (const path of [
     spineManifestPath,
@@ -297,6 +374,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     proofFreshnessAdminProofPath,
     nextActionPath,
     nextActionAdminProofPath,
+    devTestGameProofGraphPath,
+    devTestGameProofGraphAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
@@ -349,6 +428,26 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !adminProof.dependsOn.includes(nextActionPath)
   ) {
     throw new Error("spine manifest next-action admin terminal artifact drifted");
+  }
+  const proofGraph = artifacts.get("proof-graph");
+  if (
+    proofGraph?.command !== devTestGameProofGraphCommand ||
+    proofGraph.path !== devTestGameProofGraphPath ||
+    !Array.isArray(proofGraph.dependsOn) ||
+    !proofGraph.dependsOn.includes(spineManifestPath) ||
+    !proofGraph.dependsOn.includes(adminSpineProofPath)
+  ) {
+    throw new Error("spine manifest proof graph terminal artifact drifted");
+  }
+  const proofGraphAdminProof = artifacts.get("proof-graph-admin-proof");
+  if (
+    proofGraphAdminProof?.command !== devTestGameProofGraphAdminProofCommand ||
+    proofGraphAdminProof.path !== devTestGameProofGraphAdminProofPath ||
+    proofGraphAdminProof.roleUrl !== "/admin/audit/local-proof-graph?game=<seeded-game>" ||
+    !Array.isArray(proofGraphAdminProof.dependsOn) ||
+    !proofGraphAdminProof.dependsOn.includes(devTestGameProofGraphPath)
+  ) {
+    throw new Error("spine manifest proof graph admin terminal artifact drifted");
   }
 }
 
@@ -525,6 +624,8 @@ const artifactRefreshCommands = Object.freeze({
   "spine-manifest-admin": "npm run test:dev-test-game-spine-manifest-admin-proof",
   "admin-spine": "npm run test:dev-test-game-admin-spine",
   "admin-spine-admin": "npm run test:dev-test-game-admin-spine",
+  "proof-graph": "npm run test:dev-test-game-proof-graph",
+  "proof-graph-admin": "npm run test:dev-test-game-proof-graph-admin-proof",
 });
 
 function markdownSpineManifest(manifest) {

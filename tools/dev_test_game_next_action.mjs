@@ -230,6 +230,8 @@ const devSpineArtifactPriorities = new Map(
     ["release", "target/dev-test-game/release-admin-proof.json"],
     ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
     ["admin-spine-admin", "target/dev-test-game/admin-spine-admin-proof.json"],
+    ["proof-graph", "target/dev-test-game/proof-graph.json"],
+    ["proof-graph-admin", "target/dev-test-game/proof-graph-admin-proof.json"],
     ["spine-manifest", "target/dev-test-game/spine-manifest.json"],
     ["spine-manifest-admin", "target/dev-test-game/spine-manifest-admin-proof.json"],
   ].flatMap(([id, artifactPath], index) => [
@@ -240,10 +242,17 @@ const devSpineArtifactPriorities = new Map(
 
 const unknownSpineFallbackPriority = 1_000;
 const terminalFallbackPriority = 10_000;
-const terminalArtifactIds = new Set(["next-action", "next-action-admin-proof"]);
+const terminalArtifactIds = new Set([
+  "next-action",
+  "next-action-admin-proof",
+  "proof-graph",
+  "proof-graph-admin",
+]);
 const terminalArtifactPaths = new Set([
   devTestGameNextActionPath,
   "target/dev-test-game/next-action-admin-proof.json",
+  "target/dev-test-game/proof-graph.json",
+  "target/dev-test-game/proof-graph-admin-proof.json",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

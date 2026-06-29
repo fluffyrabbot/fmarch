@@ -3,10 +3,16 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
+export {
+  devTestGameProofGraphAdminProofCommand,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofGraphCommand,
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
+import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
-export const devTestGameProofGraphPath = "target/dev-test-game/proof-graph.json";
 
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
 
@@ -50,11 +56,11 @@ export function buildDevTestGameProofGraph(
     nodes,
     edges,
   };
-  assertDevTestGameProofGraph(evidence);
+  assertDevTestGameProofGraph(evidence, { adminSpineProof: adminSpine });
   return evidence;
 }
 
-export function assertDevTestGameProofGraph(evidence) {
+export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) {
   if (evidence?.version !== DEV_TEST_GAME_PROOF_GRAPH_VERSION) {
     throw new Error(`proof graph version drifted: ${evidence?.version}`);
   }
@@ -96,7 +102,71 @@ export function assertDevTestGameProofGraph(evidence) {
       throw new Error(`proof graph edge has an unknown endpoint: ${edge.from}->${edge.to}`);
     }
   }
+  if (adminSpineProof !== undefined) {
+    assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
+  }
   return evidence;
+}
+
+export function assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof) {
+  validateDevTestGameAdminSpineProof(adminSpineProof, {
+    path: graph?.generatedFrom?.adminSpineProof,
+  });
+  const recoveryCommands = new Map(
+    (adminSpineProof.recovery?.surfaces ?? []).map((surface) => [
+      surface.id,
+      surface.rerunCommand,
+    ]),
+  );
+  const adminEntries = new Map(
+    (adminSpineProof.adminProofs ?? []).map((entry) => [entry.id, entry]),
+  );
+  const graphAdminNodes = new Map(
+    (graph.nodes ?? [])
+      .filter((node) => node.kind === "admin-proof-surface")
+      .map((node) => [node.surfaceId, node]),
+  );
+  if (adminEntries.size !== graphAdminNodes.size) {
+    throw new Error(
+      `proof graph admin surface count drifted: expected ${adminEntries.size}, got ${graphAdminNodes.size}`,
+    );
+  }
+  for (const [id, entry] of adminEntries) {
+    const node = graphAdminNodes.get(id);
+    if (node === undefined) {
+      throw new Error(`proof graph missing admin surface node: ${id}`);
+    }
+    const expectedNodeId = `admin-proof:${id}`;
+    if (node.id !== expectedNodeId) {
+      throw new Error(`proof graph admin surface ${id} node id drifted: ${node.id}`);
+    }
+    if (node.status !== entry.status) {
+      throw new Error(`proof graph admin surface ${id} status drifted`);
+    }
+    if (node.artifact !== entry.path) {
+      throw new Error(`proof graph admin surface ${id} artifact drifted`);
+    }
+    if (node.roleUrl !== entry.detailRoleUrl) {
+      throw new Error(`proof graph admin surface ${id} role URL drifted`);
+    }
+    if (node.proofCommand !== entry.rerunCommand) {
+      throw new Error(`proof graph admin surface ${id} proof command drifted`);
+    }
+    if (node.recoveryCommand !== recoveryCommands.get(id)) {
+      throw new Error(`proof graph admin surface ${id} recovery command drifted`);
+    }
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "admin-spine" &&
+          edge.to === expectedNodeId &&
+          edge.relationship === "aggregates",
+      )
+    ) {
+      throw new Error(`proof graph admin surface ${id} is missing aggregate edge`);
+    }
+  }
+  return graph;
 }
 
 export async function writeDevTestGameProofGraph({

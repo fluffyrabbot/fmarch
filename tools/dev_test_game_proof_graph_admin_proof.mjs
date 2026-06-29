@@ -1,5 +1,6 @@
 import path from "node:path";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
+import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -18,8 +19,14 @@ const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
 );
+const adminSpineProofPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
+    "target/dev-test-game/admin-spine-proof.json",
+);
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
 
 await runAdminAuditProof({
@@ -28,11 +35,20 @@ await runAdminAuditProof({
   evidencePath,
   envOverrides: {
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
   },
-  loadSource: async () => ({
-    proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath)),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
+  loadSource: async () => {
+    const adminSpineProof = await readJson(adminSpineProofPath);
+    return {
+      proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath), {
+        adminSpineProof,
+      }),
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+      adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
+        path: adminSpineProofRelativePath,
+      }),
+    };
+  },
   prove: async ({ browser, frontendBaseUrl, source }) =>
     await proveAdminAuditDetail({
       browser,
@@ -57,9 +73,11 @@ await runAdminAuditProof({
     generatedFrom: {
       proofGraph: proofGraphRelativePath,
       proofRun: proofRunRelativePath,
+      adminSpineProof: adminSpineProofRelativePath,
       game: source.proofRun.session.game,
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
       edgeCount: source.proofGraph.edges.length,
+      adminProofSurfaceIds: source.adminSpineProof.proofIds,
     },
     adminRoleSurface,
   }),
@@ -86,6 +104,12 @@ export function assertProofGraphAdminProof(evidence) {
   for (const nodeId of evidence.generatedFrom?.nodeIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(nodeId)) {
       throw new Error(`proof graph admin proof missing visible node: ${nodeId}`);
+    }
+  }
+  const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
+  for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
+    if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
+      throw new Error(`proof graph admin proof missing generated admin node: ${surfaceId}`);
     }
   }
   if (!Array.isArray(evidence.adminRoleSurface?.visibleRelatedLinks)) {

@@ -605,9 +605,9 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     },
   ]);
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 7,
-    artifactCount: 6,
-    terminalArtifactCount: 2,
+    commandCount: 9,
+    artifactCount: 8,
+    terminalArtifactCount: 4,
     adminSpineStepCount: 8,
     artifactFreshnessStatus: "blocked",
     freshCount: 1,
@@ -832,7 +832,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
   const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
   assert.equal(freshness.label, "Local proof freshness");
-  assert.equal(freshness.status, "18 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.status, "20 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
@@ -859,6 +859,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "spine-manifest-admin",
       "admin-spine",
       "admin-spine-admin",
+      "proof-graph",
+      "proof-graph-admin",
       "next-action-handoff",
     ],
   );
@@ -872,8 +874,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     },
   ]);
   assert.deepEqual(freshness.artifactSummary, {
-    artifactCount: 18,
-    freshCount: 18,
+    artifactCount: 20,
+    freshCount: 20,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
@@ -969,8 +971,8 @@ test("admin route data exposes local next action as a native audit row", async (
     actionStatus: "ready",
     sourceManifest: "target/dev-test-game/spine-manifest.json",
     artifactFreshnessStatus: "passed",
-    artifactCount: 18,
-    freshCount: 18,
+    artifactCount: 20,
+    freshCount: 20,
     staleCount: 0,
     missingCount: 0,
     selectionTrace: {
@@ -1780,6 +1782,15 @@ function spineManifestFixture() {
         proofArtifact: "target/dev-test-game/next-action-admin-proof.json",
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
       },
+      proofGraph: {
+        script: "test:dev-test-game-proof-graph",
+        proofArtifact: "target/dev-test-game/proof-graph.json",
+      },
+      proofGraphAdminProof: {
+        script: "test:dev-test-game-proof-graph-admin-proof",
+        proofArtifact: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      },
     },
     terminalArtifacts: [
       {
@@ -1792,6 +1803,17 @@ function spineManifestFixture() {
         command: "test:dev-test-game-next-action-admin-proof",
         path: "target/dev-test-game/next-action-admin-proof.json",
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      },
+      {
+        id: "proof-graph",
+        command: "test:dev-test-game-proof-graph",
+        path: "target/dev-test-game/proof-graph.json",
+      },
+      {
+        id: "proof-graph-admin-proof",
+        command: "test:dev-test-game-proof-graph-admin-proof",
+        path: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
       },
     ],
     artifactFreshness: {
@@ -1837,6 +1859,8 @@ function spineManifestFixture() {
       "target/dev-test-game/proof-freshness-admin-proof.json",
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",
+      "target/dev-test-game/proof-graph.json",
+      "target/dev-test-game/proof-graph-admin-proof.json",
     ],
     checks: [
       { id: "live-spine-order-recorded", status: "passed" },
@@ -1876,6 +1900,8 @@ function proofFreshnessFixture({
     freshnessArtifact("spine-manifest-admin", "fresh"),
     freshnessArtifact("admin-spine", "fresh"),
     freshnessArtifact("admin-spine-admin", "fresh"),
+    freshnessArtifact("proof-graph", "fresh"),
+    freshnessArtifact("proof-graph-admin", "fresh"),
   ],
 } = {}) {
   const summary = {
@@ -1938,8 +1964,8 @@ function nextActionFixture({
       manifestGeneratedAt: "2026-06-26T00:00:00.000Z",
       artifactFreshnessStatus: "passed",
       artifactFreshnessSummary: {
-        artifactCount: 18,
-        freshCount: 18,
+        artifactCount: 20,
+        freshCount: 20,
         staleCount: 0,
         missingCount: 0,
       },
