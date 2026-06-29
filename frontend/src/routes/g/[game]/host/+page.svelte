@@ -270,8 +270,14 @@
             name="principalUserId"
             value={inviteTarget.principalUserId}
           />
+          <input type="hidden" name="slotId" value={inviteTarget.slotId} />
+          <input
+            type="hidden"
+            name="expectedOccupantUserId"
+            value={inviteTarget.expectedOccupantUserId}
+          />
           <button
-            class="fm-touch-control"
+            class="touch-control"
             type="submit"
             data-testid={inviteTarget.submitTestId}
           >

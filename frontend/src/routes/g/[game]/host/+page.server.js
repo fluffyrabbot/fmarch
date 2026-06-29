@@ -48,10 +48,11 @@ export async function load({ params, locals, fetch, url }) {
 }
 
 export const actions = {
-  issuePlayerInvite: async ({ cookies, fetch, params, request, url }) =>
+  issuePlayerInvite: async ({ cookies, fetch, locals, params, request, url }) =>
     await issueHostScopedInvite({
       cookies,
       fetch,
+      locals,
       params,
       request,
       url,
@@ -61,10 +62,11 @@ export const actions = {
       ackMessage: "Player invite issued",
       rejectMessage: "Player invite was rejected",
     }),
-  issueReplacementInvite: async ({ cookies, fetch, params, request, url }) =>
+  issueReplacementInvite: async ({ cookies, fetch, locals, params, request, url }) =>
     await issueHostScopedInvite({
       cookies,
       fetch,
+      locals,
       params,
       request,
       url,
@@ -79,6 +81,7 @@ export const actions = {
 async function issueHostScopedInvite({
   cookies,
   fetch,
+  locals,
   params,
   request,
   url,
@@ -97,10 +100,42 @@ async function issueHostScopedInvite({
   }
 
   const formData = await request.formData();
+  const principalForProjection = resolveHostRoutePrincipal({
+    game: params.game,
+    locals,
+  });
+  if (principalForProjection === "") {
+    return fail(401, inviteForm(field, {
+      state: "reject",
+      message: "Host session is required",
+    }));
+  }
   const principalUserId = invitePrincipal(
     formData.get("principalUserId"),
     defaultPrincipalUserId,
   );
+  const slotId = inviteSlotId(formData.get("slotId"));
+  const expectedOccupantUserId = invitePrincipal(
+    formData.get("expectedOccupantUserId"),
+    principalUserId,
+  );
+  const currentOccupant = await currentInviteTargetOccupant({
+    fetch,
+    game: params.game,
+    principalUserId: principalForProjection,
+    slotId,
+    sessionToken,
+  });
+  if (currentOccupant !== expectedOccupantUserId) {
+    return fail(409, inviteForm(field, {
+      state: "reject",
+      message: `Invite target is stale; ${slotId} is currently occupied by ${currentOccupant}`,
+      principalUserId,
+      slotId,
+      expectedOccupantUserId,
+      currentOccupantUserId: currentOccupant,
+    }));
+  }
   const returnTo = `/g/${params.game}`;
   const inviteToken = `${tokenPrefix}-${params.game}-${randomUUID()}`;
   const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
@@ -151,9 +186,42 @@ function invitePrincipal(value, fallback) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
 }
 
+function inviteSlotId(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : "slot-7";
+}
+
 function inviteLoginPath({ returnTo, inviteToken }) {
   const params = new URLSearchParams({ returnTo, invite: inviteToken });
   return `/auth/login?${params.toString()}`;
+}
+
+async function currentInviteTargetOccupant({
+  fetch,
+  game,
+  principalUserId,
+  slotId,
+  sessionToken,
+}) {
+  const response = await fetch(
+    hostConsoleStateUrl(process.env, { game, principalUserId, slotId }),
+    {
+      headers: {
+        authorization: `Bearer ${sessionToken}`,
+        accept: "application/json",
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`host invite target projection failed with ${response.status}`);
+  }
+  const state = await response.json();
+  const slot = Array.isArray(state?.slots)
+    ? state.slots.find((candidate) => candidate.slot_id === slotId)
+    : null;
+  if (typeof slot?.occupant_user_id !== "string" || slot.occupant_user_id.trim() === "") {
+    throw new Error(`host invite target projection missing ${slotId}`);
+  }
+  return slot.occupant_user_id;
 }
 
 function authInvitesUrl(env) {
@@ -162,4 +230,16 @@ function authInvitesUrl(env) {
       ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
       : "";
   return `${baseUrl}/auth/invites`;
+}
+
+function hostConsoleStateUrl(env, { game, principalUserId, slotId }) {
+  const baseUrl =
+    typeof env.FMARCH_API_BASE_URL === "string"
+      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
+      : "";
+  const params = new URLSearchParams({
+    principal_user_id: principalUserId,
+    slot_id: slotId,
+  });
+  return `${baseUrl}/games/${encodeURIComponent(game)}/host-console-state?${params.toString()}`;
 }

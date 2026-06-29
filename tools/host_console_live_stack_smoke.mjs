@@ -2490,10 +2490,26 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   const phaseControlEvidence = await driveHostPhaseControlsBrowser(page, pageUrl);
   const streamConflictEvidence = await driveHostStreamConflictBrowser(page);
   const actionEvidence = [];
+  let stalePlayerInviteSession = null;
+  let stalePlayerInviteBefore = null;
   for (const expected of [
     { id: "extend_deadline", status: "ack" },
     { id: "process_replacement", status: "ack" },
   ]) {
+    if (expected.id === "process_replacement") {
+      stalePlayerInviteSession = await openStaleModeratorBrowser(pageUrl);
+      stalePlayerInviteBefore = await readPlayerInviteTarget(stalePlayerInviteSession.page);
+      if (
+        !stalePlayerInviteBefore.targetLabel.includes("Slot 7") ||
+        !stalePlayerInviteBefore.targetLabel.includes("player-mira") ||
+        stalePlayerInviteBefore.principalUserId !== "player-mira" ||
+        stalePlayerInviteBefore.expectedOccupantUserId !== "player-mira"
+      ) {
+        throw new Error(
+          `stale player invite fixture was not pre-replacement: ${JSON.stringify(stalePlayerInviteBefore)}`,
+        );
+      }
+    }
     const actionRoot = page.getByTestId(`critical-host-action-${expected.id}`);
     const trigger = actionRoot.getByTestId("critical-host-action-trigger");
     await trigger.waitFor({ state: "visible" });
@@ -2553,23 +2569,24 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
   }
-  const playerInviteTarget = await page.getByTestId("host-player-invite-target").innerText();
-  const playerInvitePrincipal = await page
-    .getByTestId("host-player-invite-panel")
-    .locator('input[name="principalUserId"]')
-    .inputValue();
+  const livePlayerInvite = await readPlayerInviteTarget(page);
   if (
-    !playerInviteTarget.includes("Slot 7") ||
-    !playerInviteTarget.includes("player-rowan") ||
-    playerInvitePrincipal !== "player-rowan"
+    !livePlayerInvite.targetLabel.includes("Slot 7") ||
+    !livePlayerInvite.targetLabel.includes("player-rowan") ||
+    livePlayerInvite.principalUserId !== "player-rowan" ||
+    livePlayerInvite.expectedOccupantUserId !== "player-rowan"
   ) {
     throw new Error(
       `player invite target did not follow replacement projection: ${JSON.stringify({
-        playerInviteTarget,
-        playerInvitePrincipal,
+        livePlayerInvite,
       })}`,
     );
   }
+  const stalePlayerInviteReject =
+    stalePlayerInviteSession === null
+      ? null
+      : await rejectStalePlayerInviteFromBrowser(stalePlayerInviteSession.page);
+  await stalePlayerInviteSession?.context.close();
   const apiStateBeforePrompt = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
   );
@@ -2587,9 +2604,11 @@ async function driveModeratorBrowser({ page, pageUrl }) {
     playerInviteTarget: {
       status: "passed",
       source: "host-console-state projection",
-      targetLabel: playerInviteTarget,
-      principalUserId: playerInvitePrincipal,
+      targetLabel: livePlayerInvite.targetLabel,
+      principalUserId: livePlayerInvite.principalUserId,
+      expectedOccupantUserId: livePlayerInvite.expectedOccupantUserId,
     },
+    stalePlayerInviteReject,
     hostPrompt: {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,
@@ -2789,6 +2808,54 @@ async function openStaleModeratorBrowser(pageUrl) {
   }
   await page.getByTestId("host-console-votecount").waitFor({ state: "visible" });
   return { context, page };
+}
+
+async function readPlayerInviteTarget(page) {
+  return {
+    targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
+    principalUserId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="principalUserId"]')
+      .inputValue(),
+    slotId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="slotId"]')
+      .inputValue(),
+    expectedOccupantUserId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="expectedOccupantUserId"]')
+      .inputValue(),
+  };
+}
+
+async function rejectStalePlayerInviteFromBrowser(page) {
+  const beforeSubmit = await readPlayerInviteTarget(page);
+  const submit = page.getByTestId("host-player-invite-submit");
+  const submitBox = await submit.boundingBox();
+  assertHitTarget(submitBox, "stale player invite submit");
+  await submit.click();
+  const status = page.getByTestId("host-player-invite-status");
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-player-invite-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const message = await status.innerText();
+  if (!message.includes("Invite target is stale") || !message.includes("player-rowan")) {
+    throw new Error(`stale player invite rejection copy was not specific: ${message}`);
+  }
+  if ((await page.getByTestId("host-player-invite-url").count()) !== 0) {
+    throw new Error("stale player invite rendered an invite URL");
+  }
+  return {
+    state: "reject",
+    beforeSubmit,
+    submitBox,
+    message,
+    urlRendered: false,
+  };
 }
 
 async function confirmHostAction(page, actionId, expectedState = "ack") {
