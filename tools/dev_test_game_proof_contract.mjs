@@ -57,6 +57,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
   "replacement-action-reconnect",
+  "replacement-stale-action-after-resolve",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -3012,6 +3013,168 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "player_killed" &&
         hardening.replacementActionReconnect?.targetNoticeAfterReconnect?.status ===
           "factional_kill",
+    }),
+    lane("replacement-stale-action-after-resolve", "Stale replacement action rejects after resolve", {
+      game: hardening.replacementStaleActionAfterResolve?.game ?? null,
+      targetSlot: hardening.replacementStaleActionAfterResolve?.targetSlot ?? null,
+      rejectError:
+        hardening.replacementStaleActionAfterResolve?.reject?.error ?? null,
+      refreshedPhase:
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.phase?.phaseId ?? null,
+      refreshedLocked:
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.phase?.locked ?? null,
+      refreshedActionCount:
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.actions?.length ?? null,
+      targetAlive:
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject?.alive ??
+        null,
+      rowanPrivateKillVisible:
+        hardening.replacementStaleActionAfterResolve
+          ?.rowanPrivateIsolationAfterReject?.targetKillVisible ?? null,
+      targetNoticePresent:
+        hardening.replacementStaleActionAfterResolve?.targetNoticeAfterReject !==
+        undefined
+          ? hardening.replacementStaleActionAfterResolve?.targetNoticeAfterReject !== null
+          : null,
+      passed:
+        hardening.replacementStaleActionAfterResolve?.status === "passed" &&
+        hardening.replacementStaleActionAfterResolve?.targetSlot === "slot-2" &&
+        hardening.replacementStaleActionAfterResolve?.hostEntry?.capabilityKinds?.includes(
+          "HostOf",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.replacementEntry?.capabilityKinds?.includes(
+          "SlotOccupant",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.targetEntry?.capabilityKinds?.includes(
+          "SlotOccupant",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.replacement?.state ===
+          "ack" &&
+        hardening.replacementStaleActionAfterResolve?.replacement?.serverEnvelope
+          ?.body?.kind === "Ack" &&
+        hardening.replacementStaleActionAfterResolve?.replacement?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.slot === "slot_4" &&
+        hardening.replacementStaleActionAfterResolve?.replacement?.requestEnvelope
+          ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+          "player-rowan" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose
+          ?.actorSlot === "slot_4" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose
+          ?.actorStatus === "alive" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose?.phase
+          ?.phaseId === "N01" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose?.phase
+          ?.locked === false &&
+        hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose
+          ?.actions?.some(
+            (candidate) => candidate.templateId === "factional_kill",
+          ) === true &&
+        hardening.replacementStaleActionAfterResolve?.actionButtonBeforeClose
+          ?.action === "submit_action:factional_kill" &&
+        hardening.replacementStaleActionAfterResolve?.actionButtonBeforeClose
+          ?.disabled === false &&
+        hardening.replacementStaleActionAfterResolve?.closedStatus?.state ===
+          "closed" &&
+        hardening.replacementStaleActionAfterResolve?.resolveNight?.commandStatus
+          ?.state === "ack" &&
+        hardening.replacementStaleActionAfterResolve?.hostPhaseAfterResolve?.id ===
+          "N01" &&
+        hardening.replacementStaleActionAfterResolve?.hostPhaseAfterResolve
+          ?.locked === true &&
+        hardening.replacementStaleActionAfterResolve?.hostPhaseActionsAfterResolve?.includes(
+          "advance_phase",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterResolve
+          ?.slot_id === "slot-2" &&
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterResolve
+          ?.alive === true &&
+        hardening.replacementStaleActionAfterResolve?.reject?.state ===
+          "reject" &&
+        hardening.replacementStaleActionAfterResolve?.reject?.error ===
+          "PhaseLocked" &&
+        hardening.replacementStaleActionAfterResolve?.reject?.serverEnvelope?.body
+          ?.kind === "Reject" &&
+        Array.isArray(hardening.replacementStaleActionAfterResolve?.reject?.streamSeqs) ===
+          false &&
+        hardening.replacementStaleActionAfterResolve?.reject?.message?.includes(
+          "stale action state",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.reject?.message?.includes(
+          "current action controls",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
+          ?.body?.command?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
+          ?.body?.command?.SubmitAction?.action_id === "role_factional_kill" &&
+        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
+          ?.body?.command?.SubmitAction?.template_id === "factional_kill" &&
+        hardening.replacementStaleActionAfterResolve?.dispatchPlan
+          ?.projectionRefreshKeys?.includes("notifications") === true &&
+        hardening.replacementStaleActionAfterResolve?.dispatchPlan
+          ?.projectionRefreshKeys?.includes("investigationResults") === true &&
+        hardening.replacementStaleActionAfterResolve?.dispatchPlan
+          ?.projectionRefreshKeys?.includes("commandState") === true &&
+        hardening.replacementStaleActionAfterResolve?.currentReceipt?.actionId ===
+          "submit_action:factional_kill" &&
+        hardening.replacementStaleActionAfterResolve?.currentReceipt?.state ===
+          "reject" &&
+        hardening.replacementStaleActionAfterResolve?.currentReceipt
+          ?.commandTrace?.projectionRefreshKeys?.includes("commandState") === true &&
+        hardening.replacementStaleActionAfterResolve?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.receiptStatusText?.includes(
+          "stale action state",
+        ) === true &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.actorSlot === "slot_4" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.actorAlive === true &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.actorStatus === "alive" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject?.phase
+          ?.phaseId === "N01" &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject?.phase
+          ?.locked === true &&
+        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
+          ?.actions?.length === 0 &&
+        hardening.replacementStaleActionAfterResolve?.buttonsAfterReject?.some(
+          (button) => button.action === "submit_action:factional_kill",
+        ) === false &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.actor_slot === "slot_4" &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.actor_alive === true &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.actor_status === "alive" &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.phase?.phase_id === "N01" &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.phase?.locked === true &&
+        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
+          ?.actions?.length === 0 &&
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject
+          ?.slot_id === "slot-2" &&
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject
+          ?.alive === true &&
+        hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject
+          ?.status === "alive" &&
+        hardening.replacementStaleActionAfterResolve?.rowanPrivateIsolationAfterReject
+          ?.targetKillVisible === false &&
+        hardening.replacementStaleActionAfterResolve?.targetCommandStateAfterReject
+          ?.actorSlot === "slot-2" &&
+        hardening.replacementStaleActionAfterResolve?.targetCommandStateAfterReject
+          ?.actorAlive === true &&
+        hardening.replacementStaleActionAfterResolve?.targetCommandStateAfterReject
+          ?.actorStatus === "alive" &&
+        hardening.replacementStaleActionAfterResolve?.targetCommandStateAfterReject
+          ?.phase?.phaseId === "N01" &&
+        hardening.replacementStaleActionAfterResolve?.targetCommandStateAfterReject
+          ?.phase?.locked === true &&
+        hardening.replacementStaleActionAfterResolve?.targetNoticeAfterReject === null,
     }),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
       targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,

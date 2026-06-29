@@ -309,6 +309,8 @@ const replacementIncomingAction =
   session.verification.multiplayerHardening.replacementIncomingAction;
 const replacementActionReconnect =
   session.verification.multiplayerHardening.replacementActionReconnect;
+const replacementStaleActionAfterResolve =
+  session.verification.multiplayerHardening.replacementStaleActionAfterResolve;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1911,6 +1913,196 @@ assert.equal(
   replacementActionReconnect.targetNoticeAfterReconnect.status,
   "factional_kill",
 );
+assert.equal(replacementStaleActionAfterResolve.status, "passed");
+assert.equal(replacementStaleActionAfterResolve.targetSlot, "slot-2");
+assert.equal(
+  replacementStaleActionAfterResolve.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.replacementEntry.capabilityKinds.includes(
+    "SlotOccupant",
+  ),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.targetEntry.capabilityKinds.includes(
+    "SlotOccupant",
+  ),
+  true,
+);
+assert.equal(replacementStaleActionAfterResolve.replacement.state, "ack");
+assert.equal(
+  replacementStaleActionAfterResolve.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.slot,
+  "slot_4",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateBeforeClose.actorSlot,
+  "slot_4",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateBeforeClose.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateBeforeClose.phase.locked,
+  false,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateBeforeClose.actions.some(
+    (candidate) => candidate.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.actionButtonBeforeClose.action,
+  "submit_action:factional_kill",
+);
+assert.equal(replacementStaleActionAfterResolve.actionButtonBeforeClose.disabled, false);
+assert.equal(replacementStaleActionAfterResolve.closedStatus.state, "closed");
+assert.equal(replacementStaleActionAfterResolve.resolveNight.commandStatus.state, "ack");
+assert.equal(replacementStaleActionAfterResolve.hostPhaseAfterResolve.id, "N01");
+assert.equal(replacementStaleActionAfterResolve.hostPhaseAfterResolve.locked, true);
+assert.equal(
+  replacementStaleActionAfterResolve.hostPhaseActionsAfterResolve.includes(
+    "advance_phase",
+  ),
+  true,
+);
+assert.equal(replacementStaleActionAfterResolve.targetSlotAfterResolve.slot_id, "slot-2");
+assert.equal(replacementStaleActionAfterResolve.targetSlotAfterResolve.alive, true);
+assert.equal(replacementStaleActionAfterResolve.reject.state, "reject");
+assert.equal(replacementStaleActionAfterResolve.reject.error, "PhaseLocked");
+assert.equal(
+  replacementStaleActionAfterResolve.reject.serverEnvelope.body.kind,
+  "Reject",
+);
+assert.equal(Array.isArray(replacementStaleActionAfterResolve.reject.streamSeqs), false);
+assert.match(
+  replacementStaleActionAfterResolve.reject.message,
+  /stale action state/,
+);
+assert.match(
+  replacementStaleActionAfterResolve.reject.message,
+  /current action controls/,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.reject.requestEnvelope.body.body.command
+    .SubmitAction.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.reject.requestEnvelope.body.body.command
+    .SubmitAction.action_id,
+  "role_factional_kill",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.reject.requestEnvelope.body.body.command
+    .SubmitAction.template_id,
+  "factional_kill",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.dispatchPlan.projectionRefreshKeys.includes(
+    "notifications",
+  ),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.dispatchPlan.projectionRefreshKeys.includes(
+    "investigationResults",
+  ),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.dispatchPlan.projectionRefreshKeys.includes(
+    "commandState",
+  ),
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.currentReceipt.actionId,
+  "submit_action:factional_kill",
+);
+assert.equal(replacementStaleActionAfterResolve.currentReceipt.state, "reject");
+assert.match(
+  replacementStaleActionAfterResolve.receiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.match(
+  replacementStaleActionAfterResolve.receiptStatusText,
+  /stale action state/,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateAfterReject.actorSlot,
+  "slot_4",
+);
+assert.equal(replacementStaleActionAfterResolve.commandStateAfterReject.actorAlive, true);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateAfterReject.actorStatus,
+  "alive",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateAfterReject.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.commandStateAfterReject.phase.locked,
+  true,
+);
+assert.equal(replacementStaleActionAfterResolve.commandStateAfterReject.actions.length, 0);
+assert.equal(
+  replacementStaleActionAfterResolve.buttonsAfterReject.some(
+    (button) => button.action === "submit_action:factional_kill",
+  ),
+  false,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.apiCommandStateAfterReject.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.apiCommandStateAfterReject.actor_alive,
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.apiCommandStateAfterReject.phase.phase_id,
+  "N01",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.apiCommandStateAfterReject.phase.locked,
+  true,
+);
+assert.equal(replacementStaleActionAfterResolve.apiCommandStateAfterReject.actions.length, 0);
+assert.equal(replacementStaleActionAfterResolve.targetSlotAfterReject.slot_id, "slot-2");
+assert.equal(replacementStaleActionAfterResolve.targetSlotAfterReject.alive, true);
+assert.equal(replacementStaleActionAfterResolve.targetSlotAfterReject.status, "alive");
+assert.equal(
+  replacementStaleActionAfterResolve.rowanPrivateIsolationAfterReject.targetKillVisible,
+  false,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.targetCommandStateAfterReject.actorSlot,
+  "slot-2",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.targetCommandStateAfterReject.actorAlive,
+  true,
+);
+assert.equal(
+  replacementStaleActionAfterResolve.targetCommandStateAfterReject.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  replacementStaleActionAfterResolve.targetCommandStateAfterReject.phase.locked,
+  true,
+);
+assert.equal(replacementStaleActionAfterResolve.targetNoticeAfterReject, null);
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",

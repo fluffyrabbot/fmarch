@@ -34,6 +34,7 @@ const requiredScenarios = [
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
   "replacement-action-reconnect",
+  "replacement-stale-action-after-resolve",
   "concurrent-host-resolve-race",
   "concurrent-host-advance-race",
   "concurrent-host-deadline-advance-race",

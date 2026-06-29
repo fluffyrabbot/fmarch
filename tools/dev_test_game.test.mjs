@@ -3304,6 +3304,119 @@ test("session card and markdown include role credential URLs and tokens", () => 
         outcomeSummary:
           "Rowan reconnected after resolved Slot 4 factional_kill to locked N01 with no actions",
       },
+      replacementStaleActionAfterResolve: {
+        status: "passed",
+        game: "replacement-stale-action-after-resolve-game-a",
+        targetSlot: "slot-2",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        targetEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacement: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-stale-action-after-resolve-game-a",
+                    slot: "slot_4",
+                    outgoing_user: "player-goon-a",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateBeforeClose: {
+          actorSlot: "slot_4",
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [{ templateId: "factional_kill" }],
+        },
+        buttonsBeforeClose: [
+          { action: "submit_action:factional_kill", disabled: false },
+        ],
+        actionButtonBeforeClose: {
+          action: "submit_action:factional_kill",
+          disabled: false,
+        },
+        closedStatus: { state: "closed" },
+        resolveNight: { commandStatus: { state: "ack" } },
+        hostPhaseAfterResolve: { id: "N01", locked: true },
+        hostPhaseActionsAfterResolve: ["advance_phase"],
+        targetSlotAfterResolve: {
+          slot_id: "slot-2",
+          alive: true,
+          status: "alive",
+        },
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterReject: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: true },
+          actions: [],
+        },
+        buttonsAfterReject: [],
+        dispatchPlan: {
+          projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
+        },
+        currentReceipt: {
+          actionId: "submit_action:factional_kill",
+          state: "reject",
+          commandTrace: { projectionRefreshKeys: ["commandState"] },
+        },
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        apiCommandStateAfterReject: {
+          actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
+          phase: { phase_id: "N01", locked: true },
+          actions: [],
+        },
+        targetSlotAfterReject: {
+          slot_id: "slot-2",
+          alive: true,
+          status: "alive",
+        },
+        rowanPrivateIsolationAfterReject: {
+          targetKillVisible: false,
+          notificationCount: 0,
+        },
+        targetCommandStateAfterReject: {
+          actorSlot: "slot-2",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: true },
+          actions: [],
+        },
+        targetNoticeAfterReject: null,
+        outcomeSummary:
+          "Rowan's stale replacement factional_kill rejected after N01 resolution without appending",
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -5041,6 +5154,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
       "replacement-action-reconnect",
+      "replacement-stale-action-after-resolve",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5141,7 +5255,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 78);
+  assert.equal(opsArtifacts.proofRun.laneCount, 79);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5247,6 +5361,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
       "replacement-action-reconnect",
+      "replacement-stale-action-after-resolve",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5765,6 +5880,7 @@ function hardeningAdminProofFixture() {
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
         "replacement-action-reconnect",
+        "replacement-stale-action-after-resolve",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5889,6 +6005,7 @@ function seedAdminProofFixture() {
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
         "replacement-action-reconnect",
+        "replacement-stale-action-after-resolve",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
