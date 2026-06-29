@@ -2992,11 +2992,60 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         staleN01Phase: { phaseId: "N01" },
         reject: {
+          state: "reject",
           error: "PhaseLocked",
           message:
             "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                  },
+                },
+              },
+            },
+          },
         },
         phaseAfterReject: { phaseId: "D02" },
+        commandStateAfterReject: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "D02", locked: false },
+          actions: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+        },
+        currentReceipt: {
+          actionId: "submit_action:factional_kill",
+          state: "reject",
+          commandTrace: {
+            projectionRefreshKeys: [
+              "notifications",
+              "investigationResults",
+              "commandState",
+            ],
+          },
+        },
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        apiCommandStateAfterReject: {
+          actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
+          phase: { phase_id: "D02", locked: false },
+          actions: [],
+        },
         actionVisibleAfterRefresh: false,
       },
       staleHostControl: {

@@ -503,8 +503,9 @@ second host page frozen on D01 locked controls until its stale
 stale deadline target, refreshes to N01, and exposes current phase controls,
 keeps a second action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` copy that names stale
-action state plus current action controls, refreshes to D02 without the stale
-action control, and keeps a second host page frozen on the N01
+action state plus current action controls, refreshes browser and API command
+state to D02 without the stale action control, and keeps a second host page
+frozen on the N01
 locked controls until its stale `UnlockThread` click renders a host command
 activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
 `resolve_phase` / `lock_thread` controls, keeps a full host page frozen on D02

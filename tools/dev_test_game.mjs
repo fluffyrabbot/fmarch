@@ -2381,6 +2381,8 @@ async function verifySeededActionLoop({
   const staleActionConflict = await submitStaleActionConflict({
     staleActionPage,
     staleActionSetup,
+    apiBaseUrl,
+    game,
   });
 
   return {
@@ -3067,7 +3069,12 @@ async function freezeStaleActionPage({ staleActionPage, game }) {
   };
 }
 
-async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) {
+async function submitStaleActionConflict({
+  staleActionPage,
+  staleActionSetup,
+  apiBaseUrl,
+  game,
+}) {
   await staleActionPage.locator('[data-action="submit_action:factional_kill"]').click();
   await staleActionPage.waitForFunction(
     () =>
@@ -3082,7 +3089,9 @@ async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) 
     throw new Error(`stale action message drifted: ${JSON.stringify(reject)}`);
   }
   await staleActionPage.waitForFunction(
-    () => window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02",
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
   );
   await staleActionPage.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
@@ -3090,6 +3099,68 @@ async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) 
   const phaseAfterReject = await staleActionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const commandStateAfterReject = await staleActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const dispatchPlan = await staleActionPage.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const currentReceipt = await staleActionPage.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await staleActionPage
+    .getByTestId("player-command-status")
+    .innerText();
+  const apiCommandStateAfterReject = await fetchJson(
+    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+  );
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+      "slot_4" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
+      "factional_kill" ||
+    dispatchPlan?.projectionRefreshKeys?.includes("notifications") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("investigationResults") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
+    currentReceipt?.actionId !== "submit_action:factional_kill" ||
+    currentReceipt?.state !== "reject" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
+      true ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+      "dayVoteOutcomes",
+    ) === true ||
+    !receiptStatusText.includes("Reject PhaseLocked") ||
+    !receiptStatusText.includes("stale action state") ||
+    commandStateAfterReject?.actorSlot !== "slot_4" ||
+    commandStateAfterReject?.actorAlive !== true ||
+    commandStateAfterReject?.actorStatus !== "alive" ||
+    commandStateAfterReject?.phase?.phaseId !== "D02" ||
+    commandStateAfterReject?.phase?.locked !== false ||
+    commandStateAfterReject?.actions?.length !== 0 ||
+    apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
+    apiCommandStateAfterReject?.actor_alive !== true ||
+    apiCommandStateAfterReject?.actor_status !== "alive" ||
+    apiCommandStateAfterReject?.phase?.phase_id !== "D02" ||
+    apiCommandStateAfterReject?.phase?.locked !== false ||
+    apiCommandStateAfterReject?.actions?.length !== 0
+  ) {
+    throw new Error(
+      `stale action recovery drifted: ${JSON.stringify({
+        reject,
+        phaseAfterReject,
+        commandStateAfterReject,
+        dispatchPlan,
+        currentReceipt,
+        receiptStatusText,
+        apiCommandStateAfterReject,
+      })}`,
+    );
+  }
   return {
     status: "passed",
     staleN01Phase: staleActionSetup.staleN01Phase,
@@ -3097,6 +3168,11 @@ async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) 
     closedStatus: staleActionSetup.closedStatus,
     reject,
     phaseAfterReject,
+    commandStateAfterReject,
+    dispatchPlan,
+    currentReceipt,
+    receiptStatusText,
+    apiCommandStateAfterReject,
     actionVisibleAfterRefresh: false,
   };
 }

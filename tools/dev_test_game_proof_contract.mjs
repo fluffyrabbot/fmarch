@@ -2730,19 +2730,84 @@ export function buildDevTestGameProofRun(session, options = {}) {
       rejectMessage: hardening.staleActionConflict?.reject?.message ?? null,
       stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
       refreshedPhase: hardening.staleActionConflict?.phaseAfterReject?.phaseId ?? null,
+      refreshedCommandPhase:
+        hardening.staleActionConflict?.commandStateAfterReject?.phase?.phaseId ?? null,
+      refreshedActionCount:
+        hardening.staleActionConflict?.commandStateAfterReject?.actions?.length ?? null,
+      apiRefreshedPhase:
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.phase?.phase_id ??
+        null,
+      receiptActionId: hardening.staleActionConflict?.currentReceipt?.actionId ?? null,
       actionVisibleAfterRefresh:
         hardening.staleActionConflict?.actionVisibleAfterRefresh ?? null,
       passed:
         hardening.staleActionConflict?.status === "passed" &&
+        hardening.staleActionConflict?.reject?.state === "reject" &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.staleActionConflict?.reject?.streamSeqs) === false &&
+        hardening.staleActionConflict?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.staleActionConflict?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.template_id === "factional_kill" &&
         hardening.staleActionConflict?.reject?.message?.includes(
           "stale action state",
         ) === true &&
         hardening.staleActionConflict?.reject?.message?.includes(
           "current action controls",
         ) === true &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "notifications",
+        ) === true &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "investigationResults",
+        ) === true &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "dayVoteOutcomes",
+        ) === true &&
+        hardening.staleActionConflict?.currentReceipt?.actionId ===
+          "submit_action:factional_kill" &&
+        hardening.staleActionConflict?.currentReceipt?.state === "reject" &&
+        hardening.staleActionConflict?.currentReceipt?.commandTrace
+          ?.projectionRefreshKeys?.includes("commandState") === true &&
+        hardening.staleActionConflict?.currentReceipt?.commandTrace
+          ?.projectionRefreshKeys?.includes("dayVoteOutcomes") === false &&
+        hardening.staleActionConflict?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        hardening.staleActionConflict?.receiptStatusText?.includes(
+          "stale action state",
+        ) === true &&
         hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
         hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
+        hardening.staleActionConflict?.commandStateAfterReject?.actorSlot ===
+          "slot_4" &&
+        hardening.staleActionConflict?.commandStateAfterReject?.actorAlive ===
+          true &&
+        hardening.staleActionConflict?.commandStateAfterReject?.actorStatus ===
+          "alive" &&
+        hardening.staleActionConflict?.commandStateAfterReject?.phase?.phaseId ===
+          "D02" &&
+        hardening.staleActionConflict?.commandStateAfterReject?.phase?.locked ===
+          false &&
+        hardening.staleActionConflict?.commandStateAfterReject?.actions?.length ===
+          0 &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_slot ===
+          "slot_4" &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_alive ===
+          true &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_status ===
+          "alive" &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.phase?.phase_id ===
+          "D02" &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.phase?.locked ===
+          false &&
+        hardening.staleActionConflict?.apiCommandStateAfterReject?.actions?.length ===
+          0 &&
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-action-conflict-message", "Stale player action conflict message is explicit", {
@@ -2751,6 +2816,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       templateId: hardening.staleActionConflict?.actionConfig?.templateId ?? null,
       stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
       refreshedPhase: hardening.staleActionConflict?.phaseAfterReject?.phaseId ?? null,
+      receiptStatusText: hardening.staleActionConflict?.receiptStatusText ?? null,
       passed:
         hardening.staleActionConflict?.status === "passed" &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
@@ -2760,10 +2826,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict?.reject?.message?.includes(
           "current action controls",
         ) === true &&
+        hardening.staleActionConflict?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        hardening.staleActionConflict?.receiptStatusText?.includes(
+          "stale action state",
+        ) === true &&
+        hardening.staleActionConflict?.currentReceipt?.actionId ===
+          "submit_action:factional_kill" &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "dayVoteOutcomes",
+        ) === true &&
         hardening.staleActionConflict?.actionConfig?.templateId ===
           "factional_kill" &&
         hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
         hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
+        hardening.staleActionConflict?.commandStateAfterReject?.actions?.length ===
+          0 &&
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-host-control", "Stale host phase control rejects without drift", {
