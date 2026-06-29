@@ -2721,6 +2721,76 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
+      concurrentPlayerVoteResolveRace: {
+        status: "passed",
+        game: "vote-resolve-race-game-a",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        playerEntry: { capabilityKinds: ["SlotOccupant"] },
+        setupCommandState: {
+          actorSlot: "slot_4",
+          phase: { phaseId: "D01", locked: false },
+        },
+        setupVoteButton: { action: "submit_vote:slot-2", disabled: false },
+        setupHostPhase: { id: "D01", locked: false },
+        setupHostPhaseActions: ["resolve_phase"],
+        vote: {
+          state: "ack",
+          streamSeqs: [47],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    game: "vote-resolve-race-game-a",
+                    actor_slot: "slot_4",
+                    target: { Slot: "slot-2" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        resolve: {
+          state: "ack",
+          streamSeqs: [48, 49, 50],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ResolvePhase: { game: "vote-resolve-race-game-a", seed: 71004 },
+                },
+              },
+            },
+          },
+        },
+        voteSeq: 47,
+        resolveSeq: 48,
+        outcomeSummary: "vote seq 47 before resolve seq 48",
+        commandStateAfterRace: {
+          phase: { phaseId: "D01", locked: true },
+          voteTargets: [],
+        },
+        buttonsAfterRace: [
+          { action: "withdraw_vote", disabled: true },
+          { action: "submit_post", disabled: false },
+        ],
+        hostPhaseAfterRace: { id: "D01", locked: true },
+        hostDayVoteOutcomesAfterRace: [
+          { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+        ],
+        playerDayVoteOutcomesAfterRace: [
+          { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+        ],
+        apiCommandStateAfterRace: {
+          phase: { phase_id: "D01", locked: true },
+          vote_targets: [],
+        },
+        apiDayVoteOutcomesAfterRace: [
+          { phase_id: "D01", status: "Lynch", winner_slot: "slot-2" },
+        ],
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4376,6 +4446,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Stale dead-target vote: Reject InvalidTarget"));
   assert(markdown.includes("Dead current vote: Slot 3 cleared"));
   assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
+  assert(markdown.includes("Concurrent player vote/resolve race: vote seq 47 before resolve seq 48"));
   assert(markdown.includes("Concurrent host resolve race: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent host advance race: Reject InvalidTarget"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
@@ -4447,6 +4518,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-withdraw-after-phase-closure",
       "stale-player-vote-after-phase-closure",
       "stale-player-post-after-phase-closure",
+      "concurrent-player-vote-resolve-race",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4547,7 +4619,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 70);
+  assert.equal(opsArtifacts.proofRun.laneCount, 71);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4645,6 +4717,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "night-action-loop",
       "action-idempotent-retry",
       "concurrent-action-race",
+      "concurrent-player-vote-resolve-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5155,6 +5228,7 @@ function hardeningAdminProofFixture() {
         "stale-player-withdraw-after-phase-closure",
         "stale-player-vote-after-phase-closure",
         "stale-player-post-after-phase-closure",
+        "concurrent-player-vote-resolve-race",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5271,6 +5345,7 @@ function seedAdminProofFixture() {
         "replacement-incoming-player",
         "action-idempotent-retry",
         "concurrent-action-race",
+        "concurrent-player-vote-resolve-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

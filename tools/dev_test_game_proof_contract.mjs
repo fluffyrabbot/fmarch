@@ -49,6 +49,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-withdraw-after-phase-closure",
   "stale-player-vote-after-phase-closure",
   "stale-player-post-after-phase-closure",
+  "concurrent-player-vote-resolve-race",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -2186,6 +2187,107 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ) === true,
       },
     ),
+    lane(
+      "concurrent-player-vote-resolve-race",
+      "Concurrent player vote and host resolve converge",
+      {
+        game: hardening.concurrentPlayerVoteResolveRace?.game ?? null,
+        voteState: hardening.concurrentPlayerVoteResolveRace?.vote?.state ?? null,
+        voteError: hardening.concurrentPlayerVoteResolveRace?.vote?.error ?? null,
+        voteSeq: hardening.concurrentPlayerVoteResolveRace?.voteSeq ?? null,
+        resolveSeq: hardening.concurrentPlayerVoteResolveRace?.resolveSeq ?? null,
+        phaseLockedAfterRace:
+          hardening.concurrentPlayerVoteResolveRace?.commandStateAfterRace?.phase
+            ?.locked ?? null,
+        outcomeStatus:
+          hardening.concurrentPlayerVoteResolveRace?.playerDayVoteOutcomesAfterRace?.[0]
+            ?.status ?? null,
+        passed:
+          hardening.concurrentPlayerVoteResolveRace?.status === "passed" &&
+          hardening.concurrentPlayerVoteResolveRace?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.playerEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.setupCommandState?.actorSlot ===
+            "slot_4" &&
+          hardening.concurrentPlayerVoteResolveRace?.setupCommandState?.phase
+            ?.phaseId === "D01" &&
+          hardening.concurrentPlayerVoteResolveRace?.setupCommandState?.phase
+            ?.locked === false &&
+          hardening.concurrentPlayerVoteResolveRace?.setupVoteButton?.disabled ===
+            false &&
+          hardening.concurrentPlayerVoteResolveRace?.setupHostPhase?.locked ===
+            false &&
+          hardening.concurrentPlayerVoteResolveRace?.setupHostPhaseActions?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.resolve?.state === "ack" &&
+          hardening.concurrentPlayerVoteResolveRace?.resolve?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          Array.isArray(hardening.concurrentPlayerVoteResolveRace?.resolve?.streamSeqs) &&
+          hardening.concurrentPlayerVoteResolveRace.resolve.streamSeqs.length >= 3 &&
+          hardening.concurrentPlayerVoteResolveRace?.resolve?.requestEnvelope?.body
+            ?.body?.command?.ResolvePhase?.game ===
+            hardening.concurrentPlayerVoteResolveRace?.game &&
+          hardening.concurrentPlayerVoteResolveRace?.vote?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.actor_slot === "slot_4" &&
+          ((hardening.concurrentPlayerVoteResolveRace?.vote?.state === "ack" &&
+            hardening.concurrentPlayerVoteResolveRace?.vote?.serverEnvelope?.body
+              ?.kind === "Ack" &&
+            Array.isArray(hardening.concurrentPlayerVoteResolveRace?.vote?.streamSeqs) &&
+            hardening.concurrentPlayerVoteResolveRace.vote.streamSeqs.length === 1 &&
+            hardening.concurrentPlayerVoteResolveRace.voteSeq <
+              hardening.concurrentPlayerVoteResolveRace.resolveSeq) ||
+            (hardening.concurrentPlayerVoteResolveRace?.vote?.state === "reject" &&
+              hardening.concurrentPlayerVoteResolveRace?.vote?.error ===
+                "PhaseLocked" &&
+              hardening.concurrentPlayerVoteResolveRace?.vote?.serverEnvelope?.body
+                ?.kind === "Reject" &&
+              Array.isArray(
+                hardening.concurrentPlayerVoteResolveRace?.vote?.streamSeqs,
+              ) === false)) &&
+          hardening.concurrentPlayerVoteResolveRace?.commandStateAfterRace?.phase
+            ?.phaseId === "D01" &&
+          hardening.concurrentPlayerVoteResolveRace?.commandStateAfterRace?.phase
+            ?.locked === true &&
+          hardening.concurrentPlayerVoteResolveRace?.commandStateAfterRace
+            ?.voteTargets?.length === 0 &&
+          hardening.concurrentPlayerVoteResolveRace?.buttonsAfterRace?.some(
+            (button) => button.action?.startsWith("submit_vote"),
+          ) === false &&
+          hardening.concurrentPlayerVoteResolveRace?.buttonsAfterRace?.some(
+            (button) => button.action === "submit_post" && button.disabled === false,
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.hostPhaseAfterRace?.locked ===
+            true &&
+          hardening.concurrentPlayerVoteResolveRace?.hostDayVoteOutcomesAfterRace?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.playerDayVoteOutcomesAfterRace?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.apiCommandStateAfterRace?.phase
+            ?.locked === true &&
+          hardening.concurrentPlayerVoteResolveRace?.apiCommandStateAfterRace
+            ?.vote_targets?.length === 0 &&
+          normalizedDayVoteOutcomeRows(
+            hardening.concurrentPlayerVoteResolveRace?.apiDayVoteOutcomesAfterRace,
+          ).some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true,
+      },
+    ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
       targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,
       rejectError: hardening.staleDeadTargetVote?.reject?.error ?? null,
@@ -4183,6 +4285,26 @@ function normalizedVotecountRows(apiVotecount) {
       target: delta.candidate_slot ?? delta.candidateSlot ?? "unknown",
       phaseId: delta.phase_id ?? delta.phaseId ?? "unknown",
       count: Number(delta.count ?? 0),
+    }));
+}
+
+function normalizedDayVoteOutcomeRows(apiDayVoteOutcomes) {
+  const rows = Array.isArray(apiDayVoteOutcomes) ? apiDayVoteOutcomes : [];
+  return rows
+    .map((delta) =>
+      delta?.kind === "DayVoteOutcomeApplied"
+        ? delta.body
+        : delta?.DayVoteOutcomeApplied ??
+          delta?.body?.DayVoteOutcomeApplied ??
+          (delta?.status !== undefined ? delta : null),
+    )
+    .filter(Boolean)
+    .map((delta) => ({
+      phaseId: delta.phase_id ?? delta.phaseId ?? "unknown",
+      status: delta.status ?? "unknown",
+      winnerSlot: delta.winner_slot ?? delta.winnerSlot ?? null,
+      tallies: delta.tallies ?? {},
+      majority: Number(delta.majority ?? 0),
     }));
 }
 

@@ -1346,6 +1346,19 @@ async fn submit_vote(
     target: VoteTarget,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = submit_vote_locked(pool, principal, game, actor_slot, target, receipt).await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn submit_vote_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    actor_slot: String,
+    target: VoteTarget,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
 
     // 1. resolve capability (boundary) and require the NARROWEST one.
@@ -1387,6 +1400,18 @@ async fn withdraw_vote(
     actor_slot: String,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = withdraw_vote_locked(pool, principal, game, actor_slot, receipt).await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn withdraw_vote_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    actor_slot: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
@@ -1408,6 +1433,33 @@ async fn withdraw_vote(
 }
 
 async fn submit_action(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    action_id: String,
+    actor_slot: String,
+    template_id: String,
+    targets: Vec<String>,
+    grant_id: Option<String>,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let mut phase_lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = submit_action_with_action_lock(
+        pool,
+        principal,
+        game,
+        action_id,
+        actor_slot,
+        template_id,
+        targets,
+        grant_id,
+        receipt,
+    )
+    .await;
+    release_phase_boundary_lock(&mut phase_lock, game, result).await
+}
+
+async fn submit_action_with_action_lock(
     pool: &PgPool,
     principal: &Principal,
     game: Uuid,
@@ -1580,6 +1632,20 @@ fn submit_action_lock_key(game: Uuid) -> i64 {
 }
 
 async fn withdraw_action(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    action_id: String,
+    actor_slot: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result =
+        withdraw_action_locked(pool, principal, game, action_id, actor_slot, receipt).await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn withdraw_action_locked(
     pool: &PgPool,
     principal: &Principal,
     game: Uuid,
@@ -1803,9 +1869,9 @@ async fn resolve_phase(
     seed: u64,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_resolve_phase_lock(pool, game).await?;
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
     let result = resolve_phase_locked(pool, principal, game, seed, receipt).await;
-    release_resolve_phase_lock(&mut lock, game, result).await
+    release_phase_boundary_lock(&mut lock, game, result).await
 }
 
 async fn resolve_phase_locked(
@@ -1880,7 +1946,7 @@ async fn resolve_phase_locked(
     persist(pool, game, &events, receipt).await
 }
 
-async fn acquire_resolve_phase_lock(
+async fn acquire_phase_boundary_lock(
     pool: &PgPool,
     game: Uuid,
 ) -> Result<PoolConnection<Postgres>, Reject> {
@@ -1889,32 +1955,32 @@ async fn acquire_resolve_phase_lock(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(resolve_phase_lock_key(game))
+        .bind(phase_boundary_lock_key(game))
         .execute(&mut *conn)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     Ok(conn)
 }
 
-async fn release_resolve_phase_lock(
+async fn release_phase_boundary_lock(
     conn: &mut PoolConnection<Postgres>,
     game: Uuid,
     result: Result<Ack, Reject>,
 ) -> Result<Ack, Reject> {
     let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(resolve_phase_lock_key(game))
+        .bind(phase_boundary_lock_key(game))
         .fetch_one(&mut **conn)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if !released {
         return Err(Reject::Internal(
-            "resolve phase lock was not held at release".to_string(),
+            "phase boundary lock was not held at release".to_string(),
         ));
     }
     result
 }
 
-fn resolve_phase_lock_key(game: Uuid) -> i64 {
+fn phase_boundary_lock_key(game: Uuid) -> i64 {
     let bytes = game.as_bytes();
     let high = u64::from_be_bytes([
         bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
