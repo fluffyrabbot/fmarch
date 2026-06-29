@@ -2958,6 +2958,79 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorStatus: "modkilled",
         },
       },
+      concurrentActionRace: {
+        status: "passed",
+        staleN01Phase: { phaseId: "N01" },
+        actionConfig: {
+          templateId: "factional_kill",
+        },
+        ackPageRole: "live",
+        rejectPageRole: "concurrent",
+        targetSlot: "slot-2",
+        ack: {
+          state: "ack",
+          commandId: "11111111-1111-4111-8111-111111111111",
+          streamSeqs: [42],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "22222222-2222-4222-8222-222222222222",
+          error: "ActionAlreadySubmitted",
+          message:
+            "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        liveCommandStateAfterRace: {
+          actorSlot: "slot_4",
+          phase: { phaseId: "N01", locked: false },
+          actions: [],
+        },
+        concurrentCommandStateAfterRace: {
+          actorSlot: "slot_4",
+          phase: { phaseId: "N01", locked: false },
+          actions: [],
+        },
+        apiCommandStateAfterRace: {
+          actor_slot: "slot_4",
+          phase: { phase_id: "N01", locked: false },
+          actions: [],
+        },
+        resolvedTargetSlot: {
+          slot_id: "slot-2",
+          alive: false,
+          status: "dead",
+        },
+        actionVisibleAfterRefresh: false,
+      },
       actionIdempotentRetry: {
         status: "passed",
         actionConfig: {
@@ -3695,6 +3768,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-incoming-player",
       "idempotent-retry",
       "action-idempotent-retry",
+      "concurrent-action-race",
       "reconnect-recovery",
       "stale-player-vote",
       "stale-player-vote-after-change",
@@ -3795,7 +3869,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 62);
+  assert.equal(opsArtifacts.proofRun.laneCount, 63);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3892,6 +3966,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "dead-player-recovery",
       "night-action-loop",
       "action-idempotent-retry",
+      "concurrent-action-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -4352,6 +4427,7 @@ function hardeningAdminProofFixture() {
         "replacement-idempotent-retry",
         "idempotent-retry",
         "action-idempotent-retry",
+        "concurrent-action-race",
         "reconnect-recovery",
         "stale-player-vote",
         "stale-player-vote-after-change",
@@ -4465,6 +4541,7 @@ function seedAdminProofFixture() {
         "replacement-stale-private-receipts",
         "replacement-incoming-player",
         "action-idempotent-retry",
+        "concurrent-action-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

@@ -1737,6 +1737,36 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.ack.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.reject.error,
+  "ActionAlreadySubmitted",
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentActionRace.ack.commandId,
+  session.verification.multiplayerHardening.concurrentActionRace.reject.commandId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace
+    .apiCommandStateAfterRace.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.resolvedTargetSlot.alive,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace
+    .actionVisibleAfterRefresh,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.actionIdempotentRetry.status,
   "passed",
 );

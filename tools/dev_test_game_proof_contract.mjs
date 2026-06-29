@@ -41,6 +41,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-incoming-player",
   "idempotent-retry",
   "action-idempotent-retry",
+  "concurrent-action-race",
   "reconnect-recovery",
   "stale-player-vote",
   "stale-player-vote-after-change",
@@ -1514,6 +1515,89 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.actions?.length ===
           0 &&
         hardening.actionIdempotentRetry?.actionVisibleAfterRefresh === false,
+    }),
+    lane("concurrent-action-race", "Concurrent player actions converge with one stored action", {
+      ackPageRole: hardening.concurrentActionRace?.ackPageRole ?? null,
+      rejectPageRole: hardening.concurrentActionRace?.rejectPageRole ?? null,
+      ackState: hardening.concurrentActionRace?.ack?.state ?? null,
+      rejectError: hardening.concurrentActionRace?.reject?.error ?? null,
+      targetSlot: hardening.concurrentActionRace?.targetSlot ?? null,
+      refreshedActionCount:
+        hardening.concurrentActionRace?.apiCommandStateAfterRace?.actions?.length ??
+        null,
+      resolvedTargetAlive:
+        hardening.concurrentActionRace?.resolvedTargetSlot?.alive ?? null,
+      passed:
+        hardening.concurrentActionRace?.status === "passed" &&
+        ["live", "concurrent"].includes(
+          hardening.concurrentActionRace?.ackPageRole,
+        ) &&
+        ["live", "concurrent"].includes(
+          hardening.concurrentActionRace?.rejectPageRole,
+        ) &&
+        hardening.concurrentActionRace?.ackPageRole !==
+          hardening.concurrentActionRace?.rejectPageRole &&
+        hardening.concurrentActionRace?.ack?.state === "ack" &&
+        hardening.concurrentActionRace?.ack?.serverEnvelope?.body?.kind === "Ack" &&
+        hardening.concurrentActionRace?.reject?.state === "reject" &&
+        hardening.concurrentActionRace?.reject?.error === "ActionAlreadySubmitted" &&
+        hardening.concurrentActionRace?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.concurrentActionRace?.reject?.streamSeqs) ===
+          false &&
+        hardening.concurrentActionRace?.ack?.commandId !==
+          hardening.concurrentActionRace?.reject?.commandId &&
+        hardening.concurrentActionRace?.ack?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.concurrentActionRace?.ack?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.action_id === "role_factional_kill" &&
+        hardening.concurrentActionRace?.ack?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.template_id === "factional_kill" &&
+        hardening.concurrentActionRace?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.concurrentActionRace?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.action_id === "role_factional_kill" &&
+        hardening.concurrentActionRace?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.template_id === "factional_kill" &&
+        hardening.concurrentActionRace?.reject?.requestEnvelope?.body?.body?.command
+          ?.SubmitAction?.targets?.[0] ===
+          hardening.concurrentActionRace?.ack?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.targets?.[0] &&
+        hardening.concurrentActionRace?.targetSlot ===
+          hardening.concurrentActionRace?.ack?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.targets?.[0] &&
+        hardening.concurrentActionRace?.reject?.message?.includes(
+          "refresh and use current controls",
+        ) === true &&
+        hardening.concurrentActionRace?.liveCommandStateAfterRace?.actorSlot ===
+          "slot_4" &&
+        hardening.concurrentActionRace?.liveCommandStateAfterRace?.phase?.phaseId ===
+          "N01" &&
+        hardening.concurrentActionRace?.liveCommandStateAfterRace?.phase?.locked ===
+          false &&
+        hardening.concurrentActionRace?.liveCommandStateAfterRace?.actions?.length ===
+          0 &&
+        hardening.concurrentActionRace?.concurrentCommandStateAfterRace?.actorSlot ===
+          "slot_4" &&
+        hardening.concurrentActionRace?.concurrentCommandStateAfterRace?.phase
+          ?.phaseId === "N01" &&
+        hardening.concurrentActionRace?.concurrentCommandStateAfterRace?.phase
+          ?.locked === false &&
+        hardening.concurrentActionRace?.concurrentCommandStateAfterRace?.actions
+          ?.length === 0 &&
+        hardening.concurrentActionRace?.apiCommandStateAfterRace?.actor_slot ===
+          "slot_4" &&
+        hardening.concurrentActionRace?.apiCommandStateAfterRace?.phase?.phase_id ===
+          "N01" &&
+        hardening.concurrentActionRace?.apiCommandStateAfterRace?.phase?.locked ===
+          false &&
+        hardening.concurrentActionRace?.apiCommandStateAfterRace?.actions?.length ===
+          0 &&
+        hardening.concurrentActionRace?.resolvedTargetSlot?.slot_id ===
+          hardening.concurrentActionRace?.targetSlot &&
+        hardening.concurrentActionRace?.resolvedTargetSlot?.alive === false &&
+        hardening.concurrentActionRace?.resolvedTargetSlot?.status === "dead" &&
+        hardening.concurrentActionRace?.actionVisibleAfterRefresh === false,
     }),
     lane("reconnect-recovery", "Dropped player live projection reconnects", {
       reconnectingState: hardening.reconnect?.reconnectingStatus?.state ?? null,

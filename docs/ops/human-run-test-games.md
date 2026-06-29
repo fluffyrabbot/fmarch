@@ -360,10 +360,11 @@ N01, submits the browser-visible invalid self-action, records the current
 `Reject InvalidTarget` command receipt, refreshes command state, and verifies
 the legal `factional_kill` action remains available without advancing phase.
 The same action loop also keeps a second action-player page frozen before the
-legal submit, replays the successful `factional_kill` command id after the live
-ACK and proves the original ACK stream seqs refresh browser and API command
-state to N01 with no stale action controls, then clicks another stale
-`factional_kill` control with a distinct command id and proves
+legal submit, races two `factional_kill` submissions with distinct command ids
+until one ACKs and the other renders `Reject ActionAlreadySubmitted`, replays
+the winning command id and proves the original ACK stream seqs refresh browser
+and API command state to N01 with no stale action controls, then clicks another
+stale `factional_kill` control with a distinct command id and proves
 `Reject ActionAlreadySubmitted` recovery reaches the same current state.
 
 The player action-boundary proof keeps the seeded `player` role URL on the same
@@ -503,8 +504,11 @@ URL, verifies the affected player role URL loses controls with `SlotNotAlive`
 recovery after each host action, and restores Slot 7 alive before replacement
 continues, keeps one action-player page frozen on N01 until its stale
 `factional_kill` rejects with `Reject SlotNotAlive` copy that names actor death
-plus current action controls and refreshes out of stale action controls, keeps a
-second action-player page frozen on N01 until its stale `factional_kill`
+plus current action controls and refreshes out of stale action controls, races
+the hydrated action-player page with a second frozen N01 action-player page
+until one `factional_kill` ACKs and the other receives
+`Reject ActionAlreadySubmitted`, keeps another action-player page frozen on N01
+until its stale `factional_kill`
 replay with the successful command id returns the original ACK stream seqs and
 refreshes browser plus API command state to N01 with no action controls, keeps a
 third action-player page frozen on N01 until its stale `factional_kill`
