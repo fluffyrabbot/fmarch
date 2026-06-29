@@ -79,6 +79,20 @@ test("player route data exposes thread, channel, votecount, and touch command la
     "/media/midsummer/thread/receipt-442-original.jpg",
   );
   assert.equal(data.composer.voteCommandLabel, "Vote slot-2");
+  assert.deepEqual(data.composer.voteCommands, [
+    {
+      action: "submit_vote",
+      commandKind: "submit_vote",
+      label: "Vote slot-2",
+      voteTarget: { Slot: "slot-2" },
+    },
+    {
+      action: "submit_vote:no_lynch",
+      commandKind: "submit_vote",
+      label: "Vote no lynch",
+      voteTarget: "NoLynch",
+    },
+  ]);
   assert.deepEqual(data.composer.actionCommands, []);
   assert.equal(data.coldLoad.threadEndpoint, "/games/midsummer/thread?limit=50");
   assert.equal(

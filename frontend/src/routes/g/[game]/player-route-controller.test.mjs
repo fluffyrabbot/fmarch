@@ -114,6 +114,25 @@ test("player route controller builds typed player command requests", () => {
 
   assert.deepEqual(
     buildPlayerCommandRequest({
+      data: fixtureData(),
+      action: "submit_vote:no_lynch",
+      composerBody: "ignored for no lynch vote",
+    }),
+    {
+      principalUserId: "player_mira",
+      endpoint: "/commands",
+      command: {
+        SubmitVote: {
+          game: "midsummer",
+          actor_slot: "slot-7",
+          target: "NoLynch",
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommandRequest({
       data: fixtureData({
         threadPager: { pageSize: 50, channel: "role-pm" },
       }),
@@ -221,6 +240,7 @@ test("player route controller refreshes only projections touched by acked comman
   assert.deepEqual(result.snapshot, projectionStore.getSnapshot());
 
   assert.deepEqual(playerRefreshKeysForAction("submit_post"), ["thread", "votecount"]);
+  assert.deepEqual(playerRefreshKeysForAction("submit_vote:no_lynch"), ["votecount"]);
   assert.deepEqual(playerRefreshKeysForAction("submit_action"), [
     "notifications",
     "investigationResults",
@@ -623,6 +643,20 @@ function fixtureData(overrides = {}) {
     composer: {
       commandEndpoint: "/commands",
       voteTargetSlot: "slot-2",
+      voteCommands: [
+        {
+          action: "submit_vote",
+          commandKind: "submit_vote",
+          label: "Vote slot-2",
+          voteTarget: { Slot: "slot-2" },
+        },
+        {
+          action: "submit_vote:no_lynch",
+          commandKind: "submit_vote",
+          label: "Vote no lynch",
+          voteTarget: "NoLynch",
+        },
+      ],
       actionCommands: [
         {
           action: "submit_action:factional_kill",

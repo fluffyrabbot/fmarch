@@ -26,6 +26,25 @@ test("player actions map to Rust wire command variants", () => {
 
   assert.deepEqual(
     buildPlayerCommand({
+      action: "submit_vote:no_lynch",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      actionConfig: {
+        commandKind: "submit_vote",
+        voteTarget: "NoLynch",
+      },
+    }),
+    {
+      SubmitVote: {
+        game: "00000000-0000-0000-0000-000000000001",
+        actor_slot: "slot-7",
+        target: "NoLynch",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommand({
       action: "submit_post",
       game: "00000000-0000-0000-0000-000000000001",
       actorSlot: "slot-7",

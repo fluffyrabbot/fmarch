@@ -10,6 +10,10 @@ test("player command panel model exposes tablet touch command contracts", () => 
     composer: {
       defaultBody: "##vote slot-2",
       voteCommandLabel: "Vote slot-2",
+      voteCommands: [
+        { action: "submit_vote", label: "Vote slot-2" },
+        { action: "submit_vote:no_lynch", label: "Vote no lynch" },
+      ],
       withdrawCommandLabel: "Withdraw vote",
       postCommandLabel: "Post",
       actionCommands: [
@@ -73,6 +77,12 @@ test("player command panel model exposes tablet touch command contracts", () => 
     })),
     [
       { action: "submit_vote", label: "Vote slot-2", disabled: false, minTouchTargetPx: 44 },
+      {
+        action: "submit_vote:no_lynch",
+        label: "Vote no lynch",
+        disabled: false,
+        minTouchTargetPx: 44,
+      },
       { action: "withdraw_vote", label: "Withdraw vote", disabled: false, minTouchTargetPx: 44 },
       { action: "submit_post", label: "Post", disabled: false, minTouchTargetPx: 44 },
     ],

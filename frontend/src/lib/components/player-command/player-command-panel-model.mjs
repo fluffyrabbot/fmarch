@@ -6,7 +6,7 @@ export const PLAYER_COMMAND_PANEL_CONTRACT = Object.freeze({
   channelContextTestId: "player-command-channel-context",
   deadlineTestId: "player-votecount-deadline",
   minTouchTargetPx: 44,
-  actions: Object.freeze(["submit_vote", "withdraw_vote", "submit_post"]),
+  actions: Object.freeze(["submit_vote", "submit_vote:no_lynch", "withdraw_vote", "submit_post"]),
 });
 
 export function buildPlayerCommandPanelViewModel({
@@ -37,10 +37,8 @@ export function buildPlayerCommandPanelViewModel({
       defaultBody: String(composer.defaultBody ?? ""),
       channelContext,
       buttons: Object.freeze([
-        commandButton({
-          action: "submit_vote",
-          label: composer.voteCommandLabel,
-          primary: true,
+        ...voteCommandButtons({
+          composer,
           disabled: playerCommandsDisabled,
         }),
         commandButton({
@@ -122,6 +120,35 @@ function commandButton({ action, label, primary = false, disabled = false }) {
       minTouchTargetPx: PLAYER_COMMAND_PANEL_CONTRACT.minTouchTargetPx,
     }),
   });
+}
+
+function voteCommandButtons({ composer, disabled }) {
+  const voteCommands = normalizeVoteCommands(composer);
+  return voteCommands.map((command, index) =>
+    commandButton({
+      action: command.action,
+      label: command.label,
+      primary: index === 0,
+      disabled,
+    }),
+  );
+}
+
+function normalizeVoteCommands(composer = {}) {
+  if (Array.isArray(composer.voteCommands) && composer.voteCommands.length > 0) {
+    return composer.voteCommands.map((command) =>
+      Object.freeze({
+        action: String(command?.action ?? "submit_vote"),
+        label: String(command?.label ?? command?.action ?? "submit_vote"),
+      }),
+    );
+  }
+  return Object.freeze([
+    Object.freeze({
+      action: "submit_vote",
+      label: composer.voteCommandLabel,
+    }),
+  ]);
 }
 
 function actionCommandButton(command) {

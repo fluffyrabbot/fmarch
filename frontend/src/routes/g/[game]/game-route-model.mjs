@@ -112,6 +112,20 @@ export async function buildGameRouteData({
       voteCommandLabel: "Vote slot-2",
       withdrawCommandLabel: "Withdraw vote",
       voteTargetSlot: "slot-2",
+      voteCommands: [
+        {
+          action: "submit_vote",
+          commandKind: "submit_vote",
+          label: "Vote slot-2",
+          voteTarget: { Slot: "slot-2" },
+        },
+        {
+          action: "submit_vote:no_lynch",
+          commandKind: "submit_vote",
+          label: "Vote no lynch",
+          voteTarget: "NoLynch",
+        },
+      ],
       commandEndpoint: "/commands",
       transportBoundary: LIVE_TRANSPORT_BOUNDARY.proof,
     },

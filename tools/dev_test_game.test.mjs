@@ -966,7 +966,39 @@ test("session card and markdown include role credential URLs and tokens", () => 
     },
     dayVoteNoLynch: {
       status: "passed",
-      proof: "host resolved a seeded no-lynch day vote without a death",
+      proof: "two player role URLs clicked no-lynch and host resolved without a death",
+      miraNoLynchVote: {
+        state: "ack",
+        requestEnvelope: {
+          body: {
+            body: {
+              principal_user_id: "player-mira",
+              command: {
+                SubmitVote: {
+                  target: "NoLynch",
+                },
+              },
+            },
+          },
+        },
+      },
+      miraVotecountAfterVote: [{ target: "no_lynch", count: 1 }],
+      seedNoLynchVote: {
+        state: "ack",
+        requestEnvelope: {
+          body: {
+            body: {
+              principal_user_id: "player-seed",
+              command: {
+                SubmitVote: {
+                  target: "NoLynch",
+                },
+              },
+            },
+          },
+        },
+      },
+      seedVotecountAfterVote: [{ target: "no_lynch", count: 2 }],
       resolveDay: { commandStatus: { state: "ack" } },
       hostAfterResolve: {
         dayVoteOutcomes: [

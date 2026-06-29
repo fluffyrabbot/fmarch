@@ -168,6 +168,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     lane("day-vote-no-lynch", "No-lynch day vote resolves without a death", {
       outcomeStatus: verification.dayVoteNoLynch?.dayVoteOutcome?.status ?? null,
       noLynchTally: verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch ?? null,
+      miraVoteState: verification.dayVoteNoLynch?.miraNoLynchVote?.state ?? null,
+      seedVoteState: verification.dayVoteNoLynch?.seedNoLynchVote?.state ?? null,
       survivorAlive: verification.dayVoteNoLynch?.survivorSlot?.alive ?? null,
       survivorOutcomePanel: verification.dayVoteNoLynch?.survivorOutcomePanel ?? null,
       deathNoticeCount:
@@ -181,6 +183,22 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteNoLynch?.dayVoteOutcome?.status === "NoLynch" &&
         verification.dayVoteNoLynch?.dayVoteOutcome?.winner_slot === null &&
         verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch === 2 &&
+        verification.dayVoteNoLynch?.miraNoLynchVote?.state === "ack" &&
+        verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-mira" &&
+        verification.dayVoteNoLynch?.miraNoLynchVote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.target === "NoLynch" &&
+        verification.dayVoteNoLynch?.seedNoLynchVote?.state === "ack" &&
+        verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-seed" &&
+        verification.dayVoteNoLynch?.seedNoLynchVote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.target === "NoLynch" &&
+        verification.dayVoteNoLynch?.miraVotecountAfterVote?.some(
+          (row) => row.target === "no_lynch" && row.count === 1,
+        ) &&
+        verification.dayVoteNoLynch?.seedVotecountAfterVote?.some(
+          (row) => row.target === "no_lynch" && row.count === 2,
+        ) &&
         verification.dayVoteNoLynch?.hostAfterResolve?.dayVoteOutcomes?.some(
           (row) =>
             row.phaseId === "D01" &&

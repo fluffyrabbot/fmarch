@@ -47,9 +47,7 @@ export function buildPlayerCommand({
         SubmitVote: Object.freeze({
           game: requiredString(game, "game"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
-          target: Object.freeze({
-            Slot: requiredString(target, "target"),
-          }),
+          target: voteTargetWire(actionConfig?.voteTarget ?? target),
         }),
       });
     case "withdraw_vote":
@@ -215,6 +213,19 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function voteTargetWire(target) {
+  if (target === "NoLynch") {
+    return "NoLynch";
+  }
+  if (target?.kind === "NoLynch") {
+    return "NoLynch";
+  }
+  const slot = target?.Slot ?? target?.slot ?? target;
+  return Object.freeze({
+    Slot: requiredString(slot, "target"),
+  });
 }
 
 function normalizeTargets(value) {

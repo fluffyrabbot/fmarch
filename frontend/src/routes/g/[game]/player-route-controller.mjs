@@ -186,10 +186,15 @@ export function playerRefreshKeysForAction(action) {
   ) {
     return Object.freeze(["notifications", "investigationResults", "commandState"]);
   }
+  if (
+    normalizedAction === "submit_vote" ||
+    normalizedAction.startsWith("submit_vote:")
+  ) {
+    return Object.freeze(["votecount"]);
+  }
   switch (normalizedAction) {
     case "submit_post":
       return Object.freeze(["thread", "votecount"]);
-    case "submit_vote":
     case "withdraw_vote":
       return Object.freeze(["votecount"]);
     default:
@@ -350,6 +355,9 @@ function playerRefreshKeysForDataActionWithCommandState(data, action) {
 
 export function playerActionConfig(data, action) {
   return (
+    data.composer.voteCommands?.find(
+      (command) => String(command.action) === String(action),
+    ) ??
     data.composer.actionCommands?.find(
       (command) => String(command.action) === String(action),
     ) ?? null

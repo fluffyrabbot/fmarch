@@ -868,7 +868,9 @@ async function verifySessionCard(card) {
       frontendBaseUrl: card.frontendBaseUrl,
     });
     dayVoteNoLynch = await verifySeededDayVoteNoLynch({
+      browser,
       hostPage: roleEntries.host.page,
+      playerPage: roleEntries.player.page,
       survivorPage: roleEntries.deniedPlayer.page,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
@@ -1731,16 +1733,85 @@ async function seedDayVoteResolutionGame({ game }) {
 }
 
 async function verifySeededDayVoteNoLynch({
+  browser,
   hostPage,
+  playerPage,
   survivorPage,
   apiBaseUrl,
   frontendBaseUrl,
 }) {
   const noLynchGame = crypto.randomUUID();
   const seed = await seedDayVoteNoLynchGame({ game: noLynchGame });
+  const seedVoterSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-no-lynch-seed-voter-${crypto.randomUUID()}`,
+    principalUserId: "player-seed",
+    returnTo: `/g/${noLynchGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const seedVoterEntry = await openVerifiedRoleEntry({
+    browser,
+    session: seedVoterSession,
+    game: noLynchGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   const hostProofPage = await hostPage.context().newPage();
+  const miraVoterPage = await playerPage.context().newPage();
   const survivorProofPage = await survivorPage.context().newPage();
   try {
+    await gotoPlayerBoard(miraVoterPage, noLynchGame);
+    await miraVoterPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+    );
+    await seedVoterEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true,
+    );
+    await miraVoterPage.locator('[data-action="submit_vote:no_lynch"]').click();
+    await miraVoterPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-mira" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target === "NoLynch",
+    );
+    await waitForPlayerVotecount(miraVoterPage, { target: "no_lynch", count: 1 });
+    const miraNoLynchVote = await miraVoterPage.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const miraVotecountAfterVote = await miraVoterPage.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount ?? [],
+    );
+
+    await seedVoterEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await seedVoterEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-seed" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target === "NoLynch",
+    );
+    await waitForPlayerVotecount(seedVoterEntry.page, {
+      target: "no_lynch",
+      count: 2,
+    });
+    const seedNoLynchVote = await seedVoterEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const seedVotecountAfterVote = await seedVoterEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount ?? [],
+    );
+
     await hostProofPage.goto(`${frontendBaseUrl}/g/${noLynchGame}/host`, {
       waitUntil: "networkidle",
     });
@@ -1835,6 +1906,22 @@ async function verifySeededDayVoteNoLynch({
       dayVoteOutcome?.status !== "NoLynch" ||
       dayVoteOutcome?.winner_slot !== null ||
       dayVoteOutcome?.tallies?.no_lynch !== 2 ||
+      miraNoLynchVote?.state !== "ack" ||
+      miraNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !==
+        "player-mira" ||
+      miraNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
+        "NoLynch" ||
+      seedNoLynchVote?.state !== "ack" ||
+      seedNoLynchVote?.requestEnvelope?.body?.body?.principal_user_id !==
+        "player-seed" ||
+      seedNoLynchVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target !==
+        "NoLynch" ||
+      !miraVotecountAfterVote.some(
+        (row) => row.target === "no_lynch" && row.count === 1,
+      ) ||
+      !seedVotecountAfterVote.some(
+        (row) => row.target === "no_lynch" && row.count === 2,
+      ) ||
       hostAfterResolve.phase?.id !== "D01" ||
       hostAfterResolve.phase?.locked !== true ||
       !hostAfterResolve.dayVoteOutcomes.some(
@@ -1868,6 +1955,16 @@ async function verifySeededDayVoteNoLynch({
         `day vote no-lynch proof drifted: ${JSON.stringify({
           noLynchGame,
           seed,
+          seedVoterSession: {
+            principalUserId: seedVoterSession.principalUserId,
+            credentialKind: seedVoterSession.credentialKind,
+            expectedCapabilityKind: seedVoterSession.expectedCapabilityKind,
+          },
+          seedVoterBrowserEntry: seedVoterEntry.verification,
+          miraNoLynchVote,
+          miraVotecountAfterVote,
+          seedNoLynchVote,
+          seedVotecountAfterVote,
           hostBeforeResolve,
           resolveDay,
           hostAfterResolve,
@@ -1886,6 +1983,16 @@ async function verifySeededDayVoteNoLynch({
       status: "passed",
       game: noLynchGame,
       seed,
+      seedVoterSession: {
+        principalUserId: seedVoterSession.principalUserId,
+        credentialKind: seedVoterSession.credentialKind,
+        expectedCapabilityKind: seedVoterSession.expectedCapabilityKind,
+      },
+      seedVoterBrowserEntry: seedVoterEntry.verification,
+      miraNoLynchVote,
+      miraVotecountAfterVote,
+      seedNoLynchVote,
+      seedVotecountAfterVote,
       hostBeforeResolve,
       resolveDay,
       hostAfterResolve,
@@ -1897,11 +2004,13 @@ async function verifySeededDayVoteNoLynch({
       survivorOutcomePanel,
       survivorOutcomeTally,
       proof:
-        "A disposable seeded no-lynch game loaded host and surviving-player role URLs, two committed no_lynch votes resolved through the host browser, /day-vote-outcomes exposed the official NoLynch result, both role URLs rendered the no-elimination outcome panel, and the surviving player stayed alive without a day_vote death notice.",
+        "A disposable seeded no-lynch game loaded two player role URLs, both players clicked the Vote no lynch control through /commands, the host role URL resolved those no_lynch votes, /day-vote-outcomes exposed the official NoLynch result, both host and surviving-player role URLs rendered the no-elimination outcome panel, and the surviving player stayed alive without a day_vote death notice.",
     };
   } finally {
     await hostProofPage.close().catch(() => {});
+    await miraVoterPage.close().catch(() => {});
     await survivorProofPage.close().catch(() => {});
+    await seedVoterEntry.context.close().catch(() => {});
   }
 }
 
@@ -1918,14 +2027,6 @@ async function seedDayVoteNoLynchGame({ game }) {
     ["host_h", { AssignSlot: { game, slot: "slot_3", user: "player-target" } }],
     ["host_h", { AssignRole: { game, slot: "slot_3", role_key: "mafia_goon" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
-    [
-      "player-mira",
-      { SubmitVote: { game, actor_slot: "slot-7", target: "NoLynch" } },
-    ],
-    [
-      "player-seed",
-      { SubmitVote: { game, actor_slot: "slot-2", target: "NoLynch" } },
-    ],
   ];
   const commands = [];
   for (const [principalUserId, command] of plan) {
@@ -1934,7 +2035,8 @@ async function seedDayVoteNoLynchGame({ game }) {
   return {
     game,
     commands: commands.length,
-    preseededNoLynchVotes: 2,
+    preseededNoLynchVotes: 0,
+    browserNoLynchVoteSlots: ["slot-7", "slot-2"],
     survivorSlot: "slot_3",
   };
 }
