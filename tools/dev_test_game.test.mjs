@@ -520,7 +520,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           id: "exhaustive-race-coverage",
           status: "unproven",
           requiredEvidence:
-            "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+            "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
         },
       ],
     }),
@@ -535,7 +535,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       id: "exhaustive-race-coverage",
       status: "unproven",
       requiredEvidence:
-        "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+        "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
       buildSlice:
         "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
       proofTarget: "target/dev-test-game/proof-run.json",
@@ -566,7 +566,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         proofBoundary:
           "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
-          "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+          "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
       },
     ],
   });
@@ -4011,6 +4011,100 @@ test("session card and markdown include role credential URLs and tokens", () => 
           ],
         },
       },
+      concurrentHostCompleteRace: {
+        status: "passed",
+        game: `${game}-concurrent-complete-test`,
+        actionId: "complete_game",
+        setup: {
+          firstRoleActions: ["complete_game"],
+          secondRoleActions: ["complete_game"],
+          firstRevealText: "0/1 slots revealed",
+          secondRevealText: "0/1 slots revealed",
+          firstSlots: [
+            { role_revealed: false, alignment_revealed: false },
+          ],
+          secondSlots: [
+            { role_revealed: false, alignment_revealed: false },
+          ],
+        },
+        ackRaceRole: "first",
+        rejectRaceRole: "second",
+        ack: {
+          state: "ack",
+          commandId: "concurrent-complete-ack",
+          streamSeqs: [56],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  CompleteGame: { game: `${game}-concurrent-complete-test` },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "concurrent-complete-reject",
+          error: "GameAlreadyCompleted",
+          message: "Reject GameAlreadyCompleted: game already completed",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  CompleteGame: { game: `${game}-concurrent-complete-test` },
+                },
+              },
+            },
+          },
+        },
+        firstOutcome: {
+          state: "ack",
+          commandId: "concurrent-complete-ack",
+        },
+        secondOutcome: {
+          state: "reject",
+          commandId: "concurrent-complete-reject",
+          error: "GameAlreadyCompleted",
+        },
+        firstSlotsAfterRace: [
+          { role_revealed: true, alignment_revealed: true },
+        ],
+        secondSlotsAfterRace: [
+          { role_revealed: true, alignment_revealed: true },
+        ],
+        firstRevealTextAfterRace: "All 1 slots revealed",
+        secondRevealTextAfterRace: "All 1 slots revealed",
+        firstRoleActionsAfterRace: [],
+        secondRoleActionsAfterRace: [],
+        firstActivityStatusText: "Ack: stream seqs 56",
+        secondActivityStatusText:
+          "Reject GameAlreadyCompleted: game already completed",
+        firstActivityRow: {
+          source: "outcome",
+          actionId: "complete_game",
+          dispatchKind: "complete_game",
+        },
+        secondActivityRow: {
+          source: "outcome",
+          actionId: "complete_game",
+          dispatchKind: "complete_game",
+        },
+        firstDispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        secondDispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiStateAfterRace: {
+          completed: true,
+          slots: [
+            { role_revealed: true, alignment_revealed: true },
+          ],
+        },
+      },
       stalePlayerComplete: {
         status: "passed",
         game: `${game}-player-complete-test`,
@@ -4278,6 +4372,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-lifecycle-race",
       "stale-host-prompt",
       "stale-host-complete",
+      "concurrent-host-complete-race",
       "stale-player-complete",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
@@ -4363,7 +4458,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 68);
+  assert.equal(opsArtifacts.proofRun.laneCount, 69);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4465,6 +4560,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-lifecycle-race",
+      "concurrent-host-complete-race",
       "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
@@ -4976,6 +5072,7 @@ function hardeningAdminProofFixture() {
         "stale-host-modkill",
         "stale-host-prompt",
         "stale-host-complete",
+        "concurrent-host-complete-race",
         "stale-player-complete",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
@@ -4986,6 +5083,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
+        "concurrent-host-complete-race",
         "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
@@ -5085,6 +5183,7 @@ function seedAdminProofFixture() {
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
+        "concurrent-host-complete-race",
         "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",

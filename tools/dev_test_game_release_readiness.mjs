@@ -222,7 +222,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     },
     {
       id: "local-hardening-proof",
-      label: "Idempotency, reconnect, stale-client, and one concurrent vote race",
+      label: "Idempotency, reconnect, stale-client, and local concurrent race matrix",
       status: "passed",
       evidence: sourcePath,
       laneIds: [
@@ -245,6 +245,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "concurrent-host-lifecycle-race",
         "stale-host-prompt",
         "stale-host-complete",
+        "concurrent-host-complete-race",
         "stale-player-complete",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
@@ -404,7 +405,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       id: "exhaustive-race-coverage",
       status: "unproven",
       requiredEvidence:
-        "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+        "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
     },
     ...(opsArtifactsEvidence === undefined
       ? [
@@ -771,6 +772,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "concurrent-host-lifecycle-race",
     "stale-host-prompt",
     "stale-host-complete",
+    "concurrent-host-complete-race",
     "stale-player-complete",
     "stale-same-action-recovery",
     "stale-dead-action-conflict",
@@ -1004,6 +1006,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "concurrent-host-advance-race",
     "concurrent-host-deadline-advance-race",
     "concurrent-host-lifecycle-race",
+    "concurrent-host-complete-race",
     "concurrent-host-mixed-advance-race",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
@@ -1097,6 +1100,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "concurrent-host-advance-race",
     "concurrent-host-deadline-advance-race",
     "concurrent-host-lifecycle-race",
+    "concurrent-host-complete-race",
     "concurrent-host-mixed-advance-race",
     "stale-same-action-recovery",
     "stale-action-conflict-message",

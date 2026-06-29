@@ -62,6 +62,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-lifecycle-race",
   "stale-host-prompt",
   "stale-host-complete",
+  "concurrent-host-complete-race",
   "stale-player-complete",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
@@ -2942,6 +2943,108 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostComplete?.apiStateAfterReject?.completed === true &&
         hardening.staleHostComplete?.apiStateAfterReject?.slots?.length === 1 &&
         hardening.staleHostComplete?.apiStateAfterReject?.slots?.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ) === true,
+    }),
+    lane("concurrent-host-complete-race", "Concurrent complete-game commands converge", {
+      ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
+      rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,
+      rejectError: hardening.concurrentHostCompleteRace?.reject?.error ?? null,
+      apiCompleted:
+        hardening.concurrentHostCompleteRace?.apiStateAfterRace?.completed ?? null,
+      apiRevealedSlots:
+        hardening.concurrentHostCompleteRace?.apiStateAfterRace?.slots?.filter(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ).length ?? null,
+      passed:
+        hardening.concurrentHostCompleteRace?.status === "passed" &&
+        hardening.concurrentHostCompleteRace?.setup?.firstRoleActions?.includes(
+          "complete_game",
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.setup?.secondRoleActions?.includes(
+          "complete_game",
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.setup?.firstSlots?.length === 1 &&
+        hardening.concurrentHostCompleteRace?.setup?.secondSlots?.length === 1 &&
+        hardening.concurrentHostCompleteRace?.setup?.firstSlots?.every(
+          (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.setup?.secondSlots?.every(
+          (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.setup?.firstRevealText?.includes(
+          "0/1 slots revealed",
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.setup?.secondRevealText?.includes(
+          "0/1 slots revealed",
+        ) === true &&
+        ["first", "second"].includes(
+          hardening.concurrentHostCompleteRace?.ackRaceRole,
+        ) &&
+        ["first", "second"].includes(
+          hardening.concurrentHostCompleteRace?.rejectRaceRole,
+        ) &&
+        hardening.concurrentHostCompleteRace?.ackRaceRole !==
+          hardening.concurrentHostCompleteRace?.rejectRaceRole &&
+        hardening.concurrentHostCompleteRace?.ack?.state === "ack" &&
+        hardening.concurrentHostCompleteRace?.ack?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        Array.isArray(hardening.concurrentHostCompleteRace?.ack?.streamSeqs) &&
+        hardening.concurrentHostCompleteRace.ack.streamSeqs.length === 1 &&
+        hardening.concurrentHostCompleteRace?.reject?.state === "reject" &&
+        hardening.concurrentHostCompleteRace?.reject?.error ===
+          "GameAlreadyCompleted" &&
+        hardening.concurrentHostCompleteRace?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.concurrentHostCompleteRace?.reject?.streamSeqs) ===
+          false &&
+        hardening.concurrentHostCompleteRace?.ack?.commandId !==
+          hardening.concurrentHostCompleteRace?.reject?.commandId &&
+        hardening.concurrentHostCompleteRace?.ack?.requestEnvelope?.body?.body
+          ?.command?.CompleteGame?.game ===
+          hardening.concurrentHostCompleteRace?.game &&
+        hardening.concurrentHostCompleteRace?.reject?.requestEnvelope?.body?.body
+          ?.command?.CompleteGame?.game ===
+          hardening.concurrentHostCompleteRace?.game &&
+        hardening.concurrentHostCompleteRace?.firstSlotsAfterRace?.length === 1 &&
+        hardening.concurrentHostCompleteRace?.secondSlotsAfterRace?.length === 1 &&
+        hardening.concurrentHostCompleteRace?.firstSlotsAfterRace?.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.secondSlotsAfterRace?.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.firstRevealTextAfterRace?.includes(
+          "All 1 slots revealed",
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.secondRevealTextAfterRace?.includes(
+          "All 1 slots revealed",
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.firstRoleActionsAfterRace?.includes(
+          "complete_game",
+        ) === false &&
+        hardening.concurrentHostCompleteRace?.secondRoleActionsAfterRace?.includes(
+          "complete_game",
+        ) === false &&
+        [
+          hardening.concurrentHostCompleteRace?.firstActivityStatusText,
+          hardening.concurrentHostCompleteRace?.secondActivityStatusText,
+        ].some((text) => String(text).includes("Ack")) === true &&
+        [
+          hardening.concurrentHostCompleteRace?.firstActivityStatusText,
+          hardening.concurrentHostCompleteRace?.secondActivityStatusText,
+        ].some((text) => String(text).includes("Reject GameAlreadyCompleted")) ===
+          true &&
+        [
+          hardening.concurrentHostCompleteRace?.firstDispatchPlan,
+          hardening.concurrentHostCompleteRace?.secondDispatchPlan,
+        ].some(
+          (plan) => plan?.projectionRefreshKeys?.includes("host") === true,
+        ) === true &&
+        hardening.concurrentHostCompleteRace?.apiStateAfterRace?.completed === true &&
+        hardening.concurrentHostCompleteRace?.apiStateAfterRace?.slots?.length ===
+          1 &&
+        hardening.concurrentHostCompleteRace?.apiStateAfterRace?.slots?.every(
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),

@@ -393,6 +393,10 @@ The hardening proof also opens a disposable D02 game in two host role pages,
 confirms `Mark dead` and `Modkill slot` concurrently for Slot 7, and proves one
 ACK plus one `InvalidTarget` lifecycle recovery while both host pages, the
 affected player role URL, and the API converge to one terminal status.
+The same hardening matrix opens a disposable endgame-reveal game in two host
+role pages, confirms `CompleteGame` concurrently, and proves one ACK plus one
+`GameAlreadyCompleted` recovery while both host pages and the API converge to a
+single completed game with all slot facts revealed.
 
 The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
@@ -668,7 +672,7 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale player vote-after-change recovery, stale player withdraw-after-change recovery, stale player withdraw-after-phase-closure recovery, stale player vote-after-phase-closure recovery, stale player post-after-phase-closure recovery, stale dead-target vote recovery,
 dead-current-vote cleanup with stale host publish-after-clear recovery, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
-concurrent host resolve/advance/deadline-advance/lifecycle/mixed-advance races, stale deadline advance recovery, stale host resolve recovery, stale host publish-after-change recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
+concurrent host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, stale deadline advance recovery, stale host resolve recovery, stale host publish-after-change recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,

@@ -3949,6 +3949,49 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_complete_game_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+
+    let (first, second) = tokio::join!(
+        handle(&pool, &host, Command::CompleteGame { game }),
+        handle(&pool, &host, Command::CompleteGame { game }),
+    );
+
+    let results = [first, second];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let already_completed_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::GameAlreadyCompleted)))
+        .count();
+    assert_eq!(ack_count, 1, "exactly one CompleteGame command should ACK");
+    assert_eq!(
+        already_completed_count, 1,
+        "losing CompleteGame command should revalidate after the winner completes the game"
+    );
+
+    let completed_event_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'GameCompleted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        completed_event_count, 1,
+        "concurrent CompleteGame commands must append one GameCompleted event"
+    );
+
+    let projected_after = slot_state(&pool, game).await.unwrap();
+    assert!(
+        projected_after
+            .iter()
+            .all(|slot| slot.role_revealed && slot.alignment_revealed),
+        "winning CompleteGame command should reveal every projected slot"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
     let host = user("host_alignment_reveal");
     let game = Uuid::new_v4();

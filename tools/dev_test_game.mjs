@@ -773,6 +773,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent host lifecycle race: ${card.verification.multiplayerHardening.concurrentHostLifecycleRace.reject.message}`,
         "",
+        `Concurrent host complete race: ${card.verification.multiplayerHardening.concurrentHostCompleteRace.reject.message}`,
+        "",
         `Action idempotent retry: ${card.verification.multiplayerHardening.actionIdempotentRetry.retry.message}`,
         "",
         `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
@@ -4170,6 +4172,11 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  const concurrentHostCompleteRace = await verifyConcurrentHostCompleteRace({
+    hostPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   const stalePlayerComplete = await verifyStalePlayerCompleteRecovery({
     playerPage,
     apiBaseUrl,
@@ -4219,11 +4226,12 @@ async function verifySeededMultiplayerHardening({
     staleHostAdvance,
     staleHostPrompt,
     staleHostComplete,
+    concurrentHostCompleteRace,
     stalePlayerComplete,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -4562,6 +4570,342 @@ async function verifyStaleHostCompleteRecovery({
     await staleCompletePage.close().catch(() => {});
     await liveCompletePage.close().catch(() => {});
   }
+}
+
+async function verifyConcurrentHostCompleteRace({
+  hostPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const completeGame = crypto.randomUUID();
+  const actionId = "complete_game";
+  const seed = await seedHostCompleteRecoveryGame({ completeGame });
+  const context = hostPage.context();
+  const firstCompletePage = await context.newPage();
+  const secondCompletePage = await context.newPage();
+  try {
+    await Promise.all([
+      firstCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+      secondCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+    ]);
+    await Promise.all([
+      firstCompletePage
+        .getByTestId(`critical-host-action-${actionId}`)
+        .waitFor({ state: "visible" }),
+      secondCompletePage
+        .getByTestId(`critical-host-action-${actionId}`)
+        .waitFor({ state: "visible" }),
+    ]);
+    await Promise.all([
+      firstCompletePage.waitForFunction(
+        () =>
+          (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+          window.__fmarchHostProjection.slots.every(
+            (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+          ),
+      ),
+      secondCompletePage.waitForFunction(
+        () =>
+          (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+          window.__fmarchHostProjection.slots.every(
+            (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+          ),
+      ),
+    ]);
+    const setup = {
+      firstSlots: await firstCompletePage.evaluate(
+        () => window.__fmarchHostProjection?.slots ?? [],
+      ),
+      secondSlots: await secondCompletePage.evaluate(
+        () => window.__fmarchHostProjection?.slots ?? [],
+      ),
+      firstRevealText: await firstCompletePage
+        .getByTestId("host-console-endgame-reveal")
+        .innerText(),
+      secondRevealText: await secondCompletePage
+        .getByTestId("host-console-endgame-reveal")
+        .innerText(),
+      firstRoleActions: await visibleHostControlActions(firstCompletePage, "roles"),
+      secondRoleActions: await visibleHostControlActions(secondCompletePage, "roles"),
+    };
+    const race = await submitConcurrentHostCompleteRace({
+      firstCompletePage,
+      secondCompletePage,
+      setup,
+      apiBaseUrl,
+      completeGame,
+      actionId,
+    });
+    return {
+      status: "passed",
+      game: completeGame,
+      actionId,
+      seed,
+      ...race,
+      proof:
+        "A disposable local endgame-reveal game opened two host role URLs with private role facts, confirmed CompleteGame concurrently with distinct command ids, proved one ACK plus one GameAlreadyCompleted recovery, and converged both host projections plus the API to one revealed completed game.",
+    };
+  } finally {
+    await firstCompletePage.close().catch(() => {});
+    await secondCompletePage.close().catch(() => {});
+  }
+}
+
+async function submitConcurrentHostCompleteRace({
+  firstCompletePage,
+  secondCompletePage,
+  setup,
+  apiBaseUrl,
+  completeGame,
+  actionId,
+}) {
+  const firstBefore = await firstCompletePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    actionId,
+  );
+  const secondBefore = await secondCompletePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId] ?? null,
+    actionId,
+  );
+  const firstRoot = firstCompletePage.getByTestId(`critical-host-action-${actionId}`);
+  const secondRoot = secondCompletePage.getByTestId(`critical-host-action-${actionId}`);
+  await Promise.all([
+    firstRoot.getByTestId("critical-host-action-trigger").click(),
+    secondRoot.getByTestId("critical-host-action-trigger").click(),
+  ]);
+  await Promise.all([
+    firstRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+    secondRoot.getByTestId("critical-host-action-confirmation").waitFor({
+      state: "visible",
+    }),
+  ]);
+  const [firstConfirmationMessage, secondConfirmationMessage] = await Promise.all([
+    firstRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+    secondRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
+  ]);
+  await Promise.all([
+    firstRoot.getByTestId("critical-host-action-confirm").click(),
+    secondRoot.getByTestId("critical-host-action-confirm").click(),
+  ]);
+  await Promise.all([
+    firstCompletePage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.CompleteGame !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      { expectedActionId: actionId, beforeCommandId: firstBefore?.commandId ?? null },
+    ),
+    secondCompletePage.waitForFunction(
+      ({ expectedActionId, beforeCommandId }) => {
+        const status = window.__fmarchHostCommandStatuses?.[expectedActionId];
+        return (
+          status?.commandId !== beforeCommandId &&
+          status?.requestEnvelope?.body?.body?.command?.CompleteGame !== undefined &&
+          (status?.state === "ack" || status?.state === "reject")
+        );
+      },
+      { expectedActionId: actionId, beforeCommandId: secondBefore?.commandId ?? null },
+    ),
+  ]);
+
+  const [firstOutcome, secondOutcome] = await Promise.all([
+    firstCompletePage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      actionId,
+    ),
+    secondCompletePage.evaluate(
+      (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+      actionId,
+    ),
+  ]);
+  const outcomes = [
+    { raceRole: "first", outcome: firstOutcome },
+    { raceRole: "second", outcome: secondOutcome },
+  ];
+  const ackEntries = outcomes.filter((entry) => entry.outcome?.state === "ack");
+  const rejectEntries = outcomes.filter((entry) => entry.outcome?.state === "reject");
+  const ackEntry = ackEntries[0] ?? null;
+  const rejectEntry = rejectEntries[0] ?? null;
+  const ack = ackEntry?.outcome ?? null;
+  const reject = rejectEntry?.outcome ?? null;
+  const ackCommand = ack?.requestEnvelope?.body?.body?.command?.CompleteGame;
+  const rejectCommand = reject?.requestEnvelope?.body?.body?.command?.CompleteGame;
+  if (
+    setup?.firstRoleActions?.includes(actionId) !== true ||
+    setup?.secondRoleActions?.includes(actionId) !== true ||
+    setup?.firstSlots?.length !== 1 ||
+    setup?.secondSlots?.length !== 1 ||
+    setup.firstSlots.some(
+      (slot) => slot.role_revealed === true || slot.alignment_revealed === true,
+    ) ||
+    setup.secondSlots.some(
+      (slot) => slot.role_revealed === true || slot.alignment_revealed === true,
+    ) ||
+    !setup.firstRevealText?.includes("0/1 slots revealed") ||
+    !setup.secondRevealText?.includes("0/1 slots revealed") ||
+    ackEntries.length !== 1 ||
+    rejectEntries.length !== 1 ||
+    ack?.serverEnvelope?.body?.kind !== "Ack" ||
+    !Array.isArray(ack?.streamSeqs) ||
+    ack.streamSeqs.length !== 1 ||
+    reject?.error !== "GameAlreadyCompleted" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    ack?.commandId === reject?.commandId ||
+    ackCommand?.game !== completeGame ||
+    rejectCommand?.game !== completeGame
+  ) {
+    throw new Error(
+      `concurrent host complete race outcomes drifted: ${JSON.stringify({
+        setup,
+        firstOutcome,
+        secondOutcome,
+      })}`,
+    );
+  }
+
+  await Promise.all([
+    firstCompletePage.waitForFunction(
+      () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+    ),
+    secondCompletePage.waitForFunction(
+      () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+    ),
+  ]);
+
+  const [
+    firstSlotsAfterRace,
+    secondSlotsAfterRace,
+    firstRevealTextAfterRace,
+    secondRevealTextAfterRace,
+    firstRoleActionsAfterRace,
+    secondRoleActionsAfterRace,
+    firstActivityStatusText,
+    secondActivityStatusText,
+    firstActivityRow,
+    secondActivityRow,
+    firstDispatchPlan,
+    secondDispatchPlan,
+  ] = await Promise.all([
+    firstCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    secondCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    firstCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    secondCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    visibleHostControlActions(firstCompletePage, "roles"),
+    visibleHostControlActions(secondCompletePage, "roles"),
+    firstCompletePage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    secondCompletePage.getByTestId(`host-command-activity-status-${actionId}`).innerText(),
+    firstCompletePage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    })),
+    secondCompletePage.getByTestId(`host-command-activity-${actionId}`).evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    })),
+    firstCompletePage.evaluate(() => window.__fmarchHostCommandDispatchBridgePlan),
+    secondCompletePage.evaluate(() => window.__fmarchHostCommandDispatchBridgePlan),
+  ]);
+  const apiStateAfterRace = await fetchHostConsoleState({
+    apiBaseUrl,
+    game: completeGame,
+  });
+  const activityTexts = [firstActivityStatusText, secondActivityStatusText];
+  if (
+    firstSlotsAfterRace.length !== 1 ||
+    secondSlotsAfterRace.length !== 1 ||
+    firstSlotsAfterRace.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    secondSlotsAfterRace.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    !firstRevealTextAfterRace.includes("All 1 slots revealed") ||
+    !secondRevealTextAfterRace.includes("All 1 slots revealed") ||
+    firstRoleActionsAfterRace.includes(actionId) ||
+    secondRoleActionsAfterRace.includes(actionId) ||
+    !activityTexts.some((text) => text.includes("Ack")) ||
+    !activityTexts.some((text) => text.includes("Reject GameAlreadyCompleted")) ||
+    firstActivityRow.source !== "outcome" ||
+    firstActivityRow.actionId !== actionId ||
+    firstActivityRow.dispatchKind !== actionId ||
+    secondActivityRow.source !== "outcome" ||
+    secondActivityRow.actionId !== actionId ||
+    secondActivityRow.dispatchKind !== actionId ||
+    [firstDispatchPlan, secondDispatchPlan].some(
+      (plan) => plan?.projectionRefreshKeys?.includes("host") === true,
+    ) !== true ||
+    apiStateAfterRace.completed !== true ||
+    apiStateAfterRace.slots?.length !== 1 ||
+    apiStateAfterRace.slots.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    )
+  ) {
+    throw new Error(
+      `concurrent host complete convergence drifted: ${JSON.stringify({
+        firstSlotsAfterRace,
+        secondSlotsAfterRace,
+        firstRevealTextAfterRace,
+        secondRevealTextAfterRace,
+        firstRoleActionsAfterRace,
+        secondRoleActionsAfterRace,
+        firstActivityStatusText,
+        secondActivityStatusText,
+        firstActivityRow,
+        secondActivityRow,
+        firstDispatchPlan,
+        secondDispatchPlan,
+        apiStateAfterRace,
+      })}`,
+    );
+  }
+
+  return {
+    setup,
+    firstConfirmationMessage,
+    secondConfirmationMessage,
+    ackRaceRole: ackEntry.raceRole,
+    rejectRaceRole: rejectEntry.raceRole,
+    ack,
+    reject,
+    firstOutcome,
+    secondOutcome,
+    firstSlotsAfterRace,
+    secondSlotsAfterRace,
+    firstRevealTextAfterRace,
+    secondRevealTextAfterRace,
+    firstRoleActionsAfterRace,
+    secondRoleActionsAfterRace,
+    firstActivityStatusText,
+    secondActivityStatusText,
+    firstActivityRow,
+    secondActivityRow,
+    firstDispatchPlan,
+    secondDispatchPlan,
+    apiStateAfterRace,
+  };
 }
 
 async function seedHostCompleteRecoveryGame({ completeGame }) {

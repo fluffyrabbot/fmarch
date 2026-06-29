@@ -753,6 +753,17 @@ async fn complete_game(
     game: Uuid,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_complete_game_lock(pool, game).await?;
+    let result = complete_game_locked(pool, principal, game, receipt).await;
+    release_complete_game_lock(&mut lock, game, result).await
+}
+
+async fn complete_game_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
@@ -777,6 +788,51 @@ async fn complete_game(
         receipt,
     )
     .await
+}
+
+async fn acquire_complete_game_lock(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<PoolConnection<Postgres>, Reject> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(complete_game_lock_key(game))
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(conn)
+}
+
+async fn release_complete_game_lock(
+    conn: &mut PoolConnection<Postgres>,
+    game: Uuid,
+    result: Result<Ack, Reject>,
+) -> Result<Ack, Reject> {
+    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
+        .bind(complete_game_lock_key(game))
+        .fetch_one(&mut **conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    if !released {
+        return Err(Reject::Internal(
+            "complete game lock was not held at release".to_string(),
+        ));
+    }
+    result
+}
+
+fn complete_game_lock_key(game: Uuid) -> i64 {
+    let bytes = game.as_bytes();
+    let high = u64::from_be_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]);
+    let low = u64::from_be_bytes([
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+    ]);
+    (high ^ low ^ 0x6d66_6172_6368_0005) as i64
 }
 
 async fn host_phase_lifecycle(
