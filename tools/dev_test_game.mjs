@@ -775,6 +775,14 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent host complete race: ${card.verification.multiplayerHardening.concurrentHostCompleteRace.reject.message}`,
         "",
+      );
+      if (card.verification.multiplayerHardening.concurrentPlayerCompleteRace !== undefined) {
+        lines.push(
+          `Concurrent player complete race: ${card.verification.multiplayerHardening.concurrentPlayerCompleteRace.outcomeSummary}`,
+          "",
+        );
+      }
+      lines.push(
         `Action idempotent retry: ${card.verification.multiplayerHardening.actionIdempotentRetry.retry.message}`,
         "",
         `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
@@ -4177,6 +4185,13 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     frontendBaseUrl,
   });
+  const concurrentPlayerCompleteRace = await verifyConcurrentPlayerCompleteRace({
+    hostPage,
+    playerPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+    normalizeCommandResponse,
+  });
   const stalePlayerComplete = await verifyStalePlayerCompleteRecovery({
     playerPage,
     apiBaseUrl,
@@ -4227,11 +4242,12 @@ async function verifySeededMultiplayerHardening({
     staleHostPrompt,
     staleHostComplete,
     concurrentHostCompleteRace,
+    concurrentPlayerCompleteRace,
     stalePlayerComplete,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted while the role URL refreshes to disabled completed-game controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -4924,6 +4940,222 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
     game: completeGame,
     commands: commands.length,
   };
+}
+
+async function verifyConcurrentPlayerCompleteRace({
+  hostPage,
+  playerPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const completeGame = crypto.randomUUID();
+  const postBody = `Concurrent player completion race post ${completeGame}`;
+  const seed = await seedHostCompleteRecoveryGame({ completeGame });
+  const playerRacePage = await playerPage.context().newPage();
+  const hostRacePage = await hostPage.context().newPage();
+  try {
+    await Promise.all([
+      gotoPlayerBoard(playerRacePage, completeGame),
+      hostRacePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+    ]);
+    await Promise.all([
+      playerRacePage.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+          window.__fmarchPlayerProjection?.commandState?.gameCompleted === false,
+      ),
+      hostRacePage
+        .getByTestId("critical-host-action-complete_game")
+        .waitFor({ state: "visible" }),
+    ]);
+    const setupCommandState = await playerRacePage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const setupButtons = await playerCommandButtons(playerRacePage);
+    const setupPostButton = setupButtons.find((button) => button.action === "submit_post");
+    const setupHostSlots = await hostRacePage.evaluate(
+      () => window.__fmarchHostProjection?.slots ?? [],
+    );
+    const setupHostActions = await visibleHostControlActions(hostRacePage, "roles");
+    const postCommandId = crypto.randomUUID();
+    const completeCommandId = crypto.randomUUID();
+    const [postRaw, completeRaw] = await Promise.all([
+      sendBrowserCommand(playerRacePage, {
+        principalUserId: "player-mira",
+        command: {
+          SubmitPost: {
+            game: completeGame,
+            channel_id: hardeningRetryChannel,
+            actor_slot: "slot-7",
+            body: postBody,
+            media: [],
+          },
+        },
+        commandId: postCommandId,
+      }),
+      sendBrowserCommand(hostRacePage, {
+        principalUserId: "host_h",
+        command: { CompleteGame: { game: completeGame } },
+        commandId: completeCommandId,
+      }),
+    ]);
+    const post = normalizeCommandResponse({
+      commandId: postCommandId,
+      requestEnvelope: postRaw.requestEnvelope,
+      response: { status: postRaw.httpStatus },
+      serverEnvelope: postRaw.serverEnvelope,
+    });
+    const complete = normalizeCommandResponse({
+      commandId: completeCommandId,
+      requestEnvelope: completeRaw.requestEnvelope,
+      response: { status: completeRaw.httpStatus },
+      serverEnvelope: completeRaw.serverEnvelope,
+    });
+    const postAcked = post?.state === "ack";
+    const postRejectedCompleted =
+      post?.state === "reject" && post?.error === "GameAlreadyCompleted";
+    const postSeq = postAcked ? post.streamSeqs?.[0] : null;
+    const completeSeq = complete?.streamSeqs?.[0] ?? null;
+    const acceptedSerialOrder =
+      postAcked === true && Number.isInteger(postSeq) && postSeq < completeSeq;
+    if (
+      setupCommandState?.gameCompleted !== false ||
+      setupCommandState?.actorSlot !== "slot-7" ||
+      setupPostButton?.disabled !== false ||
+      setupHostSlots.length !== 1 ||
+      setupHostSlots.some(
+        (slot) => slot.role_revealed === true || slot.alignment_revealed === true,
+      ) ||
+      setupHostActions.includes("complete_game") !== true ||
+      complete?.state !== "ack" ||
+      !Array.isArray(complete?.streamSeqs) ||
+      complete.streamSeqs.length !== 1 ||
+      post?.requestEnvelope?.body?.body?.command?.SubmitPost?.body !== postBody ||
+      complete?.requestEnvelope?.body?.body?.command?.CompleteGame?.game !==
+        completeGame ||
+      (acceptedSerialOrder !== true && postRejectedCompleted !== true)
+    ) {
+      throw new Error(
+        `concurrent player complete race outcomes drifted: ${JSON.stringify({
+          completeGame,
+          setupCommandState,
+          setupButtons,
+          setupHostSlots,
+          setupHostActions,
+          post,
+          complete,
+          postSeq,
+          completeSeq,
+        })}`,
+      );
+    }
+
+    await Promise.all([
+      gotoPlayerBoard(playerRacePage, completeGame),
+      hostRacePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+    ]);
+    await Promise.all([
+      playerRacePage.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+          (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      ),
+      hostRacePage.waitForFunction(
+        () =>
+          (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+          window.__fmarchHostProjection.slots.every(
+            (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+          ),
+      ),
+    ]);
+    const commandStateAfterRace = await playerRacePage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const buttonsAfterRace = await playerCommandButtons(playerRacePage);
+    const hostSlotsAfterRace = await hostRacePage.evaluate(
+      () => window.__fmarchHostProjection?.slots ?? [],
+    );
+    const apiCommandStateAfterRace = await fetchJson(
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiThreadAfterRace = await fetchJson(
+      `${apiBaseUrl}/games/${completeGame}/channels/${hardeningRetryChannel}/thread?principal_user_id=player-mira&limit=100`,
+    );
+    const apiStateAfterRace = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: completeGame,
+    });
+    const apiThreadHasPost = apiThreadAfterRace.posts?.some((post) => post.body === postBody);
+    if (
+      commandStateAfterRace?.gameCompleted !== true ||
+      commandStateAfterRace?.actions?.length !== 0 ||
+      commandStateAfterRace?.voteTargets?.length !== 0 ||
+      !commandStateAfterRace?.boundary?.includes("game is complete") ||
+      buttonsAfterRace.some((button) => button.disabled !== true) ||
+      hostSlotsAfterRace.length !== 1 ||
+      hostSlotsAfterRace.some(
+        (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+      ) ||
+      apiCommandStateAfterRace?.game_completed !== true ||
+      apiCommandStateAfterRace?.actions?.length !== 0 ||
+      apiCommandStateAfterRace?.vote_targets?.length !== 0 ||
+      apiStateAfterRace.completed !== true ||
+      apiStateAfterRace.slots?.length !== 1 ||
+      apiStateAfterRace.slots.some(
+        (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+      ) ||
+      apiThreadHasPost !== postAcked
+    ) {
+      throw new Error(
+        `concurrent player complete race convergence drifted: ${JSON.stringify({
+          completeGame,
+          post,
+          complete,
+          commandStateAfterRace,
+          buttonsAfterRace,
+          hostSlotsAfterRace,
+          apiCommandStateAfterRace,
+          apiThreadBodies: apiThreadAfterRace.posts?.map((post) => post.body),
+          apiStateAfterRace,
+        })}`,
+      );
+    }
+    const outcomeSummary = postAcked
+      ? `post seq ${postSeq} before complete seq ${completeSeq}`
+      : "post rejected GameAlreadyCompleted after completion";
+    return {
+      status: "passed",
+      game: completeGame,
+      seed,
+      postBody,
+      setupCommandState,
+      setupButtons,
+      setupPostButton,
+      setupHostSlots,
+      setupHostActions,
+      post,
+      complete,
+      postSeq,
+      completeSeq,
+      outcomeSummary,
+      commandStateAfterRace,
+      buttonsAfterRace,
+      hostSlotsAfterRace,
+      apiCommandStateAfterRace,
+      apiThreadHasPost,
+      apiStateAfterRace,
+      proof:
+        "A disposable player role URL and host role URL raced SubmitPost against CompleteGame through /commands, accepted only post-before-complete ACK ordering or GameAlreadyCompleted rejection, then refreshed browser and API projections to a revealed completed game with disabled player controls.",
+    };
+  } finally {
+    await playerRacePage.close().catch(() => {});
+    await hostRacePage.close().catch(() => {});
+  }
 }
 
 async function freezeStaleHostCompletePage({

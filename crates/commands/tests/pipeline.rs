@@ -3992,6 +3992,65 @@ async fn concurrent_complete_game_serializes_to_one_ack(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_player_post_and_complete_game_serialize_terminal_boundary(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    let player = user("user_a");
+
+    let (complete, post) = tokio::join!(
+        handle(&pool, &host, Command::CompleteGame { game }),
+        handle(
+            &pool,
+            &player,
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: "slot_1".into(),
+                body: "racing post against completion".into(),
+                media: Vec::new(),
+            },
+        ),
+    );
+
+    let complete = complete.expect("CompleteGame should ACK the first completion");
+    assert_eq!(
+        complete.stream_seqs.len(),
+        1,
+        "completion appends exactly GameCompleted"
+    );
+    let complete_seq = complete.stream_seqs[0];
+
+    match post {
+        Ok(post_ack) => {
+            assert_eq!(post_ack.stream_seqs.len(), 1);
+            assert!(
+                post_ack.stream_seqs[0] < complete_seq,
+                "if the racing post ACKs, it must serialize before GameCompleted"
+            );
+        }
+        Err(Reject::GameAlreadyCompleted) => {}
+        Err(err) => panic!("racing post should only reject as completed, got {err:?}"),
+    }
+
+    let events = eventstore::load_stream(&pool, game)
+        .await
+        .expect("load event stream");
+    let completed_seq = events
+        .iter()
+        .find(|event| event.kind == "GameCompleted")
+        .expect("completion event")
+        .stream_seq;
+    assert_eq!(completed_seq, complete_seq);
+    let post_after_completion = events
+        .iter()
+        .any(|event| event.kind == "PostSubmitted" && event.stream_seq > completed_seq);
+    assert!(
+        !post_after_completion,
+        "no player post may append after GameCompleted"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn host_resolve_phase_reveals_town_alignment_without_role(pool: PgPool) {
     let host = user("host_alignment_reveal");
     let game = Uuid::new_v4();

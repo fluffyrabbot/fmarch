@@ -4105,6 +4105,89 @@ test("session card and markdown include role credential URLs and tokens", () => 
           ],
         },
       },
+      concurrentPlayerCompleteRace: {
+        status: "passed",
+        game: `${game}-concurrent-player-complete-test`,
+        postBody: "concurrent player complete fixture post",
+        setupCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: false,
+          actions: [],
+          voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+        },
+        setupButtons: [{ action: "submit_post", disabled: false }],
+        setupPostButton: { action: "submit_post", disabled: false },
+        setupHostActions: ["complete_game"],
+        setupHostSlots: [
+          { role_revealed: false, alignment_revealed: false },
+        ],
+        post: {
+          state: "reject",
+          commandId: "concurrent-player-complete-post",
+          error: "GameAlreadyCompleted",
+          message: "Reject GameAlreadyCompleted: game already completed",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitPost: {
+                    game: `${game}-concurrent-player-complete-test`,
+                    channel_id: "main",
+                    actor_slot: "slot-7",
+                    body: "concurrent player complete fixture post",
+                    media: [],
+                  },
+                },
+              },
+            },
+          },
+        },
+        complete: {
+          state: "ack",
+          commandId: "concurrent-player-complete-complete",
+          streamSeqs: [57],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  CompleteGame: { game: `${game}-concurrent-player-complete-test` },
+                },
+              },
+            },
+          },
+        },
+        postSeq: null,
+        completeSeq: 57,
+        outcomeSummary: "post rejected GameAlreadyCompleted after completion",
+        commandStateAfterRace: {
+          gameCompleted: true,
+          boundary: "game is complete",
+          actions: [],
+          voteTargets: [],
+        },
+        buttonsAfterRace: [
+          { action: "submit_vote:no_lynch", disabled: true },
+          { action: "withdraw_vote", disabled: true },
+          { action: "submit_post", disabled: true },
+        ],
+        hostSlotsAfterRace: [
+          { role_revealed: true, alignment_revealed: true },
+        ],
+        apiCommandStateAfterRace: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadHasPost: false,
+        apiStateAfterRace: {
+          completed: true,
+          slots: [
+            { role_revealed: true, alignment_revealed: true },
+          ],
+        },
+      },
       stalePlayerComplete: {
         status: "passed",
         game: `${game}-player-complete-test`,
@@ -4300,6 +4383,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
   assert(markdown.includes("Stale host modkill: Reject InvalidTarget"));
   assert(markdown.includes("Concurrent host lifecycle race: Reject InvalidTarget"));
+  assert(
+    markdown.includes(
+      "Concurrent player complete race: post rejected GameAlreadyCompleted after completion",
+    ),
+  );
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
@@ -4373,6 +4461,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-prompt",
       "stale-host-complete",
       "concurrent-host-complete-race",
+      "concurrent-player-complete-race",
       "stale-player-complete",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
@@ -4458,7 +4547,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 69);
+  assert.equal(opsArtifacts.proofRun.laneCount, 70);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4561,6 +4650,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-deadline-advance-race",
       "concurrent-host-lifecycle-race",
       "concurrent-host-complete-race",
+      "concurrent-player-complete-race",
       "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
@@ -5073,6 +5163,7 @@ function hardeningAdminProofFixture() {
         "stale-host-prompt",
         "stale-host-complete",
         "concurrent-host-complete-race",
+        "concurrent-player-complete-race",
         "stale-player-complete",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
@@ -5084,6 +5175,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
+        "concurrent-player-complete-race",
         "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
@@ -5184,6 +5276,7 @@ function seedAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
+        "concurrent-player-complete-race",
         "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",

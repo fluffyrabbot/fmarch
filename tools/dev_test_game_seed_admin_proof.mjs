@@ -31,6 +31,7 @@ const requiredScenarios = [
   "concurrent-host-deadline-advance-race",
   "concurrent-host-lifecycle-race",
   "concurrent-host-complete-race",
+  "concurrent-player-complete-race",
   "concurrent-host-mixed-advance-race",
   "stale-same-action-recovery",
   "host-replacement-console",

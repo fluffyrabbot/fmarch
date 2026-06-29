@@ -469,9 +469,24 @@ async fn handle_inner(
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
     if let Some(game) = game_closed_by_completion(&command) {
-        require_game_not_completed(pool, game).await?;
+        let mut lock = acquire_completed_game_boundary_lock(pool, game).await?;
+        let result = async {
+            require_game_not_completed(pool, game).await?;
+            handle_command(pool, principal, command, receipt).await
+        }
+        .await;
+        return release_completed_game_boundary_lock(&mut lock, game, result).await;
     }
 
+    handle_command(pool, principal, command, receipt).await
+}
+
+async fn handle_command(
+    pool: &PgPool,
+    principal: &Principal,
+    command: Command,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
         Command::CreateGame { game, pack } => {
@@ -753,9 +768,9 @@ async fn complete_game(
     game: Uuid,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_complete_game_lock(pool, game).await?;
+    let mut lock = acquire_completed_game_boundary_lock(pool, game).await?;
     let result = complete_game_locked(pool, principal, game, receipt).await;
-    release_complete_game_lock(&mut lock, game, result).await
+    release_completed_game_boundary_lock(&mut lock, game, result).await
 }
 
 async fn complete_game_locked(
@@ -790,7 +805,7 @@ async fn complete_game_locked(
     .await
 }
 
-async fn acquire_complete_game_lock(
+async fn acquire_completed_game_boundary_lock(
     pool: &PgPool,
     game: Uuid,
 ) -> Result<PoolConnection<Postgres>, Reject> {
@@ -799,32 +814,32 @@ async fn acquire_complete_game_lock(
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(complete_game_lock_key(game))
+        .bind(completed_game_boundary_lock_key(game))
         .execute(&mut *conn)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     Ok(conn)
 }
 
-async fn release_complete_game_lock(
+async fn release_completed_game_boundary_lock(
     conn: &mut PoolConnection<Postgres>,
     game: Uuid,
     result: Result<Ack, Reject>,
 ) -> Result<Ack, Reject> {
     let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(complete_game_lock_key(game))
+        .bind(completed_game_boundary_lock_key(game))
         .fetch_one(&mut **conn)
         .await
         .map_err(|e| Reject::Internal(e.to_string()))?;
     if !released {
         return Err(Reject::Internal(
-            "complete game lock was not held at release".to_string(),
+            "completed game boundary lock was not held at release".to_string(),
         ));
     }
     result
 }
 
-fn complete_game_lock_key(game: Uuid) -> i64 {
+fn completed_game_boundary_lock_key(game: Uuid) -> i64 {
     let bytes = game.as_bytes();
     let high = u64::from_be_bytes([
         bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
