@@ -532,6 +532,55 @@ test("host action rejects stale player invite targets before issuing an invite",
   ]);
 });
 
+test("host action retries stale player invites against the current occupant", async () => {
+  const observed = [];
+  const result = await actions.issuePlayerInvite({
+    cookies: {
+      get(name) {
+        return name === "fmarch_session" ? "host-session-token" : undefined;
+      },
+    },
+    fetch: async (url, init) => {
+      observed.push({
+        url,
+        method: init.method,
+        authorization: init.headers.authorization,
+        accept: init.headers.accept,
+        body: init.body === undefined ? undefined : JSON.parse(init.body),
+      });
+      if (url === "/games/midsummer/host-console-state?principal_user_id=host_h&slot_id=slot-7") {
+        return jsonResponse({
+          slots: [{ slot_id: "slot-7", occupant_user_id: "player-rowan" }],
+        });
+      }
+      return jsonResponse({
+        principal_user_id: "player-rowan",
+        invited_by_user_id: "host_h",
+        game: "midsummer",
+        expires_at: observed.at(-1).body.expires_at,
+        global_capabilities: [],
+      });
+    },
+    locals: {
+      principalUserId: "host_h",
+      resolvedCapabilities: [{ kind: "HostOf", game: "midsummer" }],
+    },
+    params: { game: "midsummer" },
+    request: formRequest({
+      principalUserId: "player-rowan",
+      slotId: "slot-7",
+      expectedOccupantUserId: "player-rowan",
+    }),
+    url: new URL("http://localhost/g/midsummer/host"),
+  });
+
+  assert.equal(observed[1].url, "/auth/invites");
+  assert.equal(observed[1].body.principal_user_id, "player-rowan");
+  assert.match(observed[1].body.invite_token, /^player-midsummer-/);
+  assert.equal(result.playerInvite.state, "ack");
+  assert.equal(result.playerInvite.principalUserId, "player-rowan");
+});
+
 test("host action rejects replacement invite issuance without a host session", async () => {
   const result = await actions.issueReplacementInvite({
     cookies: { get: () => undefined },

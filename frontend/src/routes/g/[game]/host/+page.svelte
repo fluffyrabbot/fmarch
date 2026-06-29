@@ -300,6 +300,36 @@
             >
               {inviteResult.loginUrl}
             </a>
+          {:else if inviteTarget.id === "player" && inviteResult.currentOccupantUserId}
+            <form
+              class="host-console-critical-path__invite-retry"
+              method="POST"
+              action={inviteTarget.action}
+              data-testid="host-player-invite-retry"
+            >
+              <input
+                type="hidden"
+                name="principalUserId"
+                value={inviteResult.currentOccupantUserId}
+              />
+              <input
+                type="hidden"
+                name="slotId"
+                value={inviteResult.slotId ?? inviteTarget.slotId}
+              />
+              <input
+                type="hidden"
+                name="expectedOccupantUserId"
+                value={inviteResult.currentOccupantUserId}
+              />
+              <button
+                class="touch-control"
+                type="submit"
+                data-testid="host-player-invite-retry-submit"
+              >
+                Issue current player invite
+              </button>
+            </form>
           {/if}
         {/if}
       </section>

@@ -111,10 +111,14 @@ const CHECKS = Object.freeze([
       evidence?.browser?.moderator?.playerInviteTarget?.status === "passed" &&
       evidence?.browser?.moderator?.playerInviteTarget?.principalUserId ===
         "player-rowan" &&
-      evidence?.browser?.moderator?.stalePlayerInviteReject?.state === "reject" &&
-      evidence?.browser?.moderator?.stalePlayerInviteReject?.message?.includes(
+      evidence?.browser?.moderator?.stalePlayerInviteReject?.state === "recovered" &&
+      evidence?.browser?.moderator?.stalePlayerInviteReject?.reject?.message?.includes(
         "Invite target is stale",
       ) &&
+      evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.state ===
+        "ack" &&
+      evidence?.browser?.moderator?.stalePlayerInviteReject?.retry?.target
+        ?.principalUserId === "player-rowan" &&
       evidence?.slotLifecycleApiState?.slots?.some(
         (slot) => slot.slot_id === "slot-7" && slot.alive === false,
       ),

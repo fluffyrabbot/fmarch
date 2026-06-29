@@ -253,6 +253,10 @@ body {
   margin: 0;
 }
 
+.host-console-critical-path__invite-retry {
+  grid-column: 1 / -1;
+}
+
 .host-console-critical-path__invite-url {
   color: #214f62;
   font-size: 14px;

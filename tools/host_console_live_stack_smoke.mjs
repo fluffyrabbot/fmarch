@@ -2849,12 +2849,63 @@ async function rejectStalePlayerInviteFromBrowser(page) {
   if ((await page.getByTestId("host-player-invite-url").count()) !== 0) {
     throw new Error("stale player invite rendered an invite URL");
   }
+  const retry = page.getByTestId("host-player-invite-retry-submit");
+  await retry.waitFor({ state: "visible" });
+  const retryBox = await retry.boundingBox();
+  assertHitTarget(retryBox, "stale player invite retry submit");
+  const retryTarget = {
+    principalUserId: await page
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="principalUserId"]')
+      .inputValue(),
+    slotId: await page
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="slotId"]')
+      .inputValue(),
+    expectedOccupantUserId: await page
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="expectedOccupantUserId"]')
+      .inputValue(),
+  };
+  if (
+    retryTarget.principalUserId !== "player-rowan" ||
+    retryTarget.expectedOccupantUserId !== "player-rowan" ||
+    retryTarget.slotId !== "slot-7"
+  ) {
+    throw new Error(
+      `stale player invite retry did not target current occupant: ${JSON.stringify(retryTarget)}`,
+    );
+  }
+  await retry.click();
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-player-invite-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  const retryMessage = await status.innerText();
+  const retryLoginUrl = await page.getByTestId("host-player-invite-url").innerText();
+  if (!retryLoginUrl.includes("player-")) {
+    throw new Error(
+      `stale player invite retry did not render a player invite URL: ${retryLoginUrl}`,
+    );
+  }
   return {
-    state: "reject",
+    state: "recovered",
     beforeSubmit,
-    submitBox,
-    message,
-    urlRendered: false,
+    reject: {
+      state: "reject",
+      submitBox,
+      message,
+      urlRendered: false,
+    },
+    retry: {
+      state: "ack",
+      submitBox: retryBox,
+      target: retryTarget,
+      message: retryMessage,
+      loginUrl: retryLoginUrl,
+    },
   };
 }
 
