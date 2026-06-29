@@ -509,18 +509,66 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   const freshAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [
+        {
+          id: "hosted-production-identity",
+          status: "unproven",
+          requiredEvidence: "Hosted account lifecycle",
+        },
+        {
+          id: "exhaustive-race-coverage",
+          status: "unproven",
+          requiredEvidence:
+            "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+        },
+      ],
+    }),
   });
   assertDevTestGameNextAction(freshAction);
   assert.deepEqual(freshAction.nextAction, {
-    command: "test:dev-test-game-proof-freshness-admin-proof",
-    reason: "all-artifacts-fresh",
+    command:
+      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    reason: "release-readiness-unproven",
     status: "ready",
+    unproven: {
+      id: "exhaustive-race-coverage",
+      status: "unproven",
+      requiredEvidence:
+        "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+      buildSlice:
+        "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+      proofTarget: "target/dev-test-game/proof-run.json",
+    },
   });
   assert.deepEqual(freshAction.selectionTrace, {
     strategy: "development-spine-priority",
     candidateCount: 0,
     selectedArtifactId: null,
     candidates: [],
+  });
+  assert.deepEqual(freshAction.releaseReadinessTrace, {
+    strategy: "local-dev-release-readiness-priority",
+    candidateCount: 1,
+    selectedUnprovenId: "exhaustive-race-coverage",
+    candidates: [
+      {
+        rank: 1,
+        id: "exhaustive-race-coverage",
+        status: "unproven",
+        priority: 0,
+        selected: true,
+        command:
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        buildSlice:
+          "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+        proofTarget: "target/dev-test-game/proof-run.json",
+        proofBoundary:
+          "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
+        requiredEvidence:
+          "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+      },
+    ],
   });
 });
 
@@ -3498,6 +3546,104 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterRace: { phase_id: "N01", locked: false, deadline: null },
       },
+      concurrentHostMixedAdvanceRace: {
+        status: "passed",
+        game: "mixed-advance-race-game-a",
+        actionId: "mixed_advance_phase",
+        setup: {
+          stalePhase: { id: "D01", locked: true, deadline: 918300 },
+          visibleActions: [
+            "unlock_thread",
+            "advance_phase",
+            "advance_phase_by_deadline",
+          ],
+          closedStatus: { state: "closed" },
+        },
+        ackRaceRole: "normal",
+        rejectRaceRole: "deadline",
+        ackActionId: "advance_phase",
+        rejectActionId: "advance_phase_by_deadline",
+        ack: {
+          state: "ack",
+          commandId: "99999999-9999-4999-8999-999999999999",
+          streamSeqs: [56],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: { AdvancePhase: { game: "mixed-advance-race-game-a" } },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; deadline target is stale, refresh the host console and use current phase controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  AdvancePhaseByDeadline: {
+                    game: "mixed-advance-race-game-a",
+                    phase: "D01",
+                    observed_at: 918301,
+                  },
+                },
+              },
+            },
+          },
+        },
+        normalOutcome: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: { AdvancePhase: { game: "mixed-advance-race-game-a" } },
+              },
+            },
+          },
+        },
+        deadlineOutcome: {
+          state: "reject",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  AdvancePhaseByDeadline: {
+                    game: "mixed-advance-race-game-a",
+                    phase: "D01",
+                    observed_at: 918301,
+                  },
+                },
+              },
+            },
+          },
+        },
+        normalPhaseAfterRace: { id: "N01", locked: false, deadline: null },
+        deadlinePhaseAfterRace: { id: "N01", locked: false, deadline: null },
+        normalPhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        deadlinePhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        normalDeadlineActionsAfterRace: ["extend_deadline"],
+        deadlineDeadlineActionsAfterRace: ["extend_deadline"],
+        normalActivityStatusText: "Ack: stream seqs 56",
+        deadlineActivityStatusText:
+          "Reject InvalidTarget: invalid target; deadline target is stale, refresh the host console and use current phase controls",
+        normalActivityRow: {
+          source: "status",
+          actionId: "advance_phase",
+          dispatchKind: "advance_phase",
+        },
+        deadlineActivityRow: {
+          source: "outcome",
+          actionId: "advance_phase_by_deadline",
+          dispatchKind: "advance_phase_by_deadline",
+        },
+        apiPhaseAfterRace: { phase_id: "N01", locked: false, deadline: null },
+      },
       staleHostResolve: {
         status: "passed",
         actionId: "resolve_phase",
@@ -4010,6 +4156,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
+      "concurrent-host-mixed-advance-race",
       "stale-host-resolve",
       "stale-host-advance",
       "stale-host-deadline",
@@ -4085,7 +4232,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 66);
+  assert.equal(opsArtifacts.proofRun.laneCount, 67);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4186,6 +4333,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
+      "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -4525,6 +4673,41 @@ function identityAdapterProofFixture(game) {
   };
 }
 
+function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
+  return {
+    version: 1,
+    proof: "dev-test-game-release-readiness",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-release-readiness-checklist",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      proofGeneratedAt: "2026-06-26T00:00:00.000Z",
+      game: "game-a",
+    },
+    localDevelopmentSpine: {
+      status: "passed",
+      checks: [
+        {
+          id: "local-role-url-browser-proof",
+          label: "Seeded role URLs and browser proof",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+        },
+      ],
+    },
+    releaseReadiness: {
+      status: "not_ready",
+      reason: "Local proof passed, but release evidence remains unproven.",
+      unproven,
+    },
+    proofBoundary:
+      "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
 function identityAdminProofFixture() {
   return {
     version: 1,
@@ -4670,6 +4853,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
@@ -4767,6 +4951,7 @@ function seedAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

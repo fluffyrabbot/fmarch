@@ -70289,6 +70289,98 @@ async fn concurrent_host_deadline_advance_serializes_to_one_ack(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    handle(
+        &pool,
+        &host,
+        Command::ExtendDeadline {
+            game,
+            phase: "D01".into(),
+            at: 100,
+        },
+    )
+    .await
+    .expect("set D01 deadline before racing mixed advance");
+    handle(&pool, &host, Command::ResolvePhase { game, seed: 72_201 })
+        .await
+        .expect("resolve D01 before racing mixed advance");
+
+    let (normal, deadline) = tokio::join!(
+        handle(&pool, &host, Command::AdvancePhase { game }),
+        handle(
+            &pool,
+            &host,
+            Command::AdvancePhaseByDeadline {
+                game,
+                phase: "D01".into(),
+                observed_at: 101,
+            },
+        ),
+    );
+
+    let results = [normal, deadline];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let invalid_target_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::InvalidTarget)))
+        .count();
+    assert_eq!(
+        ack_count, 1,
+        "exactly one mixed normal/deadline advance should ACK"
+    );
+    assert_eq!(
+        invalid_target_count, 1,
+        "the losing mixed normal/deadline advance should revalidate after the winner advances"
+    );
+    let ack = results
+        .iter()
+        .find_map(|result| result.as_ref().ok())
+        .expect("one mixed advance ACK");
+    assert!(
+        ack.stream_seqs.len() == 1 || ack.stream_seqs.len() == 2,
+        "mixed advance winner appends either a normal phase advance or deadline evidence plus phase advance"
+    );
+
+    let deadline_evidence_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseDeadlineElapsed' \
+         AND payload->>'phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        deadline_evidence_count <= 1,
+        "mixed normal/deadline advance must not append duplicate deadline evidence"
+    );
+    let advance_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
+         AND payload->>'source_phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        advance_count, 1,
+        "mixed normal/deadline advance must not append duplicate phase transitions"
+    );
+
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(phase.phase_id, "N01");
+    assert!(
+        !phase.locked,
+        "winning mixed advance should leave the next phase open"
+    );
+    assert_eq!(
+        phase.deadline, None,
+        "mixed advance must clear the old phase deadline on the next phase"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");

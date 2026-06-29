@@ -9,6 +9,9 @@ import {
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 
+const LOCAL_RACE_COMMAND =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -554,7 +557,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 58,
+    laneCount: 59,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -869,8 +872,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       id: "local-next-action",
       label: "Ranked next action",
       href: "/admin/audit/local-next-action?game=midsummer",
-      status: "ready: test:dev-test-game-proof-freshness-admin-proof",
-      command: "test:dev-test-game-proof-freshness-admin-proof",
+      status: `ready: ${LOCAL_RACE_COMMAND}`,
+      command: LOCAL_RACE_COMMAND,
     },
   ]);
   assert.deepEqual(freshness.artifactSummary, {
@@ -879,7 +882,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
-    nextActionCommand: "test:dev-test-game-proof-freshness-admin-proof",
+    nextActionCommand: LOCAL_RACE_COMMAND,
     nextActionInspectHref: "/admin/audit/local-next-action?game=midsummer",
     releaseReady: false,
     productionReady: false,
@@ -951,23 +954,23 @@ test("admin route data exposes local next action as a native audit row", async (
 
   const nextAction = data.audit.find((item) => item.id === "local-next-action");
   assert.equal(nextAction.label, "Local next action");
-  assert.equal(
-    nextAction.status,
-    "ready: test:dev-test-game-proof-freshness-admin-proof",
-  );
+  assert.equal(nextAction.status, `ready: ${LOCAL_RACE_COMMAND}`);
   assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
   assert.equal(nextAction.inspectHref, "/admin/audit/local-next-action?game=midsummer");
   assert.deepEqual(
     nextAction.checks.map((check) => [check.id, check.status]),
     [
       ["next-command", "available"],
-      ["all-artifacts-fresh", "ready"],
+      ["release-readiness-unproven", "ready"],
+      ["exhaustive-race-coverage", "unproven"],
       ["selection-trace", "0 candidates"],
+      ["release-readiness-selection-trace", "1 buildable candidates"],
+      ["release-readiness-exhaustive-race-coverage", "selected:unproven"],
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
-    command: "test:dev-test-game-proof-freshness-admin-proof",
-    reason: "all-artifacts-fresh",
+    command: LOCAL_RACE_COMMAND,
+    reason: "release-readiness-unproven",
     actionStatus: "ready",
     sourceManifest: "target/dev-test-game/spine-manifest.json",
     artifactFreshnessStatus: "passed",
@@ -980,6 +983,32 @@ test("admin route data exposes local next action as a native audit row", async (
       candidateCount: 0,
       selectedArtifactId: null,
       candidates: [],
+    },
+    releaseReadinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
+    releaseReadinessStatus: "not_ready",
+    unprovenCount: 7,
+    buildableUnprovenCount: 1,
+    selectedUnprovenId: "exhaustive-race-coverage",
+    selectedBuildSlice:
+      "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+    selectedProofTarget: "target/dev-test-game/proof-run.json",
+    releaseReadinessTrace: {
+      strategy: "local-dev-release-readiness-priority",
+      candidateCount: 1,
+      selectedUnprovenId: "exhaustive-race-coverage",
+      candidates: [
+        {
+          rank: 1,
+          id: "exhaustive-race-coverage",
+          status: "unproven",
+          priority: 0,
+          selected: true,
+          command: LOCAL_RACE_COMMAND,
+          buildSlice:
+            "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+          proofTarget: "target/dev-test-game/proof-run.json",
+        },
+      ],
     },
     releaseReady: false,
     productionReady: false,
@@ -1029,7 +1058,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "31 hardening lanes passed");
+  assert.equal(hardening.status, "32 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1062,6 +1091,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
+      "concurrent-host-mixed-advance-race",
       "stale-host-resolve",
       "stale-host-advance",
       "stale-host-deadline",
@@ -1071,7 +1101,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 58,
+    laneCount: 59,
     releaseReady: false,
     productionReady: false,
   });
@@ -1122,7 +1152,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 58,
+    laneCount: 59,
     releaseReady: false,
     productionReady: false,
   });
@@ -1183,7 +1213,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 31);
+  assert.equal(data.audit.checks.length, 32);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1214,6 +1244,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["concurrent-host-resolve-race", "passed"],
       ["concurrent-host-advance-race", "passed"],
       ["concurrent-host-deadline-advance-race", "passed"],
+      ["concurrent-host-mixed-advance-race", "passed"],
       ["stale-host-resolve", "passed"],
       ["stale-host-advance", "passed"],
       ["stale-host-deadline", "passed"],
@@ -1254,7 +1285,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "38 demo scenarios available locally");
+  assert.equal(seed.status, "39 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1273,6 +1304,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
+      "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -1302,7 +1334,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 38,
+    scenarioCount: 39,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -1321,7 +1353,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 38);
+  assert.equal(data.audit.scenarios.length, 39);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1338,6 +1370,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["concurrent-host-resolve-race", "available_locally"],
       ["concurrent-host-advance-race", "available_locally"],
       ["concurrent-host-deadline-advance-race", "available_locally"],
+      ["concurrent-host-mixed-advance-race", "available_locally"],
       ["stale-same-action-recovery", "available_locally"],
       ["stale-action-conflict-message", "available_locally"],
       ["stale-dead-action-conflict", "available_locally"],
@@ -1701,6 +1734,7 @@ function proofRunFixture() {
     "concurrent-host-resolve-race",
     "concurrent-host-advance-race",
     "concurrent-host-deadline-advance-race",
+    "concurrent-host-mixed-advance-race",
     "stale-host-resolve",
     "stale-host-advance",
     "stale-host-deadline",
@@ -1740,7 +1774,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 58,
+      laneCount: 59,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
@@ -1789,6 +1823,7 @@ function seedFixtureSummaryFixture() {
         "Concurrent host deadline advance race",
         "host",
       ),
+      seedScenario("concurrent-host-mixed-advance-race", "Concurrent host mixed advance race", "host"),
       seedScenario("stale-same-action-recovery", "Stale same action recovery", "actionPlayer"),
       seedScenario(
         "stale-action-conflict-message",
@@ -2033,10 +2068,23 @@ function freshnessArtifact(id, status) {
 
 function nextActionFixture({
   actionStatus = "ready",
-  reason = "all-artifacts-fresh",
-  command = "test:dev-test-game-proof-freshness-admin-proof",
+  reason = "release-readiness-unproven",
+  command = LOCAL_RACE_COMMAND,
   artifact,
+  unproven =
+    artifact === undefined && reason === "release-readiness-unproven"
+      ? {
+          id: "exhaustive-race-coverage",
+          status: "unproven",
+          requiredEvidence:
+            "Broader concurrent command race matrix beyond the single proven concurrent vote convergence lane",
+          buildSlice:
+            "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+          proofTarget: "target/dev-test-game/proof-run.json",
+        }
+      : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
+  releaseReadinessTrace = releaseReadinessTraceFixture({ unproven, command }),
 } = {}) {
   return {
     version: 1,
@@ -2057,14 +2105,23 @@ function nextActionFixture({
         staleCount: 0,
         missingCount: 0,
       },
+      releaseReadinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
+      releaseReadinessGeneratedAt: "2026-06-26T00:00:00.000Z",
+      releaseReadinessSummary: {
+        status: "not_ready",
+        unprovenCount: 7,
+        buildableUnprovenCount: unproven === undefined ? 0 : 1,
+      },
     },
     nextAction: {
       command,
       reason,
       status: actionStatus,
       ...(artifact === undefined ? {} : { artifact }),
+      ...(unproven === undefined ? {} : { unproven }),
     },
     selectionTrace,
+    releaseReadinessTrace,
   };
 }
 
@@ -2174,6 +2231,34 @@ function selectionTraceFixture({ artifact, command }) {
         selected: true,
         refreshCommand: command,
         refreshSource: artifact.refreshSource,
+      },
+    ],
+  };
+}
+
+function releaseReadinessTraceFixture({ unproven, command }) {
+  if (unproven === undefined) {
+    return {
+      strategy: "local-dev-release-readiness-priority",
+      candidateCount: 0,
+      selectedUnprovenId: null,
+      candidates: [],
+    };
+  }
+  return {
+    strategy: "local-dev-release-readiness-priority",
+    candidateCount: 1,
+    selectedUnprovenId: unproven.id,
+    candidates: [
+      {
+        rank: 1,
+        id: unproven.id,
+        status: unproven.status,
+        priority: 0,
+        selected: true,
+        command,
+        buildSlice: unproven.buildSlice,
+        proofTarget: unproven.proofTarget,
       },
     ],
   };

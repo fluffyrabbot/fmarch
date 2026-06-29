@@ -486,7 +486,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     action.artifact !== null && typeof action.artifact === "object"
       ? action.artifact
       : null;
+  const unproven =
+    action.unproven !== null && typeof action.unproven === "object"
+      ? action.unproven
+      : null;
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
+  const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
+    nextAction.releaseReadinessTrace,
+  );
   const checks = [
     Object.freeze({
       id: "next-command",
@@ -504,6 +511,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
             status: String(artifact.status ?? "unknown"),
           }),
         ]),
+    ...(unproven === null
+      ? []
+      : [
+          Object.freeze({
+            id: String(unproven.id),
+            status: String(unproven.status ?? "unknown"),
+          }),
+        ]),
     Object.freeze({
       id: "selection-trace",
       status: `${selectionTrace.candidateCount} candidates`,
@@ -516,8 +531,26 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
           : `rank-${candidate.rank}:${candidate.status}`,
       }),
     ),
+    ...(releaseReadinessTrace.candidateCount === 0
+      ? []
+      : [
+          Object.freeze({
+            id: "release-readiness-selection-trace",
+            status: `${releaseReadinessTrace.candidateCount} buildable candidates`,
+          }),
+          ...releaseReadinessTrace.candidates.map((candidate) =>
+            Object.freeze({
+              id: `release-readiness-${candidate.id}`,
+              status: candidate.selected
+                ? `selected:${candidate.status}`
+                : `rank-${candidate.rank}:${candidate.status}`,
+            }),
+          ),
+        ]),
   ];
   const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
+  const releaseReadinessSummary =
+    nextAction.generatedFrom?.releaseReadinessSummary ?? {};
   return Object.freeze({
     id: "local-next-action",
     label: "Local next action",
@@ -546,6 +579,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       staleCount: Number(freshnessSummary.staleCount ?? 0),
       missingCount: Number(freshnessSummary.missingCount ?? 0),
       selectionTrace,
+      releaseReadinessChecklist: String(
+        nextAction.generatedFrom?.releaseReadinessChecklist ?? "",
+      ),
+      releaseReadinessStatus: String(releaseReadinessSummary.status ?? "unknown"),
+      unprovenCount: Number(releaseReadinessSummary.unprovenCount ?? 0),
+      buildableUnprovenCount: Number(
+        releaseReadinessSummary.buildableUnprovenCount ?? 0,
+      ),
+      selectedUnprovenId: String(unproven?.id ?? ""),
+      selectedBuildSlice: String(unproven?.buildSlice ?? ""),
+      selectedProofTarget: String(unproven?.proofTarget ?? ""),
+      releaseReadinessTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
@@ -591,6 +636,45 @@ function normalizeNextActionSelectionTrace(selectionTrace) {
     selectedArtifactId:
       typeof selectionTrace.selectedArtifactId === "string"
         ? selectionTrace.selectedArtifactId
+        : null,
+    candidates: Object.freeze(candidates),
+  });
+}
+
+function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
+  if (
+    releaseReadinessTrace === null ||
+    typeof releaseReadinessTrace !== "object" ||
+    releaseReadinessTrace.strategy !== "local-dev-release-readiness-priority" ||
+    !Array.isArray(releaseReadinessTrace.candidates)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      candidateCount: 0,
+      selectedUnprovenId: null,
+      candidates: Object.freeze([]),
+    });
+  }
+  const candidates = releaseReadinessTrace.candidates
+    .filter((candidate) => candidate !== null && typeof candidate === "object")
+    .map((candidate) =>
+      Object.freeze({
+        rank: Number(candidate.rank ?? 0),
+        id: String(candidate.id ?? "unknown"),
+        status: String(candidate.status ?? "unknown"),
+        priority: Number(candidate.priority ?? 0),
+        selected: candidate.selected === true,
+        command: String(candidate.command ?? ""),
+        buildSlice: String(candidate.buildSlice ?? ""),
+        proofTarget: String(candidate.proofTarget ?? ""),
+      }),
+    );
+  return Object.freeze({
+    strategy: releaseReadinessTrace.strategy,
+    candidateCount: Number(releaseReadinessTrace.candidateCount ?? candidates.length),
+    selectedUnprovenId:
+      typeof releaseReadinessTrace.selectedUnprovenId === "string"
+        ? releaseReadinessTrace.selectedUnprovenId
         : null,
     candidates: Object.freeze(candidates),
   });
@@ -1195,6 +1279,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "concurrent-host-resolve-race",
     "concurrent-host-advance-race",
     "concurrent-host-deadline-advance-race",
+    "concurrent-host-mixed-advance-race",
     "stale-host-resolve",
     "stale-host-advance",
     "stale-host-deadline",

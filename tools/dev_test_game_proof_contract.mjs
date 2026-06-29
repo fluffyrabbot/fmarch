@@ -70,6 +70,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-resolve-race",
   "concurrent-host-advance-race",
   "concurrent-host-deadline-advance-race",
+  "concurrent-host-mixed-advance-race",
   "stale-host-resolve",
   "stale-host-advance",
   "stale-host-deadline",
@@ -3445,6 +3446,143 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.locked ===
             false &&
           hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.deadline ===
+            null,
+      },
+    ),
+    lane(
+      "concurrent-host-mixed-advance-race",
+      "Concurrent host mixed advance commands converge",
+      {
+        ackRaceRole: hardening.concurrentHostMixedAdvanceRace?.ackRaceRole ?? null,
+        rejectRaceRole:
+          hardening.concurrentHostMixedAdvanceRace?.rejectRaceRole ?? null,
+        ackActionId: hardening.concurrentHostMixedAdvanceRace?.ackActionId ?? null,
+        rejectActionId:
+          hardening.concurrentHostMixedAdvanceRace?.rejectActionId ?? null,
+        game: hardening.concurrentHostMixedAdvanceRace?.game ?? null,
+        ackState: hardening.concurrentHostMixedAdvanceRace?.ack?.state ?? null,
+        rejectError: hardening.concurrentHostMixedAdvanceRace?.reject?.error ?? null,
+        phaseAfterRace:
+          hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.phase_id ??
+          null,
+        passed:
+          hardening.concurrentHostMixedAdvanceRace?.status === "passed" &&
+          hardening.concurrentHostMixedAdvanceRace?.setup?.stalePhase?.id ===
+            "D01" &&
+          hardening.concurrentHostMixedAdvanceRace?.setup?.stalePhase?.locked ===
+            true &&
+          typeof hardening.concurrentHostMixedAdvanceRace?.setup?.stalePhase
+            ?.deadline === "number" &&
+          hardening.concurrentHostMixedAdvanceRace?.setup?.visibleActions?.includes(
+            "advance_phase",
+          ) === true &&
+          hardening.concurrentHostMixedAdvanceRace?.setup?.visibleActions?.includes(
+            "advance_phase_by_deadline",
+          ) === true &&
+          ["normal", "deadline"].includes(
+            hardening.concurrentHostMixedAdvanceRace?.ackRaceRole,
+          ) &&
+          ["normal", "deadline"].includes(
+            hardening.concurrentHostMixedAdvanceRace?.rejectRaceRole,
+          ) &&
+          hardening.concurrentHostMixedAdvanceRace?.ackRaceRole !==
+            hardening.concurrentHostMixedAdvanceRace?.rejectRaceRole &&
+          ["advance_phase", "advance_phase_by_deadline"].includes(
+            hardening.concurrentHostMixedAdvanceRace?.ackActionId,
+          ) &&
+          ["advance_phase", "advance_phase_by_deadline"].includes(
+            hardening.concurrentHostMixedAdvanceRace?.rejectActionId,
+          ) &&
+          hardening.concurrentHostMixedAdvanceRace?.ackActionId !==
+            hardening.concurrentHostMixedAdvanceRace?.rejectActionId &&
+          hardening.concurrentHostMixedAdvanceRace?.ack?.state === "ack" &&
+          hardening.concurrentHostMixedAdvanceRace?.ack?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          Array.isArray(
+            hardening.concurrentHostMixedAdvanceRace?.ack?.streamSeqs,
+          ) &&
+          (hardening.concurrentHostMixedAdvanceRace?.ackActionId ===
+          "advance_phase"
+            ? hardening.concurrentHostMixedAdvanceRace.ack.streamSeqs.length === 1
+            : hardening.concurrentHostMixedAdvanceRace.ack.streamSeqs.length ===
+              2) &&
+          hardening.concurrentHostMixedAdvanceRace?.reject?.state === "reject" &&
+          hardening.concurrentHostMixedAdvanceRace?.reject?.error ===
+            "InvalidTarget" &&
+          hardening.concurrentHostMixedAdvanceRace?.reject?.serverEnvelope?.body
+            ?.kind === "Reject" &&
+          Array.isArray(
+            hardening.concurrentHostMixedAdvanceRace?.reject?.streamSeqs,
+          ) === false &&
+          (hardening.concurrentHostMixedAdvanceRace?.rejectActionId ===
+          "advance_phase"
+            ? hardening.concurrentHostMixedAdvanceRace?.reject?.message?.includes(
+                "stale phase state",
+              ) === true
+            : hardening.concurrentHostMixedAdvanceRace?.reject?.message?.includes(
+                "deadline target is stale",
+              ) === true) &&
+          hardening.concurrentHostMixedAdvanceRace?.ack?.commandId !==
+            hardening.concurrentHostMixedAdvanceRace?.reject?.commandId &&
+          typeof hardening.concurrentHostMixedAdvanceRace?.game === "string" &&
+          hardening.concurrentHostMixedAdvanceRace.game.length > 0 &&
+          hardening.concurrentHostMixedAdvanceRace?.normalOutcome?.requestEnvelope
+            ?.body?.body?.command?.AdvancePhase?.game ===
+            hardening.concurrentHostMixedAdvanceRace?.game &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlineOutcome?.requestEnvelope
+            ?.body?.body?.command?.AdvancePhaseByDeadline?.game ===
+            hardening.concurrentHostMixedAdvanceRace?.game &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlineOutcome?.requestEnvelope
+            ?.body?.body?.command?.AdvancePhaseByDeadline?.phase === "D01" &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlineOutcome?.requestEnvelope
+            ?.body?.body?.command?.AdvancePhaseByDeadline?.observed_at ===
+            hardening.concurrentHostMixedAdvanceRace?.setup?.stalePhase?.deadline +
+              1 &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseAfterRace?.id ===
+            "N01" &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseAfterRace?.locked ===
+            false &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseAfterRace
+            ?.deadline === null &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseAfterRace?.id ===
+            "N01" &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseAfterRace
+            ?.locked === false &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseAfterRace
+            ?.deadline === null &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
+            "lock_thread",
+          ) === true &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
+            "advance_phase",
+          ) === false &&
+          hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
+            "advance_phase_by_deadline",
+          ) === false &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
+            "lock_thread",
+          ) === true &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
+            "advance_phase",
+          ) === false &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
+            "advance_phase_by_deadline",
+          ) === false &&
+          hardening.concurrentHostMixedAdvanceRace?.normalActivityRow?.actionId ===
+            "advance_phase" &&
+          hardening.concurrentHostMixedAdvanceRace?.deadlineActivityRow?.actionId ===
+            "advance_phase_by_deadline" &&
+          hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.phase_id ===
+            "N01" &&
+          hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.locked ===
+            false &&
+          hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.deadline ===
             null,
       },
     ),

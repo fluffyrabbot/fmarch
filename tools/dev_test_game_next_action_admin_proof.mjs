@@ -58,11 +58,21 @@ await runAdminAuditProof({
       reason: source.nextAction.nextAction.reason,
       actionStatus: source.nextAction.nextAction.status,
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
+      unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
       selectionTrace: {
         strategy: source.nextAction.selectionTrace.strategy,
         candidateCount: source.nextAction.selectionTrace.candidateCount,
         selectedArtifactId: source.nextAction.selectionTrace.selectedArtifactId,
         candidateIds: source.nextAction.selectionTrace.candidates.map(
+          (candidate) => candidate.id,
+        ),
+      },
+      releaseReadinessTrace: {
+        strategy: source.nextAction.releaseReadinessTrace.strategy,
+        candidateCount: source.nextAction.releaseReadinessTrace.candidateCount,
+        selectedUnprovenId:
+          source.nextAction.releaseReadinessTrace.selectedUnprovenId,
+        candidateIds: source.nextAction.releaseReadinessTrace.candidates.map(
           (candidate) => candidate.id,
         ),
       },
@@ -96,6 +106,14 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof is missing selection trace evidence");
   }
+  if (
+    evidence.generatedFrom?.releaseReadinessTrace?.strategy !==
+      "local-dev-release-readiness-priority" ||
+    !Number.isInteger(evidence.generatedFrom.releaseReadinessTrace.candidateCount) ||
+    !Array.isArray(evidence.generatedFrom.releaseReadinessTrace.candidateIds)
+  ) {
+    throw new Error("next-action admin proof is missing release-readiness trace evidence");
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -109,8 +127,17 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.nextAction.artifact?.id !== undefined) {
     checks.push(nextAction.nextAction.artifact.id);
   }
+  if (nextAction.nextAction.unproven?.id !== undefined) {
+    checks.push(
+      nextAction.nextAction.unproven.id,
+      "release-readiness-selection-trace",
+    );
+  }
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
+  }
+  for (const candidate of nextAction.releaseReadinessTrace.candidates) {
+    checks.push(`release-readiness-${candidate.id}`);
   }
   return checks;
 }
@@ -123,8 +150,16 @@ function requiredChecksForEvidence(evidence) {
     ...(typeof evidence.generatedFrom?.artifactId === "string"
       ? [evidence.generatedFrom.artifactId]
       : []),
+    ...(typeof evidence.generatedFrom?.unprovenId === "string"
+      ? [evidence.generatedFrom.unprovenId, "release-readiness-selection-trace"]
+      : []),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
       ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)
+      : []),
+    ...(Array.isArray(evidence.generatedFrom?.releaseReadinessTrace?.candidateIds)
+      ? evidence.generatedFrom.releaseReadinessTrace.candidateIds.map(
+          (id) => `release-readiness-${id}`,
+        )
       : []),
   ];
 }

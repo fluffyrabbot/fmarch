@@ -340,6 +340,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D01 advance_phase_by_deadline concurrently with distinct command ids, prove one deadline evidence ACK plus one InvalidTarget recovery, and converge to the next open phase.",
     }),
     scenario({
+      id: "concurrent-host-mixed-advance-race",
+      title: "Concurrent host mixed advance race",
+      role: "host",
+      provenBy: ["concurrent-host-mixed-advance-race"].filter(hasLane),
+      note: "Two host role pages submit D01 advance_phase and advance_phase_by_deadline concurrently with distinct command ids, prove exactly one ACK plus one InvalidTarget recovery, and converge to the next open phase without duplicate deadline evidence.",
+    }),
+    scenario({
       id: "stale-same-action-recovery",
       title: "Stale same action recovery",
       role: "actionPlayer",
@@ -531,12 +538,13 @@ function demoScenarios({ roles, laneIds }) {
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, host resolve/advance/deadline-advance races, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection plus stale player completed-game command closure, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, host resolve/advance/deadline-advance/mixed-advance races, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection plus stale player completed-game command closure, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

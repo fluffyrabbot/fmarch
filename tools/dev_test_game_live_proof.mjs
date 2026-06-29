@@ -2271,6 +2271,154 @@ assert.equal(
   null,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.status,
+  "passed",
+);
+assert(
+  ["normal", "deadline"].includes(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ackRaceRole,
+  ),
+);
+assert(
+  ["normal", "deadline"].includes(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.rejectRaceRole,
+  ),
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ackRaceRole,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.rejectRaceRole,
+);
+assert(
+  ["advance_phase", "advance_phase_by_deadline"].includes(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ackActionId,
+  ),
+);
+assert(
+  ["advance_phase", "advance_phase_by_deadline"].includes(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.rejectActionId,
+  ),
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ackActionId,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.rejectActionId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.setup.stalePhase.id,
+  "D01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.setup.stalePhase.locked,
+  true,
+);
+assert.equal(
+  typeof session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.setup.stalePhase
+    .deadline,
+  "number",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ack.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ack.streamSeqs
+    .length,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ackActionId ===
+    "advance_phase"
+    ? 1
+    : 2,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.error,
+  "InvalidTarget",
+);
+if (
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.rejectActionId ===
+  "advance_phase"
+) {
+  assert.match(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.message,
+    /stale phase state/,
+  );
+} else {
+  assert.match(
+    session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.message,
+    /deadline target is stale/,
+  );
+}
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.ack.commandId,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.reject.commandId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.normalOutcome
+    .requestEnvelope.body.body.command.AdvancePhase.game,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlineOutcome
+    .requestEnvelope.body.body.command.AdvancePhaseByDeadline.game,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlineOutcome
+    .requestEnvelope.body.body.command.AdvancePhaseByDeadline.phase,
+  "D01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlineOutcome
+    .requestEnvelope.body.body.command.AdvancePhaseByDeadline.observed_at,
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.setup.stalePhase
+    .deadline + 1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.normalPhaseAfterRace.id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.normalPhaseAfterRace
+    .locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.normalPhaseAfterRace
+    .deadline,
+  null,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlinePhaseAfterRace
+    .id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlinePhaseAfterRace
+    .locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.deadlinePhaseAfterRace
+    .deadline,
+  null,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.apiPhaseAfterRace
+    .phase_id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.apiPhaseAfterRace
+    .locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostMixedAdvanceRace.apiPhaseAfterRace
+    .deadline,
+  null,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostResolve.status,
   "passed",
 );

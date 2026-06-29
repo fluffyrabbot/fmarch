@@ -7,9 +7,12 @@ import {
   spineManifestPath,
 } from "./dev_test_game_spine_manifest.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
+export const devTestGameReleaseReadinessPath =
+  "target/dev-test-game/release-readiness-checklist.json";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -18,21 +21,24 @@ export function buildDevTestGameNextAction(
   {
     generatedAt = new Date().toISOString(),
     spineManifestSource = spineManifestPath,
+    releaseReadinessChecklist = null,
+    releaseReadinessChecklistSource = devTestGameReleaseReadinessPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
+  const readiness =
+    releaseReadinessChecklist === null
+      ? null
+      : assertDevTestGameReleaseReadiness(releaseReadinessChecklist);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
+  const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness);
+  const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
+  const selectedUnproven = releaseReadinessCandidates[0];
   const nextAction =
-    artifact === undefined
+    artifact !== undefined
       ? {
-          command:
-            manifest.artifactFreshness?.nextCommand ?? proofFreshnessAdminProofCommand,
-          reason: "all-artifacts-fresh",
-          status: "ready",
-        }
-      : {
           command: artifact.nextCommand ?? artifact.refreshCommand,
           reason: "artifact-not-fresh",
           status: "blocked",
@@ -43,6 +49,33 @@ export function buildDevTestGameNextAction(
             status: artifact.status,
             refreshSource: artifact.refreshSource,
           },
+        }
+      : selectedUnproven !== undefined
+        ? {
+            command: selectedUnproven.command,
+            reason: "release-readiness-unproven",
+            status: "ready",
+            unproven: {
+              id: selectedUnproven.item.id,
+              status: selectedUnproven.item.status,
+              requiredEvidence: selectedUnproven.item.requiredEvidence,
+              buildSlice: selectedUnproven.buildSlice,
+              proofTarget: selectedUnproven.proofTarget,
+            },
+          }
+        : {
+            command:
+              manifest.artifactFreshness?.nextCommand ?? proofFreshnessAdminProofCommand,
+            reason: "all-artifacts-fresh",
+            status: "ready",
+          };
+  const releaseReadinessSummary =
+    readiness === null
+      ? null
+      : {
+          status: readiness.releaseReadiness.status,
+          unprovenCount: readiness.releaseReadiness.unproven.length,
+          buildableUnprovenCount: releaseReadinessCandidates.length,
         };
   const evidence = {
     version: DEV_TEST_GAME_NEXT_ACTION_VERSION,
@@ -53,15 +86,23 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest. It chooses the highest-priority local recovery or freshness command from current development-spine artifact freshness status; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, otherwise it chooses a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
       artifactFreshnessStatus: manifest.artifactFreshness.status,
       artifactFreshnessSummary: { ...manifest.artifactFreshness.summary },
+      ...(readiness === null
+        ? {}
+        : {
+            releaseReadinessChecklist: releaseReadinessChecklistSource,
+            releaseReadinessGeneratedAt: readiness.generatedAt,
+            releaseReadinessSummary,
+          }),
     },
     nextAction,
     selectionTrace,
+    releaseReadinessTrace,
   };
   assertDevTestGameNextAction(evidence);
   return evidence;
@@ -89,7 +130,13 @@ export function assertDevTestGameNextAction(evidence) {
   if (!["ready", "blocked"].includes(evidence.nextAction.status)) {
     throw new Error(`next-action status drifted: ${evidence.nextAction.status}`);
   }
-  if (!["all-artifacts-fresh", "artifact-not-fresh"].includes(evidence.nextAction.reason)) {
+  if (
+    ![
+      "all-artifacts-fresh",
+      "artifact-not-fresh",
+      "release-readiness-unproven",
+    ].includes(evidence.nextAction.reason)
+  ) {
     throw new Error(`next-action reason drifted: ${evidence.nextAction.reason}`);
   }
   if (
@@ -98,7 +145,14 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action artifact recovery is missing an artifact id");
   }
+  if (
+    evidence.nextAction.reason === "release-readiness-unproven" &&
+    typeof evidence.nextAction.unproven?.id !== "string"
+  ) {
+    throw new Error("next-action release-readiness recovery is missing an unproven id");
+  }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
+  assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   return evidence;
 }
 
@@ -107,11 +161,25 @@ export async function writeDevTestGameNextAction({
   manifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ?? spineManifestPath,
 } = {}) {
   const absoluteManifestPath = path.resolve(repoRoot, manifestPath);
+  const absoluteReleaseReadinessPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS_CHECKLIST ??
+      devTestGameReleaseReadinessPath,
+  );
   const manifest = JSON.parse(await readFile(absoluteManifestPath, "utf8"));
+  const releaseReadinessChecklist = JSON.parse(
+    await readFile(absoluteReleaseReadinessPath, "utf8"),
+  );
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
+  const releaseReadinessChecklistSource = path.relative(
+    repoRoot,
+    absoluteReleaseReadinessPath,
+  );
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     spineManifestSource,
+    releaseReadinessChecklist,
+    releaseReadinessChecklistSource,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -162,6 +230,50 @@ function buildSelectionTrace(candidates) {
   };
 }
 
+function rankedBuildableReleaseReadinessItems(readiness) {
+  if (readiness === null) {
+    return [];
+  }
+  return (readiness.releaseReadiness?.unproven ?? [])
+    .map((item, index) => {
+      const buildable = localBuildableReleaseReadinessItems.get(item.id);
+      return buildable === undefined
+        ? null
+        : {
+            item,
+            index,
+            priority: buildable.priority,
+            command: buildable.command,
+            buildSlice: buildable.buildSlice,
+            proofTarget: buildable.proofTarget,
+            proofBoundary: buildable.proofBoundary,
+          };
+    })
+    .filter((candidate) => candidate !== null)
+    .sort((left, right) => left.priority - right.priority || left.index - right.index);
+}
+
+function buildReleaseReadinessTrace(candidates) {
+  const selectedUnprovenId = candidates[0]?.item.id ?? null;
+  return {
+    strategy: "local-dev-release-readiness-priority",
+    candidateCount: candidates.length,
+    selectedUnprovenId,
+    candidates: candidates.map((candidate, index) => ({
+      rank: index + 1,
+      id: candidate.item.id,
+      status: candidate.item.status,
+      priority: candidate.priority,
+      selected: candidate.item.id === selectedUnprovenId,
+      command: candidate.command,
+      buildSlice: candidate.buildSlice,
+      proofTarget: candidate.proofTarget,
+      proofBoundary: candidate.proofBoundary,
+      requiredEvidence: candidate.item.requiredEvidence,
+    })),
+  };
+}
+
 function assertSelectionTrace(selectionTrace, nextAction) {
   if (
     selectionTrace?.strategy !== "development-spine-priority" ||
@@ -176,7 +288,7 @@ function assertSelectionTrace(selectionTrace, nextAction) {
   if (selectionTrace.candidateCount === 0) {
     if (
       selectionTrace.selectedArtifactId !== null ||
-      nextAction.reason !== "all-artifacts-fresh"
+      nextAction.reason === "artifact-not-fresh"
     ) {
       throw new Error("next-action fresh trace has a selected artifact");
     }
@@ -194,6 +306,50 @@ function assertSelectionTrace(selectionTrace, nextAction) {
   for (const candidate of rest) {
     if (candidate.selected === true) {
       throw new Error(`next-action selection trace has duplicate selection: ${candidate.id}`);
+    }
+  }
+}
+
+function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
+  if (
+    releaseReadinessTrace?.strategy !== "local-dev-release-readiness-priority" ||
+    !Number.isInteger(releaseReadinessTrace.candidateCount) ||
+    !Array.isArray(releaseReadinessTrace.candidates)
+  ) {
+    throw new Error("next-action release-readiness trace is missing or malformed");
+  }
+  if (releaseReadinessTrace.candidateCount !== releaseReadinessTrace.candidates.length) {
+    throw new Error("next-action release-readiness trace candidate count drifted");
+  }
+  if (releaseReadinessTrace.candidateCount === 0) {
+    if (
+      releaseReadinessTrace.selectedUnprovenId !== null ||
+      nextAction.reason === "release-readiness-unproven"
+    ) {
+      throw new Error("next-action release-readiness trace has no selected item");
+    }
+    return;
+  }
+  const [selected, ...rest] = releaseReadinessTrace.candidates;
+  if (
+    selected.selected !== true ||
+    selected.id !== releaseReadinessTrace.selectedUnprovenId
+  ) {
+    throw new Error("next-action release-readiness trace does not match selection");
+  }
+  if (nextAction.reason === "release-readiness-unproven") {
+    if (
+      nextAction.unproven?.id !== selected.id ||
+      nextAction.command !== selected.command
+    ) {
+      throw new Error("next-action release-readiness selection does not match action");
+    }
+  }
+  for (const candidate of rest) {
+    if (candidate.selected === true) {
+      throw new Error(
+        `next-action release-readiness trace has duplicate selection: ${candidate.id}`,
+      );
     }
   }
 }
@@ -253,6 +409,22 @@ const terminalArtifactPaths = new Set([
   "target/dev-test-game/next-action-admin-proof.json",
   "target/dev-test-game/proof-graph.json",
   "target/dev-test-game/proof-graph-admin-proof.json",
+]);
+
+const localBuildableReleaseReadinessItems = new Map([
+  [
+    "exhaustive-race-coverage",
+    {
+      priority: 0,
+      command:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      buildSlice:
+        "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
+      proofTarget: "target/dev-test-game/proof-run.json",
+      proofBoundary:
+        "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
+    },
+  ],
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
