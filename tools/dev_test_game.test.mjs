@@ -2041,6 +2041,85 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         hostPhaseAfterUnlock: { locked: false },
       },
+      stalePlayerVoteAfterChange: {
+        status: "passed",
+        commandStateBeforeClose: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        actionCommandStateBeforeChange: {
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        staleVoteTarget: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        staleVoteButton: {
+          action: "submit_vote",
+          disabled: false,
+          text: "Vote Slot 3",
+        },
+        closedStatus: { state: "closed" },
+        actionVote: { state: "ack" },
+        apiVotecountAfterActionVote: [
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "no_lynch", count: 1 },
+          },
+        ],
+        staleVote: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    target: { Slot: "slot-3" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterAck: {
+          currentVote: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        },
+        votecountAfterAck: [
+          { target: "no_lynch", count: 1 },
+          { target: "slot-3", count: 1 },
+        ],
+        dispatchPlan: {
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+        currentVoteAfterAck: {
+          hasVote: "true",
+          text: "Current vote Slot 3",
+        },
+        apiVotecountAfterAck: [
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "no_lynch", count: 1 },
+          },
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "slot-3", count: 1 },
+          },
+        ],
+        apiCommandStateAfterAck: {
+          current_vote: { kind: "slot", slot_id: "slot-3", label: "Slot 3" },
+        },
+        withdrawPlayer: { state: "ack" },
+        withdrawAction: { state: "ack" },
+        apiVotecountAfterCleanup: [],
+        apiCommandStateAfterCleanup: {
+          current_vote: null,
+        },
+      },
       staleDeadTargetVote: {
         status: "passed",
         commandStateBeforeClose: {
@@ -3084,6 +3163,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "idempotent-retry",
       "reconnect-recovery",
       "stale-player-vote",
+      "stale-player-vote-after-change",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -3176,7 +3256,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 55);
+  assert.equal(opsArtifacts.proofRun.laneCount, 56);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3732,6 +3812,7 @@ function hardeningAdminProofFixture() {
         "idempotent-retry",
         "reconnect-recovery",
         "stale-player-vote",
+        "stale-player-vote-after-change",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",

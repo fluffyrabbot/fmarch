@@ -42,6 +42,7 @@ const requiredLaneIds = Object.freeze([
   "idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
+  "stale-player-vote-after-change",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -1472,6 +1473,97 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) &&
         hardening.stalePlayerVote?.hostPhaseAfterUnlock?.locked === false,
     }),
+    lane(
+      "stale-player-vote-after-change",
+      "Stale player vote ACK refreshes changed votecount",
+      {
+        targetSlot:
+          hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId ?? null,
+        actionVoteState:
+          hardening.stalePlayerVoteAfterChange?.actionVote?.state ?? null,
+        staleVoteState:
+          hardening.stalePlayerVoteAfterChange?.staleVote?.state ?? null,
+        currentVoteAfterAck:
+          hardening.stalePlayerVoteAfterChange?.commandStateAfterAck?.currentVote ??
+          null,
+        cleanupRows: normalizedVotecountRows(
+          hardening.stalePlayerVoteAfterChange?.apiVotecountAfterCleanup,
+        ).length,
+        passed:
+          hardening.stalePlayerVoteAfterChange?.status === "passed" &&
+          hardening.stalePlayerVoteAfterChange?.commandStateBeforeClose?.currentVote ===
+            null &&
+          hardening.stalePlayerVoteAfterChange?.commandStateBeforeClose?.voteTargets?.some(
+            (target) =>
+              target.kind === "slot" &&
+              target.slotId ===
+                hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId,
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.staleVoteButton?.disabled ===
+            false &&
+          hardening.stalePlayerVoteAfterChange?.closedStatus?.state === "closed" &&
+          hardening.stalePlayerVoteAfterChange?.actionVote?.state === "ack" &&
+          normalizedVotecountRows(
+            hardening.stalePlayerVoteAfterChange?.apiVotecountAfterActionVote,
+          ).some(
+            (row) =>
+              row.phaseId === "D02" &&
+              row.target === "no_lynch" &&
+              row.count === 1,
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.staleVote?.state === "ack" &&
+          hardening.stalePlayerVoteAfterChange?.staleVote?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.target?.Slot ===
+            hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId &&
+          hardening.stalePlayerVoteAfterChange?.commandStateAfterAck?.currentVote
+            ?.slotId ===
+            hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId &&
+          hardening.stalePlayerVoteAfterChange?.votecountAfterAck?.some(
+            (row) => row.target === "no_lynch" && row.count === 1,
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.votecountAfterAck?.some(
+            (row) =>
+              row.target ===
+                hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId &&
+              row.count === 1,
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "votecount",
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "commandState",
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.currentVoteAfterAck?.hasVote ===
+            "true" &&
+          normalizedVotecountRows(
+            hardening.stalePlayerVoteAfterChange?.apiVotecountAfterAck,
+          ).some(
+            (row) =>
+              row.phaseId === "D02" &&
+              row.target === "no_lynch" &&
+              row.count === 1,
+          ) === true &&
+          normalizedVotecountRows(
+            hardening.stalePlayerVoteAfterChange?.apiVotecountAfterAck,
+          ).some(
+            (row) =>
+              row.phaseId === "D02" &&
+              row.target ===
+                hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId &&
+              row.count === 1,
+          ) === true &&
+          hardening.stalePlayerVoteAfterChange?.apiCommandStateAfterAck?.current_vote
+            ?.slot_id ===
+            hardening.stalePlayerVoteAfterChange?.staleVoteTarget?.slotId &&
+          hardening.stalePlayerVoteAfterChange?.withdrawPlayer?.state === "ack" &&
+          hardening.stalePlayerVoteAfterChange?.withdrawAction?.state === "ack" &&
+          normalizedVotecountRows(
+            hardening.stalePlayerVoteAfterChange?.apiVotecountAfterCleanup,
+          ).length === 0 &&
+          hardening.stalePlayerVoteAfterChange?.apiCommandStateAfterCleanup
+            ?.current_vote === null,
+      },
+    ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
       targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,
       rejectError: hardening.staleDeadTargetVote?.reject?.error ?? null,
