@@ -1753,6 +1753,19 @@ async fn extend_deadline(
     at: i64,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
+    let result = extend_deadline_locked(pool, principal, game, phase, at, receipt).await;
+    release_phase_boundary_lock(&mut lock, game, result).await
+}
+
+async fn extend_deadline_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    phase: String,
+    at: i64,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     // Requires HostOf|CohostOf — the narrowest is CohostOf (host subsumes it).

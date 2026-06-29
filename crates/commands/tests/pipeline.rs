@@ -70342,6 +70342,114 @@ async fn concurrent_player_vote_and_host_resolve_phase_serializes_vote_before_re
     );
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_cohost_deadline_and_host_resolve_phase_serializes_deadline_before_resolution(
+    pool: PgPool,
+) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AddCohost {
+            game,
+            user: "cohost_c".into(),
+        },
+    )
+    .await
+    .expect("delegate cohost deadline authority");
+
+    let lock_key = 41_007_i64;
+    install_deadline_insert_blocker(&pool, game, lock_key).await;
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let deadline_pool = pool.clone();
+    let deadline = tokio::spawn(async move {
+        handle(
+            &deadline_pool,
+            &user("cohost_c"),
+            Command::ExtendDeadline {
+                game,
+                phase: "D01".into(),
+                at: 72_501,
+            },
+        )
+        .await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+
+    let resolve_pool = pool.clone();
+    let resolve = tokio::spawn(async move {
+        handle(
+            &resolve_pool,
+            &user("host_h"),
+            Command::ResolvePhase { game, seed: 72_502 },
+        )
+        .await
+    });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let deadline = deadline
+        .await
+        .unwrap()
+        .expect("deadline extension wins the phase boundary first");
+    let resolve = resolve
+        .await
+        .unwrap()
+        .expect("resolve runs after the racing deadline commits");
+    assert_eq!(deadline.stream_seqs.len(), 1);
+    assert!(
+        resolve.stream_seqs.len() >= 3,
+        "resolve appends resolution envelopes and a phase lock"
+    );
+    assert!(
+        deadline.stream_seqs[0] < resolve.stream_seqs[0],
+        "deadline must serialize before the phase resolution starts"
+    );
+
+    let events = eventstore::load_stream(&pool, game)
+        .await
+        .expect("load event stream");
+    let deadline_seq = events
+        .iter()
+        .find(|event| event.kind == "DeadlineExtended")
+        .expect("deadline event")
+        .stream_seq;
+    let resolution_seq = events
+        .iter()
+        .find(|event| event.kind == "ResolutionApplied")
+        .expect("resolution event")
+        .stream_seq;
+    let lock_seq = events
+        .iter()
+        .find(|event| event.kind == "ThreadLocked")
+        .expect("thread lock event")
+        .stream_seq;
+    assert!(
+        deadline_seq < resolution_seq && resolution_seq < lock_seq,
+        "racing deadline extension must be part of the phase before resolution closes it"
+    );
+
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(phase.phase_id, "D01");
+    assert!(phase.locked);
+    assert_eq!(
+        phase.deadline,
+        Some(72_501),
+        "locked phase should retain the serialized deadline extension"
+    );
+}
+
 async fn install_vote_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
     let function_sql = format!(
         r#"
@@ -70366,6 +70474,37 @@ async fn install_vote_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
         CREATE TRIGGER test_block_vote_insert
             BEFORE INSERT ON events
             FOR EACH ROW EXECUTE FUNCTION test_block_vote_insert()
+        "#,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+async fn install_deadline_insert_blocker(pool: &PgPool, game: Uuid, lock_key: i64) {
+    let function_sql = format!(
+        r#"
+        CREATE OR REPLACE FUNCTION test_block_deadline_insert() RETURNS trigger AS $$
+        BEGIN
+            IF NEW.stream_id = '{game}'::uuid AND NEW.kind = 'DeadlineExtended' THEN
+                PERFORM pg_advisory_lock({lock_key});
+                PERFORM pg_advisory_unlock({lock_key});
+            END IF;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        "#
+    );
+    sqlx::query(&function_sql).execute(pool).await.unwrap();
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_deadline_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query(
+        r#"
+        CREATE TRIGGER test_block_deadline_insert
+            BEFORE INSERT ON events
+            FOR EACH ROW EXECUTE FUNCTION test_block_deadline_insert()
         "#,
     )
     .execute(pool)

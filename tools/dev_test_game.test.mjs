@@ -2852,6 +2852,64 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiHostStateAfterRace: { phase: { phase_id: "D02", locked: false } },
       },
+      concurrentCohostDeadlineResolveRace: {
+        status: "passed",
+        game: "deadline-resolve-race-game-a",
+        deadlineAt: 1781928000,
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        cohostEntry: { capabilityKinds: ["CohostOf"] },
+        setupHostPhase: { id: "D01", locked: false },
+        setupCohostPhase: { id: "D01", locked: false },
+        setupHostPhaseActions: ["resolve_phase"],
+        setupHostDeadlineActions: ["extend_deadline"],
+        setupCohostPhaseActions: [],
+        setupCohostDeadlineActions: ["extend_deadline"],
+        resolve: {
+          state: "ack",
+          streamSeqs: [54, 55, 56],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: { ResolvePhase: { game: "deadline-resolve-race-game-a" } },
+              },
+            },
+          },
+        },
+        deadline: {
+          state: "ack",
+          streamSeqs: [53],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ExtendDeadline: {
+                    game: "deadline-resolve-race-game-a",
+                    phase: "D01",
+                    at: 1781928000,
+                  },
+                },
+              },
+            },
+          },
+        },
+        deadlineSeq: 53,
+        resolveSeq: 54,
+        outcomeSummary: "deadline seq 53 before resolve seq 54",
+        hostPhaseAfterRace: { id: "D01", locked: true, deadline: 1781928000 },
+        cohostPhaseAfterRace: { id: "D01", locked: true, deadline: 1781928000 },
+        hostPhaseActionsAfterRace: ["unlock_thread", "advance_phase"],
+        cohostPhaseActionsAfterRace: [],
+        hostDeadlineActionsAfterRace: ["extend_deadline"],
+        cohostDeadlineActionsAfterRace: ["extend_deadline"],
+        hostStateAfterRace: {
+          phase: { phase_id: "D01", locked: true, deadline: 1781928000 },
+        },
+        cohostStateAfterRace: {
+          phase: { phase_id: "D01", locked: true, deadline: 1781928000 },
+        },
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4509,6 +4567,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
   assert(markdown.includes("Concurrent player vote/resolve race: vote seq 47 before resolve seq 48"));
   assert(markdown.includes("Concurrent player action/advance race: Reject PhaseLocked"));
+  assert(markdown.includes("Concurrent cohost deadline/resolve race: deadline seq 53 before resolve seq 54"));
   assert(markdown.includes("Concurrent host resolve race: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent host advance race: Reject InvalidTarget"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
@@ -4582,6 +4641,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-post-after-phase-closure",
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
+      "concurrent-cohost-deadline-resolve-race",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4682,7 +4742,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 72);
+  assert.equal(opsArtifacts.proofRun.laneCount, 73);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4782,6 +4842,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-action-race",
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
+      "concurrent-cohost-deadline-resolve-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5294,6 +5355,7 @@ function hardeningAdminProofFixture() {
         "stale-player-post-after-phase-closure",
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
+        "concurrent-cohost-deadline-resolve-race",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5412,6 +5474,7 @@ function seedAdminProofFixture() {
         "concurrent-action-race",
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
+        "concurrent-cohost-deadline-resolve-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
