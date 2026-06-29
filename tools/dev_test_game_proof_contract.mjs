@@ -41,6 +41,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-vote-race",
   "host-votecount-publication",
   "host-lifecycle-control",
+  "host-modkill-control",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1251,6 +1252,59 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.hostLifecycleControl?.playerCommandStateAfterRestore?.actorAlive ===
           true &&
         hardening.hostLifecycleControl?.playerCommandStateAfterRestore?.actorStatus ===
+          "alive",
+    }),
+    lane("host-modkill-control", "Host modkill control disables player commands", {
+      targetSlot: hardening.hostModkillControl?.targetSlot ?? null,
+      modkillState:
+        hardening.hostModkillControl?.modkill?.commandStatus?.state ?? null,
+      commandStatus:
+        hardening.hostModkillControl?.modkill?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.status ?? null,
+      apiModkillStatus:
+        hardening.hostModkillControl?.apiSlotAfterModkill?.status ?? null,
+      actorStatusAfterModkill:
+        hardening.hostModkillControl?.playerCommandStateAfterModkill?.actorStatus ??
+        null,
+      directPostError: hardening.hostModkillControl?.directPost?.error ?? null,
+      restoreState: hardening.hostModkillControl?.restoreAlive?.state ?? null,
+      apiRestoredStatus:
+        hardening.hostModkillControl?.apiSlotAfterRestore?.status ?? null,
+      actorStatusAfterRestore:
+        hardening.hostModkillControl?.playerCommandStateAfterRestore?.actorStatus ??
+        null,
+      passed:
+        hardening.hostModkillControl?.status === "passed" &&
+        hardening.hostModkillControl?.targetSlot === "slot-7" &&
+        hardening.hostModkillControl?.modkill?.commandStatus?.state === "ack" &&
+        hardening.hostModkillControl?.modkill?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.game === session?.game &&
+        hardening.hostModkillControl?.modkill?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.slot === "slot-7" &&
+        hardening.hostModkillControl?.modkill?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.status === "modkilled" &&
+        hardening.hostModkillControl?.hostReplacementAfterModkill?.lifecycleLabel ===
+          "Modkilled" &&
+        hardening.hostModkillControl?.apiSlotAfterModkill?.alive === false &&
+        hardening.hostModkillControl?.apiSlotAfterModkill?.status === "modkilled" &&
+        hardening.hostModkillControl?.playerCommandStateAfterModkill?.actorAlive ===
+          false &&
+        hardening.hostModkillControl?.playerCommandStateAfterModkill?.actorStatus ===
+          "modkilled" &&
+        hardening.hostModkillControl?.playerCommandStateAfterModkill?.actions
+          ?.length === 0 &&
+        hardening.hostModkillControl?.disabledControls?.vote === true &&
+        hardening.hostModkillControl?.disabledControls?.withdraw === true &&
+        hardening.hostModkillControl?.disabledControls?.post === true &&
+        hardening.hostModkillControl?.actionControlCount === 0 &&
+        hardening.hostModkillControl?.directPost?.state === "reject" &&
+        hardening.hostModkillControl?.directPost?.error === "SlotNotAlive" &&
+        hardening.hostModkillControl?.restoreAlive?.state === "ack" &&
+        hardening.hostModkillControl?.apiSlotAfterRestore?.alive === true &&
+        hardening.hostModkillControl?.apiSlotAfterRestore?.status === "alive" &&
+        hardening.hostModkillControl?.playerCommandStateAfterRestore?.actorAlive ===
+          true &&
+        hardening.hostModkillControl?.playerCommandStateAfterRestore?.actorStatus ===
           "alive",
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {

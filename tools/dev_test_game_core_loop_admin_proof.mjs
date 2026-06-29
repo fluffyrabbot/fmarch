@@ -25,6 +25,7 @@ const requiredChecks = [
   "private-channel",
   "host-votecount-publication",
   "host-lifecycle-control",
+  "host-modkill-control",
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-invalid-target-recovery",

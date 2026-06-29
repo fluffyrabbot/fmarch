@@ -356,11 +356,11 @@ control, sends `PublishVotecount` through `/commands`, renders the host command
 activity ACK, and verifies the projection-derived `Official votecount for D02`
 post appears in both the player browser thread and the API thread.
 
-The host lifecycle-control proof then clicks the hydrated `Mark dead` control
-for Slot 7, verifies `SetSlotStatus` through `/commands`, checks that the host
-and affected player role URLs render Slot 7 as dead with disabled player
-controls and `SlotNotAlive` recovery, and restores Slot 7 to alive before the
-replacement lanes continue.
+The host lifecycle-control proofs then click the hydrated `Mark dead` and
+`Modkill slot` controls for Slot 7, verify each `SetSlotStatus` through
+`/commands`, check that the host and affected player role URLs render the
+dead/modkilled lifecycle with disabled player controls and `SlotNotAlive`
+recovery, and restore Slot 7 to alive before the replacement lanes continue.
 
 The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
@@ -417,6 +417,7 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `host-votecount-publication`,
 `host-lifecycle-control`,
+`host-modkill-control`,
 `replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
 `replacement-console`, `stale-host-invite-recovery`,
@@ -466,10 +467,10 @@ verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
 lands, refreshes command state after a stale locked-phase vote reject, submits
 two concurrent D02 votes from separate role pages and verifies converged browser
-plus API votecount, marks Slot 7 dead from the hydrated host role URL, verifies
-the affected player role URL loses controls with `SlotNotAlive` recovery, and
-restores Slot 7 alive before replacement continues, keeps one action-player page
-frozen on N01 until its stale
+plus API votecount, marks Slot 7 dead and modkilled from the hydrated host role
+URL, verifies the affected player role URL loses controls with `SlotNotAlive`
+recovery after each host action, and restores Slot 7 alive before replacement
+continues, keeps one action-player page frozen on N01 until its stale
 `factional_kill` rejects with `Reject SlotNotAlive` copy that names actor death
 plus current action controls and refreshes out of stale action controls, keeps a
 second action-player page frozen on N01 until its
