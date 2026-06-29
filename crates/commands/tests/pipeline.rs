@@ -70141,6 +70141,52 @@ async fn concurrent_host_resolve_phase_serializes_to_one_ack(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_host_advance_phase_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    handle(&pool, &host, Command::ResolvePhase { game, seed: 72_001 })
+        .await
+        .expect("resolve D01 before racing advance");
+
+    let (first, second) = tokio::join!(
+        handle(&pool, &host, Command::AdvancePhase { game }),
+        handle(&pool, &host, Command::AdvancePhase { game }),
+    );
+
+    let results = [first, second];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let invalid_target_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::InvalidTarget)))
+        .count();
+    assert_eq!(ack_count, 1, "exactly one concurrent advance should ACK");
+    assert_eq!(
+        invalid_target_count, 1,
+        "the losing concurrent advance should revalidate after the winner advances"
+    );
+
+    let advance_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'PhaseAdvanced' \
+         AND payload->>'source_phase_id' = 'D01'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        advance_count, 1,
+        "concurrent advance must not append duplicate phase transitions"
+    );
+
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(phase.phase_id, "N01");
+    assert!(
+        !phase.locked,
+        "winning advance should leave the next phase open"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");

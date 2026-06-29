@@ -528,7 +528,10 @@ activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
 D02 and races two host role pages on `ResolvePhase` until exactly one ACKs and
 one renders stale `Reject PhaseLocked` recovery, verifies both browser
 projections plus the API converge to locked D02, restores that disposable D02
-open, keeps a full host page frozen on D02
+open, advances another disposable seeded game to locked D02 and races two host
+role pages on `AdvancePhase` until exactly one ACKs and one renders stale
+`Reject InvalidTarget` recovery, verifies both browser projections plus the API
+converge to open N02, keeps a full host page frozen on D02
 `ResolvePhase` until the live host resolves and locks D02, then renders a stale
 `Reject PhaseLocked` receipt with no ACK stream seqs, refreshes to locked D02
 controls, keeps a player page frozen on a legal D02 vote target until the host

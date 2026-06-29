@@ -3361,6 +3361,67 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterRestore: { phase_id: "D02", locked: false },
       },
+      concurrentHostAdvanceRace: {
+        status: "passed",
+        game: "advance-race-game-a",
+        actionId: "advance_phase",
+        setup: {
+          stalePhase: { id: "D02", locked: true },
+          phaseActions: ["unlock_thread", "advance_phase"],
+          deadlineActions: ["extend_deadline"],
+          closedStatus: { state: "closed" },
+        },
+        ackPageRole: "live",
+        rejectPageRole: "concurrent",
+        ack: {
+          state: "ack",
+          commandId: "55555555-5555-4555-8555-555555555555",
+          streamSeqs: [53],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: { AdvancePhase: { game: "advance-race-game-a" } },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          commandId: "66666666-6666-4666-8666-666666666666",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: { AdvancePhase: { game: "advance-race-game-a" } },
+              },
+            },
+          },
+        },
+        livePhaseAfterRace: { id: "N02", locked: false },
+        concurrentPhaseAfterRace: { id: "N02", locked: false },
+        livePhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        concurrentPhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        liveDeadlineActionsAfterRace: ["extend_deadline"],
+        concurrentDeadlineActionsAfterRace: ["extend_deadline"],
+        liveActivityStatusText: "Ack: stream seqs 53",
+        concurrentActivityStatusText:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        liveActivityRow: {
+          source: "status",
+          actionId: "advance_phase",
+          dispatchKind: "advance_phase",
+        },
+        concurrentActivityRow: {
+          source: "outcome",
+          actionId: "advance_phase",
+          dispatchKind: "advance_phase",
+        },
+        apiPhaseAfterRace: { phase_id: "N02", locked: false },
+      },
       staleHostResolve: {
         status: "passed",
         actionId: "resolve_phase",
@@ -3788,6 +3849,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Dead current vote: Slot 3 cleared"));
   assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
   assert(markdown.includes("Concurrent host resolve race: Reject PhaseLocked"));
+  assert(markdown.includes("Concurrent host advance race: Reject InvalidTarget"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
   assert(markdown.includes("Stale host lifecycle: Reject InvalidTarget"));
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
@@ -3870,6 +3932,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-action-conflict-message",
       "stale-host-control",
       "concurrent-host-resolve-race",
+      "concurrent-host-advance-race",
       "stale-host-resolve",
       "stale-host-advance",
       "stale-host-deadline",
@@ -3945,7 +4008,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 64);
+  assert.equal(opsArtifacts.proofRun.laneCount, 65);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4044,6 +4107,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "action-idempotent-retry",
       "concurrent-action-race",
       "concurrent-host-resolve-race",
+      "concurrent-host-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -4526,6 +4590,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict-message",
         "stale-host-control",
         "concurrent-host-resolve-race",
+        "concurrent-host-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
@@ -4621,6 +4686,7 @@ function seedAdminProofFixture() {
         "action-idempotent-retry",
         "concurrent-action-race",
         "concurrent-host-resolve-race",
+        "concurrent-host-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

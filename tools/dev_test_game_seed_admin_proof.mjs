@@ -27,6 +27,7 @@ const requiredScenarios = [
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-host-resolve-race",
+  "concurrent-host-advance-race",
   "stale-same-action-recovery",
   "host-replacement-console",
   "replacement-host-issued-invite",

@@ -326,6 +326,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D02 resolve_phase concurrently with distinct command ids, prove one ACK plus one PhaseLocked recovery, and restore the phase unlocked for follow-on controls.",
     }),
     scenario({
+      id: "concurrent-host-advance-race",
+      title: "Concurrent host advance race",
+      role: "host",
+      provenBy: ["concurrent-host-advance-race"].filter(hasLane),
+      note: "Two host role pages submit D02 advance_phase concurrently with distinct command ids, prove one ACK plus one InvalidTarget recovery, and converge to the next open phase.",
+    }),
+    scenario({
       id: "stale-same-action-recovery",
       title: "Stale same action recovery",
       role: "actionPlayer",
@@ -515,6 +522,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-action-conflict-message",
         "stale-host-control",
         "concurrent-host-resolve-race",
+        "concurrent-host-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
         "stale-host-deadline",
