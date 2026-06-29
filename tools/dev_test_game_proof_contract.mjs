@@ -53,6 +53,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-player-action-advance-race",
   "concurrent-cohost-deadline-resolve-race",
   "concurrent-replacement-private-post-race",
+  "concurrent-replacement-vote-race",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -2601,6 +2602,76 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
             ?.occupant_user_id === "player-rowan" &&
           hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status === 403,
+      },
+    ),
+    lane(
+      "concurrent-replacement-vote-race",
+      "Concurrent replacement and vote converge",
+      {
+        game: hardening.concurrentReplacementVoteRace?.game ?? null,
+        targetSlot: hardening.concurrentReplacementVoteRace?.targetSlot ?? null,
+        voteState: hardening.concurrentReplacementVoteRace?.vote?.state ?? null,
+        voteError: hardening.concurrentReplacementVoteRace?.vote?.error ?? null,
+        voteSeq: hardening.concurrentReplacementVoteRace?.voteSeq ?? null,
+        replacementSeq: hardening.concurrentReplacementVoteRace?.replacementSeq ?? null,
+        apiOccupant:
+          hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
+            ?.occupant_user_id ?? null,
+        targetCount: hardening.concurrentReplacementVoteRace?.targetVotecount?.count ?? null,
+        passed:
+          hardening.concurrentReplacementVoteRace?.status === "passed" &&
+          hardening.concurrentReplacementVoteRace?.targetSlot === "slot-2" &&
+          hardening.concurrentReplacementVoteRace?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.concurrentReplacementVoteRace?.playerEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.concurrentReplacementVoteRace?.setupHostReplacement
+            ?.occupantLabel === "player-mira" &&
+          hardening.concurrentReplacementVoteRace?.setupCommandState?.actorSlot ===
+            "slot-7" &&
+          hardening.concurrentReplacementVoteRace?.setupCommandState?.actorStatus ===
+            "alive" &&
+          hardening.concurrentReplacementVoteRace?.setupCommandState?.voteTargets?.some(
+            (target) => target.kind === "slot" && target.slotId === "slot-2",
+          ) === true &&
+          hardening.concurrentReplacementVoteRace?.replacement?.state === "ack" &&
+          hardening.concurrentReplacementVoteRace?.replacement?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
+            ?.body?.command?.ProcessReplacement?.game ===
+            hardening.concurrentReplacementVoteRace?.game &&
+          hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
+            ?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
+          hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
+            ?.body?.command?.ProcessReplacement?.outgoing_user === "player-mira" &&
+          hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
+            ?.body?.command?.ProcessReplacement?.incoming_user === "player-rowan" &&
+          hardening.concurrentReplacementVoteRace?.vote?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.actor_slot === "slot-7" &&
+          hardening.concurrentReplacementVoteRace?.vote?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.target?.Slot === "slot-2" &&
+          ((hardening.concurrentReplacementVoteRace?.vote?.state === "ack" &&
+            hardening.concurrentReplacementVoteRace?.vote?.serverEnvelope?.body
+              ?.kind === "Ack" &&
+            hardening.concurrentReplacementVoteRace?.voteSeq <
+              hardening.concurrentReplacementVoteRace?.replacementSeq &&
+            hardening.concurrentReplacementVoteRace?.targetVotecount?.count === 1) ||
+            (hardening.concurrentReplacementVoteRace?.vote?.state === "reject" &&
+              hardening.concurrentReplacementVoteRace?.vote?.error ===
+                "NotYourSlot" &&
+              hardening.concurrentReplacementVoteRace?.vote?.serverEnvelope?.body
+                ?.kind === "Reject" &&
+              hardening.concurrentReplacementVoteRace?.targetVotecount === null)) &&
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.status ===
+            403 &&
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
+            "NotYourSlot" &&
+          hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
+            ?.occupantLabel === "player-rowan" &&
+          hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
+            ?.occupant_user_id === "player-rowan",
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

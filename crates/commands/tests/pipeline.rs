@@ -2975,6 +2975,125 @@ async fn concurrent_replacement_waits_for_in_flight_outgoing_post(pool: PgPool) 
     drop_post_insert_blocker(&pool).await;
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_replacement_waits_for_in_flight_outgoing_vote(pool: PgPool) {
+    let host_id = "host_h";
+    let slot = "slot_7";
+    let outgoing = "user_a";
+    let incoming = "user_b";
+    let target = "slot_target";
+    let game = setup_game(&pool, host_id, slot, outgoing).await;
+    add_vanilla_slot(&pool, game, host_id, target).await;
+
+    let lock_key = 41_007_i64;
+    install_vote_insert_blocker(&pool, game, lock_key).await;
+    let mut blocker = pool.acquire().await.unwrap();
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let vote_pool = pool.clone();
+    let vote_task = tokio::spawn(async move {
+        handle(
+            &vote_pool,
+            &user(outgoing),
+            Command::SubmitVote {
+                game,
+                actor_slot: slot.into(),
+                target: VoteTarget::Slot(target.into()),
+            },
+        )
+        .await
+    });
+    wait_for_advisory_wait_count(&pool, 1).await;
+
+    let replacement_pool = pool.clone();
+    let replacement_task = tokio::spawn(async move {
+        handle(
+            &replacement_pool,
+            &user(host_id),
+            Command::ProcessReplacement {
+                game,
+                slot: slot.into(),
+                outgoing_user: outgoing.into(),
+                incoming_user: incoming.into(),
+            },
+        )
+        .await
+    });
+    let early_replacement = tokio::time::timeout(std::time::Duration::from_millis(250), async {
+        loop {
+            if replacement_task.is_finished() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+    })
+    .await;
+    assert!(
+        early_replacement.is_err(),
+        "replacement must wait while the outgoing vote is in flight"
+    );
+
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_key)
+        .execute(&mut *blocker)
+        .await
+        .unwrap();
+
+    let vote_ack = vote_task
+        .await
+        .unwrap()
+        .expect("vote that already passed outgoing authority check wins first");
+    let replacement_ack = replacement_task
+        .await
+        .unwrap()
+        .expect("replacement proceeds after the in-flight vote commits");
+    assert_eq!(vote_ack.stream_seqs.len(), 1);
+    assert_eq!(replacement_ack.stream_seqs.len(), 1);
+    assert!(
+        vote_ack.stream_seqs[0] < replacement_ack.stream_seqs[0],
+        "replacement must not commit between outgoing authority check and vote append"
+    );
+    assert_eq!(
+        tally_for(&pool, game, "D01", target).await,
+        1,
+        "the winning vote remains attached to the stable slot"
+    );
+
+    let vote_after_replacement = handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitVote {
+            game,
+            actor_slot: slot.into(),
+            target: VoteTarget::NoLynch,
+        },
+    )
+    .await
+    .expect_err("outgoing user loses slot authority after replacement");
+    assert_eq!(vote_after_replacement, Reject::NotYourSlot);
+
+    let events = eventstore::load_stream(&pool, game).await.unwrap();
+    let vote_event = events
+        .iter()
+        .find(|event| event.kind == "VoteSubmitted")
+        .expect("winning vote event exists");
+    let replacement_event = events
+        .iter()
+        .find(|event| event.kind == "ReplacementCompleted")
+        .expect("replacement event exists");
+    assert_eq!(vote_event.payload["actor"], slot);
+    assert_eq!(vote_event.payload["target"], target);
+    assert!(
+        vote_event.stream_seq < replacement_event.stream_seq,
+        "vote remains a legitimate Slot 7 write before replacement"
+    );
+    drop_vote_insert_blocker(&pool).await;
+}
+
 // ───────────────────────── capability enforcement ─────────────────────────
 
 #[sqlx::test(migrations = "../projections/migrations")]
@@ -72016,6 +72135,17 @@ async fn drop_post_insert_blocker(pool: &PgPool) {
         .await
         .unwrap();
     sqlx::query("DROP FUNCTION IF EXISTS test_block_post_insert()")
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+async fn drop_vote_insert_blocker(pool: &PgPool) {
+    sqlx::query("DROP TRIGGER IF EXISTS test_block_vote_insert ON events")
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query("DROP FUNCTION IF EXISTS test_block_vote_insert()")
         .execute(pool)
         .await
         .unwrap();

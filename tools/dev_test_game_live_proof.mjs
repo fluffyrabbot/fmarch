@@ -301,6 +301,8 @@ const concurrentVoteRace = session.verification.multiplayerHardening.concurrentV
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
 const replacementPrivatePostRace =
   session.verification.multiplayerHardening.concurrentReplacementPrivatePostRace;
+const replacementVoteRace =
+  session.verification.multiplayerHardening.concurrentReplacementVoteRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1555,6 +1557,58 @@ assert.equal(
 assert.equal(replacementPrivatePostRace.hostReplacementAfterRace.occupantLabel, "player-rowan");
 assert.equal(replacementPrivatePostRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
 assert.equal(replacementPrivatePostRace.staleRoute.status, 403);
+assert.equal(replacementVoteRace.status, "passed");
+assert.equal(replacementVoteRace.targetSlot, "slot-2");
+assert.equal(
+  replacementVoteRace.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementVoteRace.playerEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(replacementVoteRace.setupHostReplacement.occupantLabel, "player-mira");
+assert.equal(replacementVoteRace.setupCommandState.actorSlot, "slot-7");
+assert.equal(replacementVoteRace.setupCommandState.actorStatus, "alive");
+assert.equal(
+  replacementVoteRace.setupCommandState.voteTargets.some(
+    (target) => target.kind === "slot" && target.slotId === "slot-2",
+  ),
+  true,
+);
+assert.equal(replacementVoteRace.replacement.state, "ack");
+assert.equal(
+  replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .slot,
+  "slot-7",
+);
+assert.equal(
+  replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementVoteRace.vote.requestEnvelope.body.body.command.SubmitVote.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  replacementVoteRace.vote.requestEnvelope.body.body.command.SubmitVote.target.Slot,
+  "slot-2",
+);
+if (replacementVoteRace.vote.state === "ack") {
+  assert.equal(replacementVoteRace.vote.serverEnvelope.body.kind, "Ack");
+  assert.equal(replacementVoteRace.voteSeq < replacementVoteRace.replacementSeq, true);
+  assert.equal(replacementVoteRace.targetVotecount.count, 1);
+} else {
+  assert.equal(replacementVoteRace.vote.state, "reject");
+  assert.equal(replacementVoteRace.vote.error, "NotYourSlot");
+  assert.equal(replacementVoteRace.vote.serverEnvelope.body.kind, "Reject");
+  assert.equal(replacementVoteRace.targetVotecount, null);
+}
+assert.equal(replacementVoteRace.commandStateAfterRace.status, 403);
+assert.equal(replacementVoteRace.commandStateAfterRace.error, "NotYourSlot");
+assert.equal(replacementVoteRace.hostReplacementAfterRace.occupantLabel, "player-rowan");
+assert.equal(replacementVoteRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",
