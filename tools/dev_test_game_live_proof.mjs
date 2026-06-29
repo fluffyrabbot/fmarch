@@ -305,6 +305,8 @@ const replacementVoteRace =
   session.verification.multiplayerHardening.concurrentReplacementVoteRace;
 const replacementActionRace =
   session.verification.multiplayerHardening.concurrentReplacementActionRace;
+const replacementIncomingAction =
+  session.verification.multiplayerHardening.replacementIncomingAction;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -1697,6 +1699,82 @@ assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_slot, "slo
 assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_status, "alive");
 assert.equal(replacementActionRace.currentRoleCommandState.actorSlot, "slot_4");
 assert.equal(replacementActionRace.currentRoleCommandState.actorStatus, "alive");
+assert.equal(replacementIncomingAction.status, "passed");
+assert.equal(replacementIncomingAction.targetSlot, "slot-2");
+assert.equal(
+  replacementIncomingAction.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementIncomingAction.replacementEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(
+  replacementIncomingAction.targetEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(replacementIncomingAction.setupHostPhase.id, "N01");
+assert.equal(replacementIncomingAction.setupHostPhase.locked, false);
+assert.equal(replacementIncomingAction.setupSlot.occupant_user_id, "player-goon-a");
+assert.equal(replacementIncomingAction.replacement.state, "ack");
+assert.equal(
+  replacementIncomingAction.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .slot,
+  "slot_4",
+);
+assert.equal(
+  replacementIncomingAction.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementIncomingAction.outgoingCommandStateAfterReplacement.status,
+  403,
+);
+assert.equal(
+  replacementIncomingAction.outgoingCommandStateAfterReplacement.error,
+  "NotYourSlot",
+);
+assert.equal(replacementIncomingAction.currentCommandStateBeforeAction.actorSlot, "slot_4");
+assert.equal(
+  replacementIncomingAction.currentCommandStateBeforeAction.actions.some(
+    (candidate) => candidate.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(replacementIncomingAction.action.state, "ack");
+assert.equal(
+  replacementIncomingAction.action.requestEnvelope.body.body.principal_user_id,
+  "player-rowan",
+);
+assert.equal(
+  replacementIncomingAction.action.requestEnvelope.body.body.command.SubmitAction
+    .actor_slot,
+  "slot_4",
+);
+assert.equal(
+  replacementIncomingAction.action.requestEnvelope.body.body.command.SubmitAction
+    .template_id,
+  "factional_kill",
+);
+assert.equal(
+  replacementIncomingAction.action.requestEnvelope.body.body.command.SubmitAction.targets[0],
+  "slot-2",
+);
+assert.equal(replacementIncomingAction.currentCommandStateAfterAction.actions.length, 0);
+assert.equal(replacementIncomingAction.apiCommandStateAfterAction.actions.length, 0);
+assert.equal(replacementIncomingAction.resolveNight.commandStatus.state, "ack");
+assert.equal(replacementIncomingAction.hostPhaseAfterResolve.id, "N01");
+assert.equal(replacementIncomingAction.hostPhaseAfterResolve.locked, true);
+assert.equal(replacementIncomingAction.targetSlotAfterResolve.slot_id, "slot-2");
+assert.equal(replacementIncomingAction.targetSlotAfterResolve.alive, false);
+assert.equal(replacementIncomingAction.targetSlotAfterResolve.status, "dead");
+assert.equal(replacementIncomingAction.targetCommandState.actorSlot, "slot-2");
+assert.equal(replacementIncomingAction.targetCommandState.actorAlive, false);
+assert.equal(replacementIncomingAction.targetNotice.audience_slot, "slot-2");
+assert.equal(replacementIncomingAction.targetNotice.effect, "player_killed");
+assert.equal(replacementIncomingAction.targetNotice.status, "factional_kill");
+assert.equal(replacementIncomingAction.replacementPrivateIsolation.targetKillVisible, false);
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",

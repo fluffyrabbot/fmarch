@@ -3267,6 +3267,158 @@ async fn concurrent_replacement_and_outgoing_action_converges(pool: PgPool) {
     }
 }
 
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn incoming_replacement_can_submit_and_resolve_action(pool: PgPool) {
+    let host_id = "host_h";
+    let slot = "slot_4";
+    let outgoing = "action-goon";
+    let incoming = "replacement-goon";
+    let target = "slot-2";
+    let host = user(host_id);
+    let game = Uuid::new_v4();
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot_id, occupant, role) in [
+        (slot, outgoing, "mafia_goon"),
+        (target, "town-target", "vanilla_townie"),
+        ("slot-3", "town-backup", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot_id.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot_id.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot_id.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle(
+        &pool,
+        &host,
+        Command::ProcessReplacement {
+            game,
+            slot: slot.into(),
+            outgoing_user: outgoing.into(),
+            incoming_user: incoming.into(),
+        },
+    )
+    .await
+    .expect("host replaces the action-capable slot");
+
+    let outgoing_err = handle(
+        &pool,
+        &user(outgoing),
+        Command::SubmitAction {
+            game,
+            action_id: "outgoing_after_replacement".into(),
+            actor_slot: slot.into(),
+            template_id: "factional_kill".into(),
+            targets: vec![target.into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect_err("outgoing user cannot keep action authority after replacement");
+    assert_eq!(outgoing_err, Reject::NotYourSlot);
+
+    let action_ack = handle(
+        &pool,
+        &user(incoming),
+        Command::SubmitAction {
+            game,
+            action_id: "incoming_replacement_kill".into(),
+            actor_slot: slot.into(),
+            template_id: "factional_kill".into(),
+            targets: vec![target.into()],
+            grant_id: None,
+        },
+    )
+    .await
+    .expect("incoming replacement can submit the slot action");
+    assert_eq!(action_ack.stream_seqs.len(), 1);
+
+    handle(&pool, &host, Command::ResolvePhase { game, seed: 72_502 })
+        .await
+        .expect("host resolves incoming replacement action");
+
+    let action_event = eventstore::load_stream(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|event| {
+            event.kind == "ActionSubmitted"
+                && event.payload["action_id"] == "incoming_replacement_kill"
+        })
+        .expect("incoming replacement action event exists");
+    assert_eq!(action_event.payload["actor"], slot);
+    assert_eq!(action_event.payload["template_id"], "factional_kill");
+    assert_eq!(action_event.payload["targets"], serde_json::json!([target]));
+
+    let target_state = slot_state(&pool, game)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|row| row.slot_id == target)
+        .expect("resolved target slot");
+    assert!(
+        !target_state.alive && target_state.status == "dead",
+        "incoming replacement action should kill the selected target"
+    );
+
+    let notices = player_notifications(&pool, game).await.unwrap();
+    assert!(
+        notices.iter().any(|notice| {
+            notice.audience_slot == target
+                && notice.effect == "player_killed"
+                && notice.status == "factional_kill"
+        }),
+        "target receives the private kill receipt from the replacement action"
+    );
+}
+
 // ───────────────────────── capability enforcement ─────────────────────────
 
 #[sqlx::test(migrations = "../projections/migrations")]

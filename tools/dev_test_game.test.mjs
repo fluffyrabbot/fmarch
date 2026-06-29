@@ -3114,6 +3114,88 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         currentRoleButtons: [],
       },
+      replacementIncomingAction: {
+        status: "passed",
+        game: "replacement-incoming-action-game-a",
+        targetSlot: "slot-2",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        targetEntry: { capabilityKinds: ["SlotOccupant"] },
+        setupHostPhase: { id: "N01", locked: false },
+        setupSlot: { occupant_user_id: "player-goon-a" },
+        replacement: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-incoming-action-game-a",
+                    slot: "slot_4",
+                    outgoing_user: "player-goon-a",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        outgoingCommandStateAfterReplacement: {
+          status: 403,
+          error: "NotYourSlot",
+        },
+        currentCommandStateBeforeAction: {
+          actorSlot: "slot_4",
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [{ templateId: "factional_kill" }],
+        },
+        currentButtonsBeforeAction: [
+          { action: "submit_action:factional_kill", disabled: false },
+        ],
+        action: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitAction: {
+                    game: "replacement-incoming-action-game-a",
+                    action_id: "incoming_replacement_factional_kill",
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        currentCommandStateAfterAction: { actions: [] },
+        currentButtonsAfterAction: [],
+        apiCommandStateAfterAction: { actions: [] },
+        resolveNight: { commandStatus: { state: "ack" } },
+        hostPhaseAfterResolve: { id: "N01", locked: true },
+        targetSlotAfterResolve: { slot_id: "slot-2", alive: false, status: "dead" },
+        targetCommandState: {
+          actorSlot: "slot-2",
+          actorAlive: false,
+          actorStatus: "dead",
+        },
+        targetNotice: {
+          audience_slot: "slot-2",
+          effect: "player_killed",
+          status: "factional_kill",
+        },
+        replacementPrivateIsolation: {
+          targetKillVisible: false,
+          notificationCount: 0,
+        },
+        outcomeSummary: "Rowan submitted factional_kill as Slot 4 and killed slot-2",
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4849,6 +4931,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
+      "replacement-incoming-action",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4949,7 +5032,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 76);
+  assert.equal(opsArtifacts.proofRun.laneCount, 77);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5053,6 +5136,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
+      "replacement-incoming-action",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5569,6 +5653,7 @@ function hardeningAdminProofFixture() {
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
+        "replacement-incoming-action",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5691,6 +5776,7 @@ function seedAdminProofFixture() {
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
+        "replacement-incoming-action",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

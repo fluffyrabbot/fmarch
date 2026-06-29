@@ -775,6 +775,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent replacement action race: ${card.verification.multiplayerHardening.concurrentReplacementActionRace.outcomeSummary}`,
         "",
+        `Incoming replacement action: ${card.verification.multiplayerHardening.replacementIncomingAction.outcomeSummary}`,
+        "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
         "",
         `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
@@ -4046,6 +4048,13 @@ async function verifySeededMultiplayerHardening({
       frontendBaseUrl,
       normalizeCommandResponse,
     });
+  const replacementIncomingAction =
+    await verifyIncomingReplacementActionSubmission({
+      browser: playerPage.context().browser(),
+      apiBaseUrl,
+      frontendBaseUrl,
+      normalizeCommandResponse,
+    });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -4273,6 +4282,7 @@ async function verifySeededMultiplayerHardening({
     concurrentReplacementPrivatePostRace,
     concurrentReplacementVoteRace,
     concurrentReplacementActionRace,
+    replacementIncomingAction,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -14155,6 +14165,335 @@ async function seedReplacementActionRaceGame({ raceGame }) {
   }
   return {
     game: raceGame,
+    commands,
+  };
+}
+
+async function verifyIncomingReplacementActionSubmission({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("incoming replacement action proof requires a Playwright browser");
+  }
+  const actionGame = crypto.randomUUID();
+  const seed = await seedIncomingReplacementActionGame({ actionGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-incoming-replacement-action-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${actionGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: actionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  let replacementEntry;
+  let targetEntry;
+  try {
+    await hostEntry.page.goto(`${frontendBaseUrl}/g/${actionGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false });
+    const setupHostPhase = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const setupSlot = (
+      await fetchHostConsoleState({ apiBaseUrl, game: actionGame, slot: "slot_4" })
+    ).slots?.find?.((slot) => slot.slot_id === "slot_4");
+    const replacementCommandId = crypto.randomUUID();
+    const replacementRaw = await sendBrowserCommand(hostEntry.page, {
+      principalUserId: "host_h",
+      commandId: replacementCommandId,
+      command: {
+        ProcessReplacement: {
+          game: actionGame,
+          slot: "slot_4",
+          outgoing_user: "player-goon-a",
+          incoming_user: "player-rowan",
+        },
+      },
+    });
+    const replacement = normalizeCommandResponse({
+      commandId: replacementCommandId,
+      requestEnvelope: replacementRaw.requestEnvelope,
+      response: { status: replacementRaw.httpStatus },
+      serverEnvelope: replacementRaw.serverEnvelope,
+    });
+    const outgoingCommandStateAfterReplacement = await fetchJsonStatus(
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    );
+    const replacementSession = await createSessionGrantCredential({
+      token: `${tokenPrefix}-incoming-replacement-action-player-${crypto.randomUUID()}`,
+      principalUserId: "player-rowan",
+      returnTo: `/g/${actionGame}`,
+      expectedCapabilityKind: "SlotOccupant",
+      issuedBy: {
+        principalUserId: "root_admin",
+        capabilityKind: "GlobalAdmin",
+        surface: "/auth/session-grants",
+      },
+    });
+    replacementEntry = await openVerifiedRoleEntry({
+      browser,
+      session: replacementSession,
+      game: actionGame,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+    await gotoPlayerBoard(replacementEntry.page, actionGame);
+    await replacementEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+        window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.actions?.some(
+          (action) => action.templateId === "factional_kill",
+        ),
+    );
+    const currentCommandStateBeforeAction = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const currentButtonsBeforeAction = await playerCommandButtons(replacementEntry.page);
+    const actionCommandId = crypto.randomUUID();
+    const targetSlot = "slot-2";
+    const actionRaw = await sendBrowserCommand(replacementEntry.page, {
+      principalUserId: "player-rowan",
+      commandId: actionCommandId,
+      command: {
+        SubmitAction: {
+          game: actionGame,
+          action_id: "incoming_replacement_factional_kill",
+          actor_slot: "slot_4",
+          template_id: "factional_kill",
+          targets: [targetSlot],
+        },
+      },
+    });
+    const action = normalizeCommandResponse({
+      commandId: actionCommandId,
+      requestEnvelope: actionRaw.requestEnvelope,
+      response: { status: actionRaw.httpStatus },
+      serverEnvelope: actionRaw.serverEnvelope,
+    });
+    await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    await replacementEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+    );
+    const currentCommandStateAfterAction = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const currentButtonsAfterAction = await playerCommandButtons(replacementEntry.page);
+    const apiCommandStateAfterAction = await fetchJson(
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=player-rowan&slot_id=slot_4`,
+    );
+
+    const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    const targetSlotAfterResolve = await fetchResolvedSlotState({
+      apiBaseUrl,
+      game: actionGame,
+      slot: targetSlot,
+    });
+    const hostPhaseAfterResolve = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const targetSession = await createSessionGrantCredential({
+      token: `${tokenPrefix}-incoming-replacement-action-target-${crypto.randomUUID()}`,
+      principalUserId: "player-target",
+      returnTo: `/g/${actionGame}`,
+      expectedCapabilityKind: "SlotOccupant",
+      issuedBy: {
+        principalUserId: "root_admin",
+        capabilityKind: "GlobalAdmin",
+        surface: "/auth/session-grants",
+      },
+    });
+    targetEntry = await openVerifiedRoleEntry({
+      browser,
+      session: targetSession,
+      game: actionGame,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
+    await gotoPlayerBoard(targetEntry.page, actionGame);
+    await targetEntry.page.waitForFunction(
+      (expectedSlot) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedSlot &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.notifications?.some(
+          (notice) =>
+            notice.audience_slot === expectedSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "factional_kill",
+        ),
+      targetSlot,
+    );
+    const targetCommandState = await targetEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const targetNotice = await targetEntry.page.evaluate(
+      (expectedSlot) =>
+        window.__fmarchPlayerProjection?.notifications?.find(
+          (notice) =>
+            notice.audience_slot === expectedSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "factional_kill",
+        ) ?? null,
+      targetSlot,
+    );
+    await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+    const replacementNotificationsAfterResolve = await replacementEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.notifications ?? [],
+    );
+    const replacementPrivateIsolation = {
+      targetKillVisible: replacementNotificationsAfterResolve.some(
+        (notice) =>
+          notice.audience_slot === targetSlot ||
+          notice.effect === "player_killed" ||
+          notice.status === "factional_kill",
+      ),
+      notificationCount: replacementNotificationsAfterResolve.length,
+    };
+    if (
+      setupHostPhase?.id !== "N01" ||
+      setupHostPhase?.locked !== false ||
+      setupSlot?.occupant_user_id !== "player-goon-a" ||
+      replacement?.state !== "ack" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
+        "slot_4" ||
+      replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
+        ?.incoming_user !== "player-rowan" ||
+      outgoingCommandStateAfterReplacement.status !== 403 ||
+      outgoingCommandStateAfterReplacement.body?.error !== "NotYourSlot" ||
+      currentCommandStateBeforeAction?.actorSlot !== "slot_4" ||
+      currentCommandStateBeforeAction?.actorStatus !== "alive" ||
+      currentCommandStateBeforeAction?.actions?.some(
+        (candidate) => candidate.templateId === "factional_kill",
+      ) !== true ||
+      currentButtonsBeforeAction.some(
+        (button) =>
+          button.action === "submit_action:factional_kill" && button.disabled === false,
+      ) !== true ||
+      action?.state !== "ack" ||
+      action?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+        "slot_4" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
+        "factional_kill" ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
+        targetSlot ||
+      currentCommandStateAfterAction?.actions?.length !== 0 ||
+      currentButtonsAfterAction.some(
+        (button) => button.action === "submit_action:factional_kill",
+      ) ||
+      apiCommandStateAfterAction?.actions?.length !== 0 ||
+      resolveNight?.commandStatus?.state !== "ack" ||
+      hostPhaseAfterResolve?.id !== "N01" ||
+      hostPhaseAfterResolve?.locked !== true ||
+      targetSlotAfterResolve?.alive !== false ||
+      targetSlotAfterResolve?.status !== "dead" ||
+      targetCommandState?.actorSlot !== targetSlot ||
+      targetCommandState?.actorAlive !== false ||
+      targetCommandState?.actorStatus !== "dead" ||
+      targetNotice === null ||
+      replacementPrivateIsolation.targetKillVisible !== false
+    ) {
+      throw new Error(
+        `incoming replacement action proof drifted: ${JSON.stringify({
+          actionGame,
+          setupHostPhase,
+          setupSlot,
+          replacement,
+          outgoingCommandStateAfterReplacement,
+          currentCommandStateBeforeAction,
+          currentButtonsBeforeAction,
+          action,
+          currentCommandStateAfterAction,
+          currentButtonsAfterAction,
+          apiCommandStateAfterAction,
+          resolveNight,
+          hostPhaseAfterResolve,
+          targetSlotAfterResolve,
+          targetCommandState,
+          targetNotice,
+          replacementPrivateIsolation,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: actionGame,
+      seed,
+      targetSlot,
+      hostEntry: hostEntry.verification,
+      replacementEntry: replacementEntry.verification,
+      targetEntry: targetEntry.verification,
+      setupHostPhase,
+      setupSlot,
+      replacement,
+      outgoingCommandStateAfterReplacement: {
+        status: outgoingCommandStateAfterReplacement.status,
+        error: outgoingCommandStateAfterReplacement.body?.error,
+      },
+      currentCommandStateBeforeAction,
+      currentButtonsBeforeAction,
+      action,
+      currentCommandStateAfterAction,
+      currentButtonsAfterAction,
+      apiCommandStateAfterAction,
+      resolveNight,
+      hostPhaseAfterResolve,
+      targetSlotAfterResolve,
+      targetCommandState,
+      targetNotice,
+      replacementPrivateIsolation,
+      outcomeSummary: `Rowan submitted factional_kill as Slot 4 and killed ${targetSlot}`,
+      proof:
+        "A disposable host role URL processed Slot 4 replacement, Rowan's current replacement role URL submitted factional_kill as Slot 4, the host role URL resolved N01, and the target role URL received the private player_killed factional_kill receipt while Rowan did not.",
+    };
+  } finally {
+    await targetEntry?.context?.close().catch(() => {});
+    await replacementEntry?.context?.close().catch(() => {});
+    await hostEntry.context.close().catch(() => {});
+  }
+}
+
+async function seedIncomingReplacementActionGame({ actionGame }) {
+  const commands = [];
+  const plan = [
+    ...seedCommandPlanForGame(actionGame),
+    ["host_h", { ResolvePhase: { game: actionGame, seed: 72_502 } }],
+    ["host_h", { AdvancePhase: { game: actionGame } }],
+  ];
+  for (const [principalUserId, command] of plan) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `incoming replacement action seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game: actionGame,
     commands,
   };
 }
