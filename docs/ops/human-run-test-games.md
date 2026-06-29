@@ -194,9 +194,9 @@ release or production readiness, is:
 npm run test:dev-test-game-spine-manifest
 ```
 
-The generated next-action receipt, which reads the spine manifest and emits one
-local recovery or freshness command without claiming release or production
-readiness, is:
+The generated next-action receipt, which reads the spine manifest and emits the
+highest-priority stale or missing development-spine recovery/freshness command
+without claiming release or production readiness, is:
 
 ```sh
 npm run test:dev-test-game-next-action

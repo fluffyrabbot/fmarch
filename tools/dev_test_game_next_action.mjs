@@ -51,7 +51,7 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest. It chooses one local recovery or freshness command from current artifact freshness status; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest. It chooses the highest-priority local recovery or freshness command from current development-spine artifact freshness status; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -115,10 +115,72 @@ export async function writeDevTestGameNextAction({
 }
 
 function firstArtifactNeedingRefresh(manifest) {
-  return (manifest.artifactFreshness?.artifacts ?? []).find(
+  const artifacts = (manifest.artifactFreshness?.artifacts ?? []).filter(
     (artifact) => artifact.status !== "fresh",
   );
+  return artifacts
+    .map((artifact, index) => ({
+      artifact,
+      index,
+      priority: developmentSpineArtifactPriority(artifact),
+      statusPriority: artifact.status === "missing" ? 0 : 1,
+    }))
+    .sort(
+      (left, right) =>
+        left.priority - right.priority ||
+        left.statusPriority - right.statusPriority ||
+        artifactAgeSeconds(right.artifact) - artifactAgeSeconds(left.artifact) ||
+        left.index - right.index,
+    )[0]?.artifact;
 }
+
+function artifactAgeSeconds(artifact) {
+  return typeof artifact.ageSeconds === "number" ? artifact.ageSeconds : 0;
+}
+
+function developmentSpineArtifactPriority(artifact) {
+  return (
+    devSpineArtifactPriorities.get(artifact.id) ??
+    devSpineArtifactPriorities.get(artifact.path) ??
+    (terminalArtifactIds.has(artifact.id) || terminalArtifactPaths.has(artifact.path)
+      ? terminalFallbackPriority
+      : unknownSpineFallbackPriority)
+  );
+}
+
+const devSpineArtifactPriorities = new Map(
+  [
+    ["proof-run", "target/dev-test-game/proof-run.json"],
+    ["session", "target/dev-test-game/session.json"],
+    ["core-loop", "target/dev-test-game/core-loop-admin-proof.json"],
+    ["hardening", "target/dev-test-game/hardening-admin-proof.json"],
+    ["identity-adapter", "target/auth-invite-role-proof/invite-role-proof.json"],
+    ["identity", "target/dev-test-game/identity-admin-proof.json"],
+    ["backup-restore", "target/live-stack-backup-restore-drill/local-backup-restore-proof.json"],
+    ["backup", "target/dev-test-game/backup-admin-proof.json"],
+    ["ops-artifacts", "target/dev-test-game/ops-artifacts.json"],
+    ["ops", "target/dev-test-game/ops-admin-proof.json"],
+    ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
+    ["seed", "target/dev-test-game/seed-admin-proof.json"],
+    ["release-readiness", "target/dev-test-game/release-readiness-checklist.json"],
+    ["release", "target/dev-test-game/release-admin-proof.json"],
+    ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
+    ["admin-spine-admin", "target/dev-test-game/admin-spine-admin-proof.json"],
+    ["spine-manifest", "target/dev-test-game/spine-manifest.json"],
+    ["spine-manifest-admin", "target/dev-test-game/spine-manifest-admin-proof.json"],
+  ].flatMap(([id, artifactPath], index) => [
+    [id, index],
+    [artifactPath, index],
+  ]),
+);
+
+const unknownSpineFallbackPriority = 1_000;
+const terminalFallbackPriority = 10_000;
+const terminalArtifactIds = new Set(["next-action", "next-action-admin-proof"]);
+const terminalArtifactPaths = new Set([
+  devTestGameNextActionPath,
+  "target/dev-test-game/next-action-admin-proof.json",
+]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const evidence = await writeDevTestGameNextAction();

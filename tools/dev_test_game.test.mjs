@@ -454,6 +454,68 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
 });
 
+test("dev test-game next-action prioritizes development-spine recovery over manifest order", () => {
+  const staleManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 3,
+        freshCount: 0,
+        staleCount: 1,
+        missingCount: 2,
+      },
+      artifacts: [
+        {
+          id: "release",
+          label: "Release admin proof",
+          path: "target/dev-test-game/release-admin-proof.json",
+          status: "missing",
+        },
+        {
+          id: "next-action",
+          label: "Next action receipt",
+          path: "target/dev-test-game/next-action.json",
+          status: "missing",
+        },
+        {
+          id: "proof-run",
+          label: "Live proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 90000,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+
+  const staleAction = buildDevTestGameNextAction(staleManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+
+  assertDevTestGameNextAction(staleAction);
+  assert.deepEqual(staleAction.nextAction, {
+    command:
+      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    reason: "artifact-not-fresh",
+    status: "blocked",
+    artifact: {
+      id: "proof-run",
+      label: "Live proof run",
+      path: "target/dev-test-game/proof-run.json",
+      status: "stale",
+      refreshSource: "manifest-default",
+    },
+  });
+});
+
 test("named game selection is idempotent by default with explicit reset and reuse", () => {
   const registry = {
     local: { game: "11111111-1111-4111-8111-111111111111" },
