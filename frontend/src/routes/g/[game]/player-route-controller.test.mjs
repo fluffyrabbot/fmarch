@@ -29,6 +29,7 @@ test("player route controller builds projection store boundaries from route data
   assert.deepEqual(buildPlayerProjectionInitialSnapshot(data), {
     thread: data.thread,
     votecount: data.votecount,
+    dayVoteOutcomes: data.dayVoteOutcomes,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
     commandState: data.commandState,
@@ -36,6 +37,7 @@ test("player route controller builds projection store boundaries from route data
   assert.deepEqual(Object.keys(buildPlayerProjectionColdLoads(data)), [
     "thread",
     "votecount",
+    "dayVoteOutcomes",
     "notifications",
     "investigationResults",
     "commandState",
@@ -43,6 +45,7 @@ test("player route controller builds projection store boundaries from route data
   assert.deepEqual(playerResyncKeys(data), [
     "thread",
     "votecount",
+    "dayVoteOutcomes",
     "notifications",
     "investigationResults",
     "commandState",
@@ -59,8 +62,13 @@ test("player route controller builds projection store boundaries from route data
   assert.deepEqual(Object.keys(buildPlayerProjectionColdLoads(anonymousData)), [
     "thread",
     "votecount",
+    "dayVoteOutcomes",
   ]);
-  assert.deepEqual(playerResyncKeys(anonymousData), ["thread", "votecount"]);
+  assert.deepEqual(playerResyncKeys(anonymousData), [
+    "thread",
+    "votecount",
+    "dayVoteOutcomes",
+  ]);
   assert.deepEqual(
     playerRefreshKeysForLiveDelta(data, {
       kind: "delta",
@@ -69,11 +77,18 @@ test("player route controller builds projection store boundaries from route data
     ["commandState"],
   );
   assert.deepEqual(
+    playerRefreshKeysForLiveDelta(data, {
+      kind: "delta",
+      delta: { kind: "DayVoteOutcomeApplied" },
+    }),
+    ["dayVoteOutcomes", "commandState"],
+  );
+  assert.deepEqual(
     playerRefreshKeysForLiveDelta(anonymousData, {
       kind: "delta",
-      delta: { kind: "ThreadPostsChanged" },
+      delta: { kind: "DayVoteOutcomeApplied" },
     }),
-    [],
+    ["dayVoteOutcomes"],
   );
 });
 
@@ -628,6 +643,7 @@ function fixtureData(overrides = {}) {
     threadPager: { pageSize: 50, channel: "main" },
     thread: { nextBeforeSeq: 41, posts: [] },
     votecount: [],
+    dayVoteOutcomes: [],
     notifications: [],
     investigationResults: [],
     commandState: {
@@ -637,6 +653,7 @@ function fixtureData(overrides = {}) {
     coldLoad: {
       threadEndpoint: "/games/midsummer/thread?limit=50",
       votecountEndpoint: "/games/midsummer/votecount",
+      dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
       notificationsEndpoint:
         "/games/midsummer/notifications?principal_user_id=player_mira",
       investigationResultsEndpoint:

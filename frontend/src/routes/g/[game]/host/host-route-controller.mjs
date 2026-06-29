@@ -7,6 +7,7 @@ import {
 } from "../../../../lib/app/confirmation-command-trace-model.mjs";
 import {
   normalizeHostPrompts,
+  normalizeDayVoteOutcomes,
   normalizeVotecount,
 } from "../../../../lib/app/cold-load.mjs";
 import {
@@ -22,6 +23,7 @@ import {
 export const HOST_PROJECTION_RESYNC_KEYS = Object.freeze([
   "host",
   "votecount",
+  "dayVoteOutcomes",
   "hostPrompts",
 ]);
 
@@ -33,6 +35,7 @@ export function buildHostProjectionInitialSnapshot(data) {
       replacement: data.replacement,
     }),
     votecount: data.votecount,
+    dayVoteOutcomes: data.dayVoteOutcomes,
     hostPrompts: data.hostPrompts,
   });
 }
@@ -46,6 +49,10 @@ export function buildHostProjectionColdLoads(data) {
     votecount: Object.freeze({
       url: data.hostVotecountEndpoint,
       normalize: normalizeVotecount,
+    }),
+    dayVoteOutcomes: Object.freeze({
+      url: data.dayVoteOutcomesEndpoint,
+      normalize: normalizeDayVoteOutcomes,
     }),
     hostPrompts: Object.freeze({
       url: data.hostPromptEndpoint,
@@ -61,6 +68,9 @@ export function hostProjectionResyncKeys() {
 export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "HostOf" }) {
   const projection = snapshot.host;
   const votecount = snapshot.votecount;
+  const dayVoteOutcomes = Array.isArray(snapshot.dayVoteOutcomes)
+    ? snapshot.dayVoteOutcomes
+    : [];
   const hostPrompts = snapshot.hostPrompts;
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts,
@@ -78,6 +88,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
   return Object.freeze({
     projection,
     votecount,
+    dayVoteOutcomes,
     hostPrompts,
     criticalActions,
     moderatorActionGroups,
@@ -190,6 +201,9 @@ export async function sendHostRouteAction({
 export function hostPostAckRefreshKeys({ event, outcome }) {
   if (outcome?.state !== "ack") {
     return Object.freeze([]);
+  }
+  if (event?.payload?.kind === "resolve_phase") {
+    return Object.freeze(["host", "votecount", "dayVoteOutcomes", "hostPrompts"]);
   }
   if (event?.payload?.kind !== "resolve_host_prompt") {
     return Object.freeze([]);

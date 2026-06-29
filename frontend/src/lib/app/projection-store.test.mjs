@@ -306,6 +306,45 @@ test("projection store applies live host-prompt envelopes through the prompt nor
   ]);
 });
 
+test("projection store applies live day-vote outcome envelopes through the outcome normalizer", () => {
+  const store = createProjectionStore({
+    initialSnapshot: {
+      dayVoteOutcomes: [],
+    },
+    coldLoads: {
+      dayVoteOutcomes: {
+        url: "/day-vote-outcomes",
+        normalize: (payload, previous) => [
+          ...previous,
+          {
+            phaseId: payload.phase_id,
+            winnerSlot: payload.winner_slot,
+          },
+        ],
+      },
+    },
+  });
+
+  const snapshot = store.applyLiveEnvelope({
+    v: 1,
+    id: 5,
+    body: {
+      kind: "Delta",
+      body: {
+        kind: "DayVoteOutcomeApplied",
+        body: {
+          phase_id: "D01",
+          winner_slot: "slot-2",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(snapshot.dayVoteOutcomes, [
+    { phaseId: "D01", winnerSlot: "slot-2" },
+  ]);
+});
+
 test("projection store applies live player-private envelopes through scoped normalizers", () => {
   const store = createProjectionStore({
     initialSnapshot: {

@@ -358,6 +358,12 @@ function normalizeProjectionDelta(delta) {
       body: delta.body ?? {},
     });
   }
+  if (delta?.kind === "DayVoteOutcomeApplied") {
+    return Object.freeze({
+      kind: "DayVoteOutcomeApplied",
+      body: delta.body ?? {},
+    });
+  }
   if (delta?.kind === "ResyncRequired") {
     return Object.freeze({
       kind: "ResyncRequired",
@@ -404,6 +410,12 @@ function normalizeProjectionDelta(delta) {
     return Object.freeze({
       kind: "PlayerInvestigationResultsChanged",
       body: delta.PlayerInvestigationResultsChanged,
+    });
+  }
+  if (delta?.DayVoteOutcomeApplied !== undefined) {
+    return Object.freeze({
+      kind: "DayVoteOutcomeApplied",
+      body: delta.DayVoteOutcomeApplied,
     });
   }
   if (delta?.ResyncRequired !== undefined) {

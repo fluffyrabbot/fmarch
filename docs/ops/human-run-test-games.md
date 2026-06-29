@@ -322,7 +322,8 @@ role capabilities: the `actionPlayer` role URL casts the fourth Slot 2 vote from
 the browser, the host role URL resolves D01, `/day-vote-outcomes` records the
 official `Lynch` result, the host projection marks Slot 2 dead, and the target
 player role URL sees the `player_killed` / `day_vote` notice with disabled
-controls.
+controls, and both the host and target player role URLs render the official
+day-vote outcome panel from the `/day-vote-outcomes` projection.
 
 The action-loop proof continues in the same seeded game: the host page resolves
 D01, clicks the hydrated `Advance by deadline` control to record deadline

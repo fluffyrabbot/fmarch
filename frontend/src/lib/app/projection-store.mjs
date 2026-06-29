@@ -128,6 +128,13 @@ export function createProjectionStore({
         message.delta.body?.results ?? message.delta.body,
       );
     }
+    if (
+      message?.kind === "delta" &&
+      message.delta.kind === "DayVoteOutcomeApplied" &&
+      coldLoads.dayVoteOutcomes !== undefined
+    ) {
+      return applyPayload("dayVoteOutcomes", message.delta.body);
+    }
     const patch = projectionPatchForLiveEnvelope(envelope, snapshot);
     if (patch === null) {
       return snapshot;

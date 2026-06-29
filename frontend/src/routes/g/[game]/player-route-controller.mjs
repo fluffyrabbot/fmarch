@@ -12,6 +12,7 @@ import {
 } from "../../../lib/app/command-boundary.mjs";
 import {
   normalizeThreadPage,
+  normalizeDayVoteOutcomes,
   normalizePlayerCommandState,
   normalizeVotecount,
   playerThreadUrl,
@@ -25,6 +26,7 @@ export function buildPlayerProjectionInitialSnapshot(data) {
   return Object.freeze({
     thread: data.thread,
     votecount: data.votecount,
+    dayVoteOutcomes: data.dayVoteOutcomes,
     notifications: data.notifications,
     investigationResults: data.investigationResults,
     commandState: data.commandState,
@@ -40,6 +42,10 @@ export function buildPlayerProjectionColdLoads(data) {
     votecount: Object.freeze({
       url: data.coldLoad.votecountEndpoint,
       normalize: normalizeVotecount,
+    }),
+    dayVoteOutcomes: Object.freeze({
+      url: data.coldLoad.dayVoteOutcomesEndpoint,
+      normalize: normalizeDayVoteOutcomes,
     }),
     ...(data.coldLoad.notificationsEndpoint === null
       ? {}
@@ -72,6 +78,7 @@ export function playerResyncKeys(data) {
   return Object.freeze([
     "thread",
     "votecount",
+    "dayVoteOutcomes",
     ...(data.coldLoad.notificationsEndpoint === null ? [] : ["notifications"]),
     ...(data.coldLoad.investigationResultsEndpoint === null
       ? []
@@ -81,13 +88,17 @@ export function playerResyncKeys(data) {
 }
 
 export function playerRefreshKeysForLiveDelta(data, message) {
-  if (
-    data.coldLoad.commandStateEndpoint == null ||
-    message?.kind !== "delta"
-  ) {
+  if (message?.kind !== "delta") {
     return Object.freeze([]);
   }
-  return Object.freeze(["commandState"]);
+  const keys = [];
+  if (message.delta?.kind === "DayVoteOutcomeApplied") {
+    keys.push("dayVoteOutcomes");
+  }
+  if (data.coldLoad.commandStateEndpoint != null) {
+    keys.push("commandState");
+  }
+  return Object.freeze(keys);
 }
 
 export function playerCommandTrace(action) {

@@ -119,6 +119,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
       outcomeStatus: verification.dayVoteResolution?.dayVoteOutcome?.status ?? null,
       winnerSlot: verification.dayVoteResolution?.dayVoteOutcome?.winner_slot ?? null,
       hostSlotAlive: verification.dayVoteResolution?.hostSlot?.alive ?? null,
+      hostOutcomePanel: verification.dayVoteResolution?.hostAfterResolve?.outcomePanel ?? null,
+      targetOutcomePanel: verification.dayVoteResolution?.targetOutcomePanel ?? null,
       targetNoticeStatus: verification.dayVoteResolution?.targetNotice?.status ?? null,
       passed:
         verification.dayVoteResolution?.status === "passed" &&
@@ -132,10 +134,32 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.dayVoteOutcome?.winner_slot === "slot-2" &&
         verification.dayVoteResolution?.dayVoteOutcome?.tallies?.["slot-2"] === 4 &&
         verification.dayVoteResolution?.resolveDay?.commandStatus?.state === "ack" &&
+        verification.dayVoteResolution?.hostAfterResolve?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ) &&
+        verification.dayVoteResolution?.hostAfterResolve?.outcomePanel?.includes("D01 Lynch") &&
+        verification.dayVoteResolution?.hostAfterResolve?.outcomePanel?.includes(
+          "Slot 2 was eliminated",
+        ) &&
+        verification.dayVoteResolution?.hostAfterResolve?.outcomeTally?.includes("4/3") &&
         verification.dayVoteResolution?.hostSlot?.alive === false &&
         verification.dayVoteResolution?.hostSlot?.status === "dead" &&
         verification.dayVoteResolution?.targetCommandState?.actorAlive === false &&
         verification.dayVoteResolution?.targetCommandState?.actorStatus === "dead" &&
+        verification.dayVoteResolution?.targetDayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ) &&
+        verification.dayVoteResolution?.targetOutcomePanel?.includes("D01 Lynch") &&
+        verification.dayVoteResolution?.targetOutcomePanel?.includes(
+          "Slot 2 was eliminated",
+        ) &&
+        verification.dayVoteResolution?.targetOutcomeTally?.includes("4/3") &&
         verification.dayVoteResolution?.targetNotice?.effect === "player_killed" &&
         verification.dayVoteResolution?.targetNotice?.status === "day_vote" &&
         Object.values(verification.dayVoteResolution?.targetControls ?? {}).every(Boolean),

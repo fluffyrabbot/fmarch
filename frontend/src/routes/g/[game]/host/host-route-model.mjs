@@ -10,6 +10,7 @@ import { buildLiveProjectionUrl } from "../../../../lib/app/live-transport.mjs";
 import {
   hostVotecountUrl,
   hostPromptsUrl,
+  dayVoteOutcomesUrl,
   loadHostColdData,
 } from "../../../../lib/app/cold-load.mjs";
 
@@ -100,6 +101,7 @@ export async function buildHostConsoleRouteData({
       principalUserId: commandPrincipalUserId,
     }),
     hostVotecountEndpoint: hostVotecountUrl({ game: gameId }),
+    dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
     liveProjection: Object.freeze({
       endpoint: buildLiveProjectionUrl({
         apiBaseUrl,
@@ -130,6 +132,11 @@ export async function buildHostConsoleRouteData({
     }),
     hostPrompts: coldLoad.hostPrompts,
     votecount: coldLoad.votecount,
+    dayVoteOutcomes: coldLoad.dayVoteOutcomes,
+    dayVoteOutcomeBoundary: Object.freeze({
+      status: "official-engine-result",
+      command: "/day-vote-outcomes",
+    }),
     criticalActions,
     moderatorActionGroups: buildHostConsoleActionGroups({
       actions: criticalActions,
@@ -296,6 +303,18 @@ const HOST_FIXTURE_COLD_LOAD = Object.freeze({
   votecount: Object.freeze([
     Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
     Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),
+  ]),
+  dayVoteOutcomes: Object.freeze([
+    Object.freeze({
+      phaseId: "D01",
+      sourceSeq: 41,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: Object.freeze({ "slot-2": 4, "slot-7": 2 }),
+      majority: 4,
+      reason: null,
+    }),
   ]),
   hostPrompts: Object.freeze([
     Object.freeze({

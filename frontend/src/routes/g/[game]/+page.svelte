@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
+  import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
     buildRouteStateViewModel,
@@ -57,6 +58,7 @@
   let commandReceipts = [];
   let thread = data.thread;
   let votecount = data.votecount;
+  let dayVoteOutcomes = data.dayVoteOutcomes;
   let commandState = data.commandState;
   let player = data.player;
   let phase = data.phase;
@@ -89,6 +91,7 @@
   $: currentData = Object.freeze({
     ...data,
     commandState,
+    dayVoteOutcomes,
     player,
     phase,
     composer,
@@ -109,6 +112,9 @@
   projectionStore.subscribe((snapshot) => {
     thread = snapshot.thread;
     votecount = snapshot.votecount;
+    dayVoteOutcomes = Array.isArray(snapshot.dayVoteOutcomes)
+      ? snapshot.dayVoteOutcomes
+      : [];
     commandState = snapshot.commandState;
     player = Object.freeze({
       ...data.player,
@@ -301,6 +307,12 @@
     threadPager={data.threadPager}
     {votecount}
     {privateQueueBoundary}
+  />
+
+  <DayVoteOutcomePanel
+    outcomes={dayVoteOutcomes}
+    boundary={data.dayVoteOutcomeBoundary}
+    rootTestId="player-day-vote-outcome"
   />
 
   {#if playerForcedRouteState}

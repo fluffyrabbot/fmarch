@@ -166,6 +166,34 @@ test("normalizes tagged server envelopes", () => {
       },
     },
   );
+  assert.deepEqual(
+    normalizeServerEnvelopeMessage({
+      v: 1,
+      id: 6,
+      body: {
+        kind: "Delta",
+        body: {
+          kind: "DayVoteOutcomeApplied",
+          body: {
+            phase_id: "D01",
+            status: "Lynch",
+            winner_slot: "slot-2",
+          },
+        },
+      },
+    }),
+    {
+      kind: "delta",
+      delta: {
+        kind: "DayVoteOutcomeApplied",
+        body: {
+          phase_id: "D01",
+          status: "Lynch",
+          winner_slot: "slot-2",
+        },
+      },
+    },
+  );
 });
 
 test("creates votecount patches from live delta envelopes", () => {

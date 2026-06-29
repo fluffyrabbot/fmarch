@@ -57,6 +57,7 @@ test("host console route data is allowed for HostOf scoped to the current game",
   );
   assert.equal(data.votecountBoundary.command, "official-votecount-live-ws");
   assert.equal(data.hostVotecountEndpoint, "/games/midsummer/votecount");
+  assert.equal(data.dayVoteOutcomesEndpoint, "/games/midsummer/day-vote-outcomes");
   assert.deepEqual(data.commandContext, {
     gameId: "midsummer",
     principalUserId: "host_h",
@@ -70,6 +71,19 @@ test("host console route data is allowed for HostOf scoped to the current game",
   assert.deepEqual(data.votecount, [
     { target: "slot-2 / Ilya", count: 4, needed: 7 },
     { target: "slot-7 / Mira", count: 2, needed: 7 },
+  ]);
+  assert.deepEqual(data.dayVoteOutcomes, [
+    {
+      game: null,
+      phaseId: "D01",
+      sourceSeq: 41,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: { "slot-2": 4, "slot-7": 2 },
+      majority: 4,
+      reason: null,
+    },
   ]);
   assert.deepEqual(
     data.criticalActions.map((action) => action.payload.gameId),
@@ -188,6 +202,20 @@ test("host console route data uses host prompt and votecount cold-loads when ava
           },
         ]);
       }
+      if (url === "/games/midsummer/day-vote-outcomes") {
+        return jsonResponse([
+          {
+            DayVoteOutcomeApplied: {
+              phase_id: "D01",
+              source_seq: 14,
+              event_index: 0,
+              status: "Lynch",
+              winner_slot: "slot-target",
+              tallies: { "slot-target": 1 },
+            },
+          },
+        ]);
+      }
       return jsonResponse([
         {
           prompt_id: "D01:tie:slot_2",
@@ -204,6 +232,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   assert.deepEqual(seen, [
     "/games/midsummer/host-prompts?principal_user_id=host_h",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
   ]);
   assert.deepEqual(data.hostPrompts, [
     {
@@ -238,6 +267,19 @@ test("host console route data uses host prompt and votecount cold-loads when ava
   );
   assert.deepEqual(data.votecount, [
     { target: "slot-target", count: 1, needed: 3 },
+  ]);
+  assert.deepEqual(data.dayVoteOutcomes, [
+    {
+      game: null,
+      phaseId: "D01",
+      sourceSeq: 14,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-target",
+      tallies: { "slot-target": 1 },
+      majority: null,
+      reason: null,
+    },
   ]);
   assert.equal(data.workQueues.find((queue) => queue.id === "votecount").value, "1 projected target");
 });

@@ -26,16 +26,19 @@ test("host route controller builds projection store boundaries from route data",
       replacement: data.replacement,
     },
     votecount: data.votecount,
+    dayVoteOutcomes: data.dayVoteOutcomes,
     hostPrompts: data.hostPrompts,
   });
   assert.deepEqual(Object.keys(buildHostProjectionColdLoads(data)), [
     "host",
     "votecount",
+    "dayVoteOutcomes",
     "hostPrompts",
   ]);
   assert.deepEqual(hostProjectionResyncKeys(), [
     "host",
     "votecount",
+    "dayVoteOutcomes",
     "hostPrompts",
   ]);
 });
@@ -49,6 +52,15 @@ test("host route controller derives action groups from live host projections", (
         replacement: null,
       },
       votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      dayVoteOutcomes: [
+        {
+          phaseId: "D01",
+          sourceSeq: 7,
+          eventIndex: 0,
+          status: "Lynch",
+          winnerSlot: "slot-2",
+        },
+      ],
       hostPrompts: [
         {
           id: "D01:tie:slot_2",
@@ -68,6 +80,7 @@ test("host route controller derives action groups from live host projections", (
   });
 
   assert.equal(derived.projection.phase.id, "D01");
+  assert.equal(derived.dayVoteOutcomes[0].winnerSlot, "slot-2");
   assert.deepEqual(
     derived.criticalActions
       .filter((action) => action.id.startsWith("resolve_host_prompt-"))
@@ -97,6 +110,7 @@ test("host route controller derives action groups from live host projections", (
         replacement: null,
       },
       votecount: [],
+      dayVoteOutcomes: [],
       hostPrompts: [],
     },
   });
@@ -116,6 +130,7 @@ test("host route controller derives action groups from live host projections", (
         replacement: null,
       },
       votecount: [{ target: "slot-2 / Ilya", count: 2, needed: 4 }],
+      dayVoteOutcomes: [],
       hostPrompts: [
         {
           id: "D01:tie:slot_2",
@@ -439,6 +454,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostAckRefreshKeys({
+      event: { payload: { kind: "resolve_phase" } },
+      outcome: { state: "ack" },
+    }),
+    ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  );
+  assert.deepEqual(
+    hostPostAckRefreshKeys({
       event: { payload: { kind: "resolve_host_prompt" } },
       outcome: {
         state: "ack",
@@ -503,7 +525,7 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
       event: { payload: { kind: "extend_deadline" } },
       outcome: { state: "reject", error: "StreamConflict", retryable: true },
     }),
-    ["host", "votecount", "hostPrompts"],
+    ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   );
 });
 
@@ -635,10 +657,12 @@ function fixtureData(overrides = {}) {
     commandEndpoint: "/commands",
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",
+    dayVoteOutcomesEndpoint: "/games/midsummer/day-vote-outcomes",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
     phase: { id: "D01", label: "Day 1", locked: false, state: "open" },
     replacement: null,
     votecount: [],
+    dayVoteOutcomes: [],
     hostPrompts: [],
     ...overrides,
   };

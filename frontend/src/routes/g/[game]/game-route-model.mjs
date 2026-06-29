@@ -7,6 +7,7 @@ import {
 } from "../../../lib/app/capabilities.mjs";
 import {
   loadPlayerColdData,
+  dayVoteOutcomesUrl,
   playerCommandStateUrl,
   playerThreadUrl,
   playerVotecountUrl,
@@ -163,6 +164,10 @@ export async function buildGameRouteData({
     }),
     phase,
     ...coldLoad,
+    dayVoteOutcomeBoundary: Object.freeze({
+      status: "official-engine-result",
+      command: "/day-vote-outcomes",
+    }),
     privateQueue,
     privateQueueBoundary: buildPrivateQueueBoundary(coldLoad),
     privateQueueExpandedItems: privateQueueExpandedItems({
@@ -195,6 +200,7 @@ export async function buildGameRouteData({
         limit: 50,
       }),
       votecountEndpoint: playerVotecountUrl({ game: gameId }),
+      dayVoteOutcomesEndpoint: dayVoteOutcomesUrl({ game: gameId }),
       notificationsEndpoint: hasPrincipal
         ? principalScopedGameUrl({
             game: gameId,
@@ -262,6 +268,7 @@ function pendingReplacementColdLoad(game, slotId) {
         "Replacement invite has no current SlotOccupant authority until the host processes replacement.",
     }),
     votecount: Object.freeze([]),
+    dayVoteOutcomes: Object.freeze([]),
     thread: Object.freeze({
       nextBeforeSeq: null,
       posts: Object.freeze([]),
@@ -423,6 +430,18 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     Object.freeze({ target: "slot-2 / Ilya", count: 4, needed: 7 }),
     Object.freeze({ target: "slot-7 / Mira", count: 2, needed: 7 }),
     Object.freeze({ target: "No lynch", count: 1, needed: 7 }),
+  ]),
+  dayVoteOutcomes: Object.freeze([
+    Object.freeze({
+      phaseId: "D01",
+      sourceSeq: 41,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: Object.freeze({ "slot-2": 4, "slot-7": 2 }),
+      majority: 4,
+      reason: null,
+    }),
   ]),
   thread: Object.freeze({
     nextBeforeSeq: 441,

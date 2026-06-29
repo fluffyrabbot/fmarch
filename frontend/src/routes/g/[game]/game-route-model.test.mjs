@@ -102,6 +102,23 @@ test("player route data exposes thread, channel, votecount, and touch command la
   });
   assert.equal(data.coldLoad.votecountEndpoint, "/games/midsummer/votecount");
   assert.equal(
+    data.coldLoad.dayVoteOutcomesEndpoint,
+    "/games/midsummer/day-vote-outcomes",
+  );
+  assert.deepEqual(data.dayVoteOutcomes, [
+    {
+      game: null,
+      phaseId: "D01",
+      sourceSeq: 41,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: { "slot-2": 4, "slot-7": 2 },
+      majority: 4,
+      reason: null,
+    },
+  ]);
+  assert.equal(
     data.liveProjection.endpoint,
     "/ws?game=midsummer&principal_user_id=player_mira",
   );
@@ -303,6 +320,21 @@ test("player route data uses REST projection cold-loads when available", async (
           { VoteCountChanged: { candidate_slot: "slot-2", count: 5 } },
         ]);
       }
+      if (url.includes("/day-vote-outcomes")) {
+        return jsonResponse([
+          {
+            DayVoteOutcomeApplied: {
+              phase_id: "D01",
+              source_seq: 22,
+              event_index: 0,
+              status: "Lynch",
+              winner_slot: "slot-2",
+              tallies: { "slot-2": 5 },
+              majority: 5,
+            },
+          },
+        ]);
+      }
       if (url.includes("/notifications")) {
         return jsonResponse([
           { effect: "Neighborized", status: "Delivered" },
@@ -388,6 +420,19 @@ test("player route data uses REST projection cold-loads when available", async (
     "/media/original/server-receipt.jpg",
   );
   assert.deepEqual(data.votecount, [{ target: "slot-2", count: 5, needed: 7 }]);
+  assert.deepEqual(data.dayVoteOutcomes, [
+    {
+      game: null,
+      phaseId: "D01",
+      sourceSeq: 22,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-2",
+      tallies: { "slot-2": 5 },
+      majority: 5,
+      reason: null,
+    },
+  ]);
   assert.deepEqual(data.privateQueue, [
     {
       id: "notification-1",
@@ -642,6 +687,7 @@ test("player load rejects signed-out sessions without private scoped requests", 
   assert.deepEqual(seen, [
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
   ]);
 });
 

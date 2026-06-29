@@ -11,7 +11,14 @@ export async function loadPlayerColdData({
     typeof principalUserId === "string" && principalUserId.trim() !== "";
   const canLoadCommandState =
     canLoadPrivate && typeof actorSlot === "string" && actorSlot.trim() !== "";
-  const [thread, votecount, notifications, investigationResults, commandState] = await Promise.all([
+  const [
+    thread,
+    votecount,
+    dayVoteOutcomes,
+    notifications,
+    investigationResults,
+    commandState,
+  ] = await Promise.all([
     fetchJson({
       fetchImpl,
       fallback: fallback.thread,
@@ -27,6 +34,11 @@ export async function loadPlayerColdData({
       fetchImpl,
       fallback: fallback.votecount,
       url: playerVotecountUrl({ apiBaseUrl, game }),
+    }),
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.dayVoteOutcomes ?? [],
+      url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
     }),
     canLoadPrivate
       ? fetchJson({
@@ -69,6 +81,10 @@ export async function loadPlayerColdData({
   return Object.freeze({
     thread: normalizeThreadPage(thread, fallback.thread),
     votecount: normalizeVotecount(votecount, fallback.votecount),
+    dayVoteOutcomes: normalizeDayVoteOutcomes(
+      dayVoteOutcomes,
+      fallback.dayVoteOutcomes ?? [],
+    ),
     notifications: Object.freeze(
       Array.isArray(notifications) ? notifications : [],
     ),
@@ -136,7 +152,7 @@ export async function loadHostColdData({
   apiBaseUrl = "",
   fallback,
 }) {
-  const [hostPrompts, votecount] = await Promise.all([
+  const [hostPrompts, votecount, dayVoteOutcomes] = await Promise.all([
     fetchJson({
       fetchImpl,
       fallback: fallback.hostPrompts,
@@ -151,11 +167,20 @@ export async function loadHostColdData({
       fallback: fallback.votecount,
       url: hostVotecountUrl({ apiBaseUrl, game }),
     }),
+    fetchJson({
+      fetchImpl,
+      fallback: fallback.dayVoteOutcomes ?? [],
+      url: dayVoteOutcomesUrl({ apiBaseUrl, game }),
+    }),
   ]);
 
   return Object.freeze({
     hostPrompts: normalizeHostPrompts(hostPrompts, fallback.hostPrompts),
     votecount: normalizeVotecount(votecount, fallback.votecount),
+    dayVoteOutcomes: normalizeDayVoteOutcomes(
+      dayVoteOutcomes,
+      fallback.dayVoteOutcomes ?? [],
+    ),
   });
 }
 
@@ -337,6 +362,97 @@ export function normalizeVotecount(deltas, fallback) {
     );
 
   return Object.freeze(rows.length === 0 ? fallback : rows);
+}
+
+export function normalizeDayVoteOutcomes(payload, fallback = []) {
+  const rows = normalizeDayVoteOutcomePayload(payload);
+  if (rows.length === 0) {
+    return fallback;
+  }
+  if (Array.isArray(payload)) {
+    return sortDayVoteOutcomeRows(rows);
+  }
+  const existing = Array.isArray(fallback) ? fallback : [];
+  const merged = new Map();
+  for (const row of [...existing, ...rows]) {
+    merged.set(dayVoteOutcomeKey(row), row);
+  }
+  return sortDayVoteOutcomeRows([...merged.values()]);
+}
+
+function normalizeDayVoteOutcomePayload(payload) {
+  const items = Array.isArray(payload) ? payload : [payload];
+  return items
+    .flatMap((item) => {
+      if (Array.isArray(item)) {
+        return normalizeDayVoteOutcomePayload(item);
+      }
+      const body =
+        item?.kind === "DayVoteOutcomeApplied"
+          ? item.body
+          : item?.DayVoteOutcomeApplied ??
+            item?.body?.DayVoteOutcomeApplied ??
+            item?.body ??
+            item;
+      const normalized = normalizeDayVoteOutcomeRow(body);
+      return normalized === null ? [] : [normalized];
+    });
+}
+
+function normalizeDayVoteOutcomeRow(row) {
+  if (row === null || typeof row !== "object") {
+    return null;
+  }
+  const phaseId = row.phase_id ?? row.phaseId;
+  const status = row.status;
+  if (typeof phaseId !== "string" || phaseId.trim() === "" || typeof status !== "string") {
+    return null;
+  }
+  return Object.freeze({
+    game: row.game ?? null,
+    phaseId,
+    sourceSeq: Number(row.source_seq ?? row.sourceSeq ?? 0),
+    eventIndex: Number(row.event_index ?? row.eventIndex ?? 0),
+    status,
+    winnerSlot: row.winner_slot ?? row.winnerSlot ?? null,
+    tallies: normalizeNumericRecord(row.tallies),
+    majority: normalizeNullableNumber(row.majority),
+    reason: typeof row.reason === "string" && row.reason.trim() !== "" ? row.reason : null,
+  });
+}
+
+function dayVoteOutcomeKey(row) {
+  return `${row.phaseId}:${row.sourceSeq}:${row.eventIndex}`;
+}
+
+function sortDayVoteOutcomeRows(rows) {
+  return Object.freeze(
+    [...rows].sort((left, right) => {
+      const sourceSeqDelta = Number(left.sourceSeq ?? 0) - Number(right.sourceSeq ?? 0);
+      if (sourceSeqDelta !== 0) {
+        return sourceSeqDelta;
+      }
+      return Number(left.eventIndex ?? 0) - Number(right.eventIndex ?? 0);
+    }),
+  );
+}
+
+function normalizeNumericRecord(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return Object.freeze({});
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(value)
+        .map(([key, count]) => [key, Number(count)])
+        .filter(([, count]) => Number.isFinite(count)),
+    ),
+  );
+}
+
+function normalizeNullableNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
@@ -626,6 +742,10 @@ export function playerThreadUrl({
 
 export function playerVotecountUrl({ apiBaseUrl = "", game }) {
   return `${apiBaseUrl}/games/${encodeURIComponent(game)}/votecount`;
+}
+
+export function dayVoteOutcomesUrl({ apiBaseUrl = "", game }) {
+  return `${apiBaseUrl}/games/${encodeURIComponent(game)}/day-vote-outcomes`;
 }
 
 export function playerCommandStateUrl({

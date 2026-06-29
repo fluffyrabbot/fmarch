@@ -10,6 +10,7 @@ export function exposeHostRouteWindowState({
   commandStatuses,
   projection,
   votecount,
+  dayVoteOutcomes,
   hostPrompts,
 }) {
   if (windowRef === undefined || windowRef === null) {
@@ -20,6 +21,7 @@ export function exposeHostRouteWindowState({
   windowRef.__fmarchHostCommandStatuses = commandStatuses;
   windowRef.__fmarchHostProjection = projection;
   windowRef.__fmarchHostVotecountProjection = votecount;
+  windowRef.__fmarchHostDayVoteOutcomesProjection = dayVoteOutcomes;
   windowRef.__fmarchHostPromptsProjection = hostPrompts;
   return true;
 }
@@ -51,6 +53,7 @@ export function recordHostLiveProjectionEvent({
   if (snapshot !== null) {
     windowRef.__fmarchHostProjection = snapshot.host;
     windowRef.__fmarchHostVotecountProjection = snapshot.votecount;
+    windowRef.__fmarchHostDayVoteOutcomesProjection = snapshot.dayVoteOutcomes;
     windowRef.__fmarchHostPromptsProjection = snapshot.hostPrompts;
   }
   return liveStatus;

@@ -17,6 +17,7 @@ test("host browser bridge exposes host route projections for smoke evidence", ()
     commandStatuses: { lock_thread: { state: "ack" } },
     projection: { phase: { id: "D01" } },
     votecount: [{ target: "slot-2" }],
+    dayVoteOutcomes: [{ phaseId: "D01", winnerSlot: "slot-2" }],
     hostPrompts: [{ id: "prompt-1" }],
   };
 
@@ -26,6 +27,10 @@ test("host browser bridge exposes host route projections for smoke evidence", ()
   assert.equal(windowRef.__fmarchHostCommandStatuses, state.commandStatuses);
   assert.equal(windowRef.__fmarchHostProjection, state.projection);
   assert.equal(windowRef.__fmarchHostVotecountProjection, state.votecount);
+  assert.equal(
+    windowRef.__fmarchHostDayVoteOutcomesProjection,
+    state.dayVoteOutcomes,
+  );
   assert.equal(windowRef.__fmarchHostPromptsProjection, state.hostPrompts);
   assert.equal(exposeHostRouteWindowState({ windowRef: null, ...state }), false);
 });
@@ -38,6 +43,7 @@ test("host browser bridge records live projection events and latest snapshot", (
   const snapshot = {
     host: { replacement: { lifecycleLabel: "Modkilled" } },
     votecount: [{ target: "slot-target", count: 2 }],
+    dayVoteOutcomes: [{ phaseId: "D01", winnerSlot: "slot-target" }],
     hostPrompts: [{ id: "prompt-2", status: "pending" }],
   };
 
@@ -63,6 +69,10 @@ test("host browser bridge records live projection events and latest snapshot", (
   assert.equal(windowRef.__fmarchHostLiveProjectionStatus, liveStatus);
   assert.equal(windowRef.__fmarchHostProjection, snapshot.host);
   assert.equal(windowRef.__fmarchHostVotecountProjection, snapshot.votecount);
+  assert.equal(
+    windowRef.__fmarchHostDayVoteOutcomesProjection,
+    snapshot.dayVoteOutcomes,
+  );
   assert.equal(windowRef.__fmarchHostPromptsProjection, snapshot.hostPrompts);
 });
 
@@ -70,6 +80,7 @@ test("host browser bridge preserves previous live projections for null snapshots
   const windowRef = {
     __fmarchHostProjection: { phase: { id: "D01" } },
     __fmarchHostVotecountProjection: [{ target: "slot-2" }],
+    __fmarchHostDayVoteOutcomesProjection: [{ phaseId: "D01" }],
     __fmarchHostPromptsProjection: [{ id: "prompt-1" }],
   };
 
@@ -85,6 +96,9 @@ test("host browser bridge preserves previous live projections for null snapshots
   assert.deepEqual(windowRef.__fmarchHostVotecountProjection, [
     { target: "slot-2" },
   ]);
+  assert.deepEqual(windowRef.__fmarchHostDayVoteOutcomesProjection, [
+    { phaseId: "D01" },
+  ]);
   assert.deepEqual(windowRef.__fmarchHostPromptsProjection, [
     { id: "prompt-1" },
   ]);
@@ -98,13 +112,14 @@ test("host browser bridge triggers manual live resync through the store adapter"
   const snapshot = {
     host: { replacement: { occupantLabel: "player-rowan" } },
     votecount: [{ target: "slot-7" }],
+    dayVoteOutcomes: [{ phaseId: "D01", winnerSlot: "slot-7" }],
     hostPrompts: [{ id: "prompt-3" }],
   };
 
   const result = await triggerHostLiveProjectionResync({
     windowRef,
     projectionStore,
-    resyncKeys: ["host", "votecount", "hostPrompts"],
+    resyncKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
     fetchImpl,
     fromSeq: 42,
     currentStatus: { state: "updated", message: "before" },
@@ -123,7 +138,12 @@ test("host browser bridge triggers manual live resync through the store adapter"
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].projectionStore, projectionStore);
-  assert.deepEqual(calls[0].resyncKeys, ["host", "votecount", "hostPrompts"]);
+  assert.deepEqual(calls[0].resyncKeys, [
+    "host",
+    "votecount",
+    "dayVoteOutcomes",
+    "hostPrompts",
+  ]);
   assert.equal(calls[0].fetchImpl, fetchImpl);
   assert.deepEqual(calls[0].message, {
     kind: "resync-required",

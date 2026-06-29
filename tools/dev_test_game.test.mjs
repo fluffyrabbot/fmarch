@@ -933,6 +933,13 @@ test("session card and markdown include role credential URLs and tokens", () => 
       },
       voterVotecountAfterVote: [{ target: "slot-2", count: 4 }],
       resolveDay: { commandStatus: { state: "ack" } },
+      hostAfterResolve: {
+        dayVoteOutcomes: [
+          { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+        ],
+        outcomePanel: "D01 Lynch\nSlot 2 was eliminated by official vote.",
+        outcomeTally: "Slot 2\n4/3",
+      },
       dayVoteOutcome: {
         phase_id: "D01",
         status: "Lynch",
@@ -951,6 +958,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
         status: "day_vote",
       },
       targetControls: { vote: true, withdraw: true, post: true },
+      targetDayVoteOutcomes: [
+        { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+      ],
+      targetOutcomePanel: "D01 Lynch\nSlot 2 was eliminated by official vote.",
+      targetOutcomeTally: "Slot 2\n4/3",
     },
     actionLoop: {
       status: "passed",

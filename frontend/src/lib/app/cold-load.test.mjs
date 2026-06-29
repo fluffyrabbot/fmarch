@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  dayVoteOutcomesUrl,
   hostVotecountUrl,
   hostPromptsUrl,
   loadAdminColdData,
   loadHostColdData,
   loadPlayerColdData,
+  normalizeDayVoteOutcomes,
   normalizeHostPrompts,
   normalizePlayerCommandState,
   normalizeThreadPage,
@@ -20,6 +22,7 @@ import {
 const FALLBACK = Object.freeze({
   thread: Object.freeze({ nextBeforeSeq: null, posts: Object.freeze([]) }),
   votecount: Object.freeze([]),
+  dayVoteOutcomes: Object.freeze([]),
   audit: Object.freeze([
     Object.freeze({
       id: "proof-runs",
@@ -84,6 +87,10 @@ test("cold-load URLs match existing API route contracts", () => {
   );
   assert.equal(hostVotecountUrl({ game: "game-a" }), "/games/game-a/votecount");
   assert.equal(
+    dayVoteOutcomesUrl({ game: "game-a" }),
+    "/games/game-a/day-vote-outcomes",
+  );
+  assert.equal(
     playerCommandStateUrl({
       game: "game-a",
       principalUserId: "player_a",
@@ -119,6 +126,7 @@ test("player cold-load uses channel-scoped thread endpoint for private channel r
   assert.deepEqual(seen, [
     "/games/midsummer/channels/role-pm/thread?limit=50&principal_user_id=player_mira",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
     "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
@@ -218,6 +226,39 @@ test("normalizes thread and votecount projection payloads for the player view", 
     ),
     [{ target: "slot-2", count: 1, needed: 7 }],
   );
+
+  assert.deepEqual(
+    normalizeDayVoteOutcomes(
+      [
+        {
+          kind: "DayVoteOutcomeApplied",
+          body: {
+            phase_id: "D01",
+            source_seq: 8,
+            event_index: 1,
+            status: "Lynch",
+            winner_slot: "slot-2",
+            tallies: { "slot-2": 4, "slot-7": 2 },
+            majority: 4,
+          },
+        },
+      ],
+      FALLBACK.dayVoteOutcomes,
+    ),
+    [
+      {
+        game: null,
+        phaseId: "D01",
+        sourceSeq: 8,
+        eventIndex: 1,
+        status: "Lynch",
+        winnerSlot: "slot-2",
+        tallies: { "slot-2": 4, "slot-7": 2 },
+        majority: 4,
+        reason: null,
+      },
+    ],
+  );
 });
 
 test("normalizes live and cold thread posts through the same media contract", () => {
@@ -315,12 +356,14 @@ test("player cold-load fetches real endpoints and falls back per endpoint", asyn
   assert.deepEqual(seen, [
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
     "/games/midsummer/notifications?principal_user_id=player_mira",
     "/games/midsummer/investigation-results?principal_user_id=player_mira",
     "/games/midsummer/player-command-state?principal_user_id=player_mira&slot_id=slot_4",
   ]);
   assert.equal(data.thread.posts[0].body, "hello");
   assert.deepEqual(data.votecount, FALLBACK.votecount);
+  assert.deepEqual(data.dayVoteOutcomes, FALLBACK.dayVoteOutcomes);
   assert.equal(data.commandState.phase.phaseId, "N01");
   assert.equal(data.commandState.actorAlive, true);
   assert.equal(data.commandState.actorStatus, "alive");
@@ -408,9 +451,11 @@ test("player cold-load skips private scoped endpoints without a principal", asyn
   assert.deepEqual(seen, [
     "/games/midsummer/thread?limit=50",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
   ]);
   assert.deepEqual(data.notifications, []);
   assert.deepEqual(data.investigationResults, []);
+  assert.deepEqual(data.dayVoteOutcomes, []);
 });
 
 test("admin cold-load maps operator proof status when available", async () => {
@@ -505,6 +550,20 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
           },
         ]);
       }
+      if (url === "/games/midsummer/day-vote-outcomes") {
+        return jsonResponse([
+          {
+            DayVoteOutcomeApplied: {
+              phase_id: "D01",
+              source_seq: 11,
+              event_index: 0,
+              status: "Lynch",
+              winner_slot: "slot-target",
+              tallies: { "slot-target": 2 },
+            },
+          },
+        ]);
+      }
       return jsonResponse([
         {
           prompt_id: "D01:skip_next_day:slot_1",
@@ -521,6 +580,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   assert.deepEqual(seen, [
     "/games/midsummer/host-prompts?principal_user_id=host_h",
     "/games/midsummer/votecount",
+    "/games/midsummer/day-vote-outcomes",
   ]);
   assert.deepEqual(data.hostPrompts, [
     {
@@ -535,6 +595,19 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
   ]);
   assert.deepEqual(data.votecount, [
     { target: "slot-target", count: 2, needed: 5 },
+  ]);
+  assert.deepEqual(data.dayVoteOutcomes, [
+    {
+      game: null,
+      phaseId: "D01",
+      sourceSeq: 11,
+      eventIndex: 0,
+      status: "Lynch",
+      winnerSlot: "slot-target",
+      tallies: { "slot-target": 2 },
+      majority: null,
+      reason: null,
+    },
   ]);
 });
 

@@ -1494,9 +1494,27 @@ async function verifySeededDayVoteResolution({
 
     const resolveDay = await confirmHostAction(hostProofPage, "resolve_phase");
     await waitForHostProjectionPhase(hostProofPage, { phaseId: "D01", locked: true });
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+    );
     const hostAfterResolve = {
       phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
       phaseActions: await visibleHostPhaseActions(hostProofPage),
+      dayVoteOutcomes: await hostProofPage.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      outcomePanel: await hostProofPage
+        .locator('[data-testid="host-day-vote-outcome-latest"]')
+        .innerText(),
+      outcomeTally: await hostProofPage
+        .locator('[data-testid="host-day-vote-outcome-tally-slot-2"]')
+        .innerText(),
     };
 
     await gotoPlayerBoard(targetProofPage, dayVoteGame);
@@ -1504,6 +1522,12 @@ async function verifySeededDayVoteResolution({
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2" &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ) &&
         window.__fmarchPlayerProjection?.notifications?.some(
           (notice) =>
             notice.effect === "player_killed" && notice.status === "day_vote",
@@ -1524,6 +1548,15 @@ async function verifySeededDayVoteResolution({
       withdraw: await targetProofPage.locator('[data-action="withdraw_vote"]').isDisabled(),
       post: await targetProofPage.locator('[data-action="submit_post"]').isDisabled(),
     };
+    const targetDayVoteOutcomes = await targetProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
+    );
+    const targetOutcomePanel = await targetProofPage
+      .locator('[data-testid="player-day-vote-outcome-latest"]')
+      .innerText();
+    const targetOutcomeTally = await targetProofPage
+      .locator('[data-testid="player-day-vote-outcome-tally-slot-2"]')
+      .innerText();
 
     const dayVoteOutcomes = await fetchJson(
       `${apiBaseUrl}/games/${dayVoteGame}/day-vote-outcomes`,
@@ -1554,11 +1587,29 @@ async function verifySeededDayVoteResolution({
       dayVoteOutcome?.tallies?.["slot-2"] !== 4 ||
       hostAfterResolve.phase?.id !== "D01" ||
       hostAfterResolve.phase?.locked !== true ||
+      !hostAfterResolve.dayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      ) ||
+      !hostAfterResolve.outcomePanel.includes("D01 Lynch") ||
+      !hostAfterResolve.outcomePanel.includes("Slot 2 was eliminated") ||
+      !hostAfterResolve.outcomeTally.includes("4/3") ||
       hostSlot?.alive !== false ||
       hostSlot?.status !== "dead" ||
       targetCommandState?.actorSlot !== "slot-2" ||
       targetCommandState?.actorAlive !== false ||
       targetCommandState?.actorStatus !== "dead" ||
+      !targetDayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      ) ||
+      !targetOutcomePanel.includes("D01 Lynch") ||
+      !targetOutcomePanel.includes("Slot 2 was eliminated") ||
+      !targetOutcomeTally.includes("4/3") ||
       targetNotice?.audience_slot !== "slot-2" ||
       targetNotice?.effect !== "player_killed" ||
       targetNotice?.status !== "day_vote" ||
@@ -1579,6 +1630,9 @@ async function verifySeededDayVoteResolution({
           targetCommandState,
           targetNotice,
           targetControls,
+          targetDayVoteOutcomes,
+          targetOutcomePanel,
+          targetOutcomeTally,
         })}`,
       );
     }
@@ -1598,8 +1652,11 @@ async function verifySeededDayVoteResolution({
       targetCommandState,
       targetNotice,
       targetControls,
+      targetDayVoteOutcomes,
+      targetOutcomePanel,
+      targetOutcomeTally,
       proof:
-        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
+        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host and target player role URLs rendered the official day-vote outcome panel, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
     };
   } finally {
     await hostProofPage.close().catch(() => {});

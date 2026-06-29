@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
+  import DayVoteOutcomePanel from "$lib/components/day-vote-outcome/DayVoteOutcomePanel.svelte";
   import RouteState from "$lib/app/RouteState.svelte";
   import {
     buildRouteStateViewModel,
@@ -56,6 +57,7 @@
     replacement: data.replacement,
   };
   let votecount = data.votecount;
+  let dayVoteOutcomes = data.dayVoteOutcomes;
   let hostPrompts = data.hostPrompts;
   let moderatorActionGroups = data.moderatorActionGroups;
   let liveStatus = LIVE_PROJECTION_CONNECTING_STATUS;
@@ -90,6 +92,7 @@
     });
     projection = derived.projection;
     votecount = derived.votecount;
+    dayVoteOutcomes = derived.dayVoteOutcomes;
     hostPrompts = derived.hostPrompts;
     moderatorActionGroups = derived.moderatorActionGroups;
   });
@@ -102,6 +105,7 @@
       commandStatuses,
       projection,
       votecount,
+      dayVoteOutcomes,
       hostPrompts,
     });
   }
@@ -354,6 +358,12 @@
     <HostVotecountPanel
       boundary={data.votecountBoundary}
       rows={votecount}
+    />
+
+    <DayVoteOutcomePanel
+      outcomes={dayVoteOutcomes}
+      boundary={data.dayVoteOutcomeBoundary}
+      rootTestId="host-day-vote-outcome"
     />
   {/if}
 </main>
