@@ -2422,6 +2422,108 @@ assert.equal(
   403,
 );
 assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .routeResponseStatus,
+  200,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .threadPagerVisible,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .recoveredCommandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .recoveredCommandState.gameCompleted,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .recoveredCommandState.actions.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .recoveredCommandState.voteTargets.length,
+  0,
+);
+assert.match(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .recoveredCommandState.boundary,
+  /game is complete/,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .reloadChannelContext.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .reloadChannelContext.actorSlot,
+  "slot-7",
+);
+assert.match(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .reloadChannelContext.capabilityLabel,
+  /ChannelMember\(private:mafia_day_chat\)/,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject.reloadButtons.some(
+    (button) => button.disabled !== true,
+  ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .reloadRejectedPostVisible,
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .reloadThreadPostBodies.includes(replacementStalePrivatePostAfterComplete.postBody),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .apiCommandStateAfterReload.game_completed,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .apiCommandStateAfterReload.actions.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .apiCommandStateAfterReload.vote_targets.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .apiThreadPostBodiesAfterReload.includes(
+      replacementStalePrivatePostAfterComplete.postBody,
+    ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .staleOutgoingRouteAfterReload.status,
+  403,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.privateReloadAfterReject
+    .staleOutgoingThreadAfterReload.status,
+  403,
+);
+assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",
 );

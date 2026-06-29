@@ -1277,6 +1277,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "replacement-stale-private-post-after-resolve",
     "replacement-stale-private-post-reconnect",
     "replacement-stale-private-post-after-complete",
+    "replacement-stale-private-post-after-complete-reload",
     "stale-host-publish",
     "stale-host-lifecycle",
     "stale-host-modkill",

@@ -3668,8 +3668,42 @@ test("session card and markdown include role credential URLs and tokens", () => 
         apiThreadPostBodies: [],
         staleOutgoingRouteAfterReject: { status: 403 },
         staleOutgoingThreadAfterReject: { status: 403 },
+        privateReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          threadPagerVisible: true,
+          recoveredCommandState: {
+            actorSlot: "slot-7",
+            gameCompleted: true,
+            actions: [],
+            voteTargets: [],
+            boundary: "Role-action availability: game is complete.",
+          },
+          reloadChannelContext: {
+            channelId: "private:mafia_day_chat",
+            actorSlot: "slot-7",
+            capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+          },
+          reloadButtons: [
+            { action: "withdraw_vote", disabled: true },
+            { action: "submit_post", disabled: true },
+          ],
+          reloadThreadPostBodies: [],
+          reloadRejectedPostVisible: false,
+          apiCommandStateAfterReload: {
+            game_completed: true,
+            actions: [],
+            vote_targets: [],
+          },
+          apiThreadPostBodiesAfterReload: [],
+          staleOutgoingRouteAfterReload: {
+            status: 403,
+            responseStatus: 403,
+          },
+          staleOutgoingThreadAfterReload: { status: 403 },
+        },
         outcomeSummary:
-          "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion",
+          "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion and reloaded into completed private-channel truth",
       },
       staleHostPublishAfterChange: {
         status: "passed",
@@ -5412,6 +5446,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
       "replacement-stale-private-post-after-complete",
+      "replacement-stale-private-post-after-complete-reload",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5512,7 +5547,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 82);
+  assert.equal(opsArtifacts.proofRun.laneCount, 83);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5622,6 +5657,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
       "replacement-stale-private-post-after-complete",
+      "replacement-stale-private-post-after-complete-reload",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -6144,6 +6180,7 @@ function hardeningAdminProofFixture() {
         "replacement-stale-private-post-after-resolve",
         "replacement-stale-private-post-reconnect",
         "replacement-stale-private-post-after-complete",
+        "replacement-stale-private-post-after-complete-reload",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -6272,6 +6309,7 @@ function seedAdminProofFixture() {
         "replacement-stale-private-post-after-resolve",
         "replacement-stale-private-post-reconnect",
         "replacement-stale-private-post-after-complete",
+        "replacement-stale-private-post-after-complete-reload",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

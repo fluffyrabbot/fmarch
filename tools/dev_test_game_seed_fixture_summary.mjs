@@ -188,6 +188,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-stale-private-post-after-resolve",
     "replacement-stale-private-post-reconnect",
     "replacement-stale-private-post-after-complete",
+    "replacement-stale-private-post-after-complete-reload",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
@@ -413,6 +414,15 @@ function demoScenarios({ roles, laneIds }) {
       role: "replacementPlayer",
       provenBy: ["replacement-stale-private-post-after-complete"].filter(hasLane),
       note: "Rowan's replacement private-channel role URL freezes before host CompleteGame, then the stale private post rejects GameAlreadyCompleted while refreshing to completed-game controls with Mira still blocked.",
+    }),
+    scenario({
+      id: "replacement-stale-private-post-after-complete-reload",
+      title: "Completed replacement private channel reload",
+      role: "replacementPlayer",
+      provenBy: ["replacement-stale-private-post-after-complete-reload"].filter(
+        hasLane,
+      ),
+      note: "After Rowan's stale private post rejects on CompleteGame, the replacement private-channel role URL reloads into completed-game disabled controls while the rejected post stays absent and Mira remains forbidden.",
     }),
     scenario({
       id: "concurrent-host-resolve-race",
@@ -654,6 +664,7 @@ function demoScenarios({ roles, laneIds }) {
         "replacement-stale-private-post-after-resolve",
         "replacement-stale-private-post-reconnect",
         "replacement-stale-private-post-after-complete",
+        "replacement-stale-private-post-after-complete-reload",
         "stale-host-publish",
         "stale-host-lifecycle",
         "stale-host-modkill",
