@@ -513,7 +513,10 @@ activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
 controls, keeps a player page frozen on a legal D02 vote target until the host
 marks that target dead, then renders `Reject InvalidTarget` copy naming the
 stale vote-target condition and refreshes to the current vote target controls
-without the dead slot, keeps a full host page frozen on locked D02 `AdvancePhase` until the
+without the dead slot, casts a live current vote from the player role URL,
+marks that voted target dead from the host role URL, and verifies player
+`current_vote`, player/host votecount, and API votecount all clear that
+dead-target ballot without resurrecting it on restore, keeps a full host page frozen on locked D02 `AdvancePhase` until the
 live host unlocks D02, then renders a stale `Reject InvalidTarget` receipt with
 no ACK stream seqs and refreshes to open D02 `resolve_phase` / `lock_thread`
 controls for the remaining seeded flows, keeps a second host page frozen on the
@@ -627,8 +630,8 @@ host-issued replacement invite, stale outgoing-player action recovery, stale out
 private-channel recovery, stale outgoing-player private-receipt recovery, and replacement-player ownership,
 projection-driven host player-invite retargeting after replacement, stale host player-invite recovery to the current occupant,
 duplicate replacement command, duplicate post command, player reconnect,
-concurrent vote race, stale player vote, stale dead-target vote recovery, stale
-dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
+concurrent vote race, stale player vote, stale dead-target vote recovery,
+dead-current-vote cleanup, stale dead action conflict, stale action conflict, stale action conflict message, stale host control recovery,
 stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove

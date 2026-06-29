@@ -2099,6 +2099,83 @@ test("session card and markdown include role credential URLs and tokens", () => 
         restoreAlive: { state: "ack", slot: "slot-3", status: "alive" },
         apiSlotAfterRestore: { alive: true, status: "alive" },
       },
+      deadCurrentVote: {
+        status: "passed",
+        commandStateBeforeVote: {
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        target: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        voteButton: {
+          action: "submit_vote",
+          disabled: false,
+          text: "Vote Slot 3",
+        },
+        vote: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    target: { Slot: "slot-3" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterVote: {
+          currentVote: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        },
+        currentVoteAfterVote: {
+          hasVote: "true",
+          text: "Current vote Slot 3",
+        },
+        playerVotecountAfterVote: [{ target: "slot-3", count: 1 }],
+        apiVotecountAfterVote: [
+          {
+            kind: "VoteCountChanged",
+            body: { phase_id: "D02", candidate_slot: "slot-3", count: 1 },
+          },
+        ],
+        markDead: { state: "ack", slot: "slot-3", status: "dead" },
+        apiSlotAfterDead: { alive: false, status: "dead" },
+        commandStateAfterDead: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        currentVoteAfterDead: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
+        playerVotecountAfterDead: [],
+        hostVotecountAfterDead: [],
+        apiCommandStateAfterDead: {
+          current_vote: null,
+          vote_targets: [
+            { kind: "slot", slot_id: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slot_id: null, label: "No lynch" },
+          ],
+        },
+        apiVotecountAfterDead: [],
+        restoreAlive: { state: "ack", slot: "slot-3", status: "alive" },
+        apiSlotAfterRestore: { alive: true, status: "alive" },
+        commandStateAfterRestore: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+      },
       concurrentVoteRace: {
         status: "passed",
         targetSlot: "slot-3",
@@ -2847,6 +2924,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Stale dead-target vote: Reject InvalidTarget"));
+  assert(markdown.includes("Dead current vote: Slot 3 cleared"));
   assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
   assert(markdown.includes("Stale host lifecycle: Reject InvalidTarget"));
@@ -2905,6 +2983,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "reconnect-recovery",
       "stale-player-vote",
       "stale-dead-target-vote",
+      "dead-current-vote",
       "concurrent-vote-race",
       "host-votecount-publication",
       "stale-host-publish",
@@ -2994,7 +3073,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 53);
+  assert.equal(opsArtifacts.proofRun.laneCount, 54);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,

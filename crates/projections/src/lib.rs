@@ -2657,6 +2657,24 @@ async fn set_slot_status(
     .bind(status)
     .execute(&mut **tx)
     .await?;
+    if !alive {
+        clear_ballots_for_dead_slot(tx, game_id, slot_id).await?;
+    }
+    Ok(())
+}
+
+async fn clear_ballots_for_dead_slot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    slot_id: &str,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        "DELETE FROM vote_ballot WHERE game_id = $1 AND (actor_slot = $2 OR target = $2)",
+    )
+    .bind(game_id)
+    .bind(slot_id)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 

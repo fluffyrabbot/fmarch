@@ -70339,6 +70339,73 @@ async fn submit_vote_rejects_dead_target_as_invalid_target(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn slot_lifecycle_death_clears_current_ballots_by_and_for_slot(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
+    add_vanilla_slot(&pool, game, "host_h", "slot_3").await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::AssignSlot {
+            game,
+            slot: "slot_2".into(),
+            user: "user_b".into(),
+        },
+    )
+    .await
+    .expect("assign slot_2");
+
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_1".into(),
+            target: VoteTarget::Slot("slot_2".into()),
+        },
+    )
+    .await
+    .expect("slot_1 votes target that will die");
+    handle(
+        &pool,
+        &user("user_b"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_2".into(),
+            target: VoteTarget::Slot("slot_3".into()),
+        },
+    )
+    .await
+    .expect("slot_2 casts a ballot before dying");
+    assert_eq!(tally_for(&pool, game, "D01", "slot_2").await, 1);
+    assert_eq!(tally_for(&pool, game, "D01", "slot_3").await, 1);
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_2".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect("host marks voted target and voter dead");
+
+    assert_eq!(
+        votecount(&pool, game).await.unwrap(),
+        Vec::<projections::VoteCountRow>::new(),
+        "slot death clears current ballots cast by and targeting that slot"
+    );
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        votecount(&pool, game).await.unwrap(),
+        Vec::<projections::VoteCountRow>::new(),
+        "votecount rebuild preserves lifecycle-cleared current ballots"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");

@@ -759,6 +759,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale dead-target vote: ${card.verification.multiplayerHardening.staleDeadTargetVote.reject.message}`,
         "",
+        `Dead current vote: ${card.verification.multiplayerHardening.deadCurrentVote.target.label} cleared`,
+        "",
         `Concurrent vote race: ${card.verification.multiplayerHardening.concurrentVoteRace.targetSlot} count ${card.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count}`,
         "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
@@ -3295,6 +3297,12 @@ async function verifySeededMultiplayerHardening({
     game,
     apiBaseUrl,
   });
+  const deadCurrentVote = await verifyDeadCurrentVoteRecovery({
+    hostPage,
+    playerPage,
+    game,
+    apiBaseUrl,
+  });
   const concurrentVoteRace = await verifyConcurrentVoteRace({
     playerPage,
     actionPage,
@@ -3451,6 +3459,7 @@ async function verifySeededMultiplayerHardening({
     reconnect,
     stalePlayerVote,
     staleDeadTargetVote,
+    deadCurrentVote,
     concurrentVoteRace,
     hostVotecountPublication,
     staleHostPublish,
@@ -3469,7 +3478,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -7743,6 +7752,233 @@ async function verifyStaleDeadTargetVoteRecovery({
     apiSlotAfterRestore,
     proof:
       "A seeded player role URL froze with a legal D02 vote target, the host marked that target dead, the stale vote click rejected as InvalidTarget with vote-control recovery copy, then commandState refreshed with the dead target removed and the remaining legal vote controls intact before the seed target was restored alive.",
+  };
+}
+
+async function verifyDeadCurrentVoteRecovery({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+}) {
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+  );
+  const commandStateBeforeVote = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const target = commandStateBeforeVote?.voteTargets?.find(
+    (candidate) => candidate.kind === "slot",
+  );
+  const voteButton = target
+    ? (await playerCommandButtons(playerPage)).find(
+        (button) =>
+          button.action?.startsWith("submit_vote") &&
+          button.text?.includes(target.label) &&
+          button.disabled === false,
+      )
+    : undefined;
+  if (target?.slotId === undefined || voteButton === undefined) {
+    throw new Error(
+      `dead current-vote setup found no legal vote target: ${JSON.stringify({
+        commandStateBeforeVote,
+        voteButton,
+      })}`,
+    );
+  }
+
+  await playerPage.locator(`[data-action="${voteButton.action}"]`).click();
+  await playerPage.waitForFunction(
+    (targetSlot) =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+        ?.SubmitVote?.target?.Slot === targetSlot,
+    target.slotId,
+  );
+  await playerPage.waitForFunction(
+    (targetSlot) =>
+      window.__fmarchPlayerProjection?.commandState?.currentVote?.kind === "slot" &&
+      window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId === targetSlot &&
+      window.__fmarchPlayerProjection?.votecount?.some(
+        (row) => row.target === targetSlot && Number(row.count) >= 1,
+      ),
+    target.slotId,
+  );
+  const vote = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const commandStateAfterVote = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const currentVoteAfterVote = await playerPage
+    .getByTestId("player-current-vote")
+    .evaluate((node) => ({
+      hasVote: node.getAttribute("data-has-vote"),
+      text: node.textContent?.trim() ?? "",
+    }));
+  const playerVotecountAfterVote = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.votecount ?? [],
+  );
+  const apiVotecountAfterVote = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+
+  const markDead = await setSlotLifecycleViaHost({
+    hostPage,
+    game,
+    slot: target.slotId,
+    status: "dead",
+  });
+  await playerPage.waitForFunction(
+    (targetSlot) =>
+      window.__fmarchPlayerProjection?.commandState?.currentVote === null &&
+      (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).some(
+        (candidate) => candidate.kind === "slot" && candidate.slotId === targetSlot,
+      ) === false &&
+      (window.__fmarchPlayerProjection?.votecount ?? []).some(
+        (row) => row.target === targetSlot,
+      ) === false,
+    target.slotId,
+  );
+  await hostPage.waitForFunction(
+    (targetSlot) =>
+      (window.__fmarchHostVotecountProjection ?? []).some(
+        (row) => row.target === targetSlot,
+      ) === false,
+    target.slotId,
+  );
+  const apiSlotAfterDead = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: target.slotId,
+  });
+  const commandStateAfterDead = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const currentVoteAfterDead = await playerPage
+    .getByTestId("player-current-vote")
+    .evaluate((node) => ({
+      hasVote: node.getAttribute("data-has-vote"),
+      text: node.textContent?.trim() ?? "",
+    }));
+  const playerVotecountAfterDead = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.votecount ?? [],
+  );
+  const hostVotecountAfterDead = await hostPage.evaluate(
+    () => window.__fmarchHostVotecountProjection ?? [],
+  );
+  const apiCommandStateAfterDead = await fetchJson(
+    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+  );
+  const apiVotecountAfterDead = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+  if (
+    vote?.state !== "ack" ||
+    commandStateAfterVote?.currentVote?.slotId !== target.slotId ||
+    currentVoteAfterVote.hasVote !== "true" ||
+    !currentVoteAfterVote.text.includes(target.label) ||
+    !normalizedVotecountRows(apiVotecountAfterVote).some(
+      (row) => row.target === target.slotId && row.count >= 1,
+    ) ||
+    markDead?.state !== "ack" ||
+    apiSlotAfterDead?.alive !== false ||
+    commandStateAfterDead?.currentVote !== null ||
+    commandStateAfterDead?.voteTargets?.some(
+      (candidate) => candidate.kind === "slot" && candidate.slotId === target.slotId,
+    ) === true ||
+    currentVoteAfterDead.hasVote !== "false" ||
+    !currentVoteAfterDead.text.includes("No current vote") ||
+    playerVotecountAfterDead.some((row) => row.target === target.slotId) ||
+    hostVotecountAfterDead.some((row) => row.target === target.slotId) ||
+    apiCommandStateAfterDead?.current_vote !== null ||
+    apiCommandStateAfterDead?.vote_targets?.some(
+      (candidate) => candidate.kind === "slot" && candidate.slot_id === target.slotId,
+    ) === true ||
+    normalizedVotecountRows(apiVotecountAfterDead).some(
+      (row) => row.target === target.slotId,
+    )
+  ) {
+    throw new Error(
+      `dead current-vote recovery drifted: ${JSON.stringify({
+        target,
+        vote,
+        commandStateAfterVote,
+        currentVoteAfterVote,
+        playerVotecountAfterVote,
+        apiVotecountAfterVote,
+        markDead,
+        apiSlotAfterDead,
+        commandStateAfterDead,
+        currentVoteAfterDead,
+        hostVotecountAfterDead,
+        apiCommandStateAfterDead,
+        apiVotecountAfterDead,
+      })}`,
+    );
+  }
+
+  const restoreAlive = await setSlotLifecycleViaHost({
+    hostPage,
+    game,
+    slot: target.slotId,
+    status: "alive",
+  });
+  const apiSlotAfterRestore = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: target.slotId,
+  });
+  await playerPage.waitForFunction(
+    (targetSlot) =>
+      window.__fmarchPlayerProjection?.commandState?.voteTargets?.some(
+        (candidate) => candidate.kind === "slot" && candidate.slotId === targetSlot,
+      ) === true &&
+      window.__fmarchPlayerProjection?.commandState?.currentVote === null,
+    target.slotId,
+  );
+  const commandStateAfterRestore = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  if (
+    restoreAlive?.state !== "ack" ||
+    apiSlotAfterRestore?.alive !== true ||
+    commandStateAfterRestore?.currentVote !== null ||
+    commandStateAfterRestore?.voteTargets?.some(
+      (candidate) => candidate.kind === "slot" && candidate.slotId === target.slotId,
+    ) !== true
+  ) {
+    throw new Error(
+      `dead current-vote cleanup drifted: ${JSON.stringify({
+        target,
+        restoreAlive,
+        apiSlotAfterRestore,
+        commandStateAfterRestore,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    commandStateBeforeVote,
+    target,
+    voteButton,
+    vote,
+    commandStateAfterVote,
+    currentVoteAfterVote,
+    playerVotecountAfterVote,
+    apiVotecountAfterVote,
+    markDead,
+    apiSlotAfterDead,
+    commandStateAfterDead,
+    currentVoteAfterDead,
+    playerVotecountAfterDead,
+    hostVotecountAfterDead,
+    apiCommandStateAfterDead,
+    apiVotecountAfterDead,
+    restoreAlive,
+    apiSlotAfterRestore,
+    commandStateAfterRestore,
+    proof:
+      "The seeded player role URL cast a legal current vote, the host marked that voted target dead, player commandState refreshed to currentVote null, the dead target disappeared from legal vote controls, and player/host/API votecount projections cleared the dead-target ballot before the seed target was restored alive without resurrecting the old vote.",
   };
 }
 

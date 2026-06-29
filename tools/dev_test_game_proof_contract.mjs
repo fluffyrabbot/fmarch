@@ -42,6 +42,8 @@ const requiredLaneIds = Object.freeze([
   "idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
+  "stale-dead-target-vote",
+  "dead-current-vote",
   "concurrent-vote-race",
   "host-votecount-publication",
   "stale-host-publish",
@@ -1529,6 +1531,77 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleDeadTargetVote?.apiSlotAfterRestore?.alive === true &&
         hardening.staleDeadTargetVote?.apiSlotAfterRestore?.status === "alive",
     }),
+    lane("dead-current-vote", "Lifecycle death clears current vote and votecount", {
+      targetSlot: hardening.deadCurrentVote?.target?.slotId ?? null,
+      voteState: hardening.deadCurrentVote?.vote?.state ?? null,
+      currentVoteAfterVote:
+        hardening.deadCurrentVote?.commandStateAfterVote?.currentVote ?? null,
+      currentVoteAfterDead:
+        hardening.deadCurrentVote?.commandStateAfterDead?.currentVote ?? null,
+      playerVotecountAfterDead:
+        hardening.deadCurrentVote?.playerVotecountAfterDead ?? null,
+      restoreAlive:
+        hardening.deadCurrentVote?.apiSlotAfterRestore?.alive ?? null,
+      passed:
+        hardening.deadCurrentVote?.status === "passed" &&
+        hardening.deadCurrentVote?.target?.kind === "slot" &&
+        hardening.deadCurrentVote?.commandStateBeforeVote?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.deadCurrentVote?.target?.slotId,
+        ) === true &&
+        hardening.deadCurrentVote?.voteButton?.disabled === false &&
+        hardening.deadCurrentVote?.vote?.state === "ack" &&
+        hardening.deadCurrentVote?.vote?.requestEnvelope?.body?.body?.command?.SubmitVote
+          ?.target?.Slot === hardening.deadCurrentVote?.target?.slotId &&
+        hardening.deadCurrentVote?.commandStateAfterVote?.currentVote?.kind === "slot" &&
+        hardening.deadCurrentVote?.commandStateAfterVote?.currentVote?.slotId ===
+          hardening.deadCurrentVote?.target?.slotId &&
+        hardening.deadCurrentVote?.currentVoteAfterVote?.hasVote === "true" &&
+        hardening.deadCurrentVote?.playerVotecountAfterVote?.some(
+          (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
+        ) === true &&
+        normalizedVotecountRows(hardening.deadCurrentVote?.apiVotecountAfterVote).some(
+          (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
+        ) === true &&
+        hardening.deadCurrentVote?.markDead?.state === "ack" &&
+        hardening.deadCurrentVote?.apiSlotAfterDead?.alive === false &&
+        hardening.deadCurrentVote?.apiSlotAfterDead?.status === "dead" &&
+        hardening.deadCurrentVote?.commandStateAfterDead?.currentVote === null &&
+        hardening.deadCurrentVote?.commandStateAfterDead?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.deadCurrentVote?.target?.slotId,
+        ) === false &&
+        hardening.deadCurrentVote?.currentVoteAfterDead?.hasVote === "false" &&
+        hardening.deadCurrentVote?.currentVoteAfterDead?.text?.includes(
+          "No current vote",
+        ) === true &&
+        hardening.deadCurrentVote?.playerVotecountAfterDead?.some(
+          (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
+        ) === false &&
+        hardening.deadCurrentVote?.hostVotecountAfterDead?.some(
+          (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
+        ) === false &&
+        hardening.deadCurrentVote?.apiCommandStateAfterDead?.current_vote === null &&
+        hardening.deadCurrentVote?.apiCommandStateAfterDead?.vote_targets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slot_id === hardening.deadCurrentVote?.target?.slotId,
+        ) === false &&
+        normalizedVotecountRows(hardening.deadCurrentVote?.apiVotecountAfterDead).some(
+          (row) => row.target === hardening.deadCurrentVote?.target?.slotId,
+        ) === false &&
+        hardening.deadCurrentVote?.restoreAlive?.state === "ack" &&
+        hardening.deadCurrentVote?.apiSlotAfterRestore?.alive === true &&
+        hardening.deadCurrentVote?.apiSlotAfterRestore?.status === "alive" &&
+        hardening.deadCurrentVote?.commandStateAfterRestore?.currentVote === null &&
+        hardening.deadCurrentVote?.commandStateAfterRestore?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.deadCurrentVote?.target?.slotId,
+        ) === true,
+    }),
     lane("concurrent-vote-race", "Concurrent player votes converge in projections", {
       targetSlot: hardening.concurrentVoteRace?.targetSlot ?? null,
       playerState: hardening.concurrentVoteRace?.playerVote?.state ?? null,
@@ -2354,6 +2427,21 @@ function sameArray(left, right) {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+function normalizedVotecountRows(apiVotecount) {
+  const rows = Array.isArray(apiVotecount) ? apiVotecount : [];
+  return rows
+    .map((delta) =>
+      delta?.kind === "VoteCountChanged"
+        ? delta.body
+        : delta?.VoteCountChanged ?? delta?.body?.VoteCountChanged ?? null,
+    )
+    .filter(Boolean)
+    .map((delta) => ({
+      target: delta.candidate_slot ?? delta.candidateSlot ?? "unknown",
+      count: Number(delta.count ?? 0),
+    }));
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
