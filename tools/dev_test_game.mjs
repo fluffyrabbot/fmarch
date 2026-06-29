@@ -771,6 +771,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host modkill: ${card.verification.multiplayerHardening.staleHostModkill.reject.message}`,
         "",
+        `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
+        "",
         `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
@@ -815,6 +817,7 @@ async function verifySessionCard(card) {
   let playerActionBoundary;
   let multiplayerHardening;
   let replacementConsole;
+  let staleSameActionPage;
   let staleActionPage;
   let staleDeadActionPage;
   let staleHostPage;
@@ -838,6 +841,7 @@ async function verifySessionCard(card) {
       sessions[role] = roleEntries[role].verification;
       roles.push(role);
     }
+    staleSameActionPage = await roleEntries.actionPlayer.context.newPage();
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleDeadActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
@@ -888,6 +892,7 @@ async function verifySessionCard(card) {
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
+      staleSameActionPage,
       staleActionPage,
       staleDeadActionPage,
       staleHostPage,
@@ -903,6 +908,7 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
+      staleSameActionRecovery: actionLoop.staleSameActionRecovery,
       staleActionConflict: actionLoop.staleActionConflict,
       staleDeadActionConflict: actionLoop.staleDeadActionConflict,
       staleHostPage,
@@ -932,6 +938,7 @@ async function verifySessionCard(card) {
     sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.browserEntry;
     roles.push("replacementPlayer");
   } finally {
+    await staleSameActionPage?.close().catch(() => {});
     await staleActionPage?.close().catch(() => {});
     await staleDeadActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
@@ -2268,6 +2275,7 @@ async function verifySeededActionLoop({
   playerPage,
   actionPage,
   targetPage,
+  staleSameActionPage,
   staleActionPage,
   staleDeadActionPage,
   staleHostPage,
@@ -2307,6 +2315,10 @@ async function verifySeededActionLoop({
   const n01Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const staleSameActionSetup = await freezeStaleActionPage({
+    staleActionPage: staleSameActionPage,
+    game,
+  });
   const staleActionSetup = await freezeStaleActionPage({ staleActionPage, game });
   const staleDeadActionSetup = await freezeStaleActionPage({
     staleActionPage: staleDeadActionPage,
@@ -2341,6 +2353,13 @@ async function verifySeededActionLoop({
   await actionPage.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
   );
+  const staleSameActionRecovery = await submitStaleSameActionRecovery({
+    staleSameActionPage,
+    staleSameActionSetup,
+    legalAction,
+    apiBaseUrl,
+    game,
+  });
 
   const resolveNight = await confirmHostAction(hostPage, "resolve_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: true });
@@ -2396,6 +2415,7 @@ async function verifySeededActionLoop({
     playerActionBoundary,
     deadlineAdvance,
     staleDeadlineAdvance,
+    staleSameActionRecovery,
     resolutionReceipts,
     deadPlayerRecovery,
     resolveNight,
@@ -2407,7 +2427,7 @@ async function verifySeededActionLoop({
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
   };
 }
 
@@ -3069,6 +3089,123 @@ async function freezeStaleActionPage({ staleActionPage, game }) {
   };
 }
 
+async function submitStaleSameActionRecovery({
+  staleSameActionPage,
+  staleSameActionSetup,
+  legalAction,
+  apiBaseUrl,
+  game,
+}) {
+  await staleSameActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await staleSameActionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "ActionAlreadySubmitted",
+  );
+  const reject = await staleSameActionPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  if (!reject.message.includes("refresh and use current controls")) {
+    throw new Error(`stale same-action message drifted: ${JSON.stringify(reject)}`);
+  }
+  await staleSameActionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+  );
+  await staleSameActionPage.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  const legalSubmittedCommand =
+    legalAction?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  const phaseAfterReject = await staleSameActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState?.phase,
+  );
+  const commandStateAfterReject = await staleSameActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const dispatchPlan = await staleSameActionPage.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const currentReceipt = await staleSameActionPage.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await staleSameActionPage
+    .getByTestId("player-command-status")
+    .innerText();
+  const apiCommandStateAfterReject = await fetchJson(
+    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+  );
+  const submittedCommand =
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "ActionAlreadySubmitted" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    reject?.commandId === legalAction?.commandId ||
+    submittedCommand?.actor_slot !== "slot_4" ||
+    submittedCommand?.action_id !== "role_factional_kill" ||
+    submittedCommand?.template_id !== "factional_kill" ||
+    submittedCommand?.targets?.[0] !== legalSubmittedCommand?.targets?.[0] ||
+    dispatchPlan?.projectionRefreshKeys?.includes("notifications") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("investigationResults") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") === true ||
+    currentReceipt?.actionId !== "submit_action:factional_kill" ||
+    currentReceipt?.state !== "reject" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
+      true ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+      "dayVoteOutcomes",
+    ) === true ||
+    !receiptStatusText.includes("Reject ActionAlreadySubmitted") ||
+    !receiptStatusText.includes("refresh and use current controls") ||
+    commandStateAfterReject?.actorSlot !== "slot_4" ||
+    commandStateAfterReject?.actorAlive !== true ||
+    commandStateAfterReject?.actorStatus !== "alive" ||
+    commandStateAfterReject?.phase?.phaseId !== "N01" ||
+    commandStateAfterReject?.phase?.locked !== false ||
+    commandStateAfterReject?.actions?.length !== 0 ||
+    apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
+    apiCommandStateAfterReject?.actor_alive !== true ||
+    apiCommandStateAfterReject?.actor_status !== "alive" ||
+    apiCommandStateAfterReject?.phase?.phase_id !== "N01" ||
+    apiCommandStateAfterReject?.phase?.locked !== false ||
+    apiCommandStateAfterReject?.actions?.length !== 0
+  ) {
+    throw new Error(
+      `stale same-action recovery drifted: ${JSON.stringify({
+        legalAction,
+        reject,
+        phaseAfterReject,
+        commandStateAfterReject,
+        dispatchPlan,
+        currentReceipt,
+        receiptStatusText,
+        apiCommandStateAfterReject,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    staleN01Phase: staleSameActionSetup.staleN01Phase,
+    actionConfig: staleSameActionSetup.actionConfig,
+    closedStatus: staleSameActionSetup.closedStatus,
+    legalActionCommandId: legalAction.commandId,
+    legalActionTarget: legalSubmittedCommand?.targets?.[0] ?? null,
+    reject,
+    phaseAfterReject,
+    commandStateAfterReject,
+    dispatchPlan,
+    currentReceipt,
+    receiptStatusText,
+    apiCommandStateAfterReject,
+    actionVisibleAfterRefresh: false,
+  };
+}
+
 async function submitStaleActionConflict({
   staleActionPage,
   staleActionSetup,
@@ -3385,6 +3522,7 @@ async function verifySeededMultiplayerHardening({
   hostPage,
   playerPage,
   actionPage,
+  staleSameActionRecovery,
   staleActionConflict,
   staleDeadActionConflict,
   staleHostPage,
@@ -3704,6 +3842,7 @@ async function verifySeededMultiplayerHardening({
     hostLifecycleControl,
     hostModkillControl,
     staleHostModkill,
+    staleSameActionRecovery,
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,

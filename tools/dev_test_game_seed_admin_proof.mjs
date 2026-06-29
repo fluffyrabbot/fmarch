@@ -24,6 +24,7 @@ const requiredScenarios = [
   "resolution-receipt",
   "dead-player-recovery",
   "night-action-loop",
+  "stale-same-action-recovery",
   "host-replacement-console",
   "replacement-host-issued-invite",
   "replacement-pending-player",

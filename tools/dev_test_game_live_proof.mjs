@@ -1737,6 +1737,42 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery.reject.error,
+  "ActionAlreadySubmitted",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleSameActionRecovery.reject.message,
+  /refresh and use current controls/,
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.staleSameActionRecovery.reject.commandId,
+  session.verification.multiplayerHardening.staleSameActionRecovery.legalActionCommandId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery
+    .commandStateAfterReject.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery
+    .commandStateAfterReject.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery
+    .apiCommandStateAfterReject.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleSameActionRecovery
+    .actionVisibleAfterRefresh,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleDeadActionConflict.restoreAlive.state,
   "ack",
 );

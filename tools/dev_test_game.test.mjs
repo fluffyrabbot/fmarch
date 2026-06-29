@@ -2958,6 +2958,73 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorStatus: "modkilled",
         },
       },
+      staleSameActionRecovery: {
+        status: "passed",
+        actionConfig: {
+          templateId: "factional_kill",
+        },
+        staleN01Phase: { phaseId: "N01" },
+        legalActionCommandId: "11111111-1111-4111-8111-111111111111",
+        legalActionTarget: "slot-2",
+        reject: {
+          state: "reject",
+          commandId: "22222222-2222-4222-8222-222222222222",
+          error: "ActionAlreadySubmitted",
+          message:
+            "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        phaseAfterReject: { phaseId: "N01", locked: false },
+        commandStateAfterReject: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        currentReceipt: {
+          actionId: "submit_action:factional_kill",
+          state: "reject",
+          commandTrace: {
+            projectionRefreshKeys: [
+              "notifications",
+              "investigationResults",
+              "commandState",
+            ],
+          },
+        },
+        receiptStatusText:
+          "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
+        apiCommandStateAfterReject: {
+          actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
+          phase: { phase_id: "N01", locked: false },
+          actions: [],
+        },
+        actionVisibleAfterRefresh: false,
+      },
       staleDeadActionConflict: {
         status: "passed",
         markDead: { state: "ack" },
@@ -3582,6 +3649,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-prompt",
       "stale-host-complete",
       "stale-player-complete",
+      "stale-same-action-recovery",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -3661,7 +3729,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 60);
+  assert.equal(opsArtifacts.proofRun.laneCount, 61);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3757,6 +3825,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
+      "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
       "host-replacement-console",
@@ -4230,6 +4299,7 @@ function hardeningAdminProofFixture() {
         "stale-host-prompt",
         "stale-host-complete",
         "stale-player-complete",
+        "stale-same-action-recovery",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",
@@ -4326,6 +4396,7 @@ function seedAdminProofFixture() {
         "replacement-stale-private-channel",
         "replacement-stale-private-receipts",
         "replacement-incoming-player",
+        "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",
         "private-channel-member",
