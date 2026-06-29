@@ -984,9 +984,9 @@ async fn advance_phase(
     game: Uuid,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_advance_phase_lock(pool, game).await?;
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
     let result = advance_phase_locked(pool, principal, game, receipt).await;
-    release_advance_phase_lock(&mut lock, game, result).await
+    release_phase_boundary_lock(&mut lock, game, result).await
 }
 
 async fn advance_phase_locked(
@@ -1024,51 +1024,6 @@ async fn advance_phase_locked(
     .await
 }
 
-async fn acquire_advance_phase_lock(
-    pool: &PgPool,
-    game: Uuid,
-) -> Result<PoolConnection<Postgres>, Reject> {
-    let mut conn = pool
-        .acquire()
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    sqlx::query("SELECT pg_advisory_lock($1)")
-        .bind(advance_phase_lock_key(game))
-        .execute(&mut *conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    Ok(conn)
-}
-
-async fn release_advance_phase_lock(
-    conn: &mut PoolConnection<Postgres>,
-    game: Uuid,
-    result: Result<Ack, Reject>,
-) -> Result<Ack, Reject> {
-    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
-        .bind(advance_phase_lock_key(game))
-        .fetch_one(&mut **conn)
-        .await
-        .map_err(|e| Reject::Internal(e.to_string()))?;
-    if !released {
-        return Err(Reject::Internal(
-            "advance phase lock was not held at release".to_string(),
-        ));
-    }
-    result
-}
-
-fn advance_phase_lock_key(game: Uuid) -> i64 {
-    let bytes = game.as_bytes();
-    let high = u64::from_be_bytes([
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-    ]);
-    let low = u64::from_be_bytes([
-        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-    ]);
-    (high ^ low ^ 0x6d66_6172_6368_0003) as i64
-}
-
 async fn advance_phase_by_deadline(
     pool: &PgPool,
     principal: &Principal,
@@ -1077,11 +1032,11 @@ async fn advance_phase_by_deadline(
     observed_at: i64,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
-    let mut lock = acquire_advance_phase_lock(pool, game).await?;
+    let mut lock = acquire_phase_boundary_lock(pool, game).await?;
     let result =
         advance_phase_by_deadline_locked(pool, principal, game, phase_id, observed_at, receipt)
             .await;
-    release_advance_phase_lock(&mut lock, game, result).await
+    release_phase_boundary_lock(&mut lock, game, result).await
 }
 
 async fn advance_phase_by_deadline_locked(

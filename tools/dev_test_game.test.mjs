@@ -2791,6 +2791,67 @@ test("session card and markdown include role credential URLs and tokens", () => 
           { phase_id: "D01", status: "Lynch", winner_slot: "slot-2" },
         ],
       },
+      concurrentPlayerActionAdvanceRace: {
+        status: "passed",
+        game: "action-advance-race-game-a",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        actionEntry: { capabilityKinds: ["SlotOccupant"] },
+        setupCommandState: {
+          actorSlot: "slot_4",
+          phase: { phaseId: "N01", locked: false },
+          actions: [{ templateId: "factional_kill" }],
+        },
+        setupActionButton: {
+          action: "submit_action:factional_kill",
+          disabled: false,
+        },
+        setupHostPhase: { id: "N01", locked: false },
+        setupHostPhaseActions: ["resolve_phase"],
+        closedStatus: { state: "closed" },
+        resolveNight: { commandStatus: { state: "ack" } },
+        lockedHostPhase: { id: "N01", locked: true },
+        lockedHostPhaseActions: ["advance_phase"],
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message: "Reject PhaseLocked",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    game: "action-advance-race-game-a",
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        advance: {
+          state: "ack",
+          streamSeqs: [52],
+          serverEnvelope: { body: { kind: "Ack" } },
+        },
+        commandStateAfterRace: {
+          actorSlot: "slot_4",
+          phase: { phaseId: "D02", locked: false },
+          actions: [],
+        },
+        buttonsAfterRace: [{ action: "submit_vote:no_lynch", disabled: false }],
+        hostPhaseAfterRace: { id: "D02", locked: false },
+        hostPhaseActionsAfterRace: ["resolve_phase", "lock_thread"],
+        apiCommandStateAfterRace: {
+          actor_slot: "slot_4",
+          phase: { phase_id: "D02", locked: false },
+          actions: [],
+        },
+        apiHostStateAfterRace: { phase: { phase_id: "D02", locked: false } },
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -4447,6 +4508,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Dead current vote: Slot 3 cleared"));
   assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
   assert(markdown.includes("Concurrent player vote/resolve race: vote seq 47 before resolve seq 48"));
+  assert(markdown.includes("Concurrent player action/advance race: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent host resolve race: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent host advance race: Reject InvalidTarget"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
@@ -4519,6 +4581,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-vote-after-phase-closure",
       "stale-player-post-after-phase-closure",
       "concurrent-player-vote-resolve-race",
+      "concurrent-player-action-advance-race",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -4619,7 +4682,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 71);
+  assert.equal(opsArtifacts.proofRun.laneCount, 72);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4718,6 +4781,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "action-idempotent-retry",
       "concurrent-action-race",
       "concurrent-player-vote-resolve-race",
+      "concurrent-player-action-advance-race",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5229,6 +5293,7 @@ function hardeningAdminProofFixture() {
         "stale-player-vote-after-phase-closure",
         "stale-player-post-after-phase-closure",
         "concurrent-player-vote-resolve-race",
+        "concurrent-player-action-advance-race",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -5346,6 +5411,7 @@ function seedAdminProofFixture() {
         "action-idempotent-retry",
         "concurrent-action-race",
         "concurrent-player-vote-resolve-race",
+        "concurrent-player-action-advance-race",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

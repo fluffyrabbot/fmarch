@@ -765,6 +765,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent player vote/resolve race: ${card.verification.multiplayerHardening.concurrentPlayerVoteResolveRace.outcomeSummary}`,
         "",
+        `Concurrent player action/advance race: ${card.verification.multiplayerHardening.concurrentPlayerActionAdvanceRace.reject.message}`,
+        "",
         `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
         "",
         `Stale host lifecycle: ${card.verification.multiplayerHardening.staleHostLifecycle.reject.message}`,
@@ -4004,6 +4006,12 @@ async function verifySeededMultiplayerHardening({
       frontendBaseUrl,
       normalizeCommandResponse,
     });
+  const concurrentPlayerActionAdvanceRace =
+    await verifyConcurrentPlayerActionAdvanceRace({
+      browser: playerPage.context().browser(),
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -4226,6 +4234,7 @@ async function verifySeededMultiplayerHardening({
     stalePlayerVoteAfterPhaseClosure,
     stalePlayerPostAfterPhaseClosure,
     concurrentPlayerVoteResolveRace,
+    concurrentPlayerActionAdvanceRace,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -4257,7 +4266,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked while both role URLs converge to locked day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted while the role URL refreshes to disabled completed-game controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked while both role URLs converge to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending while both role URLs converge to open D02, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved two host role pages racing CompleteGame converge to one revealed endgame with one GameAlreadyCompleted recovery, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted while the role URL refreshes to disabled completed-game controls, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -12543,6 +12552,302 @@ async function verifyConcurrentPlayerVoteResolveRace({
     await hostEntry.context.close().catch(() => {});
     await playerEntry.context.close().catch(() => {});
   }
+}
+
+async function verifyConcurrentPlayerActionAdvanceRace({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("concurrent player action/advance proof requires a Playwright browser");
+  }
+  const raceGame = crypto.randomUUID();
+  const seed = await seedPlayerActionAdvanceRaceGame({ raceGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-action-advance-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${raceGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const actionSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-action-advance-player-${crypto.randomUUID()}`,
+    principalUserId: "player-goon-a",
+    returnTo: `/g/${raceGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: raceGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const actionEntry = await openVerifiedRoleEntry({
+    browser,
+    session: actionSession,
+    game: raceGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  try {
+    await Promise.all([
+      hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+      gotoPlayerBoard(actionEntry.page, raceGame),
+    ]);
+    await Promise.all([
+      waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false }),
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+          window.__fmarchPlayerProjection?.commandState?.actions?.some(
+            (action) => action.templateId === "factional_kill",
+          ),
+      ),
+    ]);
+    const setupCommandState = await actionEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const setupButtons = await playerCommandButtons(actionEntry.page);
+    const setupActionButton = setupButtons.find(
+      (button) =>
+        button.action === "submit_action:factional_kill" && button.disabled === false,
+    );
+    const setupHostPhase = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const setupHostPhaseActions = await visibleHostPhaseActions(hostEntry.page);
+    await actionEntry.page.waitForFunction(
+      () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+    );
+    const closedStatus = await actionEntry.page.evaluate(
+      () => window.__fmarchClosePlayerLiveProjection(),
+    );
+    const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    const lockedHostPhase = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const lockedHostPhaseActions = await visibleHostPhaseActions(hostEntry.page);
+    const advanceActionRoot = hostEntry.page.getByTestId(
+      "critical-host-action-advance_phase",
+    );
+    await advanceActionRoot
+      .getByTestId("critical-host-action-trigger")
+      .waitFor({ state: "visible" });
+    await advanceActionRoot.getByTestId("critical-host-action-trigger").click();
+    await advanceActionRoot
+      .getByTestId("critical-host-action-confirmation")
+      .waitFor({ state: "visible" });
+    await Promise.all([
+      actionEntry.page.locator('[data-action="submit_action:factional_kill"]').click(),
+      advanceActionRoot.getByTestId("critical-host-action-confirm").click(),
+    ]);
+    await Promise.all([
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.action_id === "role_factional_kill" &&
+          window.__fmarchPlayerCommandStatus?.state === "reject",
+      ),
+      hostEntry.page.waitForFunction(
+        () => window.__fmarchHostCommandStatuses?.advance_phase?.state === "ack",
+      ),
+    ]);
+    const reject = await actionEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const advance = await hostEntry.page.evaluate(
+      () => window.__fmarchHostCommandStatuses?.advance_phase,
+    );
+    const submittedCommand = reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
+    if (
+      setupCommandState?.actorSlot !== "slot_4" ||
+      setupCommandState?.phase?.phaseId !== "N01" ||
+      setupCommandState?.phase?.locked !== false ||
+      setupActionButton?.disabled !== false ||
+      setupHostPhase?.id !== "N01" ||
+      setupHostPhase?.locked !== false ||
+      setupHostPhaseActions.includes("resolve_phase") !== true ||
+      closedStatus?.state !== "closed" ||
+      resolveNight?.commandStatus?.state !== "ack" ||
+      lockedHostPhase?.id !== "N01" ||
+      lockedHostPhase?.locked !== true ||
+      lockedHostPhaseActions.includes("advance_phase") !== true ||
+      reject?.state !== "reject" ||
+      !["PhaseLocked", "InvalidTarget"].includes(reject?.error) ||
+      reject?.serverEnvelope?.body?.kind !== "Reject" ||
+      Array.isArray(reject?.streamSeqs) ||
+      submittedCommand?.actor_slot !== "slot_4" ||
+      submittedCommand?.action_id !== "role_factional_kill" ||
+      submittedCommand?.template_id !== "factional_kill" ||
+      advance?.state !== "ack" ||
+      advance?.serverEnvelope?.body?.kind !== "Ack" ||
+      !Array.isArray(advance?.streamSeqs) ||
+      advance.streamSeqs.length !== 1
+    ) {
+      throw new Error(
+        `concurrent player action/advance race outcomes drifted: ${JSON.stringify({
+          raceGame,
+          setupCommandState,
+          setupButtons,
+          setupHostPhase,
+          setupHostPhaseActions,
+          closedStatus,
+          resolveNight,
+          lockedHostPhase,
+          lockedHostPhaseActions,
+          reject,
+          advance,
+        })}`,
+      );
+    }
+
+    await Promise.all([
+      gotoPlayerBoard(actionEntry.page, raceGame),
+      hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
+        waitUntil: "networkidle",
+      }),
+    ]);
+    await Promise.all([
+      waitForHostProjectionPhase(hostEntry.page, { phaseId: "D02", locked: false }),
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+          (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      ),
+      actionEntry.page.waitForFunction(
+        () =>
+          document.querySelector('[data-action="submit_action:factional_kill"]') ===
+          null,
+      ),
+    ]);
+    const commandStateAfterRace = await actionEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const buttonsAfterRace = await playerCommandButtons(actionEntry.page);
+    const hostPhaseAfterRace = await hostEntry.page.evaluate(
+      () => window.__fmarchHostProjection?.phase,
+    );
+    const hostPhaseActionsAfterRace = await visibleHostPhaseActions(hostEntry.page);
+    const apiCommandStateAfterRace = await fetchJson(
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+    );
+    const apiHostStateAfterRace = await fetchJson(
+      `${apiBaseUrl}/games/${raceGame}/host-console-state?principal_user_id=host_h`,
+    );
+    if (
+      commandStateAfterRace?.actorSlot !== "slot_4" ||
+      commandStateAfterRace?.phase?.phaseId !== "D02" ||
+      commandStateAfterRace?.phase?.locked !== false ||
+      commandStateAfterRace?.actions?.length !== 0 ||
+      buttonsAfterRace.some((button) => button.action === "submit_action:factional_kill") ||
+      hostPhaseAfterRace?.id !== "D02" ||
+      hostPhaseAfterRace?.locked !== false ||
+      hostPhaseActionsAfterRace.includes("resolve_phase") !== true ||
+      hostPhaseActionsAfterRace.includes("advance_phase") === true ||
+      apiCommandStateAfterRace?.actor_slot !== "slot_4" ||
+      apiCommandStateAfterRace?.phase?.phase_id !== "D02" ||
+      apiCommandStateAfterRace?.phase?.locked !== false ||
+      apiCommandStateAfterRace?.actions?.length !== 0 ||
+      apiHostStateAfterRace?.phase?.phase_id !== "D02" ||
+      apiHostStateAfterRace?.phase?.locked !== false
+    ) {
+      throw new Error(
+        `concurrent player action/advance convergence drifted: ${JSON.stringify({
+          raceGame,
+          reject,
+          advance,
+          commandStateAfterRace,
+          buttonsAfterRace,
+          hostPhaseAfterRace,
+          hostPhaseActionsAfterRace,
+          apiCommandStateAfterRace,
+          apiHostStateAfterRace,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: raceGame,
+      seed,
+      hostSession: {
+        principalUserId: hostSession.principalUserId,
+        credentialKind: hostSession.credentialKind,
+        expectedCapabilityKind: hostSession.expectedCapabilityKind,
+      },
+      actionSession: {
+        principalUserId: actionSession.principalUserId,
+        credentialKind: actionSession.credentialKind,
+        expectedCapabilityKind: actionSession.expectedCapabilityKind,
+      },
+      hostEntry: hostEntry.verification,
+      actionEntry: actionEntry.verification,
+      setupCommandState,
+      setupButtons,
+      setupActionButton,
+      setupHostPhase,
+      setupHostPhaseActions,
+      closedStatus,
+      resolveNight,
+      lockedHostPhase,
+      lockedHostPhaseActions,
+      reject,
+      advance,
+      commandStateAfterRace,
+      buttonsAfterRace,
+      hostPhaseAfterRace,
+      hostPhaseActionsAfterRace,
+      apiCommandStateAfterRace,
+      apiHostStateAfterRace,
+      proof:
+        "A disposable action-player role URL froze an enabled N01 factional_kill control, the host role URL resolved N01 and raced AdvancePhase against the stale action click, then both role URLs and API projections converged to open D02 with no stale action appended.",
+    };
+  } finally {
+    await hostEntry.context.close().catch(() => {});
+    await actionEntry.context.close().catch(() => {});
+  }
+}
+
+async function seedPlayerActionAdvanceRaceGame({ raceGame }) {
+  const plan = [
+    ...seedCommandPlanForGame(raceGame),
+    ["host_h", { ResolvePhase: { game: raceGame, seed: 72_401 } }],
+    ["host_h", { AdvancePhase: { game: raceGame } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `concurrent player action/advance seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game: raceGame,
+    commands,
+  };
 }
 
 async function verifyStaleDeadTargetVoteRecovery({

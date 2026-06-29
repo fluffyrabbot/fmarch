@@ -50,6 +50,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote-after-phase-closure",
   "stale-player-post-after-phase-closure",
   "concurrent-player-vote-resolve-race",
+  "concurrent-player-action-advance-race",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -2286,6 +2287,110 @@ export function buildDevTestGameProofRun(session, options = {}) {
               row.status === "Lynch" &&
               row.winnerSlot === "slot-2",
           ) === true,
+      },
+    ),
+    lane(
+      "concurrent-player-action-advance-race",
+      "Concurrent player action and host advance converge",
+      {
+        game: hardening.concurrentPlayerActionAdvanceRace?.game ?? null,
+        rejectError: hardening.concurrentPlayerActionAdvanceRace?.reject?.error ?? null,
+        phaseAfterRace:
+          hardening.concurrentPlayerActionAdvanceRace?.commandStateAfterRace?.phase
+            ?.phaseId ?? null,
+        hostPhaseAfterRace:
+          hardening.concurrentPlayerActionAdvanceRace?.hostPhaseAfterRace?.id ?? null,
+        passed:
+          hardening.concurrentPlayerActionAdvanceRace?.status === "passed" &&
+          hardening.concurrentPlayerActionAdvanceRace?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.actionEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupCommandState?.actorSlot ===
+            "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupCommandState?.phase
+            ?.phaseId === "N01" &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupCommandState?.phase
+            ?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupCommandState?.actions?.some(
+            (action) => action.templateId === "factional_kill",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupActionButton?.disabled ===
+            false &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupHostPhase?.id === "N01" &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupHostPhase?.locked ===
+            false &&
+          hardening.concurrentPlayerActionAdvanceRace?.setupHostPhaseActions?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.closedStatus?.state ===
+            "closed" &&
+          hardening.concurrentPlayerActionAdvanceRace?.resolveNight?.commandStatus
+            ?.state === "ack" &&
+          hardening.concurrentPlayerActionAdvanceRace?.lockedHostPhase?.id === "N01" &&
+          hardening.concurrentPlayerActionAdvanceRace?.lockedHostPhase?.locked ===
+            true &&
+          hardening.concurrentPlayerActionAdvanceRace?.lockedHostPhaseActions?.includes(
+            "advance_phase",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.reject?.state === "reject" &&
+          ["PhaseLocked", "InvalidTarget"].includes(
+            hardening.concurrentPlayerActionAdvanceRace?.reject?.error,
+          ) &&
+          hardening.concurrentPlayerActionAdvanceRace?.reject?.serverEnvelope?.body
+            ?.kind === "Reject" &&
+          Array.isArray(
+            hardening.concurrentPlayerActionAdvanceRace?.reject?.streamSeqs,
+          ) === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.SubmitAction?.actor_slot === "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.SubmitAction?.action_id === "role_factional_kill" &&
+          hardening.concurrentPlayerActionAdvanceRace?.reject?.requestEnvelope?.body
+            ?.body?.command?.SubmitAction?.template_id === "factional_kill" &&
+          hardening.concurrentPlayerActionAdvanceRace?.advance?.state === "ack" &&
+          hardening.concurrentPlayerActionAdvanceRace?.advance?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          Array.isArray(
+            hardening.concurrentPlayerActionAdvanceRace?.advance?.streamSeqs,
+          ) &&
+          hardening.concurrentPlayerActionAdvanceRace.advance.streamSeqs.length ===
+            1 &&
+          hardening.concurrentPlayerActionAdvanceRace?.commandStateAfterRace
+            ?.actorSlot === "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.commandStateAfterRace?.phase
+            ?.phaseId === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.commandStateAfterRace?.phase
+            ?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.commandStateAfterRace?.actions
+            ?.length === 0 &&
+          hardening.concurrentPlayerActionAdvanceRace?.buttonsAfterRace?.some(
+            (button) => button.action === "submit_action:factional_kill",
+          ) === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.hostPhaseAfterRace?.id ===
+            "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.hostPhaseAfterRace?.locked ===
+            false &&
+          hardening.concurrentPlayerActionAdvanceRace?.hostPhaseActionsAfterRace?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.hostPhaseActionsAfterRace?.includes(
+            "advance_phase",
+          ) === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiCommandStateAfterRace
+            ?.actor_slot === "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiCommandStateAfterRace
+            ?.phase?.phase_id === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiCommandStateAfterRace
+            ?.phase?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiCommandStateAfterRace
+            ?.actions?.length === 0 &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiHostStateAfterRace?.phase
+            ?.phase_id === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.apiHostStateAfterRace?.phase
+            ?.locked === false,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

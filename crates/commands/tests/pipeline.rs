@@ -70614,6 +70614,121 @@ async fn concurrent_host_mixed_advance_serializes_to_one_ack(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    for (slot, occupant, role) in [
+        ("slot_4", "action-goon", "mafia_goon"),
+        ("slot-2", "town-target-2", "vanilla_townie"),
+    ] {
+        handle(
+            &pool,
+            &host,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &host,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &host,
+        Command::StartGame {
+            game,
+            phase: "N01".into(),
+        },
+    )
+    .await
+    .expect("start directly in N01");
+    handle(&pool, &host, Command::ResolvePhase { game, seed: 72_301 })
+        .await
+        .expect("lock N01 before racing stale player action against advance");
+
+    let action_pool = pool.clone();
+    let action = tokio::spawn(async move {
+        handle(
+            &action_pool,
+            &user("action-goon"),
+            Command::SubmitAction {
+                game,
+                action_id: "late_night_action".into(),
+                actor_slot: "slot_4".into(),
+                template_id: "factional_kill".into(),
+                targets: vec!["slot-2".into()],
+                grant_id: None,
+            },
+        )
+        .await
+    });
+    let advance_pool = pool.clone();
+    let advance = tokio::spawn(async move {
+        handle(
+            &advance_pool,
+            &user("host_h"),
+            Command::AdvancePhase { game },
+        )
+        .await
+    });
+
+    let action = action
+        .await
+        .unwrap()
+        .expect_err("late action must reject while the host advances the phase");
+    assert!(
+        matches!(action, Reject::PhaseLocked | Reject::InvalidTarget),
+        "late action should refresh against either locked N01 or current D02"
+    );
+    let advance = advance
+        .await
+        .unwrap()
+        .expect("host phase advance wins the transition");
+    assert_eq!(advance.stream_seqs.len(), 1);
+
+    let phase = phase_state(&pool, game).await.unwrap().unwrap();
+    assert_eq!(phase.phase_id, "D02");
+    assert!(
+        !phase.locked,
+        "host advance should leave the next day phase open"
+    );
+    let late_action_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ActionSubmitted' \
+         AND payload->>'action_id' = 'late_night_action'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        late_action_count, 0,
+        "stale player action must not append into the old phase while host advances"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");
