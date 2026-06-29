@@ -1180,6 +1180,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-publish",
     "stale-host-lifecycle",
     "stale-host-modkill",
+    "stale-host-prompt",
     "stale-dead-action-conflict",
     "stale-action-conflict",
     "stale-action-conflict-message",

@@ -753,6 +753,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host publish: ${card.verification.multiplayerHardening.staleHostPublish.reject.message}`,
         "",
+        `Stale host prompt: ${card.verification.multiplayerHardening.staleHostPrompt.reject.message}`,
+        "",
         `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
         "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
@@ -2670,6 +2672,12 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  const staleHostPrompt = await verifyStaleHostPromptRecovery({
+    hostPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+    game,
+  });
 
   return {
     status: "passed",
@@ -2695,10 +2703,291 @@ async function verifySeededMultiplayerHardening({
     staleHostControl,
     staleHostResolve,
     staleHostAdvance,
+    staleHostPrompt,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt and cohost deadline role URLs clicked old controls, rendered command-activity receipts, refreshed to current projections, and exposed their current valid control sets.",
+  };
+}
+
+async function verifyStaleHostPromptRecovery({
+  hostPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+  game,
+}) {
+  const promptGame = crypto.randomUUID();
+  const promptId = "D01:skip_next_day:slot_1";
+  const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
+  const seed = await seedHostPromptRecoveryGame({ promptGame, promptId });
+  const context = hostPage.context();
+  const stalePromptPage = await context.newPage();
+  const livePromptPage = await context.newPage();
+  try {
+    const setup = await freezeStaleHostPromptPage({
+      stalePromptPage,
+      frontendBaseUrl,
+      promptGame,
+      actionId,
+      promptId,
+    });
+    await livePromptPage.goto(`${frontendBaseUrl}/g/${promptGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await livePromptPage
+      .getByTestId(`critical-host-action-${actionId}`)
+      .waitFor({ state: "visible" });
+    const liveResolve = await confirmHostAction(livePromptPage, actionId);
+    await livePromptPage.waitForFunction(
+      (expectedPromptId) =>
+        window.__fmarchHostPromptsProjection?.some(
+          (prompt) => prompt.id === expectedPromptId && prompt.status === "resolved",
+        ),
+      promptId,
+    );
+    const staleRecovery = await submitStaleHostPromptRecovery({
+      stalePromptPage,
+      setup,
+      liveResolve,
+      apiBaseUrl,
+      promptGame,
+      actionId,
+      promptId,
+    });
+    return {
+      status: "passed",
+      game: promptGame,
+      promptId,
+      actionId,
+      seed,
+      liveResolve,
+      ...staleRecovery,
+      proof:
+        "A disposable local host-prompt game created a Beloved Princess skip-next-day prompt, froze one host role URL with the pending Resolve prompt control, resolved it from a live host role URL, then clicked the stale prompt control and recovered through PromptAlreadyResolved without ACK stream seqs while refreshing hostPrompts to the resolved state.",
+    };
+  } finally {
+    await stalePromptPage.close().catch(() => {});
+    await livePromptPage.close().catch(() => {});
+  }
+}
+
+async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
+  const plan = [
+    ["host_h", { CreateGame: { game: promptGame, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_1" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_2" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_3" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_4" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_5" } }],
+    ["host_h", { AddSlot: { game: promptGame, slot: "slot_6" } }],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_1", user: "prompt-user-1" } }],
+    [
+      "host_h",
+      { AssignRole: { game: promptGame, slot: "slot_1", role_key: "beloved_princess" } },
+    ],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_2", user: "prompt-user-2" } }],
+    [
+      "host_h",
+      { AssignRole: { game: promptGame, slot: "slot_2", role_key: "vanilla_townie" } },
+    ],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_3", user: "prompt-user-3" } }],
+    [
+      "host_h",
+      { AssignRole: { game: promptGame, slot: "slot_3", role_key: "vanilla_townie" } },
+    ],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_4", user: "prompt-user-4" } }],
+    ["host_h", { AssignRole: { game: promptGame, slot: "slot_4", role_key: "mafia_goon" } }],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_5", user: "prompt-user-5" } }],
+    ["host_h", { AssignRole: { game: promptGame, slot: "slot_5", role_key: "mafia_goon" } }],
+    ["host_h", { AssignSlot: { game: promptGame, slot: "slot_6", user: "prompt-user-6" } }],
+    [
+      "host_h",
+      { AssignRole: { game: promptGame, slot: "slot_6", role_key: "vanilla_townie" } },
+    ],
+    ["host_h", { StartGame: { game: promptGame, phase: "D01" } }],
+    [
+      "prompt-user-2",
+      { SubmitVote: { game: promptGame, actor_slot: "slot_2", target: { Slot: "slot_1" } } },
+    ],
+    [
+      "prompt-user-3",
+      { SubmitVote: { game: promptGame, actor_slot: "slot_3", target: { Slot: "slot_1" } } },
+    ],
+    [
+      "prompt-user-4",
+      { SubmitVote: { game: promptGame, actor_slot: "slot_4", target: { Slot: "slot_1" } } },
+    ],
+    [
+      "prompt-user-5",
+      { SubmitVote: { game: promptGame, actor_slot: "slot_5", target: { Slot: "slot_1" } } },
+    ],
+    ["host_h", { ResolvePhase: { game: promptGame, seed: 7421 } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game: promptGame,
+    promptId,
+    commands: commands.length,
+  };
+}
+
+async function freezeStaleHostPromptPage({
+  stalePromptPage,
+  frontendBaseUrl,
+  promptGame,
+  actionId,
+  promptId,
+}) {
+  await stalePromptPage.goto(`${frontendBaseUrl}/g/${promptGame}/host`, {
+    waitUntil: "networkidle",
+  });
+  await stalePromptPage
+    .getByTestId(`critical-host-action-${actionId}`)
+    .waitFor({ state: "visible" });
+  await stalePromptPage.waitForFunction(
+    (expectedPromptId) =>
+      window.__fmarchHostPromptsProjection?.some(
+        (prompt) => prompt.id === expectedPromptId && prompt.status === "pending",
+      ),
+    promptId,
+  );
+  const prompts = await stalePromptPage.evaluate(() => window.__fmarchHostPromptsProjection);
+  const promptActions = await visibleHostControlActions(stalePromptPage, "host-prompts");
+  const closedStatus = await stalePromptPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    !prompts?.some((prompt) => prompt.id === promptId && prompt.status === "pending") ||
+    !promptActions.includes(actionId) ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host prompt setup drifted: ${JSON.stringify({
+        promptGame,
+        promptId,
+        prompts,
+        promptActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    game: promptGame,
+    promptId,
+    promptActions,
+    prompts,
+    closedStatus,
+  };
+}
+
+async function submitStaleHostPromptRecovery({
+  stalePromptPage,
+  setup,
+  liveResolve,
+  apiBaseUrl,
+  promptGame,
+  actionId,
+  promptId,
+}) {
+  const action = await confirmHostAction(stalePromptPage, actionId, "reject");
+  await stalePromptPage
+    .waitForFunction(
+      ({ expectedActionId, expectedPromptId }) =>
+        window.__fmarchHostCommandStatuses?.[expectedActionId]?.error ===
+          "PromptAlreadyResolved" &&
+        (window.__fmarchHostPromptsProjection?.some(
+          (prompt) => prompt.id === expectedPromptId && prompt.status === "resolved",
+        ) ||
+          document.querySelector(`[data-testid="critical-host-action-${expectedActionId}"]`) ===
+            null),
+      { expectedActionId: actionId, expectedPromptId: promptId },
+      { timeout: 5000 },
+    )
+    .catch(() => {});
+  const reject = action.commandStatus;
+  const commandOutcomes = await stalePromptPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const promptsAfterReject = await stalePromptPage.evaluate(
+    () => window.__fmarchHostPromptsProjection ?? [],
+  );
+  const promptActionsAfterReject = await visibleHostControlActions(
+    stalePromptPage,
+    "host-prompts",
+  );
+  const activityStatusText = await stalePromptPage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await stalePromptPage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await stalePromptPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const apiPromptsAfterReject = await fetchJson(
+    `${apiBaseUrl}/games/${promptGame}/host-prompts?principal_user_id=host_h`,
+  );
+  if (
+    setup?.promptActions?.includes(actionId) !== true ||
+    liveResolve?.commandStatus?.state !== "ack" ||
+    !Array.isArray(liveResolve?.commandStatus?.streamSeqs) ||
+    liveResolve.commandStatus.streamSeqs.length !== 2 ||
+    liveResolve?.commandStatus?.requestEnvelope?.body?.body?.command?.ResolveHostPrompt
+      ?.prompt_id !== promptId ||
+    reject?.state !== "reject" ||
+    reject?.error !== "PromptAlreadyResolved" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    commandOutcomes.find(
+      (outcome) =>
+        outcome.actionId === actionId &&
+        outcome.state === "reject" &&
+        outcome.error === "PromptAlreadyResolved",
+    ) === undefined ||
+    promptsAfterReject.find((prompt) => prompt.id === promptId)?.status !== "resolved" ||
+    promptActionsAfterReject.includes(actionId) ||
+    !activityStatusText.includes("Reject PromptAlreadyResolved") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== "resolve_host_prompt" ||
+    dispatchPlan?.projectionRefreshKeys?.includes("hostPrompts") !== true ||
+    apiPromptsAfterReject.find((prompt) => (prompt.id ?? prompt.prompt_id) === promptId)
+      ?.status !== "resolved"
+  ) {
+    throw new Error(
+      `stale host prompt recovery drifted: ${JSON.stringify({
+        setup,
+        liveResolve,
+        reject,
+        commandOutcomes,
+        promptsAfterReject,
+        promptActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPromptsAfterReject,
+      })}`,
+    );
+  }
+  return {
+    setup,
+    reject,
+    commandOutcomes,
+    promptsAfterReject,
+    promptActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPromptsAfterReject,
   };
 }
 

@@ -2237,6 +2237,76 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterReject: { phase_id: "D02", locked: false },
       },
+      staleHostPrompt: {
+        status: "passed",
+        game: `${game}-prompt-test`,
+        promptId: "D01:skip_next_day:slot_1",
+        actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
+        setup: {
+          promptId: "D01:skip_next_day:slot_1",
+          promptActions: ["resolve_host_prompt-D01-skip_next_day-slot_1"],
+          prompts: [
+            {
+              id: "D01:skip_next_day:slot_1",
+              status: "pending",
+            },
+          ],
+          closedStatus: { state: "closed" },
+        },
+        liveResolve: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [53, 54],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    ResolveHostPrompt: {
+                      game: `${game}-prompt-test`,
+                      prompt_id: "D01:skip_next_day:slot_1",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          error: "PromptAlreadyResolved",
+          message: "Reject PromptAlreadyResolved: prompt already resolved",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
+            state: "reject",
+            error: "PromptAlreadyResolved",
+          },
+        ],
+        promptsAfterReject: [
+          {
+            id: "D01:skip_next_day:slot_1",
+            status: "resolved",
+          },
+        ],
+        promptActionsAfterReject: [],
+        activityStatusText: "Reject PromptAlreadyResolved: prompt already resolved",
+        activityRow: {
+          source: "outcome",
+          actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
+          dispatchKind: "resolve_host_prompt",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["hostPrompts"],
+        },
+        apiPromptsAfterReject: [
+          {
+            prompt_id: "D01:skip_next_day:slot_1",
+            status: "resolved",
+          },
+        ],
+      },
       staleHostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -2432,6 +2502,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-lifecycle",
       "host-modkill-control",
       "stale-host-modkill",
+      "stale-host-prompt",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -2511,7 +2582,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 47);
+  assert.equal(opsArtifacts.proofRun.laneCount, 48);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3067,6 +3138,7 @@ function hardeningAdminProofFixture() {
         "stale-host-publish",
         "stale-host-lifecycle",
         "stale-host-modkill",
+        "stale-host-prompt",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",

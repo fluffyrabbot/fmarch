@@ -212,6 +212,13 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
   }
   if (
     outcome?.state === "reject" &&
+    outcome?.error === "PromptAlreadyResolved" &&
+    event?.payload?.kind === "resolve_host_prompt"
+  ) {
+    return Object.freeze(["hostPrompts"]);
+  }
+  if (
+    outcome?.state === "reject" &&
     (outcome?.retryable === true || outcome?.error === "StreamConflict")
   ) {
     return hostProjectionResyncKeys();

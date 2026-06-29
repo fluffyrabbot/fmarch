@@ -29498,6 +29498,36 @@ async fn host_resolve_phase_projects_beloved_princess_host_prompt(pool: PgPool) 
     assert_eq!(phase_payload["skipped_phase_id"], "D02");
     assert_eq!(phase_payload["reason"], "skip_next_day");
 
+    let duplicate_prompt_err = handle(
+        &pool,
+        &h,
+        Command::ResolveHostPrompt {
+            game,
+            prompt_id: "D01:skip_next_day:slot_1".into(),
+            decision: HostPromptDecision::Acknowledge {
+                metadata: serde_json::json!({
+                    "operator_note": "duplicate stale click"
+                }),
+            },
+        },
+    )
+    .await
+    .expect_err("resolved host prompt must reject stale duplicate resolution");
+    assert_eq!(duplicate_prompt_err, Reject::PromptAlreadyResolved);
+    let duplicate_prompt_event_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events \
+         WHERE stream_id = $1 AND kind = 'HostPromptResolved' \
+           AND payload->>'prompt_id' = 'D01:skip_next_day:slot_1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        duplicate_prompt_event_count, 1,
+        "duplicate prompt resolution must not append another HostPromptResolved event"
+    );
+
     let night_vote_err = handle(
         &pool,
         &user("user_2"),

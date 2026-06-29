@@ -47,6 +47,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-lifecycle",
   "host-modkill-control",
   "stale-host-modkill",
+  "stale-host-prompt",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1525,6 +1526,55 @@ export function buildDevTestGameProofRun(session, options = {}) {
           false &&
         hardening.staleHostModkill?.playerCommandStateAfterReject?.actorStatus ===
           "modkilled",
+    }),
+    lane("stale-host-prompt", "Stale host prompt rejects after live resolution", {
+      rejectError: hardening.staleHostPrompt?.reject?.error ?? null,
+      promptId: hardening.staleHostPrompt?.promptId ?? null,
+      liveResolveSeqs:
+        hardening.staleHostPrompt?.liveResolve?.commandStatus?.streamSeqs ?? null,
+      promptActionsAfterReject:
+        hardening.staleHostPrompt?.promptActionsAfterReject ?? null,
+      promptStatusAfterReject:
+        hardening.staleHostPrompt?.promptsAfterReject?.find(
+          (prompt) => prompt.id === hardening.staleHostPrompt?.promptId,
+        )?.status ?? null,
+      apiPromptStatusAfterReject:
+        hardening.staleHostPrompt?.apiPromptsAfterReject?.find(
+          (prompt) =>
+            (prompt.id ?? prompt.prompt_id) === hardening.staleHostPrompt?.promptId,
+        )?.status ?? null,
+      passed:
+        hardening.staleHostPrompt?.status === "passed" &&
+        hardening.staleHostPrompt?.promptId === "D01:skip_next_day:slot_1" &&
+        hardening.staleHostPrompt?.setup?.promptActions?.includes(
+          "resolve_host_prompt-D01-skip_next_day-slot_1",
+        ) === true &&
+        hardening.staleHostPrompt?.liveResolve?.commandStatus?.state === "ack" &&
+        Array.isArray(
+          hardening.staleHostPrompt?.liveResolve?.commandStatus?.streamSeqs,
+        ) &&
+        hardening.staleHostPrompt.liveResolve.commandStatus.streamSeqs.length === 2 &&
+        hardening.staleHostPrompt?.reject?.state === "reject" &&
+        hardening.staleHostPrompt?.reject?.error === "PromptAlreadyResolved" &&
+        hardening.staleHostPrompt?.reject?.serverEnvelope?.body?.kind === "Reject" &&
+        Array.isArray(hardening.staleHostPrompt?.reject?.streamSeqs) === false &&
+        hardening.staleHostPrompt?.promptsAfterReject?.find(
+          (prompt) => prompt.id === "D01:skip_next_day:slot_1",
+        )?.status === "resolved" &&
+        hardening.staleHostPrompt?.promptActionsAfterReject?.includes(
+          "resolve_host_prompt-D01-skip_next_day-slot_1",
+        ) === false &&
+        hardening.staleHostPrompt?.activityRow?.source === "outcome" &&
+        hardening.staleHostPrompt?.activityRow?.actionId ===
+          "resolve_host_prompt-D01-skip_next_day-slot_1" &&
+        hardening.staleHostPrompt?.activityRow?.dispatchKind ===
+          "resolve_host_prompt" &&
+        hardening.staleHostPrompt?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "hostPrompts",
+        ) === true &&
+        hardening.staleHostPrompt?.apiPromptsAfterReject?.find(
+          (prompt) => (prompt.id ?? prompt.prompt_id) === "D01:skip_next_day:slot_1",
+        )?.status === "resolved",
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,
