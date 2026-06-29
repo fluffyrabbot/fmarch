@@ -375,10 +375,21 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
-`replacement-console`, `replacement-stale-success-recovery`,
+`replacement-console`, `stale-host-invite-recovery`,
+`replacement-stale-success-recovery`,
 `replacement-stale-player`, `replacement-stale-action`,
 `replacement-stale-private-channel`, `replacement-stale-private-receipts`, and
 `replacement-incoming-player` rows.
+
+The stale host invite recovery is carried as `stale-host-invite-recovery` in
+`target/dev-test-game/proof-run.json` and as the local seed/demo scenario with
+the same id in `target/dev-test-game/seed-fixture-summary.json`. It uses a stale
+seeded host role URL that loaded the player-invite form for `player-mira` before
+replacement, submits that old target after Slot 7 moves to `player-rowan`,
+renders `Invite target is stale` without an invite URL, then retries the
+current `player-rowan` target from the same host surface and records an ACK
+player invite. This is local browser recovery evidence only; it does not prove
+hosted invite delivery or production account lifecycle.
 
 The multiplayer-hardening proof promotes the first auth revocation, retry,
 reconnect, concurrent-vote, and stale-client behaviors into the same browser
@@ -492,7 +503,8 @@ specific cohost deadline delegation with host-only command rejection,
 host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, stale outgoing-player action recovery, stale outgoing-player
 private-channel recovery, stale outgoing-player private-receipt recovery, and replacement-player ownership,
-projection-driven host player-invite retargeting after replacement, duplicate replacement command, duplicate post command, player reconnect,
+projection-driven host player-invite retargeting after replacement, stale host player-invite recovery to the current occupant,
+duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
 stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
