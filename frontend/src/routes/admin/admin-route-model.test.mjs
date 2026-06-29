@@ -705,6 +705,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofFreshness: proofFreshnessFixture(),
+    nextAction: nextActionFixture(),
   });
 
   const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
@@ -736,14 +737,26 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "spine-manifest-admin",
       "admin-spine",
       "admin-spine-admin",
+      "next-action-handoff",
     ],
   );
+  assert.deepEqual(freshness.relatedLinks, [
+    {
+      id: "local-next-action",
+      label: "Ranked next action",
+      href: "/admin/audit/local-next-action?game=midsummer",
+      status: "ready: test:dev-test-game-proof-freshness-admin-proof",
+      command: "test:dev-test-game-proof-freshness-admin-proof",
+    },
+  ]);
   assert.deepEqual(freshness.artifactSummary, {
     artifactCount: 18,
     freshCount: 18,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
+    nextActionCommand: "test:dev-test-game-proof-freshness-admin-proof",
+    nextActionInspectHref: "/admin/audit/local-next-action?game=midsummer",
     releaseReady: false,
     productionReady: false,
   });
@@ -762,6 +775,19 @@ test("admin local proof freshness detail data carries stale and missing rows", a
         freshnessArtifact("backup-restore", "missing"),
       ],
     }),
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "artifact-not-fresh",
+      command:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      artifact: {
+        id: "proof-run",
+        label: "Live proof run",
+        path: "target/dev-test-game/proof-run.json",
+        status: "stale",
+        refreshSource: "manifest-default",
+      },
+    }),
   });
 
   assert.equal(data.status, "available");
@@ -773,8 +799,23 @@ test("admin local proof freshness detail data carries stale and missing rows", a
       ["session", "fresh"],
       ["proof-run", "stale"],
       ["backup-restore", "missing"],
+      [
+        "next-action-handoff",
+        "blocked: DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      ],
     ],
   );
+  assert.deepEqual(data.audit.relatedLinks, [
+    {
+      id: "local-next-action",
+      label: "Ranked next action",
+      href: "/admin/audit/local-next-action?game=midsummer",
+      status:
+        "blocked: DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      command:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    },
+  ]);
 });
 
 test("admin route data exposes local next action as a native audit row", async () => {

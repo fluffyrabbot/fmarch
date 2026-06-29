@@ -163,7 +163,7 @@ export async function buildAdminRouteData({
             { game },
           ),
           proofFreshness,
-          { game },
+          { game, nextAction },
         ),
         nextAction,
         { game },
@@ -371,8 +371,12 @@ export function appendLocalOpsArtifactsAudit(audit, opsArtifacts, { game }) {
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
-export function appendLocalProofFreshnessAudit(audit, proofFreshness, { game }) {
-  const row = normalizeLocalProofFreshnessAudit(proofFreshness, { game });
+export function appendLocalProofFreshnessAudit(
+  audit,
+  proofFreshness,
+  { game, nextAction = null },
+) {
+  const row = normalizeLocalProofFreshnessAudit(proofFreshness, { game, nextAction });
   if (row === null) {
     return audit;
   }
@@ -514,7 +518,10 @@ function normalizeNextActionSelectionTrace(selectionTrace) {
   });
 }
 
-export function normalizeLocalProofFreshnessAudit(proofFreshness, { game }) {
+export function normalizeLocalProofFreshnessAudit(
+  proofFreshness,
+  { game, nextAction = null },
+) {
   if (
     proofFreshness === null ||
     typeof proofFreshness !== "object" ||
@@ -530,6 +537,17 @@ export function normalizeLocalProofFreshnessAudit(proofFreshness, { game }) {
     ? proofFreshness.artifacts
     : [];
   const summary = proofFreshness.summary ?? {};
+  const nextActionRow = normalizeLocalNextActionAudit(nextAction, { game });
+  const nextActionHandoff =
+    nextActionRow === null
+      ? null
+      : Object.freeze({
+          id: "local-next-action",
+          label: "Ranked next action",
+          href: nextActionRow.inspectHref,
+          status: nextActionRow.status,
+          command: nextActionRow.artifactSummary.command,
+        });
   return Object.freeze({
     id: "local-proof-freshness",
     label: "Local proof freshness",
@@ -544,19 +562,33 @@ export function normalizeLocalProofFreshnessAudit(proofFreshness, { game }) {
     href: "target/dev-test-game/release-readiness-checklist.json",
     inspectHref: adminAuditInspectHref({ game, audit: "local-proof-freshness" }),
     checks: Object.freeze(
-      artifacts.map((artifact) =>
-        Object.freeze({
-          id: String(artifact.id),
-          status: String(artifact.status),
-        }),
-      ),
+      [
+        ...artifacts.map((artifact) =>
+          Object.freeze({
+            id: String(artifact.id),
+            status: String(artifact.status),
+          }),
+        ),
+        ...(nextActionHandoff === null
+          ? []
+          : [
+              Object.freeze({
+                id: "next-action-handoff",
+                status: nextActionHandoff.status,
+              }),
+            ]),
+      ],
     ),
+    relatedLinks:
+      nextActionHandoff === null ? Object.freeze([]) : Object.freeze([nextActionHandoff]),
     artifactSummary: Object.freeze({
       artifactCount: Number(summary.artifactCount ?? artifacts.length),
       freshCount: Number(summary.freshCount ?? 0),
       staleCount: Number(summary.staleCount ?? 0),
       missingCount: Number(summary.missingCount ?? 0),
       maxAgeHours: Number(proofFreshness.maxAgeHours ?? 0),
+      nextActionCommand: nextActionHandoff?.command ?? "",
+      nextActionInspectHref: nextActionHandoff?.href ?? "",
       releaseReady: proofFreshness.releaseReady === true,
       productionReady: proofFreshness.productionReady === true,
     }),

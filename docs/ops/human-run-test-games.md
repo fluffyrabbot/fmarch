@@ -184,6 +184,10 @@ The seeded admin overview-to-local-proof-freshness detail browser proof is:
 npm run test:dev-test-game-proof-freshness-admin-proof
 ```
 
+The proof-freshness detail includes a `local-next-action` handoff link to the
+ranked recovery receipt, so stale or missing artifacts point at the generated
+next local command instead of leaving recovery selection implicit.
+
 The generated spine manifest, which records proof command order, evidence env
 wiring, current artifact freshness statuses, per-artifact refresh commands for
 the aggregate bundle and each admin proof surface, terminal next-action

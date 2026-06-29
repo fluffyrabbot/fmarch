@@ -105,6 +105,22 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.relatedLinks?.length > 0}
+      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-related-links">
+        {#each data.audit.relatedLinks as link}
+          <li class="admin-audit-detail__entry">
+            <a
+              data-testid={`admin-audit-related-link-${link.id}`}
+              data-min-touch-target-px="44"
+              href={link.href}
+            >
+              <strong>{link.label}</strong>
+              <span>{link.status}</span>
+            </a>
+          </li>
+        {/each}
+      </ol>
+    {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
       data-testid={evidenceTestId}
@@ -170,5 +186,14 @@
 
   .admin-audit-detail__entry span {
     color: #455466;
+  }
+
+  .admin-audit-detail__entry a {
+    color: inherit;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-block-size: 44px;
+    text-decoration: none;
   }
 </style>

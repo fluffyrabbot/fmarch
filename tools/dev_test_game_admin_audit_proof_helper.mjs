@@ -98,6 +98,7 @@ export async function proveAdminAuditDetail({
   requiredScenarios = [],
   requiredSessions = [],
   requiredUnproven = [],
+  requiredRelatedLinks = [],
   forbiddenText = [],
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
@@ -157,6 +158,11 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-unproven",
       ids: requiredUnproven,
     });
+    const visibleRelatedLinks = await waitForRows({
+      page,
+      prefix: "admin-audit-related-link",
+      ids: requiredRelatedLinks,
+    });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error(`${auditId} admin surface leaked an invite URL token`);
@@ -177,6 +183,7 @@ export async function proveAdminAuditDetail({
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
+      ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

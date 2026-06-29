@@ -1,5 +1,6 @@
 import path from "node:path";
 import { readLocalProofFreshness } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
+import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -14,15 +15,25 @@ const proofRunPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const nextActionPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
+    "target/dev-test-game/next-action.json",
+);
+const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
 const evidencePath = path.join(artifactDir, "proof-freshness-admin-proof.json");
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-proof-freshness-admin-proof",
   stage: "proof-freshness-admin-proof-listen",
   evidencePath,
+  envOverrides: {
+    FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
+  },
   loadSource: async () => ({
     freshness: assertProofFreshness(await readLocalProofFreshness()),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
   }),
   prove: async ({ browser, frontendBaseUrl, source }) =>
     await proveAdminAuditDetail({
@@ -30,10 +41,20 @@ await runAdminAuditProof({
       frontendBaseUrl,
       game: source.proofRun.session.game,
       auditId: "local-proof-freshness",
-      requiredChecks: source.freshness.artifacts.map((artifact) => artifact.id),
+      requiredChecks: [
+        ...source.freshness.artifacts.map((artifact) => artifact.id),
+        "next-action-handoff",
+      ],
       requiredCheckStatuses: Object.fromEntries(
-        source.freshness.artifacts.map((artifact) => [artifact.id, artifact.status]),
+        [
+          ...source.freshness.artifacts.map((artifact) => [
+            artifact.id,
+            artifact.status,
+          ]),
+          ["next-action-handoff", source.nextAction.nextAction.status],
+        ],
       ),
+      requiredRelatedLinks: ["local-next-action"],
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -46,9 +67,13 @@ await runAdminAuditProof({
       "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game proof freshness dashboard. Proves fresh generated proof artifacts are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
+      nextAction: nextActionRelativePath,
       game: source.proofRun.session.game,
       artifactIds: source.freshness.artifacts.map((artifact) => artifact.id),
       maxAgeHours: source.freshness.maxAgeHours,
+      nextActionCommand: source.nextAction.nextAction.command,
+      nextActionStatus: source.nextAction.nextAction.status,
+      nextActionReason: source.nextAction.nextAction.reason,
     },
     adminRoleSurface,
   }),
@@ -90,6 +115,16 @@ export function assertProofFreshnessAdminProof(evidence) {
     evidence.adminRoleSurface?.rawInviteTokensVisible !== false
   ) {
     throw new Error("proof freshness admin proof did not prove admin overview click-through");
+  }
+  if (
+    typeof evidence.generatedFrom?.nextActionCommand !== "string" ||
+    evidence.generatedFrom.nextActionCommand.trim() === "" ||
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes("local-next-action")
+  ) {
+    throw new Error("proof freshness admin proof did not prove next-action handoff");
+  }
+  if (!evidence.adminRoleSurface?.visibleChecks?.includes("next-action-handoff")) {
+    throw new Error("proof freshness admin proof missing next-action handoff check");
   }
   for (const id of evidence.generatedFrom?.artifactIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(id)) {
