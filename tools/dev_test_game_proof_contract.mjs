@@ -60,6 +60,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-stale-action-after-resolve",
   "replacement-stale-private-post-after-resolve",
   "replacement-stale-private-post-reconnect",
+  "replacement-stale-private-post-after-complete",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -3401,6 +3402,136 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.apiCommandStateAfterReconnect?.vote_targets?.length === 0 &&
           hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
             ?.staleOutgoingThreadAfterReconnect?.status === 403,
+      },
+    ),
+    lane(
+      "replacement-stale-private-post-after-complete",
+      "Stale replacement private post rejects after completion",
+      {
+        game:
+          hardening.replacementStalePrivatePostAfterComplete?.game ?? null,
+        channel:
+          hardening.replacementStalePrivatePostAfterComplete?.channel ?? null,
+        rejectError:
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.error ??
+          null,
+        gameCompleted:
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.gameCompleted ?? null,
+        staleThreadStatus:
+          hardening.replacementStalePrivatePostAfterComplete
+            ?.staleOutgoingThreadAfterReject?.status ?? null,
+        passed:
+          hardening.replacementStalePrivatePostAfterComplete?.status === "passed" &&
+          hardening.replacementStalePrivatePostAfterComplete?.channel ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterComplete?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.staleOutgoingEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.replacementEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.replacement?.state ===
+            "ack" &&
+          hardening.replacementStalePrivatePostAfterComplete?.replacement
+            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot ===
+            "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.replacement
+            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+            "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterComplete
+            ?.hostReplacementAfterProcess?.occupantLabel === "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateBeforeClose
+            ?.gameCompleted === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
+            ?.channelId === "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
+            ?.capabilityLabel?.includes(
+              "ChannelMember(private:mafia_day_chat)",
+            ) === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.submitPostBeforeClose
+            ?.disabled === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.closedStatus?.state ===
+            "closed" &&
+          hardening.replacementStalePrivatePostAfterComplete?.complete?.commandStatus
+            ?.state === "ack" &&
+          hardening.replacementStalePrivatePostAfterComplete?.complete?.commandStatus
+            ?.requestEnvelope?.body?.body?.command?.CompleteGame?.game ===
+            hardening.replacementStalePrivatePostAfterComplete?.game &&
+          hardening.replacementStalePrivatePostAfterComplete?.hostSlotsAfterComplete?.some(
+            (slot) =>
+              slot.role_revealed !== true || slot.alignment_revealed !== true,
+          ) === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.hostActionsAfterComplete?.includes(
+            "complete_game",
+          ) === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.apiStateAfterComplete
+            ?.completed === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.state ===
+            "reject" &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.error ===
+            "GameAlreadyCompleted" &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.serverEnvelope
+            ?.body?.kind === "Reject" &&
+          Array.isArray(
+            hardening.replacementStalePrivatePostAfterComplete?.reject?.streamSeqs,
+          ) === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
+            ?.body?.body?.principal_user_id === "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.channel_id ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.body ===
+            hardening.replacementStalePrivatePostAfterComplete?.postBody &&
+          hardening.replacementStalePrivatePostAfterComplete?.dispatchPlan
+            ?.projectionRefreshKeys?.includes("commandState") === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.currentReceipt
+            ?.actionId === "submit_post" &&
+          hardening.replacementStalePrivatePostAfterComplete?.currentReceipt
+            ?.state === "reject" &&
+          hardening.replacementStalePrivatePostAfterComplete?.receiptStatusText?.includes(
+            "Reject GameAlreadyCompleted",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.gameCompleted === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.actions?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.voteTargets?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
+            ?.boundary?.includes("game is complete") === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.channelContextAfterReject
+            ?.channelId === "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterComplete?.channelContextAfterReject
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterComplete?.buttonsAfterReject?.some(
+            (button) => button.disabled !== true,
+          ) === false &&
+          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
+            ?.game_completed === true &&
+          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
+            ?.actions?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
+            ?.vote_targets?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterComplete?.apiThreadPostBodies?.includes(
+            hardening.replacementStalePrivatePostAfterComplete?.postBody,
+          ) === false &&
+          hardening.replacementStalePrivatePostAfterComplete
+            ?.staleOutgoingRouteAfterReject?.status === 403 &&
+          hardening.replacementStalePrivatePostAfterComplete
+            ?.staleOutgoingThreadAfterReject?.status === 403,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

@@ -3565,6 +3565,112 @@ test("session card and markdown include role credential URLs and tokens", () => 
         outcomeSummary:
           "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
       },
+      replacementStalePrivatePostAfterComplete: {
+        status: "passed",
+        game: "replacement-stale-private-post-after-complete-game-a",
+        channel: "private:mafia_day_chat",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        staleOutgoingEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacement: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-stale-private-post-after-complete-game-a",
+                    slot: "slot-7",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostReplacementAfterProcess: { occupantLabel: "player-rowan" },
+        commandStateBeforeClose: {
+          actorSlot: "slot-7",
+          gameCompleted: false,
+        },
+        channelContextBeforeClose: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+        },
+        submitPostBeforeClose: { action: "submit_post", disabled: false },
+        closedStatus: { state: "closed" },
+        complete: {
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    CompleteGame: {
+                      game: "replacement-stale-private-post-after-complete-game-a",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostSlotsAfterComplete: [
+          { role_revealed: true, alignment_revealed: true },
+        ],
+        hostActionsAfterComplete: [],
+        apiStateAfterComplete: { completed: true },
+        postBody: "Replacement stale private post after complete fixture",
+        reject: {
+          state: "reject",
+          error: "GameAlreadyCompleted",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                    body: "Replacement stale private post after complete fixture",
+                  },
+                },
+              },
+            },
+          },
+        },
+        dispatchPlan: { projectionRefreshKeys: ["commandState"] },
+        currentReceipt: { actionId: "submit_post", state: "reject" },
+        receiptStatusText:
+          "Reject GameAlreadyCompleted: game already completed",
+        commandStateAfterReject: {
+          actorSlot: "slot-7",
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+          boundary: "Role-action availability: game is complete.",
+        },
+        channelContextAfterReject: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+        },
+        buttonsAfterReject: [
+          { action: "withdraw_vote", disabled: true },
+          { action: "submit_post", disabled: true },
+        ],
+        apiCommandStateAfterReject: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadPostBodies: [],
+        staleOutgoingRouteAfterReject: { status: 403 },
+        staleOutgoingThreadAfterReject: { status: 403 },
+        outcomeSummary:
+          "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion",
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -5305,6 +5411,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5405,7 +5512,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 81);
+  assert.equal(opsArtifacts.proofRun.laneCount, 82);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5514,6 +5621,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -6035,6 +6143,7 @@ function hardeningAdminProofFixture() {
         "replacement-stale-action-after-resolve",
         "replacement-stale-private-post-after-resolve",
         "replacement-stale-private-post-reconnect",
+        "replacement-stale-private-post-after-complete",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -6162,6 +6271,7 @@ function seedAdminProofFixture() {
         "replacement-stale-action-after-resolve",
         "replacement-stale-private-post-after-resolve",
         "replacement-stale-private-post-reconnect",
+        "replacement-stale-private-post-after-complete",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

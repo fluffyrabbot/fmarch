@@ -313,6 +313,8 @@ const replacementStaleActionAfterResolve =
   session.verification.multiplayerHardening.replacementStaleActionAfterResolve;
 const replacementStalePrivatePostAfterResolve =
   session.verification.multiplayerHardening.replacementStalePrivatePostAfterResolve;
+const replacementStalePrivatePostAfterComplete =
+  session.verification.multiplayerHardening.replacementStalePrivatePostAfterComplete;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -2294,6 +2296,129 @@ assert.equal(
 assert.equal(
   replacementStalePrivatePostAfterResolve.privateReconnectAfterAck
     .staleOutgoingThreadAfterReconnect.status,
+  403,
+);
+assert.equal(replacementStalePrivatePostAfterComplete.status, "passed");
+assert.equal(replacementStalePrivatePostAfterComplete.channel, "private:mafia_day_chat");
+assert.equal(
+  replacementStalePrivatePostAfterComplete.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.replacementEntry.capabilityKinds.includes(
+    "SlotOccupant",
+  ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.slot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.commandStateBeforeClose.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.commandStateBeforeClose.gameCompleted,
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.channelContextBeforeClose.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.submitPostBeforeClose.disabled,
+  false,
+);
+assert.equal(replacementStalePrivatePostAfterComplete.closedStatus.state, "closed");
+assert.equal(
+  replacementStalePrivatePostAfterComplete.complete.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.hostSlotsAfterComplete.some(
+    (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+  ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.hostActionsAfterComplete.includes(
+    "complete_game",
+  ),
+  false,
+);
+assert.equal(replacementStalePrivatePostAfterComplete.apiStateAfterComplete.completed, true);
+assert.equal(replacementStalePrivatePostAfterComplete.reject.state, "reject");
+assert.equal(
+  replacementStalePrivatePostAfterComplete.reject.error,
+  "GameAlreadyCompleted",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.reject.requestEnvelope.body.body.command
+    .SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.reject.requestEnvelope.body.body.command
+    .SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.reject.requestEnvelope.body.body.command
+    .SubmitPost.body,
+  replacementStalePrivatePostAfterComplete.postBody,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.dispatchPlan.projectionRefreshKeys.includes(
+    "commandState",
+  ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.currentReceipt.actionId,
+  "submit_post",
+);
+assert.equal(replacementStalePrivatePostAfterComplete.currentReceipt.state, "reject");
+assert.match(
+  replacementStalePrivatePostAfterComplete.receiptStatusText,
+  /Reject GameAlreadyCompleted/,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.commandStateAfterReject.gameCompleted,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.commandStateAfterReject.voteTargets.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.buttonsAfterReject.some(
+    (button) => button.disabled !== true,
+  ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.apiCommandStateAfterReject.game_completed,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.apiThreadPostBodies.includes(
+    replacementStalePrivatePostAfterComplete.postBody,
+  ),
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.staleOutgoingRouteAfterReject.status,
+  403,
+);
+assert.equal(
+  replacementStalePrivatePostAfterComplete.staleOutgoingThreadAfterReject.status,
   403,
 );
 assert.equal(

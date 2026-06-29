@@ -557,7 +557,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 73,
+    laneCount: 74,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1058,7 +1058,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "46 hardening lanes passed");
+  assert.equal(hardening.status, "47 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1088,6 +1088,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
       "stale-host-publish",
       "stale-host-lifecycle",
       "stale-host-modkill",
@@ -1115,7 +1116,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 73,
+    laneCount: 74,
     releaseReady: false,
     productionReady: false,
   });
@@ -1166,7 +1167,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 73,
+    laneCount: 74,
     releaseReady: false,
     productionReady: false,
   });
@@ -1227,7 +1228,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 46);
+  assert.equal(data.audit.checks.length, 47);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1255,6 +1256,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["replacement-stale-action-after-resolve", "passed"],
       ["replacement-stale-private-post-after-resolve", "passed"],
       ["replacement-stale-private-post-reconnect", "passed"],
+      ["replacement-stale-private-post-after-complete", "passed"],
       ["stale-host-publish", "passed"],
       ["stale-host-lifecycle", "passed"],
       ["stale-host-modkill", "passed"],
@@ -1313,7 +1315,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "53 demo scenarios available locally");
+  assert.equal(seed.status, "54 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1340,6 +1342,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "replacement-stale-action-after-resolve",
       "replacement-stale-private-post-after-resolve",
       "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -1376,7 +1379,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 53,
+    scenarioCount: 54,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -1395,7 +1398,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 53);
+  assert.equal(data.audit.scenarios.length, 54);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1420,6 +1423,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["replacement-stale-action-after-resolve", "available_locally"],
       ["replacement-stale-private-post-after-resolve", "available_locally"],
       ["replacement-stale-private-post-reconnect", "available_locally"],
+      ["replacement-stale-private-post-after-complete", "available_locally"],
       ["concurrent-host-resolve-race", "available_locally"],
       ["concurrent-host-advance-race", "available_locally"],
       ["concurrent-host-deadline-advance-race", "available_locally"],
@@ -1784,6 +1788,7 @@ function proofRunFixture() {
     "replacement-stale-action-after-resolve",
     "replacement-stale-private-post-after-resolve",
     "replacement-stale-private-post-reconnect",
+    "replacement-stale-private-post-after-complete",
     "host-votecount-publication",
     "stale-host-publish",
     "host-lifecycle-control",
@@ -1844,7 +1849,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 73,
+      laneCount: 74,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
@@ -1935,6 +1940,11 @@ function seedFixtureSummaryFixture() {
       seedScenario(
         "replacement-stale-private-post-reconnect",
         "Replacement private post reconnect",
+        "replacementPlayer",
+      ),
+      seedScenario(
+        "replacement-stale-private-post-after-complete",
+        "Stale replacement private post after completion",
         "replacementPlayer",
       ),
       seedScenario("concurrent-host-resolve-race", "Concurrent host resolve race", "host"),
