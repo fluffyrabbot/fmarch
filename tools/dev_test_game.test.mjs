@@ -2307,6 +2307,64 @@ test("session card and markdown include role credential URLs and tokens", () => 
           },
         ],
       },
+      staleHostComplete: {
+        status: "passed",
+        game: `${game}-complete-test`,
+        actionId: "complete_game",
+        setup: {
+          roleActions: ["complete_game"],
+          revealText: "0/1 slots revealed",
+          slots: [
+            { role_revealed: false, alignment_revealed: false },
+          ],
+          closedStatus: { state: "closed" },
+        },
+        liveComplete: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [55],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: { CompleteGame: { game: `${game}-complete-test` } },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          error: "GameAlreadyCompleted",
+          message: "Reject GameAlreadyCompleted: game already completed",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            actionId: "complete_game",
+            state: "reject",
+            error: "GameAlreadyCompleted",
+          },
+        ],
+        slotsAfterReject: [
+          { role_revealed: true, alignment_revealed: true },
+        ],
+        revealTextAfterReject: "All 1 slots revealed",
+        roleActionsAfterReject: ["complete_game"],
+        activityStatusText: "Reject GameAlreadyCompleted: game already completed",
+        activityRow: {
+          source: "outcome",
+          actionId: "complete_game",
+          dispatchKind: "complete_game",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiStateAfterReject: {
+          slots: [
+            { role_revealed: true, alignment_revealed: true },
+          ],
+        },
+      },
       staleHostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -2503,6 +2561,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "host-modkill-control",
       "stale-host-modkill",
       "stale-host-prompt",
+      "stale-host-complete",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -2582,7 +2641,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 48);
+  assert.equal(opsArtifacts.proofRun.laneCount, 49);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3139,6 +3198,7 @@ function hardeningAdminProofFixture() {
         "stale-host-lifecycle",
         "stale-host-modkill",
         "stale-host-prompt",
+        "stale-host-complete",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",

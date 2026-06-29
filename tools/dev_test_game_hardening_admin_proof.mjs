@@ -31,6 +31,7 @@ const requiredChecks = [
   "stale-host-lifecycle",
   "stale-host-modkill",
   "stale-host-prompt",
+  "stale-host-complete",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",

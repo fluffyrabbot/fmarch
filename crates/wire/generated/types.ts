@@ -17,7 +17,7 @@ export type ClientEnvelope = { v: number, id: bigint, body: ClientMsg, };
 
 export type AckMsg = { stream_seqs: Array<bigint>, };
 
-export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "InvalidPromptDecision" | "Internal";
+export type RejectCode = "NotAuthorized" | "NotYourSlot" | "NotHost" | "PhaseLocked" | "SlotNotAlive" | "VoteNotAllowed" | "InvalidTarget" | "ActionAlreadySubmitted" | "InvalidRole" | "StreamConflict" | "UnknownGame" | "UnknownSlot" | "UnknownPrompt" | "PromptAlreadyResolved" | "GameAlreadyCompleted" | "InvalidPromptDecision" | "Internal";
 
 export type RejectMsg = { error: RejectCode, retryable: boolean, message: string, };
 
@@ -31,7 +31,7 @@ export type DayVoteOutcomeDelta = { game: string, phase_id: string, source_seq: 
 
 export type HostConsolePhaseStateDelta = { phase_id: string, locked: boolean, deadline: bigint | null, };
 
-export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id: string, alive: boolean, status: string, status_tags: Array<string>, };
+export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id: string, alive: boolean, status: string, status_tags: Array<string>, role_key: string | null, alignment: string | null, role_revealed: boolean, alignment_revealed: boolean, };
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 

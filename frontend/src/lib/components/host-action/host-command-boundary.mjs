@@ -281,7 +281,10 @@ export function projectHostConsoleState(state, fallback) {
   }
 
   const phase = state.phase ?? null;
-  const slot = Array.isArray(state.slots) ? state.slots[0] : null;
+  const slots = Array.isArray(state.slots)
+    ? state.slots.map((slot) => normalizeHostConsoleSlot(slot))
+    : [];
+  const slot = slots[0] ?? null;
   const posts = Array.isArray(state.thread_posts) ? state.thread_posts : [];
   const preservedSlotHistory =
     slot !== null && posts.some((post) => post?.author_slot === slot.slot_id);
@@ -327,6 +330,23 @@ export function projectHostConsoleState(state, fallback) {
         ? `Slot history remains attached to ${slot.slot_id}`
         : fallback.replacement.historyLabel,
     }),
+    slots: Object.freeze(slots),
+  });
+}
+
+function normalizeHostConsoleSlot(slot) {
+  return Object.freeze({
+    slot_id: String(slot?.slot_id ?? ""),
+    occupant_user_id: String(slot?.occupant_user_id ?? ""),
+    alive: slot?.alive === true,
+    status: String(slot?.status ?? "alive"),
+    status_tags: Object.freeze(
+      Array.isArray(slot?.status_tags) ? slot.status_tags.map(String) : [],
+    ),
+    role_key: slot?.role_key ?? null,
+    alignment: slot?.alignment ?? null,
+    role_revealed: slot?.role_revealed === true,
+    alignment_revealed: slot?.alignment_revealed === true,
   });
 }
 

@@ -219,6 +219,13 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
   }
   if (
     outcome?.state === "reject" &&
+    outcome?.error === "GameAlreadyCompleted" &&
+    event?.payload?.kind === "complete_game"
+  ) {
+    return Object.freeze(["host"]);
+  }
+  if (
+    outcome?.state === "reject" &&
     (outcome?.retryable === true || outcome?.error === "StreamConflict")
   ) {
     return hostProjectionResyncKeys();

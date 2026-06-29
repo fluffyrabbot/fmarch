@@ -23,17 +23,17 @@ use std::time::{Duration, Instant};
 
 use caps::{Capability, CapabilitySet, Principal};
 use domain::{
+    IrAbility, Modifier, RoleModifier,
     pack::{
         ActionTemplate, ActivationGateReason, GrantKind, GrantSpec, HostPromptDecisionKind,
         HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, ItaSessionControlKind,
         PhaseParity, TargetRoleFilter, TargetSpec, TargetState, Window,
     },
-    IrAbility, Modifier, RoleModifier,
 };
 use eventstore::{ActorId, EventInput};
-use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
+use projections::{ProjectionError, append_and_project_in_tx, audit_rebuild};
 use serde::Serialize;
-use sqlx::{pool::PoolConnection, postgres::PgPool, Postgres, Row};
+use sqlx::{Postgres, Row, pool::PoolConnection, postgres::PgPool};
 use uuid::Uuid;
 
 mod model;
@@ -558,18 +558,7 @@ async fn handle_inner(
         Command::ResolvePhase { game, seed } => {
             resolve_phase(pool, principal, game, seed, receipt).await
         }
-        Command::CompleteGame { game } => {
-            host_lifecycle(
-                pool,
-                principal,
-                game,
-                "GameCompleted",
-                serde_json::json!({}),
-                ActorId::Host,
-                receipt,
-            )
-            .await
-        }
+        Command::CompleteGame { game } => complete_game(pool, principal, game, receipt).await,
         Command::PublishVotecount { game } => {
             publish_votecount(pool, principal, game, receipt).await
         }
@@ -701,6 +690,38 @@ async fn host_lifecycle(
         pool,
         game,
         &[EventInput::new(kind, 1, payload, actor, 0)],
+        receipt,
+    )
+    .await
+}
+
+async fn complete_game(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    if stream.iter().any(|event| event.kind == "GameCompleted") {
+        return Err(Reject::GameAlreadyCompleted);
+    }
+
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "GameCompleted",
+            1,
+            serde_json::json!({}),
+            ActorId::Host,
+            0,
+        )],
         receipt,
     )
     .await
@@ -2808,7 +2829,7 @@ fn host_prompt_effect(
             let selected = match decision {
                 HostPromptDecision::SelectSlot { slot } => slot.clone(),
                 HostPromptDecision::Acknowledge { .. } => {
-                    return Err(Reject::InvalidPromptDecision)
+                    return Err(Reject::InvalidPromptDecision);
                 }
             };
             let contenders = prompt
@@ -3962,11 +3983,7 @@ async fn require_game(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
 
 /// Least-authority gate: require `cap`, mapping a miss to `deny`.
 fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), Reject> {
-    if caps.grants(cap) {
-        Ok(())
-    } else {
-        Err(deny)
-    }
+    if caps.grants(cap) { Ok(()) } else { Err(deny) }
 }
 
 /// The principal must be the slot's CURRENT occupant. We distinguish "this slot
@@ -4145,7 +4162,7 @@ async fn validate_action_submission(
         TargetSpec::Many | TargetSpec::Group
             if targets.is_empty() || targets.len() > template.constraints.max_targets as usize =>
         {
-            return Err(Reject::InvalidTarget)
+            return Err(Reject::InvalidTarget);
         }
         _ => {}
     }

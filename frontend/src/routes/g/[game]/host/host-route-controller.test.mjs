@@ -485,6 +485,13 @@ test("host route controller schedules projection refreshes for prompt ACKs and s
   );
   assert.deepEqual(
     hostPostCommandRefreshKeys({
+      event: { payload: { kind: "complete_game" } },
+      outcome: { state: "reject", error: "GameAlreadyCompleted" },
+    }),
+    ["host"],
+  );
+  assert.deepEqual(
+    hostPostCommandRefreshKeys({
       event: { payload: { kind: "process_replacement" } },
       outcome: { state: "reject", error: "InvalidTarget" },
     }),

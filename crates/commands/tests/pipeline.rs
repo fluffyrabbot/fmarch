@@ -3874,6 +3874,22 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
     assert_eq!(completed_godfather.role_key, "godfather");
     assert_eq!(completed_godfather.alignment.as_deref(), Some("mafia"));
 
+    let duplicate_complete_err = handle(&pool, &host, Command::CompleteGame { game })
+        .await
+        .expect_err("completed game must reject stale duplicate completion");
+    assert_eq!(duplicate_complete_err, Reject::GameAlreadyCompleted);
+    let completed_event_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM events WHERE stream_id = $1 AND kind = 'GameCompleted'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        completed_event_count, 1,
+        "duplicate CompleteGame must not append another GameCompleted event"
+    );
+
     let projected_after = slot_state(&pool, game).await.unwrap();
     assert!(
         projected_after.iter().all(|slot| slot.role_revealed),

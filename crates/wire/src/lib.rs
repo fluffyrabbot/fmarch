@@ -464,6 +464,7 @@ pub enum RejectCode {
     UnknownSlot,
     UnknownPrompt,
     PromptAlreadyResolved,
+    GameAlreadyCompleted,
     InvalidPromptDecision,
     Internal,
 }
@@ -485,6 +486,7 @@ impl From<&commands::Reject> for RejectCode {
             commands::Reject::UnknownSlot => RejectCode::UnknownSlot,
             commands::Reject::UnknownPrompt => RejectCode::UnknownPrompt,
             commands::Reject::PromptAlreadyResolved => RejectCode::PromptAlreadyResolved,
+            commands::Reject::GameAlreadyCompleted => RejectCode::GameAlreadyCompleted,
             commands::Reject::InvalidPromptDecision => RejectCode::InvalidPromptDecision,
             commands::Reject::Internal(_) => RejectCode::Internal,
         }
@@ -593,6 +595,10 @@ pub struct HostConsoleSlotOccupancyDelta {
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
+    pub role_key: Option<String>,
+    pub alignment: Option<String>,
+    pub role_revealed: bool,
+    pub alignment_revealed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

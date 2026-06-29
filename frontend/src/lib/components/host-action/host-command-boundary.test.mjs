@@ -525,6 +525,10 @@ test("host console projection maps deadline and stable slot history to labels", 
           occupant_user_id: "player-rowan",
           alive: false,
           status: "modkilled",
+          role_key: "encryptor",
+          alignment: "mafia",
+          role_revealed: true,
+          alignment_revealed: true,
         },
       ],
       thread_posts: [{ author_slot: "slot-7", body: "before replacement" }],
@@ -549,6 +553,10 @@ test("host console projection maps deadline and stable slot history to labels", 
   assert.equal(projection.phase.lockedLabel, "Thread locked");
   assert.equal(projection.replacement.occupantLabel, "player-rowan");
   assert.equal(projection.replacement.lifecycleLabel, "Modkilled");
+  assert.equal(projection.slots[0].role_key, "encryptor");
+  assert.equal(projection.slots[0].alignment, "mafia");
+  assert.equal(projection.slots[0].role_revealed, true);
+  assert.equal(projection.slots[0].alignment_revealed, true);
   assert.equal(
     projection.replacement.historyLabel,
     "Slot history remains attached to slot-7",

@@ -11,6 +11,7 @@ export function buildHostPhaseSummaryViewModel({
 } = {}) {
   const livePhase = projection?.phase ?? {};
   const replacement = projection?.replacement ?? {};
+  const revealSummary = endgameRevealSummary(projection?.slots);
   const slotLabel = slotDisplayLabel(replacement.slotId ?? "slot-7");
 
   return Object.freeze({
@@ -53,6 +54,11 @@ export function buildHostPhaseSummaryViewModel({
         value: replacement.historyLabel ?? "Slot history unavailable",
         testId: "host-console-history",
       }),
+      fact({
+        label: "Endgame reveal",
+        value: revealSummary,
+        testId: "host-console-endgame-reveal",
+      }),
     ]),
   });
 }
@@ -69,4 +75,17 @@ function slotDisplayLabel(slotId) {
   return String(slotId)
     .replace(/^slot[-_]/, "Slot ")
     .replace(/[-_]+/g, " ");
+}
+
+function endgameRevealSummary(slots) {
+  if (!Array.isArray(slots) || slots.length === 0) {
+    return "Role sheet private";
+  }
+  const revealedCount = slots.filter(
+    (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+  ).length;
+  if (revealedCount === slots.length) {
+    return `All ${slots.length} slots revealed`;
+  }
+  return `${revealedCount}/${slots.length} slots revealed`;
 }

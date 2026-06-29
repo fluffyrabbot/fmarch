@@ -755,6 +755,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host prompt: ${card.verification.multiplayerHardening.staleHostPrompt.reject.message}`,
         "",
+        `Stale host complete: ${card.verification.multiplayerHardening.staleHostComplete.reject.message}`,
+        "",
         `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
         "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
@@ -2678,6 +2680,12 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  const staleHostComplete = await verifyStaleHostCompleteRecovery({
+    hostPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+    game,
+  });
 
   return {
     status: "passed",
@@ -2704,10 +2712,11 @@ async function verifySeededMultiplayerHardening({
     staleHostResolve,
     staleHostAdvance,
     staleHostPrompt,
+    staleHostComplete,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt and cohost deadline role URLs clicked old controls, rendered command-activity receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game and cohost deadline role URLs clicked old controls, rendered command-activity receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -2988,6 +2997,247 @@ async function submitStaleHostPromptRecovery({
     activityRow,
     dispatchPlan,
     apiPromptsAfterReject,
+  };
+}
+
+async function verifyStaleHostCompleteRecovery({
+  hostPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+  game,
+}) {
+  const completeGame = crypto.randomUUID();
+  const actionId = "complete_game";
+  const seed = await seedHostCompleteRecoveryGame({ completeGame });
+  const context = hostPage.context();
+  const staleCompletePage = await context.newPage();
+  const liveCompletePage = await context.newPage();
+  try {
+    const setup = await freezeStaleHostCompletePage({
+      staleCompletePage,
+      frontendBaseUrl,
+      completeGame,
+      actionId,
+    });
+    await liveCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await liveCompletePage
+      .getByTestId(`critical-host-action-${actionId}`)
+      .waitFor({ state: "visible" });
+    const liveComplete = await confirmHostAction(liveCompletePage, actionId);
+    await liveCompletePage.waitForFunction(
+      () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+    );
+    const staleRecovery = await submitStaleHostCompleteRecovery({
+      staleCompletePage,
+      setup,
+      liveComplete,
+      apiBaseUrl,
+      completeGame,
+      actionId,
+    });
+    return {
+      status: "passed",
+      game: completeGame,
+      actionId,
+      seed,
+      liveComplete,
+      ...staleRecovery,
+      proof:
+        "A disposable local endgame-reveal game froze one host role URL with the CompleteGame control while roles were private, completed the same game from a live host role URL, then clicked the stale reveal control and recovered through GameAlreadyCompleted without ACK stream seqs while refreshing the host projection to all slots revealed.",
+    };
+  } finally {
+    await staleCompletePage.close().catch(() => {});
+    await liveCompletePage.close().catch(() => {});
+  }
+}
+
+async function seedHostCompleteRecoveryGame({ completeGame }) {
+  const plan = [
+    ["host_h", { CreateGame: { game: completeGame, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game: completeGame, slot: "slot-7" } }],
+    ["host_h", { AssignSlot: { game: completeGame, slot: "slot-7", user: "complete-user-7" } }],
+    ["host_h", { AssignRole: { game: completeGame, slot: "slot-7", role_key: "godfather" } }],
+    ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game: completeGame,
+    commands: commands.length,
+  };
+}
+
+async function freezeStaleHostCompletePage({
+  staleCompletePage,
+  frontendBaseUrl,
+  completeGame,
+  actionId,
+}) {
+  await staleCompletePage.goto(`${frontendBaseUrl}/g/${completeGame}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleCompletePage
+    .getByTestId(`critical-host-action-${actionId}`)
+    .waitFor({ state: "visible" });
+  await staleCompletePage.waitForFunction(
+    () =>
+      (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+      (window.__fmarchHostProjection?.slots ?? []).every(
+        (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+      ),
+  );
+  const slots = await staleCompletePage.evaluate(
+    () => window.__fmarchHostProjection?.slots ?? [],
+  );
+  const revealText = await staleCompletePage
+    .getByTestId("host-console-endgame-reveal")
+    .innerText();
+  const roleActions = await visibleHostControlActions(staleCompletePage, "roles");
+  const closedStatus = await staleCompletePage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    !roleActions.includes(actionId) ||
+    !revealText.includes("0/1 slots revealed") ||
+    slots.length !== 1 ||
+    slots.some((slot) => slot.role_revealed === true || slot.alignment_revealed === true) ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host complete setup drifted: ${JSON.stringify({
+        completeGame,
+        roleActions,
+        revealText,
+        slots,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    game: completeGame,
+    roleActions,
+    revealText,
+    slots,
+    closedStatus,
+  };
+}
+
+async function submitStaleHostCompleteRecovery({
+  staleCompletePage,
+  setup,
+  liveComplete,
+  apiBaseUrl,
+  completeGame,
+  actionId,
+}) {
+  const action = await confirmHostAction(staleCompletePage, actionId, "reject");
+  await staleCompletePage.waitForFunction(
+    () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+  );
+  const reject = action.commandStatus;
+  const commandOutcomes = await staleCompletePage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const slotsAfterReject = await staleCompletePage.evaluate(
+    () => window.__fmarchHostProjection?.slots ?? [],
+  );
+  const revealTextAfterReject = await staleCompletePage
+    .getByTestId("host-console-endgame-reveal")
+    .innerText();
+  const roleActionsAfterReject = await visibleHostControlActions(
+    staleCompletePage,
+    "roles",
+  );
+  const activityStatusText = await staleCompletePage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleCompletePage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleCompletePage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const apiStateAfterReject = await fetchHostConsoleState({
+    apiBaseUrl,
+    game: completeGame,
+  });
+  if (
+    setup?.roleActions?.includes(actionId) !== true ||
+    liveComplete?.commandStatus?.state !== "ack" ||
+    !Array.isArray(liveComplete?.commandStatus?.streamSeqs) ||
+    liveComplete.commandStatus.streamSeqs.length !== 1 ||
+    liveComplete?.commandStatus?.requestEnvelope?.body?.body?.command?.CompleteGame
+      ?.game !== completeGame ||
+    reject?.state !== "reject" ||
+    reject?.error !== "GameAlreadyCompleted" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    commandOutcomes.find(
+      (outcome) =>
+        outcome.actionId === actionId &&
+        outcome.state === "reject" &&
+        outcome.error === "GameAlreadyCompleted",
+    ) === undefined ||
+    slotsAfterReject.length !== 1 ||
+    slotsAfterReject.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    !revealTextAfterReject.includes("All 1 slots revealed") ||
+    !roleActionsAfterReject.includes(actionId) ||
+    !activityStatusText.includes("Reject GameAlreadyCompleted") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    apiStateAfterReject.slots?.length !== 1 ||
+    apiStateAfterReject.slots.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    )
+  ) {
+    throw new Error(
+      `stale host complete recovery drifted: ${JSON.stringify({
+        setup,
+        liveComplete,
+        reject,
+        commandOutcomes,
+        slotsAfterReject,
+        revealTextAfterReject,
+        roleActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiStateAfterReject,
+      })}`,
+    );
+  }
+  return {
+    setup,
+    reject,
+    commandOutcomes,
+    slotsAfterReject,
+    revealTextAfterReject,
+    roleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiStateAfterReject,
   };
 }
 

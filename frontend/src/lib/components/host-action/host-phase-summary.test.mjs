@@ -25,6 +25,16 @@ test("host phase summary model renders live phase and slot projection facts", ()
         lifecycleLabel: "Modkilled",
         historyLabel: "Slot history remains attached to slot-7",
       },
+      slots: [
+        {
+          role_revealed: true,
+          alignment_revealed: true,
+        },
+        {
+          role_revealed: true,
+          alignment_revealed: true,
+        },
+      ],
     },
   });
 
@@ -44,6 +54,7 @@ test("host phase summary model renders live phase and slot projection facts", ()
         "Slot history remains attached to slot-7",
         "host-console-history",
       ],
+      ["Endgame reveal", "All 2 slots revealed", "host-console-endgame-reveal"],
     ],
   );
 });
@@ -70,6 +81,7 @@ test("host phase summary model falls back without inventing state", () => {
       ["Slot 12 occupant", "Unknown occupant"],
       ["Lifecycle", "Unknown lifecycle"],
       ["Slot history", "Slot history unavailable"],
+      ["Endgame reveal", "Role sheet private"],
     ],
   );
 });

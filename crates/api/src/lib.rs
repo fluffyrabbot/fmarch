@@ -1698,6 +1698,10 @@ pub struct HostConsoleSlotOccupancy {
     pub alive: bool,
     pub status: String,
     pub status_tags: Vec<String>,
+    pub role_key: Option<String>,
+    pub alignment: Option<String>,
+    pub role_revealed: bool,
+    pub alignment_revealed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1746,6 +1750,10 @@ impl From<HostConsoleSlotOccupancy> for HostConsoleSlotOccupancyDelta {
             alive: slot.alive,
             status: slot.status,
             status_tags: slot.status_tags,
+            role_key: slot.role_key,
+            alignment: slot.alignment,
+            role_revealed: slot.role_revealed,
+            alignment_revealed: slot.alignment_revealed,
         }
     }
 }
@@ -1857,6 +1865,12 @@ async fn load_host_console_state(
                 status_tags: slot_state
                     .map(|state| state.status_tags.clone())
                     .unwrap_or_default(),
+                role_key: slot_state.and_then(|state| state.role_key.clone()),
+                alignment: slot_state.and_then(|state| state.alignment.clone()),
+                role_revealed: slot_state.map(|state| state.role_revealed).unwrap_or(false),
+                alignment_revealed: slot_state
+                    .map(|state| state.alignment_revealed)
+                    .unwrap_or(false),
             }
         })
         .collect();

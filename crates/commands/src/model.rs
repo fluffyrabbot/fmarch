@@ -222,6 +222,9 @@ pub enum Reject {
     /// The host/admin prompt has already been resolved.
     #[error("prompt already resolved")]
     PromptAlreadyResolved,
+    /// The game has already been completed.
+    #[error("game already completed")]
+    GameAlreadyCompleted,
     /// The prompt decision is malformed for the prompt kind.
     #[error("invalid prompt decision")]
     InvalidPromptDecision,

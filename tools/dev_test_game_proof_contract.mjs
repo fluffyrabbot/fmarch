@@ -48,6 +48,7 @@ const requiredLaneIds = Object.freeze([
   "host-modkill-control",
   "stale-host-modkill",
   "stale-host-prompt",
+  "stale-host-complete",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1575,6 +1576,55 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostPrompt?.apiPromptsAfterReject?.find(
           (prompt) => (prompt.id ?? prompt.prompt_id) === "D01:skip_next_day:slot_1",
         )?.status === "resolved",
+    }),
+    lane("stale-host-complete", "Stale complete-game reveal rejects after live completion", {
+      rejectError: hardening.staleHostComplete?.reject?.error ?? null,
+      liveCompleteSeqs:
+        hardening.staleHostComplete?.liveComplete?.commandStatus?.streamSeqs ?? null,
+      revealTextAfterReject:
+        hardening.staleHostComplete?.revealTextAfterReject ?? null,
+      roleActionsAfterReject:
+        hardening.staleHostComplete?.roleActionsAfterReject ?? null,
+      apiRevealedSlots:
+        hardening.staleHostComplete?.apiStateAfterReject?.slots?.filter(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ).length ?? null,
+      passed:
+        hardening.staleHostComplete?.status === "passed" &&
+        hardening.staleHostComplete?.setup?.roleActions?.includes("complete_game") ===
+          true &&
+        hardening.staleHostComplete?.setup?.slots?.length === 1 &&
+        hardening.staleHostComplete?.setup?.slots?.every(
+          (slot) => slot.role_revealed === false && slot.alignment_revealed === false,
+        ) === true &&
+        hardening.staleHostComplete?.liveComplete?.commandStatus?.state === "ack" &&
+        Array.isArray(
+          hardening.staleHostComplete?.liveComplete?.commandStatus?.streamSeqs,
+        ) &&
+        hardening.staleHostComplete.liveComplete.commandStatus.streamSeqs.length ===
+          1 &&
+        hardening.staleHostComplete?.reject?.state === "reject" &&
+        hardening.staleHostComplete?.reject?.error === "GameAlreadyCompleted" &&
+        hardening.staleHostComplete?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.staleHostComplete?.reject?.streamSeqs) === false &&
+        hardening.staleHostComplete?.slotsAfterReject?.length === 1 &&
+        hardening.staleHostComplete?.slotsAfterReject?.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ) === true &&
+        hardening.staleHostComplete?.revealTextAfterReject ===
+          "All 1 slots revealed" &&
+        hardening.staleHostComplete?.activityRow?.source === "outcome" &&
+        hardening.staleHostComplete?.activityRow?.actionId === "complete_game" &&
+        hardening.staleHostComplete?.activityRow?.dispatchKind ===
+          "complete_game" &&
+        hardening.staleHostComplete?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleHostComplete?.apiStateAfterReject?.slots?.length === 1 &&
+        hardening.staleHostComplete?.apiStateAfterReject?.slots?.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ) === true,
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,
