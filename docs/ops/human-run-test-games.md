@@ -391,6 +391,23 @@ current `player-rowan` target from the same host surface and records an ACK
 player invite. This is local browser recovery evidence only; it does not prove
 hosted invite delivery or production account lifecycle.
 
+To replay and inspect only this local evidence surface after a fresh run:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
+node - <<'NODE'
+const proof = require("./target/dev-test-game/proof-run.json");
+const lane = proof.lanes.find((item) => item.id === "stale-host-invite-recovery");
+console.log(JSON.stringify(lane.evidence, null, 2));
+NODE
+```
+
+The expected local proof fields are: `rejectMessage` contains
+`Invite target is stale`, `urlRendered` is `false`, and
+`retryPrincipalUserId` is `player-rowan`. The same scenario should also appear in
+`target/dev-test-game/seed-fixture-summary.json` with id
+`stale-host-invite-recovery`.
+
 The multiplayer-hardening proof promotes the first auth revocation, retry,
 reconnect, concurrent-vote, and stale-client behaviors into the same browser
 harness: the replacement player session revocation and positive session refresh
