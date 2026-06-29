@@ -35,6 +35,7 @@ const requiredScenarios = [
   "replacement-stale-conflict-message",
   "replacement-invalid-target-recovery",
   "replacement-idempotent-retry",
+  "stale-host-invite-recovery",
   "replacement-stale-success-recovery",
   "replacement-stale-player",
   "replacement-stale-action",

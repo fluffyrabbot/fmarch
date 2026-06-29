@@ -1136,6 +1136,29 @@ test("session card and markdown include role credential URLs and tokens", () => 
           occupant_user_id: "player-rowan",
         },
       },
+      staleHostInviteRecovery: {
+        status: "passed",
+        beforeSubmit: {
+          principalUserId: "player-mira",
+          expectedOccupantUserId: "player-mira",
+          slotId: "slot-7",
+        },
+        reject: {
+          state: "reject",
+          message: "Invite target is stale; slot-7 is currently occupied by player-rowan",
+          urlRendered: false,
+        },
+        retry: {
+          state: "ack",
+          target: {
+            principalUserId: "player-rowan",
+            expectedOccupantUserId: "player-rowan",
+            slotId: "slot-7",
+          },
+          message: "Player invite issued",
+          loginUrl: `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}&invite=player-${game}-fixture`,
+        },
+      },
       staleOutgoingPlayer: {
         status: "passed",
         setup: {
@@ -1608,6 +1631,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Process replacement: Ack: stream seqs 44"));
   assert(markdown.includes("Projected occupant: player-rowan"));
   assert(markdown.includes("Replacement duplicate retry: Ack: stream seqs 44"));
+  assert(markdown.includes("Stale host invite recovery: Player invite issued"));
   assert(
     markdown.includes(
       "Stale outgoing recovery: Reject NotYourSlot: not your slot; slot ownership changed, refresh and use current role surface",
@@ -1649,6 +1673,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-session-refresh-recovery",
       "replacement-stale-session-after-refresh",
       "replacement-reconnect-recovery",
+      "stale-host-invite-recovery",
       "replacement-stale-conflict-message",
       "replacement-invalid-target-recovery",
       "replacement-console",
@@ -1739,7 +1764,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 35);
+  assert.equal(opsArtifacts.proofRun.laneCount, 36);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1846,6 +1871,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-conflict-message",
       "replacement-invalid-target-recovery",
       "replacement-idempotent-retry",
+      "stale-host-invite-recovery",
       "replacement-stale-success-recovery",
       "replacement-stale-player",
       "replacement-stale-action",
@@ -2239,6 +2265,7 @@ function coreLoopAdminProofFixture() {
         "replacement-invalid-target-recovery",
         "replacement-console",
         "replacement-idempotent-retry",
+        "stale-host-invite-recovery",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-stale-action",
@@ -2371,6 +2398,7 @@ function seedAdminProofFixture() {
         "replacement-stale-conflict-message",
         "replacement-invalid-target-recovery",
         "replacement-idempotent-retry",
+        "stale-host-invite-recovery",
         "replacement-stale-success-recovery",
         "replacement-stale-player",
         "replacement-stale-action",

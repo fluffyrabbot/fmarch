@@ -24,6 +24,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-session-refresh-recovery",
   "replacement-stale-session-after-refresh",
   "replacement-reconnect-recovery",
+  "stale-host-invite-recovery",
   "replacement-stale-conflict-message",
   "replacement-invalid-target-recovery",
   "replacement-console",
@@ -537,6 +538,51 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.recoveredCommandState?.actorSlot === "slot-7" &&
         verification.replacementConsole?.replacementReconnectRecovery
           ?.recoveredCommandState?.actorAlive === true,
+    }),
+    lane("stale-host-invite-recovery", "Stale host player invite recovers to current occupant", {
+      beforePrincipalUserId:
+        verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
+          ?.principalUserId ?? null,
+      rejectMessage:
+        verification.replacementConsole?.staleHostInviteRecovery?.reject?.message ??
+        null,
+      urlRendered:
+        verification.replacementConsole?.staleHostInviteRecovery?.reject
+          ?.urlRendered ?? null,
+      retryState:
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.state ??
+        null,
+      retryPrincipalUserId:
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.principalUserId ?? null,
+      retryExpectedOccupantUserId:
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.expectedOccupantUserId ?? null,
+      retrySlotId:
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.slotId ?? null,
+      passed:
+        verification.replacementConsole?.staleHostInviteRecovery?.status === "passed" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
+          ?.principalUserId === "player-mira" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.beforeSubmit
+          ?.expectedOccupantUserId === "player-mira" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.reject?.message?.includes(
+          "Invite target is stale",
+        ) === true &&
+        verification.replacementConsole?.staleHostInviteRecovery?.reject
+          ?.urlRendered === false &&
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.state ===
+          "ack" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.principalUserId === "player-rowan" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.expectedOccupantUserId === "player-rowan" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.target
+          ?.slotId === "slot-7" &&
+        verification.replacementConsole?.staleHostInviteRecovery?.retry?.loginUrl?.includes(
+          `invite=player-${session?.game ?? ""}-`,
+        ) === true,
     }),
     lane("replacement-stale-conflict-message", "Stale replacement conflict message is explicit", {
       rejectError:

@@ -709,6 +709,8 @@ export function markdownSessionCard(card) {
         "",
         `Replacement duplicate retry: ${card.verification.replacementConsole.replacementIdempotentRetry.retryReplacement.message}`,
         "",
+        `Stale host invite recovery: ${card.verification.replacementConsole.staleHostInviteRecovery.retry.message}`,
+        "",
         `Stale outgoing recovery: ${card.verification.replacementConsole.staleOutgoingPlayer.reject.message}`,
         "",
         `Stale replacement recovery: ${card.verification.replacementConsole.staleReplacementAfterSuccess.reject.error}`,
@@ -2072,6 +2074,7 @@ async function verifySeededReplacementConsole({
     game,
     frontendBaseUrl,
   });
+  let staleHostInviteContext;
   let pendingIncomingPlayer;
   let replacementSessionRevocation;
   try {
@@ -2095,6 +2098,13 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
+    const staleHostInviteSetup = await openStaleHostInvitePage({
+      browser,
+      hostPage,
+      game,
+      frontendBaseUrl,
+    });
+    staleHostInviteContext = staleHostInviteSetup.context;
     const staleOutgoingSetup = await freezeStaleOutgoingReplacementPage({
       staleOutgoingPage,
       game,
@@ -2121,6 +2131,11 @@ async function verifySeededReplacementConsole({
       apiSlot,
       game,
       apiBaseUrl,
+    });
+    const staleHostInviteRecovery = await verifyStaleHostPlayerInviteRecovery({
+      staleHostInvitePage: staleHostInviteSetup.page,
+      staleHostInviteBefore: staleHostInviteSetup.before,
+      game,
     });
     const staleOutgoingPlayer = await submitStaleOutgoingReplacementRecovery({
       staleOutgoingPage,
@@ -2218,6 +2233,18 @@ async function verifySeededReplacementConsole({
       replacementIdempotentRetry?.sameStreamSeqs !== true ||
       replacementIdempotentRetry?.apiSlotAfterRetry?.occupant_user_id !==
         "player-rowan" ||
+      staleHostInviteRecovery?.status !== "passed" ||
+      staleHostInviteRecovery?.beforeSubmit?.principalUserId !== "player-mira" ||
+      staleHostInviteRecovery?.reject?.message?.includes("Invite target is stale") !==
+        true ||
+      staleHostInviteRecovery?.reject?.urlRendered !== false ||
+      staleHostInviteRecovery?.retry?.state !== "ack" ||
+      staleHostInviteRecovery?.retry?.target?.principalUserId !== "player-rowan" ||
+      staleHostInviteRecovery?.retry?.target?.expectedOccupantUserId !==
+        "player-rowan" ||
+      staleHostInviteRecovery?.retry?.target?.slotId !== "slot-7" ||
+      staleHostInviteRecovery?.retry?.loginUrl?.includes(`invite=player-${game}-`) !==
+        true ||
       staleOutgoingPlayer?.reject?.error !== "NotYourSlot" ||
       staleOutgoingPlayer?.recoveredCommandState?.actorStatus !== "replaced" ||
       staleOutgoingPlayer?.buttonsDisabled !== true ||
@@ -2303,6 +2330,7 @@ async function verifySeededReplacementConsole({
           projectedReplacement,
           apiSlot,
           replacementIdempotentRetry,
+          staleHostInviteRecovery,
           staleOutgoingPlayer,
           staleReplacementAfterSuccess,
           incomingPlayer,
@@ -2326,6 +2354,7 @@ async function verifySeededReplacementConsole({
       projectedReplacement,
       apiSlot,
       replacementIdempotentRetry,
+      staleHostInviteRecovery,
       staleOutgoingPlayer,
       staleReplacementAfterSuccess,
       incomingPlayer,
@@ -2337,9 +2366,10 @@ async function verifySeededReplacementConsole({
       replacementStaleSessionAfterRefresh,
       replacementReconnectRecovery,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, proved Mira's stale browser cannot keep private-channel authority while Rowan can post in the same private channel as current Slot 7, proved Mira's stale private receipt endpoints reject while Rowan's current private queue stays readable and free of target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered a stale host player-invite form by rejecting the old player-mira target and retrying the current player-rowan target from the same role surface, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, proved Mira's stale browser cannot keep private-channel authority while Rowan can post in the same private channel as current Slot 7, proved Mira's stale private receipt endpoints reject while Rowan's current private queue stays readable and free of target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
     };
   } finally {
+    await staleHostInviteContext?.close().catch(() => {});
     await replacementSessionRevocation?.staleEntry?.context.close().catch(() => {});
     await pendingIncomingPlayer?.replacementEntry?.context.close().catch(() => {});
   }
@@ -2424,6 +2454,121 @@ async function issueReplacementInviteFromHost({ hostPage, game, frontendBaseUrl 
     session,
     proof:
       "The seeded host role URL issued a local replacement invite for player-rowan through the host page action and rendered the resulting role URL before replacement processing.",
+  };
+}
+
+async function openStaleHostInvitePage({ browser, hostPage, game, frontendBaseUrl }) {
+  const hostCookies = await hostPage.context().cookies(frontendBaseUrl);
+  const sessionCookie = hostCookies.find((cookie) => cookie.name === "fmarch_session");
+  if (sessionCookie === undefined) {
+    throw new Error("stale host invite proof requires an authenticated host cookie");
+  }
+  const context = await browser.newContext({ viewport: { width: 1024, height: 768 } });
+  await context.addInitScript(() => {
+    window.WebSocket = undefined;
+  });
+  await context.addCookies([sessionCookie]);
+  const page = await context.newPage();
+  try {
+    await page.goto(`${frontendBaseUrl}/g/${game}/host`, { waitUntil: "networkidle" });
+    await page.getByTestId("host-player-invite-panel").waitFor({ state: "visible" });
+    const before = await readPlayerInviteTarget(page);
+    if (
+      before.principalUserId !== "player-mira" ||
+      before.expectedOccupantUserId !== "player-mira" ||
+      before.slotId !== "slot-7"
+    ) {
+      throw new Error(
+        `stale host invite page was not pre-replacement: ${JSON.stringify(before)}`,
+      );
+    }
+    return { context, page, before };
+  } catch (error) {
+    await context.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function readPlayerInviteTarget(page) {
+  return {
+    targetLabel: await page.getByTestId("host-player-invite-target").innerText(),
+    principalUserId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="principalUserId"]')
+      .inputValue(),
+    slotId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="slotId"]')
+      .inputValue(),
+    expectedOccupantUserId: await page
+      .getByTestId("host-player-invite-panel")
+      .locator('input[name="expectedOccupantUserId"]')
+      .inputValue(),
+  };
+}
+
+async function verifyStaleHostPlayerInviteRecovery({
+  staleHostInvitePage,
+  staleHostInviteBefore,
+  game,
+}) {
+  const submit = staleHostInvitePage.getByTestId("host-player-invite-submit");
+  await submit.click();
+  const status = staleHostInvitePage.getByTestId("host-player-invite-status");
+  await status.waitFor({ state: "visible" });
+  await staleHostInvitePage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-player-invite-status"]')
+        ?.getAttribute("data-state") === "reject",
+  );
+  const message = await status.innerText();
+  const urlRendered =
+    (await staleHostInvitePage.getByTestId("host-player-invite-url").count()) > 0;
+  const retry = staleHostInvitePage.getByTestId("host-player-invite-retry-submit");
+  await retry.waitFor({ state: "visible" });
+  const retryTarget = {
+    principalUserId: await staleHostInvitePage
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="principalUserId"]')
+      .inputValue(),
+    slotId: await staleHostInvitePage
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="slotId"]')
+      .inputValue(),
+    expectedOccupantUserId: await staleHostInvitePage
+      .getByTestId("host-player-invite-retry")
+      .locator('input[name="expectedOccupantUserId"]')
+      .inputValue(),
+  };
+  await retry.click();
+  await staleHostInvitePage.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-player-invite-status"]')
+        ?.getAttribute("data-state") === "ack",
+  );
+  const retryMessage = await status.innerText();
+  const retryLoginUrl = await staleHostInvitePage
+    .getByTestId("host-player-invite-url")
+    .innerText();
+  return {
+    status: "passed",
+    beforeSubmit: staleHostInviteBefore,
+    reject: {
+      state: "reject",
+      message,
+      urlRendered,
+    },
+    retry: {
+      state: "ack",
+      target: retryTarget,
+      message: retryMessage,
+      loginUrl: retryLoginUrl,
+      inviteTokenPrefix: `player-${game}-`,
+    },
+    proof:
+      "A stale seeded host role page loaded the player invite form for player-mira before replacement, submitted it after Slot 7 moved to player-rowan, rendered stale-target recovery without an invite URL, then retried the current player-rowan target from the same role surface and received a fresh player invite URL.",
   };
 }
 

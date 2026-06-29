@@ -866,6 +866,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     "replacement-pending-player",
     "replacement-invalid-target-recovery",
     "replacement-console",
+    "stale-host-invite-recovery",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",

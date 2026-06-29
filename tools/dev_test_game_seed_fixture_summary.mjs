@@ -167,6 +167,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-stale-conflict-message",
     "replacement-invalid-target-recovery",
     "replacement-idempotent-retry",
+    "stale-host-invite-recovery",
     "replacement-stale-success-recovery",
     "replacement-stale-player",
     "replacement-stale-action",
@@ -378,6 +379,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Host replays the successful ProcessReplacement command id through /commands, receives the original ACK stream seqs, and Slot 7 remains with Rowan.",
     }),
     scenario({
+      id: "stale-host-invite-recovery",
+      title: "Stale host invite recovery",
+      role: "host",
+      provenBy: ["stale-host-invite-recovery"].filter(hasLane),
+      note: "A stale host role URL submits the old player-mira invite target after replacement, receives stale-target recovery without a URL, then retries the current player-rowan target from the same surface.",
+    }),
+    scenario({
       id: "replacement-stale-success-recovery",
       title: "Stale replacement after success",
       role: "host",
@@ -445,6 +453,7 @@ function demoScenarios({ roles, laneIds }) {
         "replacement-reconnect-recovery",
         "replacement-stale-conflict-message",
         "replacement-idempotent-retry",
+        "stale-host-invite-recovery",
         "idempotent-retry",
         "reconnect-recovery",
         "concurrent-vote-race",
@@ -453,7 +462,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-control",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host control rejection, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",
