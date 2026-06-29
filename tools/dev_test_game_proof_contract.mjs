@@ -11,6 +11,7 @@ const requiredLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
+  "day-vote-resolution",
   "action-loop",
   "host-deadline-advance",
   "stale-deadline-advance",
@@ -112,6 +113,32 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.coreLoop?.rejectedVote?.error === "PhaseLocked" &&
         verification.coreLoop?.lock?.commandStatus?.state === "ack" &&
         verification.coreLoop?.unlock?.commandStatus?.state === "ack",
+    }),
+    lane("day-vote-resolution", "Day vote resolves through role URLs", {
+      finalVoteState: verification.dayVoteResolution?.finalVote?.state ?? null,
+      outcomeStatus: verification.dayVoteResolution?.dayVoteOutcome?.status ?? null,
+      winnerSlot: verification.dayVoteResolution?.dayVoteOutcome?.winner_slot ?? null,
+      hostSlotAlive: verification.dayVoteResolution?.hostSlot?.alive ?? null,
+      targetNoticeStatus: verification.dayVoteResolution?.targetNotice?.status ?? null,
+      passed:
+        verification.dayVoteResolution?.status === "passed" &&
+        verification.dayVoteResolution?.finalVote?.state === "ack" &&
+        verification.dayVoteResolution?.finalVote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.actor_slot === "slot_4" &&
+        verification.dayVoteResolution?.finalVote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.target?.Slot === "slot-2" &&
+        verification.dayVoteResolution?.dayVoteOutcome?.phase_id === "D01" &&
+        verification.dayVoteResolution?.dayVoteOutcome?.status === "Lynch" &&
+        verification.dayVoteResolution?.dayVoteOutcome?.winner_slot === "slot-2" &&
+        verification.dayVoteResolution?.dayVoteOutcome?.tallies?.["slot-2"] === 4 &&
+        verification.dayVoteResolution?.resolveDay?.commandStatus?.state === "ack" &&
+        verification.dayVoteResolution?.hostSlot?.alive === false &&
+        verification.dayVoteResolution?.hostSlot?.status === "dead" &&
+        verification.dayVoteResolution?.targetCommandState?.actorAlive === false &&
+        verification.dayVoteResolution?.targetCommandState?.actorStatus === "dead" &&
+        verification.dayVoteResolution?.targetNotice?.effect === "player_killed" &&
+        verification.dayVoteResolution?.targetNotice?.status === "day_vote" &&
+        Object.values(verification.dayVoteResolution?.targetControls ?? {}).every(Boolean),
     }),
     lane("action-loop", "Day/night action submission and resolution", {
       invalidActionError: verification.actionLoop?.invalidAction?.error ?? null,

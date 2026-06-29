@@ -17,6 +17,7 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
 const requiredChecks = [
   "core-loop",
+  "day-vote-resolution",
   "action-loop",
   "host-deadline-advance",
   "stale-deadline-advance",
@@ -65,7 +66,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-core-loop-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, player-action, day/night, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, day-vote resolution, player-action, day/night, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,

@@ -99,7 +99,7 @@ export function buildDevTestGameSeedFixtureSummary({
       {
         id: "demo-scenarios-mapped",
         status: "passed",
-        scenarioCount: 12,
+        scenarioCount: 13,
       },
       {
         id: "proof-lanes-carried",
@@ -251,6 +251,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["browser-entry", "core-loop", "stale-player-vote"].filter(hasLane),
       note: "Player opens the seeded role URL, submits votes, and sees clear PhaseLocked recovery from stale state.",
+    }),
+    scenario({
+      id: "day-vote-resolution",
+      title: "Day vote resolution",
+      role: "actionPlayer",
+      provenBy: ["browser-entry", "day-vote-resolution"].filter(hasLane),
+      note: "Action player opens a seeded role URL, casts the majority Slot 2 vote, then host and target-player role URLs prove the official day-vote lynch result.",
     }),
     scenario({
       id: "player-action-denied",

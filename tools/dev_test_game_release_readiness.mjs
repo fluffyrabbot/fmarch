@@ -191,6 +191,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: sourcePath,
       laneIds: [
         "core-loop",
+        "day-vote-resolution",
         "action-loop",
         "host-deadline-advance",
         "stale-deadline-advance",
@@ -678,6 +679,7 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
 export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
+    "day-vote-resolution",
     "action-loop",
     "host-deadline-advance",
     "stale-deadline-advance",

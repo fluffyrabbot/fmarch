@@ -554,7 +554,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 50,
+    laneCount: 51,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1065,7 +1065,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 50,
+    laneCount: 51,
     releaseReady: false,
     productionReady: false,
   });
@@ -1080,13 +1080,14 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
   const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
   assert.equal(coreLoop.label, "Local core loop");
-  assert.equal(coreLoop.status, "23 core loop lanes passed");
+  assert.equal(coreLoop.status, "24 core loop lanes passed");
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
   assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
     [
       "core-loop",
+      "day-vote-resolution",
       "action-loop",
       "host-deadline-advance",
       "stale-deadline-advance",
@@ -1114,7 +1115,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 50,
+    laneCount: 51,
     releaseReady: false,
     productionReady: false,
   });
@@ -1131,11 +1132,12 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
-  assert.equal(data.audit.checks.length, 23);
+  assert.equal(data.audit.checks.length, 24);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["core-loop", "passed"],
+      ["day-vote-resolution", "passed"],
       ["action-loop", "passed"],
       ["host-deadline-advance", "passed"],
       ["stale-deadline-advance", "passed"],
@@ -1622,6 +1624,7 @@ function proofRunFixture() {
     "browser-entry",
     "cohost-console",
     "core-loop",
+    "day-vote-resolution",
     "action-loop",
     "host-deadline-advance",
     "stale-deadline-advance",
@@ -1704,7 +1707,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 50,
+      laneCount: 51,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },

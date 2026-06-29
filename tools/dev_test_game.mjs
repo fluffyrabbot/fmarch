@@ -579,6 +579,18 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.dayVoteResolution !== undefined) {
+      lines.push(
+        "## Day Vote Resolution Proof",
+        "",
+        `Status: ${card.verification.dayVoteResolution.status}`,
+        "",
+        `Proof: ${card.verification.dayVoteResolution.proof}`,
+        "",
+        `Outcome: ${card.verification.dayVoteResolution.dayVoteOutcome.status} ${card.verification.dayVoteResolution.dayVoteOutcome.winner_slot}`,
+        "",
+      );
+    }
     if (card.verification.cohostConsole !== undefined) {
       lines.push(
         "## Cohost Console Proof",
@@ -777,6 +789,7 @@ async function verifySessionCard(card) {
   const roleEntries = {};
   let cohostConsole;
   let coreLoop;
+  let dayVoteResolution;
   let privateChannel;
   let actionLoop;
   let invalidActionRecovery;
@@ -833,6 +846,13 @@ async function verifySessionCard(card) {
     coreLoop = await verifySeededCoreLoop({
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
+    });
+    dayVoteResolution = await verifySeededDayVoteResolution({
+      hostPage: roleEntries.host.page,
+      actionPage: roleEntries.actionPlayer.page,
+      targetPage: roleEntries.deniedPlayer.page,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
     privateChannel = await verifySeededPrivateChannel({
       playerPage: roleEntries.player.page,
@@ -912,6 +932,7 @@ async function verifySessionCard(card) {
     sessions,
     cohostConsole,
     coreLoop,
+    dayVoteResolution,
     privateChannel,
     actionLoop,
     invalidActionRecovery,
@@ -1411,6 +1432,224 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
     },
     proof:
       "The seeded host role URL locked D01 through the hydrated host phase control, the seeded player role URL submitted a vote while the phase was locked and rendered Reject PhaseLocked recovery, then the host role URL unlocked D01 so the human-run game remains usable.",
+  };
+}
+
+async function verifySeededDayVoteResolution({
+  hostPage,
+  actionPage,
+  targetPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const dayVoteGame = crypto.randomUUID();
+  const seed = await seedDayVoteResolutionGame({ game: dayVoteGame });
+  const hostProofPage = await hostPage.context().newPage();
+  const voterPage = await actionPage.context().newPage();
+  const targetProofPage = await targetPage.context().newPage();
+  try {
+    await hostProofPage.goto(`${frontendBaseUrl}/g/${dayVoteGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.phase?.id === "D01" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === "slot-2" && row.count === 3,
+        ),
+    );
+    const hostBeforeVote = {
+      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
+      votecount: await hostProofPage.evaluate(
+        () => window.__fmarchHostVotecountProjection ?? [],
+      ),
+      phaseActions: await visibleHostPhaseActions(hostProofPage),
+    };
+
+    await gotoPlayerBoard(voterPage, dayVoteGame);
+    await voterPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+    );
+    const voterBeforeVote = await voterPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    await voterPage.locator('[data-action="submit_vote"]').click();
+    await voterPage.waitForFunction(
+      () => window.__fmarchPlayerCommandStatus?.state === "ack",
+    );
+    await voterPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.votecount?.some(
+          (row) => row.target === "slot-2" && row.count === 4,
+        ),
+    );
+    const finalVote = await voterPage.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const voterVotecountAfterVote = await voterPage.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount ?? [],
+    );
+
+    const resolveDay = await confirmHostAction(hostProofPage, "resolve_phase");
+    await waitForHostProjectionPhase(hostProofPage, { phaseId: "D01", locked: true });
+    const hostAfterResolve = {
+      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostProofPage),
+    };
+
+    await gotoPlayerBoard(targetProofPage, dayVoteGame);
+    await targetProofPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.notifications?.some(
+          (notice) =>
+            notice.effect === "player_killed" && notice.status === "day_vote",
+        ),
+    );
+    const targetCommandState = await targetProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const targetNotice = await targetProofPage.evaluate(
+      () =>
+        window.__fmarchPlayerProjection?.notifications?.find(
+          (notice) =>
+            notice.effect === "player_killed" && notice.status === "day_vote",
+        ) ?? null,
+    );
+    const targetControls = {
+      vote: await targetProofPage.locator('[data-action="submit_vote"]').isDisabled(),
+      withdraw: await targetProofPage.locator('[data-action="withdraw_vote"]').isDisabled(),
+      post: await targetProofPage.locator('[data-action="submit_post"]').isDisabled(),
+    };
+
+    const dayVoteOutcomes = await fetchJson(
+      `${apiBaseUrl}/games/${dayVoteGame}/day-vote-outcomes`,
+    );
+    const dayVoteOutcome =
+      dayVoteOutcomes.find((delta) => delta.kind === "DayVoteOutcomeApplied")?.body ??
+      null;
+    const hostState = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: dayVoteGame,
+      slot: "slot-2",
+    });
+    const hostSlot = hostState.slots?.find?.((slot) => slot.slot_id === "slot-2");
+
+    if (
+      finalVote?.state !== "ack" ||
+      finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
+        "slot_4" ||
+      finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
+        "slot-2" ||
+      !voterVotecountAfterVote.some(
+        (row) => row.target === "slot-2" && row.count === 4,
+      ) ||
+      resolveDay.commandStatus?.state !== "ack" ||
+      dayVoteOutcome?.phase_id !== "D01" ||
+      dayVoteOutcome?.status !== "Lynch" ||
+      dayVoteOutcome?.winner_slot !== "slot-2" ||
+      dayVoteOutcome?.tallies?.["slot-2"] !== 4 ||
+      hostAfterResolve.phase?.id !== "D01" ||
+      hostAfterResolve.phase?.locked !== true ||
+      hostSlot?.alive !== false ||
+      hostSlot?.status !== "dead" ||
+      targetCommandState?.actorSlot !== "slot-2" ||
+      targetCommandState?.actorAlive !== false ||
+      targetCommandState?.actorStatus !== "dead" ||
+      targetNotice?.audience_slot !== "slot-2" ||
+      targetNotice?.effect !== "player_killed" ||
+      targetNotice?.status !== "day_vote" ||
+      !Object.values(targetControls).every(Boolean)
+    ) {
+      throw new Error(
+        `day vote resolution proof drifted: ${JSON.stringify({
+          dayVoteGame,
+          seed,
+          hostBeforeVote,
+          voterBeforeVote,
+          finalVote,
+          voterVotecountAfterVote,
+          resolveDay,
+          hostAfterResolve,
+          dayVoteOutcomes,
+          hostSlot,
+          targetCommandState,
+          targetNotice,
+          targetControls,
+        })}`,
+      );
+    }
+
+    return {
+      status: "passed",
+      game: dayVoteGame,
+      seed,
+      hostBeforeVote,
+      voterBeforeVote,
+      finalVote,
+      voterVotecountAfterVote,
+      resolveDay,
+      hostAfterResolve,
+      dayVoteOutcome,
+      hostSlot,
+      targetCommandState,
+      targetNotice,
+      targetControls,
+      proof:
+        "A disposable seeded day-vote game loaded host/action-player/target role URLs, the action-player browser cast the fourth Slot 2 vote through /commands, the host browser resolved D01, /day-vote-outcomes exposed the official Lynch result, the host projection marked Slot 2 dead, and the target player role URL saw the day_vote death notice with disabled controls.",
+    };
+  } finally {
+    await hostProofPage.close().catch(() => {});
+    await voterPage.close().catch(() => {});
+    await targetProofPage.close().catch(() => {});
+  }
+}
+
+async function seedDayVoteResolutionGame({ game }) {
+  const plan = [
+    ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game, slot: "slot-7" } }],
+    ["host_h", { AddSlot: { game, slot: "slot-2" } }],
+    ["host_h", { AddSlot: { game, slot: "slot-3" } }],
+    ["host_h", { AddSlot: { game, slot: "slot_4" } }],
+    ["host_h", { AddSlot: { game, slot: "slot_5" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-target" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot-3", user: "player-seed" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-3", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot_4", user: "player-goon-a" } }],
+    ["host_h", { AssignRole: { game, slot: "slot_4", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot_5", user: "player-goon-b" } }],
+    ["host_h", { AssignRole: { game, slot: "slot_5", role_key: "vanilla_townie" } }],
+    ["host_h", { StartGame: { game, phase: "D01" } }],
+    [
+      "player-seed",
+      { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot-2" } } },
+    ],
+    [
+      "player-mira",
+      { SubmitVote: { game, actor_slot: "slot-7", target: { Slot: "slot-2" } } },
+    ],
+    [
+      "player-goon-b",
+      { SubmitVote: { game, actor_slot: "slot_5", target: { Slot: "slot-2" } } },
+    ],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game,
+    commands: commands.length,
+    preseededVotes: 3,
+    targetSlot: "slot-2",
+    resolvingVoterSlot: "slot_4",
   };
 }
 

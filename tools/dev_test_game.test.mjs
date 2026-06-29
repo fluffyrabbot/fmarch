@@ -912,6 +912,46 @@ test("session card and markdown include role credential URLs and tokens", () => 
       rejectedVote: { error: "PhaseLocked", message: "Reject PhaseLocked: phase locked" },
       unlock: { commandStatus: { state: "ack" } },
     },
+    dayVoteResolution: {
+      status: "passed",
+      proof: "action-player cast the majority day vote and host resolved the lynch",
+      finalVote: {
+        state: "ack",
+        requestEnvelope: {
+          body: {
+            body: {
+              command: {
+                SubmitVote: {
+                  game,
+                  actor_slot: "slot_4",
+                  target: { Slot: "slot-2" },
+                },
+              },
+            },
+          },
+        },
+      },
+      voterVotecountAfterVote: [{ target: "slot-2", count: 4 }],
+      resolveDay: { commandStatus: { state: "ack" } },
+      dayVoteOutcome: {
+        phase_id: "D01",
+        status: "Lynch",
+        winner_slot: "slot-2",
+        tallies: { "slot-2": 4 },
+      },
+      hostSlot: { slot_id: "slot-2", alive: false, status: "dead" },
+      targetCommandState: {
+        actorSlot: "slot-2",
+        actorAlive: false,
+        actorStatus: "dead",
+      },
+      targetNotice: {
+        audience_slot: "slot-2",
+        effect: "player_killed",
+        status: "day_vote",
+      },
+      targetControls: { vote: true, withdraw: true, post: true },
+    },
     actionLoop: {
       status: "passed",
       proof: "host resolved N01 and action player advanced to D02",
@@ -2502,6 +2542,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Host-only resolve: Reject NotHost: not host"));
   assert(markdown.includes("## Core Loop Proof"));
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
+  assert(markdown.includes("## Day Vote Resolution Proof"));
+  assert(markdown.includes("Outcome: Lynch slot-2"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Invalid Action Recovery Proof"));
@@ -2569,6 +2611,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "browser-entry",
       "cohost-console",
       "core-loop",
+      "day-vote-resolution",
       "action-loop",
       "host-deadline-advance",
       "stale-deadline-advance",
@@ -2687,7 +2730,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 50);
+  assert.equal(opsArtifacts.proofRun.laneCount, 51);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2776,6 +2819,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "host-phase-controls",
       "cohost-deadline-control",
       "player-vote-recovery",
+      "day-vote-resolution",
       "player-action-denied",
       "invalid-action-recovery",
       "resolution-receipt",
@@ -3177,6 +3221,7 @@ function coreLoopAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [
         "core-loop",
+        "day-vote-resolution",
         "action-loop",
         "host-deadline-advance",
         "stale-deadline-advance",

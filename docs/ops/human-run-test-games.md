@@ -317,6 +317,13 @@ through the hydrated phase control, the player page submits a vote into the
 locked phase and renders `Reject PhaseLocked` recovery, and the host page unlocks
 D01 again so the human-run game remains usable after verification.
 
+The day-vote resolution proof uses a disposable seeded game with the same local
+role capabilities: the `actionPlayer` role URL casts the fourth Slot 2 vote from
+the browser, the host role URL resolves D01, `/day-vote-outcomes` records the
+official `Lynch` result, the host projection marks Slot 2 dead, and the target
+player role URL sees the `player_killed` / `day_vote` notice with disabled
+controls.
+
 The action-loop proof continues in the same seeded game: the host page resolves
 D01, clicks the hydrated `Advance by deadline` control to record deadline
 evidence and advance to N01, the `actionPlayer` page renders a live

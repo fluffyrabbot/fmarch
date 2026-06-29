@@ -1078,6 +1078,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   }
   const requiredLaneIds = [
     "core-loop",
+    "day-vote-resolution",
     "action-loop",
     "host-deadline-advance",
     "stale-deadline-advance",
