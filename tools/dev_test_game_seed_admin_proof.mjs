@@ -26,6 +26,7 @@ const requiredScenarios = [
   "night-action-loop",
   "action-idempotent-retry",
   "concurrent-action-race",
+  "concurrent-host-resolve-race",
   "stale-same-action-recovery",
   "host-replacement-console",
   "replacement-host-issued-invite",

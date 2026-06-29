@@ -23,17 +23,17 @@ use std::time::{Duration, Instant};
 
 use caps::{Capability, CapabilitySet, Principal};
 use domain::{
-    IrAbility, Modifier, RoleModifier,
     pack::{
         ActionTemplate, ActivationGateReason, GrantKind, GrantSpec, HostPromptDecisionKind,
         HostPromptResolutionEffect, HostPromptResolutionEffectPolicy, ItaSessionControlKind,
         PhaseParity, TargetRoleFilter, TargetSpec, TargetState, Window,
     },
+    IrAbility, Modifier, RoleModifier,
 };
 use eventstore::{ActorId, EventInput};
-use projections::{ProjectionError, append_and_project_in_tx, audit_rebuild};
+use projections::{append_and_project_in_tx, audit_rebuild, ProjectionError};
 use serde::Serialize;
-use sqlx::{Postgres, Row, pool::PoolConnection, postgres::PgPool};
+use sqlx::{pool::PoolConnection, postgres::PgPool, Postgres, Row};
 use uuid::Uuid;
 
 mod model;
@@ -1590,6 +1590,18 @@ async fn resolve_phase(
     seed: u64,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    let mut lock = acquire_resolve_phase_lock(pool, game).await?;
+    let result = resolve_phase_locked(pool, principal, game, seed, receipt).await;
+    release_resolve_phase_lock(&mut lock, game, result).await
+}
+
+async fn resolve_phase_locked(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    seed: u64,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
     require_game(pool, game).await?;
     let caps = caps::resolve(pool, principal, game).await?;
     require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
@@ -1653,6 +1665,51 @@ async fn resolve_phase(
     ));
     events.push(lock_ev);
     persist(pool, game, &events, receipt).await
+}
+
+async fn acquire_resolve_phase_lock(
+    pool: &PgPool,
+    game: Uuid,
+) -> Result<PoolConnection<Postgres>, Reject> {
+    let mut conn = pool
+        .acquire()
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(resolve_phase_lock_key(game))
+        .execute(&mut *conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(conn)
+}
+
+async fn release_resolve_phase_lock(
+    conn: &mut PoolConnection<Postgres>,
+    game: Uuid,
+    result: Result<Ack, Reject>,
+) -> Result<Ack, Reject> {
+    let released = sqlx::query_scalar::<_, bool>("SELECT pg_advisory_unlock($1)")
+        .bind(resolve_phase_lock_key(game))
+        .fetch_one(&mut **conn)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    if !released {
+        return Err(Reject::Internal(
+            "resolve phase lock was not held at release".to_string(),
+        ));
+    }
+    result
+}
+
+fn resolve_phase_lock_key(game: Uuid) -> i64 {
+    let bytes = game.as_bytes();
+    let high = u64::from_be_bytes([
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+    ]);
+    let low = u64::from_be_bytes([
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+    ]);
+    (high ^ low ^ 0x6d66_6172_6368_0002) as i64
 }
 
 async fn control_ita_session(
@@ -4035,7 +4092,11 @@ async fn require_game(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
 
 /// Least-authority gate: require `cap`, mapping a miss to `deny`.
 fn require(caps: &CapabilitySet, cap: &Capability, deny: Reject) -> Result<(), Reject> {
-    if caps.grants(cap) { Ok(()) } else { Err(deny) }
+    if caps.grants(cap) {
+        Ok(())
+    } else {
+        Err(deny)
+    }
 }
 
 /// The principal must be the slot's CURRENT occupant. We distinguish "this slot

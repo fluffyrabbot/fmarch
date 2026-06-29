@@ -524,7 +524,11 @@ state to D02 without the stale action control, and keeps a second host page
 frozen on the N01
 locked controls until its stale `UnlockThread` click renders a host command
 activity `Reject PhaseLocked` receipt, refreshes to D02, and exposes the current
-`resolve_phase` / `lock_thread` controls, keeps a full host page frozen on D02
+`resolve_phase` / `lock_thread` controls, advances a disposable seeded game to
+D02 and races two host role pages on `ResolvePhase` until exactly one ACKs and
+one renders stale `Reject PhaseLocked` recovery, verifies both browser
+projections plus the API converge to locked D02, restores that disposable D02
+open, keeps a full host page frozen on D02
 `ResolvePhase` until the live host resolves and locks D02, then renders a stale
 `Reject PhaseLocked` receipt with no ACK stream seqs, refreshes to locked D02
 controls, keeps a player page frozen on a legal D02 vote target until the host

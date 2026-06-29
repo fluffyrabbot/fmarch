@@ -67,6 +67,7 @@ const requiredLaneIds = Object.freeze([
   "stale-action-conflict",
   "stale-action-conflict-message",
   "stale-host-control",
+  "concurrent-host-resolve-race",
   "stale-host-resolve",
   "stale-host-advance",
   "stale-host-deadline",
@@ -3147,6 +3148,100 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === false &&
         hardening.staleHostControl?.apiPhaseAfterReject?.phase_id === "D02" &&
         hardening.staleHostControl?.apiPhaseAfterReject?.locked === false,
+    }),
+    lane("concurrent-host-resolve-race", "Concurrent host resolves converge", {
+      ackPageRole: hardening.concurrentHostResolveRace?.ackPageRole ?? null,
+      rejectPageRole: hardening.concurrentHostResolveRace?.rejectPageRole ?? null,
+      game: hardening.concurrentHostResolveRace?.game ?? null,
+      ackState: hardening.concurrentHostResolveRace?.ack?.state ?? null,
+      rejectError: hardening.concurrentHostResolveRace?.reject?.error ?? null,
+      lockedAfterRace:
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRace?.locked ?? null,
+      lockedAfterRestore:
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRestore?.locked ?? null,
+      passed:
+        hardening.concurrentHostResolveRace?.status === "passed" &&
+        hardening.concurrentHostResolveRace?.setup?.stalePhase?.id === "D02" &&
+        hardening.concurrentHostResolveRace?.setup?.stalePhase?.locked === false &&
+        hardening.concurrentHostResolveRace?.setup?.phaseActions?.includes(
+          "resolve_phase",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.setup?.phaseActions?.includes(
+          "lock_thread",
+        ) === true &&
+        ["live", "concurrent"].includes(
+          hardening.concurrentHostResolveRace?.ackPageRole,
+        ) &&
+        ["live", "concurrent"].includes(
+          hardening.concurrentHostResolveRace?.rejectPageRole,
+        ) &&
+        hardening.concurrentHostResolveRace?.ackPageRole !==
+          hardening.concurrentHostResolveRace?.rejectPageRole &&
+        hardening.concurrentHostResolveRace?.ack?.state === "ack" &&
+        hardening.concurrentHostResolveRace?.ack?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        Array.isArray(hardening.concurrentHostResolveRace?.ack?.streamSeqs) &&
+        hardening.concurrentHostResolveRace.ack.streamSeqs.length > 0 &&
+        hardening.concurrentHostResolveRace?.reject?.state === "reject" &&
+        hardening.concurrentHostResolveRace?.reject?.error === "PhaseLocked" &&
+        hardening.concurrentHostResolveRace?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.concurrentHostResolveRace?.reject?.streamSeqs) ===
+          false &&
+        hardening.concurrentHostResolveRace?.reject?.message?.includes(
+          "stale phase state",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.ack?.commandId !==
+          hardening.concurrentHostResolveRace?.reject?.commandId &&
+        typeof hardening.concurrentHostResolveRace?.game === "string" &&
+        hardening.concurrentHostResolveRace.game.length > 0 &&
+        hardening.concurrentHostResolveRace?.ack?.requestEnvelope?.body?.body?.command
+          ?.ResolvePhase?.game === hardening.concurrentHostResolveRace?.game &&
+        hardening.concurrentHostResolveRace?.reject?.requestEnvelope?.body?.body
+          ?.command?.ResolvePhase?.game === hardening.concurrentHostResolveRace?.game &&
+        hardening.concurrentHostResolveRace?.livePhaseAfterRace?.id === "D02" &&
+        hardening.concurrentHostResolveRace?.livePhaseAfterRace?.locked === true &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseAfterRace?.id === "D02" &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseAfterRace?.locked ===
+          true &&
+        hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
+          "unlock_thread",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
+          "advance_phase",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
+          "resolve_phase",
+        ) === false &&
+        hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
+          "lock_thread",
+        ) === false &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
+          "unlock_thread",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
+          "advance_phase",
+        ) === true &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
+          "resolve_phase",
+        ) === false &&
+        hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
+          "lock_thread",
+        ) === false &&
+        hardening.concurrentHostResolveRace?.liveActivityRow?.actionId ===
+          "resolve_phase" &&
+        hardening.concurrentHostResolveRace?.concurrentActivityRow?.actionId ===
+          "resolve_phase" &&
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRace?.phase_id === "D02" &&
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRace?.locked === true &&
+        hardening.concurrentHostResolveRace?.restoreAfterRace?.commandStatus?.state ===
+          "ack" &&
+        hardening.concurrentHostResolveRace?.restoreAfterRace?.commandStatus
+          ?.requestEnvelope?.body?.body?.command?.UnlockThread?.game ===
+          hardening.concurrentHostResolveRace?.game &&
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRestore?.phase_id ===
+          "D02" &&
+        hardening.concurrentHostResolveRace?.apiPhaseAfterRestore?.locked === false,
     }),
     lane("stale-host-resolve", "Stale host resolve rejects after live resolution", {
       rejectError: hardening.staleHostResolve?.reject?.error ?? null,

@@ -2961,9 +2961,13 @@ async fn stale_phase_extend_deadline_rejects_without_mutating_current_phase(pool
         Some(222),
     );
 
-    handle(&pool, &user("host_h"), Command::ResolvePhase { game, seed: 4815 })
-        .await
-        .expect("host resolves D01");
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::ResolvePhase { game, seed: 4815 },
+    )
+    .await
+    .expect("host resolves D01");
     let locked_phase_err = handle(
         &pool,
         &user("user_c"),
@@ -3890,11 +3894,7 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         "duplicate CompleteGame must not append another GameCompleted event"
     );
     for (label, principal, command) in [
-        (
-            "host lock",
-            host.clone(),
-            Command::LockThread { game },
-        ),
+        ("host lock", host.clone(), Command::LockThread { game }),
         (
             "player vote",
             user("user_1"),
@@ -70086,6 +70086,57 @@ async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool
     assert!(
         !phase_state(&pool, game).await.unwrap().unwrap().locked,
         "stale unlock rejection must preserve the open projection"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn concurrent_host_resolve_phase_serializes_to_one_ack(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+
+    let (first, second) = tokio::join!(
+        handle(&pool, &host, Command::ResolvePhase { game, seed: 71_001 },),
+        handle(&pool, &host, Command::ResolvePhase { game, seed: 71_002 },),
+    );
+
+    let results = [first, second];
+    let ack_count = results.iter().filter(|result| result.is_ok()).count();
+    let phase_locked_count = results
+        .iter()
+        .filter(|result| matches!(result, Err(Reject::PhaseLocked)))
+        .count();
+    assert_eq!(ack_count, 1, "exactly one concurrent resolve should ACK");
+    assert_eq!(
+        phase_locked_count, 1,
+        "the losing concurrent resolve should revalidate after the winner locks"
+    );
+
+    let resolution_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ResolutionApplied'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        resolution_count, 1,
+        "concurrent resolve must not append duplicate resolution envelopes"
+    );
+
+    let lock_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events WHERE stream_id = $1 AND kind = 'ThreadLocked'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        lock_count, 1,
+        "concurrent resolve must not append duplicate phase locks"
+    );
+    assert!(
+        phase_state(&pool, game).await.unwrap().unwrap().locked,
+        "winning resolve should leave the phase locked"
     );
 }
 

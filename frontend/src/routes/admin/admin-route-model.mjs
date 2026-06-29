@@ -1192,6 +1192,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-action-conflict",
     "stale-action-conflict-message",
     "stale-host-control",
+    "concurrent-host-resolve-race",
     "stale-host-resolve",
     "stale-host-advance",
     "stale-host-deadline",

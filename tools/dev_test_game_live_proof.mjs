@@ -1956,6 +1956,106 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.status,
+  "passed",
+);
+assert(
+  ["live", "concurrent"].includes(
+    session.verification.multiplayerHardening.concurrentHostResolveRace.ackPageRole,
+  ),
+);
+assert(
+  ["live", "concurrent"].includes(
+    session.verification.multiplayerHardening.concurrentHostResolveRace.rejectPageRole,
+  ),
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.ackPageRole,
+  session.verification.multiplayerHardening.concurrentHostResolveRace.rejectPageRole,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.ack.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.ack.streamSeqs.length >
+    0,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.reject.message,
+  /stale phase state/,
+);
+assert.notEqual(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.ack.commandId,
+  session.verification.multiplayerHardening.concurrentHostResolveRace.reject.commandId,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.ack.requestEnvelope.body
+    .body.command.ResolvePhase.game,
+  session.verification.multiplayerHardening.concurrentHostResolveRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.reject.requestEnvelope.body
+    .body.command.ResolvePhase.game,
+  session.verification.multiplayerHardening.concurrentHostResolveRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.livePhaseAfterRace.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.livePhaseAfterRace.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.concurrentPhaseAfterRace
+    .id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.concurrentPhaseAfterRace
+    .locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.apiPhaseAfterRace
+    .phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.apiPhaseAfterRace.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.restoreAfterRace
+    .commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.restoreAfterRace
+    .commandStatus.requestEnvelope.body.body.command.UnlockThread.game,
+  session.verification.multiplayerHardening.concurrentHostResolveRace.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.apiPhaseAfterRestore
+    .phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostResolveRace.apiPhaseAfterRestore
+    .locked,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostResolve.status,
   "passed",
 );
