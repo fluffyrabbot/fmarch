@@ -192,6 +192,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [
         "core-loop",
         "action-loop",
+        "host-deadline-advance",
         "invalid-action-recovery",
         "resolution-receipts",
         "dead-player-recovery",
@@ -668,6 +669,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
     "action-loop",
+    "host-deadline-advance",
     "invalid-action-recovery",
     "resolution-receipts",
     "dead-player-recovery",

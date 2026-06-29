@@ -1076,7 +1076,11 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
   const playerProjectionAfterReject = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
-  await expectHostPhaseActions(hostPage, ["unlock_thread", "advance_phase"]);
+  await expectHostPhaseActions(hostPage, [
+    "unlock_thread",
+    "advance_phase",
+    "advance_phase_by_deadline",
+  ]);
   const unlock = await confirmHostAction(hostPage, "unlock_thread");
   await waitForHostProjectionPhaseLocked(hostPage, false);
   await playerPage.waitForFunction(
@@ -1090,7 +1094,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage }) {
     status: "passed",
     hostActions: {
       initial: ["resolve_phase", "lock_thread"],
-      locked: ["unlock_thread", "advance_phase"],
+      locked: ["unlock_thread", "advance_phase", "advance_phase_by_deadline"],
       restored: ["resolve_phase", "lock_thread"],
     },
     lock,
@@ -1121,8 +1125,12 @@ async function verifySeededActionLoop({
   await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D01", locked: true });
-  await expectHostPhaseActions(hostPage, ["unlock_thread", "advance_phase"]);
-  const advanceNight = await confirmHostAction(hostPage, "advance_phase");
+  const deadlineAdvance = await verifyHostDeadlineAdvance({
+    hostPage,
+    game,
+    apiBaseUrl,
+  });
+  const advanceNight = deadlineAdvance.advance;
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
   const playerActionBoundary = await verifySeededPlayerActionBoundary({
     playerPage,
@@ -1220,6 +1228,7 @@ async function verifySeededActionLoop({
     invalidActionRecovery,
     legalAction,
     playerActionBoundary,
+    deadlineAdvance,
     resolutionReceipts,
     deadPlayerRecovery,
     resolveNight,
@@ -1231,7 +1240,63 @@ async function verifySeededActionLoop({
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+  };
+}
+
+async function verifyHostDeadlineAdvance({ hostPage, game, apiBaseUrl }) {
+  await expectHostPhaseActions(hostPage, [
+    "unlock_thread",
+    "advance_phase",
+    "advance_phase_by_deadline",
+  ]);
+  await hostPage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D01" &&
+      window.__fmarchHostProjection?.phase?.locked === true &&
+      typeof window.__fmarchHostProjection?.phase?.deadline === "number",
+  );
+  const phaseBeforeAdvance = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const advance = await confirmHostAction(hostPage, "advance_phase_by_deadline");
+  const command =
+    advance.commandStatus?.requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline;
+  if (
+    command?.game !== game ||
+    command?.phase !== "D01" ||
+    command?.observed_at !== phaseBeforeAdvance.deadline + 1
+  ) {
+    throw new Error(
+      `deadline advance command drifted: ${JSON.stringify({
+        command,
+        phaseBeforeAdvance,
+      })}`,
+    );
+  }
+  await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
+  const hostStateAfterAdvance = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    hostStateAfterAdvance?.phase?.phase_id !== "N01" ||
+    hostStateAfterAdvance?.phase?.locked !== false ||
+    hostStateAfterAdvance?.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `deadline advance projection drifted: ${JSON.stringify(hostStateAfterAdvance?.phase)}`,
+    );
+  }
+  const phaseAfterAdvance = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  return {
+    status: "passed",
+    phaseBeforeAdvance,
+    advance,
+    command,
+    phaseAfterAdvance,
+    apiPhaseAfterAdvance: hostStateAfterAdvance.phase,
+    proof:
+      "The seeded host role URL resolved D01 into a locked phase with the previously extended deadline, clicked the hydrated Advance by deadline control, sent AdvancePhaseByDeadline with observed_at one second after the stored deadline, and both browser/API host projections advanced to unlocked N01 with no carried deadline.",
   };
 }
 

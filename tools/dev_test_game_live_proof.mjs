@@ -167,6 +167,37 @@ assert.match(session.verification.privateChannel.denied.recoveredUrl, /\/$/);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");
+assert.equal(session.verification.actionLoop.deadlineAdvance.status, "passed");
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.advance.commandStatus.requestEnvelope.body.body
+    .command.AdvancePhaseByDeadline.phase,
+  "D01",
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.advance.commandStatus.requestEnvelope.body.body
+    .command.AdvancePhaseByDeadline.observed_at,
+  session.verification.actionLoop.deadlineAdvance.phaseBeforeAdvance.deadline + 1,
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.phaseBeforeAdvance.locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.phaseAfterAdvance.id,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.phaseAfterAdvance.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.apiPhaseAfterAdvance.phase_id,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.deadlineAdvance.apiPhaseAfterAdvance.deadline,
+  null,
+);
 assert.equal(session.verification.actionLoop.n01Phase.phaseId, "N01");
 assert.equal(session.verification.actionLoop.invalidAction.state, "reject");
 assert.equal(session.verification.actionLoop.invalidAction.error, "InvalidTarget");

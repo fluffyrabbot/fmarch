@@ -62,6 +62,16 @@ const ADVANCE_PHASE_EVENT = Object.freeze({
   }),
 });
 
+const ADVANCE_PHASE_BY_DEADLINE_EVENT = Object.freeze({
+  actionId: "advance_phase_by_deadline",
+  payload: Object.freeze({
+    kind: "advance_phase_by_deadline",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    phaseId: "D01",
+    observedAt: 1781928001,
+  }),
+});
+
 const PUBLISH_VOTECOUNT_EVENT = Object.freeze({
   actionId: "publish_votecount",
   payload: Object.freeze({
@@ -153,6 +163,13 @@ test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(ADVANCE_PHASE_EVENT), {
     AdvancePhase: {
       game: "00000000-0000-0000-0000-000000000001",
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(ADVANCE_PHASE_BY_DEADLINE_EVENT), {
+    AdvancePhaseByDeadline: {
+      game: "00000000-0000-0000-0000-000000000001",
+      phase: "D01",
+      observed_at: 1781928001,
     },
   });
   assert.deepEqual(mapHostActionToWireCommand(PUBLISH_VOTECOUNT_EVENT), {
@@ -421,6 +438,7 @@ test("host console projection maps deadline and stable slot history to labels", 
   );
 
   assert.equal(projection.phase.deadlineLabel, "Jun 19, 2026, 9:00 PM");
+  assert.equal(projection.phase.deadline, 1781928000);
   assert.equal(projection.phase.lockedLabel, "Thread locked");
   assert.equal(projection.replacement.occupantLabel, "player-rowan");
   assert.equal(projection.replacement.lifecycleLabel, "Modkilled");

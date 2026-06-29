@@ -136,6 +136,14 @@ export function mapHostActionToWireCommand(actionEvent) {
           game: requiredString(payload.gameId, "payload.gameId"),
         }),
       });
+    case "advance_phase_by_deadline":
+      return Object.freeze({
+        AdvancePhaseByDeadline: Object.freeze({
+          game: requiredString(payload.gameId, "payload.gameId"),
+          phase: requiredString(payload.phaseId, "payload.phaseId"),
+          observed_at: requiredInteger(payload.observedAt, "payload.observedAt"),
+        }),
+      });
     case "publish_votecount":
       return Object.freeze({
         PublishVotecount: Object.freeze({
@@ -278,6 +286,10 @@ export function projectHostConsoleState(state, fallback) {
         typeof phase?.deadline === "number"
           ? formatDeadline(phase.deadline)
           : fallback.phase.deadlineLabel,
+      deadline:
+        typeof phase?.deadline === "number"
+          ? phase.deadline
+          : fallback.phase.deadline ?? null,
     }),
     replacement: Object.freeze({
       ...fallback.replacement,
@@ -310,6 +322,13 @@ function requiredSlotLifecycle(value) {
     default:
       throw new TypeError("payload.status must be alive, dead, or modkilled");
   }
+}
+
+function requiredInteger(value, field) {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${field} must be an integer`);
+  }
+  return value;
 }
 
 function mapHostPromptDecision(decision) {

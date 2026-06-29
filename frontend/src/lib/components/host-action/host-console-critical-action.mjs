@@ -125,7 +125,7 @@ export function buildHostConsoleCriticalActions(
 function buildPhaseActions(gameId, phase) {
   const locked = phaseLocked(phase);
   if (locked === true) {
-    return [
+    const actions = [
       freezeHostAction({
         id: "unlock_thread",
         label: "Unlock thread",
@@ -153,6 +153,8 @@ function buildPhaseActions(gameId, phase) {
         },
       }),
     ];
+    const deadlineAdvance = buildDeadlineAdvanceAction(gameId, phase);
+    return deadlineAdvance === null ? actions : Object.freeze([...actions, deadlineAdvance]);
   }
   if (locked === null) {
     return [
@@ -191,6 +193,32 @@ function buildPhaseActions(gameId, phase) {
   ];
 }
 
+function buildDeadlineAdvanceAction(gameId, phase) {
+  if (typeof phase?.deadline !== "number" || !Number.isFinite(phase.deadline)) {
+    return null;
+  }
+  const phaseId = typeof phase?.id === "string" && phase.id.trim() !== "" ? phase.id : null;
+  if (phaseId === null) {
+    return null;
+  }
+  const observedAt = Math.floor(phase.deadline) + 1;
+  return freezeHostAction({
+    id: "advance_phase_by_deadline",
+    label: "Advance by deadline",
+    objectLabel: "Expired phase deadline",
+    outcomeLabel: "record deadline evidence and advance to the next pack-defined phase",
+    confirmationText:
+      "Advance expired phase deadline: record deadline evidence and advance to the next pack-defined phase for Expired phase deadline.",
+    irreversible: true,
+    payload: {
+      kind: "advance_phase_by_deadline",
+      gameId,
+      phaseId,
+      observedAt,
+    },
+  });
+}
+
 function phaseLocked(phase) {
   if (phase?.locked === true || phase?.state === "locked") {
     return true;
@@ -225,8 +253,15 @@ export function buildHostConsoleActionGroups({
       authority: "HostOf(game)",
       value: "Advance phase or lock the public thread",
       boundary: "Typed commands",
-      boundaryDetail: "ResolvePhase, LockThread, UnlockThread, AdvancePhase",
-      actionIds: ["resolve_phase", "lock_thread", "unlock_thread", "advance_phase"],
+      boundaryDetail:
+        "ResolvePhase, LockThread, UnlockThread, AdvancePhase, AdvancePhaseByDeadline",
+      actionIds: [
+        "resolve_phase",
+        "lock_thread",
+        "unlock_thread",
+        "advance_phase",
+        "advance_phase_by_deadline",
+      ],
       actions: actionList,
     }),
     freezeHostActionGroup({

@@ -225,6 +225,7 @@ function isPhaseControlAction(kind) {
     "lock_thread",
     "unlock_thread",
     "advance_phase",
+    "advance_phase_by_deadline",
     "extend_deadline",
   ].includes(kind);
 }

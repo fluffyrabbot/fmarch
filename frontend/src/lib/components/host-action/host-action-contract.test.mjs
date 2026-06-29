@@ -353,6 +353,39 @@ test("host console proof actions cover the roadmap-critical irreversible actions
   }
 });
 
+test("host console exposes deadline advance only for locked phases with deadlines", () => {
+  const unlockedActions = buildHostConsoleCriticalActions("midsummer", {
+    phase: { id: "D01", locked: false, deadline: 1781928000 },
+  });
+  assert.equal(
+    unlockedActions.some((action) => action.id === "advance_phase_by_deadline"),
+    false,
+  );
+
+  const lockedWithoutDeadline = buildHostConsoleCriticalActions("midsummer", {
+    phase: { id: "D01", locked: true },
+  });
+  assert.equal(
+    lockedWithoutDeadline.some(
+      (action) => action.id === "advance_phase_by_deadline",
+    ),
+    false,
+  );
+
+  const lockedWithDeadline = buildHostConsoleCriticalActions("midsummer", {
+    phase: { id: "D01", locked: true, deadline: 1781928000 },
+  });
+  const deadlineAdvance = lockedWithDeadline.find(
+    (action) => action.id === "advance_phase_by_deadline",
+  );
+  assert.deepEqual(deadlineAdvance?.payload, {
+    kind: "advance_phase_by_deadline",
+    gameId: "midsummer",
+    phaseId: "D01",
+    observedAt: 1781928001,
+  });
+});
+
 test("host console action groups turn typed commands into moderator control bays", () => {
   const actions = buildHostConsoleCriticalActions("midsummer", {
     hostPrompts: [

@@ -917,6 +917,43 @@ test("session card and markdown include role credential URLs and tokens", () => 
       proof: "host resolved N01 and action player advanced to D02",
       invalidAction: { error: "InvalidTarget", message: "Reject InvalidTarget: invalid target" },
       legalAction: { state: "ack", message: "Ack: stream seqs 42" },
+      deadlineAdvance: {
+        status: "passed",
+        phaseBeforeAdvance: {
+          id: "D01",
+          locked: true,
+          deadline: 1781928000,
+        },
+        advance: {
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    AdvancePhaseByDeadline: {
+                      game,
+                      phase: "D01",
+                      observed_at: 1781928001,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        command: {
+          game,
+          phase: "D01",
+          observed_at: 1781928001,
+        },
+        phaseAfterAdvance: { id: "N01", locked: false },
+        apiPhaseAfterAdvance: {
+          phase_id: "N01",
+          locked: false,
+          deadline: null,
+        },
+      },
       resolvedTargetSlot: { alive: false },
       d02Phase: { phaseId: "D02" },
     },
@@ -2053,6 +2090,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "cohost-console",
       "core-loop",
       "action-loop",
+      "host-deadline-advance",
       "invalid-action-recovery",
       "resolution-receipts",
       "dead-player-recovery",
@@ -2159,7 +2197,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 39);
+  assert.equal(opsArtifacts.proofRun.laneCount, 40);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2650,6 +2688,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [
         "core-loop",
         "action-loop",
+        "host-deadline-advance",
         "invalid-action-recovery",
         "resolution-receipts",
         "dead-player-recovery",

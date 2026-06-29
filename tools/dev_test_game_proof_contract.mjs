@@ -12,6 +12,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-console",
   "core-loop",
   "action-loop",
+  "host-deadline-advance",
   "invalid-action-recovery",
   "resolution-receipts",
   "dead-player-recovery",
@@ -113,6 +114,39 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
+    }),
+    lane("host-deadline-advance", "Host advances locked phase by deadline evidence", {
+      advanceState:
+        verification.actionLoop?.deadlineAdvance?.advance?.commandStatus?.state ?? null,
+      commandPhase:
+        verification.actionLoop?.deadlineAdvance?.command?.phase ?? null,
+      observedAt:
+        verification.actionLoop?.deadlineAdvance?.command?.observed_at ?? null,
+      deadline:
+        verification.actionLoop?.deadlineAdvance?.phaseBeforeAdvance?.deadline ?? null,
+      browserPhaseAfter:
+        verification.actionLoop?.deadlineAdvance?.phaseAfterAdvance?.id ?? null,
+      apiPhaseAfter:
+        verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.phase_id ?? null,
+      passed:
+        verification.actionLoop?.deadlineAdvance?.status === "passed" &&
+        verification.actionLoop?.deadlineAdvance?.advance?.commandStatus?.state ===
+          "ack" &&
+        verification.actionLoop?.deadlineAdvance?.command?.game === session?.game &&
+        verification.actionLoop?.deadlineAdvance?.command?.phase === "D01" &&
+        verification.actionLoop?.deadlineAdvance?.phaseBeforeAdvance?.id === "D01" &&
+        verification.actionLoop?.deadlineAdvance?.phaseBeforeAdvance?.locked === true &&
+        Number.isInteger(
+          verification.actionLoop?.deadlineAdvance?.phaseBeforeAdvance?.deadline,
+        ) &&
+        verification.actionLoop?.deadlineAdvance?.command?.observed_at ===
+          verification.actionLoop?.deadlineAdvance?.phaseBeforeAdvance?.deadline + 1 &&
+        verification.actionLoop?.deadlineAdvance?.phaseAfterAdvance?.id === "N01" &&
+        verification.actionLoop?.deadlineAdvance?.phaseAfterAdvance?.locked === false &&
+        verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.phase_id ===
+          "N01" &&
+        verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.locked === false &&
+        verification.actionLoop?.deadlineAdvance?.apiPhaseAfterAdvance?.deadline === null,
     }),
     lane("invalid-action-recovery", "Invalid action reject keeps legal controls usable", {
       rejectError: verification.invalidActionRecovery?.reject?.error ?? null,

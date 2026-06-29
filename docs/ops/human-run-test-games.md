@@ -318,9 +318,11 @@ locked phase and renders `Reject PhaseLocked` recovery, and the host page unlock
 D01 again so the human-run game remains usable after verification.
 
 The action-loop proof continues in the same seeded game: the host page resolves
-D01 and advances to N01, the `actionPlayer` page renders a live `factional_kill`
-action, recovers from an invalid self-action, submits the legal action, and then
-the host page resolves N01 and advances to D02.
+D01, clicks the hydrated `Advance by deadline` control to record deadline
+evidence and advance to N01, the `actionPlayer` page renders a live
+`factional_kill` action, recovers from an invalid self-action, submits the legal
+action, and then the host page resolves N01 and uses the ordinary phase advance
+to reach D02.
 
 The resolution-receipt proof uses the same seeded N01 kill: the target
 `deniedPlayer` role URL opens the player board after resolution and loads the
@@ -413,7 +415,7 @@ recovers current Slot 7 command state plus a new Rowan post through reconnect.
 The same core game-loop evidence is inspectable from the seeded admin role:
 `target/dev-test-game/core-loop-admin-proof.json` is written by clicking from
 the admin overview into the native local core-loop detail route and verifying
-the `core-loop`, `action-loop`, `invalid-action-recovery`,
+the `core-loop`, `action-loop`, `host-deadline-advance`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
 `private-channel`, `host-votecount-publication`,
 `host-lifecycle-control`,
