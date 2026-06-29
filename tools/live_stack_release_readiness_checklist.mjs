@@ -227,6 +227,18 @@ function validateInviteRoleProof(artifact) {
   if (proof.productionReady !== false) {
     throw new Error("invite role proof must not claim production readiness");
   }
+  if (
+    proof.identityLifecycle?.hostScopedInviteIssuance?.status !== "passed" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
+      "?/issuePlayerInvite" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostPanelTestId !==
+      "host-player-invite-panel" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
+      true ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !== proof.game
+  ) {
+    throw new Error("invite role proof missing host role-surface invite issuance");
+  }
   const required = new Map([
     ["admin", "GlobalAdmin"],
     ["host", "HostOf"],
@@ -258,6 +270,11 @@ function validateInviteRoleProof(artifact) {
     ),
     proofBoundary: proof.proofBoundary,
     scope: proof.scope,
+    hostScopedInviteIssuance: {
+      hostRoleSurface: proof.identityLifecycle.hostScopedInviteIssuance.hostRoleSurface,
+      hostAction: proof.identityLifecycle.hostScopedInviteIssuance.hostAction,
+      hostPanelTestId: proof.identityLifecycle.hostScopedInviteIssuance.hostPanelTestId,
+    },
     productionReady: proof.productionReady,
   };
 }

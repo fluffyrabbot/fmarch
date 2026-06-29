@@ -2710,12 +2710,12 @@ async function dropVoteInsertDelayTrigger() {
 
 async function driveHostPhaseControlsBrowser(page, pageUrl) {
   const staleSession = await openStaleModeratorBrowser(pageUrl);
-  await expectHostPhaseActions(page, ["lock_thread"]);
-  await expectHostPhaseActions(staleSession.page, ["lock_thread"]);
+  await expectHostPhaseActions(page, ["resolve_phase", "lock_thread"]);
+  await expectHostPhaseActions(staleSession.page, ["resolve_phase", "lock_thread"]);
   const lockEvidence = await confirmHostAction(page, "lock_thread");
   await waitForHostConsolePhaseLocked(page, true);
   await expectHostPhaseActions(page, ["unlock_thread", "advance_phase"]);
-  await expectHostPhaseActions(staleSession.page, ["lock_thread"]);
+  await expectHostPhaseActions(staleSession.page, ["resolve_phase", "lock_thread"]);
   const staleLockEvidence = await confirmHostAction(
     staleSession.page,
     "lock_thread",
@@ -2725,20 +2725,20 @@ async function driveHostPhaseControlsBrowser(page, pageUrl) {
   await expectHostPhaseActions(staleSession.page, ["unlock_thread", "advance_phase"]);
   const unlockEvidence = await confirmHostAction(page, "unlock_thread");
   await waitForHostConsolePhaseLocked(page, false);
-  await expectHostPhaseActions(page, ["lock_thread"]);
+  await expectHostPhaseActions(page, ["resolve_phase", "lock_thread"]);
   await staleSession.context.close();
 
   return {
-    initialActions: ["lock_thread"],
+    initialActions: ["resolve_phase", "lock_thread"],
     lockedActions: ["unlock_thread", "advance_phase"],
-    staleActionsBeforeReject: ["lock_thread"],
+    staleActionsBeforeReject: ["resolve_phase", "lock_thread"],
     staleActionsAfterRejectRefresh: ["unlock_thread", "advance_phase"],
-    restoredActions: ["lock_thread"],
+    restoredActions: ["resolve_phase", "lock_thread"],
     lock: lockEvidence,
     staleLockReject: staleLockEvidence,
     unlock: unlockEvidence,
     proof:
-      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Lock only, LockThread ACK refreshed the live page to locked controls with Unlock and Advance, a second stale host page with its live websocket blocked submitted the old Lock control and recovered through a rendered Reject PhaseLocked plus host projection refresh to Unlock/Advance, and UnlockThread ACK restored Lock without a page reload.",
+      "The hydrated host route rendered phase controls from projected host phase state: open D01 showed Resolve and Lock, LockThread ACK refreshed the live page to locked controls with Unlock and Advance, a second stale host page with its live websocket blocked submitted the old Lock control and recovered through a rendered Reject PhaseLocked plus host projection refresh to Unlock/Advance, and UnlockThread ACK restored Resolve and Lock without a page reload.",
   };
 }
 
@@ -3543,11 +3543,13 @@ function assertStalePlayerActionRecovery(outcome) {
 }
 
 function assertStalePlayerActionRecoveryMessage({ outcome, statusMessage }) {
-  const expected = "stale projection, refresh and use current controls";
-  if (!String(outcome?.message ?? "").includes(expected)) {
+  const expected = ["stale action state", "current action controls"];
+  const outcomeMessage = String(outcome?.message ?? "");
+  const renderedMessage = String(statusMessage ?? "");
+  if (expected.some((text) => !outcomeMessage.includes(text))) {
     throw new Error(`stale player action did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!String(statusMessage ?? "").includes(expected)) {
+  if (expected.some((text) => !renderedMessage.includes(text))) {
     throw new Error(`stale player action did not render recovery guidance: ${statusMessage}`);
   }
 }

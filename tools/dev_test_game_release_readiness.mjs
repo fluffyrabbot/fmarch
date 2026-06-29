@@ -1081,7 +1081,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 6) {
+  if (proof?.version !== 7) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -1125,6 +1125,14 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.hostScopedInviteIssuance?.status !== "passed" ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.issuingCapability !==
       "HostOf(game)" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurface !==
+      `/g/${proof.game}/host` ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
+      "?/issuePlayerInvite" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostPanelTestId !==
+      "host-player-invite-panel" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
+      true ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalUserId !==
       "host_h" ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !== proof.game ||

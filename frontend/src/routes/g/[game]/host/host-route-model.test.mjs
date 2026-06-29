@@ -363,6 +363,56 @@ test("host action issues a replacement invite through the authenticated host ses
   });
 });
 
+test("host action issues a player invite through the authenticated host session", async () => {
+  const observed = {};
+  const result = await actions.issuePlayerInvite({
+    cookies: {
+      get(name) {
+        return name === "fmarch_session" ? "host-session-token" : undefined;
+      },
+    },
+    fetch: async (url, init) => {
+      observed.request = {
+        url,
+        method: init.method,
+        authorization: init.headers.authorization,
+        accept: init.headers.accept,
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        principal_user_id: "player-mira",
+        invited_by_user_id: "host_h",
+        game: "midsummer",
+        expires_at: observed.request.body.expires_at,
+        global_capabilities: [],
+      });
+    },
+    params: { game: "midsummer" },
+    request: formRequest({ principalUserId: " player-mira " }),
+    url: new URL("http://localhost/g/midsummer/host"),
+  });
+
+  assert.equal(observed.request.url, "/auth/invites");
+  assert.equal(observed.request.method, "POST");
+  assert.equal(observed.request.authorization, "Bearer host-session-token");
+  assert.equal(observed.request.accept, "application/json");
+  assert.equal(observed.request.body.principal_user_id, "player-mira");
+  assert.equal(observed.request.body.game, "midsummer");
+  assert.equal(observed.request.body.global_capabilities, undefined);
+  assert.match(observed.request.body.invite_token, /^player-midsummer-/);
+  assert.deepEqual(result.playerInvite, {
+    state: "ack",
+    message: "Player invite issued",
+    principalUserId: "player-mira",
+    invitedByUserId: "host_h",
+    game: "midsummer",
+    returnTo: "/g/midsummer",
+    loginUrl: `http://localhost/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed.request.body.invite_token}`,
+    loginPath: `/auth/login?returnTo=%2Fg%2Fmidsummer&invite=${observed.request.body.invite_token}`,
+    expiresAt: observed.request.body.expires_at,
+  });
+});
+
 test("host action rejects replacement invite issuance without a host session", async () => {
   const result = await actions.issueReplacementInvite({
     cookies: { get: () => undefined },

@@ -2058,7 +2058,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 6,
+    version: 7,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -2101,6 +2101,10 @@ function identityAdapterProofFixture(game) {
       hostScopedInviteIssuance: {
         status: "passed",
         issuingCapability: "HostOf(game)",
+        hostRoleSurface: `/g/${game}/host`,
+        hostAction: "?/issuePlayerInvite",
+        hostPanelTestId: "host-player-invite-panel",
+        clickedThroughFromHostRoleUrl: true,
         issuedByPrincipalUserId: "host_h",
         issuedForGame: game,
         storedGameScope: game,

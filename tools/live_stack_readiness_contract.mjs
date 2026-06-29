@@ -96,7 +96,10 @@ const CHECKS = Object.freeze([
       evidence?.browser?.playerAction?.staleActionRecovery?.outcome?.error ===
         "PhaseLocked" &&
       evidence?.browser?.playerAction?.staleActionRecovery?.statusMessage?.includes(
-        "stale projection",
+        "stale action state",
+      ) &&
+      evidence?.browser?.playerAction?.staleActionRecovery?.statusMessage?.includes(
+        "current action controls",
       ),
   },
   {

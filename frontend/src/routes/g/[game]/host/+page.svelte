@@ -247,7 +247,45 @@
     />
 
     <section
-      class="host-console-critical-path__replacement-invite"
+      class="host-console-critical-path__invite-panel"
+      data-testid="host-player-invite-panel"
+    >
+      <header>
+        <p class="host-console-critical-path__eyebrow">Player invite</p>
+        <strong data-testid="host-player-invite-target">Slot 7 / player-mira</strong>
+      </header>
+      <form method="POST" action="?/issuePlayerInvite">
+        <input type="hidden" name="principalUserId" value="player-mira" />
+        <button
+          class="fm-touch-control"
+          type="submit"
+          data-testid="host-player-invite-submit"
+        >
+          Issue player invite
+        </button>
+      </form>
+      {#if form?.playerInvite}
+        <p
+          class="host-console-critical-path__invite-status"
+          data-state={form.playerInvite.state}
+          data-testid="host-player-invite-status"
+        >
+          {form.playerInvite.message}
+        </p>
+        {#if form.playerInvite.state === "ack"}
+          <a
+            class="host-console-critical-path__invite-url"
+            href={form.playerInvite.loginUrl}
+            data-testid="host-player-invite-url"
+          >
+            {form.playerInvite.loginUrl}
+          </a>
+        {/if}
+      {/if}
+    </section>
+
+    <section
+      class="host-console-critical-path__invite-panel"
       data-testid="host-replacement-invite-panel"
     >
       <header>
@@ -266,7 +304,7 @@
       </form>
       {#if form?.replacementInvite}
         <p
-          class="host-console-critical-path__replacement-invite-status"
+          class="host-console-critical-path__invite-status"
           data-state={form.replacementInvite.state}
           data-testid="host-replacement-invite-status"
         >
@@ -274,7 +312,7 @@
         </p>
         {#if form.replacementInvite.state === "ack"}
           <a
-            class="host-console-critical-path__replacement-invite-url"
+            class="host-console-critical-path__invite-url"
             href={form.replacementInvite.loginUrl}
             data-testid="host-replacement-invite-url"
           >

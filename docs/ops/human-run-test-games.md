@@ -229,7 +229,7 @@ npm run test:dev-test-game-seed-fixture
 After the live gate has written the dev-test-game proof, ops bundle, and seed
 fixture, the local identity-adapter proof for replacing dev tokens without
 changing role surfaces, proving local lifecycle recovery, and proving a host
-can issue a game-scoped local player invite is:
+can issue a game-scoped local player invite from the seeded host role URL is:
 
 ```sh
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity
@@ -238,7 +238,10 @@ DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-tes
 That command also writes `target/dev-test-game/identity-admin-proof.json` by
 clicking from the seeded admin overview into the native local identity-adapter
 detail route, where lifecycle/delegated-issuance checks and admin/host/player
-role surfaces are visible without raw invite-token echoes.
+role surfaces are visible without raw invite-token echoes. The delegated
+issuance check clicks the seeded host console's player-invite control, verifies
+the stored local game scope, and redeems that invite through the existing player
+role URL.
 
 The local backup/restore drill for this spine is:
 
@@ -447,9 +450,9 @@ identity-adapter proof that invite-issued opaque sessions preserve the same role
 URL and capability architecture through local session rotation, session
 revocation, revoked-invite rejection, replacement-invite recovery, and a seeded
 host-issued game-scoped player invite that persists its local game scope and
-redeems back to the existing player role surface, plus a seeded admin
-overview-to-local-identity-adapter-detail browser proof without raw credential
-echoes.
+is issued from the seeded host role URL before redeeming back to the existing
+player role surface, plus a seeded admin overview-to-local-identity-adapter-detail
+browser proof without raw credential echoes.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while

@@ -48,69 +48,110 @@ export async function load({ params, locals, fetch, url }) {
 }
 
 export const actions = {
-  issueReplacementInvite: async ({ cookies, fetch, params, request, url }) => {
-    const sessionToken = cookies.get(SESSION_COOKIE_NAME);
-    if (sessionToken === undefined || sessionToken.trim() === "") {
-      return fail(401, replacementInviteForm({
-        state: "reject",
-        message: "Host session is required",
-      }));
-    }
-
-    const formData = await request.formData();
-    const principalUserId = replacementPrincipal(formData.get("principalUserId"));
-    const returnTo = `/g/${params.game}`;
-    const inviteToken = `replacement-${params.game}-${randomUUID()}`;
-    const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
-    const response = await fetch(authInvitesUrl(process.env), {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${sessionToken}`,
-        "content-type": "application/json",
-        accept: "application/json",
-      },
-      body: JSON.stringify({
-        invite_token: inviteToken,
-        principal_user_id: principalUserId,
-        expires_at: expiresAt,
-        game: params.game,
-      }),
-    });
-
-    if (!response.ok) {
-      return fail(response.status, replacementInviteForm({
-        state: "reject",
-        message: "Replacement invite was rejected",
-      }));
-    }
-
-    const invite = await response.json();
-    const loginPath = replacementLoginPath({ returnTo, inviteToken });
-    return replacementInviteForm({
-      state: "ack",
-      message: "Replacement invite issued",
-      principalUserId: invite.principal_user_id,
-      invitedByUserId: invite.invited_by_user_id,
-      game: invite.game,
-      returnTo,
-      loginUrl: `${url.origin}${loginPath}`,
-      loginPath,
-      expiresAt: invite.expires_at,
-    });
-  },
+  issuePlayerInvite: async ({ cookies, fetch, params, request, url }) =>
+    await issueHostScopedInvite({
+      cookies,
+      fetch,
+      params,
+      request,
+      url,
+      field: "playerInvite",
+      tokenPrefix: "player",
+      defaultPrincipalUserId: "player-mira",
+      ackMessage: "Player invite issued",
+      rejectMessage: "Player invite was rejected",
+    }),
+  issueReplacementInvite: async ({ cookies, fetch, params, request, url }) =>
+    await issueHostScopedInvite({
+      cookies,
+      fetch,
+      params,
+      request,
+      url,
+      field: "replacementInvite",
+      tokenPrefix: "replacement",
+      defaultPrincipalUserId: "player-rowan",
+      ackMessage: "Replacement invite issued",
+      rejectMessage: "Replacement invite was rejected",
+    }),
 };
 
-function replacementInviteForm(replacementInvite) {
+async function issueHostScopedInvite({
+  cookies,
+  fetch,
+  params,
+  request,
+  url,
+  field,
+  tokenPrefix,
+  defaultPrincipalUserId,
+  ackMessage,
+  rejectMessage,
+}) {
+  const sessionToken = cookies.get(SESSION_COOKIE_NAME);
+  if (sessionToken === undefined || sessionToken.trim() === "") {
+    return fail(401, inviteForm(field, {
+      state: "reject",
+      message: "Host session is required",
+    }));
+  }
+
+  const formData = await request.formData();
+  const principalUserId = invitePrincipal(
+    formData.get("principalUserId"),
+    defaultPrincipalUserId,
+  );
+  const returnTo = `/g/${params.game}`;
+  const inviteToken = `${tokenPrefix}-${params.game}-${randomUUID()}`;
+  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7;
+  const response = await fetch(authInvitesUrl(process.env), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      invite_token: inviteToken,
+      principal_user_id: principalUserId,
+      expires_at: expiresAt,
+      game: params.game,
+    }),
+  });
+
+  if (!response.ok) {
+    return fail(response.status, inviteForm(field, {
+      state: "reject",
+      message: rejectMessage,
+    }));
+  }
+
+  const invite = await response.json();
+  const loginPath = inviteLoginPath({ returnTo, inviteToken });
+  return inviteForm(field, {
+    state: "ack",
+    message: ackMessage,
+    principalUserId: invite.principal_user_id,
+    invitedByUserId: invite.invited_by_user_id,
+    game: invite.game,
+    returnTo,
+    loginUrl: `${url.origin}${loginPath}`,
+    loginPath,
+    expiresAt: invite.expires_at,
+  });
+}
+
+function inviteForm(field, invite) {
   return {
-    replacementInvite,
+    [field]: invite,
   };
 }
 
-function replacementPrincipal(value) {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : "player-rowan";
+function invitePrincipal(value, fallback) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
 }
 
-function replacementLoginPath({ returnTo, inviteToken }) {
+function inviteLoginPath({ returnTo, inviteToken }) {
   const params = new URLSearchParams({ returnTo, invite: inviteToken });
   return `/auth/login?${params.toString()}`;
 }

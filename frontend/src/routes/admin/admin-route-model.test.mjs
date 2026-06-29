@@ -1303,6 +1303,9 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       issuedForGame: "game-a",
       storedGameScope: "game-a",
       globalCapabilitiesGranted: 0,
+      hostRoleSurface: "/g/game-a/host",
+      hostAction: "?/issuePlayerInvite",
+      clickedThroughFromHostRoleUrl: true,
     },
     rawTokensStored: false,
     rawTokensVisible: false,
@@ -1949,7 +1952,7 @@ function backupRestoreProofFixture() {
 
 function identityAdapterProofFixture() {
   return {
-    version: 6,
+    version: 7,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -1979,6 +1982,9 @@ function identityAdapterProofFixture() {
       },
       hostScopedInviteIssuance: {
         status: "passed",
+        hostRoleSurface: "/g/game-a/host",
+        hostAction: "?/issuePlayerInvite",
+        clickedThroughFromHostRoleUrl: true,
         issuedByPrincipalUserId: "host_h",
         issuedForGame: "game-a",
         storedGameScope: "game-a",

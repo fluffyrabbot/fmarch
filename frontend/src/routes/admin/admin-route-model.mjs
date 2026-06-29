@@ -1093,7 +1093,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 6 ||
+    identityAdapterProof.version !== 7 ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
@@ -1138,6 +1138,12 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     roles.length === 0 ||
     lifecycleChecks.some(([, status]) => status !== "passed") ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurface !==
+      `/g/${identityAdapterProof.game}/host` ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
+      "?/issuePlayerInvite" ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance
+      ?.clickedThroughFromHostRoleUrl !== true ||
     identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance
       ?.issuedByPrincipalUserId !== "host_h" ||
     identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !==
@@ -1211,6 +1217,16 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         globalCapabilitiesGranted:
           identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
             ?.globalCapabilitiesGranted ?? null,
+        hostRoleSurface: String(
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+            ?.hostRoleSurface ?? "",
+        ),
+        hostAction: String(
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance?.hostAction ?? "",
+        ),
+        clickedThroughFromHostRoleUrl:
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+            ?.clickedThroughFromHostRoleUrl === true,
       }),
       rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
       rawTokensVisible:

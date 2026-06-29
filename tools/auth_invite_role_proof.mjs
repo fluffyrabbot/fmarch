@@ -94,14 +94,14 @@ try {
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 6,
+    version: 7,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including GlobalAdmin discovery and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -458,31 +458,30 @@ async function proveHostScopedInviteIssuance({
   hostSessionToken,
   hostReturnTo,
 }) {
-  const hostIssuedInviteToken = `host-issued-player-invite-${game}`;
-  const issued = await createInvite(apiBaseUrl, {
-    inviteToken: hostIssuedInviteToken,
-    principalUserId: "player-mira",
-    gameScope: game,
-    bearerToken: hostSessionToken,
+  const hostSurface = await driveHostPlayerInviteSurface({
+    frontendBaseUrl,
+    hostSessionToken,
+    hostReturnTo,
   });
-  if (issued.invitedByUserId !== "host_h") {
-    throw new Error(`host-scoped invite was not issued by host_h: ${JSON.stringify(issued)}`);
+  const issued = await storedInviteRecord(hostSurface.inviteToken);
+  if (issued.invitedByUserId !== "host_h" || issued.principalUserId !== "player-mira") {
+    throw new Error(
+      `host-scoped invite row did not match host surface: ${JSON.stringify(issued)}`,
+    );
   }
   if (issued.game !== game) {
-    throw new Error(`host-scoped invite response did not preserve game scope: ${JSON.stringify(issued)}`);
+    throw new Error(
+      `host-scoped invite row did not preserve game scope: ${JSON.stringify(issued)}`,
+    );
   }
   if (issued.globalCapabilities.length !== 0) {
     throw new Error("host-scoped invite unexpectedly granted global capabilities");
   }
-  const storedGame = await storedInviteGameScope(hostIssuedInviteToken);
-  if (storedGame !== game) {
-    throw new Error(`host-scoped invite persisted game ${storedGame}, expected ${game}`);
-  }
   const player = await driveInviteLogin({
     frontendBaseUrl,
     apiBaseUrl,
-    role: "hostIssuedPlayer",
-    inviteToken: hostIssuedInviteToken,
+    role: "hostSurfacePlayerInvite",
+    inviteToken: hostSurface.inviteToken,
     returnTo: `/g/${game}`,
     expectedCapability: "SlotOccupant",
   });
@@ -501,9 +500,13 @@ async function proveHostScopedInviteIssuance({
   return {
     status: "passed",
     issuingCapability: "HostOf(game)",
+    hostRoleSurface: hostSurface.roleSurface,
+    hostAction: "?/issuePlayerInvite",
+    hostPanelTestId: "host-player-invite-panel",
+    clickedThroughFromHostRoleUrl: hostSurface.clickedThroughFromHostRoleUrl,
     issuedByPrincipalUserId: issued.invitedByUserId,
-    issuedForGame: issued.game,
-    storedGameScope: storedGame,
+    issuedForGame: hostSurface.game,
+    storedGameScope: issued.game,
     principalUserId: player.principalUserId,
     globalCapabilitiesGranted: issued.globalCapabilities.length,
     redeemedCapabilityKinds: player.capabilityKinds,
@@ -512,6 +515,66 @@ async function proveHostScopedInviteIssuance({
     hostRoleSurfaceStillValid: true,
     rawInviteTokenStored: false,
   };
+}
+
+async function driveHostPlayerInviteSurface({
+  frontendBaseUrl,
+  hostSessionToken,
+  hostReturnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_session",
+        value: hostSessionToken,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${hostReturnTo}`, { waitUntil: "networkidle" });
+    await page.getByTestId("host-player-invite-panel").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const targetText = await page.getByTestId("host-player-invite-target").innerText();
+    if (!targetText.includes("player-mira")) {
+      throw new Error(`host player invite target drifted: ${targetText}`);
+    }
+    await page.getByTestId("host-player-invite-submit").click();
+    await page.getByTestId("host-player-invite-url").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const statusText = await page.getByTestId("host-player-invite-status").innerText();
+    if (!statusText.includes("Player invite issued")) {
+      throw new Error(`host player invite status drifted: ${statusText}`);
+    }
+    const href = await page.getByTestId("host-player-invite-url").getAttribute("href");
+    const loginUrl = new URL(href, frontendBaseUrl);
+    const inviteToken = loginUrl.searchParams.get("invite");
+    const returnTo = loginUrl.searchParams.get("returnTo");
+    if (
+      loginUrl.pathname !== "/auth/login" ||
+      inviteToken === null ||
+      !inviteToken.startsWith(`player-${game}-`) ||
+      returnTo !== `/g/${game}`
+    ) {
+      throw new Error(`host player invite URL drifted: ${loginUrl.toString()}`);
+    }
+    return {
+      roleSurface: hostReturnTo,
+      targetPrincipalUserId: "player-mira",
+      game,
+      loginUrl: loginUrl.toString(),
+      returnTo,
+      inviteToken,
+      clickedThroughFromHostRoleUrl: true,
+    };
+  } finally {
+    await page.close();
+  }
 }
 
 async function rotateSession({ apiBaseUrl, oldSessionToken, newSessionToken }) {
@@ -564,7 +627,7 @@ async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalUserId }) {
   );
 }
 
-async function storedInviteGameScope(inviteToken) {
+async function storedInviteRecord(inviteToken) {
   if (proofDatabase === undefined) {
     throw new Error("proof database is not available");
   }
@@ -575,11 +638,22 @@ async function storedInviteGameScope(inviteToken) {
     "-t",
     "-A",
     "-c",
-    `SELECT COALESCE(game::TEXT, '') FROM auth_invite WHERE token_hash = ${sqlLiteral(
-      hashSessionToken(inviteToken),
-    )}`,
+    `
+      SELECT json_build_object(
+        'principalUserId', principal_user_id,
+        'game', COALESCE(game::TEXT, ''),
+        'invitedByUserId', invited_by_user_id,
+        'globalCapabilities', COALESCE(to_json(global_capabilities), '[]'::JSON)
+      )::TEXT
+      FROM auth_invite
+      WHERE token_hash = ${sqlLiteral(hashSessionToken(inviteToken))}
+    `,
   ]);
-  return output.trim();
+  const json = output.trim();
+  if (json === "") {
+    throw new Error("stored invite row was not found");
+  }
+  return JSON.parse(json);
 }
 
 async function driveAdminIdentityAuditSurface({
@@ -738,7 +812,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 6 ||
+    evidence.version !== 7 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -759,6 +833,14 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.hostScopedInviteIssuance?.status !== "passed" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuingCapability !==
       "HostOf(game)" ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurface !==
+      `/g/${game}/host` ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.hostAction !==
+      "?/issuePlayerInvite" ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.hostPanelTestId !==
+      "host-player-invite-panel" ||
+    evidence.identityLifecycle?.hostScopedInviteIssuance?.clickedThroughFromHostRoleUrl !==
+      true ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalUserId !==
       "host_h" ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !== game ||
