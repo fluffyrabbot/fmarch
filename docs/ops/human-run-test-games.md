@@ -542,7 +542,7 @@ control without mutating the D02 deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the twenty-nine hardening lane rows above.
+verifying the thirty hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and

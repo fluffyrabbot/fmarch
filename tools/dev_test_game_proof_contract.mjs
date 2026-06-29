@@ -45,6 +45,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote-after-change",
   "stale-player-withdraw-after-change",
   "stale-player-withdraw-after-phase-closure",
+  "stale-player-vote-after-phase-closure",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -1764,6 +1765,120 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.apiCommandStateAfterReject?.vote_targets?.length === 0 &&
           hardening.stalePlayerWithdrawAfterPhaseClosure
             ?.apiCommandStateAfterReject?.current_vote === null,
+      },
+    ),
+    lane(
+      "stale-player-vote-after-phase-closure",
+      "Stale player vote rejects after host phase closure",
+      {
+        game: hardening.stalePlayerVoteAfterPhaseClosure?.game ?? null,
+        targetSlot:
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVoteTarget?.slotId ??
+          null,
+        targetKind:
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVoteTarget?.kind ??
+          null,
+        resolveState:
+          hardening.stalePlayerVoteAfterPhaseClosure?.resolveDay?.commandStatus
+            ?.state ?? null,
+        rejectError:
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.error ?? null,
+        phaseLockedAfterReject:
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateAfterReject
+            ?.phase?.locked ?? null,
+        currentVoteAfterReject:
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateAfterReject
+            ?.currentVote ?? null,
+        outcomeStatus:
+          hardening.stalePlayerVoteAfterPhaseClosure?.dayVoteOutcomesAfterReject?.[0]
+            ?.status ?? null,
+        passed:
+          hardening.stalePlayerVoteAfterPhaseClosure?.status === "passed" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.playerEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateBeforeClose
+            ?.phase?.phaseId === "D01" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateBeforeClose
+            ?.phase?.locked === false &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateBeforeClose
+            ?.currentVote?.slotId === "slot-2" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVoteTarget !==
+            undefined &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVoteButton?.disabled ===
+            false &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.currentVoteBeforeClose
+            ?.hasVote === "true" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.closedStatus?.state ===
+            "closed" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.resolveDay?.commandStatus
+            ?.state === "ack" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.hostAfterResolve?.phase
+            ?.locked === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.hostAfterResolve?.dayVoteOutcomes?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.phase?.locked === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.current_vote === null &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.vote_targets?.length === 0 &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.state ===
+            "reject" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.error ===
+            "PhaseLocked" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.serverEnvelope
+            ?.body?.kind === "Reject" &&
+          Array.isArray(
+            hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.streamSeqs,
+          ) === false &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.staleVote?.requestEnvelope
+            ?.body?.body?.command?.SubmitVote?.actor_slot === "slot-7" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "votecount",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "commandState",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateAfterReject
+            ?.phase?.locked === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateAfterReject
+            ?.voteTargets?.length === 0 &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.commandStateAfterReject
+            ?.currentVote === null &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.currentVoteAfterReject
+            ?.hasVote === "false" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.withdrawAfterReject
+            ?.disabled === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.withdrawAfterReject
+            ?.reason === "No current vote" &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.buttonsAfterReject?.some(
+            (button) => button.action?.startsWith("submit_vote"),
+          ) === false &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.buttonsAfterReject?.some(
+            (button) => button.action === "submit_post" && button.disabled === false,
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.dayVoteOutcomesAfterReject?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterReject
+            ?.phase?.locked === true &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterReject
+            ?.vote_targets?.length === 0 &&
+          hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterReject
+            ?.current_vote === null,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

@@ -2281,6 +2281,94 @@ test("session card and markdown include role credential URLs and tokens", () => 
           vote_targets: [],
         },
       },
+      stalePlayerVoteAfterPhaseClosure: {
+        status: "passed",
+        game: "phase-closure-vote-game",
+        hostEntry: {
+          capabilityKinds: ["HostOf"],
+        },
+        playerEntry: {
+          capabilityKinds: ["SlotOccupant"],
+        },
+        commandStateBeforeClose: {
+          actorSlot: "slot-7",
+          phase: { phaseId: "D01", locked: false },
+          currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "no_lynch", label: "No lynch" },
+          ],
+        },
+        staleVoteTarget: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        staleVoteButton: {
+          action: "submit_vote:slot-3",
+          disabled: false,
+          text: "Vote Slot 3",
+        },
+        currentVoteBeforeClose: {
+          hasVote: "true",
+          text: "Current vote Slot 2",
+        },
+        closedStatus: { state: "closed" },
+        resolveDay: { commandStatus: { state: "ack" } },
+        hostAfterResolve: {
+          phase: { id: "D01", locked: true },
+          dayVoteOutcomes: [
+            { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+          ],
+        },
+        apiCommandStateAfterResolve: {
+          phase: { locked: true },
+          current_vote: null,
+          vote_targets: [],
+        },
+        staleVote: {
+          state: "reject",
+          error: "PhaseLocked",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot-7",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterReject: {
+          phase: { phaseId: "D01", locked: true },
+          currentVote: null,
+          voteTargets: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+        currentVoteAfterReject: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
+        withdrawAfterReject: {
+          exists: true,
+          disabled: true,
+          reason: "No current vote",
+          text: "Withdraw vote",
+        },
+        buttonsAfterReject: [
+          { action: "withdraw_vote", disabled: true, text: "Withdraw vote" },
+          { action: "submit_post", disabled: false, text: "Post" },
+        ],
+        dayVoteOutcomesAfterReject: [
+          { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+        ],
+        apiCommandStateAfterReject: {
+          phase: { locked: true },
+          current_vote: null,
+          vote_targets: [],
+        },
+      },
       staleDeadTargetVote: {
         status: "passed",
         commandStateBeforeClose: {
@@ -3327,6 +3415,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-vote-after-change",
       "stale-player-withdraw-after-change",
       "stale-player-withdraw-after-phase-closure",
+      "stale-player-vote-after-phase-closure",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -3419,7 +3508,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 58);
+  assert.equal(opsArtifacts.proofRun.laneCount, 59);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3978,6 +4067,7 @@ function hardeningAdminProofFixture() {
         "stale-player-vote-after-change",
         "stale-player-withdraw-after-change",
         "stale-player-withdraw-after-phase-closure",
+        "stale-player-vote-after-phase-closure",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",

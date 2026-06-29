@@ -3422,6 +3422,13 @@ async function verifySeededMultiplayerHardening({
       frontendBaseUrl,
       normalizeCommandResponse,
     });
+  const stalePlayerVoteAfterPhaseClosure =
+    await verifyStalePlayerVoteAfterPhaseClosure({
+      browser: playerPage.context().browser(),
+      apiBaseUrl,
+      frontendBaseUrl,
+      normalizeCommandResponse,
+    });
   const staleDeadTargetVote = await verifyStaleDeadTargetVoteRecovery({
     hostPage,
     playerPage,
@@ -3602,6 +3609,7 @@ async function verifySeededMultiplayerHardening({
     stalePlayerVoteAfterChange,
     stalePlayerWithdrawAfterChange,
     stalePlayerWithdrawAfterPhaseClosure,
+    stalePlayerVoteAfterPhaseClosure,
     staleDeadTargetVote,
     deadCurrentVote,
     concurrentVoteRace,
@@ -3623,7 +3631,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected a stale withdraw after host phase resolution with PhaseLocked and refreshed to locked commandState, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -8862,6 +8870,342 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
       apiVotecountAfterReject,
       proof:
         "A disposable player role URL froze with an enabled Withdraw vote control for an existing D01 ballot, a disposable host role URL resolved that day and locked the phase, then the stale player WithdrawVote rejected as PhaseLocked and refreshed commandState, day-vote outcome truth, cleared the obsolete current vote, and disabled stale vote controls.",
+    };
+  } finally {
+    await hostEntry.context.close().catch(() => {});
+    await playerEntry.context.close().catch(() => {});
+  }
+}
+
+async function verifyStalePlayerVoteAfterPhaseClosure({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  if (browser === null || browser === undefined) {
+    throw new Error("stale vote phase-closure proof requires a Playwright browser");
+  }
+  const phaseClosureGame = crypto.randomUUID();
+  const seed = await seedDayVoteResolutionGame({ game: phaseClosureGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-stale-vote-phase-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${phaseClosureGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const playerSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-stale-vote-phase-player-${crypto.randomUUID()}`,
+    principalUserId: "player-mira",
+    returnTo: `/g/${phaseClosureGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: phaseClosureGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const playerEntry = await openVerifiedRoleEntry({
+    browser,
+    session: playerSession,
+    game: phaseClosureGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  try {
+    await gotoPlayerBoard(playerEntry.page, phaseClosureGame);
+    await playerEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind === "slot" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+          "slot-2",
+    );
+    const commandStateBeforeClose = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const staleVoteTarget =
+      commandStateBeforeClose?.voteTargets?.find(
+        (candidate) =>
+          candidate.kind === "slot" && candidate.slotId !== "slot-2",
+      ) ??
+      commandStateBeforeClose?.voteTargets?.find(
+        (candidate) => candidate.kind === "no_lynch",
+      );
+    const staleVoteButton = staleVoteTarget
+      ? (await playerCommandButtons(playerEntry.page)).find(
+          (button) =>
+            button.action?.startsWith("submit_vote") &&
+            button.text?.includes(staleVoteTarget.label) &&
+            button.disabled === false,
+        )
+      : undefined;
+    const currentVoteBeforeClose = await playerEntry.page
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const buttonsBeforeClose = await playerCommandButtons(playerEntry.page);
+    const closedStatus = await playerEntry.page.evaluate(
+      () => window.__fmarchClosePlayerLiveProjection?.(),
+    );
+
+    await hostEntry.page.goto(`${frontendBaseUrl}/g/${phaseClosureGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.phase?.id === "D01" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === "slot-2" && row.count === 3,
+        ),
+    );
+    const hostBeforeResolve = {
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      votecount: await hostEntry.page.evaluate(
+        () => window.__fmarchHostVotecountProjection ?? [],
+      ),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+    };
+    const resolveDay = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "D01", locked: true });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+    );
+    const hostAfterResolve = {
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      dayVoteOutcomes: await hostEntry.page.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      outcomePanel: await hostEntry.page
+        .locator('[data-testid="host-day-vote-outcome-latest"]')
+        .innerText(),
+    };
+    const apiCommandStateAfterResolve = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiDayVoteOutcomesAfterResolve = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/day-vote-outcomes`,
+    );
+
+    if (
+      staleVoteTarget === undefined ||
+      staleVoteButton === undefined ||
+      commandStateBeforeClose?.currentVote?.slotId !== "slot-2" ||
+      currentVoteBeforeClose.hasVote !== "true" ||
+      !currentVoteBeforeClose.text.includes("Slot 2") ||
+      !buttonsBeforeClose.some(
+        (button) =>
+          button.action === staleVoteButton.action &&
+          button.disabled === false &&
+          button.text?.includes(staleVoteTarget.label),
+      ) ||
+      closedStatus?.state !== "closed" ||
+      resolveDay.commandStatus?.state !== "ack" ||
+      hostAfterResolve.phase?.locked !== true ||
+      !hostAfterResolve.dayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      ) ||
+      apiCommandStateAfterResolve?.phase?.locked !== true ||
+      apiCommandStateAfterResolve?.current_vote !== null ||
+      apiCommandStateAfterResolve?.vote_targets?.length !== 0 ||
+      !normalizeDayVoteOutcomeRows(apiDayVoteOutcomesAfterResolve).some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      )
+    ) {
+      throw new Error(
+        `stale vote phase-closure setup drifted: ${JSON.stringify({
+          phaseClosureGame,
+          seed,
+          commandStateBeforeClose,
+          staleVoteTarget,
+          staleVoteButton,
+          currentVoteBeforeClose,
+          buttonsBeforeClose,
+          closedStatus,
+          hostBeforeResolve,
+          resolveDay,
+          hostAfterResolve,
+          apiCommandStateAfterResolve,
+          apiDayVoteOutcomesAfterResolve,
+        })}`,
+      );
+    }
+
+    await playerEntry.page
+      .locator(`[data-action="${staleVoteButton.action}"]`, {
+        hasText: staleVoteTarget.label,
+      })
+      .first()
+      .click();
+    await playerEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote !== undefined &&
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+    );
+    await playerEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote === null &&
+        (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).length ===
+          0 &&
+        window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+    );
+    const staleVote = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const commandStateAfterReject = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const dispatchPlan = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const currentVoteAfterReject = await playerEntry.page
+      .getByTestId("player-current-vote")
+      .evaluate((node) => ({
+        hasVote: node.getAttribute("data-has-vote"),
+        text: node.textContent?.trim() ?? "",
+      }));
+    const withdrawAfterReject = await playerCommandControlState(
+      playerEntry.page,
+      "withdraw_vote",
+    );
+    const buttonsAfterReject = await playerCommandButtons(playerEntry.page);
+    const dayVoteOutcomesAfterReject = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
+    );
+    const apiCommandStateAfterReject = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiVotecountAfterReject = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/votecount`,
+    );
+    if (
+      staleVote?.state !== "reject" ||
+      staleVote?.error !== "PhaseLocked" ||
+      staleVote?.serverEnvelope?.body?.kind !== "Reject" ||
+      Array.isArray(staleVote?.streamSeqs) ||
+      staleVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
+        "slot-7" ||
+      dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
+      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+      commandStateAfterReject?.phase?.phaseId !== "D01" ||
+      commandStateAfterReject?.phase?.locked !== true ||
+      commandStateAfterReject?.currentVote !== null ||
+      commandStateAfterReject?.voteTargets?.length !== 0 ||
+      currentVoteAfterReject.hasVote !== "false" ||
+      !currentVoteAfterReject.text.includes("No current vote") ||
+      withdrawAfterReject.exists !== true ||
+      withdrawAfterReject.disabled !== true ||
+      withdrawAfterReject.reason !== "No current vote" ||
+      buttonsAfterReject.some((button) => button.action?.startsWith("submit_vote")) ||
+      !buttonsAfterReject.some(
+        (button) => button.action === "submit_post" && button.disabled === false,
+      ) ||
+      !dayVoteOutcomesAfterReject.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      ) ||
+      apiCommandStateAfterReject?.phase?.locked !== true ||
+      apiCommandStateAfterReject?.vote_targets?.length !== 0 ||
+      apiCommandStateAfterReject?.current_vote !== null ||
+      normalizedVotecountRows(apiVotecountAfterReject).some(
+        (row) => row.phaseId === "D01" && row.target === "slot-2" && row.count !== 3,
+      )
+    ) {
+      throw new Error(
+        `stale vote phase-closure recovery drifted: ${JSON.stringify({
+          phaseClosureGame,
+          staleVoteTarget,
+          staleVote,
+          commandStateAfterReject,
+          dispatchPlan,
+          currentVoteAfterReject,
+          withdrawAfterReject,
+          buttonsAfterReject,
+          dayVoteOutcomesAfterReject,
+          apiCommandStateAfterReject,
+          apiVotecountAfterReject,
+        })}`,
+      );
+    }
+
+    return {
+      status: "passed",
+      game: phaseClosureGame,
+      seed,
+      hostSession: {
+        principalUserId: hostSession.principalUserId,
+        credentialKind: hostSession.credentialKind,
+        expectedCapabilityKind: hostSession.expectedCapabilityKind,
+      },
+      playerSession: {
+        principalUserId: playerSession.principalUserId,
+        credentialKind: playerSession.credentialKind,
+        expectedCapabilityKind: playerSession.expectedCapabilityKind,
+      },
+      hostEntry: hostEntry.verification,
+      playerEntry: playerEntry.verification,
+      commandStateBeforeClose,
+      staleVoteTarget,
+      staleVoteButton,
+      currentVoteBeforeClose,
+      buttonsBeforeClose,
+      closedStatus,
+      hostBeforeResolve,
+      resolveDay,
+      hostAfterResolve,
+      apiCommandStateAfterResolve,
+      apiDayVoteOutcomesAfterResolve,
+      staleVote,
+      commandStateAfterReject,
+      dispatchPlan,
+      currentVoteAfterReject,
+      withdrawAfterReject,
+      buttonsAfterReject,
+      dayVoteOutcomesAfterReject,
+      apiCommandStateAfterReject,
+      apiVotecountAfterReject,
+      proof:
+        "A disposable player role URL froze with legal D01 vote controls, a disposable host role URL resolved that day and locked the phase, then the stale player SubmitVote rejected as PhaseLocked and refreshed commandState, day-vote outcome truth, cleared current vote, and removed stale vote controls.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
