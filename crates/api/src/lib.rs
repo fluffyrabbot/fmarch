@@ -24,10 +24,10 @@ use wire::{
     AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, Hello,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
-    PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
-    PlayerNotificationsDelta, ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
-    ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
-    PROTOCOL_VERSION,
+    PROTOCOL_VERSION, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
+    PlayerNotification, PlayerNotificationsDelta, ProjectionDelta, RejectCode, RejectMsg,
+    ServerEnvelope, ServerMsg, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
+    VoteCountDelta,
 };
 
 #[derive(Clone)]
@@ -570,6 +570,7 @@ async fn create_auth_invite(
         INSERT INTO auth_invite (
             token_hash,
             principal_user_id,
+            game,
             created_at,
             expires_at,
             redeemed_at,
@@ -577,12 +578,13 @@ async fn create_auth_invite(
             global_capabilities,
             invited_by_user_id
         )
-        VALUES ($1, $2, $3, $4, NULL, NULL, $5, $6)
+        VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, $7)
         ON CONFLICT (token_hash) DO NOTHING
         "#,
     )
     .bind(hash_session_token(invite_token))
     .bind(request.principal_user_id.as_str())
+    .bind(request.game)
     .bind(now)
     .bind(request.expires_at)
     .bind(&global_capabilities)

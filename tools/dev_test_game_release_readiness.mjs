@@ -1081,7 +1081,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 5) {
+  if (proof?.version !== 6) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -1103,7 +1103,10 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
-    !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation")
+    !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
+    !proof.identityAdapter?.delegatedIssuanceControls?.includes(
+      "host-scoped-invite-issuance",
+    )
   ) {
     throw new Error("identity adapter proof does not preserve the role-surface adapter");
   }
@@ -1119,6 +1122,20 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       "HostOf",
     ) ||
     proof.identityLifecycle?.inviteRevocation?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.status !== "passed" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.issuingCapability !==
+      "HostOf(game)" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.issuedByPrincipalUserId !==
+      "host_h" ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !== proof.game ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !== proof.game ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.globalCapabilitiesGranted !== 0 ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.rawInviteTokenStored !== false ||
+    !proof.identityLifecycle?.hostScopedInviteIssuance?.redeemedCapabilityKinds?.includes(
+      "SlotOccupant",
+    ) ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurfaceStillValid !== true ||
     proof.identityLifecycle?.auditTrail?.status !== "passed" ||
     proof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
@@ -1178,6 +1195,7 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
     "session-rotation",
     "session-revocation",
     "invite-revocation",
+    "host-scoped-invite-issuance",
     "audit-trail",
     "admin-audit-surface",
   ];

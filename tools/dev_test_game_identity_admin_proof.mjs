@@ -19,6 +19,7 @@ const requiredChecks = [
   "session-rotation",
   "session-revocation",
   "invite-revocation",
+  "host-scoped-invite-issuance",
   "audit-trail",
   "admin-audit-surface",
 ];

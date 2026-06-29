@@ -1278,6 +1278,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       "session-rotation",
       "session-revocation",
       "invite-revocation",
+      "host-scoped-invite-issuance",
       "audit-trail",
       "admin-audit-surface",
     ],
@@ -1296,6 +1297,13 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     inviteCredentialKind: "single-use-invite",
     sessionCredentialKind: "opaque-session",
     lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+    delegatedIssuanceControls: ["host-scoped-invite-issuance"],
+    hostScopedInvite: {
+      issuedByPrincipalUserId: "host_h",
+      issuedForGame: "game-a",
+      storedGameScope: "game-a",
+      globalCapabilitiesGranted: 0,
+    },
     rawTokensStored: false,
     rawTokensVisible: false,
     releaseReady: false,
@@ -1314,7 +1322,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, "local-identity-adapter");
-  assert.equal(data.audit.checks.length, 5);
+  assert.equal(data.audit.checks.length, 6);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -1322,6 +1330,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
       ["session-rotation", "passed"],
       ["session-revocation", "passed"],
       ["invite-revocation", "passed"],
+      ["host-scoped-invite-issuance", "passed"],
       ["audit-trail", "passed"],
       ["admin-audit-surface", "passed"],
     ],
@@ -1940,7 +1949,7 @@ function backupRestoreProofFixture() {
 
 function identityAdapterProofFixture() {
   return {
-    version: 5,
+    version: 6,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -1955,6 +1964,7 @@ function identityAdapterProofFixture() {
       inviteCredentialKind: "single-use-invite",
       sessionCredentialKind: "opaque-session",
       lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+      delegatedIssuanceControls: ["host-scoped-invite-issuance"],
     },
     identityLifecycle: {
       status: "passed",
@@ -1966,6 +1976,14 @@ function identityAdapterProofFixture() {
       },
       inviteRevocation: {
         status: "passed",
+      },
+      hostScopedInviteIssuance: {
+        status: "passed",
+        issuedByPrincipalUserId: "host_h",
+        issuedForGame: "game-a",
+        storedGameScope: "game-a",
+        globalCapabilitiesGranted: 0,
+        rawInviteTokenStored: false,
       },
       auditTrail: {
         status: "passed",

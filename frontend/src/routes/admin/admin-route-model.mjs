@@ -1093,7 +1093,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 5 ||
+    identityAdapterProof.version !== 6 ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
@@ -1125,6 +1125,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
     ["session-revocation", identityAdapterProof.identityLifecycle?.sessionRevocation?.status],
     ["invite-revocation", identityAdapterProof.identityLifecycle?.inviteRevocation?.status],
+    [
+      "host-scoped-invite-issuance",
+      identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.status,
+    ],
     ["audit-trail", identityAdapterProof.identityLifecycle?.auditTrail?.status],
     [
       "admin-audit-surface",
@@ -1134,6 +1138,16 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     roles.length === 0 ||
     lifecycleChecks.some(([, status]) => status !== "passed") ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance
+      ?.issuedByPrincipalUserId !== "host_h" ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.issuedForGame !==
+      identityAdapterProof.game ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.storedGameScope !==
+      identityAdapterProof.game ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance
+      ?.globalCapabilitiesGranted !== 0 ||
+    identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.rawInviteTokenStored !==
+      false ||
     identityAdapterProof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     identityAdapterProof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false
   ) {
@@ -1175,6 +1189,29 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         identityAdapterProof.identityAdapter?.sessionCredentialKind ?? "",
       ),
       lifecycleControls: Object.freeze(controls.map((control) => String(control))),
+      delegatedIssuanceControls: Object.freeze(
+        (Array.isArray(identityAdapterProof.identityAdapter?.delegatedIssuanceControls)
+          ? identityAdapterProof.identityAdapter.delegatedIssuanceControls
+          : []
+        ).map((control) => String(control)),
+      ),
+      hostScopedInvite: Object.freeze({
+        issuedByPrincipalUserId: String(
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+            ?.issuedByPrincipalUserId ?? "",
+        ),
+        issuedForGame: String(
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance?.issuedForGame ??
+            "",
+        ),
+        storedGameScope: String(
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+            ?.storedGameScope ?? "",
+        ),
+        globalCapabilitiesGranted:
+          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+            ?.globalCapabilitiesGranted ?? null,
+      }),
       rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
       rawTokensVisible:
         identityAdapterProof.identityLifecycle.adminAuditSurface.rawTokensVisible,

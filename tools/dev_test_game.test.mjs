@@ -2058,7 +2058,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 5,
+    version: 6,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -2072,6 +2072,7 @@ function identityAdapterProofFixture(game) {
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
       lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+      delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
@@ -2096,6 +2097,19 @@ function identityAdapterProofFixture(game) {
         revokedInviteRejected: true,
         recoveryCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
+      },
+      hostScopedInviteIssuance: {
+        status: "passed",
+        issuingCapability: "HostOf(game)",
+        issuedByPrincipalUserId: "host_h",
+        issuedForGame: game,
+        storedGameScope: game,
+        principalUserId: "player-mira",
+        globalCapabilitiesGranted: 0,
+        redeemedCapabilityKinds: ["SlotOccupant"],
+        sameRoleSurface: true,
+        hostRoleSurfaceStillValid: true,
+        rawInviteTokenStored: false,
       },
       auditTrail: {
         status: "passed",
@@ -2176,6 +2190,7 @@ function identityAdminProofFixture() {
         "session-rotation",
         "session-revocation",
         "invite-revocation",
+        "host-scoped-invite-issuance",
         "audit-trail",
         "admin-audit-surface",
       ],
