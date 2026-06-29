@@ -40,6 +40,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-stale-private-receipts",
   "replacement-incoming-player",
   "idempotent-retry",
+  "action-idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
   "stale-player-vote-after-change",
@@ -1425,6 +1426,94 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.idempotentRetry?.retryPost?.streamSeqs,
         ) &&
         hardening.idempotentRetry?.projectedPostCount === 1,
+    }),
+    lane("action-idempotent-retry", "Duplicate action command id returns original ACK", {
+      retryState: hardening.actionIdempotentRetry?.retry?.state ?? null,
+      commandId: hardening.actionIdempotentRetry?.legalActionCommandId ?? null,
+      sameStreamSeqs: sameArray(
+        hardening.actionIdempotentRetry?.legalActionStreamSeqs,
+        hardening.actionIdempotentRetry?.retry?.streamSeqs,
+      ),
+      refreshedPhase:
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.phase?.phaseId ??
+        null,
+      refreshedActionCount:
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.actions?.length ??
+        null,
+      apiRefreshedPhase:
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.phase?.phase_id ??
+        null,
+      receiptActionId: hardening.actionIdempotentRetry?.currentReceipt?.actionId ?? null,
+      legalActionTarget: hardening.actionIdempotentRetry?.legalActionTarget ?? null,
+      actionVisibleAfterRefresh:
+        hardening.actionIdempotentRetry?.actionVisibleAfterRefresh ?? null,
+      passed:
+        hardening.actionIdempotentRetry?.status === "passed" &&
+        hardening.actionIdempotentRetry?.retry?.state === "ack" &&
+        hardening.actionIdempotentRetry?.retry?.commandId ===
+          hardening.actionIdempotentRetry?.legalActionCommandId &&
+        hardening.actionIdempotentRetry?.retry?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        sameArray(
+          hardening.actionIdempotentRetry?.legalActionStreamSeqs,
+          hardening.actionIdempotentRetry?.retry?.streamSeqs,
+        ) &&
+        hardening.actionIdempotentRetry?.retry?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.actor_slot === "slot_4" &&
+        hardening.actionIdempotentRetry?.retry?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.action_id === "role_factional_kill" &&
+        hardening.actionIdempotentRetry?.retry?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.template_id === "factional_kill" &&
+        hardening.actionIdempotentRetry?.retry?.requestEnvelope?.body?.body
+          ?.command?.SubmitAction?.targets?.[0] ===
+          hardening.actionIdempotentRetry?.legalActionTarget &&
+        hardening.actionIdempotentRetry?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "notifications",
+        ) === true &&
+        hardening.actionIdempotentRetry?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "investigationResults",
+        ) === true &&
+        hardening.actionIdempotentRetry?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.actionIdempotentRetry?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "dayVoteOutcomes",
+        ) === false &&
+        hardening.actionIdempotentRetry?.currentReceipt?.actionId ===
+          "submit_action:factional_kill" &&
+        hardening.actionIdempotentRetry?.currentReceipt?.state === "ack" &&
+        hardening.actionIdempotentRetry?.currentReceipt?.commandTrace
+          ?.projectionRefreshKeys?.includes("commandState") === true &&
+        hardening.actionIdempotentRetry?.currentReceipt?.commandTrace
+          ?.projectionRefreshKeys?.includes("dayVoteOutcomes") === false &&
+        hardening.actionIdempotentRetry?.receiptStatusText?.includes("Ack") ===
+          true &&
+        hardening.actionIdempotentRetry?.staleN01Phase?.phaseId === "N01" &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.actorSlot ===
+          "slot_4" &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.actorAlive ===
+          true &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.actorStatus ===
+          "alive" &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.phase?.phaseId ===
+          "N01" &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.phase?.locked ===
+          false &&
+        hardening.actionIdempotentRetry?.commandStateAfterRetry?.actions?.length ===
+          0 &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.actor_slot ===
+          "slot_4" &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.actor_alive ===
+          true &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.actor_status ===
+          "alive" &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.phase?.phase_id ===
+          "N01" &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.phase?.locked ===
+          false &&
+        hardening.actionIdempotentRetry?.apiCommandStateAfterRetry?.actions?.length ===
+          0 &&
+        hardening.actionIdempotentRetry?.actionVisibleAfterRefresh === false,
     }),
     lane("reconnect-recovery", "Dropped player live projection reconnects", {
       reconnectingState: hardening.reconnect?.reconnectingStatus?.state ?? null,

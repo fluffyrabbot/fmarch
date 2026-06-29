@@ -360,9 +360,11 @@ N01, submits the browser-visible invalid self-action, records the current
 `Reject InvalidTarget` command receipt, refreshes command state, and verifies
 the legal `factional_kill` action remains available without advancing phase.
 The same action loop also keeps a second action-player page frozen before the
-legal submit, then clicks its stale `factional_kill` control after the live ACK
-and proves `Reject ActionAlreadySubmitted` recovery refreshes browser and API
-command state to N01 with no stale action controls.
+legal submit, replays the successful `factional_kill` command id after the live
+ACK and proves the original ACK stream seqs refresh browser and API command
+state to N01 with no stale action controls, then clicks another stale
+`factional_kill` control with a distinct command id and proves
+`Reject ActionAlreadySubmitted` recovery reaches the same current state.
 
 The player action-boundary proof keeps the seeded `player` role URL on the same
 local game at N01, verifies that the player command surface has no unowned
@@ -503,12 +505,15 @@ continues, keeps one action-player page frozen on N01 until its stale
 `factional_kill` rejects with `Reject SlotNotAlive` copy that names actor death
 plus current action controls and refreshes out of stale action controls, keeps a
 second action-player page frozen on N01 until its stale `factional_kill`
+replay with the successful command id returns the original ACK stream seqs and
+refreshes browser plus API command state to N01 with no action controls, keeps a
+third action-player page frozen on N01 until its stale `factional_kill`
 rejects with `Reject ActionAlreadySubmitted` copy after the live action
 succeeds and refreshes browser plus API command state to N01 with no action
 controls, keeps a second host page frozen on D01 locked controls until its stale
 `AdvancePhaseByDeadline` click renders `Reject InvalidTarget` copy that names a
 stale deadline target, refreshes to N01, and exposes current phase controls,
-keeps a third action-player page frozen on N01 until its
+keeps a fourth action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` copy that names stale
 action state plus current action controls, refreshes browser and API command
 state to D02 without the stale action control, and keeps a second host page

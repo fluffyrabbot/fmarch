@@ -771,6 +771,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host modkill: ${card.verification.multiplayerHardening.staleHostModkill.reject.message}`,
         "",
+        `Action idempotent retry: ${card.verification.multiplayerHardening.actionIdempotentRetry.retry.message}`,
+        "",
         `Stale same action: ${card.verification.multiplayerHardening.staleSameActionRecovery.reject.message}`,
         "",
         `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
@@ -817,6 +819,7 @@ async function verifySessionCard(card) {
   let playerActionBoundary;
   let multiplayerHardening;
   let replacementConsole;
+  let staleActionRetryPage;
   let staleSameActionPage;
   let staleActionPage;
   let staleDeadActionPage;
@@ -841,6 +844,7 @@ async function verifySessionCard(card) {
       sessions[role] = roleEntries[role].verification;
       roles.push(role);
     }
+    staleActionRetryPage = await roleEntries.actionPlayer.context.newPage();
     staleSameActionPage = await roleEntries.actionPlayer.context.newPage();
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleDeadActionPage = await roleEntries.actionPlayer.context.newPage();
@@ -892,6 +896,7 @@ async function verifySessionCard(card) {
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
+      staleActionRetryPage,
       staleSameActionPage,
       staleActionPage,
       staleDeadActionPage,
@@ -908,6 +913,7 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
+      actionIdempotentRetry: actionLoop.actionIdempotentRetry,
       staleSameActionRecovery: actionLoop.staleSameActionRecovery,
       staleActionConflict: actionLoop.staleActionConflict,
       staleDeadActionConflict: actionLoop.staleDeadActionConflict,
@@ -938,6 +944,7 @@ async function verifySessionCard(card) {
     sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.browserEntry;
     roles.push("replacementPlayer");
   } finally {
+    await staleActionRetryPage?.close().catch(() => {});
     await staleSameActionPage?.close().catch(() => {});
     await staleActionPage?.close().catch(() => {});
     await staleDeadActionPage?.close().catch(() => {});
@@ -2275,6 +2282,7 @@ async function verifySeededActionLoop({
   playerPage,
   actionPage,
   targetPage,
+  staleActionRetryPage,
   staleSameActionPage,
   staleActionPage,
   staleDeadActionPage,
@@ -2315,6 +2323,10 @@ async function verifySeededActionLoop({
   const n01Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const actionRetrySetup = await freezeStaleActionPage({
+    staleActionPage: staleActionRetryPage,
+    game,
+  });
   const staleSameActionSetup = await freezeStaleActionPage({
     staleActionPage: staleSameActionPage,
     game,
@@ -2353,6 +2365,13 @@ async function verifySeededActionLoop({
   await actionPage.waitForFunction(
     () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
   );
+  const actionIdempotentRetry = await submitActionIdempotentRetry({
+    staleActionRetryPage,
+    actionRetrySetup,
+    legalAction,
+    apiBaseUrl,
+    game,
+  });
   const staleSameActionRecovery = await submitStaleSameActionRecovery({
     staleSameActionPage,
     staleSameActionSetup,
@@ -2415,6 +2434,7 @@ async function verifySeededActionLoop({
     playerActionBoundary,
     deadlineAdvance,
     staleDeadlineAdvance,
+    actionIdempotentRetry,
     staleSameActionRecovery,
     resolutionReceipts,
     deadPlayerRecovery,
@@ -2427,7 +2447,7 @@ async function verifySeededActionLoop({
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, a frozen action retry page replayed the same command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
   };
 }
 
@@ -3089,6 +3109,118 @@ async function freezeStaleActionPage({ staleActionPage, game }) {
   };
 }
 
+async function submitActionIdempotentRetry({
+  staleActionRetryPage,
+  actionRetrySetup,
+  legalAction,
+  apiBaseUrl,
+  game,
+}) {
+  const legalSubmittedCommand =
+    legalAction?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  await staleActionRetryPage.evaluate((fixedCommandId) => {
+    window.__fmarchPlayerCommandIdFactory = () => fixedCommandId;
+  }, legalAction.commandId);
+  await staleActionRetryPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await staleActionRetryPage.waitForFunction(
+    () => window.__fmarchPlayerCommandStatus?.state === "ack",
+  );
+  const retry = await staleActionRetryPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  await staleActionRetryPage.evaluate(() => {
+    delete window.__fmarchPlayerCommandIdFactory;
+  });
+  await staleActionRetryPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+  );
+  await staleActionRetryPage.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  const commandStateAfterRetry = await staleActionRetryPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const dispatchPlan = await staleActionRetryPage.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const currentReceipt = await staleActionRetryPage.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await staleActionRetryPage
+    .getByTestId("player-command-status")
+    .innerText();
+  const apiCommandStateAfterRetry = await fetchJson(
+    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+  );
+  const retrySubmittedCommand =
+    retry?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  if (
+    retry?.state !== "ack" ||
+    retry?.commandId !== legalAction?.commandId ||
+    retry?.serverEnvelope?.body?.kind !== "Ack" ||
+    !sameArray(retry?.streamSeqs, legalAction?.streamSeqs) ||
+    retrySubmittedCommand?.actor_slot !== "slot_4" ||
+    retrySubmittedCommand?.action_id !== "role_factional_kill" ||
+    retrySubmittedCommand?.template_id !== "factional_kill" ||
+    retrySubmittedCommand?.targets?.[0] !== legalSubmittedCommand?.targets?.[0] ||
+    dispatchPlan?.projectionRefreshKeys?.includes("notifications") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("investigationResults") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") === true ||
+    currentReceipt?.actionId !== "submit_action:factional_kill" ||
+    currentReceipt?.state !== "ack" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
+      true ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+      "dayVoteOutcomes",
+    ) === true ||
+    !receiptStatusText.includes("Ack") ||
+    commandStateAfterRetry?.actorSlot !== "slot_4" ||
+    commandStateAfterRetry?.actorAlive !== true ||
+    commandStateAfterRetry?.actorStatus !== "alive" ||
+    commandStateAfterRetry?.phase?.phaseId !== "N01" ||
+    commandStateAfterRetry?.phase?.locked !== false ||
+    commandStateAfterRetry?.actions?.length !== 0 ||
+    apiCommandStateAfterRetry?.actor_slot !== "slot_4" ||
+    apiCommandStateAfterRetry?.actor_alive !== true ||
+    apiCommandStateAfterRetry?.actor_status !== "alive" ||
+    apiCommandStateAfterRetry?.phase?.phase_id !== "N01" ||
+    apiCommandStateAfterRetry?.phase?.locked !== false ||
+    apiCommandStateAfterRetry?.actions?.length !== 0
+  ) {
+    throw new Error(
+      `action idempotent retry drifted: ${JSON.stringify({
+        legalAction,
+        retry,
+        commandStateAfterRetry,
+        dispatchPlan,
+        currentReceipt,
+        receiptStatusText,
+        apiCommandStateAfterRetry,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    staleN01Phase: actionRetrySetup.staleN01Phase,
+    actionConfig: actionRetrySetup.actionConfig,
+    closedStatus: actionRetrySetup.closedStatus,
+    legalActionCommandId: legalAction.commandId,
+    legalActionStreamSeqs: legalAction.streamSeqs,
+    legalActionTarget: legalSubmittedCommand?.targets?.[0] ?? null,
+    retry,
+    commandStateAfterRetry,
+    dispatchPlan,
+    currentReceipt,
+    receiptStatusText,
+    apiCommandStateAfterRetry,
+    actionVisibleAfterRefresh: false,
+  };
+}
+
 async function submitStaleSameActionRecovery({
   staleSameActionPage,
   staleSameActionSetup,
@@ -3522,6 +3654,7 @@ async function verifySeededMultiplayerHardening({
   hostPage,
   playerPage,
   actionPage,
+  actionIdempotentRetry,
   staleSameActionRecovery,
   staleActionConflict,
   staleDeadActionConflict,
@@ -3842,6 +3975,7 @@ async function verifySeededMultiplayerHardening({
     hostLifecycleControl,
     hostModkillControl,
     staleHostModkill,
+    actionIdempotentRetry,
     staleSameActionRecovery,
     staleDeadActionConflict,
     staleActionConflict,
@@ -3854,7 +3988,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing to locked commandState plus day-vote outcome truth, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 

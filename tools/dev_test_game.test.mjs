@@ -2958,6 +2958,71 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorStatus: "modkilled",
         },
       },
+      actionIdempotentRetry: {
+        status: "passed",
+        actionConfig: {
+          templateId: "factional_kill",
+        },
+        staleN01Phase: { phaseId: "N01" },
+        legalActionCommandId: "11111111-1111-4111-8111-111111111111",
+        legalActionStreamSeqs: [42],
+        legalActionTarget: "slot-2",
+        retry: {
+          state: "ack",
+          commandId: "11111111-1111-4111-8111-111111111111",
+          message: "Ack: stream seqs 42",
+          streamSeqs: [42],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    action_id: "role_factional_kill",
+                    template_id: "factional_kill",
+                    targets: ["slot-2"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterRetry: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "N01", locked: false },
+          actions: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        currentReceipt: {
+          actionId: "submit_action:factional_kill",
+          state: "ack",
+          commandTrace: {
+            projectionRefreshKeys: [
+              "notifications",
+              "investigationResults",
+              "commandState",
+            ],
+          },
+        },
+        receiptStatusText: "Ack: stream seqs 42",
+        apiCommandStateAfterRetry: {
+          actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
+          phase: { phase_id: "N01", locked: false },
+          actions: [],
+        },
+        actionVisibleAfterRefresh: false,
+      },
       staleSameActionRecovery: {
         status: "passed",
         actionConfig: {
@@ -3629,6 +3694,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-private-receipts",
       "replacement-incoming-player",
       "idempotent-retry",
+      "action-idempotent-retry",
       "reconnect-recovery",
       "stale-player-vote",
       "stale-player-vote-after-change",
@@ -3729,7 +3795,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 61);
+  assert.equal(opsArtifacts.proofRun.laneCount, 62);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3825,6 +3891,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "resolution-receipt",
       "dead-player-recovery",
       "night-action-loop",
+      "action-idempotent-retry",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
       "stale-dead-action-conflict",
@@ -4284,6 +4351,7 @@ function hardeningAdminProofFixture() {
         "replacement-stale-conflict-message",
         "replacement-idempotent-retry",
         "idempotent-retry",
+        "action-idempotent-retry",
         "reconnect-recovery",
         "stale-player-vote",
         "stale-player-vote-after-change",
@@ -4396,6 +4464,7 @@ function seedAdminProofFixture() {
         "replacement-stale-private-channel",
         "replacement-stale-private-receipts",
         "replacement-incoming-player",
+        "action-idempotent-retry",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

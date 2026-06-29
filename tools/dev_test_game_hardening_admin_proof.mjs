@@ -24,6 +24,7 @@ const requiredChecks = [
   "replacement-stale-conflict-message",
   "replacement-idempotent-retry",
   "idempotent-retry",
+  "action-idempotent-retry",
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",

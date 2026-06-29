@@ -1737,6 +1737,42 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry.retry.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry.retry.commandId,
+  session.verification.multiplayerHardening.actionIdempotentRetry.legalActionCommandId,
+);
+assert.deepEqual(
+  session.verification.multiplayerHardening.actionIdempotentRetry.retry.streamSeqs,
+  session.verification.multiplayerHardening.actionIdempotentRetry.legalActionStreamSeqs,
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry
+    .commandStateAfterRetry.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry
+    .commandStateAfterRetry.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry
+    .apiCommandStateAfterRetry.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.actionIdempotentRetry
+    .actionVisibleAfterRefresh,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleSameActionRecovery.status,
   "passed",
 );
