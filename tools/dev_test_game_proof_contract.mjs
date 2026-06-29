@@ -35,6 +35,7 @@ const requiredLaneIds = Object.freeze([
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",
+  "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
   "stale-host-control",
@@ -952,6 +953,51 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentVoteRace?.actionVote?.streamSeqs,
         ) &&
         hardening.concurrentVoteRace?.apiProjection?.count === 2,
+    }),
+    lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
+      rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,
+      rejectMessage: hardening.staleDeadActionConflict?.reject?.message ?? null,
+      templateId: hardening.staleDeadActionConflict?.actionConfig?.templateId ?? null,
+      stalePhase: hardening.staleDeadActionConflict?.staleN01Phase?.phaseId ?? null,
+      actorStatusAfterReject:
+        hardening.staleDeadActionConflict?.commandStateAfterReject?.actorStatus ?? null,
+      actionVisibleAfterRefresh:
+        hardening.staleDeadActionConflict?.actionVisibleAfterRefresh ?? null,
+      restoredActorStatus:
+        hardening.staleDeadActionConflict?.liveCommandStateAfterRestore?.actorStatus ??
+        null,
+      passed:
+        hardening.staleDeadActionConflict?.status === "passed" &&
+        hardening.staleDeadActionConflict?.markDead?.state === "ack" &&
+        hardening.staleDeadActionConflict?.restoreAlive?.state === "ack" &&
+        hardening.staleDeadActionConflict?.apiSlotAfterDead?.alive === false &&
+        hardening.staleDeadActionConflict?.apiSlotAfterDead?.status === "dead" &&
+        hardening.staleDeadActionConflict?.reject?.error === "SlotNotAlive" &&
+        hardening.staleDeadActionConflict?.reject?.message?.includes(
+          "actor is no longer alive",
+        ) === true &&
+        hardening.staleDeadActionConflict?.reject?.message?.includes(
+          "current action controls",
+        ) === true &&
+        hardening.staleDeadActionConflict?.actionConfig?.templateId ===
+          "factional_kill" &&
+        hardening.staleDeadActionConflict?.staleN01Phase?.phaseId === "N01" &&
+        hardening.staleDeadActionConflict?.commandStateAfterReject?.actorAlive ===
+          false &&
+        hardening.staleDeadActionConflict?.commandStateAfterReject?.actorStatus ===
+          "dead" &&
+        hardening.staleDeadActionConflict?.commandStateAfterReject?.actions?.length ===
+          0 &&
+        hardening.staleDeadActionConflict?.actionVisibleAfterRefresh === false &&
+        hardening.staleDeadActionConflict?.apiSlotAfterRestore?.alive === true &&
+        hardening.staleDeadActionConflict?.apiSlotAfterRestore?.status === "alive" &&
+        hardening.staleDeadActionConflict?.liveCommandStateAfterRestore?.actorAlive ===
+          true &&
+        hardening.staleDeadActionConflict?.liveCommandStateAfterRestore?.actorStatus ===
+          "alive" &&
+        hardening.staleDeadActionConflict?.liveCommandStateAfterRestore?.actions?.some(
+          (action) => action.templateId === "factional_kill",
+        ) === true,
     }),
     lane("stale-action-conflict", "Stale player action rejects and refreshes command state", {
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,

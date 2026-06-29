@@ -39,6 +39,7 @@ const requiredScenarios = [
   "replacement-stale-player",
   "replacement-incoming-player",
   "stale-action-conflict-message",
+  "stale-dead-action-conflict",
   "private-channel-member",
   "private-channel-denied",
   "multiplayer-hardening",

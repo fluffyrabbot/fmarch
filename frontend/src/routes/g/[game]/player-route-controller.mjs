@@ -277,6 +277,9 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
   if (commandStatus?.state === "reject" && commandStatus?.error === "ActionAlreadySubmitted") {
     return playerRefreshKeysForDataAction(data, action);
   }
+  if (commandStatus?.state === "reject" && commandStatus?.error === "SlotNotAlive") {
+    return playerRefreshKeysForDataActionWithCommandState(data, action);
+  }
   if (
     commandStatus?.state === "reject" &&
     commandStatus?.error === "InvalidTarget" &&

@@ -283,6 +283,39 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
   );
 
+  const deadActionReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "submit_action",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot_4",
+      actionConfig: {
+        actionId: "browser_factional_kill_n01",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+      },
+    }),
+    commandIdFactory: () => "77777777-7777-4777-8777-777777777777",
+    envelopeIdFactory: () => 16,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 16,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "SlotNotAlive",
+            retryable: false,
+            message: "slot not alive",
+          },
+        },
+      }),
+  });
+  assert.equal(
+    deadActionReject.message,
+    "Reject SlotNotAlive: slot not alive; actor is no longer alive, refresh and use current action controls",
+  );
+
   const alreadySubmittedReject = await sendCommand({
     principalUserId: "player_mira",
     command: buildPlayerCommand({

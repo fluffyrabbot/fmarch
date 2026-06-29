@@ -1323,6 +1323,33 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
+      staleDeadActionConflict: {
+        status: "passed",
+        markDead: { state: "ack" },
+        apiSlotAfterDead: { alive: false, status: "dead" },
+        actionConfig: {
+          templateId: "factional_kill",
+        },
+        staleN01Phase: { phaseId: "N01" },
+        reject: {
+          error: "SlotNotAlive",
+          message:
+            "Reject SlotNotAlive: slot not alive; actor is no longer alive, refresh and use current action controls",
+        },
+        commandStateAfterReject: {
+          actorAlive: false,
+          actorStatus: "dead",
+          actions: [],
+        },
+        actionVisibleAfterRefresh: false,
+        restoreAlive: { state: "ack" },
+        apiSlotAfterRestore: { alive: true, status: "alive" },
+        liveCommandStateAfterRestore: {
+          actorAlive: true,
+          actorStatus: "alive",
+          actions: [{ templateId: "factional_kill" }],
+        },
+      },
       staleActionConflict: {
         status: "passed",
         actionConfig: {
@@ -1509,6 +1536,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "reconnect-recovery",
       "stale-player-vote",
       "concurrent-vote-race",
+      "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-host-control",
@@ -1584,7 +1612,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 31);
+  assert.equal(opsArtifacts.proofRun.laneCount, 32);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1679,6 +1707,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "dead-player-recovery",
       "night-action-loop",
       "stale-action-conflict-message",
+      "stale-dead-action-conflict",
       "host-replacement-console",
       "replacement-host-issued-invite",
       "replacement-pending-player",
@@ -2104,6 +2133,7 @@ function hardeningAdminProofFixture() {
         "reconnect-recovery",
         "stale-player-vote",
         "concurrent-vote-race",
+        "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",
         "stale-host-control",
@@ -2193,6 +2223,7 @@ function seedAdminProofFixture() {
         "replacement-stale-player",
         "replacement-incoming-player",
         "stale-action-conflict-message",
+        "stale-dead-action-conflict",
         "private-channel-member",
         "private-channel-denied",
         "multiplayer-hardening",

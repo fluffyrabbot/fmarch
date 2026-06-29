@@ -762,6 +762,7 @@ async function verifySessionCard(card) {
   let multiplayerHardening;
   let replacementConsole;
   let staleActionPage;
+  let staleDeadActionPage;
   let staleHostPage;
   let staleCohostPage;
   let staleReplacementPage;
@@ -778,6 +779,7 @@ async function verifySessionCard(card) {
       roles.push(role);
     }
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
+    staleDeadActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
@@ -804,6 +806,7 @@ async function verifySessionCard(card) {
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
       staleActionPage,
+      staleDeadActionPage,
       staleHostPage,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
@@ -818,6 +821,7 @@ async function verifySessionCard(card) {
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
       staleActionConflict: actionLoop.staleActionConflict,
+      staleDeadActionConflict: actionLoop.staleDeadActionConflict,
       staleHostPage,
       staleHostControlSetup: actionLoop.staleHostControlSetup,
       staleCohostPage,
@@ -838,6 +842,7 @@ async function verifySessionCard(card) {
     roles.push("replacementPlayer");
   } finally {
     await staleActionPage?.close().catch(() => {});
+    await staleDeadActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
@@ -1101,6 +1106,7 @@ async function verifySeededActionLoop({
   actionPage,
   targetPage,
   staleActionPage,
+  staleDeadActionPage,
   staleHostPage,
   game,
   apiBaseUrl,
@@ -1124,6 +1130,18 @@ async function verifySeededActionLoop({
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
   const staleActionSetup = await freezeStaleActionPage({ staleActionPage, game });
+  const staleDeadActionSetup = await freezeStaleActionPage({
+    staleActionPage: staleDeadActionPage,
+    game,
+  });
+  const staleDeadActionConflict = await submitStaleDeadActionConflict({
+    hostPage,
+    actionPage,
+    staleDeadActionPage,
+    staleDeadActionSetup,
+    game,
+    apiBaseUrl,
+  });
   const invalidActionRecovery = await verifySeededInvalidActionRecovery({
     actionPage,
   });
@@ -1203,10 +1221,11 @@ async function verifySeededActionLoop({
     advanceDay,
     d02Phase,
     d02PhaseText,
+    staleDeadActionConflict,
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, submitted the legal action, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
   };
 }
 
@@ -1704,6 +1723,116 @@ async function submitStaleActionConflict({ staleActionPage, staleActionSetup }) 
   };
 }
 
+async function submitStaleDeadActionConflict({
+  hostPage,
+  actionPage,
+  staleDeadActionPage,
+  staleDeadActionSetup,
+  game,
+  apiBaseUrl,
+}) {
+  const markDead = await setSlotLifecycleViaHost({
+    hostPage,
+    game,
+    slot: "slot_4",
+    status: "dead",
+  });
+  const apiSlotAfterDead = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot_4",
+  });
+  await staleDeadActionPage.locator('[data-action="submit_action:factional_kill"]').click();
+  await staleDeadActionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "SlotNotAlive",
+  );
+  const reject = await staleDeadActionPage.evaluate(
+    () => window.__fmarchPlayerCommandStatus,
+  );
+  if (
+    !reject.message.includes("actor is no longer alive") ||
+    !reject.message.includes("current action controls")
+  ) {
+    throw new Error(`stale dead action message drifted: ${JSON.stringify(reject)}`);
+  }
+  await staleDeadActionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "dead" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+  );
+  await staleDeadActionPage.waitForFunction(
+    () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+  );
+  const commandStateAfterReject = await staleDeadActionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+
+  const restoreAlive = await setSlotLifecycleViaHost({
+    hostPage,
+    game,
+    slot: "slot_4",
+    status: "alive",
+  });
+  const apiSlotAfterRestore = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot_4",
+  });
+  await actionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).some(
+        (action) => action.templateId === "factional_kill",
+      ),
+  );
+  const liveCommandStateAfterRestore = await actionPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  return {
+    status: "passed",
+    staleN01Phase: staleDeadActionSetup.staleN01Phase,
+    actionConfig: staleDeadActionSetup.actionConfig,
+    closedStatus: staleDeadActionSetup.closedStatus,
+    markDead,
+    apiSlotAfterDead,
+    reject,
+    commandStateAfterReject,
+    actionVisibleAfterRefresh: false,
+    restoreAlive,
+    apiSlotAfterRestore,
+    liveCommandStateAfterRestore,
+  };
+}
+
+async function setSlotLifecycleViaHost({ hostPage, game, slot, status }) {
+  const raw = await sendBrowserCommand(hostPage, {
+    principalUserId: "host_h",
+    commandId: crypto.randomUUID(),
+    command: {
+      SetSlotStatus: {
+        game,
+        slot,
+        status,
+      },
+    },
+  });
+  if (raw.serverEnvelope?.body?.kind !== "Ack") {
+    throw new Error(`SetSlotStatus ${slot}=${status} did not ack: ${JSON.stringify(raw)}`);
+  }
+  return {
+    state: "ack",
+    slot,
+    status,
+    httpStatus: raw.httpStatus,
+    requestEnvelope: raw.requestEnvelope,
+    serverEnvelope: raw.serverEnvelope,
+  };
+}
+
 async function verifySeededPrivateChannel({
   playerPage,
   deniedPage,
@@ -1803,6 +1932,7 @@ async function verifySeededMultiplayerHardening({
   playerPage,
   actionPage,
   staleActionConflict,
+  staleDeadActionConflict,
   staleHostPage,
   staleHostControlSetup,
   staleCohostPage,
@@ -1920,11 +2050,12 @@ async function verifySeededMultiplayerHardening({
     reconnect,
     stalePlayerVote,
     concurrentVoteRace,
+    staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, preserved a frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 

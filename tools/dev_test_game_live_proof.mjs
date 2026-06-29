@@ -1089,6 +1089,61 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.actionConfig.templateId,
+  "factional_kill",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.markDead.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.apiSlotAfterDead.alive,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.reject.error,
+  "SlotNotAlive",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleDeadActionConflict.reject.message,
+  /actor is no longer alive/,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleDeadActionConflict.reject.message,
+  /current action controls/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.commandStateAfterReject
+    .actorStatus,
+  "dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.commandStateAfterReject
+    .actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.actionVisibleAfterRefresh,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.restoreAlive.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict.apiSlotAfterRestore.alive,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleDeadActionConflict
+    .liveCommandStateAfterRestore.actorStatus,
+  "alive",
+);
+assert.equal(
   session.verification.multiplayerHardening.staleActionConflict.status,
   "passed",
 );

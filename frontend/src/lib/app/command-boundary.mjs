@@ -195,6 +195,15 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   if (reject.error === "ActionAlreadySubmitted") {
     return `${base}; refresh and use current controls`;
   }
+  if (
+    reject.error === "SlotNotAlive" &&
+    requestEnvelope?.body?.body?.command?.SubmitAction !== undefined
+  ) {
+    return `${base}; actor is no longer alive, refresh and use current action controls`;
+  }
+  if (reject.error === "SlotNotAlive") {
+    return `${base}; slot is no longer alive, refresh and use current controls`;
+  }
   if (reject.error === "NotYourSlot") {
     return `${base}; slot ownership changed, refresh and use current role surface`;
   }

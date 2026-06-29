@@ -378,7 +378,10 @@ verifies the original ACK plus exactly one projected post, drops and
 automatically reconnects the player live projection while a server-side post
 lands, refreshes command state after a stale locked-phase vote reject, submits
 two concurrent D02 votes from separate role pages and verifies converged browser
-plus API votecount, keeps a second action-player page frozen on N01 until its
+plus API votecount, keeps one action-player page frozen on N01 until its stale
+`factional_kill` rejects with `Reject SlotNotAlive` copy that names actor death
+plus current action controls and refreshes out of stale action controls, keeps a
+second action-player page frozen on N01 until its
 stale `factional_kill` rejects with `Reject PhaseLocked` copy that names stale
 action state plus current action controls, refreshes to D02 without the stale
 action control, and keeps a second host page frozen on the N01
@@ -392,7 +395,7 @@ deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the fifteen hardening lane rows above.
+verifying the sixteen hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -471,8 +474,9 @@ specific cohost deadline delegation with host-only command rejection,
 host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, and replacement-player ownership,
 duplicate replacement command, duplicate post command, player reconnect,
-concurrent vote race, stale player vote, stale action conflict, stale host
-conflict message, stale host control recovery, stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
+concurrent vote race, stale player vote, stale dead action conflict, stale
+action conflict, stale action conflict message, stale host control recovery,
+stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,
 invite delivery, account recovery, rate limits, abuse controls, production
