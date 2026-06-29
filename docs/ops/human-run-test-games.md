@@ -350,6 +350,12 @@ page opens the pack-declared `private:mafia_day_chat`, submits a private
 `SubmitPost` ACK, and a separate `deniedPlayer` page renders the 403 `Back to
 board` recovery for that same channel.
 
+The host votecount publication proof continues after the D02 concurrent-vote
+projection exists: the seeded host role URL clicks the hydrated `Publish count`
+control, sends `PublishVotecount` through `/commands`, renders the host command
+activity ACK, and verifies the projection-derived `Official votecount for D02`
+post appears in both the player browser thread and the API thread.
+
 The replacement proof uses the seeded `host` role URL after the player-owned
 lanes finish, issues the local `player-rowan` replacement invite from the host
 surface, opens that host-issued `replacementPlayer` role URL before replacement
@@ -403,7 +409,8 @@ The same core game-loop evidence is inspectable from the seeded admin role:
 the admin overview into the native local core-loop detail route and verifying
 the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `resolution-receipts`, `dead-player-recovery`, `player-action-boundary`,
-`private-channel`, `replacement-host-issued-invite`,
+`private-channel`, `host-votecount-publication`,
+`replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
 `replacement-console`, `stale-host-invite-recovery`,
 `replacement-stale-success-recovery`,

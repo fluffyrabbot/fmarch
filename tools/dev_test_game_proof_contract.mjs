@@ -39,6 +39,7 @@ const requiredLaneIds = Object.freeze([
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",
+  "host-votecount-publication",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1170,6 +1171,35 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentVoteRace?.actionVote?.streamSeqs,
         ) &&
         hardening.concurrentVoteRace?.apiProjection?.count === 2,
+    }),
+    lane("host-votecount-publication", "Host publishes projection-derived votecount", {
+      publishState: hardening.hostVotecountPublication?.publish?.commandStatus?.state ?? null,
+      commandGame:
+        hardening.hostVotecountPublication?.publish?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.PublishVotecount?.game ?? null,
+      expectedBody: hardening.hostVotecountPublication?.expectedBody ?? null,
+      activityStatusText:
+        hardening.hostVotecountPublication?.activityStatusText ?? null,
+      playerPostAuthor:
+        hardening.hostVotecountPublication?.playerThreadPost?.authorLabel ?? null,
+      apiPostAuthor:
+        hardening.hostVotecountPublication?.apiThreadPost?.author_user ?? null,
+      passed:
+        hardening.hostVotecountPublication?.status === "passed" &&
+        hardening.hostVotecountPublication?.publish?.commandStatus?.state === "ack" &&
+        hardening.hostVotecountPublication?.publish?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.PublishVotecount?.game === session?.game &&
+        hardening.hostVotecountPublication?.expectedBody ===
+          "Official votecount for D02\n- slot_5: 2" &&
+        hardening.hostVotecountPublication?.playerThreadPost?.body ===
+          hardening.hostVotecountPublication?.expectedBody &&
+        hardening.hostVotecountPublication?.playerThreadPost?.authorLabel === "host" &&
+        hardening.hostVotecountPublication?.apiThreadPost?.body ===
+          hardening.hostVotecountPublication?.expectedBody &&
+        hardening.hostVotecountPublication?.apiThreadPost?.author_user === "host" &&
+        hardening.hostVotecountPublication?.activityStatusText?.includes(
+          "Ack: stream seqs",
+        ) === true,
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,

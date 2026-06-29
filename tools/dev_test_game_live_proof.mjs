@@ -205,6 +205,43 @@ assert.equal(session.verification.actionLoop.resolveNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.resolvedTargetSlot.alive, false);
 assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
+assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
+    .state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
+    .requestEnvelope.body.body.command.PublishVotecount.game,
+  session.game,
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.expectedBody,
+  "Official votecount for D02\n- slot_5: 2",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost
+    .authorLabel,
+  "host",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost.body,
+  "Official votecount for D02\n- slot_5: 2",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost
+    .author_user,
+  "host",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost.body,
+  "Official votecount for D02\n- slot_5: 2",
+);
+assert.match(
+  session.verification.multiplayerHardening.hostVotecountPublication.activityStatusText,
+  /Ack: stream seqs/,
+);
 assert.equal(session.verification.resolutionReceipts.status, "passed");
 assert.equal(session.verification.resolutionReceipts.targetSlot, "slot-2");
 assert.equal(session.verification.resolutionReceipts.hostSlotReceipt.alive, false);

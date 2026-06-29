@@ -1749,6 +1749,33 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
+      hostVotecountPublication: {
+        status: "passed",
+        expectedBody: "Official votecount for D02\n- slot_5: 2",
+        publish: {
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    PublishVotecount: { game },
+                  },
+                },
+              },
+            },
+          },
+        },
+        playerThreadPost: {
+          body: "Official votecount for D02\n- slot_5: 2",
+          authorLabel: "host",
+        },
+        apiThreadPost: {
+          body: "Official votecount for D02\n- slot_5: 2",
+          author_user: "host",
+        },
+        activityStatusText: "Ack: stream seqs 47",
+      },
       staleDeadActionConflict: {
         status: "passed",
         markDead: { state: "ack" },
@@ -1967,6 +1994,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "reconnect-recovery",
       "stale-player-vote",
       "concurrent-vote-race",
+      "host-votecount-publication",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -2043,7 +2071,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 36);
+  assert.equal(opsArtifacts.proofRun.laneCount, 37);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2539,6 +2567,7 @@ function coreLoopAdminProofFixture() {
         "dead-player-recovery",
         "player-action-boundary",
         "private-channel",
+        "host-votecount-publication",
         "replacement-host-issued-invite",
         "replacement-pending-player",
         "replacement-invalid-target-recovery",

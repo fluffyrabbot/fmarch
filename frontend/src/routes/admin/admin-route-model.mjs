@@ -1084,6 +1084,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     "dead-player-recovery",
     "player-action-boundary",
     "private-channel",
+    "host-votecount-publication",
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-invalid-target-recovery",

@@ -2024,6 +2024,13 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     normalizeCommandResponse,
   });
+  const hostVotecountPublication = await verifyHostVotecountPublication({
+    hostPage,
+    playerPage,
+    game,
+    apiBaseUrl,
+    concurrentVoteRace,
+  });
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleHostControl = await submitStaleHostControlRecovery({
@@ -2052,12 +2059,86 @@ async function verifySeededMultiplayerHardening({
     reconnect,
     stalePlayerVote,
     concurrentVoteRace,
+    hostVotecountPublication,
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+  };
+}
+
+async function verifyHostVotecountPublication({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+  concurrentVoteRace,
+}) {
+  const expectedBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+  await hostPage.waitForFunction(
+    (expected) =>
+      window.__fmarchHostVotecountProjection?.some(
+        (row) => row.target === expected.target && row.count === expected.count,
+      ),
+    {
+      target: concurrentVoteRace.targetSlot,
+      count: concurrentVoteRace.apiProjection.count,
+    },
+  );
+  const hostVotecountBeforePublish = await hostPage.evaluate(
+    () => window.__fmarchHostVotecountProjection,
+  );
+  const publish = await confirmHostAction(hostPage, "publish_votecount");
+  const publishedCommand =
+    publish.commandStatus?.requestEnvelope?.body?.body?.command?.PublishVotecount;
+  if (publishedCommand?.game !== game) {
+    throw new Error(`PublishVotecount command drifted: ${JSON.stringify(publishedCommand)}`);
+  }
+  await playerPage.waitForFunction(
+    (body) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.some(
+        (post) => post.body === body && post.authorLabel === "host",
+      ),
+    expectedBody,
+  );
+  const playerThreadPost = await playerPage.evaluate(
+    (body) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.find(
+        (post) => post.body === body && post.authorLabel === "host",
+      ),
+    expectedBody,
+  );
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+  );
+  const apiThreadPost = apiThread.posts?.find(
+    (post) => post.body === expectedBody && post.author_user === "host",
+  );
+  if (apiThreadPost === undefined) {
+    throw new Error(
+      `published official votecount was missing from API thread: ${JSON.stringify(
+        apiThread.posts?.map((post) => post.body),
+      )}`,
+    );
+  }
+  const activityStatusText = await hostPage
+    .locator('[data-testid="host-command-activity-status-publish_votecount"]')
+    .innerText();
+  if (!activityStatusText.includes("Ack: stream seqs")) {
+    throw new Error(`publish votecount activity status drifted: ${activityStatusText}`);
+  }
+  return {
+    status: "passed",
+    expectedBody,
+    hostVotecountBeforePublish,
+    publish,
+    playerThreadPost,
+    apiThreadPost,
+    activityStatusText,
+    proof:
+      "The seeded host role URL clicked the hydrated Publish count control after D02 votes existed, sent a PublishVotecount command through /commands, rendered the ACK in host command activity, and the official projection-derived votecount post appeared in the player browser thread and API thread.",
   };
 }
 
