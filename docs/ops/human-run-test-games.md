@@ -499,6 +499,10 @@ official count, keeps a second host page frozen on the D02 `Mark dead` control
 until the live host marks Slot 7 dead, then renders a stale `SetSlotStatus`
 `Reject InvalidTarget` receipt with no ACK stream seqs while the API and player
 command projections stay on the single dead status until the seed is restored,
+keeps another host page frozen on the D02 `Modkill slot` control until the live
+host modkills Slot 7, then renders the same stale lifecycle `Reject
+InvalidTarget` receipt while API and player command projections stay on the
+single modkilled status until the seed is restored,
 keeps a full host page frozen on the
 D01 deadline control until its stale `ExtendDeadline` click renders a host
 command activity `Reject PhaseLocked` receipt, refreshes to
@@ -510,7 +514,7 @@ control without mutating the D02 deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the twenty-one hardening lane rows above.
+verifying the twenty-two hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -600,7 +604,7 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
-stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
+stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,

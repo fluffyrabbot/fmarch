@@ -46,6 +46,7 @@ const requiredLaneIds = Object.freeze([
   "host-lifecycle-control",
   "stale-host-lifecycle",
   "host-modkill-control",
+  "stale-host-modkill",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1480,6 +1481,50 @@ export function buildDevTestGameProofRun(session, options = {}) {
           true &&
         hardening.hostModkillControl?.playerCommandStateAfterRestore?.actorStatus ===
           "alive",
+    }),
+    lane("stale-host-modkill", "Stale host modkill rejects current status", {
+      rejectError: hardening.staleHostModkill?.reject?.error ?? null,
+      staleLifecycle:
+        hardening.staleHostModkill?.setup?.replacement?.lifecycleLabel ?? null,
+      apiStatus: hardening.staleHostModkill?.apiSlotAfterReject?.status ?? null,
+      actorStatus:
+        hardening.staleHostModkill?.playerCommandStateAfterReject?.actorStatus ??
+        null,
+      passed:
+        hardening.staleHostModkill?.status === "passed" &&
+        hardening.staleHostModkill?.actionId === "modkill_slot" &&
+        hardening.staleHostModkill?.lifecycleStatus === "modkilled" &&
+        hardening.staleHostModkill?.setup?.replacement?.lifecycleLabel ===
+          "Alive" &&
+        hardening.staleHostModkill?.setup?.lifecycleActions?.includes(
+          "modkill_slot",
+        ) === true &&
+        hardening.staleHostModkill?.reject?.state === "reject" &&
+        hardening.staleHostModkill?.reject?.error === "InvalidTarget" &&
+        hardening.staleHostModkill?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.staleHostModkill?.reject?.streamSeqs) ===
+          false &&
+        hardening.staleHostModkill?.reject?.message?.includes(
+          "slot lifecycle is already current",
+        ) === true &&
+        hardening.staleHostModkill?.replacementAfterReject?.lifecycleLabel ===
+          "Alive" &&
+        hardening.staleHostModkill?.lifecycleActionsAfterReject?.includes(
+          "modkill_slot",
+        ) === true &&
+        hardening.staleHostModkill?.activityRow?.source === "outcome" &&
+        hardening.staleHostModkill?.activityRow?.actionId === "modkill_slot" &&
+        Array.isArray(
+          hardening.staleHostModkill?.dispatchPlan?.projectionRefreshKeys,
+        ) &&
+        hardening.staleHostModkill.dispatchPlan.projectionRefreshKeys.length === 0 &&
+        hardening.staleHostModkill?.apiSlotAfterReject?.alive === false &&
+        hardening.staleHostModkill?.apiSlotAfterReject?.status === "modkilled" &&
+        hardening.staleHostModkill?.playerCommandStateAfterReject?.actorAlive ===
+          false &&
+        hardening.staleHostModkill?.playerCommandStateAfterReject?.actorStatus ===
+          "modkilled",
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,

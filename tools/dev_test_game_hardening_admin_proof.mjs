@@ -29,6 +29,7 @@ const requiredChecks = [
   "concurrent-vote-race",
   "stale-host-publish",
   "stale-host-lifecycle",
+  "stale-host-modkill",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",

@@ -741,6 +741,8 @@ export function markdownSessionCard(card) {
         "",
         `Host modkill: ${card.verification.multiplayerHardening.hostModkillControl.modkill.statusMessage}`,
         "",
+        `Stale host modkill: ${card.verification.multiplayerHardening.staleHostModkill.reject.message}`,
+        "",
         `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
@@ -784,6 +786,7 @@ async function verifySessionCard(card) {
   let staleHostAdvancePage;
   let staleHostPublishPage;
   let staleHostLifecyclePage;
+  let staleHostModkillPage;
   let staleHostDeadlinePage;
   let staleCohostPage;
   let staleReplacementPage;
@@ -806,6 +809,7 @@ async function verifySessionCard(card) {
     staleHostAdvancePage = await roleEntries.host.context.newPage();
     staleHostPublishPage = await roleEntries.host.context.newPage();
     staleHostLifecyclePage = await roleEntries.host.context.newPage();
+    staleHostModkillPage = await roleEntries.host.context.newPage();
     staleHostDeadlinePage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
@@ -859,6 +863,7 @@ async function verifySessionCard(card) {
       staleHostAdvancePage,
       staleHostPublishPage,
       staleHostLifecyclePage,
+      staleHostModkillPage,
       staleHostDeadlinePage,
       staleHostDeadlineSetup,
       staleCohostPage,
@@ -886,6 +891,7 @@ async function verifySessionCard(card) {
     await staleHostAdvancePage?.close().catch(() => {});
     await staleHostPublishPage?.close().catch(() => {});
     await staleHostLifecyclePage?.close().catch(() => {});
+    await staleHostModkillPage?.close().catch(() => {});
     await staleHostDeadlinePage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
@@ -2456,6 +2462,7 @@ async function verifySeededMultiplayerHardening({
   staleHostAdvancePage,
   staleHostPublishPage,
   staleHostLifecyclePage,
+  staleHostModkillPage,
   staleHostDeadlinePage,
   staleHostDeadlineSetup,
   staleCohostPage,
@@ -2582,13 +2589,21 @@ async function verifySeededMultiplayerHardening({
     staleHostLifecycleSetup,
   });
   const staleHostLifecycle = hostLifecycleControl.staleDuplicateStatus;
+  const staleHostModkillSetup = await freezeStaleHostLifecyclePage({
+    staleHostLifecyclePage: staleHostModkillPage,
+    game,
+    frontendBaseUrl,
+  });
   const hostModkillControl = await verifyHostModkillControl({
     hostPage,
     playerPage,
     game,
     apiBaseUrl,
     normalizeCommandResponse,
+    staleHostLifecyclePage: staleHostModkillPage,
+    staleHostLifecycleSetup: staleHostModkillSetup,
   });
+  const staleHostModkill = hostModkillControl.staleDuplicateStatus;
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleHostControl = await submitStaleHostControlRecovery({
@@ -2674,6 +2689,7 @@ async function verifySeededMultiplayerHardening({
     staleHostLifecycle,
     hostLifecycleControl,
     hostModkillControl,
+    staleHostModkill,
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
@@ -2682,7 +2698,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a stale host Mark dead rejects without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -2909,6 +2925,8 @@ async function verifyHostModkillControl({
   game,
   apiBaseUrl,
   normalizeCommandResponse,
+  staleHostLifecyclePage,
+  staleHostLifecycleSetup,
 }) {
   const result = await verifyHostSlotLifecycleControl({
     hostPage,
@@ -2920,6 +2938,8 @@ async function verifyHostModkillControl({
     lifecycleStatus: "modkilled",
     lifecycleLabel: "Modkilled",
     directPostBody: "Host lifecycle modkill recovery proof.",
+    staleHostLifecyclePage,
+    staleHostLifecycleSetup,
     proof:
       "The seeded host role URL clicked Modkill slot for Slot 7, emitted SetSlotStatus through /commands, host and player browser projections rendered Slot 7 modkilled, the affected player role URL disabled vote/post/action controls and rejected a direct SubmitPost as SlotNotAlive, then the host restored Slot 7 alive so later seeded proofs continue from the canonical game state.",
   });

@@ -70088,6 +70088,30 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
         Command::SetSlotStatus {
             game,
             slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Modkilled,
+        },
+    )
+    .await
+    .expect("initial modkilled status");
+    let duplicate_modkilled = handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
+            status: domain::SlotLifecycle::Modkilled,
+        },
+    )
+    .await
+    .expect_err("stale modkill control rejects once slot is already modkilled");
+    assert_eq!(duplicate_modkilled, Reject::InvalidTarget);
+
+    handle(
+        &pool,
+        &host,
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_1".into(),
             status: domain::SlotLifecycle::Alive,
         },
     )
@@ -70119,7 +70143,11 @@ async fn duplicate_slot_lifecycle_status_rejects_without_duplicate_event(pool: P
     .unwrap();
     assert_eq!(
         lifecycle_events,
-        vec![("alive".into(), 1), ("dead".into(), 1)],
+        vec![
+            ("alive".into(), 1),
+            ("dead".into(), 1),
+            ("modkilled".into(), 1)
+        ],
         "stale lifecycle rejection must not append duplicate SlotStatusChanged events"
     );
 
