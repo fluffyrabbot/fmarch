@@ -35,7 +35,7 @@ export type HostConsoleSlotOccupancyDelta = { slot_id: string, occupant_user_id:
 
 export type HostConsoleThreadPostDelta = { stream_seq: bigint, author_slot: string | null, author_user: string | null, phase_id: string, body: string, };
 
-export type HostConsoleStateDelta = { game: string, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>, };
+export type HostConsoleStateDelta = { game: string, completed: boolean, phase: HostConsolePhaseStateDelta | null, slots: Array<HostConsoleSlotOccupancyDelta>, thread_posts: Array<HostConsoleThreadPostDelta>, };
 
 export type HostPromptDelta = { game: string, phase_id: string, event_index: number, prompt_id: string, kind: string, subject_slot: string | null, reason: string, phase_kind: string, phase_number: number, metadata: unknown, status: string, decision: unknown, resolved_by: string | null, resolved_at: bigint | null, };
 

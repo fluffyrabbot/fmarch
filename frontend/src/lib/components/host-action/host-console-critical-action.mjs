@@ -1,7 +1,10 @@
 export function buildHostConsoleCriticalActions(
   gameId,
-  { hostPrompts = [], phase = null, capabilityKind = "HostOf" } = {},
+  { hostPrompts = [], phase = null, completed = false, capabilityKind = "HostOf" } = {},
 ) {
+  if (completed === true) {
+    return Object.freeze([]);
+  }
   const phaseActions = buildPhaseActions(gameId, phase);
   const actions = [
     freezeHostAction({

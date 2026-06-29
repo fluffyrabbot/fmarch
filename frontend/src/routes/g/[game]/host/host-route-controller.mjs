@@ -28,6 +28,7 @@ export const HOST_PROJECTION_RESYNC_KEYS = Object.freeze([
 export function buildHostProjectionInitialSnapshot(data) {
   return Object.freeze({
     host: Object.freeze({
+      completed: data.completed ?? false,
       phase: data.phase,
       replacement: data.replacement,
     }),
@@ -64,6 +65,7 @@ export function buildHostDerivedState({ gameId, snapshot, capabilityKind = "Host
   const criticalActions = buildHostConsoleCriticalActions(gameId, {
     hostPrompts,
     phase: projection.phase,
+    completed: projection.completed,
     capabilityKind,
   });
   const moderatorActionGroups = buildHostConsoleActionGroups({

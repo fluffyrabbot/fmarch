@@ -1330,6 +1330,7 @@ pub struct PlayerCommandStateResponse {
     pub actor_alive: bool,
     pub actor_status: String,
     pub role_key: Option<String>,
+    pub game_completed: bool,
     pub phase: Option<PlayerCommandPhaseState>,
     pub actions: Vec<PlayerCommandAction>,
     pub boundary: String,
@@ -1401,10 +1402,13 @@ async fn player_command_state(
             message: "actor slot does not exist in this game".to_string(),
         })?;
     let role_key = actor.role_key.clone();
+    let game_completed = commands::game_completed(&state.pool, game)
+        .await
+        .map_err(command_reject_api_error)?;
     let phase_view = phase
         .as_ref()
         .and_then(|phase| player_phase_state(phase).ok());
-    let actions = if actor.alive {
+    let actions = if actor.alive && !game_completed {
         match (phase.as_ref(), role_key.as_deref()) {
             (Some(phase), Some(role_key)) if !phase.locked => {
                 let active_templates = commands::active_action_templates_for_actor_phase(
@@ -1438,9 +1442,14 @@ async fn player_command_state(
         actor_alive: actor.alive,
         actor_status: actor.status.clone(),
         role_key,
+        game_completed,
         phase: phase_view,
         actions,
-        boundary: "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string(),
+        boundary: if game_completed {
+            "The game is complete; role actions, votes, and posts are closed while final role and alignment facts are public.".to_string()
+        } else {
+            "Role-action availability is derived from committed phase_state, slot_state, the actor role in the game pack, and conservative target candidates. Final command validation still happens at /commands.".to_string()
+        },
     }))
 }
 
@@ -1679,6 +1688,7 @@ struct HostConsoleStateQuery {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostConsoleStateResponse {
     pub game: Uuid,
+    pub completed: bool,
     pub phase: Option<HostConsolePhaseState>,
     pub slots: Vec<HostConsoleSlotOccupancy>,
     pub thread_posts: Vec<HostConsoleThreadPost>,
@@ -1717,6 +1727,7 @@ impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
     fn from(response: HostConsoleStateResponse) -> Self {
         HostConsoleStateDelta {
             game: response.game,
+            completed: response.completed,
             phase: response.phase.map(HostConsolePhaseStateDelta::from),
             slots: response
                 .slots
@@ -1838,6 +1849,9 @@ async fn load_host_console_state(
     slot_id: Option<&str>,
     limit: Option<i64>,
 ) -> Result<HostConsoleStateResponse, ApiError> {
+    let completed = commands::game_completed(&state.pool, game)
+        .await
+        .map_err(command_reject_api_error)?;
     let phase = projections::phase_state(&state.pool, game)
         .await?
         .map(|row| HostConsolePhaseState {
@@ -1891,6 +1905,7 @@ async fn load_host_console_state(
 
     Ok(HostConsoleStateResponse {
         game,
+        completed,
         phase,
         slots,
         thread_posts,

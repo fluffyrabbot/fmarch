@@ -3889,6 +3889,39 @@ async fn stored_game_stream_loads_role_alignment_reveal_state_and_role_effects(p
         completed_event_count, 1,
         "duplicate CompleteGame must not append another GameCompleted event"
     );
+    for (label, principal, command) in [
+        (
+            "host lock",
+            host.clone(),
+            Command::LockThread { game },
+        ),
+        (
+            "player vote",
+            user("user_1"),
+            Command::SubmitVote {
+                game,
+                actor_slot: "slot_1".into(),
+                target: VoteTarget::Slot("slot_2".into()),
+            },
+        ),
+        (
+            "player post",
+            user("user_1"),
+            Command::SubmitPost {
+                game,
+                channel_id: "main".into(),
+                actor_slot: "slot_1".into(),
+                body: "post-completion stale post".into(),
+                media: Vec::new(),
+            },
+        ),
+    ] {
+        let err = match handle(&pool, &principal, command).await {
+            Ok(ack) => panic!("{label} must reject after completion, got {ack:?}"),
+            Err(err) => err,
+        };
+        assert_eq!(err, Reject::GameAlreadyCompleted, "{label}");
+    }
 
     let projected_after = slot_state(&pool, game).await.unwrap();
     assert!(

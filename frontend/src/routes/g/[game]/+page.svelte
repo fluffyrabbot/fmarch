@@ -114,6 +114,7 @@
       ...data.player,
       alive: commandState?.actorAlive ?? data.player.alive,
       status: commandState?.actorStatus ?? data.player.status,
+      gameCompleted: commandState?.gameCompleted === true,
       capabilityLabel:
         commandState?.actorStatus === "replaced"
           ? `No current SlotOccupant(${data.player.slotId})`

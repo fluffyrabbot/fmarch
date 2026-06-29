@@ -2349,7 +2349,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
           { role_revealed: true, alignment_revealed: true },
         ],
         revealTextAfterReject: "All 1 slots revealed",
-        roleActionsAfterReject: ["complete_game"],
+        roleActionsAfterReject: [],
         activityStatusText: "Reject GameAlreadyCompleted: game already completed",
         activityRow: {
           source: "outcome",
@@ -2360,9 +2360,52 @@ test("session card and markdown include role credential URLs and tokens", () => 
           projectionRefreshKeys: ["host"],
         },
         apiStateAfterReject: {
+          completed: true,
           slots: [
             { role_revealed: true, alignment_revealed: true },
           ],
+        },
+      },
+      stalePlayerComplete: {
+        status: "passed",
+        game: `${game}-player-complete-test`,
+        setupCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: false,
+          actions: [],
+        },
+        setupButtons: [
+          { action: "submit_vote", disabled: false },
+          { action: "withdraw_vote", disabled: false },
+          { action: "submit_post", disabled: false },
+        ],
+        closedStatus: { state: "closed" },
+        liveComplete: {
+          state: "ack",
+          streamSeqs: [56],
+        },
+        reject: {
+          state: "reject",
+          error: "GameAlreadyCompleted",
+          message: "Reject GameAlreadyCompleted: game already completed",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandStateAfterReject: {
+          gameCompleted: true,
+          actions: [],
+          boundary: "The game is complete; role actions, votes, and posts are closed.",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+        buttonsAfterReject: [
+          { action: "submit_vote", disabled: true },
+          { action: "withdraw_vote", disabled: true },
+          { action: "submit_post", disabled: true },
+        ],
+        apiCommandStateAfterReject: {
+          game_completed: true,
+          actions: [],
         },
       },
       staleHostDeadline: {
@@ -2509,6 +2552,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
   assert(markdown.includes("Stale host publish: Reject InvalidTarget"));
+  assert(markdown.includes("Stale host complete: Reject GameAlreadyCompleted"));
+  assert(markdown.includes("Stale player complete: Reject GameAlreadyCompleted"));
   assert(markdown.includes("Stale host deadline: Reject PhaseLocked"));
   assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
@@ -2562,6 +2607,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-modkill",
       "stale-host-prompt",
       "stale-host-complete",
+      "stale-player-complete",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -2641,7 +2687,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 49);
+  assert.equal(opsArtifacts.proofRun.laneCount, 50);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -3199,6 +3245,7 @@ function hardeningAdminProofFixture() {
         "stale-host-modkill",
         "stale-host-prompt",
         "stale-host-complete",
+        "stale-player-complete",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",

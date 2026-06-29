@@ -468,6 +468,10 @@ async fn handle_inner(
     command: Command,
     receipt: Option<&ReceiptClaim>,
 ) -> Result<Ack, Reject> {
+    if let Some(game) = game_closed_by_completion(&command) {
+        require_game_not_completed(pool, game).await?;
+    }
+
     match command {
         // ── bootstrap lifecycle (minimal, host-gated where appropriate) ──
         Command::CreateGame { game, pack } => {
@@ -647,6 +651,54 @@ async fn handle_inner(
 }
 
 // ───────────────────────── bootstrap handlers ─────────────────────────
+
+fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
+    match command {
+        Command::CreateGame { .. } | Command::CompleteGame { .. } => None,
+        Command::AddSlot { game, .. }
+        | Command::AssignSlot { game, .. }
+        | Command::AssignRole { game, .. }
+        | Command::SetSlotStatus { game, .. }
+        | Command::AddSlotStatusTag { game, .. }
+        | Command::RemoveSlotStatusTag { game, .. }
+        | Command::AddCohost { game, .. }
+        | Command::StartGame { game, .. }
+        | Command::OpenDayPhase { game, .. }
+        | Command::AdvancePhase { game }
+        | Command::AdvancePhaseByDeadline { game, .. }
+        | Command::LockThread { game }
+        | Command::UnlockThread { game }
+        | Command::ResolvePhase { game, .. }
+        | Command::PublishVotecount { game }
+        | Command::ResolveHostPrompt { game, .. }
+        | Command::ControlItaSession { game, .. }
+        | Command::SubmitVote { game, .. }
+        | Command::WithdrawVote { game, .. }
+        | Command::SubmitAction { game, .. }
+        | Command::WithdrawAction { game, .. }
+        | Command::SubmitPost { game, .. }
+        | Command::ExtendDeadline { game, .. }
+        | Command::ProcessReplacement { game, .. } => Some(*game),
+    }
+}
+
+async fn require_game_not_completed(pool: &PgPool, game: Uuid) -> Result<(), Reject> {
+    if game_completed(pool, game).await? {
+        Err(Reject::GameAlreadyCompleted)
+    } else {
+        Ok(())
+    }
+}
+
+pub async fn game_completed(pool: &PgPool, game: Uuid) -> Result<bool, Reject> {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM events WHERE stream_id = $1 AND kind = 'GameCompleted')",
+    )
+    .bind(game)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))
+}
 
 /// `CreateGame` requires no game-scoped capability — there is none yet. The
 /// creating principal BECOMES the host (the `GameCreated.host` field), which is

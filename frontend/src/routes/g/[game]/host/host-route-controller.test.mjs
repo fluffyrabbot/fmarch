@@ -21,6 +21,7 @@ test("host route controller builds projection store boundaries from route data",
 
   assert.deepEqual(buildHostProjectionInitialSnapshot(data), {
     host: {
+      completed: false,
       phase: data.phase,
       replacement: data.replacement,
     },

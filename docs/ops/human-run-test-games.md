@@ -514,7 +514,7 @@ control without mutating the D02 deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the twenty-four hardening lane rows above.
+verifying the twenty-five hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and
@@ -604,7 +604,7 @@ projection-driven host player-invite retargeting after replacement, stale host p
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
-stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
+stale deadline advance recovery, stale host resolve recovery, stale host publish recovery, stale host lifecycle recovery, stale host modkill recovery, stale host prompt recovery, stale host complete-game recovery, stale player completed-game recovery, stale host advance recovery, stale host deadline recovery, stale cohost deadline recovery,
 local artifact-bundle, local seed/demo fixture inventory,
 local identity-adapter shape, and local backup/restore lanes. It does not prove
 hosted production account lifecycle,

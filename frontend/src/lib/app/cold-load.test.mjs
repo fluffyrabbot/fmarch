@@ -337,6 +337,7 @@ test("normalizes player command state into route action configs", () => {
         actor_alive: false,
         actor_status: "dead",
         role_key: "mafia_goon",
+        game_completed: true,
         phase: {
           phase_id: "N01",
           phase_kind: "Night",
@@ -363,6 +364,7 @@ test("normalizes player command state into route action configs", () => {
       actorAlive: false,
       actorStatus: "dead",
       roleKey: "mafia_goon",
+      gameCompleted: true,
       phase: {
         phaseId: "N01",
         phaseKind: "Night",

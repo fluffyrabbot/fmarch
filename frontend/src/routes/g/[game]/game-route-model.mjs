@@ -143,6 +143,7 @@ export async function buildGameRouteData({
       slotId: playerSlotId,
       alive: coldLoad.commandState.actorAlive,
       status: coldLoad.commandState.actorStatus,
+      gameCompleted: coldLoad.commandState.gameCompleted === true,
       capabilityLabel: playerCapabilityLabel,
     }),
     surfaceHeader: buildAppSurfaceHeaderViewModel({
@@ -254,6 +255,7 @@ function pendingReplacementColdLoad(game, slotId) {
       actorAlive: false,
       actorStatus: "pending_replacement",
       roleKey: null,
+      gameCompleted: false,
       phase: null,
       actions: Object.freeze([]),
       boundary:
@@ -270,6 +272,14 @@ function pendingReplacementColdLoad(game, slotId) {
 }
 
 export function buildPlayerPhaseView(commandState) {
+  if (commandState?.gameCompleted === true) {
+    return Object.freeze({
+      label: "Endgame",
+      state: "complete",
+      deadlineLabel: "",
+      summary: "The game is complete.",
+    });
+  }
   const phase = commandState?.phase;
   if (phase === null || phase === undefined || phase.phaseId === "") {
     return FIXTURE_PHASE;

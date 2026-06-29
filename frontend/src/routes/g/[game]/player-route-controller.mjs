@@ -226,7 +226,11 @@ export function buildPlayerCommandDispatchBridgePlan({
     request,
     optimisticStatus,
     finalStatus,
-    projectionRefreshKeys: playerRefreshKeysForAction(trace.dispatchKind),
+    projectionRefreshKeys: playerRefreshKeysForCommandOutcome({
+      data,
+      action: trace.dispatchKind,
+      commandStatus: finalStatus,
+    }),
   });
 }
 
@@ -278,6 +282,9 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     return playerRefreshKeysForDataAction(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "SlotNotAlive") {
+    return playerRefreshKeysForDataActionWithCommandState(data, action);
+  }
+  if (commandStatus?.state === "reject" && commandStatus?.error === "GameAlreadyCompleted") {
     return playerRefreshKeysForDataActionWithCommandState(data, action);
   }
   if (

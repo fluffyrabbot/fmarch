@@ -345,6 +345,7 @@ export const EMPTY_PLAYER_COMMAND_STATE = Object.freeze({
   actorAlive: null,
   actorStatus: null,
   roleKey: null,
+  gameCompleted: false,
   phase: null,
   actions: Object.freeze([]),
   boundary:
@@ -369,6 +370,12 @@ export function normalizePlayerCommandState(payload, fallback = EMPTY_PLAYER_COM
       payload.actor_status ?? payload.actorStatus ?? fallback.actorStatus ?? "",
     ),
     roleKey: payload.role_key ?? payload.roleKey ?? fallback.roleKey ?? null,
+    gameCompleted:
+      typeof payload.game_completed === "boolean"
+        ? payload.game_completed
+        : typeof payload.gameCompleted === "boolean"
+          ? payload.gameCompleted
+          : fallback.gameCompleted === true,
     phase: normalizePlayerCommandPhase(payload.phase ?? null),
     actions: Object.freeze(actions.map(normalizePlayerCommandAction).filter(Boolean)),
     boundary: String(payload.boundary ?? fallback.boundary ?? ""),

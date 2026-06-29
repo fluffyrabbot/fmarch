@@ -757,6 +757,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host complete: ${card.verification.multiplayerHardening.staleHostComplete.reject.message}`,
         "",
+        `Stale player complete: ${card.verification.multiplayerHardening.stalePlayerComplete.reject.message}`,
+        "",
         `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
         "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
@@ -2686,6 +2688,12 @@ async function verifySeededMultiplayerHardening({
     frontendBaseUrl,
     game,
   });
+  const stalePlayerComplete = await verifyStalePlayerCompleteRecovery({
+    playerPage,
+    apiBaseUrl,
+    frontendBaseUrl,
+    normalizeCommandResponse,
+  });
 
   return {
     status: "passed",
@@ -2713,10 +2721,11 @@ async function verifySeededMultiplayerHardening({
     staleHostAdvance,
     staleHostPrompt,
     staleHostComplete,
+    stalePlayerComplete,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game and cohost deadline role URLs clicked old controls, rendered command-activity receipts, refreshed to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -3061,7 +3070,7 @@ async function seedHostCompleteRecoveryGame({ completeGame }) {
   const plan = [
     ["host_h", { CreateGame: { game: completeGame, pack: "mafiascum" } }],
     ["host_h", { AddSlot: { game: completeGame, slot: "slot-7" } }],
-    ["host_h", { AssignSlot: { game: completeGame, slot: "slot-7", user: "complete-user-7" } }],
+    ["host_h", { AssignSlot: { game: completeGame, slot: "slot-7", user: "player-mira" } }],
     ["host_h", { AssignRole: { game: completeGame, slot: "slot-7", role_key: "godfather" } }],
     ["host_h", { StartGame: { game: completeGame, phase: "D01" } }],
   ];
@@ -3200,12 +3209,13 @@ async function submitStaleHostCompleteRecovery({
       (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
     ) ||
     !revealTextAfterReject.includes("All 1 slots revealed") ||
-    !roleActionsAfterReject.includes(actionId) ||
+    roleActionsAfterReject.includes(actionId) ||
     !activityStatusText.includes("Reject GameAlreadyCompleted") ||
     activityRow.source !== "outcome" ||
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    apiStateAfterReject.completed !== true ||
     apiStateAfterReject.slots?.length !== 1 ||
     apiStateAfterReject.slots.some(
       (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
@@ -3239,6 +3249,151 @@ async function submitStaleHostCompleteRecovery({
     dispatchPlan,
     apiStateAfterReject,
   };
+}
+
+async function verifyStalePlayerCompleteRecovery({
+  playerPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const completeGame = crypto.randomUUID();
+  const seed = await seedHostCompleteRecoveryGame({ completeGame });
+  const context = playerPage.context();
+  const stalePlayerPage = await context.newPage();
+  try {
+    await gotoPlayerBoard(stalePlayerPage, completeGame);
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === false,
+    );
+    const setupCommandState = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const setupButtons = await playerCommandButtons(stalePlayerPage);
+    const closedStatus = await stalePlayerPage.evaluate(
+      () => window.__fmarchClosePlayerLiveProjection?.(),
+    );
+    const completeCommandId = crypto.randomUUID();
+    const completeRaw = await sendBrowserCommand(playerPage, {
+      principalUserId: "host_h",
+      command: { CompleteGame: { game: completeGame } },
+      commandId: completeCommandId,
+    });
+    const liveComplete = normalizeCommandResponse({
+      commandId: completeCommandId,
+      requestEnvelope: completeRaw.requestEnvelope,
+      response: { status: completeRaw.httpStatus },
+      serverEnvelope: completeRaw.serverEnvelope,
+    });
+    if (
+      setupCommandState?.actions?.length !== 0 ||
+      setupButtons.find((button) => button.action === "submit_vote")?.disabled !==
+        false ||
+      closedStatus?.state !== "closed" ||
+      liveComplete?.state !== "ack"
+    ) {
+      throw new Error(
+        `stale player complete setup drifted: ${JSON.stringify({
+          completeGame,
+          seed,
+          setupCommandState,
+          setupButtons,
+          closedStatus,
+          liveComplete,
+        })}`,
+      );
+    }
+
+    await stalePlayerPage.locator('[data-action="submit_vote"]').click();
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted",
+    );
+    await stalePlayerPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+    );
+    const reject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const commandStateAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const dispatchPlan = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const buttonsAfterReject = await playerCommandButtons(stalePlayerPage);
+    const phaseAfterReject = await stalePlayerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState?.phase,
+    );
+    const apiCommandStateAfterReject = await fetchJson(
+      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    if (
+      reject?.state !== "reject" ||
+      reject?.error !== "GameAlreadyCompleted" ||
+      reject?.serverEnvelope?.body?.kind !== "Reject" ||
+      Array.isArray(reject?.streamSeqs) ||
+      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+      commandStateAfterReject?.gameCompleted !== true ||
+      commandStateAfterReject?.actions?.length !== 0 ||
+      !commandStateAfterReject?.boundary?.includes("game is complete") ||
+      buttonsAfterReject.some((button) => button.disabled !== true) ||
+      phaseAfterReject?.phaseId !== "D01" ||
+      apiCommandStateAfterReject?.game_completed !== true ||
+      apiCommandStateAfterReject?.actions?.length !== 0
+    ) {
+      throw new Error(
+        `stale player complete recovery drifted: ${JSON.stringify({
+          completeGame,
+          seed,
+          setupCommandState,
+          setupButtons,
+          closedStatus,
+          liveComplete,
+          reject,
+          commandStateAfterReject,
+          dispatchPlan,
+          buttonsAfterReject,
+          phaseAfterReject,
+          apiCommandStateAfterReject,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      game: completeGame,
+      seed,
+      setupCommandState,
+      setupButtons,
+      closedStatus,
+      liveComplete,
+      reject,
+      commandStateAfterReject,
+      dispatchPlan,
+      buttonsAfterReject,
+      phaseAfterReject,
+      apiCommandStateAfterReject,
+      proof:
+        "A disposable player role URL froze before completion, the game completed from another browser command, then the stale player Vote control rejected with GameAlreadyCompleted, refreshed commandState, disabled vote/post controls, and exposed no role actions.",
+    };
+  } finally {
+    await stalePlayerPage.close().catch(() => {});
+  }
+}
+
+async function playerCommandButtons(page) {
+  return await page.locator("[data-action]").evaluateAll((nodes) =>
+    nodes.map((node) => ({
+      action: node.getAttribute("data-action"),
+      disabled: node.hasAttribute("disabled"),
+      text: node.textContent,
+    })),
+  );
 }
 
 async function verifyHostVotecountPublication({

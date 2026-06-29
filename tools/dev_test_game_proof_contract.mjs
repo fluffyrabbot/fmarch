@@ -49,6 +49,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-modkill",
   "stale-host-prompt",
   "stale-host-complete",
+  "stale-player-complete",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1585,6 +1586,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostComplete?.revealTextAfterReject ?? null,
       roleActionsAfterReject:
         hardening.staleHostComplete?.roleActionsAfterReject ?? null,
+      apiCompleted:
+        hardening.staleHostComplete?.apiStateAfterReject?.completed ?? null,
       apiRevealedSlots:
         hardening.staleHostComplete?.apiStateAfterReject?.slots?.filter(
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
@@ -1621,10 +1624,50 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostComplete?.dispatchPlan?.projectionRefreshKeys?.includes(
           "host",
         ) === true &&
+        hardening.staleHostComplete?.roleActionsAfterReject?.includes(
+          "complete_game",
+        ) === false &&
+        hardening.staleHostComplete?.apiStateAfterReject?.completed === true &&
         hardening.staleHostComplete?.apiStateAfterReject?.slots?.length === 1 &&
         hardening.staleHostComplete?.apiStateAfterReject?.slots?.every(
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
+    }),
+    lane("stale-player-complete", "Stale player command rejects after live completion", {
+      rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
+      gameCompleted:
+        hardening.stalePlayerComplete?.commandStateAfterReject?.gameCompleted ?? null,
+      disabledButtons:
+        hardening.stalePlayerComplete?.buttonsAfterReject?.filter(
+          (button) => button.disabled === true,
+        ).length ?? null,
+      passed:
+        hardening.stalePlayerComplete?.status === "passed" &&
+        hardening.stalePlayerComplete?.setupCommandState?.gameCompleted === false &&
+        hardening.stalePlayerComplete?.setupButtons?.find(
+          (button) => button.action === "submit_vote",
+        )?.disabled === false &&
+        hardening.stalePlayerComplete?.liveComplete?.state === "ack" &&
+        hardening.stalePlayerComplete?.reject?.state === "reject" &&
+        hardening.stalePlayerComplete?.reject?.error === "GameAlreadyCompleted" &&
+        hardening.stalePlayerComplete?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.stalePlayerComplete?.reject?.streamSeqs) ===
+          false &&
+        hardening.stalePlayerComplete?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.stalePlayerComplete?.commandStateAfterReject?.gameCompleted ===
+          true &&
+        hardening.stalePlayerComplete?.commandStateAfterReject?.actions?.length ===
+          0 &&
+        hardening.stalePlayerComplete?.buttonsAfterReject?.every(
+          (button) => button.disabled === true,
+        ) === true &&
+        hardening.stalePlayerComplete?.apiCommandStateAfterReject?.game_completed ===
+          true &&
+        hardening.stalePlayerComplete?.apiCommandStateAfterReject?.actions?.length ===
+          0,
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,

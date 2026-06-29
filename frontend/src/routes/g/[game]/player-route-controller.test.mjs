@@ -288,6 +288,22 @@ test("player route controller refreshes command state after stale phase rejects"
     }),
     ["votecount", "commandState"],
   );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_vote",
+      commandStatus: { state: "reject", error: "GameAlreadyCompleted" },
+    }),
+    ["votecount", "commandState"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "submit_action:factional_kill",
+      commandStatus: { state: "reject", error: "GameAlreadyCompleted" },
+    }),
+    ["notifications", "investigationResults", "commandState"],
+  );
 });
 
 test("player route controller refreshes action state after invalid target rejects", async () => {

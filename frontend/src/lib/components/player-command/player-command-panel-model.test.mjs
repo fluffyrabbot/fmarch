@@ -141,6 +141,34 @@ test("player command panel model disables command controls for dead actors", () 
   assert.deepEqual(view.composer.actionButtons, []);
 });
 
+test("player command panel model disables command controls after completion", () => {
+  const view = buildPlayerCommandPanelViewModel({
+    composer: {
+      voteCommandLabel: "Vote slot-2",
+      withdrawCommandLabel: "Withdraw vote",
+      postCommandLabel: "Post",
+      actionCommands: [],
+    },
+    channel: { channel: "main", label: "Main thread" },
+    player: {
+      slotId: "slot-2",
+      alive: true,
+      status: "alive",
+      gameCompleted: true,
+      capabilityLabel: "SlotOccupant(slot-2)",
+    },
+  });
+
+  assert.deepEqual(
+    view.composer.buttons.map((button) => [button.action, button.disabled]),
+    [
+      ["submit_vote", true],
+      ["withdraw_vote", true],
+      ["submit_post", true],
+    ],
+  );
+});
+
 test("player command panel model surfaces replaced slot recovery context", () => {
   const view = buildPlayerCommandPanelViewModel({
     composer: {

@@ -290,6 +290,10 @@ export function projectHostConsoleState(state, fallback) {
     slot !== null && posts.some((post) => post?.author_slot === slot.slot_id);
 
   return Object.freeze({
+    completed:
+      typeof state.completed === "boolean"
+        ? state.completed
+        : fallback.completed === true,
     phase: Object.freeze({
       ...fallback.phase,
       id: phase?.phase_id ?? fallback.phase.id,

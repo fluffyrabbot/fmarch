@@ -386,6 +386,27 @@ test("host console exposes deadline advance only for locked phases with deadline
   });
 });
 
+test("host console hides mutating controls after game completion", () => {
+  assert.deepEqual(
+    buildHostConsoleCriticalActions("midsummer", {
+      completed: true,
+      phase: { id: "D01", locked: false, deadline: 1781928000 },
+      hostPrompts: [
+        {
+          id: "D01:tie:slot_2",
+          label: "tie",
+          value: "host_decides_tie",
+          status: "pending",
+          phaseId: "D01",
+          subjectSlot: "slot_2",
+          decisionKind: "acknowledge",
+        },
+      ],
+    }),
+    [],
+  );
+});
+
 test("host console action groups turn typed commands into moderator control bays", () => {
   const actions = buildHostConsoleCriticalActions("midsummer", {
     hostPrompts: [

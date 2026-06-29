@@ -518,6 +518,7 @@ test("host command sender can refresh projected host console state after ack", a
 test("host console projection maps deadline and stable slot history to labels", () => {
   const projection = projectHostConsoleState(
     {
+      completed: true,
       phase: { phase_id: "day-2", locked: true, deadline: 1781928000 },
       slots: [
         {
@@ -548,6 +549,7 @@ test("host console projection maps deadline and stable slot history to labels", 
     },
   );
 
+  assert.equal(projection.completed, true);
   assert.equal(projection.phase.deadlineLabel, "Jun 19, 2026, 9:00 PM");
   assert.equal(projection.phase.deadline, 1781928000);
   assert.equal(projection.phase.lockedLabel, "Thread locked");

@@ -576,6 +576,7 @@ pub struct DayVoteOutcomeDelta {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct HostConsoleStateDelta {
     pub game: Uuid,
+    pub completed: bool,
     pub phase: Option<HostConsolePhaseStateDelta>,
     pub slots: Vec<HostConsoleSlotOccupancyDelta>,
     pub thread_posts: Vec<HostConsoleThreadPostDelta>,

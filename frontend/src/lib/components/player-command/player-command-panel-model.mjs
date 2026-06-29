@@ -17,7 +17,8 @@ export function buildPlayerCommandPanelViewModel({
   player = {},
 }) {
   const channelContext = buildChannelContextViewModel({ channel, player });
-  const playerCommandsDisabled = player.alive === false;
+  const playerCommandsDisabled =
+    player.alive === false || player.gameCompleted === true;
   return Object.freeze({
     root: Object.freeze({
       className: PLAYER_COMMAND_PANEL_CONTRACT.rootClassName,
