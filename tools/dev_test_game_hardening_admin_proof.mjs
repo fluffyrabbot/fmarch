@@ -32,6 +32,7 @@ const requiredChecks = [
   "stale-action-conflict-message",
   "stale-host-control",
   "stale-host-resolve",
+  "stale-host-advance",
   "stale-host-deadline",
   "stale-cohost-deadline",
 ];

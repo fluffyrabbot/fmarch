@@ -233,6 +233,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   }
   if (
     reject.error === "InvalidTarget" &&
+    requestEnvelope?.body?.body?.command?.AdvancePhase !== undefined
+  ) {
+    return `${base}; stale phase state, refresh and use current controls`;
+  }
+  if (
+    reject.error === "InvalidTarget" &&
     requestEnvelope?.body?.body?.command?.AdvancePhaseByDeadline !== undefined
   ) {
     return `${base}; deadline target is stale, refresh the host console and use current phase controls`;

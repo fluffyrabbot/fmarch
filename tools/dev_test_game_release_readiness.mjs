@@ -240,6 +240,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-action-conflict-message",
         "stale-host-control",
         "stale-host-resolve",
+        "stale-host-advance",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ],
@@ -749,6 +750,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-action-conflict-message",
     "stale-host-control",
     "stale-host-resolve",
+    "stale-host-advance",
     "stale-host-deadline",
     "stale-cohost-deadline",
   ];

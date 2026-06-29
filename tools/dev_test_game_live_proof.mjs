@@ -1812,6 +1812,101 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.setup.stalePhase.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.setup.stalePhase.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.setup.phaseActions.includes(
+    "advance_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.setup.phaseActions.includes(
+    "unlock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.liveUnlock.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.liveUnlock.commandStatus.streamSeqs
+    .length > 0,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.reject.error,
+  "InvalidTarget",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostAdvance.reject.message,
+  /stale phase state/,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.multiplayerHardening.staleHostAdvance.reject.streamSeqs,
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.phaseAfterReject.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.phaseAfterReject.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.phaseActionsAfterReject.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.phaseActionsAfterReject.includes(
+    "lock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.phaseActionsAfterReject.includes(
+    "advance_phase",
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.activityRow.actionId,
+  "advance_phase",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.apiPhaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostAdvance.apiPhaseAfterReject.locked,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostDeadline.status,
   "passed",
 );

@@ -205,9 +205,7 @@ export function hostPostCommandRefreshKeys({ event, outcome }) {
   }
   if (
     outcome?.state === "reject" &&
-    (outcome?.error === "PhaseLocked" ||
-      (outcome?.error === "InvalidTarget" &&
-        event?.payload?.kind === "advance_phase_by_deadline")) &&
+    (outcome?.error === "PhaseLocked" || outcome?.error === "InvalidTarget") &&
     isPhaseControlAction(event?.payload?.kind)
   ) {
     return Object.freeze(["host"]);

@@ -2070,6 +2070,57 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterRestore: { phase_id: "D02", locked: false },
       },
+      staleHostAdvance: {
+        status: "passed",
+        actionId: "advance_phase",
+        setup: {
+          stalePhase: { id: "D02", locked: true },
+          phaseActions: ["unlock_thread", "advance_phase"],
+          deadlineActions: ["extend_deadline"],
+          closedStatus: { state: "closed" },
+        },
+        liveUnlock: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [52],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: { UnlockThread: { game } },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            actionId: "advance_phase",
+            state: "reject",
+            error: "InvalidTarget",
+          },
+        ],
+        phaseAfterReject: { id: "D02", locked: false },
+        phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
+        deadlineActionsAfterReject: ["extend_deadline"],
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "advance_phase",
+          dispatchKind: "advance_phase",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: { phase_id: "D02", locked: false },
+      },
       staleHostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -2264,6 +2315,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-action-conflict-message",
       "stale-host-control",
       "stale-host-resolve",
+      "stale-host-advance",
       "stale-host-deadline",
       "stale-cohost-deadline",
     ],
@@ -2337,7 +2389,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 43);
+  assert.equal(opsArtifacts.proofRun.laneCount, 44);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2895,6 +2947,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict-message",
         "stale-host-control",
         "stale-host-resolve",
+        "stale-host-advance",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ],

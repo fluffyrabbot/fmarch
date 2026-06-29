@@ -49,6 +49,7 @@ const requiredLaneIds = Object.freeze([
   "stale-action-conflict-message",
   "stale-host-control",
   "stale-host-resolve",
+  "stale-host-advance",
   "stale-host-deadline",
   "stale-cohost-deadline",
 ]);
@@ -1570,6 +1571,54 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostResolve?.restoreAfterReject?.commandStatus?.state === "ack" &&
         hardening.staleHostResolve?.apiPhaseAfterRestore?.phase_id === "D02" &&
         hardening.staleHostResolve?.apiPhaseAfterRestore?.locked === false,
+    }),
+    lane("stale-host-advance", "Stale host advance rejects after live unlock", {
+      rejectError: hardening.staleHostAdvance?.reject?.error ?? null,
+      stalePhase: hardening.staleHostAdvance?.setup?.stalePhase?.id ?? null,
+      liveUnlockSeqs:
+        hardening.staleHostAdvance?.liveUnlock?.commandStatus?.streamSeqs ?? null,
+      phaseId: hardening.staleHostAdvance?.phaseAfterReject?.id ?? null,
+      locked: hardening.staleHostAdvance?.phaseAfterReject?.locked ?? null,
+      phaseActions: hardening.staleHostAdvance?.phaseActionsAfterReject ?? null,
+      passed:
+        hardening.staleHostAdvance?.status === "passed" &&
+        hardening.staleHostAdvance?.setup?.stalePhase?.id === "D02" &&
+        hardening.staleHostAdvance?.setup?.stalePhase?.locked === true &&
+        hardening.staleHostAdvance?.setup?.phaseActions?.includes(
+          "advance_phase",
+        ) === true &&
+        hardening.staleHostAdvance?.setup?.phaseActions?.includes("unlock_thread") ===
+          true &&
+        hardening.staleHostAdvance?.liveUnlock?.commandStatus?.state === "ack" &&
+        Array.isArray(
+          hardening.staleHostAdvance?.liveUnlock?.commandStatus?.streamSeqs,
+        ) &&
+        hardening.staleHostAdvance.liveUnlock.commandStatus.streamSeqs.length > 0 &&
+        hardening.staleHostAdvance?.reject?.state === "reject" &&
+        hardening.staleHostAdvance?.reject?.error === "InvalidTarget" &&
+        hardening.staleHostAdvance?.reject?.serverEnvelope?.body?.kind === "Reject" &&
+        Array.isArray(hardening.staleHostAdvance?.reject?.streamSeqs) === false &&
+        hardening.staleHostAdvance?.reject?.message?.includes(
+          "stale phase state",
+        ) === true &&
+        hardening.staleHostAdvance?.phaseAfterReject?.id === "D02" &&
+        hardening.staleHostAdvance?.phaseAfterReject?.locked === false &&
+        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
+          "resolve_phase",
+        ) === true &&
+        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
+          "lock_thread",
+        ) === true &&
+        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
+          "advance_phase",
+        ) === false &&
+        hardening.staleHostAdvance?.activityRow?.source === "outcome" &&
+        hardening.staleHostAdvance?.activityRow?.actionId === "advance_phase" &&
+        hardening.staleHostAdvance?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleHostAdvance?.apiPhaseAfterReject?.phase_id === "D02" &&
+        hardening.staleHostAdvance?.apiPhaseAfterReject?.locked === false,
     }),
     lane("stale-host-deadline", "Stale host deadline control rejects without drift", {
       rejectError: hardening.staleHostDeadline?.reject?.error ?? null,
