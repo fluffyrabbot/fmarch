@@ -457,6 +457,7 @@ function demoScenarios({ roles, laneIds }) {
         "idempotent-retry",
         "reconnect-recovery",
         "concurrent-vote-race",
+        "stale-host-publish",
         "stale-dead-action-conflict",
         "stale-action-conflict-message",
         "stale-host-control",
@@ -465,7 +466,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-deadline",
         "stale-cohost-deadline",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host phase/resolve/advance/deadline control rejection, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, one concurrent vote race, stale host phase/resolve/advance/publish/deadline control rejection, and stale cohost deadline recovery.",
     }),
     scenario({
       id: "local-ops-readiness",

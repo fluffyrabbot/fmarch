@@ -341,6 +341,33 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
   );
 
+  const stalePublishReject = await sendHostActionCommand({
+    actionEvent: PUBLISH_VOTECOUNT_EVENT,
+    principalUserId: "host_h",
+    commandIdFactory: () => "46464646-4646-4646-8646-464646464646",
+    envelopeIdFactory: () => 16,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 16,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "InvalidTarget",
+            retryable: false,
+            message: "invalid target",
+          },
+        },
+      }),
+  });
+
+  assert.equal(stalePublishReject.state, "reject");
+  assert.equal(stalePublishReject.error, "InvalidTarget");
+  assert.equal(
+    stalePublishReject.message,
+    "Reject InvalidTarget: invalid target; official votecount is already published, refresh the thread before retrying",
+  );
+
   const staleReplacementReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
     principalUserId: "host_h",

@@ -1177,6 +1177,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "reconnect-recovery",
     "stale-player-vote",
     "concurrent-vote-race",
+    "stale-host-publish",
     "stale-dead-action-conflict",
     "stale-action-conflict",
     "stale-action-conflict-message",

@@ -747,6 +747,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale host advance: ${card.verification.multiplayerHardening.staleHostAdvance.reject.message}`,
         "",
+        `Stale host publish: ${card.verification.multiplayerHardening.staleHostPublish.reject.message}`,
+        "",
         `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
         "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
@@ -778,6 +780,7 @@ async function verifySessionCard(card) {
   let staleHostPage;
   let staleHostResolvePage;
   let staleHostAdvancePage;
+  let staleHostPublishPage;
   let staleHostDeadlinePage;
   let staleCohostPage;
   let staleReplacementPage;
@@ -798,6 +801,7 @@ async function verifySessionCard(card) {
     staleHostPage = await roleEntries.host.context.newPage();
     staleHostResolvePage = await roleEntries.host.context.newPage();
     staleHostAdvancePage = await roleEntries.host.context.newPage();
+    staleHostPublishPage = await roleEntries.host.context.newPage();
     staleHostDeadlinePage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
@@ -849,6 +853,7 @@ async function verifySessionCard(card) {
       staleHostControlSetup: actionLoop.staleHostControlSetup,
       staleHostResolvePage,
       staleHostAdvancePage,
+      staleHostPublishPage,
       staleHostDeadlinePage,
       staleHostDeadlineSetup,
       staleCohostPage,
@@ -874,6 +879,7 @@ async function verifySessionCard(card) {
     await staleHostPage?.close().catch(() => {});
     await staleHostResolvePage?.close().catch(() => {});
     await staleHostAdvancePage?.close().catch(() => {});
+    await staleHostPublishPage?.close().catch(() => {});
     await staleHostDeadlinePage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
@@ -1215,6 +1221,68 @@ async function freezeStaleHostAdvancePage({ staleHostAdvancePage, game, frontend
     stalePhase,
     phaseActions,
     deadlineActions,
+    closedStatus,
+  };
+}
+
+async function freezeStaleHostPublishPage({
+  staleHostPublishPage,
+  game,
+  frontendBaseUrl,
+  concurrentVoteRace,
+}) {
+  await staleHostPublishPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostPublishPage
+    .locator('[data-testid="critical-host-action-publish_votecount"]')
+    .waitFor({ state: "visible" });
+  await staleHostPublishPage.waitForFunction(
+    ({ expectedTarget, expectedCount }) =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false &&
+      window.__fmarchHostVotecountProjection?.some(
+        (row) => row.target === expectedTarget && row.count === expectedCount,
+      ),
+    {
+      expectedTarget: concurrentVoteRace.targetSlot,
+      expectedCount: concurrentVoteRace.apiProjection.count,
+    },
+  );
+  const stalePhase = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const votecountRows = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostVotecountProjection ?? [],
+  );
+  const votecountActions = await visibleHostControlActions(staleHostPublishPage, "votecount");
+  const closedStatus = await staleHostPublishPage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D02" ||
+    stalePhase?.locked !== false ||
+    !votecountRows.some(
+      (row) =>
+        row.target === concurrentVoteRace.targetSlot &&
+        row.count === concurrentVoteRace.apiProjection.count,
+    ) ||
+    !votecountActions.includes("publish_votecount") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host publish setup drifted: ${JSON.stringify({
+        stalePhase,
+        votecountRows,
+        votecountActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    votecountRows,
+    votecountActions,
     closedStatus,
   };
 }
@@ -2325,6 +2393,7 @@ async function verifySeededMultiplayerHardening({
   staleHostControlSetup,
   staleHostResolvePage,
   staleHostAdvancePage,
+  staleHostPublishPage,
   staleHostDeadlinePage,
   staleHostDeadlineSetup,
   staleCohostPage,
@@ -2415,12 +2484,26 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     normalizeCommandResponse,
   });
+  const staleHostPublishSetup = await freezeStaleHostPublishPage({
+    staleHostPublishPage,
+    game,
+    frontendBaseUrl,
+    concurrentVoteRace,
+  });
   const hostVotecountPublication = await verifyHostVotecountPublication({
     hostPage,
     playerPage,
     game,
     apiBaseUrl,
     concurrentVoteRace,
+  });
+  const staleHostPublish = await submitStaleHostPublishRecovery({
+    staleHostPublishPage,
+    staleHostPublishSetup,
+    hostVotecountPublication,
+    playerPage,
+    apiBaseUrl,
+    game,
   });
   const hostLifecycleControl = await verifyHostLifecycleControl({
     hostPage,
@@ -2517,6 +2600,7 @@ async function verifySeededMultiplayerHardening({
     stalePlayerVote,
     concurrentVoteRace,
     hostVotecountPublication,
+    staleHostPublish,
     hostLifecycleControl,
     hostModkillControl,
     staleDeadActionConflict,
@@ -2527,7 +2611,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -2601,6 +2685,117 @@ async function verifyHostVotecountPublication({
     activityStatusText,
     proof:
       "The seeded host role URL clicked the hydrated Publish count control after D02 votes existed, sent a PublishVotecount command through /commands, rendered the ACK in host command activity, and the official projection-derived votecount post appeared in the player browser thread and API thread.",
+  };
+}
+
+async function submitStaleHostPublishRecovery({
+  staleHostPublishPage,
+  staleHostPublishSetup,
+  hostVotecountPublication,
+  playerPage,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "publish_votecount";
+  const expectedBody = hostVotecountPublication.expectedBody;
+  const staleActionRoot = staleHostPublishPage.getByTestId(`critical-host-action-${actionId}`);
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostPublishPage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "InvalidTarget",
+    actionId,
+  );
+  const reject = await staleHostPublishPage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  const commandOutcomes = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const votecountActionsAfterReject = await visibleHostControlActions(
+    staleHostPublishPage,
+    "votecount",
+  );
+  const activityStatusText = await staleHostPublishPage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostPublishPage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostPublishPage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const apiThread = await fetchJson(
+    `${apiBaseUrl}/games/${game}/channels/main/thread?principal_user_id=player-mira&limit=100`,
+  );
+  const apiOfficialPosts = (apiThread.posts ?? []).filter(
+    (post) => post.body === expectedBody && post.author_user === "host",
+  );
+  const playerOfficialPostCount = await playerPage.evaluate(
+    (body) =>
+      (window.__fmarchPlayerProjection?.thread?.posts ?? []).filter(
+        (post) => post.body === body && post.authorLabel === "host",
+      ).length,
+    expectedBody,
+  );
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "InvalidTarget" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    !reject?.message?.includes("official votecount is already published") ||
+    commandOutcomes.find(
+      (outcome) =>
+        outcome.actionId === actionId &&
+        outcome.state === "reject" &&
+        outcome.error === "InvalidTarget",
+    ) === undefined ||
+    !votecountActionsAfterReject.includes(actionId) ||
+    !activityStatusText.includes("Reject InvalidTarget") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    !Array.isArray(dispatchPlan?.projectionRefreshKeys) ||
+    dispatchPlan.projectionRefreshKeys.length !== 0 ||
+    apiOfficialPosts.length !== 1 ||
+    playerOfficialPostCount !== 1
+  ) {
+    throw new Error(
+      `stale host publish recovery drifted: ${JSON.stringify({
+        staleHostPublishSetup,
+        reject,
+        commandOutcomes,
+        votecountActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiOfficialPosts,
+        playerOfficialPostCount,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    setup: staleHostPublishSetup,
+    reject,
+    commandOutcomes,
+    votecountActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiOfficialPostCount: apiOfficialPosts.length,
+    playerOfficialPostCount,
   };
 }
 

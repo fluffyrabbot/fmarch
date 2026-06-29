@@ -334,6 +334,53 @@ assert.match(
   session.verification.multiplayerHardening.hostVotecountPublication.activityStatusText,
   /Ack: stream seqs/,
 );
+assert.equal(session.verification.multiplayerHardening.staleHostPublish.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.setup.stalePhase.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.setup.stalePhase.locked,
+  false,
+);
+assert(
+  session.verification.multiplayerHardening.staleHostPublish.setup.votecountActions.includes(
+    "publish_votecount",
+  ),
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.reject.error,
+  "InvalidTarget",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostPublish.reject.message,
+  /official votecount is already published/,
+);
+assert.equal(
+  Array.isArray(session.verification.multiplayerHardening.staleHostPublish.reject.streamSeqs),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.activityRow.actionId,
+  "publish_votecount",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.dispatchPlan
+    .projectionRefreshKeys.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.apiOfficialPostCount,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPublish.playerOfficialPostCount,
+  1,
+);
 assert.equal(session.verification.resolutionReceipts.status, "passed");
 assert.equal(session.verification.resolutionReceipts.targetSlot, "slot-2");
 assert.equal(session.verification.resolutionReceipts.hostSlotReceipt.alive, false);

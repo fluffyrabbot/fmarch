@@ -227,6 +227,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   }
   if (
     reject.error === "InvalidTarget" &&
+    requestEnvelope?.body?.body?.command?.PublishVotecount !== undefined
+  ) {
+    return `${base}; official votecount is already published, refresh the thread before retrying`;
+  }
+  if (
+    reject.error === "InvalidTarget" &&
     requestEnvelope?.body?.body?.command?.ProcessReplacement !== undefined
   ) {
     return `${base}; replacement target is stale, refresh the host console and use the current slot occupant`;

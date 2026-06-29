@@ -1365,19 +1365,46 @@ async fn publish_votecount(
         .into_iter()
         .filter(|row| row.phase_id == phase)
         .collect::<Vec<_>>();
+    let body = official_votecount_body(&phase, &rows);
+    if official_votecount_already_published(pool, game, &phase, &body).await? {
+        return Err(Reject::InvalidTarget);
+    }
     let ev = EventInput::new(
         "PostSubmitted",
         1,
         serde_json::json!({
             "channel_id": "main",
             "slot_or_user": { "user": "host" },
-            "body": official_votecount_body(&phase, &rows),
+            "body": body,
             "phase_id": phase,
         }),
         ActorId::Host,
         0,
     );
     persist(pool, game, &[ev], receipt).await
+}
+
+async fn official_votecount_already_published(
+    pool: &PgPool,
+    game: Uuid,
+    phase: &str,
+    body: &str,
+) -> Result<bool, Reject> {
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM thread_view \
+         WHERE game_id = $1 \
+           AND channel_id = 'main' \
+           AND author_user = 'host' \
+           AND phase_id = $2 \
+           AND body = $3",
+    )
+    .bind(game)
+    .bind(phase)
+    .bind(body)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| Reject::Internal(e.to_string()))?;
+    Ok(count > 0)
 }
 
 fn official_votecount_body(phase: &str, rows: &[projections::VoteCountRow]) -> String {

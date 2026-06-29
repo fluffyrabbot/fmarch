@@ -1853,6 +1853,42 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         activityStatusText: "Ack: stream seqs 47",
       },
+      staleHostPublish: {
+        status: "passed",
+        actionId: "publish_votecount",
+        setup: {
+          stalePhase: { id: "D02", locked: false },
+          votecountRows: [{ target: "slot_5", count: 2 }],
+          votecountActions: ["publish_votecount"],
+          closedStatus: { state: "closed" },
+        },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; official votecount is already published, refresh the thread before retrying",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            source: "outcome",
+            actionId: "publish_votecount",
+            state: "reject",
+            error: "InvalidTarget",
+          },
+        ],
+        votecountActionsAfterReject: ["publish_votecount"],
+        activityStatusText:
+          "Reject InvalidTarget: invalid target; official votecount is already published, refresh the thread before retrying",
+        activityRow: {
+          source: "outcome",
+          actionId: "publish_votecount",
+          dispatchKind: "publish_votecount",
+        },
+        dispatchPlan: { projectionRefreshKeys: [] },
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
+      },
       hostLifecycleControl: {
         status: "passed",
         targetSlot: "slot-7",
@@ -2262,6 +2298,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
+  assert(markdown.includes("Stale host publish: Reject InvalidTarget"));
   assert(markdown.includes("Stale host deadline: Reject PhaseLocked"));
   assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
@@ -2308,6 +2345,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-vote",
       "concurrent-vote-race",
       "host-votecount-publication",
+      "stale-host-publish",
       "host-lifecycle-control",
       "host-modkill-control",
       "stale-dead-action-conflict",
@@ -2389,7 +2427,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 44);
+  assert.equal(opsArtifacts.proofRun.laneCount, 45);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2942,6 +2980,7 @@ function hardeningAdminProofFixture() {
         "reconnect-recovery",
         "stale-player-vote",
         "concurrent-vote-race",
+        "stale-host-publish",
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",

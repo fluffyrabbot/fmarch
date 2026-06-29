@@ -70011,6 +70011,49 @@ async fn stale_host_phase_controls_reject_before_duplicate_lifecycle_events(pool
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let host = user("host_h");
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_1".into(),
+            target: VoteTarget::Slot("slot_2".into()),
+        },
+    )
+    .await
+    .expect("seed vote for official count");
+
+    handle(&pool, &host, Command::PublishVotecount { game })
+        .await
+        .expect("initial official votecount publish");
+    let duplicate = handle(&pool, &host, Command::PublishVotecount { game })
+        .await
+        .expect_err("stale publish control rejects once the same official count exists");
+    assert_eq!(duplicate, Reject::InvalidTarget);
+
+    let official_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM thread_view \
+         WHERE game_id = $1 \
+           AND channel_id = 'main' \
+           AND author_user = 'host' \
+           AND phase_id = 'D01' \
+           AND body = 'Official votecount for D01\n- slot_2: 1'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        official_count, 1,
+        "stale official votecount rejection must not append a duplicate post"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
     let game = setup_game_with_pack(
         &pool,

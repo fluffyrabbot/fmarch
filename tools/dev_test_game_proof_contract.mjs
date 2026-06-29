@@ -42,6 +42,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote",
   "concurrent-vote-race",
   "host-votecount-publication",
+  "stale-host-publish",
   "host-lifecycle-control",
   "host-modkill-control",
   "stale-dead-action-conflict",
@@ -1296,6 +1297,40 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.hostVotecountPublication?.activityStatusText?.includes(
           "Ack: stream seqs",
         ) === true,
+    }),
+    lane("stale-host-publish", "Stale host publish rejects duplicate official count", {
+      rejectError: hardening.staleHostPublish?.reject?.error ?? null,
+      stalePhase: hardening.staleHostPublish?.setup?.stalePhase?.id ?? null,
+      staleLocked: hardening.staleHostPublish?.setup?.stalePhase?.locked ?? null,
+      apiOfficialPostCount: hardening.staleHostPublish?.apiOfficialPostCount ?? null,
+      playerOfficialPostCount:
+        hardening.staleHostPublish?.playerOfficialPostCount ?? null,
+      passed:
+        hardening.staleHostPublish?.status === "passed" &&
+        hardening.staleHostPublish?.setup?.stalePhase?.id === "D02" &&
+        hardening.staleHostPublish?.setup?.stalePhase?.locked === false &&
+        hardening.staleHostPublish?.setup?.votecountActions?.includes(
+          "publish_votecount",
+        ) === true &&
+        hardening.staleHostPublish?.reject?.state === "reject" &&
+        hardening.staleHostPublish?.reject?.error === "InvalidTarget" &&
+        hardening.staleHostPublish?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.staleHostPublish?.reject?.streamSeqs) === false &&
+        hardening.staleHostPublish?.reject?.message?.includes(
+          "official votecount is already published",
+        ) === true &&
+        hardening.staleHostPublish?.votecountActionsAfterReject?.includes(
+          "publish_votecount",
+        ) === true &&
+        hardening.staleHostPublish?.activityRow?.source === "outcome" &&
+        hardening.staleHostPublish?.activityRow?.actionId === "publish_votecount" &&
+        Array.isArray(
+          hardening.staleHostPublish?.dispatchPlan?.projectionRefreshKeys,
+        ) &&
+        hardening.staleHostPublish.dispatchPlan.projectionRefreshKeys.length === 0 &&
+        hardening.staleHostPublish?.apiOfficialPostCount === 1 &&
+        hardening.staleHostPublish?.playerOfficialPostCount === 1,
     }),
     lane("host-lifecycle-control", "Host slot lifecycle control disables player commands", {
       targetSlot: hardening.hostLifecycleControl?.targetSlot ?? null,
