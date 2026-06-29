@@ -8570,19 +8570,19 @@ async function verifyStalePlayerWithdrawAfterVoteChange({
   }
 }
 
-async function verifyStalePlayerWithdrawAfterPhaseClosure({
+async function openResolvedDayStalePlayerProof({
   browser,
   apiBaseUrl,
   frontendBaseUrl,
-  normalizeCommandResponse,
+  tokenLabel,
 }) {
   if (browser === null || browser === undefined) {
-    throw new Error("stale withdraw phase-closure proof requires a Playwright browser");
+    throw new Error("stale player phase-closure proof requires a Playwright browser");
   }
   const phaseClosureGame = crypto.randomUUID();
   const seed = await seedDayVoteResolutionGame({ game: phaseClosureGame });
   const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-stale-withdraw-phase-host-${crypto.randomUUID()}`,
+    token: `${tokenPrefix}-${tokenLabel}-phase-host-${crypto.randomUUID()}`,
     principalUserId: "host_h",
     returnTo: `/g/${phaseClosureGame}/host`,
     expectedCapabilityKind: "HostOf",
@@ -8593,7 +8593,7 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
     },
   });
   const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-stale-withdraw-phase-player-${crypto.randomUUID()}`,
+    token: `${tokenPrefix}-${tokenLabel}-phase-player-${crypto.randomUUID()}`,
     principalUserId: "player-mira",
     returnTo: `/g/${phaseClosureGame}`,
     expectedCapabilityKind: "SlotOccupant",
@@ -8696,11 +8696,6 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
       commandStateBeforeClose?.currentVote?.slotId !== "slot-2" ||
       currentVoteBeforeClose.hasVote !== "true" ||
       !currentVoteBeforeClose.text.includes("Slot 2") ||
-      withdrawBeforeClose.exists !== true ||
-      withdrawBeforeClose.disabled !== false ||
-      !buttonsBeforeClose.some(
-        (button) => button.action === "withdraw_vote" && button.disabled === false,
-      ) ||
       closedStatus?.state !== "closed" ||
       resolveDay.commandStatus?.state !== "ack" ||
       hostAfterResolve.phase?.locked !== true ||
@@ -8718,6 +8713,87 @@ async function verifyStalePlayerWithdrawAfterPhaseClosure({
           row.phaseId === "D01" &&
           row.status === "Lynch" &&
           row.winnerSlot === "slot-2",
+      )
+    ) {
+      throw new Error(
+        `stale player phase-closure setup drifted: ${JSON.stringify({
+          phaseClosureGame,
+          seed,
+          commandStateBeforeClose,
+          currentVoteBeforeClose,
+          withdrawBeforeClose,
+          buttonsBeforeClose,
+          closedStatus,
+          hostBeforeResolve,
+          resolveDay,
+          hostAfterResolve,
+          apiCommandStateAfterResolve,
+          apiDayVoteOutcomesAfterResolve,
+        })}`,
+      );
+    }
+
+    return {
+      phaseClosureGame,
+      seed,
+      hostSession,
+      playerSession,
+      hostEntry,
+      playerEntry,
+      commandStateBeforeClose,
+      currentVoteBeforeClose,
+      withdrawBeforeClose,
+      buttonsBeforeClose,
+      closedStatus,
+      hostBeforeResolve,
+      resolveDay,
+      hostAfterResolve,
+      apiCommandStateAfterResolve,
+      apiDayVoteOutcomesAfterResolve,
+    };
+  } catch (error) {
+    await hostEntry.context.close().catch(() => {});
+    await playerEntry.context.close().catch(() => {});
+    throw error;
+  }
+}
+
+async function verifyStalePlayerWithdrawAfterPhaseClosure({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const setup = await openResolvedDayStalePlayerProof({
+    browser,
+    apiBaseUrl,
+    frontendBaseUrl,
+    tokenLabel: "stale-withdraw",
+  });
+  const {
+    phaseClosureGame,
+    seed,
+    hostSession,
+    playerSession,
+    hostEntry,
+    playerEntry,
+    commandStateBeforeClose,
+    currentVoteBeforeClose,
+    withdrawBeforeClose,
+    buttonsBeforeClose,
+    closedStatus,
+    hostBeforeResolve,
+    resolveDay,
+    hostAfterResolve,
+    apiCommandStateAfterResolve,
+    apiDayVoteOutcomesAfterResolve,
+  } = setup;
+  try {
+    if (
+      withdrawBeforeClose.exists !== true ||
+      withdrawBeforeClose.disabled !== false ||
+      !buttonsBeforeClose.some(
+        (button) => button.action === "withdraw_vote" && button.disabled === false,
       )
     ) {
       throw new Error(
@@ -8883,62 +8959,30 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
-  if (browser === null || browser === undefined) {
-    throw new Error("stale vote phase-closure proof requires a Playwright browser");
-  }
-  const phaseClosureGame = crypto.randomUUID();
-  const seed = await seedDayVoteResolutionGame({ game: phaseClosureGame });
-  const hostSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-stale-vote-phase-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
-    returnTo: `/g/${phaseClosureGame}/host`,
-    expectedCapabilityKind: "HostOf",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
-  });
-  const playerSession = await createSessionGrantCredential({
-    token: `${tokenPrefix}-stale-vote-phase-player-${crypto.randomUUID()}`,
-    principalUserId: "player-mira",
-    returnTo: `/g/${phaseClosureGame}`,
-    expectedCapabilityKind: "SlotOccupant",
-    issuedBy: {
-      principalUserId: "root_admin",
-      capabilityKind: "GlobalAdmin",
-      surface: "/auth/session-grants",
-    },
-  });
-  const hostEntry = await openVerifiedRoleEntry({
+  const setup = await openResolvedDayStalePlayerProof({
     browser,
-    session: hostSession,
-    game: phaseClosureGame,
     apiBaseUrl,
     frontendBaseUrl,
+    tokenLabel: "stale-vote",
   });
-  const playerEntry = await openVerifiedRoleEntry({
-    browser,
-    session: playerSession,
-    game: phaseClosureGame,
-    apiBaseUrl,
-    frontendBaseUrl,
-  });
+  const {
+    phaseClosureGame,
+    seed,
+    hostSession,
+    playerSession,
+    hostEntry,
+    playerEntry,
+    commandStateBeforeClose,
+    currentVoteBeforeClose,
+    buttonsBeforeClose,
+    closedStatus,
+    hostBeforeResolve,
+    resolveDay,
+    hostAfterResolve,
+    apiCommandStateAfterResolve,
+    apiDayVoteOutcomesAfterResolve,
+  } = setup;
   try {
-    await gotoPlayerBoard(playerEntry.page, phaseClosureGame);
-    await playerEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
-        window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
-        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind === "slot" &&
-        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
-          "slot-2",
-    );
-    const commandStateBeforeClose = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerProjection?.commandState,
-    );
     const staleVoteTarget =
       commandStateBeforeClose?.voteTargets?.find(
         (candidate) =>
@@ -8948,98 +8992,22 @@ async function verifyStalePlayerVoteAfterPhaseClosure({
         (candidate) => candidate.kind === "no_lynch",
       );
     const staleVoteButton = staleVoteTarget
-      ? (await playerCommandButtons(playerEntry.page)).find(
+      ? buttonsBeforeClose.find(
           (button) =>
             button.action?.startsWith("submit_vote") &&
             button.text?.includes(staleVoteTarget.label) &&
             button.disabled === false,
         )
       : undefined;
-    const currentVoteBeforeClose = await playerEntry.page
-      .getByTestId("player-current-vote")
-      .evaluate((node) => ({
-        hasVote: node.getAttribute("data-has-vote"),
-        text: node.textContent?.trim() ?? "",
-      }));
-    const buttonsBeforeClose = await playerCommandButtons(playerEntry.page);
-    const closedStatus = await playerEntry.page.evaluate(
-      () => window.__fmarchClosePlayerLiveProjection?.(),
-    );
-
-    await hostEntry.page.goto(`${frontendBaseUrl}/g/${phaseClosureGame}/host`, {
-      waitUntil: "networkidle",
-    });
-    await hostEntry.page.waitForFunction(
-      () =>
-        window.__fmarchHostProjection?.phase?.id === "D01" &&
-        window.__fmarchHostProjection?.phase?.locked === false &&
-        window.__fmarchHostVotecountProjection?.some(
-          (row) => row.target === "slot-2" && row.count === 3,
-        ),
-    );
-    const hostBeforeResolve = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      votecount: await hostEntry.page.evaluate(
-        () => window.__fmarchHostVotecountProjection ?? [],
-      ),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-    };
-    const resolveDay = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "D01", locked: true });
-    await hostEntry.page.waitForFunction(
-      () =>
-        window.__fmarchHostDayVoteOutcomesProjection?.some(
-          (row) =>
-            row.phaseId === "D01" &&
-            row.status === "Lynch" &&
-            row.winnerSlot === "slot-2",
-        ),
-    );
-    const hostAfterResolve = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      outcomePanel: await hostEntry.page
-        .locator('[data-testid="host-day-vote-outcome-latest"]')
-        .innerText(),
-    };
-    const apiCommandStateAfterResolve = await fetchJson(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
-    );
-    const apiDayVoteOutcomesAfterResolve = await fetchJson(
-      `${apiBaseUrl}/games/${phaseClosureGame}/day-vote-outcomes`,
-    );
 
     if (
       staleVoteTarget === undefined ||
       staleVoteButton === undefined ||
-      commandStateBeforeClose?.currentVote?.slotId !== "slot-2" ||
-      currentVoteBeforeClose.hasVote !== "true" ||
-      !currentVoteBeforeClose.text.includes("Slot 2") ||
       !buttonsBeforeClose.some(
         (button) =>
           button.action === staleVoteButton.action &&
           button.disabled === false &&
           button.text?.includes(staleVoteTarget.label),
-      ) ||
-      closedStatus?.state !== "closed" ||
-      resolveDay.commandStatus?.state !== "ack" ||
-      hostAfterResolve.phase?.locked !== true ||
-      !hostAfterResolve.dayVoteOutcomes.some(
-        (row) =>
-          row.phaseId === "D01" &&
-          row.status === "Lynch" &&
-          row.winnerSlot === "slot-2",
-      ) ||
-      apiCommandStateAfterResolve?.phase?.locked !== true ||
-      apiCommandStateAfterResolve?.current_vote !== null ||
-      apiCommandStateAfterResolve?.vote_targets?.length !== 0 ||
-      !normalizeDayVoteOutcomeRows(apiDayVoteOutcomesAfterResolve).some(
-        (row) =>
-          row.phaseId === "D01" &&
-          row.status === "Lynch" &&
-          row.winnerSlot === "slot-2",
       )
     ) {
       throw new Error(
