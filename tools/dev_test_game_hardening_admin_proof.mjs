@@ -49,6 +49,7 @@ const requiredChecks = [
   "stale-host-complete",
   "concurrent-host-complete-race",
   "concurrent-player-complete-race",
+  "public-player-complete-reload",
   "stale-player-complete",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",

@@ -5156,6 +5156,41 @@ test("session card and markdown include role credential URLs and tokens", () => 
           { action: "withdraw_vote", disabled: true },
           { action: "submit_post", disabled: true },
         ],
+        publicReloadAfterRace: {
+          status: "passed",
+          routeResponseStatus: 200,
+          surfaceText:
+            "Endgame\nThe game is complete.\nNo older posts\nSubmit post",
+          threadPagerVisible: true,
+          recoveredCommandState: {
+            actorSlot: "slot-7",
+            gameCompleted: true,
+            boundary: "game is complete",
+            actions: [],
+            voteTargets: [],
+          },
+          reloadButtons: [
+            { action: "submit_vote:no_lynch", disabled: true },
+            { action: "withdraw_vote", disabled: true },
+            { action: "submit_post", disabled: true },
+          ],
+          reloadThreadPostBodies: [],
+          reloadPostCount: 0,
+          reloadPostVisible: false,
+          apiCommandStateAfterReload: {
+            game_completed: true,
+            actions: [],
+            vote_targets: [],
+          },
+          apiThreadPostBodiesAfterReload: [],
+          apiThreadPostCount: 0,
+          apiStateAfterReload: {
+            completed: true,
+            slots: [
+              { role_revealed: true, alignment_revealed: true },
+            ],
+          },
+        },
         hostSlotsAfterRace: [
           { role_revealed: true, alignment_revealed: true },
         ],
@@ -5165,6 +5200,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
           vote_targets: [],
         },
         apiThreadHasPost: false,
+        apiThreadPostCount: 0,
         apiStateAfterRace: {
           completed: true,
           slots: [
@@ -5462,6 +5498,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-complete",
       "concurrent-host-complete-race",
       "concurrent-player-complete-race",
+      "public-player-complete-reload",
       "stale-player-complete",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
@@ -5547,7 +5584,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 83);
+  assert.equal(opsArtifacts.proofRun.laneCount, 84);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5664,6 +5701,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-lifecycle-race",
       "concurrent-host-complete-race",
       "concurrent-player-complete-race",
+      "public-player-complete-reload",
       "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
@@ -6190,6 +6228,7 @@ function hardeningAdminProofFixture() {
         "stale-host-complete",
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
+        "public-player-complete-reload",
         "stale-player-complete",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
@@ -6202,6 +6241,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
+        "public-player-complete-reload",
         "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
@@ -6316,6 +6356,7 @@ function seedAdminProofFixture() {
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
+        "public-player-complete-reload",
         "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",

@@ -315,6 +315,8 @@ const replacementStalePrivatePostAfterResolve =
   session.verification.multiplayerHardening.replacementStalePrivatePostAfterResolve;
 const replacementStalePrivatePostAfterComplete =
   session.verification.multiplayerHardening.replacementStalePrivatePostAfterComplete;
+const concurrentPlayerCompleteRace =
+  session.verification.multiplayerHardening.concurrentPlayerCompleteRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -2930,6 +2932,115 @@ assert.equal(
     .slots[0].alignment_revealed,
   true,
 );
+assert.equal(concurrentPlayerCompleteRace.status, "passed");
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.status,
+  "passed",
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.routeResponseStatus,
+  200,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.threadPagerVisible,
+  true,
+);
+assert.match(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.surfaceText,
+  /Endgame/,
+);
+assert.match(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.surfaceText,
+  /The game is complete\./,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.recoveredCommandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.recoveredCommandState
+    .gameCompleted,
+  true,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.recoveredCommandState.actions
+    .length,
+  0,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.recoveredCommandState.voteTargets
+    .length,
+  0,
+);
+assert.match(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.recoveredCommandState.boundary,
+  /game is complete/,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.reloadButtons.some(
+    (button) => button.disabled !== true,
+  ),
+  false,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.apiCommandStateAfterReload
+    .game_completed,
+  true,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.apiCommandStateAfterReload.actions
+    .length,
+  0,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.apiCommandStateAfterReload
+    .vote_targets.length,
+  0,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.apiStateAfterReload.completed,
+  true,
+);
+assert.equal(
+  concurrentPlayerCompleteRace.publicReloadAfterRace.apiStateAfterReload.slots.every(
+    (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+  ),
+  true,
+);
+if (concurrentPlayerCompleteRace.post.state === "ack") {
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.reloadPostCount, 1);
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.reloadPostVisible, true);
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.apiThreadPostCount, 1);
+  assert.equal(
+    concurrentPlayerCompleteRace.publicReloadAfterRace.reloadThreadPostBodies.includes(
+      concurrentPlayerCompleteRace.postBody,
+    ),
+    true,
+  );
+  assert.equal(
+    concurrentPlayerCompleteRace.publicReloadAfterRace.apiThreadPostBodiesAfterReload.includes(
+      concurrentPlayerCompleteRace.postBody,
+    ),
+    true,
+  );
+} else {
+  assert.equal(concurrentPlayerCompleteRace.post.error, "GameAlreadyCompleted");
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.reloadPostCount, 0);
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.reloadPostVisible, false);
+  assert.equal(concurrentPlayerCompleteRace.publicReloadAfterRace.apiThreadPostCount, 0);
+  assert.equal(
+    concurrentPlayerCompleteRace.publicReloadAfterRace.reloadThreadPostBodies.includes(
+      concurrentPlayerCompleteRace.postBody,
+    ),
+    false,
+  );
+  assert.equal(
+    concurrentPlayerCompleteRace.publicReloadAfterRace.apiThreadPostBodiesAfterReload.includes(
+      concurrentPlayerCompleteRace.postBody,
+    ),
+    false,
+  );
+}
 assert.equal(
   session.verification.multiplayerHardening.staleDeadActionConflict.status,
   "passed",

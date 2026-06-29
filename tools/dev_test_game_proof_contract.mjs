@@ -77,6 +77,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-complete",
   "concurrent-host-complete-race",
   "concurrent-player-complete-race",
+  "public-player-complete-reload",
   "stale-player-complete",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
@@ -4564,6 +4565,91 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentPlayerCompleteRace?.apiStateAfterRace?.slots?.every(
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
+    }),
+    lane("public-player-complete-reload", "Public player board reloads completed game truth", {
+      game: hardening.concurrentPlayerCompleteRace?.game ?? null,
+      routeStatus:
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.routeResponseStatus ?? null,
+      gameCompleted:
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.gameCompleted ?? null,
+      postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
+      reloadPostCount:
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.reloadPostCount ?? null,
+      passed:
+        hardening.concurrentPlayerCompleteRace?.status === "passed" &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace?.status ===
+          "passed" &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.routeResponseStatus === 200 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.threadPagerVisible === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace?.surfaceText?.includes(
+          "Endgame",
+        ) === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace?.surfaceText?.includes(
+          "The game is complete.",
+        ) === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.actorSlot === "slot-7" &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.gameCompleted === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.actions?.length === 0 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.voteTargets?.length === 0 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.recoveredCommandState?.boundary?.includes("game is complete") === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.reloadButtons?.some((button) => button.disabled !== true) === false &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiCommandStateAfterReload?.game_completed === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiCommandStateAfterReload?.actions?.length === 0 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiCommandStateAfterReload?.vote_targets?.length === 0 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiStateAfterReload?.completed === true &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiStateAfterReload?.slots?.length === 1 &&
+        hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+          ?.apiStateAfterReload?.slots?.every(
+            (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+          ) === true &&
+        ((hardening.concurrentPlayerCompleteRace?.post?.state === "ack" &&
+          hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+            ?.reloadPostCount === 1 &&
+          hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+            ?.reloadPostVisible === true &&
+          hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+            ?.apiThreadPostCount === 1 &&
+          hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+            ?.reloadThreadPostBodies?.includes(
+              hardening.concurrentPlayerCompleteRace?.postBody,
+            ) === true &&
+          hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+            ?.apiThreadPostBodiesAfterReload?.includes(
+              hardening.concurrentPlayerCompleteRace?.postBody,
+            ) === true) ||
+          (hardening.concurrentPlayerCompleteRace?.post?.state === "reject" &&
+            hardening.concurrentPlayerCompleteRace?.post?.error ===
+              "GameAlreadyCompleted" &&
+            hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+              ?.reloadPostCount === 0 &&
+            hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+              ?.reloadPostVisible === false &&
+            hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+              ?.apiThreadPostCount === 0 &&
+            hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+              ?.reloadThreadPostBodies?.includes(
+                hardening.concurrentPlayerCompleteRace?.postBody,
+              ) === false &&
+            hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
+              ?.apiThreadPostBodiesAfterReload?.includes(
+                hardening.concurrentPlayerCompleteRace?.postBody,
+              ) === false)),
     }),
     lane("stale-player-complete", "Stale player command rejects after live completion", {
       rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
