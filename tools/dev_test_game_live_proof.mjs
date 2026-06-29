@@ -1704,6 +1704,114 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.setup.stalePhase.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.setup.stalePhase.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.setup.phaseActions.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.setup.phaseActions.includes(
+    "lock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.liveResolve.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.liveResolve.commandStatus.streamSeqs
+    .length > 0,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.reject.error,
+  "PhaseLocked",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostResolve.reject.message,
+  /stale phase state/,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.multiplayerHardening.staleHostResolve.reject.streamSeqs,
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.phaseAfterReject.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.phaseAfterReject.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.phaseActionsAfterReject.includes(
+    "unlock_thread",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.phaseActionsAfterReject.includes(
+    "advance_phase",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.phaseActionsAfterReject.includes(
+    "resolve_phase",
+  ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.activityRow.actionId,
+  "resolve_phase",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.dispatchPlan.projectionRefreshKeys.includes(
+    "host",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.apiPhaseAfterReject.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.apiPhaseAfterReject.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.restoreAfterReject.commandStatus
+    .state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.apiPhaseAfterRestore.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.apiPhaseAfterRestore.locked,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostDeadline.status,
   "passed",
 );

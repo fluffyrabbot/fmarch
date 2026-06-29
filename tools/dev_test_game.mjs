@@ -743,6 +743,8 @@ export function markdownSessionCard(card) {
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
         "",
+        `Stale host resolve: ${card.verification.multiplayerHardening.staleHostResolve.reject.message}`,
+        "",
         `Stale host deadline: ${card.verification.multiplayerHardening.staleHostDeadline.reject.message}`,
         "",
         `Stale cohost deadline: ${card.verification.multiplayerHardening.staleCohostDeadline.reject.message}`,
@@ -772,6 +774,7 @@ async function verifySessionCard(card) {
   let staleActionPage;
   let staleDeadActionPage;
   let staleHostPage;
+  let staleHostResolvePage;
   let staleHostDeadlinePage;
   let staleCohostPage;
   let staleReplacementPage;
@@ -790,6 +793,7 @@ async function verifySessionCard(card) {
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
     staleDeadActionPage = await roleEntries.actionPlayer.context.newPage();
     staleHostPage = await roleEntries.host.context.newPage();
+    staleHostResolvePage = await roleEntries.host.context.newPage();
     staleHostDeadlinePage = await roleEntries.host.context.newPage();
     staleCohostPage = await roleEntries.cohost.context.newPage();
     staleReplacementPage = await roleEntries.player.context.newPage();
@@ -839,12 +843,14 @@ async function verifySessionCard(card) {
       staleDeadActionConflict: actionLoop.staleDeadActionConflict,
       staleHostPage,
       staleHostControlSetup: actionLoop.staleHostControlSetup,
+      staleHostResolvePage,
       staleHostDeadlinePage,
       staleHostDeadlineSetup,
       staleCohostPage,
       staleCohostDeadlineSetup: cohostConsole.staleDeadlineSetup,
       game: card.game,
       apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
     });
     replacementConsole = await verifySeededReplacementConsole({
       browser,
@@ -861,6 +867,7 @@ async function verifySessionCard(card) {
     await staleActionPage?.close().catch(() => {});
     await staleDeadActionPage?.close().catch(() => {});
     await staleHostPage?.close().catch(() => {});
+    await staleHostResolvePage?.close().catch(() => {});
     await staleHostDeadlinePage?.close().catch(() => {});
     await staleCohostPage?.close().catch(() => {});
     await staleReplacementPage?.close().catch(() => {});
@@ -1111,6 +1118,51 @@ async function freezeStaleHostDeadlinePage({ staleHostDeadlinePage, game, fronte
     stalePhase,
     deadlineActions,
     phaseActions,
+    closedStatus,
+  };
+}
+
+async function freezeStaleHostResolvePage({ staleHostResolvePage, game, frontendBaseUrl }) {
+  await staleHostResolvePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
+    waitUntil: "networkidle",
+  });
+  await staleHostResolvePage
+    .locator('[data-testid="critical-host-action-resolve_phase"]')
+    .waitFor({ state: "visible" });
+  await staleHostResolvePage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === false,
+  );
+  const stalePhase = await staleHostResolvePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const phaseActions = await visibleHostControlActions(staleHostResolvePage, "phase");
+  const deadlineActions = await visibleHostControlActions(staleHostResolvePage, "deadline");
+  const closedStatus = await staleHostResolvePage.evaluate(() =>
+    window.__fmarchCloseHostLiveProjection?.(),
+  );
+  if (
+    stalePhase?.id !== "D02" ||
+    stalePhase?.locked !== false ||
+    !phaseActions.includes("resolve_phase") ||
+    !phaseActions.includes("lock_thread") ||
+    !deadlineActions.includes("extend_deadline") ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale host resolve setup drifted: ${JSON.stringify({
+        stalePhase,
+        phaseActions,
+        deadlineActions,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    stalePhase,
+    phaseActions,
+    deadlineActions,
     closedStatus,
   };
 }
@@ -2219,12 +2271,14 @@ async function verifySeededMultiplayerHardening({
   staleDeadActionConflict,
   staleHostPage,
   staleHostControlSetup,
+  staleHostResolvePage,
   staleHostDeadlinePage,
   staleHostDeadlineSetup,
   staleCohostPage,
   staleCohostDeadlineSetup,
   game,
   apiBaseUrl,
+  frontendBaseUrl,
 }) {
   const { normalizeCommandResponse } = await importFrontendModule(
     "src/lib/app/command-boundary.mjs",
@@ -2349,6 +2403,40 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     game,
   });
+  const staleHostResolveSetup = await freezeStaleHostResolvePage({
+    staleHostResolvePage,
+    game,
+    frontendBaseUrl,
+  });
+  const liveResolveForStaleHostResolve = await confirmHostAction(hostPage, "resolve_phase");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: true });
+  const staleHostResolveRecovery = await submitStaleHostResolveRecovery({
+    staleHostResolvePage,
+    staleHostResolveSetup,
+    liveResolveForStaleHostResolve,
+    apiBaseUrl,
+    game,
+  });
+  const restoreAfterStaleHostResolve = await confirmHostAction(hostPage, "unlock_thread");
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
+  const hostStateAfterResolveRestore = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    restoreAfterStaleHostResolve.commandStatus?.state !== "ack" ||
+    hostStateAfterResolveRestore.phase?.phase_id !== "D02" ||
+    hostStateAfterResolveRestore.phase?.locked !== false
+  ) {
+    throw new Error(
+      `stale host resolve restore drifted: ${JSON.stringify({
+        restoreAfterStaleHostResolve,
+        apiPhase: hostStateAfterResolveRestore.phase,
+      })}`,
+    );
+  }
+  const staleHostResolve = {
+    ...staleHostResolveRecovery,
+    restoreAfterReject: restoreAfterStaleHostResolve,
+    apiPhaseAfterRestore: hostStateAfterResolveRestore.phase,
+  };
 
   return {
     status: "passed",
@@ -2369,10 +2457,11 @@ async function verifySeededMultiplayerHardening({
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
+    staleHostResolve,
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve and cohost deadline role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -4817,6 +4906,123 @@ async function submitStaleHostControlRecovery({
     commandOutcomes,
     phaseAfterReject,
     visibleActionsAfterReject,
+    activityStatusText,
+    activityRow,
+    dispatchPlan,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
+}
+
+async function submitStaleHostResolveRecovery({
+  staleHostResolvePage,
+  staleHostResolveSetup,
+  liveResolveForStaleHostResolve,
+  apiBaseUrl,
+  game,
+}) {
+  const actionId = "resolve_phase";
+  const staleActionRoot = staleHostResolvePage.getByTestId(`critical-host-action-${actionId}`);
+  await staleActionRoot.getByTestId("critical-host-action-trigger").click();
+  await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
+    state: "visible",
+  });
+  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await staleHostResolvePage.waitForFunction(
+    (expectedActionId) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.error === "PhaseLocked",
+    actionId,
+  );
+  await staleHostResolvePage.waitForFunction(
+    () =>
+      window.__fmarchHostProjection?.phase?.id === "D02" &&
+      window.__fmarchHostProjection?.phase?.locked === true,
+  );
+  const reject = await staleHostResolvePage.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  const commandOutcomes = await staleHostResolvePage.evaluate(
+    () => window.__fmarchHostCommandOutcomes ?? [],
+  );
+  const phaseAfterReject = await staleHostResolvePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const phaseActionsAfterReject = await visibleHostControlActions(
+    staleHostResolvePage,
+    "phase",
+  );
+  const deadlineActionsAfterReject = await visibleHostControlActions(
+    staleHostResolvePage,
+    "deadline",
+  );
+  const activityStatusText = await staleHostResolvePage
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const activityRow = await staleHostResolvePage
+    .getByTestId(`host-command-activity-${actionId}`)
+    .evaluate((node) => ({
+      source: node.getAttribute("data-source"),
+      actionId: node.getAttribute("data-confirmation-action-id"),
+      dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+      text: node.textContent,
+    }));
+  const dispatchPlan = await staleHostResolvePage.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  if (
+    liveResolveForStaleHostResolve?.commandStatus?.state !== "ack" ||
+    !Array.isArray(liveResolveForStaleHostResolve?.commandStatus?.streamSeqs) ||
+    liveResolveForStaleHostResolve.commandStatus.streamSeqs.length === 0 ||
+    liveResolveForStaleHostResolve?.commandStatus?.requestEnvelope?.body?.body?.command
+      ?.ResolvePhase?.game !== game ||
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    reject?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(reject?.streamSeqs) ||
+    !reject?.message?.includes("stale phase state") ||
+    phaseAfterReject?.id !== "D02" ||
+    phaseAfterReject?.locked !== true ||
+    !phaseActionsAfterReject.includes("unlock_thread") ||
+    !phaseActionsAfterReject.includes("advance_phase") ||
+    phaseActionsAfterReject.includes("resolve_phase") ||
+    phaseActionsAfterReject.includes("lock_thread") ||
+    !deadlineActionsAfterReject.includes("extend_deadline") ||
+    !activityStatusText.includes("Reject PhaseLocked") ||
+    activityRow.source !== "outcome" ||
+    activityRow.actionId !== actionId ||
+    activityRow.dispatchKind !== actionId ||
+    dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    hostStateAfterReject.phase?.phase_id !== "D02" ||
+    hostStateAfterReject.phase?.locked !== true
+  ) {
+    throw new Error(
+      `stale host resolve recovery drifted: ${JSON.stringify({
+        staleHostResolveSetup,
+        liveResolveForStaleHostResolve,
+        reject,
+        commandOutcomes,
+        phaseAfterReject,
+        phaseActionsAfterReject,
+        deadlineActionsAfterReject,
+        activityStatusText,
+        activityRow,
+        dispatchPlan,
+        apiPhase: hostStateAfterReject.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    actionId,
+    setup: staleHostResolveSetup,
+    liveResolve: liveResolveForStaleHostResolve,
+    reject,
+    commandOutcomes,
+    phaseAfterReject,
+    phaseActionsAfterReject,
+    deadlineActionsAfterReject,
     activityStatusText,
     activityRow,
     dispatchPlan,

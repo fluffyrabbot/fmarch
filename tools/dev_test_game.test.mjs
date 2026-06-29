@@ -2012,6 +2012,64 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         apiPhaseAfterReject: { phase_id: "D02", locked: false },
       },
+      staleHostResolve: {
+        status: "passed",
+        actionId: "resolve_phase",
+        setup: {
+          stalePhase: { id: "D02", locked: false },
+          phaseActions: ["resolve_phase", "lock_thread"],
+          deadlineActions: ["extend_deadline"],
+          closedStatus: { state: "closed" },
+        },
+        liveResolve: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [50],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: { ResolvePhase: { game } },
+                },
+              },
+            },
+          },
+        },
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandOutcomes: [
+          {
+            actionId: "resolve_phase",
+            state: "reject",
+            error: "PhaseLocked",
+          },
+        ],
+        phaseAfterReject: { id: "D02", locked: true },
+        phaseActionsAfterReject: ["unlock_thread", "advance_phase"],
+        deadlineActionsAfterReject: ["extend_deadline"],
+        activityStatusText:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        activityRow: {
+          source: "outcome",
+          actionId: "resolve_phase",
+          dispatchKind: "resolve_phase",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        apiPhaseAfterReject: { phase_id: "D02", locked: true },
+        restoreAfterReject: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [51],
+          },
+        },
+        apiPhaseAfterRestore: { phase_id: "D02", locked: false },
+      },
       staleHostDeadline: {
         status: "passed",
         actionId: "extend_deadline",
@@ -2152,6 +2210,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
+  assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
   assert(markdown.includes("Stale host deadline: Reject PhaseLocked"));
   assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
   const proofRun = buildDevTestGameProofRun(card, {
@@ -2204,6 +2263,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-host-control",
+      "stale-host-resolve",
       "stale-host-deadline",
       "stale-cohost-deadline",
     ],
@@ -2277,7 +2337,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 42);
+  assert.equal(opsArtifacts.proofRun.laneCount, 43);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2834,6 +2894,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict",
         "stale-action-conflict-message",
         "stale-host-control",
+        "stale-host-resolve",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ],
