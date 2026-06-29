@@ -8,6 +8,7 @@ import {
   readLocalIdentityAdapterProof,
   readLocalNextAction,
   readLocalOpsArtifacts,
+  readLocalProofGraph,
   readLocalReleaseReadinessChecklist,
   readLocalSeedFixtureSummary,
   readLocalSpineManifest,
@@ -39,6 +40,7 @@ export async function load({ cookies, locals, fetch, url }) {
     identityAdapterProof: await readLocalIdentityAdapterProof(),
     spineManifest: await readLocalSpineManifest(),
     adminSpineProof: await readLocalAdminSpineProof(),
+    proofGraph: await readLocalProofGraph(),
     nextAction: await readLocalNextAction(),
     proofFreshness: await readLocalProofFreshness(),
   });

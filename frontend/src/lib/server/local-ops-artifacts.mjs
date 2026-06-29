@@ -15,6 +15,7 @@ const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
 const DEFAULT_ADMIN_SPINE_ADMIN_PROOF =
   "target/dev-test-game/admin-spine-admin-proof.json";
 const DEFAULT_NEXT_ACTION = "target/dev-test-game/next-action.json";
+const DEFAULT_PROOF_GRAPH = "target/dev-test-game/proof-graph.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -190,6 +191,13 @@ export async function readLocalNextAction({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_NEXT_ACTION,
     fallback: DEFAULT_NEXT_ACTION,
+  });
+}
+
+export async function readLocalProofGraph({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH,
+    fallback: DEFAULT_PROOF_GRAPH,
   });
 }
 

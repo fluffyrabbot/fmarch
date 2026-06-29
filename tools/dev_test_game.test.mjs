@@ -52,6 +52,10 @@ import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
 } from "./dev_test_game_next_action.mjs";
+import {
+  assertDevTestGameProofGraph,
+  buildDevTestGameProofGraph,
+} from "./dev_test_game_proof_graph.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -561,6 +565,108 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
       [2, "release", "missing", 13, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
     ],
+  );
+});
+
+test("dev test-game proof graph records local proof role URLs and recovery edges", () => {
+  const adminSpineProof = adminSpineProofFixture();
+  const spineManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 2,
+        freshCount: 1,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "proof-run",
+          label: "Dev test-game proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "stale",
+        },
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+        },
+      ],
+    },
+    adminSpineProof,
+  });
+  const graph = buildDevTestGameProofGraph(
+    {
+      spineManifest,
+      adminSpineProof,
+    },
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    },
+  );
+
+  assertDevTestGameProofGraph(graph);
+  assert.equal(graph.summary.nodeCount, 12);
+  assert.equal(graph.summary.roleUrlCount, 12);
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) =>
+        ["admin-spine", "spine-manifest", "proof-freshness", "next-action"].includes(
+          node.id,
+        ),
+      )
+      .map((node) => [
+        node.id,
+        node.kind,
+        node.artifact,
+        node.roleUrl,
+        node.recoveryCommand,
+      ]),
+    [
+      [
+        "admin-spine",
+        "aggregate-proof",
+        "target/dev-test-game/admin-spine-proof.json",
+        "/admin/audit/local-admin-spine?game=<seeded-game>",
+        "npm run test:dev-test-game-admin-spine",
+      ],
+      [
+        "spine-manifest",
+        "manifest",
+        "target/dev-test-game/spine-manifest.json",
+        "/admin/audit/local-spine-manifest?game=<seeded-game>",
+        "npm run test:dev-test-game-spine-manifest-admin-proof",
+      ],
+      [
+        "proof-freshness",
+        "freshness-dashboard",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "/admin/audit/local-proof-freshness?game=<seeded-game>",
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      ],
+      [
+        "next-action",
+        "recovery-receipt",
+        "target/dev-test-game/next-action.json",
+        "/admin/audit/local-next-action?game=<seeded-game>",
+        "test:dev-test-game-proof-freshness-admin-proof",
+      ],
+    ],
+  );
+  assert(
+    graph.edges.some(
+      (edge) =>
+        edge.from === "proof-freshness" &&
+        edge.to === "next-action" &&
+        edge.relationship === "recovers-through",
+    ),
   );
 });
 
@@ -2613,12 +2719,80 @@ function spineManifestFixture() {
       live: { plan: [{ script: "dev:test-game:prebuild" }] },
       backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
       identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
-      adminSpine: { plan: [{ script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" }] },
+      adminSpine: {
+        script: "test:dev-test-game-admin-spine",
+        proofArtifact: "target/dev-test-game/admin-spine-proof.json",
+        plan: [{ script: "tools/dev_test_game_spine_manifest_admin_proof.mjs" }],
+      },
+      proofFreshness: {
+        script: "test:dev-test-game-proof-freshness-admin-proof",
+        proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+      },
+      nextAction: {
+        script: "test:dev-test-game-next-action",
+        proofArtifact: "target/dev-test-game/next-action.json",
+      },
+    },
+    terminalArtifacts: [
+      {
+        id: "next-action",
+        command: "test:dev-test-game-next-action",
+        path: "target/dev-test-game/next-action.json",
+      },
+      {
+        id: "next-action-admin-proof",
+        command: "test:dev-test-game-next-action-admin-proof",
+        path: "target/dev-test-game/next-action-admin-proof.json",
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        dependsOn: [
+          "target/dev-test-game/next-action.json",
+          "target/dev-test-game/proof-run.json",
+        ],
+      },
+    ],
+    artifactFreshness: {
+      status: "blocked",
+      proof: "dev-test-game-proof-freshness",
+      proofCommand: "test:dev-test-game-proof-freshness-admin-proof",
+      proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+      summary: {
+        artifactCount: 2,
+        freshCount: 1,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      nextCommand:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      proofBoundary: "Local proof freshness dashboard.",
+      artifacts: [
+        {
+          id: "proof-run",
+          label: "Dev test-game proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "stale",
+          refreshCommand:
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+          nextCommand:
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+          refreshSource: "manifest-default",
+        },
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          refreshCommand: "npm run test:dev-test-game-spine-manifest",
+          refreshSource: "manifest-default",
+        },
+      ],
     },
     artifacts: [
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/spine-manifest.md",
       "target/dev-test-game/spine-manifest-admin-proof.json",
+      "target/dev-test-game/proof-freshness-admin-proof.json",
+      "target/dev-test-game/next-action.json",
+      "target/dev-test-game/next-action-admin-proof.json",
     ],
     checks: [
       { id: "live-spine-order-recorded", status: "passed" },

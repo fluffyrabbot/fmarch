@@ -93,6 +93,8 @@ target/dev-test-game/identity-admin-proof.json
 target/dev-test-game/admin-spine-proof.json
 target/dev-test-game/spine-manifest.json
 target/dev-test-game/spine-manifest.md
+target/dev-test-game/proof-graph.json
+target/dev-test-game/proof-graph-admin-proof.json
 target/dev-test-game/next-action.json
 target/dev-test-game/next-action-admin-proof.json
 target/dev-test-game/spine-manifest-admin-proof.json
@@ -201,6 +203,20 @@ npm run test:dev-test-game-spine-manifest
 The local-spine-manifest detail links to the proof-freshness dashboard and the
 ranked next-action receipt, making the manifest a navigable proof graph rather
 than only a static artifact inventory.
+
+The generated proof graph, which records local proof nodes, role URLs, artifact
+paths, dependency edges, and recovery commands without release or production
+claims, is:
+
+```sh
+npm run test:dev-test-game-proof-graph
+```
+
+The seeded admin overview-to-local-proof-graph detail browser proof is:
+
+```sh
+npm run test:dev-test-game-proof-graph-admin-proof
+```
 
 The generated next-action receipt, which reads the spine manifest and emits the
 highest-priority stale or missing development-spine recovery/freshness command
@@ -518,7 +534,11 @@ artifact freshness dashboard is reachable from the seeded admin overview, then
 regenerates `target/dev-test-game/next-action.json` and writes
 `target/dev-test-game/next-action-admin-proof.json`, proving the generated
 next-action receipt is reachable from the seeded admin overview in the native
-local-next-action detail route before the run is treated as green.
+local-next-action detail route before the run is treated as green. The proof
+graph command writes `target/dev-test-game/proof-graph.json`, and the graph
+admin proof writes `target/dev-test-game/proof-graph-admin-proof.json`, proving
+the generated graph nodes and related role URLs are inspectable from the seeded
+admin overview.
 Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse
 controls, production session-secret policy, hosted audit retention/export,
 hosted deployment, hosted demo fixtures and sanitized demo-data policy,

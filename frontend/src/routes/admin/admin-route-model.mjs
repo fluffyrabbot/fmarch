@@ -28,6 +28,7 @@ export async function buildAdminRouteData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  proofGraph = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -128,42 +129,46 @@ export async function buildAdminRouteData({
     ...coldData,
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
-        appendLocalProofFreshnessAudit(
-          appendLocalAdminSpineAudit(
-            appendLocalSpineManifestAudit(
-              appendLocalIdentityAdapterAudit(
-                appendLocalBackupRestoreAudit(
-                  appendLocalReleaseReadinessAudit(
-                    appendLocalSeedFixtureAudit(
-                      appendLocalOpsArtifactsAudit(
-                        appendLocalHardeningAudit(
-                          appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                          proofRun,
+        appendLocalProofGraphAudit(
+          appendLocalProofFreshnessAudit(
+            appendLocalAdminSpineAudit(
+              appendLocalSpineManifestAudit(
+                appendLocalIdentityAdapterAudit(
+                  appendLocalBackupRestoreAudit(
+                    appendLocalReleaseReadinessAudit(
+                      appendLocalSeedFixtureAudit(
+                        appendLocalOpsArtifactsAudit(
+                          appendLocalHardeningAudit(
+                            appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                            proofRun,
+                            { game },
+                          ),
+                          opsArtifacts,
                           { game },
                         ),
-                        opsArtifacts,
+                        seedFixtureSummary,
                         { game },
                       ),
-                      seedFixtureSummary,
+                      releaseReadinessChecklist,
                       { game },
                     ),
-                    releaseReadinessChecklist,
+                    backupRestoreProof,
                     { game },
                   ),
-                  backupRestoreProof,
+                  identityAdapterProof,
                   { game },
                 ),
-                identityAdapterProof,
+                spineManifest,
                 { game },
               ),
-              spineManifest,
+              adminSpineProof,
               { game },
             ),
-            adminSpineProof,
-            { game },
+            proofFreshness,
+            { game, nextAction },
           ),
-          proofFreshness,
-          { game, nextAction },
+          proofGraph,
+          { game },
         ),
         nextAction,
         { game },
@@ -221,6 +226,7 @@ export async function buildAdminAuditDetailData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  proofGraph = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -240,6 +246,7 @@ export async function buildAdminAuditDetailData({
     identityAdapterProof,
     spineManifest,
     adminSpineProof,
+    proofGraph,
     nextAction,
     proofFreshness,
   });
@@ -391,6 +398,73 @@ export function appendLocalNextActionAudit(audit, nextAction, { game }) {
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
+export function appendLocalProofGraphAudit(audit, proofGraph, { game }) {
+  const row = normalizeLocalProofGraphAudit(proofGraph, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
+  if (
+    proofGraph === null ||
+    typeof proofGraph !== "object" ||
+    proofGraph.version !== 1 ||
+    proofGraph.proof !== "dev-test-game-proof-graph" ||
+    proofGraph.status !== "passed" ||
+    proofGraph.scope !== "local-dev-test-game-proof-graph" ||
+    proofGraph.releaseReady !== false ||
+    proofGraph.productionReady !== false
+  ) {
+    return null;
+  }
+  const nodes = Array.isArray(proofGraph.nodes) ? proofGraph.nodes : [];
+  const edges = Array.isArray(proofGraph.edges) ? proofGraph.edges : [];
+  const roleNodes = nodes.filter(
+    (node) => typeof node?.roleUrl === "string" && node.roleUrl.trim() !== "",
+  );
+  return Object.freeze({
+    id: "local-proof-graph",
+    label: "Local proof graph",
+    status: `${nodes.length} proof nodes, ${edges.length} edges`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local development-spine proof graph",
+    boundaryDetail:
+      proofGraph.proofBoundary ??
+      "Generated local proof graph without hosted or release-readiness claims.",
+    href: "target/dev-test-game/proof-graph.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+    checks: Object.freeze(
+      nodes.map((node) =>
+        Object.freeze({
+          id: String(node.id),
+          status: String(node.status ?? "recorded"),
+        }),
+      ),
+    ),
+    relatedLinks: Object.freeze(
+      roleNodes.slice(0, 8).map((node) =>
+        Object.freeze({
+          id: String(node.id),
+          label: String(node.label ?? node.id),
+          href: seededRoleUrlToAdminHref(node.roleUrl, { game }),
+          status: String(node.status ?? "recorded"),
+          command: String(node.recoveryCommand ?? node.proofCommand ?? ""),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      nodeCount: Number(proofGraph.summary?.nodeCount ?? nodes.length),
+      edgeCount: Number(proofGraph.summary?.edgeCount ?? edges.length),
+      roleUrlCount: Number(proofGraph.summary?.roleUrlCount ?? roleNodes.length),
+      recoveryTargetCount: Number(proofGraph.summary?.recoveryTargetCount ?? 0),
+      releaseReady: proofGraph.releaseReady === true,
+      productionReady: proofGraph.productionReady === true,
+    }),
+  });
+}
+
 export function normalizeLocalNextActionAudit(nextAction, { game }) {
   if (
     nextAction === null ||
@@ -476,6 +550,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       productionReady: nextAction.productionReady === true,
     }),
   });
+}
+
+function seededRoleUrlToAdminHref(roleUrl, { game }) {
+  return String(roleUrl).replace("<seeded-game>", encodeURIComponent(game));
 }
 
 function normalizeNextActionSelectionTrace(selectionTrace) {
