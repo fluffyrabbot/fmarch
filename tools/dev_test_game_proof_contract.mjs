@@ -40,6 +40,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote",
   "concurrent-vote-race",
   "host-votecount-publication",
+  "host-lifecycle-control",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
@@ -1200,6 +1201,57 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.hostVotecountPublication?.activityStatusText?.includes(
           "Ack: stream seqs",
         ) === true,
+    }),
+    lane("host-lifecycle-control", "Host slot lifecycle control disables player commands", {
+      targetSlot: hardening.hostLifecycleControl?.targetSlot ?? null,
+      markDeadState:
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.state ?? null,
+      commandStatus:
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.status ?? null,
+      apiDeadStatus: hardening.hostLifecycleControl?.apiSlotAfterDead?.status ?? null,
+      actorStatusAfterDead:
+        hardening.hostLifecycleControl?.playerCommandStateAfterDead?.actorStatus ?? null,
+      directPostError: hardening.hostLifecycleControl?.directPost?.error ?? null,
+      restoreState: hardening.hostLifecycleControl?.restoreAlive?.state ?? null,
+      apiRestoredStatus:
+        hardening.hostLifecycleControl?.apiSlotAfterRestore?.status ?? null,
+      actorStatusAfterRestore:
+        hardening.hostLifecycleControl?.playerCommandStateAfterRestore?.actorStatus ??
+        null,
+      passed:
+        hardening.hostLifecycleControl?.status === "passed" &&
+        hardening.hostLifecycleControl?.targetSlot === "slot-7" &&
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.state === "ack" &&
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.game === session?.game &&
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.slot === "slot-7" &&
+        hardening.hostLifecycleControl?.markDead?.commandStatus?.requestEnvelope?.body
+          ?.body?.command?.SetSlotStatus?.status === "dead" &&
+        hardening.hostLifecycleControl?.hostReplacementAfterDead?.lifecycleLabel ===
+          "Dead" &&
+        hardening.hostLifecycleControl?.apiSlotAfterDead?.alive === false &&
+        hardening.hostLifecycleControl?.apiSlotAfterDead?.status === "dead" &&
+        hardening.hostLifecycleControl?.playerCommandStateAfterDead?.actorAlive ===
+          false &&
+        hardening.hostLifecycleControl?.playerCommandStateAfterDead?.actorStatus ===
+          "dead" &&
+        hardening.hostLifecycleControl?.playerCommandStateAfterDead?.actions?.length ===
+          0 &&
+        hardening.hostLifecycleControl?.disabledControls?.vote === true &&
+        hardening.hostLifecycleControl?.disabledControls?.withdraw === true &&
+        hardening.hostLifecycleControl?.disabledControls?.post === true &&
+        hardening.hostLifecycleControl?.actionControlCount === 0 &&
+        hardening.hostLifecycleControl?.directPost?.state === "reject" &&
+        hardening.hostLifecycleControl?.directPost?.error === "SlotNotAlive" &&
+        hardening.hostLifecycleControl?.restoreAlive?.state === "ack" &&
+        hardening.hostLifecycleControl?.apiSlotAfterRestore?.alive === true &&
+        hardening.hostLifecycleControl?.apiSlotAfterRestore?.status === "alive" &&
+        hardening.hostLifecycleControl?.playerCommandStateAfterRestore?.actorAlive ===
+          true &&
+        hardening.hostLifecycleControl?.playerCommandStateAfterRestore?.actorStatus ===
+          "alive",
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,

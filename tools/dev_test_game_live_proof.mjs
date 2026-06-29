@@ -1341,6 +1341,62 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.targetSlot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.markDead.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.markDead.commandStatus
+    .requestEnvelope.body.body.command.SetSlotStatus.status,
+  "dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.hostReplacementAfterDead
+    .lifecycleLabel,
+  "Dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.apiSlotAfterDead.alive,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.playerCommandStateAfterDead
+    .actorStatus,
+  "dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.disabledControls.post,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.actionControlCount,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.directPost.error,
+  "SlotNotAlive",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.restoreAlive.state,
+  "ack",
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl.apiSlotAfterRestore.alive,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.hostLifecycleControl
+    .playerCommandStateAfterRestore.actorStatus,
+  "alive",
+);
+assert.equal(
   session.verification.multiplayerHardening.staleDeadActionConflict.status,
   "passed",
 );

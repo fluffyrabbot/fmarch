@@ -24,6 +24,7 @@ const requiredChecks = [
   "player-action-boundary",
   "private-channel",
   "host-votecount-publication",
+  "host-lifecycle-control",
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-invalid-target-recovery",

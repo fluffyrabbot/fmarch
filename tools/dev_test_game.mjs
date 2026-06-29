@@ -735,6 +735,8 @@ export function markdownSessionCard(card) {
         "",
         `Concurrent vote race: ${card.verification.multiplayerHardening.concurrentVoteRace.targetSlot} count ${card.verification.multiplayerHardening.concurrentVoteRace.apiProjection.count}`,
         "",
+        `Host lifecycle: ${card.verification.multiplayerHardening.hostLifecycleControl.markDead.statusMessage}`,
+        "",
         `Stale action conflict: ${card.verification.multiplayerHardening.staleActionConflict.reject.message}`,
         "",
         `Stale control: ${card.verification.multiplayerHardening.staleHostControl.reject.message}`,
@@ -2031,6 +2033,13 @@ async function verifySeededMultiplayerHardening({
     apiBaseUrl,
     concurrentVoteRace,
   });
+  const hostLifecycleControl = await verifyHostLifecycleControl({
+    hostPage,
+    playerPage,
+    game,
+    apiBaseUrl,
+    normalizeCommandResponse,
+  });
 
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const staleHostControl = await submitStaleHostControlRecovery({
@@ -2060,12 +2069,13 @@ async function verifySeededMultiplayerHardening({
     stalePlayerVote,
     concurrentVoteRace,
     hostVotecountPublication,
+    hostLifecycleControl,
     staleDeadActionConflict,
     staleActionConflict,
     staleHostControl,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, proved two concurrent player vote commands converge to the same projected votecount, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved the seeded host role URL can mark Slot 7 dead through the browser control and the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored, proved a frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host and cohost role URLs clicked old controls, rendered PhaseLocked command-activity receipts, refreshed to D02, and exposed their current valid control sets.",
   };
 }
 
@@ -2139,6 +2149,160 @@ async function verifyHostVotecountPublication({
     activityStatusText,
     proof:
       "The seeded host role URL clicked the hydrated Publish count control after D02 votes existed, sent a PublishVotecount command through /commands, rendered the ACK in host command activity, and the official projection-derived votecount post appeared in the player browser thread and API thread.",
+  };
+}
+
+async function verifyHostLifecycleControl({
+  hostPage,
+  playerPage,
+  game,
+  apiBaseUrl,
+  normalizeCommandResponse,
+}) {
+  const targetSlot = "slot-7";
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
+  await gotoPlayerBoard(playerPage, game);
+  await playerPage.waitForFunction(
+    (slot) =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === slot &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive",
+    targetSlot,
+  );
+
+  const markDead = await confirmHostAction(hostPage, "mark_dead");
+  const markedCommand =
+    markDead.commandStatus?.requestEnvelope?.body?.body?.command?.SetSlotStatus;
+  if (
+    markedCommand?.game !== game ||
+    markedCommand?.slot !== targetSlot ||
+    markedCommand?.status !== "dead"
+  ) {
+    throw new Error(`mark_dead command drifted: ${JSON.stringify(markedCommand)}`);
+  }
+  await hostPage.waitForFunction(
+    () => window.__fmarchHostProjection?.replacement?.lifecycleLabel === "Dead",
+  );
+  const hostReplacementAfterDead = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const apiSlotAfterDead = await fetchResolvedSlotState({ apiBaseUrl, game, slot: targetSlot });
+  await playerPage.waitForFunction(
+    (slot) =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === slot &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "dead" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+    targetSlot,
+  );
+  const playerCommandStateAfterDead = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const disabledControls = {
+    vote: await playerPage.locator('[data-action="submit_vote"]').isDisabled(),
+    withdraw: await playerPage.locator('[data-action="withdraw_vote"]').isDisabled(),
+    post: await playerPage.locator('[data-action="submit_post"]').isDisabled(),
+  };
+  const actionControlCount = await playerPage.locator('[data-action^="submit_action"]').count();
+  const directPostCommandId = crypto.randomUUID();
+  const directPostRaw = await sendBrowserCommand(playerPage, {
+    principalUserId: "player-mira",
+    commandId: directPostCommandId,
+    command: {
+      SubmitPost: {
+        game,
+        channel_id: "main",
+        actor_slot: targetSlot,
+        body: "Host lifecycle dead-slot recovery proof.",
+        media: null,
+      },
+    },
+  });
+  const directPost = normalizeCommandResponse({
+    commandId: directPostCommandId,
+    requestEnvelope: directPostRaw.requestEnvelope,
+    response: { status: directPostRaw.httpStatus },
+    serverEnvelope: directPostRaw.serverEnvelope,
+  });
+  if (
+    apiSlotAfterDead?.alive !== false ||
+    apiSlotAfterDead?.status !== "dead" ||
+    playerCommandStateAfterDead?.actorAlive !== false ||
+    playerCommandStateAfterDead?.actorStatus !== "dead" ||
+    !Object.values(disabledControls).every(Boolean) ||
+    actionControlCount !== 0 ||
+    directPost.state !== "reject" ||
+    directPost.error !== "SlotNotAlive" ||
+    !directPost.message.includes("slot is no longer alive")
+  ) {
+    throw new Error(
+      `host lifecycle dead recovery drifted: ${JSON.stringify({
+        apiSlotAfterDead,
+        playerCommandStateAfterDead,
+        disabledControls,
+        actionControlCount,
+        directPost,
+      })}`,
+    );
+  }
+
+  const restoreAlive = await setSlotLifecycleViaHost({
+    hostPage,
+    game,
+    slot: targetSlot,
+    status: "alive",
+  });
+  await hostPage.waitForFunction(
+    () => window.__fmarchHostProjection?.replacement?.lifecycleLabel === "Alive",
+  );
+  const hostReplacementAfterRestore = await hostPage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const apiSlotAfterRestore = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: targetSlot,
+  });
+  await playerPage.waitForFunction(
+    (slot) =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === slot &&
+      window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+      window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive",
+    targetSlot,
+  );
+  const playerCommandStateAfterRestore = await playerPage.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  if (
+    apiSlotAfterRestore?.alive !== true ||
+    apiSlotAfterRestore?.status !== "alive" ||
+    playerCommandStateAfterRestore?.actorAlive !== true ||
+    playerCommandStateAfterRestore?.actorStatus !== "alive"
+  ) {
+    throw new Error(
+      `host lifecycle restore drifted: ${JSON.stringify({
+        apiSlotAfterRestore,
+        playerCommandStateAfterRestore,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    targetSlot,
+    markDead,
+    hostReplacementAfterDead,
+    apiSlotAfterDead,
+    playerCommandStateAfterDead,
+    disabledControls,
+    actionControlCount,
+    directPost,
+    restoreAlive,
+    hostReplacementAfterRestore,
+    apiSlotAfterRestore,
+    playerCommandStateAfterRestore,
+    proof:
+      "The seeded host role URL clicked Mark dead for Slot 7, emitted SetSlotStatus through /commands, host and player browser projections rendered Slot 7 dead, the affected player role URL disabled vote/post/action controls and rejected a direct SubmitPost as SlotNotAlive, then the host restored Slot 7 alive so later seeded proofs continue from the canonical game state.",
   };
 }
 

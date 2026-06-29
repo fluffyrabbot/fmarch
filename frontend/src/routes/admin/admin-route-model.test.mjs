@@ -554,7 +554,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 37,
+    laneCount: 38,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1056,7 +1056,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 37,
+    laneCount: 38,
     releaseReady: false,
     productionReady: false,
   });
@@ -1071,7 +1071,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
   const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
   assert.equal(coreLoop.label, "Local core loop");
-  assert.equal(coreLoop.status, "19 core loop lanes passed");
+  assert.equal(coreLoop.status, "20 core loop lanes passed");
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
   assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
   assert.deepEqual(
@@ -1085,6 +1085,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
       "player-action-boundary",
       "private-channel",
       "host-votecount-publication",
+      "host-lifecycle-control",
       "replacement-host-issued-invite",
       "replacement-pending-player",
       "replacement-invalid-target-recovery",
@@ -1101,7 +1102,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 37,
+    laneCount: 38,
     releaseReady: false,
     productionReady: false,
   });
@@ -1118,7 +1119,7 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
-  assert.equal(data.audit.checks.length, 19);
+  assert.equal(data.audit.checks.length, 20);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1130,6 +1131,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["player-action-boundary", "passed"],
       ["private-channel", "passed"],
       ["host-votecount-publication", "passed"],
+      ["host-lifecycle-control", "passed"],
       ["replacement-host-issued-invite", "passed"],
       ["replacement-pending-player", "passed"],
       ["replacement-invalid-target-recovery", "passed"],
@@ -1625,6 +1627,7 @@ function proofRunFixture() {
     "stale-player-vote",
     "concurrent-vote-race",
     "host-votecount-publication",
+    "host-lifecycle-control",
     "stale-dead-action-conflict",
     "stale-action-conflict",
     "stale-action-conflict-message",
@@ -1665,7 +1668,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 37,
+      laneCount: 38,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },

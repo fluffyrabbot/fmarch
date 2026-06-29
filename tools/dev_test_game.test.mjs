@@ -1776,6 +1776,48 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         activityStatusText: "Ack: stream seqs 47",
       },
+      hostLifecycleControl: {
+        status: "passed",
+        targetSlot: "slot-7",
+        markDead: {
+          statusMessage: "Ack: stream seqs 48",
+          commandStatus: {
+            state: "ack",
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    SetSlotStatus: { game, slot: "slot-7", status: "dead" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostReplacementAfterDead: { lifecycleLabel: "Dead" },
+        apiSlotAfterDead: { alive: false, status: "dead" },
+        playerCommandStateAfterDead: {
+          actorAlive: false,
+          actorStatus: "dead",
+          actions: [],
+        },
+        disabledControls: {
+          vote: true,
+          withdraw: true,
+          post: true,
+        },
+        actionControlCount: 0,
+        directPost: {
+          state: "reject",
+          error: "SlotNotAlive",
+        },
+        restoreAlive: { state: "ack" },
+        apiSlotAfterRestore: { alive: true, status: "alive" },
+        playerCommandStateAfterRestore: {
+          actorAlive: true,
+          actorStatus: "alive",
+        },
+      },
       staleDeadActionConflict: {
         status: "passed",
         markDead: { state: "ack" },
@@ -1950,6 +1992,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
   assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
+  assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale cohost deadline: Reject PhaseLocked"));
@@ -1995,6 +2038,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-vote",
       "concurrent-vote-race",
       "host-votecount-publication",
+      "host-lifecycle-control",
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
@@ -2071,7 +2115,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 37);
+  assert.equal(opsArtifacts.proofRun.laneCount, 38);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2568,6 +2612,7 @@ function coreLoopAdminProofFixture() {
         "player-action-boundary",
         "private-channel",
         "host-votecount-publication",
+        "host-lifecycle-control",
         "replacement-host-issued-invite",
         "replacement-pending-player",
         "replacement-invalid-target-recovery",
