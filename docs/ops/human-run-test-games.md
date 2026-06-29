@@ -325,6 +325,13 @@ player role URL sees the `player_killed` / `day_vote` notice with disabled
 controls, and both the host and target player role URLs render the official
 day-vote outcome panel from the `/day-vote-outcomes` projection.
 
+The day-vote no-lynch proof uses a second disposable seeded game: two committed
+`no_lynch` votes are present before the host role URL resolves D01, the official
+`NoLynch` outcome renders on both host and surviving-player role URLs, and the
+surviving player remains alive without a `day_vote` death notice. This proves the
+no-elimination branch of the visible day-vote outcome surface; it does not add a
+dedicated player no-lynch button yet.
+
 The action-loop proof continues in the same seeded game: the host page resolves
 D01, clicks the hydrated `Advance by deadline` control to record deadline
 evidence and advance to N01, the `actionPlayer` page renders a live

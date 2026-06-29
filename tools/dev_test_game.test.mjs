@@ -964,6 +964,37 @@ test("session card and markdown include role credential URLs and tokens", () => 
       targetOutcomePanel: "D01 Lynch\nSlot 2 was eliminated by official vote.",
       targetOutcomeTally: "Slot 2\n4/3",
     },
+    dayVoteNoLynch: {
+      status: "passed",
+      proof: "host resolved a seeded no-lynch day vote without a death",
+      resolveDay: { commandStatus: { state: "ack" } },
+      hostAfterResolve: {
+        dayVoteOutcomes: [
+          { phaseId: "D01", status: "NoLynch", winnerSlot: null },
+        ],
+        outcomePanel: "D01 NoLynch\nThe official vote resolved without an elimination.",
+        outcomeTally: "No lynch\n2/2",
+      },
+      dayVoteOutcome: {
+        phase_id: "D01",
+        status: "NoLynch",
+        winner_slot: null,
+        tallies: { no_lynch: 2 },
+      },
+      survivorSlot: { slot_id: "slot_3", alive: true, status: "alive" },
+      survivorCommandState: {
+        actorSlot: "slot_3",
+        actorAlive: true,
+        actorStatus: "alive",
+      },
+      survivorNotifications: [],
+      survivorDayVoteOutcomes: [
+        { phaseId: "D01", status: "NoLynch", winnerSlot: null },
+      ],
+      survivorOutcomePanel:
+        "D01 NoLynch\nThe official vote resolved without an elimination.",
+      survivorOutcomeTally: "No lynch\n2/2",
+    },
     actionLoop: {
       status: "passed",
       proof: "host resolved N01 and action player advanced to D02",
@@ -2556,6 +2587,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Reject PhaseLocked: phase locked"));
   assert(markdown.includes("## Day Vote Resolution Proof"));
   assert(markdown.includes("Outcome: Lynch slot-2"));
+  assert(markdown.includes("## Day Vote No-Lynch Proof"));
+  assert(markdown.includes("Outcome: NoLynch 2"));
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Invalid Action Recovery Proof"));
@@ -2624,6 +2657,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "cohost-console",
       "core-loop",
       "day-vote-resolution",
+      "day-vote-no-lynch",
       "action-loop",
       "host-deadline-advance",
       "stale-deadline-advance",
@@ -2742,7 +2776,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 51);
+  assert.equal(opsArtifacts.proofRun.laneCount, 52);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -2832,6 +2866,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "cohost-deadline-control",
       "player-vote-recovery",
       "day-vote-resolution",
+      "day-vote-no-lynch",
       "player-action-denied",
       "invalid-action-recovery",
       "resolution-receipt",
@@ -3234,6 +3269,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [
         "core-loop",
         "day-vote-resolution",
+        "day-vote-no-lynch",
         "action-loop",
         "host-deadline-advance",
         "stale-deadline-advance",

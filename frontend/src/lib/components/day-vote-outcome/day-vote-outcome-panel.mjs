@@ -94,6 +94,9 @@ function outcomeTallies(outcome) {
 
 function slotDisplayLabel(slotId) {
   const normalized = String(slotId);
+  if (normalized === "no_lynch") {
+    return "No lynch";
+  }
   const suffix = normalized.match(/\d+/)?.[0];
   return suffix === undefined ? normalized : `Slot ${suffix}`;
 }

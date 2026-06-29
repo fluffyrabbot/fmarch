@@ -57,3 +57,31 @@ test("day vote outcome panel has a stable empty state", () => {
   assert.equal(view.empty.message, "No official day vote result");
   assert.deepEqual(view.tallies, []);
 });
+
+test("day vote outcome panel renders no-lynch without raw engine keys", () => {
+  const view = buildDayVoteOutcomePanelViewModel({
+    outcomes: [
+      {
+        phaseId: "D01",
+        status: "NoLynch",
+        winnerSlot: null,
+        tallies: { no_lynch: 2 },
+        majority: 2,
+      },
+    ],
+  });
+
+  assert.deepEqual(view.latest, {
+    phaseId: "D01",
+    status: "NoLynch",
+    winnerSlot: null,
+    winnerLabel: "No lynch",
+    summary: "The official vote resolved without an elimination.",
+    reason: undefined,
+    testId: "day-vote-outcome-latest",
+  });
+  assert.deepEqual(
+    view.tallies.map((row) => [row.slotLabel, row.count, row.majority, row.testId]),
+    [["No lynch", 2, 2, "day-vote-outcome-tally-no_lynch"]],
+  );
+});

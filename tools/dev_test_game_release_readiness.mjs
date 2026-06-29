@@ -192,6 +192,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [
         "core-loop",
         "day-vote-resolution",
+        "day-vote-no-lynch",
         "action-loop",
         "host-deadline-advance",
         "stale-deadline-advance",
@@ -680,6 +681,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
     "day-vote-resolution",
+    "day-vote-no-lynch",
     "action-loop",
     "host-deadline-advance",
     "stale-deadline-advance",

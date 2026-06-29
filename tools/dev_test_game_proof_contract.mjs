@@ -12,6 +12,7 @@ const requiredLaneIds = Object.freeze([
   "cohost-console",
   "core-loop",
   "day-vote-resolution",
+  "day-vote-no-lynch",
   "action-loop",
   "host-deadline-advance",
   "stale-deadline-advance",
@@ -163,6 +164,54 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.dayVoteResolution?.targetNotice?.effect === "player_killed" &&
         verification.dayVoteResolution?.targetNotice?.status === "day_vote" &&
         Object.values(verification.dayVoteResolution?.targetControls ?? {}).every(Boolean),
+    }),
+    lane("day-vote-no-lynch", "No-lynch day vote resolves without a death", {
+      outcomeStatus: verification.dayVoteNoLynch?.dayVoteOutcome?.status ?? null,
+      noLynchTally: verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch ?? null,
+      survivorAlive: verification.dayVoteNoLynch?.survivorSlot?.alive ?? null,
+      survivorOutcomePanel: verification.dayVoteNoLynch?.survivorOutcomePanel ?? null,
+      deathNoticeCount:
+        verification.dayVoteNoLynch?.survivorNotifications?.filter(
+          (notice) => notice.effect === "player_killed" && notice.status === "day_vote",
+        ).length ?? null,
+      passed:
+        verification.dayVoteNoLynch?.status === "passed" &&
+        verification.dayVoteNoLynch?.resolveDay?.commandStatus?.state === "ack" &&
+        verification.dayVoteNoLynch?.dayVoteOutcome?.phase_id === "D01" &&
+        verification.dayVoteNoLynch?.dayVoteOutcome?.status === "NoLynch" &&
+        verification.dayVoteNoLynch?.dayVoteOutcome?.winner_slot === null &&
+        verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch === 2 &&
+        verification.dayVoteNoLynch?.hostAfterResolve?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ) &&
+        verification.dayVoteNoLynch?.hostAfterResolve?.outcomePanel?.includes("D01 NoLynch") &&
+        verification.dayVoteNoLynch?.hostAfterResolve?.outcomePanel?.includes(
+          "without an elimination",
+        ) &&
+        verification.dayVoteNoLynch?.hostAfterResolve?.outcomeTally?.includes("No lynch") &&
+        verification.dayVoteNoLynch?.hostAfterResolve?.outcomeTally?.includes("2/2") &&
+        verification.dayVoteNoLynch?.survivorSlot?.alive === true &&
+        verification.dayVoteNoLynch?.survivorSlot?.status === "alive" &&
+        verification.dayVoteNoLynch?.survivorCommandState?.actorAlive === true &&
+        verification.dayVoteNoLynch?.survivorCommandState?.actorStatus === "alive" &&
+        verification.dayVoteNoLynch?.survivorDayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ) &&
+        verification.dayVoteNoLynch?.survivorOutcomePanel?.includes("D01 NoLynch") &&
+        verification.dayVoteNoLynch?.survivorOutcomePanel?.includes(
+          "without an elimination",
+        ) &&
+        verification.dayVoteNoLynch?.survivorOutcomeTally?.includes("No lynch") &&
+        verification.dayVoteNoLynch?.survivorOutcomeTally?.includes("2/2") &&
+        verification.dayVoteNoLynch?.survivorNotifications?.every(
+          (notice) => notice.effect !== "player_killed" || notice.status !== "day_vote",
+        ),
     }),
     lane("action-loop", "Day/night action submission and resolution", {
       invalidActionError: verification.actionLoop?.invalidAction?.error ?? null,

@@ -591,6 +591,18 @@ export function markdownSessionCard(card) {
         "",
       );
     }
+    if (card.verification.dayVoteNoLynch !== undefined) {
+      lines.push(
+        "## Day Vote No-Lynch Proof",
+        "",
+        `Status: ${card.verification.dayVoteNoLynch.status}`,
+        "",
+        `Proof: ${card.verification.dayVoteNoLynch.proof}`,
+        "",
+        `Outcome: ${card.verification.dayVoteNoLynch.dayVoteOutcome.status} ${card.verification.dayVoteNoLynch.dayVoteOutcome.tallies.no_lynch}`,
+        "",
+      );
+    }
     if (card.verification.cohostConsole !== undefined) {
       lines.push(
         "## Cohost Console Proof",
@@ -790,6 +802,7 @@ async function verifySessionCard(card) {
   let cohostConsole;
   let coreLoop;
   let dayVoteResolution;
+  let dayVoteNoLynch;
   let privateChannel;
   let actionLoop;
   let invalidActionRecovery;
@@ -851,6 +864,12 @@ async function verifySessionCard(card) {
       hostPage: roleEntries.host.page,
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    dayVoteNoLynch = await verifySeededDayVoteNoLynch({
+      hostPage: roleEntries.host.page,
+      survivorPage: roleEntries.deniedPlayer.page,
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
@@ -933,6 +952,7 @@ async function verifySessionCard(card) {
     cohostConsole,
     coreLoop,
     dayVoteResolution,
+    dayVoteNoLynch,
     privateChannel,
     actionLoop,
     invalidActionRecovery,
@@ -1707,6 +1727,215 @@ async function seedDayVoteResolutionGame({ game }) {
     preseededVotes: 3,
     targetSlot: "slot-2",
     resolvingVoterSlot: "slot_4",
+  };
+}
+
+async function verifySeededDayVoteNoLynch({
+  hostPage,
+  survivorPage,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const noLynchGame = crypto.randomUUID();
+  const seed = await seedDayVoteNoLynchGame({ game: noLynchGame });
+  const hostProofPage = await hostPage.context().newPage();
+  const survivorProofPage = await survivorPage.context().newPage();
+  try {
+    await hostProofPage.goto(`${frontendBaseUrl}/g/${noLynchGame}/host`, {
+      waitUntil: "networkidle",
+    });
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.phase?.id === "D01" &&
+        window.__fmarchHostProjection?.phase?.locked === false &&
+        window.__fmarchHostVotecountProjection?.some(
+          (row) => row.target === "no_lynch" && row.count === 2,
+        ),
+    );
+    const hostBeforeResolve = {
+      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
+      votecount: await hostProofPage.evaluate(
+        () => window.__fmarchHostVotecountProjection ?? [],
+      ),
+      phaseActions: await visibleHostPhaseActions(hostProofPage),
+    };
+
+    const resolveDay = await confirmHostAction(hostProofPage, "resolve_phase");
+    await waitForHostProjectionPhase(hostProofPage, { phaseId: "D01", locked: true });
+    await hostProofPage.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ),
+    );
+    const hostAfterResolve = {
+      phase: await hostProofPage.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostProofPage),
+      dayVoteOutcomes: await hostProofPage.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      outcomePanel: await hostProofPage
+        .locator('[data-testid="host-day-vote-outcome-latest"]')
+        .innerText(),
+      outcomeTally: await hostProofPage
+        .locator('[data-testid="host-day-vote-outcome-tally-no_lynch"]')
+        .innerText(),
+    };
+
+    await gotoPlayerBoard(survivorProofPage, noLynchGame);
+    await survivorProofPage.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_3" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
+        window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ),
+    );
+    const survivorCommandState = await survivorProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const survivorNotifications = await survivorProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.notifications ?? [],
+    );
+    const survivorDayVoteOutcomes = await survivorProofPage.evaluate(
+      () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
+    );
+    const survivorOutcomePanel = await survivorProofPage
+      .locator('[data-testid="player-day-vote-outcome-latest"]')
+      .innerText();
+    const survivorOutcomeTally = await survivorProofPage
+      .locator('[data-testid="player-day-vote-outcome-tally-no_lynch"]')
+      .innerText();
+
+    const dayVoteOutcomes = await fetchJson(
+      `${apiBaseUrl}/games/${noLynchGame}/day-vote-outcomes`,
+    );
+    const dayVoteOutcome =
+      dayVoteOutcomes.find((delta) => delta.kind === "DayVoteOutcomeApplied")?.body ??
+      null;
+    const hostState = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: noLynchGame,
+      slot: "slot_3",
+    });
+    const survivorSlot = hostState.slots?.find?.((slot) => slot.slot_id === "slot_3");
+    const dayVoteDeathNotices = survivorNotifications.filter(
+      (notice) => notice.effect === "player_killed" && notice.status === "day_vote",
+    );
+
+    if (
+      resolveDay.commandStatus?.state !== "ack" ||
+      dayVoteOutcome?.phase_id !== "D01" ||
+      dayVoteOutcome?.status !== "NoLynch" ||
+      dayVoteOutcome?.winner_slot !== null ||
+      dayVoteOutcome?.tallies?.no_lynch !== 2 ||
+      hostAfterResolve.phase?.id !== "D01" ||
+      hostAfterResolve.phase?.locked !== true ||
+      !hostAfterResolve.dayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "NoLynch" &&
+          row.winnerSlot === null,
+      ) ||
+      !hostAfterResolve.outcomePanel.includes("D01 NoLynch") ||
+      !hostAfterResolve.outcomePanel.includes("without an elimination") ||
+      !hostAfterResolve.outcomeTally.includes("No lynch") ||
+      !hostAfterResolve.outcomeTally.includes("2/2") ||
+      survivorSlot?.alive !== true ||
+      survivorSlot?.status !== "alive" ||
+      survivorCommandState?.actorSlot !== "slot_3" ||
+      survivorCommandState?.actorAlive !== true ||
+      survivorCommandState?.actorStatus !== "alive" ||
+      dayVoteDeathNotices.length !== 0 ||
+      !survivorDayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "NoLynch" &&
+          row.winnerSlot === null,
+      ) ||
+      !survivorOutcomePanel.includes("D01 NoLynch") ||
+      !survivorOutcomePanel.includes("without an elimination") ||
+      !survivorOutcomeTally.includes("No lynch") ||
+      !survivorOutcomeTally.includes("2/2")
+    ) {
+      throw new Error(
+        `day vote no-lynch proof drifted: ${JSON.stringify({
+          noLynchGame,
+          seed,
+          hostBeforeResolve,
+          resolveDay,
+          hostAfterResolve,
+          dayVoteOutcomes,
+          survivorSlot,
+          survivorCommandState,
+          survivorNotifications,
+          survivorDayVoteOutcomes,
+          survivorOutcomePanel,
+          survivorOutcomeTally,
+        })}`,
+      );
+    }
+
+    return {
+      status: "passed",
+      game: noLynchGame,
+      seed,
+      hostBeforeResolve,
+      resolveDay,
+      hostAfterResolve,
+      dayVoteOutcome,
+      survivorSlot,
+      survivorCommandState,
+      survivorNotifications,
+      survivorDayVoteOutcomes,
+      survivorOutcomePanel,
+      survivorOutcomeTally,
+      proof:
+        "A disposable seeded no-lynch game loaded host and surviving-player role URLs, two committed no_lynch votes resolved through the host browser, /day-vote-outcomes exposed the official NoLynch result, both role URLs rendered the no-elimination outcome panel, and the surviving player stayed alive without a day_vote death notice.",
+    };
+  } finally {
+    await hostProofPage.close().catch(() => {});
+    await survivorProofPage.close().catch(() => {});
+  }
+}
+
+async function seedDayVoteNoLynchGame({ game }) {
+  const plan = [
+    ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game, slot: "slot-7" } }],
+    ["host_h", { AddSlot: { game, slot: "slot-2" } }],
+    ["host_h", { AddSlot: { game, slot: "slot_3" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-seed" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignSlot: { game, slot: "slot_3", user: "player-target" } }],
+    ["host_h", { AssignRole: { game, slot: "slot_3", role_key: "mafia_goon" } }],
+    ["host_h", { StartGame: { game, phase: "D01" } }],
+    [
+      "player-mira",
+      { SubmitVote: { game, actor_slot: "slot-7", target: "NoLynch" } },
+    ],
+    [
+      "player-seed",
+      { SubmitVote: { game, actor_slot: "slot-2", target: "NoLynch" } },
+    ],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game,
+    commands: commands.length,
+    preseededNoLynchVotes: 2,
+    survivorSlot: "slot_3",
   };
 }
 
