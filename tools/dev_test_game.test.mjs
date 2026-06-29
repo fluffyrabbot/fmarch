@@ -2369,6 +2369,109 @@ test("session card and markdown include role credential URLs and tokens", () => 
           vote_targets: [],
         },
       },
+      stalePlayerPostAfterPhaseClosure: {
+        status: "passed",
+        game: "phase-closure-post-game",
+        postBody: "Stale player post after D01 phase closure",
+        hostEntry: {
+          capabilityKinds: ["HostOf"],
+        },
+        playerEntry: {
+          capabilityKinds: ["SlotOccupant"],
+        },
+        commandStateBeforeClose: {
+          actorSlot: "slot-7",
+          phase: { phaseId: "D01", locked: false },
+          currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+        },
+        currentVoteBeforeClose: {
+          hasVote: "true",
+          text: "Current vote Slot 2",
+        },
+        submitPostBeforeClose: {
+          action: "submit_post",
+          disabled: false,
+          text: "Post",
+        },
+        closedStatus: { state: "closed" },
+        resolveDay: { commandStatus: { state: "ack" } },
+        hostAfterResolve: {
+          phase: { id: "D01", locked: true },
+          dayVoteOutcomes: [
+            { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+          ],
+        },
+        apiCommandStateAfterResolve: {
+          phase: { locked: true },
+          current_vote: null,
+          vote_targets: [],
+        },
+        stalePost: {
+          state: "ack",
+          streamSeqs: [501],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitPost: {
+                    actor_slot: "slot-7",
+                    channel_id: "main",
+                    body: "Stale player post after D01 phase closure",
+                  },
+                },
+              },
+            },
+          },
+        },
+        projectedPost: {
+          body: "Stale player post after D01 phase closure",
+          authorSlot: "slot-7",
+        },
+        commandStateAfterAck: {
+          phase: { phaseId: "D01", locked: true },
+          currentVote: null,
+          voteTargets: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: [
+            "thread",
+            "votecount",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+        },
+        currentVoteAfterAck: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
+        withdrawAfterAck: {
+          exists: true,
+          disabled: true,
+          reason: "No current vote",
+          text: "Withdraw vote",
+        },
+        buttonsAfterAck: [
+          { action: "withdraw_vote", disabled: true, text: "Withdraw vote" },
+          { action: "submit_post", disabled: false, text: "Post" },
+        ],
+        dayVoteOutcomesAfterAck: [
+          { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+        ],
+        apiCommandStateAfterAck: {
+          phase: { locked: true },
+          current_vote: null,
+          vote_targets: [],
+        },
+        apiThreadAfterAck: {
+          posts: [
+            {
+              body: "Stale player post after D01 phase closure",
+              author_slot: "slot-7",
+            },
+          ],
+        },
+      },
       staleDeadTargetVote: {
         status: "passed",
         commandStateBeforeClose: {
@@ -3416,6 +3519,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-player-withdraw-after-change",
       "stale-player-withdraw-after-phase-closure",
       "stale-player-vote-after-phase-closure",
+      "stale-player-post-after-phase-closure",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -3508,7 +3612,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 59);
+  assert.equal(opsArtifacts.proofRun.laneCount, 60);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -4068,6 +4172,7 @@ function hardeningAdminProofFixture() {
         "stale-player-withdraw-after-change",
         "stale-player-withdraw-after-phase-closure",
         "stale-player-vote-after-phase-closure",
+        "stale-player-post-after-phase-closure",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",

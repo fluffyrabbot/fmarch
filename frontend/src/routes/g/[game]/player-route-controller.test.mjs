@@ -239,7 +239,12 @@ test("player route controller refreshes only projections touched by acked comman
   assert.equal(result.commandStatus.state, "ack");
   assert.deepEqual(result.snapshot, projectionStore.getSnapshot());
 
-  assert.deepEqual(playerRefreshKeysForAction("submit_post"), ["thread", "votecount"]);
+  assert.deepEqual(playerRefreshKeysForAction("submit_post"), [
+    "thread",
+    "votecount",
+    "commandState",
+    "dayVoteOutcomes",
+  ]);
   assert.deepEqual(playerRefreshKeysForAction("submit_vote:no_lynch"), [
     "votecount",
     "commandState",
@@ -567,7 +572,7 @@ test("player route controller handles no-older and local view statuses", async (
       actionId: "submit_post",
       statusKey: "submit_post",
       dispatchKind: "submit_post",
-      projectionRefreshKeys: ["thread", "votecount"],
+      projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes"],
     },
   });
   assert.deepEqual(playerCommandTrace("withdraw_vote"), {
@@ -624,7 +629,7 @@ test("player route controller records one current command receipt per action", (
         actionId: "submit_post",
         statusKey: "submit_post",
         dispatchKind: "submit_post",
-        projectionRefreshKeys: ["thread", "votecount"],
+        projectionRefreshKeys: ["thread", "votecount", "commandState", "dayVoteOutcomes"],
       },
       current: false,
     },

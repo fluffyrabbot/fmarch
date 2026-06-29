@@ -46,6 +46,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-withdraw-after-change",
   "stale-player-withdraw-after-phase-closure",
   "stale-player-vote-after-phase-closure",
+  "stale-player-post-after-phase-closure",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -1879,6 +1880,129 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.vote_targets?.length === 0 &&
           hardening.stalePlayerVoteAfterPhaseClosure?.apiCommandStateAfterReject
             ?.current_vote === null,
+      },
+    ),
+    lane(
+      "stale-player-post-after-phase-closure",
+      "Stale player post ACKs after host phase closure",
+      {
+        game: hardening.stalePlayerPostAfterPhaseClosure?.game ?? null,
+        postBody: hardening.stalePlayerPostAfterPhaseClosure?.postBody ?? null,
+        postState:
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.state ?? null,
+        phaseLockedAfterAck:
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateAfterAck?.phase
+            ?.locked ?? null,
+        currentVoteAfterAck:
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateAfterAck
+            ?.currentVote ?? null,
+        outcomeStatus:
+          hardening.stalePlayerPostAfterPhaseClosure?.dayVoteOutcomesAfterAck?.[0]
+            ?.status ?? null,
+        passed:
+          hardening.stalePlayerPostAfterPhaseClosure?.status === "passed" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.playerEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateBeforeClose
+            ?.phase?.phaseId === "D01" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateBeforeClose
+            ?.phase?.locked === false &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateBeforeClose
+            ?.currentVote?.slotId === "slot-2" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.currentVoteBeforeClose
+            ?.hasVote === "true" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.submitPostBeforeClose
+            ?.disabled === false &&
+          hardening.stalePlayerPostAfterPhaseClosure?.closedStatus?.state ===
+            "closed" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.resolveDay?.commandStatus
+            ?.state === "ack" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.hostAfterResolve?.phase
+            ?.locked === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.hostAfterResolve?.dayVoteOutcomes?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.phase?.locked === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.current_vote === null &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterResolve
+            ?.vote_targets?.length === 0 &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.state === "ack" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.serverEnvelope?.body
+            ?.kind === "Ack" &&
+          Array.isArray(
+            hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.streamSeqs,
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.streamSeqs?.length >
+            0 &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.channel_id === "main" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.body ===
+            hardening.stalePlayerPostAfterPhaseClosure?.postBody &&
+          hardening.stalePlayerPostAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "thread",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "votecount",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "commandState",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.dispatchPlan?.projectionRefreshKeys?.includes(
+            "dayVoteOutcomes",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.projectedPost?.body ===
+            hardening.stalePlayerPostAfterPhaseClosure?.postBody &&
+          hardening.stalePlayerPostAfterPhaseClosure?.projectedPost?.authorSlot ===
+            "slot-7" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateAfterAck?.phase
+            ?.locked === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateAfterAck
+            ?.voteTargets?.length === 0 &&
+          hardening.stalePlayerPostAfterPhaseClosure?.commandStateAfterAck
+            ?.currentVote === null &&
+          hardening.stalePlayerPostAfterPhaseClosure?.currentVoteAfterAck?.hasVote ===
+            "false" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.withdrawAfterAck?.disabled ===
+            true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.withdrawAfterAck?.reason ===
+            "No current vote" &&
+          hardening.stalePlayerPostAfterPhaseClosure?.buttonsAfterAck?.some(
+            (button) => button.action?.startsWith("submit_vote"),
+          ) === false &&
+          hardening.stalePlayerPostAfterPhaseClosure?.buttonsAfterAck?.some(
+            (button) => button.action === "submit_post" && button.disabled === false,
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.dayVoteOutcomesAfterAck?.some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterAck?.phase
+            ?.locked === true &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterAck
+            ?.vote_targets?.length === 0 &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiCommandStateAfterAck
+            ?.current_vote === null &&
+          hardening.stalePlayerPostAfterPhaseClosure?.apiThreadAfterAck?.posts?.some(
+            (post) =>
+              post.body === hardening.stalePlayerPostAfterPhaseClosure?.postBody &&
+              post.author_slot === "slot-7",
+          ) === true,
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
