@@ -32,6 +32,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-stale-player",
   "replacement-stale-action",
   "replacement-stale-private-channel",
+  "replacement-stale-private-receipts",
   "replacement-incoming-player",
   "idempotent-retry",
   "reconnect-recovery",
@@ -957,6 +958,57 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.stalePrivateChannel?.apiThreadPostBodies?.includes(
           verification.replacementConsole?.stalePrivateChannel?.stalePostBody,
         ) === false,
+    }),
+    lane("replacement-stale-private-receipts", "Replacement private receipts follow current slot", {
+      staleNotificationsStatus:
+        verification.replacementConsole?.stalePrivateReceipts?.staleNotifications
+          ?.status ?? null,
+      staleInvestigationResultsStatus:
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.staleInvestigationResults?.status ?? null,
+      rowanNotificationsStatus:
+        verification.replacementConsole?.stalePrivateReceipts?.rowanNotifications
+          ?.status ?? null,
+      rowanInvestigationResultsStatus:
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.rowanInvestigationResults?.status ?? null,
+      rowanPrivateQueueCount:
+        verification.replacementConsole?.stalePrivateReceipts?.rowanQueue?.count ??
+        null,
+      passed:
+        verification.replacementConsole?.status === "passed" &&
+        verification.replacementConsole?.stalePrivateReceipts?.status ===
+          "passed" &&
+        verification.replacementConsole?.stalePrivateReceipts?.staleNotifications
+          ?.status === 403 &&
+        verification.replacementConsole?.stalePrivateReceipts?.staleNotifications
+          ?.body?.error === "NotAuthorized" &&
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.staleInvestigationResults?.status === 403 &&
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.staleInvestigationResults?.body?.error === "NotAuthorized" &&
+        verification.replacementConsole?.stalePrivateReceipts?.rowanNotifications
+          ?.status === 200 &&
+        Array.isArray(
+          verification.replacementConsole?.stalePrivateReceipts?.rowanNotifications
+            ?.body,
+        ) &&
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.rowanInvestigationResults?.status === 200 &&
+        Array.isArray(
+          verification.replacementConsole?.stalePrivateReceipts
+            ?.rowanInvestigationResults?.body,
+        ) &&
+        verification.replacementConsole?.stalePrivateReceipts?.rowanProjection
+          ?.targetKillVisible === false &&
+        verification.replacementConsole?.stalePrivateReceipts?.rowanProjection
+          ?.actionResultVisible === false &&
+        verification.replacementConsole?.stalePrivateReceipts?.rowanQueue?.count ===
+          0 &&
+        verification.replacementConsole?.stalePrivateReceipts?.rowanQueue
+          ?.emptyVisible === true &&
+        verification.replacementConsole?.stalePrivateReceipts
+          ?.staleRouteStillForbidden === true,
     }),
     lane("replacement-incoming-player", "Incoming replacement player owns stable slot", {
       principalUserId:

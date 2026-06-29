@@ -2148,6 +2148,12 @@ async function verifySeededReplacementConsole({
       apiBaseUrl,
       frontendBaseUrl,
     });
+    const stalePrivateReceipts = await verifyReplacementStalePrivateReceipts({
+      staleOutgoingPage,
+      replacementEntry: pendingIncomingPlayer.replacementEntry,
+      game,
+      apiBaseUrl,
+    });
     replacementSessionRevocation =
       await verifyReplacementSessionRevocationRecovery({
         browser,
@@ -2242,6 +2248,14 @@ async function verifySeededReplacementConsole({
       stalePrivateChannel?.apiThreadPostBodies?.includes(
         stalePrivateChannel.rowanPostBody,
       ) !== true ||
+      stalePrivateReceipts?.status !== "passed" ||
+      stalePrivateReceipts?.staleNotifications?.status !== 403 ||
+      stalePrivateReceipts?.staleInvestigationResults?.status !== 403 ||
+      stalePrivateReceipts?.rowanNotifications?.status !== 200 ||
+      stalePrivateReceipts?.rowanInvestigationResults?.status !== 200 ||
+      stalePrivateReceipts?.rowanQueue?.count !== 0 ||
+      stalePrivateReceipts?.rowanProjection?.targetKillVisible !== false ||
+      stalePrivateReceipts?.rowanProjection?.actionResultVisible !== false ||
       replacementSessionRevocation?.status !== "passed" ||
       replacementSessionRevocation?.revokedPrincipalUserId !== "player-rowan" ||
       replacementSessionRevocation?.apiSessionStatus !== 401 ||
@@ -2293,6 +2307,7 @@ async function verifySeededReplacementConsole({
           staleReplacementAfterSuccess,
           incomingPlayer,
           stalePrivateChannel,
+          stalePrivateReceipts,
           replacementSessionRevocation:
             withoutStaleReplacementEntry(replacementSessionRevocation),
           replacementSessionRefresh,
@@ -2315,13 +2330,14 @@ async function verifySeededReplacementConsole({
       staleReplacementAfterSuccess,
       incomingPlayer,
       stalePrivateChannel,
+      stalePrivateReceipts,
       replacementSessionRevocation:
         withoutStaleReplacementEntry(replacementSessionRevocation),
       replacementSessionRefresh,
       replacementStaleSessionAfterRefresh,
       replacementReconnectRecovery,
       proof:
-        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, proved Mira's stale browser cannot keep private-channel authority while Rowan can post in the same private channel as current Slot 7, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
+        "The seeded host role URL issued the player-rowan replacement invite, proved that URL opens as a pending replacement surface before Slot 7 transfer, proved a fresh browser cannot redeem that already-used replacement invite into another session, rejected an invalid replacement attempt without granting Rowan slot authority, processed the valid Slot 7 replacement through the hydrated ProcessReplacement control, updated the host projection to player-rowan, preserved the stable slot history boundary, replayed the same ProcessReplacement command_id and received the original ACK without moving Slot 7, recovered the stale outgoing player page with a NotYourSlot receipt plus disabled old Slot 7 controls, rejected a stale post-success replacement attempt without moving Slot 7 away from Rowan, proved the same incoming player-rowan role URL can act as Slot 7 without receiving target-only private receipts, proved Mira's stale browser cannot keep private-channel authority while Rowan can post in the same private channel as current Slot 7, proved Mira's stale private receipt endpoints reject while Rowan's current private queue stays readable and free of target-only private receipts, revoked that replacement browser session and proved the role path falls back to the shared 403 recovery boundary without player controls, granted a fresh local session and proved Rowan can log in without replaying the invite and act again as Slot 7, proved a separate stale browser context holding the revoked cookie remains unauthorized and control-free after the fresh session exists elsewhere, then dropped the fresh replacement role page's live projection and proved reconnect recovers current Slot 7 state plus a new Rowan post.",
     };
   } finally {
     await replacementSessionRevocation?.staleEntry?.context.close().catch(() => {});
@@ -3257,6 +3273,127 @@ async function verifyReplacementStalePrivateChannel({
     apiThreadPostBodies,
     proof:
       "After Slot 7 replacement, Mira's stale browser cannot submit or route into the Slot 7 private channel, while Rowan's current replacement role URL opens the same channel and ACKs a private Slot 7 post.",
+  };
+}
+
+async function verifyReplacementStalePrivateReceipts({
+  staleOutgoingPage,
+  replacementEntry,
+  game,
+  apiBaseUrl,
+}) {
+  const endpoints = {
+    staleNotifications: `${apiBaseUrl}/games/${game}/notifications?principal_user_id=player-mira`,
+    staleInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results?principal_user_id=player-mira`,
+    rowanNotifications: `${apiBaseUrl}/games/${game}/notifications?principal_user_id=player-rowan`,
+    rowanInvestigationResults: `${apiBaseUrl}/games/${game}/investigation-results?principal_user_id=player-rowan`,
+  };
+  const [
+    staleNotifications,
+    staleInvestigationResults,
+    rowanNotifications,
+    rowanInvestigationResults,
+  ] = await Promise.all([
+    fetchJsonStatus(endpoints.staleNotifications),
+    fetchJsonStatus(endpoints.staleInvestigationResults),
+    fetchJsonStatus(endpoints.rowanNotifications),
+    fetchJsonStatus(endpoints.rowanInvestigationResults),
+  ]);
+  const rowanPage = replacementEntry?.page;
+  if (rowanPage === undefined) {
+    throw new Error("replacement stale private-receipt proof requires replacement entry");
+  }
+  await rowanPage.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
+  await rowanPage.waitForFunction(
+    () => window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7",
+  );
+  const rowanProjection = await rowanPage.evaluate(() => {
+    const notifications = window.__fmarchPlayerProjection?.notifications ?? [];
+    const investigationResults =
+      window.__fmarchPlayerProjection?.investigationResults ?? [];
+    return {
+      notificationCount: notifications.length,
+      investigationResultCount: investigationResults.length,
+      targetKillVisible: notifications.some(
+        (item) =>
+          item.effect === "player_killed" ||
+          item.status === "factional_kill" ||
+          item.audience_slot === "slot-2",
+      ),
+      actionResultVisible: investigationResults.some(
+        (item) =>
+          item.actor_slot === "slot_4" ||
+          item.action_id === "browser_factional_kill_n01" ||
+          item.status === "factional_kill",
+      ),
+      notifications,
+      investigationResults,
+    };
+  });
+  const rowanQueue = {
+    count: Number(
+      await rowanPage.getByTestId("player-private-count").innerText(),
+    ),
+    emptyVisible: await rowanPage
+      .getByTestId("player-private-empty")
+      .isVisible()
+      .catch(() => false),
+    boundary: await rowanPage.getByTestId("player-private-boundary").innerText(),
+  };
+  const staleRouteStillForbidden = await staleOutgoingPage
+    .getByTestId("route-error-surface")
+    .getAttribute("data-status")
+    .then((value) => Number(value) === 403)
+    .catch(() => false);
+
+  if (
+    staleNotifications.status !== 403 ||
+    staleNotifications.body?.error !== "NotAuthorized" ||
+    !staleNotifications.body?.message?.includes(
+      "cannot read player notifications",
+    ) ||
+    staleInvestigationResults.status !== 403 ||
+    staleInvestigationResults.body?.error !== "NotAuthorized" ||
+    !staleInvestigationResults.body?.message?.includes(
+      "cannot read investigation results",
+    ) ||
+    rowanNotifications.status !== 200 ||
+    !Array.isArray(rowanNotifications.body) ||
+    rowanInvestigationResults.status !== 200 ||
+    !Array.isArray(rowanInvestigationResults.body) ||
+    rowanProjection.targetKillVisible !== false ||
+    rowanProjection.actionResultVisible !== false ||
+    rowanQueue.count !== 0 ||
+    rowanQueue.emptyVisible !== true ||
+    !rowanQueue.boundary.includes("principal-scoped endpoints") ||
+    staleRouteStillForbidden !== true
+  ) {
+    throw new Error(
+      `replacement stale private-receipt proof drifted: ${JSON.stringify({
+        endpoints,
+        staleNotifications,
+        staleInvestigationResults,
+        rowanNotifications,
+        rowanInvestigationResults,
+        rowanProjection,
+        rowanQueue,
+        staleRouteStillForbidden,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    endpoints,
+    staleNotifications,
+    staleInvestigationResults,
+    rowanNotifications,
+    rowanInvestigationResults,
+    rowanProjection,
+    rowanQueue,
+    staleRouteStillForbidden,
+    proof:
+      "After Slot 7 replacement, Mira's stale principal cannot read notification or investigation-result endpoints, while Rowan's current role surface keeps a readable empty private queue without target-only private receipts.",
   };
 }
 
@@ -4551,6 +4688,21 @@ async function fetchJson(url, options = {}, timeoutMs = 15000) {
     throw new Error(`HTTP ${response.status} from ${url}: ${JSON.stringify(body)}`);
   }
   return body;
+}
+
+async function fetchJsonStatus(url, options = {}, timeoutMs = 15000) {
+  const response = await fetchWithTimeout(url, options, timeoutMs);
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+  return {
+    status: response.status,
+    ok: response.ok,
+    body,
+  };
 }
 
 async function revokeAuthSession({ apiBaseUrl, token }) {

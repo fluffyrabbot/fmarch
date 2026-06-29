@@ -31,6 +31,7 @@ const requiredChecks = [
   "replacement-stale-player",
   "replacement-stale-action",
   "replacement-stale-private-channel",
+  "replacement-stale-private-receipts",
   "replacement-incoming-player",
 ];
 

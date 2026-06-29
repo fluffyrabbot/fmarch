@@ -1376,6 +1376,44 @@ test("session card and markdown include role credential URLs and tokens", () => 
         rowanPostBody: "Replacement Rowan private-channel post",
         apiThreadPostBodies: ["Replacement Rowan private-channel post"],
       },
+      stalePrivateReceipts: {
+        status: "passed",
+        staleNotifications: {
+          status: 403,
+          body: {
+            error: "NotAuthorized",
+            message: "principal cannot read player notifications for this game",
+          },
+        },
+        staleInvestigationResults: {
+          status: 403,
+          body: {
+            error: "NotAuthorized",
+            message: "principal cannot read investigation results for this game",
+          },
+        },
+        rowanNotifications: {
+          status: 200,
+          body: [],
+        },
+        rowanInvestigationResults: {
+          status: 200,
+          body: [],
+        },
+        rowanProjection: {
+          notificationCount: 0,
+          investigationResultCount: 0,
+          targetKillVisible: false,
+          actionResultVisible: false,
+        },
+        rowanQueue: {
+          count: 0,
+          emptyVisible: true,
+          boundary:
+            "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+        },
+        staleRouteStillForbidden: true,
+      },
     },
     multiplayerHardening: {
       status: "passed",
@@ -1619,6 +1657,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-player",
       "replacement-stale-action",
       "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
       "replacement-incoming-player",
       "idempotent-retry",
       "reconnect-recovery",
@@ -1700,7 +1739,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 34);
+  assert.equal(opsArtifacts.proofRun.laneCount, 35);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -1811,6 +1850,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-player",
       "replacement-stale-action",
       "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
       "replacement-incoming-player",
       "private-channel-member",
       "private-channel-denied",
@@ -2184,6 +2224,7 @@ function coreLoopAdminProofFixture() {
         "replacement-stale-player",
         "replacement-stale-action",
         "replacement-stale-private-channel",
+        "replacement-stale-private-receipts",
         "replacement-incoming-player",
       ],
       rawInviteTokensVisible: false,
@@ -2315,6 +2356,7 @@ function seedAdminProofFixture() {
         "replacement-stale-player",
         "replacement-stale-action",
         "replacement-stale-private-channel",
+        "replacement-stale-private-receipts",
         "replacement-incoming-player",
         "stale-action-conflict-message",
         "stale-dead-action-conflict",

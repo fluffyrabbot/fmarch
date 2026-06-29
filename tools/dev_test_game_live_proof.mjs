@@ -976,6 +976,82 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.status,
+  "passed",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.staleNotifications
+    .status,
+  403,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.staleNotifications
+    .body.error,
+  "NotAuthorized",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts
+    .staleInvestigationResults.status,
+  403,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts
+    .staleInvestigationResults.body.error,
+  "NotAuthorized",
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanNotifications
+    .status,
+  200,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.replacementConsole.stalePrivateReceipts.rowanNotifications
+      .body,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts
+    .rowanInvestigationResults.status,
+  200,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.replacementConsole.stalePrivateReceipts
+      .rowanInvestigationResults.body,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanProjection
+    .targetKillVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanProjection
+    .actionResultVisible,
+  false,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanQueue.count,
+  0,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanQueue
+    .emptyVisible,
+  true,
+);
+assert.match(
+  session.verification.replacementConsole.stalePrivateReceipts.rowanQueue.boundary,
+  /principal-scoped endpoints/,
+);
+assert.equal(
+  session.verification.replacementConsole.stalePrivateReceipts
+    .staleRouteStillForbidden,
+  true,
+);
+assert.equal(
   session.verification.replacementConsole.staleReplacementAfterSuccess.status,
   "passed",
 );

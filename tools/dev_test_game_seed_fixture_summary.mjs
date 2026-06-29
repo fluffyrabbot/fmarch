@@ -171,6 +171,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     "replacement-stale-player",
     "replacement-stale-action",
     "replacement-stale-private-channel",
+    "replacement-stale-private-receipts",
     "replacement-incoming-player",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
@@ -403,6 +404,13 @@ function demoScenarios({ roles, laneIds }) {
       role: "player",
       provenBy: ["replacement-stale-private-channel"].filter(hasLane),
       note: "Outgoing player loses Slot 7 private-channel authority after replacement, while the incoming replacement role URL can post in that same private channel.",
+    }),
+    scenario({
+      id: "replacement-stale-private-receipts",
+      title: "Replacement stale private receipts",
+      role: "player",
+      provenBy: ["replacement-stale-private-receipts"].filter(hasLane),
+      note: "Outgoing player loses private notification and investigation-result reads after replacement, while the incoming replacement role URL keeps a current private queue without target-only receipts.",
     }),
     scenario({
       id: "replacement-incoming-player",

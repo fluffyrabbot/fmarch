@@ -345,7 +345,10 @@ replaced and disabled. The same stale Mira browser then proves Slot 7
 private-channel authority is gone: a direct private-channel `SubmitPost` rejects
 as `NotYourSlot`, the private-channel route lands on the scoped 403 recovery
 path, and `player-rowan` can open and post in that same private channel as the
-current Slot 7 owner. Finally,
+current Slot 7 owner. It also proves stale private receipt reads are closed:
+Mira's old principal gets scoped 403 recovery for notification and
+investigation-result endpoints, while Rowan's current role surface keeps a
+readable empty private queue with no target-only private receipts. Finally,
 it reopens the same host-issued `replacementPlayer` role URL for `player-rowan`
 after replacement, verifies current Slot 7 authority, preserves the earlier
 Slot 7 thread history, submits a new Slot 7 post and vote, and checks
@@ -369,7 +372,8 @@ the `core-loop`, `action-loop`, `invalid-action-recovery`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
 `replacement-console`, `replacement-stale-success-recovery`,
 `replacement-stale-player`, `replacement-stale-action`,
-`replacement-stale-private-channel`, and `replacement-incoming-player` rows.
+`replacement-stale-private-channel`, `replacement-stale-private-receipts`, and
+`replacement-incoming-player` rows.
 
 The multiplayer-hardening proof promotes the first auth revocation, retry,
 reconnect, concurrent-vote, and stale-client behaviors into the same browser
@@ -480,7 +484,7 @@ This proves a local seeded browser test-game workflow for one developer, plus
 specific cohost deadline delegation with host-only command rejection,
 host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, stale outgoing-player action recovery, stale outgoing-player
-private-channel recovery, and replacement-player ownership,
+private-channel recovery, stale outgoing-player private-receipt recovery, and replacement-player ownership,
 duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
