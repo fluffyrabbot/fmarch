@@ -241,7 +241,8 @@ detail route, where lifecycle/delegated-issuance checks and admin/host/player
 role surfaces are visible without raw invite-token echoes. The delegated
 issuance check clicks the seeded host console's player-invite control, verifies
 the stored local game scope, and redeems that invite through the existing player
-role URL.
+role URL. The live-stack proof also verifies the same player-invite panel
+retargets from the current host-console slot projection after replacement.
 
 The local backup/restore drill for this spine is:
 
@@ -491,7 +492,7 @@ specific cohost deadline delegation with host-only command rejection,
 host replacement, redeemed replacement-invite recovery, stale outgoing-player replacement recovery, and incoming
 host-issued replacement invite, stale outgoing-player action recovery, stale outgoing-player
 private-channel recovery, stale outgoing-player private-receipt recovery, and replacement-player ownership,
-duplicate replacement command, duplicate post command, player reconnect,
+projection-driven host player-invite retargeting after replacement, duplicate replacement command, duplicate post command, player reconnect,
 concurrent vote race, stale player vote, stale dead action conflict, stale
 action conflict, stale action conflict message, stale host control recovery,
 stale cohost deadline recovery, local artifact-bundle, local seed/demo fixture inventory,

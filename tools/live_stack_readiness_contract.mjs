@@ -108,6 +108,9 @@ const CHECKS = Object.freeze([
     predicate: (evidence) =>
       evidence?.browser?.moderator?.hostPrompt?.commandStatus?.state === "ack" &&
       evidence?.browser?.moderator?.slotLifecycle?.commandStatus?.state === "ack" &&
+      evidence?.browser?.moderator?.playerInviteTarget?.status === "passed" &&
+      evidence?.browser?.moderator?.playerInviteTarget?.principalUserId ===
+        "player-rowan" &&
       evidence?.slotLifecycleApiState?.slots?.some(
         (slot) => slot.slot_id === "slot-7" && slot.alive === false,
       ),

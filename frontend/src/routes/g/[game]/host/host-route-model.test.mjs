@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 import {
   HOST_CONSOLE_ROUTE_CONTRACT,
+  buildHostInviteTargets,
   buildHostConsoleRouteData,
   hostConsoleForbiddenMessage,
   resolveHostConsoleAccess,
@@ -132,6 +133,34 @@ test("host console route data is allowed for HostOf scoped to the current game",
       .actions.map((action) => action.id),
     ["complete_game"],
   );
+  assert.deepEqual(data.inviteTargets.player, {
+    id: "player",
+    eyebrow: "Player invite",
+    action: "?/issuePlayerInvite",
+    panelTestId: "host-player-invite-panel",
+    targetTestId: "host-player-invite-target",
+    submitTestId: "host-player-invite-submit",
+    statusTestId: "host-player-invite-status",
+    urlTestId: "host-player-invite-url",
+    principalUserId: "player-mira",
+    targetLabel: "Slot 7 / player-mira",
+    submitLabel: "Issue player invite",
+  });
+});
+
+test("host invite targets derive from projected slot occupancy", () => {
+  const targets = buildHostInviteTargets({
+    replacement: {
+      slotId: "slot_12",
+      occupantLabel: "player-alex",
+    },
+    replacementPrincipalUserId: "player-jules",
+  });
+
+  assert.equal(targets.player.principalUserId, "player-alex");
+  assert.equal(targets.player.targetLabel, "Slot 12 / player-alex");
+  assert.equal(targets.replacement.principalUserId, "player-jules");
+  assert.equal(targets.replacement.targetLabel, "Slot 12 / player-jules");
 });
 
 test("host console route data uses host prompt and votecount cold-loads when available", async () => {

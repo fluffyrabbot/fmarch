@@ -38,7 +38,10 @@
     recordHostCommandStatus,
     sendHostRouteAction,
   } from "./host-route-controller.mjs";
-  import { HOST_CONSOLE_ROUTE_CONTRACT } from "./host-route-model.mjs";
+  import {
+    HOST_CONSOLE_ROUTE_CONTRACT,
+    buildHostInviteTargets,
+  } from "./host-route-model.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import "$lib/components/host-action/host-console-critical-path.css";
 
@@ -68,6 +71,9 @@
   $: moderatorEmptyState = buildRouteStateViewModel({
     surface: "moderator",
     state: "empty",
+  });
+  $: inviteTargets = buildHostInviteTargets({
+    replacement: projection.replacement,
   });
   const resyncKeys = hostProjectionResyncKeys();
   const projectionStore = createProjectionStore({
@@ -246,81 +252,52 @@
       {hostPrompts}
     />
 
-    <section
-      class="host-console-critical-path__invite-panel"
-      data-testid="host-player-invite-panel"
-    >
-      <header>
-        <p class="host-console-critical-path__eyebrow">Player invite</p>
-        <strong data-testid="host-player-invite-target">Slot 7 / player-mira</strong>
-      </header>
-      <form method="POST" action="?/issuePlayerInvite">
-        <input type="hidden" name="principalUserId" value="player-mira" />
-        <button
-          class="fm-touch-control"
-          type="submit"
-          data-testid="host-player-invite-submit"
-        >
-          Issue player invite
-        </button>
-      </form>
-      {#if form?.playerInvite}
-        <p
-          class="host-console-critical-path__invite-status"
-          data-state={form.playerInvite.state}
-          data-testid="host-player-invite-status"
-        >
-          {form.playerInvite.message}
-        </p>
-        {#if form.playerInvite.state === "ack"}
-          <a
-            class="host-console-critical-path__invite-url"
-            href={form.playerInvite.loginUrl}
-            data-testid="host-player-invite-url"
+    {#each [
+      [inviteTargets.player, form?.playerInvite],
+      [inviteTargets.replacement, form?.replacementInvite],
+    ] as [inviteTarget, inviteResult]}
+      <section
+        class="host-console-critical-path__invite-panel"
+        data-testid={inviteTarget.panelTestId}
+      >
+        <header>
+          <p class="host-console-critical-path__eyebrow">{inviteTarget.eyebrow}</p>
+          <strong data-testid={inviteTarget.targetTestId}>{inviteTarget.targetLabel}</strong>
+        </header>
+        <form method="POST" action={inviteTarget.action}>
+          <input
+            type="hidden"
+            name="principalUserId"
+            value={inviteTarget.principalUserId}
+          />
+          <button
+            class="fm-touch-control"
+            type="submit"
+            data-testid={inviteTarget.submitTestId}
           >
-            {form.playerInvite.loginUrl}
-          </a>
-        {/if}
-      {/if}
-    </section>
-
-    <section
-      class="host-console-critical-path__invite-panel"
-      data-testid="host-replacement-invite-panel"
-    >
-      <header>
-        <p class="host-console-critical-path__eyebrow">Replacement invite</p>
-        <strong data-testid="host-replacement-invite-target">Slot 7 / player-rowan</strong>
-      </header>
-      <form method="POST" action="?/issueReplacementInvite">
-        <input type="hidden" name="principalUserId" value="player-rowan" />
-        <button
-          class="fm-touch-control"
-          type="submit"
-          data-testid="host-replacement-invite-submit"
-        >
-          Issue invite
-        </button>
-      </form>
-      {#if form?.replacementInvite}
-        <p
-          class="host-console-critical-path__invite-status"
-          data-state={form.replacementInvite.state}
-          data-testid="host-replacement-invite-status"
-        >
-          {form.replacementInvite.message}
-        </p>
-        {#if form.replacementInvite.state === "ack"}
-          <a
-            class="host-console-critical-path__invite-url"
-            href={form.replacementInvite.loginUrl}
-            data-testid="host-replacement-invite-url"
+            {inviteTarget.submitLabel}
+          </button>
+        </form>
+        {#if inviteResult}
+          <p
+            class="host-console-critical-path__invite-status"
+            data-state={inviteResult.state}
+            data-testid={inviteTarget.statusTestId}
           >
-            {form.replacementInvite.loginUrl}
-          </a>
+            {inviteResult.message}
+          </p>
+          {#if inviteResult.state === "ack"}
+            <a
+              class="host-console-critical-path__invite-url"
+              href={inviteResult.loginUrl}
+              data-testid={inviteTarget.urlTestId}
+            >
+              {inviteResult.loginUrl}
+            </a>
+          {/if}
         {/if}
-      {/if}
-    </section>
+      </section>
+    {/each}
 
     <HostControlSurface
       groups={moderatorActionGroups}

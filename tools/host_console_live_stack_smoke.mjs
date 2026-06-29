@@ -2553,6 +2553,23 @@ async function driveModeratorBrowser({ page, pageUrl }) {
   if (!historyLabel.includes("slot-7")) {
     throw new Error(`slot history label did not preserve slot id: ${historyLabel}`);
   }
+  const playerInviteTarget = await page.getByTestId("host-player-invite-target").innerText();
+  const playerInvitePrincipal = await page
+    .getByTestId("host-player-invite-panel")
+    .locator('input[name="principalUserId"]')
+    .inputValue();
+  if (
+    !playerInviteTarget.includes("Slot 7") ||
+    !playerInviteTarget.includes("player-rowan") ||
+    playerInvitePrincipal !== "player-rowan"
+  ) {
+    throw new Error(
+      `player invite target did not follow replacement projection: ${JSON.stringify({
+        playerInviteTarget,
+        playerInvitePrincipal,
+      })}`,
+    );
+  }
   const apiStateBeforePrompt = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
   );
@@ -2567,6 +2584,12 @@ async function driveModeratorBrowser({ page, pageUrl }) {
     actions: actionEvidence,
     phaseControls: phaseControlEvidence,
     streamConflict: streamConflictEvidence,
+    playerInviteTarget: {
+      status: "passed",
+      source: "host-console-state projection",
+      targetLabel: playerInviteTarget,
+      principalUserId: playerInvitePrincipal,
+    },
     hostPrompt: {
       issueCommands: hostPromptIssueCommands,
       ...hostPromptEvidence,

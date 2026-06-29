@@ -122,6 +122,12 @@ export async function buildHostConsoleRouteData({
       lifecycleLabel: "Alive",
       historyLabel: "Waiting for replacement command proof",
     }),
+    inviteTargets: buildHostInviteTargets({
+      replacement: {
+        slotId: "slot-7",
+        occupantLabel: "player-mira",
+      },
+    }),
     hostPrompts: coldLoad.hostPrompts,
     votecount: coldLoad.votecount,
     criticalActions,
@@ -152,6 +158,43 @@ export async function buildHostConsoleRouteData({
         value: "Slot 7 / Mira",
       }),
     ]),
+  });
+}
+
+export function buildHostInviteTargets({
+  replacement = {},
+  replacementPrincipalUserId = "player-rowan",
+} = {}) {
+  const slotId = normalizeSlotId(replacement.slotId ?? "slot-7");
+  const occupant = normalizePrincipal(replacement.occupantLabel ?? "player-mira");
+  const replacementPrincipal = normalizePrincipal(replacementPrincipalUserId);
+  return Object.freeze({
+    player: Object.freeze({
+      id: "player",
+      eyebrow: "Player invite",
+      action: "?/issuePlayerInvite",
+      panelTestId: "host-player-invite-panel",
+      targetTestId: "host-player-invite-target",
+      submitTestId: "host-player-invite-submit",
+      statusTestId: "host-player-invite-status",
+      urlTestId: "host-player-invite-url",
+      principalUserId: occupant,
+      targetLabel: `${slotDisplayLabel(slotId)} / ${occupant}`,
+      submitLabel: "Issue player invite",
+    }),
+    replacement: Object.freeze({
+      id: "replacement",
+      eyebrow: "Replacement invite",
+      action: "?/issueReplacementInvite",
+      panelTestId: "host-replacement-invite-panel",
+      targetTestId: "host-replacement-invite-target",
+      submitTestId: "host-replacement-invite-submit",
+      statusTestId: "host-replacement-invite-status",
+      urlTestId: "host-replacement-invite-url",
+      principalUserId: replacementPrincipal,
+      targetLabel: `${slotDisplayLabel(slotId)} / ${replacementPrincipal}`,
+      submitLabel: "Issue invite",
+    }),
   });
 }
 
@@ -285,6 +328,18 @@ function normalizePrincipal(principalUserId) {
     throw new TypeError("host route principal must be a non-empty string");
   }
   return principalUserId;
+}
+
+function normalizeSlotId(slotId) {
+  if (typeof slotId !== "string" || slotId.trim() === "") {
+    throw new TypeError("host route slot id must be a non-empty string");
+  }
+  return slotId;
+}
+
+function slotDisplayLabel(slotId) {
+  const suffix = slotId.match(/\d+/)?.[0];
+  return suffix === undefined ? slotId : `Slot ${suffix}`;
 }
 
 function normalizeCapability(capability) {
