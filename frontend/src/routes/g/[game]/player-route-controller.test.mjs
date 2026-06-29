@@ -279,7 +279,9 @@ test("player route controller refreshes command state after stale phase rejects"
     }),
   });
 
-  assert.deepEqual(refreshed, [["notifications", "investigationResults", "commandState"]]);
+  assert.deepEqual(refreshed, [
+    ["notifications", "investigationResults", "commandState", "dayVoteOutcomes"],
+  ]);
   assert.equal(result.commandStatus.message, "Reject PhaseLocked");
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({
@@ -287,7 +289,7 @@ test("player route controller refreshes command state after stale phase rejects"
       action: "submit_action:factional_kill",
       commandStatus: { state: "reject", error: "PhaseLocked" },
     }),
-    ["notifications", "investigationResults", "commandState"],
+    ["notifications", "investigationResults", "commandState", "dayVoteOutcomes"],
   );
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({
@@ -295,7 +297,15 @@ test("player route controller refreshes command state after stale phase rejects"
       action: "submit_vote",
       commandStatus: { state: "reject", error: "PhaseLocked" },
     }),
-    ["votecount", "commandState"],
+    ["votecount", "commandState", "dayVoteOutcomes"],
+  );
+  assert.deepEqual(
+    playerRefreshKeysForCommandOutcome({
+      data: fixtureData(),
+      action: "withdraw_vote",
+      commandStatus: { state: "reject", error: "PhaseLocked" },
+    }),
+    ["votecount", "commandState", "dayVoteOutcomes"],
   );
   assert.deepEqual(
     playerRefreshKeysForCommandOutcome({

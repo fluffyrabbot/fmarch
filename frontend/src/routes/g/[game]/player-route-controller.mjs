@@ -292,7 +292,7 @@ export function playerRefreshKeysForCommandOutcome({ data, action, commandStatus
     return playerRefreshKeysForDataAction(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "PhaseLocked") {
-    return playerRefreshKeysForDataActionWithCommandState(data, action);
+    return playerRefreshKeysForStalePhase(data, action);
   }
   if (commandStatus?.state === "reject" && commandStatus?.error === "ActionAlreadySubmitted") {
     return playerRefreshKeysForDataAction(data, action);
@@ -351,6 +351,17 @@ function playerRefreshKeysForDataActionWithCommandState(data, action) {
     !keys.includes("commandState")
   ) {
     keys.push("commandState");
+  }
+  return Object.freeze(keys);
+}
+
+function playerRefreshKeysForStalePhase(data, action) {
+  const keys = [...playerRefreshKeysForDataActionWithCommandState(data, action)];
+  if (
+    data.coldLoad?.dayVoteOutcomesEndpoint != null &&
+    !keys.includes("dayVoteOutcomes")
+  ) {
+    keys.push("dayVoteOutcomes");
   }
   return Object.freeze(keys);
 }
