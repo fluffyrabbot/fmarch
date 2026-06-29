@@ -797,6 +797,7 @@ test("admin route data exposes local next action as a native audit row", async (
     [
       ["next-command", "available"],
       ["all-artifacts-fresh", "ready"],
+      ["selection-trace", "0 candidates"],
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
@@ -809,6 +810,12 @@ test("admin route data exposes local next action as a native audit row", async (
     freshCount: 18,
     staleCount: 0,
     missingCount: 0,
+    selectionTrace: {
+      strategy: "development-spine-priority",
+      candidateCount: 0,
+      selectedArtifactId: null,
+      candidates: [],
+    },
     releaseReady: false,
     productionReady: false,
   });
@@ -842,6 +849,8 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["next-command", "available"],
       ["artifact-not-fresh", "blocked"],
       ["core-loop", "stale"],
+      ["selection-trace", "1 candidates"],
+      ["selection-trace-core-loop", "selected:stale"],
     ],
   );
 });
@@ -1750,6 +1759,7 @@ function nextActionFixture({
   reason = "all-artifacts-fresh",
   command = "test:dev-test-game-proof-freshness-admin-proof",
   artifact,
+  selectionTrace = selectionTraceFixture({ artifact, command }),
 } = {}) {
   return {
     version: 1,
@@ -1777,6 +1787,36 @@ function nextActionFixture({
       status: actionStatus,
       ...(artifact === undefined ? {} : { artifact }),
     },
+    selectionTrace,
+  };
+}
+
+function selectionTraceFixture({ artifact, command }) {
+  if (artifact === undefined) {
+    return {
+      strategy: "development-spine-priority",
+      candidateCount: 0,
+      selectedArtifactId: null,
+      candidates: [],
+    };
+  }
+  return {
+    strategy: "development-spine-priority",
+    candidateCount: 1,
+    selectedArtifactId: artifact.id,
+    candidates: [
+      {
+        rank: 1,
+        id: artifact.id,
+        label: artifact.label,
+        path: artifact.path,
+        status: artifact.status,
+        priority: 2,
+        selected: true,
+        refreshCommand: command,
+        refreshSource: artifact.refreshSource,
+      },
+    ],
   };
 }
 

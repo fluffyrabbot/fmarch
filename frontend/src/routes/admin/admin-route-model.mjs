@@ -408,6 +408,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     action.artifact !== null && typeof action.artifact === "object"
       ? action.artifact
       : null;
+  const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const checks = [
     Object.freeze({
       id: "next-command",
@@ -425,6 +426,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
             status: String(artifact.status ?? "unknown"),
           }),
         ]),
+    Object.freeze({
+      id: "selection-trace",
+      status: `${selectionTrace.candidateCount} candidates`,
+    }),
+    ...selectionTrace.candidates.map((candidate) =>
+      Object.freeze({
+        id: `selection-trace-${candidate.id}`,
+        status: candidate.selected
+          ? `selected:${candidate.status}`
+          : `rank-${candidate.rank}:${candidate.status}`,
+      }),
+    ),
   ];
   const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
   return Object.freeze({
@@ -454,9 +467,50 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       freshCount: Number(freshnessSummary.freshCount ?? 0),
       staleCount: Number(freshnessSummary.staleCount ?? 0),
       missingCount: Number(freshnessSummary.missingCount ?? 0),
+      selectionTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+function normalizeNextActionSelectionTrace(selectionTrace) {
+  if (
+    selectionTrace === null ||
+    typeof selectionTrace !== "object" ||
+    selectionTrace.strategy !== "development-spine-priority" ||
+    !Array.isArray(selectionTrace.candidates)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      candidateCount: 0,
+      selectedArtifactId: null,
+      candidates: Object.freeze([]),
+    });
+  }
+  const candidates = selectionTrace.candidates
+    .filter((candidate) => candidate !== null && typeof candidate === "object")
+    .map((candidate) =>
+      Object.freeze({
+        rank: Number(candidate.rank ?? 0),
+        id: String(candidate.id ?? "unknown"),
+        label: String(candidate.label ?? ""),
+        path: String(candidate.path ?? ""),
+        status: String(candidate.status ?? "unknown"),
+        priority: Number(candidate.priority ?? 0),
+        selected: candidate.selected === true,
+        refreshCommand: String(candidate.refreshCommand ?? ""),
+        refreshSource: String(candidate.refreshSource ?? "unknown"),
+      }),
+    );
+  return Object.freeze({
+    strategy: selectionTrace.strategy,
+    candidateCount: Number(selectionTrace.candidateCount ?? candidates.length),
+    selectedArtifactId:
+      typeof selectionTrace.selectedArtifactId === "string"
+        ? selectionTrace.selectedArtifactId
+        : null,
+    candidates: Object.freeze(candidates),
   });
 }
 

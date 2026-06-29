@@ -21,7 +21,9 @@ export function buildDevTestGameNextAction(
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
-  const artifact = firstArtifactNeedingRefresh(manifest);
+  const candidates = rankedArtifactsNeedingRefresh(manifest);
+  const artifact = candidates[0]?.artifact;
+  const selectionTrace = buildSelectionTrace(candidates);
   const nextAction =
     artifact === undefined
       ? {
@@ -59,6 +61,7 @@ export function buildDevTestGameNextAction(
       artifactFreshnessSummary: { ...manifest.artifactFreshness.summary },
     },
     nextAction,
+    selectionTrace,
   };
   assertDevTestGameNextAction(evidence);
   return evidence;
@@ -95,6 +98,7 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action artifact recovery is missing an artifact id");
   }
+  assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
   return evidence;
 }
 
@@ -114,7 +118,7 @@ export async function writeDevTestGameNextAction({
   return evidence;
 }
 
-function firstArtifactNeedingRefresh(manifest) {
+function rankedArtifactsNeedingRefresh(manifest) {
   const artifacts = (manifest.artifactFreshness?.artifacts ?? []).filter(
     (artifact) => artifact.status !== "fresh",
   );
@@ -131,7 +135,67 @@ function firstArtifactNeedingRefresh(manifest) {
         left.statusPriority - right.statusPriority ||
         artifactAgeSeconds(right.artifact) - artifactAgeSeconds(left.artifact) ||
         left.index - right.index,
-    )[0]?.artifact;
+    );
+}
+
+function buildSelectionTrace(candidates) {
+  const selectedArtifactId = candidates[0]?.artifact.id ?? null;
+  return {
+    strategy: "development-spine-priority",
+    candidateCount: candidates.length,
+    selectedArtifactId,
+    candidates: candidates.map(({ artifact, priority }, index) => ({
+      rank: index + 1,
+      id: artifact.id,
+      label: artifact.label,
+      path: artifact.path,
+      status: artifact.status,
+      priority,
+      selected: artifact.id === selectedArtifactId,
+      refreshCommand: artifact.nextCommand ?? artifact.refreshCommand,
+      refreshSource: artifact.refreshSource,
+      ...(artifact.ageSeconds === undefined ? {} : { ageSeconds: artifact.ageSeconds }),
+      ...(artifact.maxAgeSeconds === undefined
+        ? {}
+        : { maxAgeSeconds: artifact.maxAgeSeconds }),
+    })),
+  };
+}
+
+function assertSelectionTrace(selectionTrace, nextAction) {
+  if (
+    selectionTrace?.strategy !== "development-spine-priority" ||
+    !Number.isInteger(selectionTrace.candidateCount) ||
+    !Array.isArray(selectionTrace.candidates)
+  ) {
+    throw new Error("next-action selection trace is missing or malformed");
+  }
+  if (selectionTrace.candidateCount !== selectionTrace.candidates.length) {
+    throw new Error("next-action selection trace candidate count drifted");
+  }
+  if (selectionTrace.candidateCount === 0) {
+    if (
+      selectionTrace.selectedArtifactId !== null ||
+      nextAction.reason !== "all-artifacts-fresh"
+    ) {
+      throw new Error("next-action fresh trace has a selected artifact");
+    }
+    return;
+  }
+  const [selected, ...rest] = selectionTrace.candidates;
+  if (
+    nextAction.reason !== "artifact-not-fresh" ||
+    selected.selected !== true ||
+    selected.id !== selectionTrace.selectedArtifactId ||
+    nextAction.artifact?.id !== selected.id
+  ) {
+    throw new Error("next-action selection trace does not match selected artifact");
+  }
+  for (const candidate of rest) {
+    if (candidate.selected === true) {
+      throw new Error(`next-action selection trace has duplicate selection: ${candidate.id}`);
+    }
+  }
 }
 
 function artifactAgeSeconds(artifact) {

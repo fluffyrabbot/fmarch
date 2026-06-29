@@ -196,7 +196,8 @@ npm run test:dev-test-game-spine-manifest
 
 The generated next-action receipt, which reads the spine manifest and emits the
 highest-priority stale or missing development-spine recovery/freshness command
-without claiming release or production readiness, is:
+plus a ranked selection trace without claiming release or production readiness,
+is:
 
 ```sh
 npm run test:dev-test-game-next-action

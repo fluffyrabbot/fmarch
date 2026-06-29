@@ -414,6 +414,26 @@ test("dev test-game next-action derives one local recovery command from the mani
       refreshSource: "admin-spine-recovery",
     },
   });
+  assert.deepEqual(staleAction.selectionTrace, {
+    strategy: "development-spine-priority",
+    candidateCount: 1,
+    selectedArtifactId: "core-loop",
+    candidates: [
+      {
+        rank: 1,
+        id: "core-loop",
+        label: "Core loop admin proof",
+        path: "target/dev-test-game/core-loop-admin-proof.json",
+        status: "stale",
+        priority: 2,
+        selected: true,
+        refreshCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+        refreshSource: "admin-spine-recovery",
+        ageSeconds: 90000,
+        maxAgeSeconds: 86400,
+      },
+    ],
+  });
 
   const freshManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -451,6 +471,12 @@ test("dev test-game next-action derives one local recovery command from the mani
     command: "test:dev-test-game-proof-freshness-admin-proof",
     reason: "all-artifacts-fresh",
     status: "ready",
+  });
+  assert.deepEqual(freshAction.selectionTrace, {
+    strategy: "development-spine-priority",
+    candidateCount: 0,
+    selectedArtifactId: null,
+    candidates: [],
   });
 });
 
@@ -514,6 +540,28 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
       refreshSource: "manifest-default",
     },
   });
+  assert.deepEqual(
+    staleAction.selectionTrace.candidates.map((candidate) => [
+      candidate.rank,
+      candidate.id,
+      candidate.status,
+      candidate.priority,
+      candidate.selected,
+      candidate.refreshCommand,
+    ]),
+    [
+      [
+        1,
+        "proof-run",
+        "stale",
+        0,
+        true,
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      ],
+      [2, "release", "missing", 13, false, "npm run test:dev-test-game-release-admin-proof"],
+      [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
+    ],
+  );
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {

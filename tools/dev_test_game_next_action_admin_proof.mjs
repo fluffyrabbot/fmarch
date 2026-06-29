@@ -58,6 +58,14 @@ await runAdminAuditProof({
       reason: source.nextAction.nextAction.reason,
       actionStatus: source.nextAction.nextAction.status,
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
+      selectionTrace: {
+        strategy: source.nextAction.selectionTrace.strategy,
+        candidateCount: source.nextAction.selectionTrace.candidateCount,
+        selectedArtifactId: source.nextAction.selectionTrace.selectedArtifactId,
+        candidateIds: source.nextAction.selectionTrace.candidates.map(
+          (candidate) => candidate.id,
+        ),
+      },
     },
     adminRoleSurface,
   }),
@@ -81,6 +89,13 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof did not prove admin overview click-through");
   }
+  if (
+    evidence.generatedFrom?.selectionTrace?.strategy !== "development-spine-priority" ||
+    !Number.isInteger(evidence.generatedFrom.selectionTrace.candidateCount) ||
+    !Array.isArray(evidence.generatedFrom.selectionTrace.candidateIds)
+  ) {
+    throw new Error("next-action admin proof is missing selection trace evidence");
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -90,9 +105,12 @@ export function assertNextActionAdminProof(evidence) {
 }
 
 function requiredChecksForNextAction(nextAction) {
-  const checks = ["next-command", nextAction.nextAction.reason];
+  const checks = ["next-command", nextAction.nextAction.reason, "selection-trace"];
   if (nextAction.nextAction.artifact?.id !== undefined) {
     checks.push(nextAction.nextAction.artifact.id);
+  }
+  for (const candidate of nextAction.selectionTrace.candidates) {
+    checks.push(`selection-trace-${candidate.id}`);
   }
   return checks;
 }
@@ -101,8 +119,12 @@ function requiredChecksForEvidence(evidence) {
   return [
     "next-command",
     evidence.generatedFrom?.reason ?? "unknown",
+    "selection-trace",
     ...(typeof evidence.generatedFrom?.artifactId === "string"
       ? [evidence.generatedFrom.artifactId]
+      : []),
+    ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
+      ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)
       : []),
   ];
 }
