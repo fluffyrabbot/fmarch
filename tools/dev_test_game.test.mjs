@@ -1821,6 +1821,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
           actorSlot: "slot-7",
           actorAlive: true,
           actions: [],
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
         },
         capabilityLabel: "SlotOccupant or ChannelMember(main)",
         stableHistoryVisible: true,
@@ -1845,6 +1850,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
           authorSlot: "slot-7",
           body: "Replacement Rowan post from dev:test-game",
         },
+        replacementVoteTarget: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
         vote: {
           requestEnvelope: {
             body: {
@@ -1853,7 +1859,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
                 command: {
                   SubmitVote: {
                     actor_slot: "slot-7",
-                    target: { Slot: "slot_5" },
+                    target: { Slot: "slot-3" },
                   },
                 },
               },
@@ -2035,16 +2041,89 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         hostPhaseAfterUnlock: { locked: false },
       },
+      staleDeadTargetVote: {
+        status: "passed",
+        commandStateBeforeClose: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        staleTarget: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        staleVoteButton: {
+          action: "submit_vote",
+          disabled: false,
+          text: "Vote Slot 3",
+        },
+        currentVoteBeforeClose: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
+        closedStatus: { state: "closed" },
+        markDead: { state: "ack", slot: "slot-3", status: "dead" },
+        apiSlotAfterDead: { alive: false, status: "dead" },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; vote target is no longer valid, refresh and use current vote controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandStateAfterReject: {
+          currentVote: null,
+          voteTargets: [
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        apiCommandStateAfterReject: {
+          vote_targets: [
+            { kind: "slot", slot_id: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slot_id: null, label: "No lynch" },
+          ],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["votecount", "commandState"],
+        },
+        buttonsAfterReject: [
+          { action: "submit_vote", disabled: false, text: "Vote Slot 4" },
+          { action: "submit_vote:no_lynch", disabled: false, text: "Vote no lynch" },
+          { action: "withdraw_vote", disabled: true, text: "Withdraw vote" },
+        ],
+        currentVoteAfterReject: {
+          hasVote: "false",
+          text: "Current vote No current vote",
+        },
+        restoreAlive: { state: "ack", slot: "slot-3", status: "alive" },
+        apiSlotAfterRestore: { alive: true, status: "alive" },
+      },
       concurrentVoteRace: {
         status: "passed",
-        targetSlot: "slot_5",
+        targetSlot: "slot-3",
+        target: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+        playerCommandStateBeforeVote: {
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot_4", label: "Slot 4" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        actionCommandStateBeforeVote: {
+          voteTargets: [
+            { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+            { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
         playerVote: { state: "ack", streamSeqs: [45] },
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
       },
       hostVotecountPublication: {
         status: "passed",
-        expectedBody: "Official votecount for D02\n- slot_5: 2",
+        expectedBody: "Official votecount for D02\n- slot-3: 2",
         publish: {
           commandStatus: {
             state: "ack",
@@ -2060,11 +2139,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
           },
         },
         playerThreadPost: {
-          body: "Official votecount for D02\n- slot_5: 2",
+          body: "Official votecount for D02\n- slot-3: 2",
           authorLabel: "host",
         },
         apiThreadPost: {
-          body: "Official votecount for D02\n- slot_5: 2",
+          body: "Official votecount for D02\n- slot-3: 2",
           author_user: "host",
         },
         activityStatusText: "Ack: stream seqs 47",
@@ -2074,7 +2153,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         actionId: "publish_votecount",
         setup: {
           stalePhase: { id: "D02", locked: false },
-          votecountRows: [{ target: "slot_5", count: 2 }],
+          votecountRows: [{ target: "slot-3", count: 2 }],
           votecountActions: ["publish_votecount"],
           closedStatus: { state: "closed" },
         },
@@ -2767,7 +2846,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("Duplicate retry: Ack: stream seqs 44"));
   assert(markdown.includes("Reconnect: attempt 1 recovered"));
   assert(markdown.includes("Stale player vote: Reject PhaseLocked"));
-  assert(markdown.includes("Concurrent vote race: slot_5 count 2"));
+  assert(markdown.includes("Stale dead-target vote: Reject InvalidTarget"));
+  assert(markdown.includes("Concurrent vote race: slot-3 count 2"));
   assert(markdown.includes("Host lifecycle: Ack: stream seqs 48"));
   assert(markdown.includes("Stale host lifecycle: Reject InvalidTarget"));
   assert(markdown.includes("Host modkill: Ack: stream seqs 49"));
@@ -2824,6 +2904,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "idempotent-retry",
       "reconnect-recovery",
       "stale-player-vote",
+      "stale-dead-target-vote",
       "concurrent-vote-race",
       "host-votecount-publication",
       "stale-host-publish",
@@ -2913,7 +2994,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 52);
+  assert.equal(opsArtifacts.proofRun.laneCount, 53);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,

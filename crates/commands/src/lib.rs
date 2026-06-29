@@ -4697,17 +4697,14 @@ async fn active_action_exists(
     Ok(active)
 }
 
-/// A vote target is `no_lynch` or a slot that exists in this game.
+/// A vote target is `no_lynch` or a currently alive slot in this game.
 async fn validate_target(pool: &PgPool, game: Uuid, target: &VoteTarget) -> Result<String, Reject> {
     match target {
         VoteTarget::NoLynch => Ok("no_lynch".to_string()),
-        VoteTarget::Slot(s) => {
-            if projections::slot_exists(pool, game, s).await? {
-                Ok(s.clone())
-            } else {
-                Err(Reject::InvalidTarget)
-            }
-        }
+        VoteTarget::Slot(s) => match projections::slot_alive(pool, game, s).await? {
+            Some(true) => Ok(s.clone()),
+            Some(false) | None => Err(Reject::InvalidTarget),
+        },
     }
 }
 

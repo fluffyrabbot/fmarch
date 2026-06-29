@@ -335,6 +335,35 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     "Reject SlotNotAlive: slot not alive; actor is no longer alive, refresh and use current action controls",
   );
 
+  const staleVoteTargetReject = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "submit_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      target: "slot-2",
+    }),
+    commandIdFactory: () => "88888888-8888-4888-8888-888888888888",
+    envelopeIdFactory: () => 17,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 17,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "InvalidTarget",
+            retryable: false,
+            message: "invalid target",
+          },
+        },
+      }),
+  });
+  assert.equal(
+    staleVoteTargetReject.message,
+    "Reject InvalidTarget: invalid target; vote target is no longer valid, refresh and use current vote controls",
+  );
+
   const alreadySubmittedReject = await sendCommand({
     principalUserId: "player_mira",
     command: buildPlayerCommand({

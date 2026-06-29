@@ -297,6 +297,8 @@ assert.equal(session.verification.actionLoop.resolveNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.resolvedTargetSlot.alive, false);
 assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
+const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
+const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -310,7 +312,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.expectedBody,
-  "Official votecount for D02\n- slot_5: 2",
+  expectedOfficialVotecountBody,
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost
@@ -319,7 +321,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.playerThreadPost.body,
-  "Official votecount for D02\n- slot_5: 2",
+  expectedOfficialVotecountBody,
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost
@@ -328,7 +330,7 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.apiThreadPost.body,
-  "Official votecount for D02\n- slot_5: 2",
+  expectedOfficialVotecountBody,
 );
 assert.match(
   session.verification.multiplayerHardening.hostVotecountPublication.activityStatusText,
@@ -1452,9 +1454,10 @@ assert.equal(
   "passed",
 );
 assert.equal(
-  session.verification.multiplayerHardening.concurrentVoteRace.targetSlot,
-  "slot_5",
+  typeof concurrentVoteRace.targetSlot,
+  "string",
 );
+assert.notEqual(concurrentVoteRace.targetSlot.length, 0);
 assert.equal(
   session.verification.multiplayerHardening.concurrentVoteRace.playerVote.state,
   "ack",
@@ -1473,13 +1476,13 @@ assert.equal(
 );
 assert.equal(
   session.verification.multiplayerHardening.concurrentVoteRace.playerProjection.some(
-    (row) => row.target === "slot_5" && row.count === 2,
+    (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
   ),
   true,
 );
 assert.equal(
   session.verification.multiplayerHardening.concurrentVoteRace.actionProjection.some(
-    (row) => row.target === "slot_5" && row.count === 2,
+    (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
   ),
   true,
 );

@@ -1344,6 +1344,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       voteState:
         verification.replacementConsole?.incomingPlayer?.vote?.serverEnvelope?.body?.kind ??
         null,
+      voteTarget:
+        verification.replacementConsole?.incomingPlayer?.replacementVoteTarget?.slotId ??
+        null,
       stableHistoryVisible:
         verification.replacementConsole?.incomingPlayer?.stableHistoryVisible ?? null,
       targetKillVisible:
@@ -1374,10 +1377,20 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
         verification.replacementConsole?.incomingPlayer?.rowanProjectedPost?.authorSlot ===
           "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.commandState?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId ===
+              verification.replacementConsole?.incomingPlayer?.replacementVoteTarget
+                ?.slotId,
+        ) === true &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
           ?.principal_user_id === "player-rowan" &&
         verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
           ?.command?.SubmitVote?.actor_slot === "slot-7" &&
+        verification.replacementConsole?.incomingPlayer?.vote?.requestEnvelope?.body?.body
+          ?.command?.SubmitVote?.target?.Slot ===
+          verification.replacementConsole?.incomingPlayer?.replacementVoteTarget?.slotId &&
         verification.replacementConsole?.incomingPlayer?.vote?.serverEnvelope?.body?.kind ===
           "Ack" &&
         verification.replacementConsole?.incomingPlayer?.privateReceiptIsolation
@@ -1456,6 +1469,66 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) &&
         hardening.stalePlayerVote?.hostPhaseAfterUnlock?.locked === false,
     }),
+    lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
+      targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,
+      rejectError: hardening.staleDeadTargetVote?.reject?.error ?? null,
+      apiTargetAliveAfterDead:
+        hardening.staleDeadTargetVote?.apiSlotAfterDead?.alive ?? null,
+      refreshedTargets:
+        hardening.staleDeadTargetVote?.commandStateAfterReject?.voteTargets ?? null,
+      restoreAlive:
+        hardening.staleDeadTargetVote?.apiSlotAfterRestore?.alive ?? null,
+      passed:
+        hardening.staleDeadTargetVote?.status === "passed" &&
+        hardening.staleDeadTargetVote?.staleTarget?.kind === "slot" &&
+        hardening.staleDeadTargetVote?.commandStateBeforeClose?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.staleDeadTargetVote?.staleTarget?.slotId,
+        ) === true &&
+        hardening.staleDeadTargetVote?.staleVoteButton?.disabled === false &&
+        hardening.staleDeadTargetVote?.currentVoteBeforeClose?.hasVote ===
+          "false" &&
+        hardening.staleDeadTargetVote?.closedStatus?.state === "closed" &&
+        hardening.staleDeadTargetVote?.markDead?.state === "ack" &&
+        hardening.staleDeadTargetVote?.apiSlotAfterDead?.alive === false &&
+        hardening.staleDeadTargetVote?.apiSlotAfterDead?.status === "dead" &&
+        hardening.staleDeadTargetVote?.reject?.state === "reject" &&
+        hardening.staleDeadTargetVote?.reject?.error === "InvalidTarget" &&
+        hardening.staleDeadTargetVote?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.staleDeadTargetVote?.reject?.streamSeqs) ===
+          false &&
+        hardening.staleDeadTargetVote?.reject?.message?.includes(
+          "vote target is no longer valid",
+        ) === true &&
+        hardening.staleDeadTargetVote?.dispatchPlan?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        hardening.staleDeadTargetVote?.commandStateAfterReject?.currentVote ===
+          null &&
+        hardening.staleDeadTargetVote?.commandStateAfterReject?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.staleDeadTargetVote?.staleTarget?.slotId,
+        ) === false &&
+        hardening.staleDeadTargetVote?.commandStateAfterReject?.voteTargets?.some(
+          (target) => target.kind === "slot",
+        ) === true &&
+        hardening.staleDeadTargetVote?.buttonsAfterReject?.some((button) =>
+          button.text?.includes(hardening.staleDeadTargetVote?.staleTarget?.label),
+        ) === false &&
+        hardening.staleDeadTargetVote?.currentVoteAfterReject?.hasVote ===
+          "false" &&
+        hardening.staleDeadTargetVote?.apiCommandStateAfterReject?.vote_targets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slot_id === hardening.staleDeadTargetVote?.staleTarget?.slotId,
+        ) === false &&
+        hardening.staleDeadTargetVote?.restoreAlive?.state === "ack" &&
+        hardening.staleDeadTargetVote?.apiSlotAfterRestore?.alive === true &&
+        hardening.staleDeadTargetVote?.apiSlotAfterRestore?.status === "alive",
+    }),
     lane("concurrent-vote-race", "Concurrent player votes converge in projections", {
       targetSlot: hardening.concurrentVoteRace?.targetSlot ?? null,
       playerState: hardening.concurrentVoteRace?.playerVote?.state ?? null,
@@ -1467,7 +1540,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
       apiCount: hardening.concurrentVoteRace?.apiProjection?.count ?? null,
       passed:
         hardening.concurrentVoteRace?.status === "passed" &&
-        hardening.concurrentVoteRace?.targetSlot === "slot_5" &&
+        typeof hardening.concurrentVoteRace?.targetSlot === "string" &&
+        hardening.concurrentVoteRace?.targetSlot.length > 0 &&
+        hardening.concurrentVoteRace?.playerCommandStateBeforeVote?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.concurrentVoteRace?.targetSlot,
+        ) === true &&
+        hardening.concurrentVoteRace?.actionCommandStateBeforeVote?.voteTargets?.some(
+          (target) =>
+            target.kind === "slot" &&
+            target.slotId === hardening.concurrentVoteRace?.targetSlot,
+        ) === true &&
         hardening.concurrentVoteRace?.playerVote?.state === "ack" &&
         hardening.concurrentVoteRace?.actionVote?.state === "ack" &&
         !sameArray(
@@ -1493,14 +1577,14 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.hostVotecountPublication?.publish?.commandStatus?.state === "ack" &&
         hardening.hostVotecountPublication?.publish?.commandStatus?.requestEnvelope?.body
           ?.body?.command?.PublishVotecount?.game === session?.game &&
-        hardening.hostVotecountPublication?.expectedBody ===
-          "Official votecount for D02\n- slot_5: 2" &&
         hardening.hostVotecountPublication?.playerThreadPost?.body ===
           hardening.hostVotecountPublication?.expectedBody &&
         hardening.hostVotecountPublication?.playerThreadPost?.authorLabel === "host" &&
         hardening.hostVotecountPublication?.apiThreadPost?.body ===
           hardening.hostVotecountPublication?.expectedBody &&
         hardening.hostVotecountPublication?.apiThreadPost?.author_user === "host" &&
+        hardening.hostVotecountPublication?.expectedBody ===
+          `Official votecount for D02\n- ${hardening.concurrentVoteRace?.targetSlot}: ${hardening.concurrentVoteRace?.apiProjection?.count}` &&
         hardening.hostVotecountPublication?.activityStatusText?.includes(
           "Ack: stream seqs",
         ) === true,

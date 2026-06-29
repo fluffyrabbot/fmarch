@@ -70307,6 +70307,38 @@ async fn submit_vote_enforces_pack_no_lynch_and_self_vote_policy(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_vote_rejects_dead_target_as_invalid_target(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    add_vanilla_slot(&pool, game, "host_h", "slot_2").await;
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::SetSlotStatus {
+            game,
+            slot: "slot_2".into(),
+            status: domain::SlotLifecycle::Dead,
+        },
+    )
+    .await
+    .expect("host marks vote target dead");
+
+    let err = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitVote {
+            game,
+            actor_slot: "slot_1".into(),
+            target: VoteTarget::Slot("slot_2".into()),
+        },
+    )
+    .await
+    .expect_err("dead vote target should be rejected before VoteSubmitted");
+    assert_eq!(err, Reject::InvalidTarget);
+    assert_eq!(tally_for(&pool, game, "D01", "slot_2").await, 0);
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn submit_vote_hammer_locks_phase_when_threshold_is_reached(pool: PgPool) {
     let game = Uuid::new_v4();
     let h = user("host_h");
