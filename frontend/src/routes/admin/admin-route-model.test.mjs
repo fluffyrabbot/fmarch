@@ -583,8 +583,27 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "artifact-refresh-status-recorded",
       "terminal-artifacts-recorded",
       "release-boundary-carried",
+      "proof-freshness-handoff",
+      "next-action-handoff",
     ],
   );
+  assert.deepEqual(manifest.relatedLinks, [
+    {
+      id: "local-proof-freshness",
+      label: "Proof freshness",
+      href: "/admin/audit/local-proof-freshness?game=midsummer",
+      status: "blocked",
+      command:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    },
+    {
+      id: "local-next-action",
+      label: "Ranked next action",
+      href: "/admin/audit/local-next-action?game=midsummer",
+      status: "test:dev-test-game-next-action",
+      command: "test:dev-test-game-next-action",
+    },
+  ]);
   assert.deepEqual(manifest.artifactSummary, {
     commandCount: 7,
     artifactCount: 6,
@@ -596,6 +615,8 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     missingCount: 0,
     nextCommand:
       "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    nextActionInspectHref: "/admin/audit/local-next-action?game=midsummer",
+    proofFreshnessInspectHref: "/admin/audit/local-proof-freshness?game=midsummer",
     releaseReady: false,
     productionReady: false,
   });
@@ -612,7 +633,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 7);
+  assert.equal(data.audit.checks.length, 9);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -623,6 +644,15 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["artifact-refresh-status-recorded", "passed"],
       ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
+      ["proof-freshness-handoff", "blocked"],
+      ["next-action-handoff", "test:dev-test-game-next-action"],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.relatedLinks.map((link) => [link.id, link.href]),
+    [
+      ["local-proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
+      ["local-next-action", "/admin/audit/local-next-action?game=midsummer"],
     ],
   );
 });
@@ -651,14 +681,25 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "release",
       "spine-manifest",
       "recovery",
+      "spine-manifest-handoff",
     ],
   );
+  assert.deepEqual(adminSpine.relatedLinks, [
+    {
+      id: "local-spine-manifest",
+      label: "Spine manifest",
+      href: "/admin/audit/local-spine-manifest?game=midsummer",
+      status: "passed",
+      command: "npm run test:dev-test-game-spine-manifest-admin-proof",
+    },
+  ]);
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
     proofCount: 8,
     recoveryStatus: "passed",
     refreshedCount: 8,
     nextCommand: "npm run test:dev-test-game-admin-spine",
+    spineManifestInspectHref: "/admin/audit/local-spine-manifest?game=midsummer",
     releaseReady: false,
     productionReady: false,
   });
@@ -675,7 +716,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, "local-admin-spine");
-  assert.equal(data.audit.checks.length, 9);
+  assert.equal(data.audit.checks.length, 10);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -688,6 +729,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["release", "passed"],
       ["spine-manifest", "passed"],
       ["recovery", "passed"],
+      ["spine-manifest-handoff", "passed"],
     ],
   );
   assert.equal(
@@ -698,6 +740,15 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
     data.audit.checks.find((check) => check.id === "recovery").nextCommand,
     "npm run test:dev-test-game-admin-spine",
   );
+  assert.deepEqual(data.audit.relatedLinks, [
+    {
+      id: "local-spine-manifest",
+      label: "Spine manifest",
+      href: "/admin/audit/local-spine-manifest?game=midsummer",
+      status: "passed",
+      command: "npm run test:dev-test-game-spine-manifest-admin-proof",
+    },
+  ]);
 });
 
 test("admin route data exposes local proof freshness as a native audit row", async () => {

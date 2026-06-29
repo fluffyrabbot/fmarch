@@ -31,7 +31,9 @@ const requiredChecks = [
   "release",
   "spine-manifest",
   "recovery",
+  "spine-manifest-handoff",
 ];
+const requiredRelatedLinks = ["local-spine-manifest"];
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-admin-spine-admin-proof",
@@ -51,6 +53,7 @@ await runAdminAuditProof({
       game: source.proofRun.session.game,
       auditId: "local-admin-spine",
       requiredChecks,
+      requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -66,6 +69,7 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       proofIds: source.adminSpineProof.proofIds,
+      relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
   }),
@@ -98,6 +102,11 @@ export function assertAdminSpineAdminProof(evidence) {
   for (const checkId of requiredChecks) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`admin spine admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(`admin spine admin proof missing related link: ${linkId}`);
     }
   }
   return evidence;

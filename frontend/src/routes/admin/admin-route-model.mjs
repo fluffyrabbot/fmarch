@@ -677,6 +677,22 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
     artifactFreshness.summary !== null && typeof artifactFreshness.summary === "object"
       ? artifactFreshness.summary
       : {};
+  const spineManifestRelatedLinks = Object.freeze([
+    Object.freeze({
+      id: "local-proof-freshness",
+      label: "Proof freshness",
+      href: adminAuditInspectHref({ game, audit: "local-proof-freshness" }),
+      status: String(artifactFreshness.status ?? "unknown"),
+      command: String(artifactFreshness.nextCommand ?? ""),
+    }),
+    Object.freeze({
+      id: "local-next-action",
+      label: "Ranked next action",
+      href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+      status: String(spineManifest.commands?.nextAction?.script ?? "unknown"),
+      command: String(spineManifest.commands?.nextAction?.script ?? ""),
+    }),
+  ]);
   return Object.freeze({
     id: "local-spine-manifest",
     label: "Local spine manifest",
@@ -689,13 +705,24 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
     href: "target/dev-test-game/spine-manifest.json",
     inspectHref: adminAuditInspectHref({ game, audit: "local-spine-manifest" }),
     checks: Object.freeze(
-      checks.map((check) =>
+      [
+        ...checks.map((check) =>
+          Object.freeze({
+            id: String(check.id),
+            status: String(check.status),
+          }),
+        ),
         Object.freeze({
-          id: String(check.id),
-          status: String(check.status),
+          id: "proof-freshness-handoff",
+          status: String(artifactFreshness.status ?? "unknown"),
         }),
-      ),
+        Object.freeze({
+          id: "next-action-handoff",
+          status: String(spineManifest.commands?.nextAction?.script ?? "unknown"),
+        }),
+      ],
     ),
+    relatedLinks: spineManifestRelatedLinks,
     artifactSummary: Object.freeze({
       commandCount: commands.length,
       artifactCount: artifacts.length,
@@ -708,6 +735,11 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       staleCount: Number(freshnessSummary.staleCount ?? 0),
       missingCount: Number(freshnessSummary.missingCount ?? 0),
       nextCommand: String(artifactFreshness.nextCommand ?? ""),
+      nextActionInspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
+      proofFreshnessInspectHref: adminAuditInspectHref({
+        game,
+        audit: "local-proof-freshness",
+      }),
       releaseReady: spineManifest.releaseReady === true,
       productionReady: spineManifest.productionReady === true,
     }),
@@ -742,6 +774,21 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
     adminSpineProof.recovery !== null && typeof adminSpineProof.recovery === "object"
       ? adminSpineProof.recovery
       : {};
+  const adminSpineRelatedLinks = Object.freeze([
+    Object.freeze({
+      id: "local-spine-manifest",
+      label: "Spine manifest",
+      href: adminAuditInspectHref({ game, audit: "local-spine-manifest" }),
+      status: String(
+        proofs.find((proof) => proof?.id === "spine-manifest")?.status ?? "unknown",
+      ),
+      command:
+        String(
+          recovery.surfaces?.find((surface) => surface?.id === "spine-manifest")
+            ?.rerunCommand ?? "",
+        ),
+    }),
+  ]);
   return Object.freeze({
     id: "local-admin-spine",
     label: "Local admin spine",
@@ -772,14 +819,25 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
           status: String(recovery.status ?? "unknown"),
           nextCommand: String(recovery.nextCommand ?? ""),
         }),
+        Object.freeze({
+          id: "spine-manifest-handoff",
+          status: String(
+            proofs.find((proof) => proof?.id === "spine-manifest")?.status ?? "unknown",
+          ),
+        }),
       ],
     ),
+    relatedLinks: adminSpineRelatedLinks,
     artifactSummary: Object.freeze({
       game: String(adminSpineProof.generatedFrom?.game ?? ""),
       proofCount: proofs.length,
       recoveryStatus: String(recovery.status ?? "unknown"),
       refreshedCount: Number(recovery.refreshedCount ?? 0),
       nextCommand: String(recovery.nextCommand ?? ""),
+      spineManifestInspectHref: adminAuditInspectHref({
+        game,
+        audit: "local-spine-manifest",
+      }),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),

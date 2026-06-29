@@ -198,6 +198,10 @@ release or production readiness, is:
 npm run test:dev-test-game-spine-manifest
 ```
 
+The local-spine-manifest detail links to the proof-freshness dashboard and the
+ranked next-action receipt, making the manifest a navigable proof graph rather
+than only a static artifact inventory.
+
 The generated next-action receipt, which reads the spine manifest and emits the
 highest-priority stale or missing development-spine recovery/freshness command
 plus a ranked selection trace without claiming release or production readiness,
@@ -218,6 +222,10 @@ The seeded admin overview-to-local-spine-manifest detail browser proof is:
 ```sh
 npm run test:dev-test-game-spine-manifest-admin-proof
 ```
+
+The local-admin-spine detail links back to the local-spine-manifest detail so
+the aggregate admin proof can be followed into the generated command and
+artifact freshness graph.
 
 The local ops artifact bundle generator is:
 
