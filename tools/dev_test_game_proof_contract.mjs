@@ -58,6 +58,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-incoming-action",
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
+  "replacement-stale-private-post-after-resolve",
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -3176,6 +3177,132 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.phase?.locked === true &&
         hardening.replacementStaleActionAfterResolve?.targetNoticeAfterReject === null,
     }),
+    lane(
+      "replacement-stale-private-post-after-resolve",
+      "Stale replacement private post refreshes after resolve",
+      {
+        game: hardening.replacementStalePrivatePostAfterResolve?.game ?? null,
+        channel:
+          hardening.replacementStalePrivatePostAfterResolve?.channel ?? null,
+        postState:
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.state ??
+          null,
+        refreshedPhase:
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.phase?.phaseId ?? null,
+        refreshedLocked:
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.phase?.locked ?? null,
+        staleRouteStatus:
+          hardening.replacementStalePrivatePostAfterResolve
+            ?.staleOutgoingRouteAfterAck?.status ?? null,
+        passed:
+          hardening.replacementStalePrivatePostAfterResolve?.status === "passed" &&
+          hardening.replacementStalePrivatePostAfterResolve?.channel ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.hostEntry?.capabilityKinds?.includes(
+            "HostOf",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.staleOutgoingEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.replacementEntry?.capabilityKinds?.includes(
+            "SlotOccupant",
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.replacement?.state ===
+            "ack" &&
+          hardening.replacementStalePrivatePostAfterResolve?.replacement?.serverEnvelope
+            ?.body?.kind === "Ack" &&
+          hardening.replacementStalePrivatePostAfterResolve?.replacement
+            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot ===
+            "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.replacement
+            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.incoming_user ===
+            "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterResolve
+            ?.hostReplacementAfterProcess?.occupantLabel === "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateBeforeClose
+            ?.actorStatus === "alive" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateBeforeClose
+            ?.phase?.phaseId === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateBeforeClose
+            ?.phase?.locked === false &&
+          hardening.replacementStalePrivatePostAfterResolve?.channelContextBeforeClose
+            ?.channelId === "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.channelContextBeforeClose
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.channelContextBeforeClose
+            ?.capabilityLabel?.includes(
+              "ChannelMember(private:mafia_day_chat)",
+            ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.submitPostBeforeClose
+            ?.disabled === false &&
+          hardening.replacementStalePrivatePostAfterResolve?.closedStatus?.state ===
+            "closed" &&
+          hardening.replacementStalePrivatePostAfterResolve?.resolveDay?.commandStatus
+            ?.state === "ack" &&
+          hardening.replacementStalePrivatePostAfterResolve?.hostPhaseAfterResolve
+            ?.id === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.hostPhaseAfterResolve
+            ?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.apiCommandStateAfterResolve
+            ?.phase?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.state ===
+            "ack" &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.serverEnvelope
+            ?.body?.kind === "Ack" &&
+          Array.isArray(
+            hardening.replacementStalePrivatePostAfterResolve?.stalePost?.streamSeqs,
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.requestEnvelope
+            ?.body?.body?.principal_user_id === "player-rowan" &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.channel_id ===
+            "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.stalePost?.requestEnvelope
+            ?.body?.body?.command?.SubmitPost?.body ===
+            hardening.replacementStalePrivatePostAfterResolve?.postBody &&
+          hardening.replacementStalePrivatePostAfterResolve?.dispatchPlan
+            ?.projectionRefreshKeys?.includes("thread") === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.dispatchPlan
+            ?.projectionRefreshKeys?.includes("commandState") === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.currentReceipt
+            ?.actionId === "submit_post" &&
+          hardening.replacementStalePrivatePostAfterResolve?.currentReceipt
+            ?.state === "ack" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.actorStatus === "alive" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.phase?.phaseId === "D01" &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.phase?.locked === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.commandStateAfterAck
+            ?.voteTargets?.length === 0 &&
+          hardening.replacementStalePrivatePostAfterResolve?.channelContextAfterAck
+            ?.channelId === "private:mafia_day_chat" &&
+          hardening.replacementStalePrivatePostAfterResolve?.channelContextAfterAck
+            ?.actorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.projectedPost
+            ?.authorSlot === "slot-7" &&
+          hardening.replacementStalePrivatePostAfterResolve?.apiThreadPostBodies?.includes(
+            hardening.replacementStalePrivatePostAfterResolve?.postBody,
+          ) === true &&
+          hardening.replacementStalePrivatePostAfterResolve?.rowanPrivateIsolationAfterAck
+            ?.targetKillVisible === false &&
+          hardening.replacementStalePrivatePostAfterResolve?.rowanPrivateIsolationAfterAck
+            ?.actionResultVisible === false &&
+          hardening.replacementStalePrivatePostAfterResolve
+            ?.staleOutgoingRouteAfterAck?.status === 403 &&
+          hardening.replacementStalePrivatePostAfterResolve
+            ?.staleOutgoingThreadAfterAck?.status === 403,
+      },
+    ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
       targetSlot: hardening.staleDeadTargetVote?.staleTarget?.slotId ?? null,
       rejectError: hardening.staleDeadTargetVote?.reject?.error ?? null,

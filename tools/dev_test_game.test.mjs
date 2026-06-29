@@ -3417,6 +3417,99 @@ test("session card and markdown include role credential URLs and tokens", () => 
         outcomeSummary:
           "Rowan's stale replacement factional_kill rejected after N01 resolution without appending",
       },
+      replacementStalePrivatePostAfterResolve: {
+        status: "passed",
+        game: "replacement-stale-private-post-after-resolve-game-a",
+        channel: "private:mafia_day_chat",
+        hostEntry: { capabilityKinds: ["HostOf"] },
+        staleOutgoingEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+        replacement: {
+          state: "ack",
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  ProcessReplacement: {
+                    game: "replacement-stale-private-post-after-resolve-game-a",
+                    slot: "slot-7",
+                    outgoing_user: "player-mira",
+                    incoming_user: "player-rowan",
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostReplacementAfterProcess: { occupantLabel: "player-rowan" },
+        commandStateBeforeClose: {
+          actorSlot: "slot-7",
+          actorStatus: "alive",
+          phase: { phaseId: "D01", locked: false },
+        },
+        channelContextBeforeClose: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+          actorStatus: "alive",
+          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+        },
+        submitPostBeforeClose: { action: "submit_post", disabled: false },
+        closedStatus: { state: "closed" },
+        resolveDay: { commandStatus: { state: "ack" } },
+        hostPhaseAfterResolve: { id: "D01", locked: true },
+        apiCommandStateAfterResolve: {
+          actor_slot: "slot-7",
+          phase: { phase_id: "D01", locked: true },
+        },
+        postBody: "Replacement stale private post after resolve fixture",
+        stalePost: {
+          state: "ack",
+          streamSeqs: [71],
+          serverEnvelope: { body: { kind: "Ack" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-rowan",
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                    body: "Replacement stale private post after resolve fixture",
+                  },
+                },
+              },
+            },
+          },
+        },
+        dispatchPlan: { projectionRefreshKeys: ["thread", "commandState"] },
+        currentReceipt: { actionId: "submit_post", state: "ack" },
+        commandStateAfterAck: {
+          actorSlot: "slot-7",
+          actorStatus: "alive",
+          phase: { phaseId: "D01", locked: true },
+          voteTargets: [],
+        },
+        channelContextAfterAck: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot-7",
+        },
+        projectedPost: {
+          authorSlot: "slot-7",
+          body: "Replacement stale private post after resolve fixture",
+        },
+        apiThreadPostBodies: [
+          "Replacement stale private post after resolve fixture",
+        ],
+        rowanPrivateIsolationAfterAck: {
+          targetKillVisible: false,
+          actionResultVisible: false,
+        },
+        staleOutgoingRouteAfterAck: { status: 403 },
+        staleOutgoingThreadAfterAck: { status: 403 },
+        outcomeSummary:
+          "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
+      },
       staleHostPublishAfterChange: {
         status: "passed",
         actionId: "publish_votecount",
@@ -5155,6 +5248,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
+      "replacement-stale-private-post-after-resolve",
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -5255,7 +5349,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 79);
+  assert.equal(opsArtifacts.proofRun.laneCount, 80);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5362,6 +5456,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
+      "replacement-stale-private-post-after-resolve",
       "concurrent-host-resolve-race",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
@@ -5881,6 +5976,7 @@ function hardeningAdminProofFixture() {
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
+        "replacement-stale-private-post-after-resolve",
         "concurrent-vote-race",
         "stale-host-publish-after-change",
         "stale-host-publish",
@@ -6006,6 +6102,7 @@ function seedAdminProofFixture() {
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
+        "replacement-stale-private-post-after-resolve",
         "concurrent-host-resolve-race",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",

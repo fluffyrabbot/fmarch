@@ -311,6 +311,8 @@ const replacementActionReconnect =
   session.verification.multiplayerHardening.replacementActionReconnect;
 const replacementStaleActionAfterResolve =
   session.verification.multiplayerHardening.replacementStaleActionAfterResolve;
+const replacementStalePrivatePostAfterResolve =
+  session.verification.multiplayerHardening.replacementStalePrivatePostAfterResolve;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -2103,6 +2105,101 @@ assert.equal(
   true,
 );
 assert.equal(replacementStaleActionAfterResolve.targetNoticeAfterReject, null);
+assert.equal(replacementStalePrivatePostAfterResolve.status, "passed");
+assert.equal(replacementStalePrivatePostAfterResolve.channel, "private:mafia_day_chat");
+assert.equal(
+  replacementStalePrivatePostAfterResolve.hostEntry.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.replacementEntry.capabilityKinds.includes(
+    "SlotOccupant",
+  ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.slot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.replacement.requestEnvelope.body.body.command
+    .ProcessReplacement.incoming_user,
+  "player-rowan",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.commandStateBeforeClose.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.channelContextBeforeClose.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.submitPostBeforeClose.disabled,
+  false,
+);
+assert.equal(replacementStalePrivatePostAfterResolve.closedStatus.state, "closed");
+assert.equal(
+  replacementStalePrivatePostAfterResolve.resolveDay.commandStatus.state,
+  "ack",
+);
+assert.equal(replacementStalePrivatePostAfterResolve.hostPhaseAfterResolve.id, "D01");
+assert.equal(
+  replacementStalePrivatePostAfterResolve.hostPhaseAfterResolve.locked,
+  true,
+);
+assert.equal(replacementStalePrivatePostAfterResolve.stalePost.state, "ack");
+assert.equal(
+  replacementStalePrivatePostAfterResolve.stalePost.requestEnvelope.body.body.command
+    .SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.stalePost.requestEnvelope.body.body.command
+    .SubmitPost.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.stalePost.requestEnvelope.body.body.command
+    .SubmitPost.body,
+  replacementStalePrivatePostAfterResolve.postBody,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.commandStateAfterAck.phase.phaseId,
+  "D01",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.commandStateAfterAck.phase.locked,
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.commandStateAfterAck.voteTargets.length,
+  0,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.channelContextAfterAck.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.apiThreadPostBodies.includes(
+    replacementStalePrivatePostAfterResolve.postBody,
+  ),
+  true,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.rowanPrivateIsolationAfterAck
+    .targetKillVisible,
+  false,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.staleOutgoingRouteAfterAck.status,
+  403,
+);
+assert.equal(
+  replacementStalePrivatePostAfterResolve.staleOutgoingThreadAfterAck.status,
+  403,
+);
 assert.equal(
   session.verification.multiplayerHardening.hostLifecycleControl.status,
   "passed",

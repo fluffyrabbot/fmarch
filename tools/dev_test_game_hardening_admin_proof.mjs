@@ -38,6 +38,7 @@ const requiredChecks = [
   "replacement-incoming-action",
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
+  "replacement-stale-private-post-after-resolve",
   "stale-host-publish",
   "stale-host-lifecycle",
   "stale-host-modkill",
