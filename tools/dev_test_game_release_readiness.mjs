@@ -1892,6 +1892,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   }
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
+  assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopHostPhaseTransitionSurface(proof.hostPhaseTransitionSurface);
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
@@ -2166,6 +2167,63 @@ function assertCoreLoopPlayerActionInvalidRecoveryProof({
       .includes("reject invalidtarget: invalid target")
   ) {
     throw new Error("core-loop admin proof missing player invalid-action recovery");
+  }
+}
+
+function assertCoreLoopTargetResolutionReceiptSurface(targetSurface) {
+  const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
+  if (
+    targetSurface?.status !== "passed" ||
+    targetSurface.clickedThroughFromRoleUrl !== true ||
+    targetSurface.releaseReady !== false ||
+    targetSurface.productionReady !== false ||
+    targetSurface.rawInviteTokensVisible !== false ||
+    targetSurface.targetSlot !== "slot-2" ||
+    targetSurface.principalUserId !== "player_ilya" ||
+    typeof targetSurface.sourceRoleUrl !== "string" ||
+    !targetSurface.sourceRoleUrl.includes("/g/") ||
+    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof targetSurface.visitedRolePath !== "string" ||
+    !targetSurface.visitedRolePath.includes("/g/") ||
+    !targetSurface.visitedRolePath.includes("private=notification-1") ||
+    targetSurface.surfaceTestId !== "player-surface" ||
+    targetSurface.checkpoint?.phaseId !== "N01" ||
+    targetSurface.checkpoint.phaseState !== "locked" ||
+    targetSurface.checkpoint.actorSlot !== "slot-2" ||
+    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
+    targetSurface.checkpoint.receiptState !== "idle" ||
+    !String(targetSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: actor is not alive") ||
+    targetSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    targetSurface.privateQueueBoundary.count !== 1 ||
+    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    targetSurface.privateNotice?.id !== "notification-1" ||
+    targetSurface.privateNotice.kind !== "notification" ||
+    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
+    !String(targetSurface.privateNotice.text ?? "").includes("factional_kill") ||
+    targetSurface.privateNotice.detailText !== "Phase N01" ||
+    targetSurface.projectionCommandState?.actorSlot !== "slot-2" ||
+    targetSurface.projectionCommandState?.actorAlive !== false ||
+    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
+    targetSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
+      "target role received factional_kill private receipt",
+    ) ||
+    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
+    targetSurface.projectionNotifications?.[0]?.status !== "factional_kill" ||
+    targetSurface.resyncFromSeq !== 901 ||
+    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-2" ||
+    targetSurface.resyncSnapshotNotifications?.[0]?.effect !== "player_killed" ||
+    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
+    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`
+  ) {
+    throw new Error("core-loop admin proof missing target resolution receipt surface");
   }
 }
 

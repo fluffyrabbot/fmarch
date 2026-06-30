@@ -153,6 +153,18 @@ function fixtureSession({ token, context }) {
           },
         ]),
       });
+    case "fixture-target":
+      return Object.freeze({
+        principalUserId: "player_ilya",
+        resolvedCapabilities: normalizeCapabilities([
+          {
+            kind: "SlotOccupant",
+            game,
+            slot: "slot-2",
+            source: "fixture",
+          },
+        ]),
+      });
     case "fixture-host":
       return Object.freeze({
         principalUserId: "host_h",

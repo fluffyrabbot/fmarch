@@ -9285,6 +9285,7 @@ function coreLoopAdminProofFixture() {
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
+    targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     hostPhaseTransitionSurface: hostPhaseTransitionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
@@ -9522,6 +9523,73 @@ function playerActionRoleSurfaceFixture() {
       receiptCount: 1,
       receiptStatusText: "Reject InvalidTarget: invalid target",
     },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function targetResolutionReceiptSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    visitedRolePath:
+      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    targetSlot: "slot-2",
+    principalUserId: "player_ilya",
+    checkpoint: {
+      phaseId: "N01",
+      phaseState: "locked",
+      actorSlot: "slot-2",
+      actionState: "disabled:actor is not alive",
+      receiptState: "idle",
+      statusText: "Player action unavailable: actor is not alive",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 1,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    privateNotice: {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed\nfactional_kill\nReview player_killed",
+      detailText: "Phase N01",
+    },
+    projectionCommandState: {
+      actorSlot: "slot-2",
+      actorAlive: false,
+      actorStatus: "dead",
+      actions: [],
+      boundary:
+        "Seeded browser target role received factional_kill private receipt after N01 resolution.",
+    },
+    projectionNotifications: [
+      {
+        effect: "player_killed",
+        phase_id: "N01",
+        status: "factional_kill",
+      },
+    ],
+    resyncFromSeq: 901,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-2",
+    },
+    resyncSnapshotNotifications: [
+      {
+        effect: "player_killed",
+      },
+    ],
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_ilya",
+      commandStateEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_ilya&slot_id=slot-2",
+    },
+    rawInviteTokensVisible: false,
     releaseReady: false,
     productionReady: false,
   };
