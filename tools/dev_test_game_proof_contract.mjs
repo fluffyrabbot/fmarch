@@ -50,6 +50,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-vote-after-phase-closure",
   "stale-player-post-after-phase-closure",
   "concurrent-player-vote-resolve-race",
+  "concurrent-player-vote-resolve-race-reload",
   "concurrent-player-action-advance-race",
   "concurrent-player-action-advance-race-reload",
   "concurrent-cohost-deadline-resolve-race",
@@ -2302,6 +2303,78 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.vote_targets?.length === 0 &&
           normalizedDayVoteOutcomeRows(
             hardening.concurrentPlayerVoteResolveRace?.apiDayVoteOutcomesAfterRace,
+          ).some(
+            (row) =>
+              row.phaseId === "D01" &&
+              row.status === "Lynch" &&
+              row.winnerSlot === "slot-2",
+          ) === true,
+      },
+    ),
+    lane(
+      "concurrent-player-vote-resolve-race-reload",
+      "Concurrent player vote and host resolve reload role surfaces",
+      {
+        game: hardening.concurrentPlayerVoteResolveRace?.game ?? null,
+        playerRouteStatus:
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.playerRouteResponseStatus ?? null,
+        hostRouteStatus:
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus ?? null,
+        phaseLocked:
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.locked ?? null,
+        outcomeStatus:
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.playerDayVoteOutcomesAfterReload?.[0]?.status ?? null,
+        passed:
+          hardening.concurrentPlayerVoteResolveRace?.status === "passed" &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.playerRouteResponseStatus === 200 &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus === 200 &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.phaseId === "D01" &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.locked === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.voteTargets?.length === 0 &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.buttonsAfterReload?.some((button) =>
+              button.action?.startsWith("submit_vote"),
+            ) === false &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.buttonsAfterReload?.some(
+              (button) => button.action === "submit_post" && button.disabled === false,
+            ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.id === "D01" &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.locked === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.hostDayVoteOutcomesAfterReload?.some(
+              (row) =>
+                row.phaseId === "D01" &&
+                row.status === "Lynch" &&
+                row.winnerSlot === "slot-2",
+            ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.playerDayVoteOutcomesAfterReload?.some(
+              (row) =>
+                row.phaseId === "D01" &&
+                row.status === "Lynch" &&
+                row.winnerSlot === "slot-2",
+            ) === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.phase?.locked === true &&
+          hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.vote_targets?.length === 0 &&
+          normalizedDayVoteOutcomeRows(
+            hardening.concurrentPlayerVoteResolveRace?.roleReloadAfterRace
+              ?.apiDayVoteOutcomesAfterReload,
           ).some(
             (row) =>
               row.phaseId === "D01" &&

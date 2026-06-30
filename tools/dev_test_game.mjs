@@ -4354,7 +4354,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked while both role URLs converge to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked, then reloads player and host role URLs to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge to the same projected votecount, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -12956,12 +12956,28 @@ async function verifyConcurrentPlayerVoteResolveRace({
     frontendBaseUrl,
   });
   try {
-    await Promise.all([
-      gotoPlayerBoard(playerEntry.page, raceGame),
+    const [playerInitialResponse, hostInitialResponse] = await Promise.all([
+      playerEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}`, {
+        waitUntil: "networkidle",
+      }),
       hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
         waitUntil: "networkidle",
       }),
     ]);
+    if (
+      playerInitialResponse === null ||
+      !playerInitialResponse.ok() ||
+      hostInitialResponse === null ||
+      !hostInitialResponse.ok()
+    ) {
+      throw new Error(
+        `concurrent player vote/resolve initial load failed: ${JSON.stringify({
+          playerStatus: playerInitialResponse?.status() ?? null,
+          hostStatus: hostInitialResponse?.status() ?? null,
+        })}`,
+      );
+    }
+    await playerEntry.page.getByTestId("player-surface").waitFor({ state: "visible" });
     await Promise.all([
       playerEntry.page.waitForFunction(
         () =>
@@ -13059,12 +13075,28 @@ async function verifyConcurrentPlayerVoteResolveRace({
       );
     }
 
-    await Promise.all([
-      gotoPlayerBoard(playerEntry.page, raceGame),
+    const [playerReloadResponse, hostReloadResponse] = await Promise.all([
+      playerEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}`, {
+        waitUntil: "networkidle",
+      }),
       hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
         waitUntil: "networkidle",
       }),
     ]);
+    if (
+      playerReloadResponse === null ||
+      !playerReloadResponse.ok() ||
+      hostReloadResponse === null ||
+      !hostReloadResponse.ok()
+    ) {
+      throw new Error(
+        `concurrent player vote/resolve reload failed: ${JSON.stringify({
+          playerStatus: playerReloadResponse?.status() ?? null,
+          hostStatus: hostReloadResponse?.status() ?? null,
+        })}`,
+      );
+    }
+    await playerEntry.page.getByTestId("player-surface").waitFor({ state: "visible" });
     await Promise.all([
       playerEntry.page.waitForFunction(
         () =>
@@ -13118,6 +13150,18 @@ async function verifyConcurrentPlayerVoteResolveRace({
         row.status === "Lynch" &&
         row.winnerSlot === "slot-2",
     );
+    const roleReloadAfterRace = {
+      status: "passed",
+      playerRouteResponseStatus: playerReloadResponse.status(),
+      hostRouteResponseStatus: hostReloadResponse.status(),
+      commandStateAfterReload: commandStateAfterRace,
+      buttonsAfterReload: buttonsAfterRace,
+      hostPhaseAfterReload: hostPhaseAfterRace,
+      hostDayVoteOutcomesAfterReload: hostDayVoteOutcomesAfterRace,
+      playerDayVoteOutcomesAfterReload: playerDayVoteOutcomesAfterRace,
+      apiCommandStateAfterReload: apiCommandStateAfterRace,
+      apiDayVoteOutcomesAfterReload: apiDayVoteOutcomesAfterRace,
+    };
     if (
       commandStateAfterRace?.phase?.phaseId !== "D01" ||
       commandStateAfterRace?.phase?.locked !== true ||
@@ -13141,7 +13185,9 @@ async function verifyConcurrentPlayerVoteResolveRace({
       ) ||
       apiCommandStateAfterRace?.phase?.locked !== true ||
       apiCommandStateAfterRace?.vote_targets?.length !== 0 ||
-      expectedOutcome === undefined
+      expectedOutcome === undefined ||
+      roleReloadAfterRace.playerRouteResponseStatus !== 200 ||
+      roleReloadAfterRace.hostRouteResponseStatus !== 200
     ) {
       throw new Error(
         `concurrent player vote/resolve race convergence drifted: ${JSON.stringify({
@@ -13155,6 +13201,7 @@ async function verifyConcurrentPlayerVoteResolveRace({
           playerDayVoteOutcomesAfterRace,
           apiCommandStateAfterRace,
           apiDayVoteOutcomesAfterRace,
+          roleReloadAfterRace,
         })}`,
       );
     }
@@ -13194,8 +13241,9 @@ async function verifyConcurrentPlayerVoteResolveRace({
       playerDayVoteOutcomesAfterRace,
       apiCommandStateAfterRace,
       apiDayVoteOutcomesAfterRace,
+      roleReloadAfterRace,
       proof:
-        "A disposable player role URL and host role URL raced SubmitVote against ResolvePhase through /commands, accepted only vote-before-resolve ACK ordering or PhaseLocked rejection, then refreshed browser and API projections to locked D01 day-vote outcome truth with vote controls removed.",
+        "A disposable player role URL and host role URL raced SubmitVote against ResolvePhase through /commands, accepted only vote-before-resolve ACK ordering or PhaseLocked rejection, then reloaded browser and API projections to locked D01 day-vote outcome truth with vote controls removed.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});

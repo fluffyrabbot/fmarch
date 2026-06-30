@@ -299,6 +299,8 @@ assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ac
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+const voteResolveRace =
+  session.verification.multiplayerHardening.concurrentPlayerVoteResolveRace;
 const actionAdvanceRace =
   session.verification.multiplayerHardening.concurrentPlayerActionAdvanceRace;
 const cohostDeadlineResolveRace =
@@ -1507,6 +1509,93 @@ assert.equal(
 assert.equal(
   session.verification.multiplayerHardening.concurrentVoteRace.actionProjection.some(
     (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
+  ),
+  true,
+);
+assert.equal(voteResolveRace.status, "passed");
+assert.equal(voteResolveRace.hostEntry.capabilityKinds.includes("HostOf"), true);
+assert.equal(voteResolveRace.playerEntry.capabilityKinds.includes("SlotOccupant"), true);
+assert.equal(voteResolveRace.setupCommandState.actorSlot, "slot_4");
+assert.equal(voteResolveRace.setupCommandState.phase.phaseId, "D01");
+assert.equal(voteResolveRace.setupCommandState.phase.locked, false);
+assert.equal(voteResolveRace.setupVoteButton.disabled, false);
+assert.equal(voteResolveRace.setupHostPhase.locked, false);
+assert.equal(voteResolveRace.setupHostPhaseActions.includes("resolve_phase"), true);
+assert.equal(voteResolveRace.resolve.state, "ack");
+assert.equal(voteResolveRace.resolve.serverEnvelope.body.kind, "Ack");
+assert.equal(voteResolveRace.resolve.streamSeqs.length >= 3, true);
+assert.equal(
+  voteResolveRace.resolve.requestEnvelope.body.body.command.ResolvePhase.game,
+  voteResolveRace.game,
+);
+assert.equal(
+  voteResolveRace.vote.requestEnvelope.body.body.command.SubmitVote.actor_slot,
+  "slot_4",
+);
+if (voteResolveRace.vote.state === "ack") {
+  assert.equal(voteResolveRace.vote.serverEnvelope.body.kind, "Ack");
+  assert.equal(voteResolveRace.voteSeq < voteResolveRace.resolveSeq, true);
+} else {
+  assert.equal(voteResolveRace.vote.state, "reject");
+  assert.equal(voteResolveRace.vote.error, "PhaseLocked");
+  assert.equal(voteResolveRace.vote.serverEnvelope.body.kind, "Reject");
+  assert.equal(Array.isArray(voteResolveRace.vote.streamSeqs), false);
+}
+assert.equal(voteResolveRace.roleReloadAfterRace.status, "passed");
+assert.equal(voteResolveRace.roleReloadAfterRace.playerRouteResponseStatus, 200);
+assert.equal(voteResolveRace.roleReloadAfterRace.hostRouteResponseStatus, 200);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.commandStateAfterReload.phase.phaseId,
+  "D01",
+);
+assert.equal(voteResolveRace.roleReloadAfterRace.commandStateAfterReload.phase.locked, true);
+assert.equal(voteResolveRace.roleReloadAfterRace.commandStateAfterReload.voteTargets.length, 0);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.buttonsAfterReload.some((button) =>
+    button.action?.startsWith("submit_vote"),
+  ),
+  false,
+);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.buttonsAfterReload.some(
+    (button) => button.action === "submit_post" && button.disabled === false,
+  ),
+  true,
+);
+assert.equal(voteResolveRace.roleReloadAfterRace.hostPhaseAfterReload.id, "D01");
+assert.equal(voteResolveRace.roleReloadAfterRace.hostPhaseAfterReload.locked, true);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.hostDayVoteOutcomesAfterReload.some(
+    (row) =>
+      row.phaseId === "D01" &&
+      row.status === "Lynch" &&
+      row.winnerSlot === "slot-2",
+  ),
+  true,
+);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.playerDayVoteOutcomesAfterReload.some(
+    (row) =>
+      row.phaseId === "D01" &&
+      row.status === "Lynch" &&
+      row.winnerSlot === "slot-2",
+  ),
+  true,
+);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.apiCommandStateAfterReload.phase.locked,
+  true,
+);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.apiCommandStateAfterReload.vote_targets.length,
+  0,
+);
+assert.equal(
+  voteResolveRace.roleReloadAfterRace.apiDayVoteOutcomesAfterReload.some(
+    (row) =>
+      row.body?.phase_id === "D01" &&
+      row.body?.status === "Lynch" &&
+      row.body?.winner_slot === "slot-2",
   ),
   true,
 );

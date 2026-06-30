@@ -27,6 +27,7 @@ const requiredScenarios = [
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-player-vote-resolve-race",
+  "concurrent-player-vote-resolve-race-reload",
   "concurrent-player-action-advance-race",
   "concurrent-player-action-advance-race-reload",
   "concurrent-cohost-deadline-resolve-race",
