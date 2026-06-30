@@ -332,6 +332,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two action-player role pages submit factional_kill concurrently with distinct command ids, prove one ACK plus one ActionAlreadySubmitted recovery, and resolve only the winning action.",
     }),
     scenario({
+      id: "concurrent-vote-race-reload",
+      title: "Concurrent vote reload",
+      role: "player",
+      provenBy: ["concurrent-vote-race-reload"].filter(hasLane),
+      note: "After two player role URLs submit concurrent D02 votes, both player role URLs reload to matching current-vote, browser votecount, and API votecount truth.",
+    }),
+    scenario({
       id: "concurrent-player-vote-resolve-race",
       title: "Concurrent player vote/resolve race",
       role: "player",
@@ -729,6 +736,7 @@ function demoScenarios({ roles, laneIds }) {
         "concurrent-action-race",
         "reconnect-recovery",
         "concurrent-vote-race",
+        "concurrent-vote-race-reload",
         "concurrent-player-vote-resolve-race",
         "concurrent-player-vote-resolve-race-reload",
         "concurrent-player-action-advance-race",

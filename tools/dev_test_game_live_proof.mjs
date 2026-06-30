@@ -1512,6 +1512,40 @@ assert.equal(
   ),
   true,
 );
+assert.equal(concurrentVoteRace.roleReloadAfterRace.status, "passed");
+assert.equal(concurrentVoteRace.roleReloadAfterRace.playerRouteStatus, 200);
+assert.equal(concurrentVoteRace.roleReloadAfterRace.actionRouteStatus, 200);
+assert.equal(
+  concurrentVoteRace.roleReloadAfterRace.playerCommandState.currentVote.slotId,
+  concurrentVoteRace.targetSlot,
+);
+assert.equal(
+  concurrentVoteRace.roleReloadAfterRace.actionCommandState.currentVote.slotId,
+  concurrentVoteRace.targetSlot,
+);
+assert.equal(concurrentVoteRace.roleReloadAfterRace.playerCurrentVote.hasVote, "true");
+assert.match(
+  concurrentVoteRace.roleReloadAfterRace.playerCurrentVote.text,
+  new RegExp(concurrentVoteRace.target.label),
+);
+assert.equal(concurrentVoteRace.roleReloadAfterRace.actionCurrentVote.hasVote, "true");
+assert.match(
+  concurrentVoteRace.roleReloadAfterRace.actionCurrentVote.text,
+  new RegExp(concurrentVoteRace.target.label),
+);
+assert.equal(
+  concurrentVoteRace.roleReloadAfterRace.playerProjection.some(
+    (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
+  ),
+  true,
+);
+assert.equal(
+  concurrentVoteRace.roleReloadAfterRace.actionProjection.some(
+    (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
+  ),
+  true,
+);
+assert.equal(concurrentVoteRace.roleReloadAfterRace.apiProjection.count, 2);
 assert.equal(voteResolveRace.status, "passed");
 assert.equal(voteResolveRace.hostEntry.capabilityKinds.includes("HostOf"), true);
 assert.equal(voteResolveRace.playerEntry.capabilityKinds.includes("SlotOccupant"), true);

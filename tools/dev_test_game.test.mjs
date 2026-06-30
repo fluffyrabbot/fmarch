@@ -2720,6 +2720,22 @@ test("session card and markdown include role credential URLs and tokens", () => 
         playerVote: { state: "ack", streamSeqs: [45] },
         actionVote: { state: "ack", streamSeqs: [46] },
         apiProjection: { count: 2 },
+        roleReloadAfterRace: {
+          status: "passed",
+          playerRouteStatus: 200,
+          actionRouteStatus: 200,
+          playerCommandState: {
+            currentVote: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+          },
+          actionCommandState: {
+            currentVote: { kind: "slot", slotId: "slot-3", label: "Slot 3" },
+          },
+          playerCurrentVote: { hasVote: "true", text: "Current vote: Slot 3" },
+          actionCurrentVote: { hasVote: "true", text: "Current vote: Slot 3" },
+          playerProjection: [{ target: "slot-3", count: 2 }],
+          actionProjection: [{ target: "slot-3", count: 2 }],
+          apiProjection: { count: 2 },
+        },
       },
       concurrentPlayerVoteResolveRace: {
         status: "passed",
@@ -5680,6 +5696,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
+      "concurrent-vote-race-reload",
       "stale-host-publish-after-change",
       "host-votecount-publication",
       "stale-host-publish",
@@ -5785,7 +5802,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 94);
+  assert.equal(opsArtifacts.proofRun.laneCount, 95);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5883,6 +5900,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "night-action-loop",
       "action-idempotent-retry",
       "concurrent-action-race",
+      "concurrent-vote-race-reload",
       "concurrent-player-vote-resolve-race",
       "concurrent-player-vote-resolve-race-reload",
       "concurrent-player-action-advance-race",
@@ -6434,6 +6452,7 @@ function hardeningAdminProofFixture() {
         "replacement-stale-private-post-after-complete",
         "replacement-stale-private-post-after-complete-reload",
         "concurrent-vote-race",
+        "concurrent-vote-race-reload",
         "stale-host-publish-after-change",
         "stale-host-publish",
         "stale-host-lifecycle",

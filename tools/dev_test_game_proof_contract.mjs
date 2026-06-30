@@ -68,6 +68,7 @@ const requiredLaneIds = Object.freeze([
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
+  "concurrent-vote-race-reload",
   "stale-host-publish-after-change",
   "host-votecount-publication",
   "stale-host-publish",
@@ -4048,6 +4049,52 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentVoteRace?.actionVote?.streamSeqs,
         ) &&
         hardening.concurrentVoteRace?.apiProjection?.count === 2,
+    }),
+    lane("concurrent-vote-race-reload", "Concurrent vote race reloads role URL projections", {
+      targetSlot: hardening.concurrentVoteRace?.targetSlot ?? null,
+      playerRouteStatus:
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerRouteStatus ?? null,
+      actionRouteStatus:
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionRouteStatus ?? null,
+      playerCurrentVote:
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerCommandState
+          ?.currentVote ?? null,
+      actionCurrentVote:
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionCommandState
+          ?.currentVote ?? null,
+      apiCount:
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.apiProjection?.count ?? null,
+      passed:
+        hardening.concurrentVoteRace?.status === "passed" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.status === "passed" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerRouteStatus ===
+          200 &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionRouteStatus ===
+          200 &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerCommandState
+          ?.currentVote?.kind === "slot" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerCommandState
+          ?.currentVote?.slotId === hardening.concurrentVoteRace?.targetSlot &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionCommandState
+          ?.currentVote?.kind === "slot" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionCommandState
+          ?.currentVote?.slotId === hardening.concurrentVoteRace?.targetSlot &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerCurrentVote
+          ?.hasVote === "true" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionCurrentVote
+          ?.hasVote === "true" &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.playerProjection?.some(
+          (row) =>
+            row.target === hardening.concurrentVoteRace?.targetSlot &&
+            row.count === 2,
+        ) === true &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.actionProjection?.some(
+          (row) =>
+            row.target === hardening.concurrentVoteRace?.targetSlot &&
+            row.count === 2,
+        ) === true &&
+        hardening.concurrentVoteRace?.roleReloadAfterRace?.apiProjection?.count ===
+          2,
     }),
     lane(
       "stale-host-publish-after-change",

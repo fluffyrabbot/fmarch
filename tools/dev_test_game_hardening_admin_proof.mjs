@@ -29,6 +29,7 @@ const requiredChecks = [
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",
+  "concurrent-vote-race-reload",
   "concurrent-player-vote-resolve-race",
   "concurrent-player-vote-resolve-race-reload",
   "concurrent-player-action-advance-race",
