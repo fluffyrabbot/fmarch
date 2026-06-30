@@ -74,6 +74,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-modkill",
   "concurrent-host-lifecycle-race",
   "stale-host-prompt",
+  "stale-host-prompt-reload",
   "stale-host-complete",
   "stale-host-complete-reload",
   "concurrent-host-complete-race",
@@ -4334,6 +4335,59 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (prompt) => (prompt.id ?? prompt.prompt_id) === "D01:skip_next_day:slot_1",
         )?.status === "resolved",
     }),
+    lane(
+      "stale-host-prompt-reload",
+      "Stale host prompt recovery reloads resolved console",
+      {
+        game: hardening.staleHostPrompt?.game ?? null,
+        promptId: hardening.staleHostPrompt?.promptId ?? null,
+        routeStatus:
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.routeResponseStatus ?? null,
+        rejectReceipt:
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.rejectReceiptStatusText ?? null,
+        promptStatusAfterReload:
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.promptsAfterReload?.find(
+              (prompt) => prompt.id === hardening.staleHostPrompt?.promptId,
+            )?.status ?? null,
+        promptActionVisible:
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.promptActionsAfterReload?.includes(
+              "resolve_host_prompt-D01-skip_next_day-slot_1",
+            ) ?? null,
+        apiPromptStatusAfterReload:
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.apiPromptsAfterReload?.find(
+              (prompt) =>
+                (prompt.id ?? prompt.prompt_id) ===
+                hardening.staleHostPrompt?.promptId,
+            )?.status ?? null,
+        passed:
+          hardening.staleHostPrompt?.status === "passed" &&
+          hardening.staleHostPrompt?.reject?.error === "PromptAlreadyResolved" &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject?.status ===
+            "passed" &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.routeResponseStatus === 200 &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.rejectReceiptStatusText?.includes("Reject PromptAlreadyResolved") ===
+            true &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.promptsAfterReload?.find(
+              (prompt) => prompt.id === "D01:skip_next_day:slot_1",
+            )?.status === "resolved" &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.promptActionsAfterReload?.includes(
+              "resolve_host_prompt-D01-skip_next_day-slot_1",
+            ) === false &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.apiPromptsAfterReload?.find(
+              (prompt) => (prompt.id ?? prompt.prompt_id) === "D01:skip_next_day:slot_1",
+            )?.status === "resolved",
+      },
+    ),
     lane("stale-host-complete", "Stale complete-game reveal rejects after live completion", {
       rejectError: hardening.staleHostComplete?.reject?.error ?? null,
       liveCompleteSeqs:

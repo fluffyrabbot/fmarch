@@ -2855,6 +2855,51 @@ assert.equal(
     .status,
   session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
 );
+assert.equal(session.verification.multiplayerHardening.staleHostPrompt.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt.reject.error,
+  "PromptAlreadyResolved",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostPrompt.activityStatusText,
+  /Reject PromptAlreadyResolved/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.rejectReceiptStatusText,
+  /Reject PromptAlreadyResolved/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.promptsAfterReload.find(
+      (prompt) => prompt.id === "D01:skip_next_day:slot_1",
+    )?.status,
+  "resolved",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.promptActionsAfterReload.includes(
+      "resolve_host_prompt-D01-skip_next_day-slot_1",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.apiPromptsAfterReload.find(
+      (prompt) => (prompt.id ?? prompt.prompt_id) === "D01:skip_next_day:slot_1",
+    )?.status,
+  "resolved",
+);
 assert.equal(session.verification.multiplayerHardening.staleHostComplete.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.staleHostComplete.reject.error,

@@ -46,6 +46,7 @@ const requiredChecks = [
   "stale-host-lifecycle",
   "stale-host-modkill",
   "stale-host-prompt",
+  "stale-host-prompt-reload",
   "stale-host-complete",
   "stale-host-complete-reload",
   "concurrent-host-complete-race",
