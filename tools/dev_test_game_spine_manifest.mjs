@@ -125,6 +125,7 @@ export function buildDevTestGameSpineManifest({
           spineManifestPath,
           "target/dev-test-game/ops-artifacts.json",
           "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameRaceCoveragePath,
         ],
       },
       nextActionAdminProof: {
@@ -163,9 +164,10 @@ export function buildDevTestGameSpineManifest({
           spineManifestPath,
           "target/dev-test-game/ops-artifacts.json",
           "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameRaceCoveragePath,
         ],
         boundary:
-          "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, and release-readiness checklist.",
+          "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
       },
       {
         id: "next-action-admin-proof",
@@ -453,7 +455,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !Array.isArray(nextAction.dependsOn) ||
     !nextAction.dependsOn.includes(spineManifestPath) ||
     !nextAction.dependsOn.includes("target/dev-test-game/ops-artifacts.json") ||
-    !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json")
+    !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json") ||
+    !nextAction.dependsOn.includes(devTestGameRaceCoveragePath)
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }

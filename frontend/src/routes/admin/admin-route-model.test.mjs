@@ -1024,6 +1024,10 @@ test("admin route data exposes local next action as a native audit row", async (
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-exhaustive-race-coverage", "selected:unproven"],
+      ["replacement-race-reload-milestone", "3/3 covered"],
+      ["replacement-race-reload-replacement-private-post", "covered:passed"],
+      ["replacement-race-reload-replacement-vote", "covered:passed"],
+      ["replacement-race-reload-replacement-action", "covered:passed"],
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
@@ -1083,6 +1087,7 @@ test("admin route data exposes local next action as a native audit row", async (
         },
       ],
     },
+    replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -1118,6 +1123,10 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["core-loop", "stale"],
       ["selection-trace", "1 candidates"],
       ["selection-trace-core-loop", "selected:stale"],
+      ["replacement-race-reload-milestone", "3/3 covered"],
+      ["replacement-race-reload-replacement-private-post", "covered:passed"],
+      ["replacement-race-reload-replacement-vote", "covered:passed"],
+      ["replacement-race-reload-replacement-action", "covered:passed"],
     ],
   );
 });
@@ -1158,6 +1167,10 @@ test("admin local next action detail data carries harness stability drift rows",
       ["harness-stability-drift", "blocked"],
       ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
       ["selection-trace", "0 candidates"],
+      ["replacement-race-reload-milestone", "3/3 covered"],
+      ["replacement-race-reload-replacement-private-post", "covered:passed"],
+      ["replacement-race-reload-replacement-vote", "covered:passed"],
+      ["replacement-race-reload-replacement-action", "covered:passed"],
     ],
   );
   assert.deepEqual(data.audit.artifactSummary.stabilityTrace, {
@@ -2555,6 +2568,7 @@ function nextActionFixture({
   releaseReadinessTrace = releaseReadinessTraceFixture({ unproven, command }),
   stability,
   stabilityTrace = stabilityTraceFixture({ stability }),
+  replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
 } = {}) {
   return {
     version: 1,
@@ -2582,6 +2596,13 @@ function nextActionFixture({
         unprovenCount: 7,
         buildableUnprovenCount: unproven === undefined ? 0 : 1,
       },
+      raceCoverage: "target/dev-test-game/race-coverage.json",
+      replacementRaceReloadSummary: {
+        status: replacementRaceReloadTrace.status,
+        requiredCellCount: replacementRaceReloadTrace.requiredCellCount,
+        coveredCellCount: replacementRaceReloadTrace.coveredCellCount,
+        gapCount: replacementRaceReloadTrace.gapCount,
+      },
       opsArtifacts: "target/dev-test-game/ops-artifacts.json",
       proofStabilityStatus: stability === undefined ? "clean" : "drifted",
       proofStabilitySummary: {
@@ -2603,6 +2624,7 @@ function nextActionFixture({
     selectionTrace,
     stabilityTrace,
     releaseReadinessTrace,
+    replacementRaceReloadTrace,
   };
 }
 
@@ -2833,6 +2855,40 @@ function stabilityTraceFixture({ stability }) {
     maxAttempts: Number(stability?.maxAttempts ?? 1),
     eventCount: Number(stability?.eventCount ?? 0),
     selected: stability !== undefined,
+  };
+}
+
+function replacementRaceReloadTraceFixture() {
+  return {
+    strategy: "replacement-race-reload-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/race-coverage.json",
+    requiredCellCount: 3,
+    coveredCellCount: 3,
+    gapCount: 0,
+    cells: [
+      {
+        id: "replacement-private-post",
+        raceLaneId: "concurrent-replacement-private-post-race",
+        reloadLaneId: "concurrent-replacement-private-post-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-vote",
+        raceLaneId: "concurrent-replacement-vote-race",
+        reloadLaneId: "concurrent-replacement-vote-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-action",
+        raceLaneId: "concurrent-replacement-action-race",
+        reloadLaneId: "concurrent-replacement-action-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+    ],
   };
 }
 

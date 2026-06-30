@@ -9,6 +9,10 @@ import {
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  assertDevTestGameRaceCoverage,
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_race_coverage.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -29,6 +33,8 @@ export function buildDevTestGameNextAction(
     releaseReadinessChecklistSource = devTestGameReleaseReadinessPath,
     opsArtifacts = null,
     opsArtifactsSource = devTestGameOpsArtifactsPath,
+    raceCoverage = null,
+    raceCoverageSource = devTestGameRaceCoveragePath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -38,6 +44,8 @@ export function buildDevTestGameNextAction(
       : assertDevTestGameReleaseReadiness(releaseReadinessChecklist);
   const ops =
     opsArtifacts === null ? null : assertDevTestGameOpsArtifacts(opsArtifacts);
+  const races =
+    raceCoverage === null ? null : assertDevTestGameRaceCoverage(raceCoverage);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
@@ -45,6 +53,9 @@ export function buildDevTestGameNextAction(
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness);
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
+  const replacementRaceReloadTrace = buildReplacementRaceReloadTrace(races, {
+    source: raceCoverageSource,
+  });
   const selectedUnproven = releaseReadinessCandidates[0];
   const nextAction =
     artifact !== undefined
@@ -115,7 +126,7 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, race coverage, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, records replacement-race reload milestone coverage, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -141,11 +152,23 @@ export function buildDevTestGameNextAction(
             releaseReadinessGeneratedAt: readiness.generatedAt,
             releaseReadinessSummary,
           }),
+      ...(races === null
+        ? {}
+        : {
+            raceCoverage: raceCoverageSource,
+            replacementRaceReloadSummary: {
+              status: replacementRaceReloadTrace.status,
+              requiredCellCount: replacementRaceReloadTrace.requiredCellCount,
+              coveredCellCount: replacementRaceReloadTrace.coveredCellCount,
+              gapCount: replacementRaceReloadTrace.gapCount,
+            },
+          }),
     },
     nextAction,
     selectionTrace,
     stabilityTrace,
     releaseReadinessTrace,
+    replacementRaceReloadTrace,
   };
   assertDevTestGameNextAction(evidence);
   return evidence;
@@ -204,6 +227,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
+  assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
   return evidence;
 }
 
@@ -226,12 +250,18 @@ export async function writeDevTestGameNextAction({
     process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS ?? devTestGameOpsArtifactsPath,
   );
   const opsArtifacts = JSON.parse(await readFile(absoluteOpsArtifactsPath, "utf8"));
+  const absoluteRaceCoveragePath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE ?? devTestGameRaceCoveragePath,
+  );
+  const raceCoverage = JSON.parse(await readFile(absoluteRaceCoveragePath, "utf8"));
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
     absoluteReleaseReadinessPath,
   );
   const opsArtifactsSource = path.relative(repoRoot, absoluteOpsArtifactsPath);
+  const raceCoverageSource = path.relative(repoRoot, absoluteRaceCoveragePath);
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     spineManifestSource,
@@ -239,6 +269,8 @@ export async function writeDevTestGameNextAction({
     releaseReadinessChecklistSource,
     opsArtifacts,
     opsArtifactsSource,
+    raceCoverage,
+    raceCoverageSource,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -375,6 +407,38 @@ function buildProofStabilityTrace(stabilityDrift) {
   };
 }
 
+function buildReplacementRaceReloadTrace(
+  raceCoverage,
+  { source = devTestGameRaceCoveragePath } = {},
+) {
+  const cells = replacementRaceReloadCellIds.map((id) => {
+    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
+    const reloadLaneId =
+      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
+    const reloadStatus = String(cell?.reloadStatus ?? "missing");
+    const covered =
+      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
+    return {
+      id,
+      raceLaneId: String(cell?.raceLaneId ?? ""),
+      reloadLaneId,
+      reloadStatus,
+      covered,
+    };
+  });
+  const coveredCellCount = cells.filter((cell) => cell.covered).length;
+  const gapCount = cells.length - coveredCellCount;
+  return {
+    strategy: "replacement-race-reload-before-readiness",
+    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
+    source: raceCoverage === null ? "" : source,
+    requiredCellCount: cells.length,
+    coveredCellCount,
+    gapCount,
+    cells,
+  };
+}
+
 function assertSelectionTrace(selectionTrace, nextAction) {
   if (
     selectionTrace?.strategy !== "development-spine-priority" ||
@@ -477,6 +541,41 @@ function assertProofStabilityTrace(stabilityTrace, nextAction) {
   }
 }
 
+function assertReplacementRaceReloadTrace(trace) {
+  if (
+    trace?.strategy !== "replacement-race-reload-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(trace.status) ||
+    !Number.isInteger(trace.requiredCellCount) ||
+    !Number.isInteger(trace.coveredCellCount) ||
+    !Number.isInteger(trace.gapCount) ||
+    !Array.isArray(trace.cells)
+  ) {
+    throw new Error("next-action replacement-race reload trace is missing or malformed");
+  }
+  if (
+    trace.requiredCellCount !== replacementRaceReloadCellIds.length ||
+    trace.cells.length !== replacementRaceReloadCellIds.length ||
+    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
+  ) {
+    throw new Error("next-action replacement-race reload trace count drifted");
+  }
+  for (const id of replacementRaceReloadCellIds) {
+    const cell = trace.cells.find((candidate) => candidate.id === id);
+    if (cell === undefined) {
+      throw new Error(`next-action replacement-race reload trace missing cell: ${id}`);
+    }
+    if (typeof cell.covered !== "boolean") {
+      throw new Error(`next-action replacement-race reload trace malformed cell: ${id}`);
+    }
+  }
+  if (trace.status === "covered" && trace.gapCount !== 0) {
+    throw new Error("next-action replacement-race reload trace covered with gaps");
+  }
+  if (trace.status === "gapped" && trace.gapCount === 0) {
+    throw new Error("next-action replacement-race reload trace gapped without gaps");
+  }
+}
+
 function artifactAgeSeconds(artifact) {
   return typeof artifact.ageSeconds === "number" ? artifact.ageSeconds : 0;
 }
@@ -553,6 +652,12 @@ const localBuildableReleaseReadinessItems = new Map([
         "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
     },
   ],
+]);
+
+const replacementRaceReloadCellIds = Object.freeze([
+  "replacement-private-post",
+  "replacement-vote",
+  "replacement-action",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

@@ -561,6 +561,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
   );
+  const replacementRaceReloadTrace = normalizeNextActionReplacementRaceReloadTrace(
+    nextAction.replacementRaceReloadTrace,
+  );
   const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
   const stability =
     action.stability !== null && typeof action.stability === "object"
@@ -631,6 +634,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
             }),
           ),
         ]),
+    Object.freeze({
+      id: "replacement-race-reload-milestone",
+      status: `${replacementRaceReloadTrace.coveredCellCount}/${replacementRaceReloadTrace.requiredCellCount} ${replacementRaceReloadTrace.status}`,
+    }),
+    ...replacementRaceReloadTrace.cells.map((cell) =>
+      Object.freeze({
+        id: `replacement-race-reload-${cell.id}`,
+        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
+      }),
+    ),
   ];
   const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
   const releaseReadinessSummary =
@@ -679,6 +692,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
       stabilityTrace,
       releaseReadinessTrace,
+      replacementRaceReloadTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
@@ -798,6 +812,48 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         ? releaseReadinessTrace.selectedUnprovenId
         : null,
     candidates: Object.freeze(candidates),
+  });
+}
+
+function normalizeNextActionReplacementRaceReloadTrace(replacementRaceReloadTrace) {
+  if (
+    replacementRaceReloadTrace === null ||
+    typeof replacementRaceReloadTrace !== "object" ||
+    replacementRaceReloadTrace.strategy !== "replacement-race-reload-before-readiness" ||
+    !Array.isArray(replacementRaceReloadTrace.cells)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      source: "",
+      requiredCellCount: 0,
+      coveredCellCount: 0,
+      gapCount: 0,
+      cells: Object.freeze([]),
+    });
+  }
+  const cells = replacementRaceReloadTrace.cells
+    .filter((cell) => cell !== null && typeof cell === "object")
+    .map((cell) =>
+      Object.freeze({
+        id: String(cell.id ?? "unknown"),
+        raceLaneId: String(cell.raceLaneId ?? ""),
+        reloadLaneId:
+          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
+        reloadStatus: String(cell.reloadStatus ?? "unknown"),
+        covered: cell.covered === true,
+      }),
+    );
+  return Object.freeze({
+    strategy: replacementRaceReloadTrace.strategy,
+    status: String(replacementRaceReloadTrace.status ?? "unknown"),
+    source: String(replacementRaceReloadTrace.source ?? ""),
+    requiredCellCount: Number(
+      replacementRaceReloadTrace.requiredCellCount ?? cells.length,
+    ),
+    coveredCellCount: Number(replacementRaceReloadTrace.coveredCellCount ?? 0),
+    gapCount: Number(replacementRaceReloadTrace.gapCount ?? 0),
+    cells: Object.freeze(cells),
   });
 }
 

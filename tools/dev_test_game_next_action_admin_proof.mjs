@@ -86,6 +86,18 @@ await runAdminAuditProof({
         forceFallbackCount: source.nextAction.stabilityTrace.forceFallbackCount,
         failureCount: source.nextAction.stabilityTrace.failureCount,
       },
+      replacementRaceReloadTrace: {
+        strategy: source.nextAction.replacementRaceReloadTrace.strategy,
+        status: source.nextAction.replacementRaceReloadTrace.status,
+        requiredCellCount:
+          source.nextAction.replacementRaceReloadTrace.requiredCellCount,
+        coveredCellCount:
+          source.nextAction.replacementRaceReloadTrace.coveredCellCount,
+        gapCount: source.nextAction.replacementRaceReloadTrace.gapCount,
+        cellIds: source.nextAction.replacementRaceReloadTrace.cells.map(
+          (cell) => cell.id,
+        ),
+      },
     },
     adminRoleSurface,
   }),
@@ -132,6 +144,21 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof is missing stability trace evidence");
   }
+  if (
+    evidence.generatedFrom?.replacementRaceReloadTrace?.strategy !==
+      "replacement-race-reload-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(
+      evidence.generatedFrom.replacementRaceReloadTrace.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.replacementRaceReloadTrace.requiredCellCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.replacementRaceReloadTrace.cellIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing replacement-race reload trace evidence",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -160,6 +187,10 @@ function requiredChecksForNextAction(nextAction) {
   for (const candidate of nextAction.releaseReadinessTrace.candidates) {
     checks.push(`release-readiness-${candidate.id}`);
   }
+  checks.push("replacement-race-reload-milestone");
+  for (const cell of nextAction.replacementRaceReloadTrace.cells) {
+    checks.push(`replacement-race-reload-${cell.id}`);
+  }
   return checks;
 }
 
@@ -183,6 +214,12 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.releaseReadinessTrace?.candidateIds)
       ? evidence.generatedFrom.releaseReadinessTrace.candidateIds.map(
           (id) => `release-readiness-${id}`,
+        )
+      : []),
+    "replacement-race-reload-milestone",
+    ...(Array.isArray(evidence.generatedFrom?.replacementRaceReloadTrace?.cellIds)
+      ? evidence.generatedFrom.replacementRaceReloadTrace.cellIds.map(
+          (id) => `replacement-race-reload-${id}`,
         )
       : []),
   ];

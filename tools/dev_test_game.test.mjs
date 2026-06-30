@@ -304,6 +304,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/ops-artifacts.json",
       "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameRaceCoveragePath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -531,6 +532,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   const freshAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
       unproven: [
         {
@@ -599,6 +601,37 @@ test("dev test-game next-action derives one local recovery command from the mani
           "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
           "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
+      },
+    ],
+  });
+  assert.deepEqual(freshAction.replacementRaceReloadTrace, {
+    strategy: "replacement-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 3,
+    coveredCellCount: 3,
+    gapCount: 0,
+    cells: [
+      {
+        id: "replacement-private-post",
+        raceLaneId: "concurrent-replacement-private-post-race",
+        reloadLaneId: "concurrent-replacement-private-post-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-vote",
+        raceLaneId: "concurrent-replacement-vote-race",
+        reloadLaneId: "concurrent-replacement-vote-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-action",
+        raceLaneId: "concurrent-replacement-action-race",
+        reloadLaneId: "concurrent-replacement-action-race-reload",
+        reloadStatus: "passed",
+        covered: true,
       },
     ],
   });
@@ -6746,6 +6779,109 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function devTestGameRaceCoverageFixture() {
+  const cells = [
+    raceCoverageCell("player-vote-change", "concurrent-vote-race", "concurrent-vote-race-reload"),
+    raceCoverageCell("player-night-action", "concurrent-action-race", "concurrent-action-race-reload"),
+    raceCoverageCell(
+      "player-vote-vs-host-resolve",
+      "concurrent-player-vote-resolve-race",
+      "concurrent-player-vote-resolve-race-reload",
+    ),
+    raceCoverageCell(
+      "player-action-vs-host-advance",
+      "concurrent-player-action-advance-race",
+      "concurrent-player-action-advance-race-reload",
+    ),
+    raceCoverageCell(
+      "cohost-deadline-vs-host-resolve",
+      "concurrent-cohost-deadline-resolve-race",
+      "concurrent-cohost-deadline-resolve-race-reload",
+    ),
+    raceCoverageCell(
+      "replacement-private-post",
+      "concurrent-replacement-private-post-race",
+      "concurrent-replacement-private-post-race-reload",
+    ),
+    raceCoverageCell(
+      "replacement-vote",
+      "concurrent-replacement-vote-race",
+      "concurrent-replacement-vote-race-reload",
+    ),
+    raceCoverageCell(
+      "replacement-action",
+      "concurrent-replacement-action-race",
+      "concurrent-replacement-action-race-reload",
+    ),
+    raceCoverageCell("host-resolve", "concurrent-host-resolve-race", "concurrent-host-resolve-race-reload"),
+    raceCoverageCell("host-advance", "concurrent-host-advance-race", "concurrent-host-advance-race-reload"),
+    raceCoverageCell(
+      "host-deadline-advance",
+      "concurrent-host-deadline-advance-race",
+      "concurrent-host-deadline-advance-race-reload",
+    ),
+    raceCoverageCell("host-lifecycle", "concurrent-host-lifecycle-race", "concurrent-host-lifecycle-race-reload"),
+    raceCoverageCell(
+      "host-mixed-advance",
+      "concurrent-host-mixed-advance-race",
+      "concurrent-host-mixed-advance-race-reload",
+    ),
+    raceCoverageCell(
+      "host-votecount-publication",
+      "concurrent-host-publish-race",
+      "concurrent-host-publish-race-reload",
+    ),
+    raceCoverageCell("host-complete-game", "concurrent-host-complete-race", "concurrent-host-complete-race-reload"),
+    raceCoverageCell(
+      "player-vs-completed-game",
+      "concurrent-player-complete-race",
+      "public-player-complete-reload",
+    ),
+  ];
+  return {
+    version: 1,
+    proof: "dev-test-game-race-coverage",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-race-coverage",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      proofGeneratedAt: "2026-06-26T00:00:00.000Z",
+      game: "game-a",
+      laneCount: 107,
+    },
+    summary: {
+      cellCount: cells.length,
+      provenCellCount: cells.length,
+      unprovenCellCount: 0,
+      reloadRequiredCellCount: cells.length,
+      reloadCoveredCellCount: cells.length,
+      reloadGapCount: 0,
+    },
+    cells,
+    unprovenCells: [],
+    reloadGaps: [],
+  };
+}
+
+function raceCoverageCell(id, raceLaneId, reloadLaneId) {
+  return {
+    id,
+    actorPair: "test",
+    commandFamily: "test",
+    raceLaneId,
+    raceStatus: "passed",
+    reloadLaneId,
+    reloadStatus: "passed",
+    reloadCoverage: "passed",
+    status: "passed",
+    provenBy: [raceLaneId, reloadLaneId],
+    missingLaneIds: [],
   };
 }
 
