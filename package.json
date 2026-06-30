@@ -2,6 +2,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check:build-posture": "bash scripts/check-build-posture.sh",
     "dev:postgres": "node tools/dev_postgres.mjs",
     "dev:test-game:prebuild": "cargo build -p server",
     "dev:test-game:local": "node tools/dev_test_game_local.mjs",
