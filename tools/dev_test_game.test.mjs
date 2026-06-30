@@ -9303,6 +9303,7 @@ function coreLoopAdminProofFixture() {
     dayFourSurvivorRoleSurface: dayFourSurvivorRoleSurfaceFixture(),
     nightFourActionSubmissionSurface: nightFourActionSubmissionSurfaceFixture(),
     nightFourResolutionReceiptSurface: nightFourResolutionReceiptSurfaceFixture(),
+    postNightFourTransitionSurface: postNightFourTransitionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10330,6 +10331,7 @@ function hostPhaseTransitionActionFixture({
   deadlineAffordance,
   projectionRefreshKeys,
   command,
+  dayVoteOutcomesProjection = [],
 }) {
   return {
     status: "passed",
@@ -10358,6 +10360,7 @@ function hostPhaseTransitionActionFixture({
         locked: phaseState === "locked",
       },
     },
+    dayVoteOutcomesProjection,
     checkpointPhaseId: phaseId,
     checkpointPhaseState: phaseState,
     checkpointDeadlineAffordance: deadlineAffordance,
@@ -11226,6 +11229,174 @@ function nightFourResolutionReceiptSurfaceFixture() {
   };
 }
 
+function postNightFourTransitionSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+    hostAdvanceProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 916,
+      setupSnapshotHost: {
+        phase: {
+          id: "N04",
+          state: "locked",
+        },
+      },
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: "advance_phase",
+        commandKind: "AdvancePhase",
+        streamSeq: 917,
+        phaseId: "D05",
+        phaseState: "open",
+        deadlineAffordance: "resolve_phase,lock_thread",
+        projectionRefreshKeys: [],
+        command: {
+          game,
+        },
+        dayVoteOutcomesProjection: [
+          { phaseId: "D02", status: "Lynch" },
+          { phaseId: "D03", status: "Lynch" },
+          { phaseId: "D04", status: "NoLynch" },
+        ],
+      }),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    survivorDayFiveProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      slotField: "survivorSlot",
+      slot: "slot-5",
+      principalUserId: "player_sage",
+      phaseId: "D05",
+      phaseState: "open",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "Player action unavailable: actor is not alive",
+      privateCount: 1,
+      privateReceipt: true,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N04",
+      boundary:
+        "Seeded browser survivor stayed dead with no controls after N04 advanced to Day 5.",
+      resyncFromSeq: 917,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_sage`,
+      dayVoteOutcomes: [
+        { phaseId: "D02", status: "Lynch" },
+        { phaseId: "D03", status: "Lynch" },
+        { phaseId: "D04", status: "NoLynch" },
+      ],
+    }),
+    actionPlayerDayFiveProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "D05",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:no legal action available",
+      statusText: "Player action unavailable: no legal action available",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player observed open Day 5 no-lynch controls after Night 4 advanced.",
+      resyncFromSeq: 917,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+      voteButtonCount: 1,
+      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+      dayVoteOutcomes: [
+        { phaseId: "D02", status: "Lynch" },
+        { phaseId: "D03", status: "Lynch" },
+        { phaseId: "D04", status: "NoLynch" },
+      ],
+    }),
+    staleNightFourActionRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_action:factional_kill",
+      commandKind: "SubmitAction",
+      setupResyncFromSeq: 916,
+      setupSnapshotCommandState: {
+        phase: { phaseId: "N04" },
+        actions: [{ targets: ["slot-5"] }],
+      },
+      command: {
+        game,
+        actor_slot: "slot-7",
+        action_id: "factional_kill",
+        targets: ["slot-5"],
+      },
+      commandStatus: {
+        state: "reject",
+        error: "PhaseLocked",
+        message:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitAction",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: [
+          "notifications",
+          "investigationResults",
+          "commandState",
+          "dayVoteOutcomes",
+        ],
+      },
+      receipts: [{ state: "reject" }],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "D05",
+          locked: false,
+        },
+        actions: [],
+        voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+        boundary:
+          "Seeded browser PhaseLocked stale N04 action refreshed into current Day 5 controls.",
+      },
+      checkpointReceiptState: "reject:PhaseLocked",
+      checkpointPhaseIdAfterReject: "D05",
+      checkpointActionStateAfterReject: "disabled:no legal action available",
+      checkpointTargetSlotsAfterReject: "",
+      recoveryText:
+        "Stale recovery\nReject PhaseLocked: refresh and use current action controls.",
+      receiptCount: 1,
+      receiptStatusText: "Reject PhaseLocked",
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 function nightFourResolutionPlayerSurfaceFixture({
   sourceRoleUrl,
   visitedRolePath,
@@ -11345,6 +11516,12 @@ function postDayThreePlayerSurfaceFixture({
   notificationsEndpoint,
   voteButtonCount = 0,
   voteTargets = [],
+  dayVoteOutcomes = [
+    { phaseId: "D02", status: "Lynch" },
+    { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
+  ],
+  privateReceiptStatus = "day_vote",
+  privateReceiptPhaseId = "D03",
 }) {
   const proof = {
     status: "passed",
@@ -11385,14 +11562,11 @@ function postDayThreePlayerSurfaceFixture({
       ? [
           {
             effect: "player_killed",
-            status: "day_vote",
+            status: privateReceiptStatus,
           },
         ]
       : [],
-    projectionDayVoteOutcomes: [
-      { phaseId: "D02", status: "Lynch" },
-      { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
-    ],
+    projectionDayVoteOutcomes: dayVoteOutcomes,
     resyncFromSeq,
     resyncSnapshotCommandState: {
       actorSlot: slot,
@@ -11403,7 +11577,7 @@ function postDayThreePlayerSurfaceFixture({
     resyncSnapshotNotifications: privateReceipt
       ? [
           {
-            status: "day_vote",
+            status: privateReceiptStatus,
           },
         ]
       : [],
@@ -11419,8 +11593,8 @@ function postDayThreePlayerSurfaceFixture({
     proof.privateNotice = {
       id: "notification-1",
       kind: "notification",
-      text: "player_killed day_vote",
-      detailText: "Phase D03",
+      text: `player_killed ${privateReceiptStatus}`,
+      detailText: `Phase ${privateReceiptPhaseId}`,
     };
   } else {
     proof.privateEmptyText = "No private results visible";
