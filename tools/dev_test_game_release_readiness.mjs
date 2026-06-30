@@ -4870,6 +4870,8 @@ function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
   const stalePostProof =
     privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
+  const completedProof =
+    privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
   if (
     privateChannelRoleSurface?.status !== "passed" ||
@@ -4983,6 +4985,171 @@ function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
     stalePostProof.rawInviteTokensVisible !== false
   ) {
     throw new Error("core-loop admin proof missing private channel stale post recovery");
+  }
+  assertCoreLoopCompletedPrivateChannelProof({
+    proof: completedProof,
+    expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+  });
+}
+
+function assertCoreLoopCompletedPrivateChannelProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    !String(proof.transition ?? "").includes("private:role-pm:reload:complete") ||
+    !String(proof.transition ?? "").includes(
+      "private:submit_post:reject:GameAlreadyCompleted",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing completed private channel shell");
+  }
+  assertCoreLoopCompletedPrivateChannelReloadProof({
+    proof: proof.reloadProof,
+    sourceRoleUrl,
+    visitedRolePath,
+  });
+  assertCoreLoopStaleCompletedPrivatePostRecoveryProof({
+    proof: proof.staleCompletedPostRecoveryProof,
+    expectedGame,
+    sourceRoleUrl,
+    visitedRolePath,
+  });
+}
+
+function assertCoreLoopCompletedPrivateChannelReloadProof({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.resyncFromSeq !== 921 ||
+    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throw new Error("core-loop admin proof missing completed private reload shell");
+  }
+  for (const [label, snapshot] of [
+    ["initial", proof.initialSnapshot],
+    ["reloaded", proof.reloadedSnapshot],
+  ]) {
+    assertCoreLoopCompletedPrivateChannelSnapshot({
+      snapshot,
+      label,
+      expectedBoundary: "completed private-channel role URL reloaded",
+    });
+  }
+}
+
+function assertCoreLoopStaleCompletedPrivatePostRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.clickedAction !== "submit_post" ||
+    proof.commandKind !== "SubmitPost" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.channel_id !== "role-pm" ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.body !== proof.stalePrivatePostBody ||
+    proof.submitDisabledBeforeReject !== false ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitPost" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject gamealreadycompleted") ||
+    proof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes" ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throw new Error(
+      "core-loop admin proof missing stale completed private post recovery",
+    );
+  }
+  for (const [label, snapshot] of [
+    ["afterReject", proof.snapshotAfterReject],
+    ["afterReload", proof.snapshotAfterReload],
+  ]) {
+    assertCoreLoopCompletedPrivateChannelSnapshot({
+      snapshot,
+      label,
+      expectedBoundary: "GameAlreadyCompleted recovery refreshed role-pm controls",
+      rejectedBody: proof.stalePrivatePostBody,
+    });
+  }
+}
+
+function assertCoreLoopCompletedPrivateChannelSnapshot({
+  snapshot,
+  label,
+  expectedBoundary,
+  rejectedBody = null,
+}) {
+  if (
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.actorSlot !== "slot-7" ||
+    snapshot.checkpoint.actionState !== "disabled:game complete" ||
+    snapshot.commandPanelChannelId !== "role-pm" ||
+    snapshot.channelContext?.channelId !== "role-pm" ||
+    snapshot.channelContext?.actorSlot !== "slot-7" ||
+    snapshot.channelContext?.capabilityLabel !== "ChannelMember(role-pm)" ||
+    snapshot.channelContext?.actorStatus !== "alive" ||
+    snapshot.commandState?.actorSlot !== "slot-7" ||
+    snapshot.commandState?.gameCompleted !== true ||
+    snapshot.commandState?.actions?.length !== 0 ||
+    snapshot.commandState?.voteTargets?.length !== 0 ||
+    !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
+    !snapshot.threadPostBodies?.includes("Completed private channel remains readable.") ||
+    snapshot.enabledMutatingButtons?.length !== 0 ||
+    !snapshot.buttons?.some(
+      (button) => button.action === "submit_post" && button.disabled === true,
+    ) ||
+    (rejectedBody !== null &&
+      snapshot.threadPostBodies?.includes(rejectedBody) === true)
+  ) {
+    throw new Error(
+      `core-loop admin proof missing ${label} completed private channel closure`,
+    );
   }
 }
 

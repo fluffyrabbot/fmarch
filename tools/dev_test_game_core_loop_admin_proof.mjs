@@ -4033,6 +4033,59 @@ async function collectCompletedPlayerReloadSnapshot(page) {
   });
 }
 
+async function collectCompletedPrivateChannelSnapshot(page) {
+  return page.evaluate(() => {
+    const checkpoint = document.querySelector(
+      '[data-testid="player-action-submission-checkpoint"]',
+    );
+    const commandPanel = document.querySelector(
+      '[data-testid="player-primary-action-zone"]',
+    );
+    const channelContext = document.querySelector(
+      '[data-testid="player-command-channel-context"]',
+    );
+    const buttons = Array.from(document.querySelectorAll("button[data-action]")).map(
+      (button) => ({
+        action: button.getAttribute("data-action"),
+        disabled: button.disabled,
+        reason: button.getAttribute("data-disabled-reason"),
+        text: button.textContent?.trim() ?? "",
+      }),
+    );
+    const threadPostBodies = (
+      window.__fmarchPlayerProjection?.thread?.posts ?? []
+    ).map((post) => String(post?.body ?? ""));
+    return {
+      checkpoint: {
+        phaseId: checkpoint?.getAttribute("data-phase-id") ?? null,
+        phaseState: checkpoint?.getAttribute("data-phase-state") ?? null,
+        actorSlot: checkpoint?.getAttribute("data-actor-slot") ?? null,
+        actionState: checkpoint?.getAttribute("data-action-state") ?? null,
+        receiptState: checkpoint?.getAttribute("data-receipt-state") ?? null,
+      },
+      commandPanelChannelId:
+        commandPanel?.getAttribute("data-channel-id") ?? null,
+      channelContext: {
+        channelId: channelContext?.getAttribute("data-channel-id") ?? null,
+        actorSlot: channelContext?.getAttribute("data-actor-slot") ?? null,
+        capabilityLabel:
+          channelContext?.getAttribute("data-capability-label") ?? null,
+        actorStatus: channelContext?.getAttribute("data-actor-status") ?? null,
+      },
+      commandState: window.__fmarchPlayerProjection?.commandState ?? null,
+      threadPostBodies,
+      buttons,
+      enabledMutatingButtons: buttons.filter(
+        (button) =>
+          !button.disabled &&
+          (button.action === "submit_post" ||
+            String(button.action ?? "").startsWith("submit_vote") ||
+            String(button.action ?? "").startsWith("submit_action")),
+      ),
+    };
+  });
+}
+
 async function collectPlayerStaleCommandProof({
   page,
   commandRequests,
@@ -7389,6 +7442,12 @@ async function provePrivateChannelRoleSurface({
         frontendBaseUrl,
         roleUrl,
       });
+    const completedPrivateChannelProof =
+      await proveCompletedPrivateChannelRoleSurface({
+        browser,
+        frontendBaseUrl,
+        roleUrl,
+      });
     return {
       status: "passed",
       sourceRoleUrl: String(roleUrl),
@@ -7426,6 +7485,7 @@ async function provePrivateChannelRoleSurface({
         receiptRefreshKeys,
       },
       stalePostAfterPhaseTransitionProof,
+      completedPrivateChannelProof,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -7527,6 +7587,234 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
       checkpointPhaseId,
       checkpointActionState,
       checkpointReceiptState,
+      receiptStatusText,
+      receiptRefreshKeys,
+      rawInviteTokensVisible: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveCompletedPrivateChannelRoleSurface({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const reloadProof = await proveCompletedPrivateChannelReload({
+    browser,
+    frontendBaseUrl,
+    roleUrl,
+  });
+  const staleCompletedPostRecoveryProof =
+    await provePrivateChannelStaleCompletedPostRecovery({
+      browser,
+      frontendBaseUrl,
+      roleUrl,
+    });
+  return {
+    status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath: rolePathFromUrl(roleUrl),
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "private:role-pm:reload:complete -> private:submit_post:reject:GameAlreadyCompleted",
+    reloadProof,
+    staleCompletedPostRecoveryProof,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+async function proveCompletedPrivateChannelReload({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  try {
+    await installCompletedPrivateChannelBrowserRoutes(page);
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const initialResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerProjection?.thread?.posts?.some?.((post) =>
+          String(post?.body ?? "").includes("Completed private channel remains readable"),
+        ) === true,
+      null,
+      { timeout: 15000 },
+    );
+    const initialSnapshot = await collectCompletedPrivateChannelSnapshot(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const reloadedResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable after reload");
+      }
+      return window.__fmarchTriggerPlayerResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerProjection?.thread?.posts?.some?.((post) =>
+          String(post?.body ?? "").includes("Completed private channel remains readable"),
+        ) === true,
+      null,
+      { timeout: 15000 },
+    );
+    const reloadedSnapshot = await collectCompletedPrivateChannelSnapshot(page);
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("completed private channel reload leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      resyncFromSeq: 921,
+      initialResyncSnapshotCommandState:
+        initialResyncSnapshot?.commandState ?? null,
+      reloadedResyncSnapshotCommandState:
+        reloadedResyncSnapshot?.commandState ?? null,
+      initialSnapshot,
+      reloadedSnapshot,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function provePrivateChannelStaleCompletedPostRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  const stalePrivatePostBody = "Stale completed private proof post";
+  try {
+    await installStaleCompletedPrivateChannelBrowserRoutes(page, {
+      commandRequests,
+      stalePrivatePostBody,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const submitButton = page.locator(
+      '[data-testid="player-composer"] button[data-action="submit_post"]',
+    );
+    await submitButton.waitFor({ state: "visible", timeout: 15000 });
+    const submitDisabledBeforeReject = await submitButton.isDisabled();
+    await page.locator('[data-testid="player-composer"] textarea').fill(
+      stalePrivatePostBody,
+    );
+    await submitButton.click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted" &&
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitPost",
+      null,
+      { timeout: 15000 },
+    );
+    const stalePostReceipt = page.getByTestId("player-command-receipt-submit_post");
+    await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const receiptRefreshKeys = await stalePostReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+    const snapshotAfterReject = await collectCompletedPrivateChannelSnapshot(page);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const reloadedResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable after completed reject reload");
+      }
+      return window.__fmarchTriggerPlayerResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true,
+      null,
+      { timeout: 15000 },
+    );
+    const snapshotAfterReload = await collectCompletedPrivateChannelSnapshot(page);
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("completed private channel stale post leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.SubmitPost ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_post",
+      commandKind: command === null ? null : "SubmitPost",
+      command,
+      commandStatus,
+      bridgePlan,
+      receipts,
+      stalePrivatePostBody,
+      submitDisabledBeforeReject,
+      snapshotAfterReject,
+      snapshotAfterReload,
+      reloadedResyncSnapshotCommandState:
+        reloadedResyncSnapshot?.commandState ?? null,
       receiptStatusText,
       receiptRefreshKeys,
       rawInviteTokensVisible: false,
@@ -7689,6 +7977,177 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
   });
 }
 
+async function installCompletedPrivateChannelBrowserRoutes(page) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "completed-private-channel-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongCompletedPrivateChannelProofCommand",
+            retryable: false,
+            message: "completed private channel reload proof does not accept commands",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await installCompletedPrivateChannelProjectionRoutes(page);
+}
+
+async function installStaleCompletedPrivateChannelBrowserRoutes(
+  page,
+  { commandRequests, stalePrivatePostBody },
+) {
+  let rejected = false;
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitPost !== undefined) {
+      rejected = true;
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "GameAlreadyCompleted",
+              retryable: false,
+              message: "Reject GameAlreadyCompleted: game already completed",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "completed-private-channel-stale-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongCompletedPrivateChannelProofCommand",
+            retryable: false,
+            message: "completed private channel stale proof only accepts SubmitPost",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+    await fulfillJson(
+      route,
+      rejected
+        ? completedPrivateChannelThread()
+        : {
+            next_before_seq: null,
+            posts: [
+              {
+                source_seq: 920,
+                stream_seq: 920,
+                author_slot: "slot-7",
+                author_user: "player_mira",
+                body: "Stale private channel still accepts a local draft before completion refresh.",
+                occurred_at: 1782615600,
+              },
+            ],
+          },
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      rejected
+        ? completedPrivateChannelCommandState({
+            boundary:
+              "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
+          })
+        : seededPrivateChannelPostOpenCommandState({
+            boundary:
+              "Seeded browser stale completed private-channel proof opened before completion refresh.",
+        }),
+    );
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+async function installCompletedPrivateChannelProjectionRoutes(page) {
+  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+    await fulfillJson(route, completedPrivateChannelThread());
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      completedPrivateChannelCommandState({
+        boundary:
+          "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
+      }),
+    );
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+function completedPrivateChannelThread() {
+  return {
+    next_before_seq: null,
+    posts: [
+      {
+        source_seq: 921,
+        stream_seq: 921,
+        author_slot: "host",
+        author_user: "host_h",
+        body: "Completed private channel remains readable.",
+        occurred_at: 1782619200,
+      },
+    ],
+  };
+}
+
 async function fulfillJson(route, payload, status = 200) {
   await route.fulfill({
     status,
@@ -7726,6 +8185,48 @@ function seededActionOpenCommandState({ boundary }) {
         grantId: "grant-factional-kill",
       },
     ],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function seededPrivateChannelPostOpenCommandState({ boundary }) {
+  return {
+    game: "seeded-private-channel-post-open",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "N05",
+      phaseKind: "Night",
+      phaseNumber: 5,
+      locked: false,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function completedPrivateChannelCommandState({ boundary }) {
+  return {
+    game: "seeded-completed-private-channel",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: true,
+    phase: {
+      phaseId: "N05",
+      phaseKind: "Night",
+      phaseNumber: 5,
+      locked: false,
+    },
+    actions: [],
     voteTargets: [],
     currentVote: null,
     boundary,
@@ -11752,6 +12253,8 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
   const stalePostProof =
     privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
+  const completedProof =
+    privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
   if (
     privateChannelRoleSurface?.status !== "passed" ||
@@ -11875,6 +12378,186 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
     throw new Error(
       `core-loop admin proof missing private channel stale post recovery: ${JSON.stringify(
         stalePostProof,
+      )}`,
+    );
+  }
+  assertCompletedPrivateChannelProof({
+    proof: completedProof,
+    expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+  });
+}
+
+function assertCompletedPrivateChannelProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    !String(proof.transition ?? "").includes("private:role-pm:reload:complete") ||
+    !String(proof.transition ?? "").includes(
+      "private:submit_post:reject:GameAlreadyCompleted",
+    )
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed private channel shell: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  assertCompletedPrivateChannelReloadProof({
+    proof: proof.reloadProof,
+    sourceRoleUrl,
+    visitedRolePath,
+  });
+  assertStaleCompletedPrivatePostRecoveryProof({
+    proof: proof.staleCompletedPostRecoveryProof,
+    expectedGame,
+    sourceRoleUrl,
+    visitedRolePath,
+  });
+}
+
+function assertCompletedPrivateChannelReloadProof({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.resyncFromSeq !== 921 ||
+    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed private reload shell: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  for (const [label, snapshot] of [
+    ["initial", proof.initialSnapshot],
+    ["reloaded", proof.reloadedSnapshot],
+  ]) {
+    assertCompletedPrivateChannelSnapshot({
+      snapshot,
+      label,
+      expectedBoundary: "completed private-channel role URL reloaded",
+    });
+  }
+}
+
+function assertStaleCompletedPrivatePostRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.clickedAction !== "submit_post" ||
+    proof.commandKind !== "SubmitPost" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.channel_id !== "role-pm" ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.body !== proof.stalePrivatePostBody ||
+    proof.submitDisabledBeforeReject !== false ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitPost" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject gamealreadycompleted") ||
+    proof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes" ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throw new Error(
+      `core-loop admin proof missing stale completed private post recovery: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  for (const [label, snapshot] of [
+    ["afterReject", proof.snapshotAfterReject],
+    ["afterReload", proof.snapshotAfterReload],
+  ]) {
+    assertCompletedPrivateChannelSnapshot({
+      snapshot,
+      label,
+      expectedBoundary:
+        label === "afterReject"
+          ? "GameAlreadyCompleted recovery refreshed role-pm controls"
+          : "GameAlreadyCompleted recovery refreshed role-pm controls",
+      rejectedBody: proof.stalePrivatePostBody,
+    });
+  }
+}
+
+function assertCompletedPrivateChannelSnapshot({
+  snapshot,
+  label,
+  expectedBoundary,
+  rejectedBody = null,
+}) {
+  if (
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.actorSlot !== "slot-7" ||
+    snapshot.checkpoint.actionState !== "disabled:game complete" ||
+    snapshot.commandPanelChannelId !== "role-pm" ||
+    snapshot.channelContext?.channelId !== "role-pm" ||
+    snapshot.channelContext?.actorSlot !== "slot-7" ||
+    snapshot.channelContext?.capabilityLabel !== "ChannelMember(role-pm)" ||
+    snapshot.channelContext?.actorStatus !== "alive" ||
+    snapshot.commandState?.actorSlot !== "slot-7" ||
+    snapshot.commandState?.gameCompleted !== true ||
+    snapshot.commandState?.actions?.length !== 0 ||
+    snapshot.commandState?.voteTargets?.length !== 0 ||
+    !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
+    !snapshot.threadPostBodies?.includes("Completed private channel remains readable.") ||
+    snapshot.enabledMutatingButtons?.length !== 0 ||
+    !snapshot.buttons?.some(
+      (button) => button.action === "submit_post" && button.disabled === true,
+    ) ||
+    (rejectedBody !== null &&
+      snapshot.threadPostBodies?.includes(rejectedBody) === true)
+  ) {
+    throw new Error(
+      `core-loop admin proof missing ${label} completed private channel closure: ${JSON.stringify(
+        snapshot,
       )}`,
     );
   }
