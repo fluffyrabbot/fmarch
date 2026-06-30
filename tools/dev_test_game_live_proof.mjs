@@ -134,6 +134,36 @@ assert.equal(session.verification.coreLoop.status, "passed");
 assert.equal(session.verification.coreLoop.lock.commandStatus.state, "ack");
 assert.equal(session.verification.coreLoop.rejectedVote.state, "reject");
 assert.equal(session.verification.coreLoop.rejectedVote.error, "PhaseLocked");
+assert.match(
+  session.verification.coreLoop.staleVoteBrowserProof.roleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.equal(
+  session.verification.coreLoop.staleVoteBrowserProof.receipt.actionId,
+  "submit_vote",
+);
+assert.equal(
+  session.verification.coreLoop.staleVoteBrowserProof.receipt.state,
+  "reject",
+);
+assert.match(
+  session.verification.coreLoop.staleVoteBrowserProof.receiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.deepEqual(
+  session.verification.coreLoop.staleVoteBrowserProof.commandStateAfterReject
+    .currentVote,
+  session.verification.coreLoop.staleVoteBrowserProof.commandStateBeforeClose
+    .currentVote,
+);
+assert.equal(
+  session.verification.coreLoop.staleVoteBrowserProof.voteControlAfterReject.exists,
+  false,
+);
+assert.equal(
+  session.verification.coreLoop.staleVoteBrowserProof.votecountUnchanged,
+  true,
+);
 assert.equal(session.verification.coreLoop.unlock.commandStatus.state, "ack");
 assert.equal(
   session.verification.coreLoop.playerPhases.lockedBeforeVote.locked,

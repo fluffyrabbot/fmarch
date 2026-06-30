@@ -12,6 +12,19 @@ import {
 test("core loop lane status formats seeded recovery evidence", () => {
   assert.equal(
     coreLoopLaneStatus({
+      id: "core-loop",
+      status: "passed",
+      evidence: {
+        rejectedVoteError: "PhaseLocked",
+        staleVoteVotecountUnchanged: true,
+        lockState: "ack",
+        unlockState: "ack",
+      },
+    }),
+    "passed: PhaseLocked vote receipt, unchanged true, lock ack/unlock ack",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
       id: "invalid-action-recovery",
       status: "passed",
       evidence: {

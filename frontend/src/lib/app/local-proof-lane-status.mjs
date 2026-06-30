@@ -50,7 +50,7 @@ export function coreLoopLaneStatus(lane) {
   const evidence = laneEvidence(lane);
   switch (lane?.id) {
     case "core-loop":
-      return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote reject, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
+      return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote receipt, unchanged ${String(evidence.staleVoteVotecountUnchanged ?? "unknown")}, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
     case "action-loop":
       return `${status}: legal action ${String(evidence.legalActionState ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
     case "host-deadline-advance":

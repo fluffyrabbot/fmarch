@@ -170,11 +170,53 @@ export function buildDevTestGameProofRun(session, options = {}) {
       rejectedVoteError: verification.coreLoop?.rejectedVote?.error ?? null,
       lockState: verification.coreLoop?.lock?.commandStatus?.state ?? null,
       unlockState: verification.coreLoop?.unlock?.commandStatus?.state ?? null,
+      staleVoteRoleUrl:
+        verification.coreLoop?.staleVoteBrowserProof?.roleUrl ?? null,
+      staleVoteReceiptStatusText:
+        verification.coreLoop?.staleVoteBrowserProof?.receiptStatusText ?? null,
+      staleVoteRefreshKeys:
+        verification.coreLoop?.staleVoteBrowserProof?.receipt?.commandTrace
+          ?.projectionRefreshKeys ?? null,
+      staleVoteCurrentVoteBeforeReject:
+        verification.coreLoop?.staleVoteBrowserProof?.commandStateBeforeClose
+          ?.currentVote ?? null,
+      staleVoteCurrentVoteAfterReject:
+        verification.coreLoop?.staleVoteBrowserProof?.commandStateAfterReject
+          ?.currentVote ?? null,
+      staleVoteControlExistsAfterReject:
+        verification.coreLoop?.staleVoteBrowserProof?.voteControlAfterReject?.exists ??
+        null,
+      staleVoteVotecountUnchanged:
+        verification.coreLoop?.staleVoteBrowserProof?.votecountUnchanged ?? null,
       passed:
         verification.coreLoop?.status === "passed" &&
         verification.coreLoop?.lockedVoteControl?.exists === false &&
         verification.coreLoop?.lockedVoteControl?.disabled === true &&
         verification.coreLoop?.rejectedVote?.error === "PhaseLocked" &&
+        typeof verification.coreLoop?.staleVoteBrowserProof?.roleUrl === "string" &&
+        verification.coreLoop?.staleVoteBrowserProof?.roleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        verification.coreLoop?.staleVoteBrowserProof?.receipt?.actionId ===
+          "submit_vote" &&
+        verification.coreLoop?.staleVoteBrowserProof?.receipt?.state === "reject" &&
+        verification.coreLoop?.staleVoteBrowserProof?.receipt?.commandTrace?.projectionRefreshKeys?.includes(
+          "commandState",
+        ) === true &&
+        verification.coreLoop?.staleVoteBrowserProof?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        JSON.stringify(
+          verification.coreLoop?.staleVoteBrowserProof?.commandStateAfterReject
+            ?.currentVote ?? null,
+        ) ===
+          JSON.stringify(
+            verification.coreLoop?.staleVoteBrowserProof?.commandStateBeforeClose
+              ?.currentVote ?? null,
+          ) &&
+        verification.coreLoop?.staleVoteBrowserProof?.voteControlAfterReject
+          ?.exists === false &&
+        verification.coreLoop?.staleVoteBrowserProof?.votecountUnchanged === true &&
         verification.coreLoop?.lock?.commandStatus?.state === "ack" &&
         verification.coreLoop?.unlock?.commandStatus?.state === "ack",
     }),
