@@ -1897,6 +1897,12 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopTargetDayVoteReceiptSurface(proof.targetDayVoteReceiptSurface);
   assertCoreLoopNormalDayVotePrivacySurface(proof.normalDayVotePrivacySurface);
   assertCoreLoopHostPhaseTransitionSurface(proof.hostPhaseTransitionSurface);
+  assertCoreLoopTargetPostDayVoteAdvanceSurface(
+    proof.targetPostDayVoteAdvanceSurface,
+  );
+  assertCoreLoopNormalPostDayVoteAdvanceSurface(
+    proof.normalPostDayVoteAdvanceSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1923,6 +1929,8 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     hostRoleSurface: proof.hostRoleSurface,
     playerRoleSurface: proof.playerRoleSurface,
     hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
+    targetPostDayVoteAdvanceSurface: proof.targetPostDayVoteAdvanceSurface,
+    normalPostDayVoteAdvanceSurface: proof.normalPostDayVoteAdvanceSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -2400,6 +2408,129 @@ function assertCoreLoopNormalDayVotePrivacySurface(normalSurface) {
       `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
   ) {
     throw new Error("core-loop admin proof missing normal day-vote privacy surface");
+  }
+}
+
+function assertCoreLoopTargetPostDayVoteAdvanceSurface(targetSurface) {
+  const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
+  if (
+    targetSurface?.status !== "passed" ||
+    targetSurface.clickedThroughFromRoleUrl !== true ||
+    targetSurface.releaseReady !== false ||
+    targetSurface.productionReady !== false ||
+    targetSurface.rawInviteTokensVisible !== false ||
+    targetSurface.targetSlot !== "slot-2" ||
+    targetSurface.principalUserId !== "player_ilya" ||
+    typeof targetSurface.sourceRoleUrl !== "string" ||
+    !targetSurface.sourceRoleUrl.includes("/g/") ||
+    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof targetSurface.visitedRolePath !== "string" ||
+    !targetSurface.visitedRolePath.includes("/g/") ||
+    !targetSurface.visitedRolePath.includes("private=notification-1") ||
+    targetSurface.surfaceTestId !== "player-surface" ||
+    targetSurface.checkpoint?.phaseId !== "N02" ||
+    targetSurface.checkpoint.phaseState !== "open" ||
+    targetSurface.checkpoint.actorSlot !== "slot-2" ||
+    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
+    targetSurface.checkpoint.receiptState !== "idle" ||
+    !String(targetSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: actor is not alive") ||
+    targetSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    targetSurface.privateQueueBoundary.count !== 1 ||
+    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    targetSurface.privateNotice?.id !== "notification-1" ||
+    targetSurface.privateNotice.kind !== "notification" ||
+    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
+    !String(targetSurface.privateNotice.text ?? "").includes("day_vote") ||
+    targetSurface.privateNotice.detailText !== "Phase D02" ||
+    targetSurface.projectionCommandState?.actorSlot !== "slot-2" ||
+    targetSurface.projectionCommandState?.actorAlive !== false ||
+    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
+    targetSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    targetSurface.projectionCommandState?.phase?.locked !== false ||
+    targetSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
+      "target role remained dead",
+    ) ||
+    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
+    targetSurface.projectionNotifications?.[0]?.status !== "day_vote" ||
+    targetSurface.resyncFromSeq !== 903 ||
+    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-2" ||
+    targetSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    targetSurface.resyncSnapshotNotifications?.[0]?.status !== "day_vote" ||
+    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
+    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`
+  ) {
+    throw new Error(
+      "core-loop admin proof missing target post-day-vote advance surface",
+    );
+  }
+}
+
+function assertCoreLoopNormalPostDayVoteAdvanceSurface(normalSurface) {
+  const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  if (
+    normalSurface?.status !== "passed" ||
+    normalSurface.clickedThroughFromRoleUrl !== true ||
+    normalSurface.releaseReady !== false ||
+    normalSurface.productionReady !== false ||
+    normalSurface.rawInviteTokensVisible !== false ||
+    normalSurface.normalSlot !== "slot-4" ||
+    normalSurface.principalUserId !== "player_rowan" ||
+    normalSurface.targetReceiptVisible !== false ||
+    typeof normalSurface.sourceRoleUrl !== "string" ||
+    !normalSurface.sourceRoleUrl.includes("/g/") ||
+    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof normalSurface.visitedRolePath !== "string" ||
+    !normalSurface.visitedRolePath.includes("/g/") ||
+    !normalSurface.visitedRolePath.includes("private=notification-1") ||
+    normalSurface.surfaceTestId !== "player-surface" ||
+    normalSurface.checkpoint?.phaseId !== "N02" ||
+    normalSurface.checkpoint.phaseState !== "open" ||
+    normalSurface.checkpoint.actorSlot !== "slot-4" ||
+    normalSurface.checkpoint.actionState !==
+      "disabled:no legal action available" ||
+    normalSurface.checkpoint.receiptState !== "idle" ||
+    !String(normalSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: no legal action available") ||
+    normalSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    normalSurface.privateQueueBoundary.count !== 0 ||
+    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    !String(normalSurface.privateEmptyText ?? "").includes(
+      "No private results visible",
+    ) ||
+    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.projectionCommandState?.actorAlive !== true ||
+    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
+    normalSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.projectionCommandState?.phase?.locked !== false ||
+    normalSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
+      "normal role stayed alive",
+    ) ||
+    normalSurface.projectionNotifications?.length !== 0 ||
+    normalSurface.resyncFromSeq !== 903 ||
+    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
+    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
+    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+  ) {
+    throw new Error(
+      "core-loop admin proof missing normal post-day-vote advance surface",
+    );
   }
 }
 
