@@ -74,6 +74,12 @@ import {
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
+  assertDevTestGameHostedMatrixExternalEvidence,
+  buildDevTestGameHostedMatrixExternalEvidence,
+  devTestGameHostedMatrixExternalEvidenceCommand,
+  devTestGameHostedMatrixExternalEvidencePath,
+} from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -6507,6 +6513,51 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.deepEqual(hostedMatrixWithExternalTarget.remainingGaps, [
     "beta/release/operator readiness and human rollback path",
   ]);
+  const externalEvidence =
+    buildDevTestGameHostedMatrixExternalEvidence({
+      matrix: hostedMatrix,
+      rawEvidence: rawHostedMatrixEvidenceFixture(),
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      frontendBaseUrl: "https://fmarch.example.test",
+      apiBaseUrl: "https://api.fmarch.example.test",
+      rawEvidenceSource: "target/dev-test-game/hosted-matrix-raw.json",
+    });
+  assertDevTestGameHostedMatrixExternalEvidence(externalEvidence, {
+    frontendBaseUrl: "https://fmarch.example.test",
+    apiBaseUrl: "https://api.fmarch.example.test",
+  });
+  assert.equal(externalEvidence.proof, "fmarch-hosted-concurrent-race-matrix-evidence");
+  assert.deepEqual(externalEvidence.groupIds, ["replacement-race-reload"]);
+  assert.deepEqual(externalEvidence.cellIds, [
+    "replacement-private-post",
+    "replacement-vote",
+    "replacement-action",
+  ]);
+  assert.equal(
+    devTestGameHostedMatrixExternalEvidenceCommand,
+    "test:dev-test-game-hosted-matrix-external-evidence",
+  );
+  assert.equal(
+    devTestGameHostedMatrixExternalEvidencePath,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  const hostedMatrixWithProducedExternalEvidence =
+    buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
+      raceCoverage,
+      proofRun,
+      session: card,
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedTarget: {
+        frontendBaseUrl: "https://fmarch.example.test",
+        apiBaseUrl: "https://api.fmarch.example.test",
+        evidencePath: devTestGameHostedMatrixExternalEvidencePath,
+        evidence: externalEvidence,
+      },
+    });
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.externalHostedEvidence.status,
+    "passed",
+  );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
@@ -7069,6 +7120,49 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function rawHostedMatrixEvidenceFixture() {
+  return {
+    proof: "fmarch-hosted-concurrent-race-matrix-raw",
+    status: "passed",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    frontendBaseUrl: "https://fmarch.example.test",
+    apiBaseUrl: "https://api.fmarch.example.test",
+    groupId: "replacement-race-reload",
+    commandRaceCount: 3,
+    reloadRecoveryCount: 3,
+    reconnectRecovery: true,
+    staleConflictMessages: true,
+    rawRoleCredentialsRedacted: true,
+    observations: [
+      rawHostedMatrixObservation(
+        "replacement-private-post",
+        "concurrent-replacement-private-post-race",
+        "concurrent-replacement-private-post-race-reload",
+      ),
+      rawHostedMatrixObservation(
+        "replacement-vote",
+        "concurrent-replacement-vote-race",
+        "concurrent-replacement-vote-race-reload",
+      ),
+      rawHostedMatrixObservation(
+        "replacement-action",
+        "concurrent-replacement-action-race",
+        "concurrent-replacement-action-race-reload",
+      ),
+    ],
+  };
+}
+
+function rawHostedMatrixObservation(cellId, raceLaneId, reloadLaneId) {
+  return {
+    id: `${cellId}-external-observation`,
+    status: "passed",
+    cellId,
+    raceLaneId,
+    reloadLaneId,
   };
 }
 
