@@ -32,6 +32,7 @@ export function completedPlayerReloadCases() {
     {
       proofField: "completedPlayerReloadProof",
       sourceRoleUrlField: "sourceActionPlayerRoleUrl",
+      transitionToken: "actionPlayer:reload:complete",
       cookieValue: "fixture-player",
       commandStateKind: "action-player",
       expectedSlot: "slot-7",
@@ -43,6 +44,7 @@ export function completedPlayerReloadCases() {
     {
       proofField: "completedNormalPlayerReloadProof",
       sourceRoleUrlField: "sourceNormalPlayerRoleUrl",
+      transitionToken: "normalPlayer:reload:complete",
       cookieValue: "fixture-normal",
       commandStateKind: "normal-player",
       expectedSlot: "slot-4",
@@ -54,6 +56,7 @@ export function completedPlayerReloadCases() {
     {
       proofField: "completedDeadPlayerReloadProof",
       sourceRoleUrlField: "sourceDeadPlayerRoleUrl",
+      transitionToken: "deadPlayer:reload:complete",
       cookieValue: "fixture-target",
       commandStateKind: "dead-player",
       expectedSlot: "slot-2",
@@ -84,6 +87,7 @@ export function staleCompletedGamePlayerCommandCases() {
   return [
     {
       proofField: "staleCompletedVoteRecoveryProof",
+      transitionToken: "stale:D05:submit_vote:reject:GameAlreadyCompleted",
       clickedAction: "submit_vote:no_lynch",
       commandKind: "SubmitVote",
       commandSelector: "SubmitVote",
@@ -99,6 +103,7 @@ export function staleCompletedGamePlayerCommandCases() {
     },
     {
       proofField: "staleCompletedPostRecoveryProof",
+      transitionToken: "stale:D05:submit_post:reject:GameAlreadyCompleted",
       clickedAction: "submit_post",
       commandKind: "SubmitPost",
       commandSelector: "SubmitPost",
@@ -119,6 +124,39 @@ export function staleCompletedGamePlayerCommandCases() {
       ],
     },
   ];
+}
+
+export function completedGameEndgameTransitionTokens() {
+  return [
+    "host:N05:complete_game:ack:921",
+    "host:reload:complete",
+    ...completedHostStaleCommandCases().map(
+      (scenario) => scenario.transitionToken,
+    ),
+    "actionPlayer:endgame:complete",
+    ...completedPlayerReloadCases().map((scenario) => scenario.transitionToken),
+    "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
+    ...staleCompletedGamePlayerCommandCases().map(
+      (scenario) => scenario.transitionToken,
+    ),
+  ];
+}
+
+export function completedGameEndgameTransition() {
+  return completedGameEndgameTransitionTokens().join(" -> ");
+}
+
+export function assertCompletedGameEndgameTransition({
+  transition,
+  failureMessage = "completed-game endgame transition missing shared scenario tokens",
+}) {
+  const transitionText = String(transition ?? "");
+  const missingTokens = completedGameEndgameTransitionTokens().filter(
+    (token) => !transitionText.includes(token),
+  );
+  if (missingTokens.length > 0) {
+    throw new Error(`${failureMessage}: ${missingTokens.join(", ")}`);
+  }
 }
 
 export function completedGameEndgameStaleRejectAssertionCases({

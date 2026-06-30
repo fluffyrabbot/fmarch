@@ -5,6 +5,8 @@ import {
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   assertCompletedStaleRejectCases,
+  assertCompletedGameEndgameTransition,
+  completedGameEndgameTransition,
   completedGameEndgameStaleRejectAssertionCases,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
@@ -1774,8 +1776,7 @@ async function proveCompletedGameEndgameSurface({
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
-    transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_post:reject:GameAlreadyCompleted",
+    transition: completedGameEndgameTransition(),
     hostCompleteProof,
     completedHostReloadProof,
     ...completedHostStaleRecoveryProofs,
@@ -11856,43 +11857,7 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
     !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
     typeof completedGameEndgameSurface.sourceDeadPlayerRoleUrl !== "string" ||
-    !completedGameEndgameSurface.sourceDeadPlayerRoleUrl.includes("/g/") ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "host:N05:complete_game:ack:921",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "host:reload:complete",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "host:stale_resolve_phase:reject:GameAlreadyCompleted",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "host:stale_advance_phase:reject:GameAlreadyCompleted",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "host:stale_complete_game:reject:GameAlreadyCompleted",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "actionPlayer:endgame:complete",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "actionPlayer:reload:complete",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "normalPlayer:reload:complete",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "deadPlayer:reload:complete",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "stale:D05:submit_vote:reject:GameAlreadyCompleted",
-    ) ||
-    !String(completedGameEndgameSurface.transition ?? "").includes(
-      "stale:D05:submit_post:reject:GameAlreadyCompleted",
-    )
+    !completedGameEndgameSurface.sourceDeadPlayerRoleUrl.includes("/g/")
   ) {
     throw new Error(
       `core-loop admin proof missing completed-game endgame surface: ${JSON.stringify(
@@ -11900,6 +11865,11 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       )}`,
     );
   }
+  assertCompletedGameEndgameTransition({
+    transition: completedGameEndgameSurface.transition,
+    failureMessage:
+      "core-loop admin proof missing completed-game endgame transition",
+  });
   assertHostCompleteGameProof({
     proof: completedGameEndgameSurface.hostCompleteProof,
     expectedGame,
