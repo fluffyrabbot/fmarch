@@ -1180,6 +1180,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     proofGraph,
   });
   const selectedSpineTarget = normalizeNextActionSpineTarget(unproven?.spineTarget);
+  const selectedSpineDrilldown = normalizeNextActionSpineDrilldown(
+    unproven?.spineDrilldown,
+  );
   const selectedProductionFeatureSpineTarget =
     normalizeNextActionFeatureSpineDeclaration(
       unproven?.productionFeatureSpineTarget,
@@ -1273,6 +1276,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "selected-spine-target",
             status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}`,
+          }),
+          Object.freeze({
+            id: "selected-spine-drilldown",
+            status: `${selectedSpineDrilldown.featureSlotId}:${selectedSpineDrilldown.cycleRowId}/${selectedSpineDrilldown.checkpointRowId}/${selectedSpineDrilldown.roleUrlRowId}`,
+          }),
+          Object.freeze({
+            id: "selected-spine-rerun-command",
+            status: selectedSpineDrilldown.rerunCommand,
           }),
           Object.freeze({
             id: "selected-spine-browser-proof",
@@ -1493,6 +1504,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         unproven?.realHostedEvidenceInputs?.proofTarget ?? "",
       ),
       selectedProductionFeatureSpineTarget,
+      selectedSpineDrilldown,
       selectedSpineTarget,
       selectedRoleUrl: unprovenRoleUrl,
       selectedRoleHref:
@@ -1633,6 +1645,9 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         productionFeatureSpineTarget: normalizeNextActionFeatureSpineDeclaration(
           candidate.productionFeatureSpineTarget,
         ),
+        spineDrilldown: normalizeNextActionSpineDrilldown(
+          candidate.spineDrilldown,
+        ),
         spineTarget: normalizeNextActionSpineTarget(candidate.spineTarget),
         ...(candidate.hostedEvidenceMode === undefined
           ? {}
@@ -1705,6 +1720,33 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
     cycleId: String(declaration.cycleId ?? ""),
     roleUrlId: String(declaration.roleUrlId ?? ""),
     checkpointId: String(declaration.checkpointId ?? ""),
+  });
+}
+
+function normalizeNextActionSpineDrilldown(drilldown) {
+  if (drilldown === null || typeof drilldown !== "object") {
+    return Object.freeze({
+      featureSlotId: "",
+      sourceCheckId: "",
+      detailRoleUrl: "",
+      cycleRowId: "",
+      roleUrlRowId: "",
+      checkpointRowId: "",
+      roleUrl: "",
+      rerunCommand: "",
+      browserProofCommand: "",
+    });
+  }
+  return Object.freeze({
+    featureSlotId: String(drilldown.featureSlotId ?? ""),
+    sourceCheckId: String(drilldown.sourceCheckId ?? ""),
+    detailRoleUrl: String(drilldown.detailRoleUrl ?? ""),
+    cycleRowId: String(drilldown.cycleRowId ?? ""),
+    roleUrlRowId: String(drilldown.roleUrlRowId ?? ""),
+    checkpointRowId: String(drilldown.checkpointRowId ?? ""),
+    roleUrl: String(drilldown.roleUrl ?? ""),
+    rerunCommand: String(drilldown.rerunCommand ?? ""),
+    browserProofCommand: String(drilldown.browserProofCommand ?? ""),
   });
 }
 

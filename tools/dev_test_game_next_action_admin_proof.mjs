@@ -113,6 +113,8 @@ await runAdminAuditProof({
         source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
       unprovenProductionFeatureSpineTarget:
         source.nextAction.nextAction.unproven?.productionFeatureSpineTarget ?? null,
+      unprovenSpineDrilldown:
+        source.nextAction.nextAction.unproven?.spineDrilldown ?? null,
       unprovenSpineTarget:
         source.nextAction.nextAction.unproven?.spineTarget ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
@@ -433,6 +435,7 @@ export function assertNextActionAdminProof(evidence) {
     evidence.generatedFrom?.unprovenSpineTarget !== undefined
   ) {
     const declaration = evidence.generatedFrom.unprovenProductionFeatureSpineTarget;
+    const drilldown = evidence.generatedFrom.unprovenSpineDrilldown;
     const target = evidence.generatedFrom.unprovenSpineTarget;
     if (
       typeof declaration?.featureSlotId !== "string" ||
@@ -446,11 +449,23 @@ export function assertNextActionAdminProof(evidence) {
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
       target.featureSlotId !== declaration.featureSlotId ||
+      typeof drilldown?.featureSlotId !== "string" ||
+      typeof drilldown?.cycleRowId !== "string" ||
+      typeof drilldown?.roleUrlRowId !== "string" ||
+      typeof drilldown?.checkpointRowId !== "string" ||
+      typeof drilldown?.rerunCommand !== "string" ||
+      drilldown.featureSlotId !== declaration.featureSlotId ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-target",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-drilldown",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-rerun-command",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
@@ -501,6 +516,8 @@ function requiredChecksForNextAction(nextAction) {
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
       checks.push("selected-feature-spine-declaration");
       checks.push("selected-spine-target");
+      checks.push("selected-spine-drilldown");
+      checks.push("selected-spine-rerun-command");
       checks.push("selected-spine-browser-proof");
     }
   }
@@ -594,6 +611,8 @@ function requiredChecksForEvidence(evidence) {
             : [
                 "selected-feature-spine-declaration",
                 "selected-spine-target",
+                "selected-spine-drilldown",
+                "selected-spine-rerun-command",
                 "selected-spine-browser-proof",
               ]),
         ]

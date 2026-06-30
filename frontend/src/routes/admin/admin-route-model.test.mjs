@@ -1402,6 +1402,14 @@ test("admin route data exposes local next action as a native audit row", async (
         "selected-spine-target",
         "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
       ],
+      [
+        "selected-spine-drilldown",
+        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+      ],
+      [
+        "selected-spine-rerun-command",
+        "npm run test:dev-test-game-core-loop-admin-proof",
+      ],
       ["selected-spine-browser-proof", LIVE_BROWSER_PROOF_COMMAND],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
@@ -1466,6 +1474,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRealHostedEvidenceCommand: "",
     selectedRealHostedEvidenceProofTarget: "",
     selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+    selectedSpineDrilldown: featureSpineDrilldownFixture(),
     selectedSpineTarget: {
       sourceCheckId: "local-core-loop-proof",
       featureSlotId: "player-action-submission",
@@ -1524,6 +1533,7 @@ test("admin route data exposes local next action as a native audit row", async (
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+          spineDrilldown: featureSpineDrilldownFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
             featureSlotId: "player-action-submission",
@@ -3828,6 +3838,7 @@ function nextActionFixture({
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+          spineDrilldown: featureSpineDrilldownFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
             featureSlotId: "player-action-submission",
@@ -4404,6 +4415,7 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
         productionFeatureSpineTarget: unproven.productionFeatureSpineTarget,
+        spineDrilldown: unproven.spineDrilldown,
         spineTarget: unproven.spineTarget,
       },
     ],
@@ -4417,6 +4429,20 @@ function productionFeatureSpineTargetFixture() {
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
+  };
+}
+
+function featureSpineDrilldownFixture() {
+  return {
+    featureSlotId: "player-action-submission",
+    sourceCheckId: "local-core-loop-proof",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleRowId: "d02-n02",
+    roleUrlRowId: "d02-n02-actionPlayer",
+    checkpointRowId: "d02-n02-n02-action-open",
+    roleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
   };
 }
 

@@ -48,6 +48,8 @@ export const devTestGameReleaseReadinessPath =
 export const devTestGameOpsArtifactsPath = "target/dev-test-game/ops-artifacts.json";
 export const devTestGameLiveProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+export const devTestGameCoreLoopAdminProofCommand =
+  "npm run test:dev-test-game-core-loop-admin-proof";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -185,6 +187,9 @@ export function buildDevTestGameNextAction(
               proofGraphNodeId: selectedUnproven.proofGraphNodeId,
               productionFeatureSpineTarget:
                 selectedUnproven.productionFeatureSpineTarget,
+              ...(selectedUnproven.spineDrilldown == null
+                ? {}
+                : { spineDrilldown: selectedUnproven.spineDrilldown }),
               ...(selectedUnproven.spineTarget == null
                 ? {}
                 : { spineTarget: selectedUnproven.spineTarget }),
@@ -398,6 +403,11 @@ export function assertDevTestGameNextAction(evidence) {
     if (!validActionableSpineTarget(evidence.nextAction.unproven?.spineTarget)) {
       throw new Error(
         "next-action release-readiness recovery is missing an actionable spine target",
+      );
+    }
+    if (!validProductionFeatureSpineDrilldown(evidence.nextAction.unproven?.spineDrilldown)) {
+      throw new Error(
+        "next-action release-readiness recovery is missing a feature spine drilldown",
       );
     }
   }
@@ -615,6 +625,20 @@ function resolveProductionFeatureSpineTarget({
   };
 }
 
+function buildProductionFeatureSpineDrilldown(spineTarget) {
+  return {
+    featureSlotId: spineTarget.featureSlotId,
+    sourceCheckId: spineTarget.sourceCheckId,
+    detailRoleUrl: spineTarget.detailRoleUrl,
+    cycleRowId: spineTarget.cycleId,
+    roleUrlRowId: spineTarget.roleUrlId,
+    checkpointRowId: spineTarget.checkpointId,
+    roleUrl: spineTarget.roleUrl,
+    rerunCommand: devTestGameCoreLoopAdminProofCommand,
+    browserProofCommand: spineTarget.browserProofCommand,
+  };
+}
+
 function validProductionFeatureSpineDeclaration(declaration) {
   return (
     declaration !== null &&
@@ -644,28 +668,31 @@ function rankedBuildableReleaseReadinessItems(
         item.id === "hosted-deployment"
           ? hostedDeploymentBuildable({ hostedTargetPreflight })
           : localBuildableReleaseReadinessItems.get(item.id);
-      return buildable === undefined
-        ? null
-        : {
-            item,
-            index,
-            priority: buildable.priority,
-            command: buildable.command,
-            buildSlice: buildable.buildSlice,
-            proofTarget: buildable.proofTarget,
-            roleUrl: buildable.roleUrl,
-            proofGraphNodeId: buildable.proofGraphNodeId,
-            proofBoundary: buildable.proofBoundary,
-            productionFeatureSpineTarget: buildable.productionFeatureSpineTarget,
-            spineTarget: resolveProductionFeatureSpineTarget({
-              itemId: item.id,
-              declaration: buildable.productionFeatureSpineTarget,
-              coreLoopSpineTarget,
-            }),
-            hostedEvidenceMode: buildable.hostedEvidenceMode,
-            realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
-            realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
-          };
+      if (buildable === undefined) {
+        return null;
+      }
+      const spineTarget = resolveProductionFeatureSpineTarget({
+        itemId: item.id,
+        declaration: buildable.productionFeatureSpineTarget,
+        coreLoopSpineTarget,
+      });
+      return {
+        item,
+        index,
+        priority: buildable.priority,
+        command: buildable.command,
+        buildSlice: buildable.buildSlice,
+        proofTarget: buildable.proofTarget,
+        roleUrl: buildable.roleUrl,
+        proofGraphNodeId: buildable.proofGraphNodeId,
+        proofBoundary: buildable.proofBoundary,
+        productionFeatureSpineTarget: buildable.productionFeatureSpineTarget,
+        spineTarget,
+        spineDrilldown: buildProductionFeatureSpineDrilldown(spineTarget),
+        hostedEvidenceMode: buildable.hostedEvidenceMode,
+        realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
+        realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
+      };
     })
     .filter((candidate) => candidate !== null)
     .sort((left, right) => left.priority - right.priority || left.index - right.index);
@@ -724,6 +751,7 @@ function buildReleaseReadinessTrace(candidates) {
       proofBoundary: candidate.proofBoundary,
       requiredEvidence: candidate.item.requiredEvidence,
       productionFeatureSpineTarget: candidate.productionFeatureSpineTarget,
+      spineDrilldown: candidate.spineDrilldown,
       ...(candidate.spineTarget == null ? {} : { spineTarget: candidate.spineTarget }),
       ...(candidate.hostedEvidenceMode === undefined
         ? {}
@@ -1121,6 +1149,8 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId ||
       JSON.stringify(nextAction.unproven?.productionFeatureSpineTarget ?? null) !==
         JSON.stringify(selected.productionFeatureSpineTarget ?? null) ||
+      JSON.stringify(nextAction.unproven?.spineDrilldown ?? null) !==
+        JSON.stringify(selected.spineDrilldown ?? null) ||
       JSON.stringify(nextAction.unproven?.spineTarget ?? null) !==
         JSON.stringify(selected.spineTarget ?? null)
     ) {
@@ -1155,6 +1185,29 @@ function validActionableSpineTarget(spineTarget) {
     spineTarget.checkpointId.length > 0 &&
     typeof spineTarget.browserProofCommand === "string" &&
     spineTarget.browserProofCommand.includes("test:dev-test-game-live")
+  );
+}
+
+function validProductionFeatureSpineDrilldown(drilldown) {
+  return (
+    drilldown !== null &&
+    typeof drilldown === "object" &&
+    typeof drilldown.featureSlotId === "string" &&
+    drilldown.featureSlotId.length > 0 &&
+    drilldown.sourceCheckId === "local-core-loop-proof" &&
+    typeof drilldown.detailRoleUrl === "string" &&
+    drilldown.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
+    typeof drilldown.cycleRowId === "string" &&
+    drilldown.cycleRowId.length > 0 &&
+    typeof drilldown.roleUrlRowId === "string" &&
+    drilldown.roleUrlRowId.length > 0 &&
+    typeof drilldown.checkpointRowId === "string" &&
+    drilldown.checkpointRowId.length > 0 &&
+    typeof drilldown.roleUrl === "string" &&
+    drilldown.roleUrl.includes("/g/") &&
+    drilldown.rerunCommand === devTestGameCoreLoopAdminProofCommand &&
+    typeof drilldown.browserProofCommand === "string" &&
+    drilldown.browserProofCommand.includes("test:dev-test-game-live")
   );
 }
 

@@ -3319,6 +3319,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     proof.generatedFrom?.unprovenSpineTarget !== undefined
   ) {
     const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
+    const drilldown = proof.generatedFrom.unprovenSpineDrilldown;
     const target = proof.generatedFrom.unprovenSpineTarget;
     if (
       typeof declaration?.featureSlotId !== "string" ||
@@ -3332,10 +3333,20 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
       target.featureSlotId !== declaration.featureSlotId ||
+      typeof drilldown?.featureSlotId !== "string" ||
+      typeof drilldown?.cycleRowId !== "string" ||
+      typeof drilldown?.roleUrlRowId !== "string" ||
+      typeof drilldown?.checkpointRowId !== "string" ||
+      typeof drilldown?.rerunCommand !== "string" ||
+      drilldown.featureSlotId !== declaration.featureSlotId ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target") ||
+      !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-drilldown") ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-rerun-command",
+      ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
       )
@@ -3373,6 +3384,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     reason: String(proof.generatedFrom?.reason ?? ""),
     unprovenProductionFeatureSpineTarget:
       proof.generatedFrom?.unprovenProductionFeatureSpineTarget ?? null,
+    unprovenSpineDrilldown: proof.generatedFrom?.unprovenSpineDrilldown ?? null,
     unprovenSpineTarget: proof.generatedFrom?.unprovenSpineTarget ?? null,
     releaseReadinessCandidateCount: releaseTrace.candidateCount,
     localReadinessDependencyCandidateCount: localTrace.candidateCount,

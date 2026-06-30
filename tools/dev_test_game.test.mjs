@@ -762,6 +762,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+      spineDrilldown: featureSpineDrilldownFixture(),
       spineTarget: resolvedFeatureSpineTargetFixture(),
     },
   });
@@ -808,6 +809,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
         productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+        spineDrilldown: featureSpineDrilldownFixture(),
         spineTarget: resolvedFeatureSpineTargetFixture(),
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
@@ -1248,6 +1250,10 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.productionFeatureSpineTarget,
     productionFeatureSpineTargetFixture("host-phase-control"),
+  );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.spineDrilldown,
+    featureSpineDrilldownFixture("host-phase-control"),
   );
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
@@ -9356,6 +9362,21 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
   };
 }
 
+function featureSpineDrilldownFixture(slotId = "player-action-submission") {
+  const target = resolvedFeatureSpineTargetFixture(slotId);
+  return {
+    featureSlotId: target.featureSlotId,
+    sourceCheckId: target.sourceCheckId,
+    detailRoleUrl: target.detailRoleUrl,
+    cycleRowId: target.cycleId,
+    roleUrlRowId: target.roleUrlId,
+    checkpointRowId: target.checkpointId,
+    roleUrl: target.roleUrl,
+    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    browserProofCommand: target.browserProofCommand,
+  };
+}
+
 const productionFeatureSpineTargetFixtures = Object.freeze({
   "host-phase-control": Object.freeze({
     featureSlotId: "host-phase-control",
@@ -9960,6 +9981,7 @@ function nextActionAdminProofFixture() {
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       unprovenProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+      unprovenSpineDrilldown: featureSpineDrilldownFixture(),
       unprovenSpineTarget: resolvedFeatureSpineTargetFixture(),
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
@@ -9999,6 +10021,8 @@ function nextActionAdminProofFixture() {
         "selected-proof-graph-node",
         "selected-feature-spine-declaration",
         "selected-spine-target",
+        "selected-spine-drilldown",
+        "selected-spine-rerun-command",
         "selected-spine-browser-proof",
         "release-readiness-selection-trace",
       ],
