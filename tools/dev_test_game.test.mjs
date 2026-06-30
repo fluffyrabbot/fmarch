@@ -9302,6 +9302,7 @@ function coreLoopAdminProofFixture() {
     nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
     dayFourSurvivorRoleSurface: dayFourSurvivorRoleSurfaceFixture(),
     nightFourActionSubmissionSurface: nightFourActionSubmissionSurfaceFixture(),
+    nightFourResolutionReceiptSurface: nightFourResolutionReceiptSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -11136,6 +11137,192 @@ function nightFourActionSubmissionSurfaceFixture() {
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function nightFourResolutionReceiptSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "host:N04:resolve_phase:ack:916 -> survivor:N04:factional_kill_receipt -> actionPlayer:N04:privacy",
+    hostResolutionProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 915,
+      setupSnapshotHost: {
+        phase: {
+          id: "N04",
+          state: "open",
+        },
+      },
+      resolveProof: hostPhaseTransitionActionFixture({
+        actionId: "resolve_phase",
+        commandKind: "ResolvePhase",
+        streamSeq: 916,
+        phaseId: "N04",
+        phaseState: "locked",
+        deadlineAffordance: "unlock_thread,advance_phase",
+        projectionRefreshKeys: [
+          "host",
+          "votecount",
+          "dayVoteOutcomes",
+          "hostPrompts",
+        ],
+        command: {
+          game,
+          seed: 918273,
+        },
+      }),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    survivorReceiptProof: nightFourResolutionPlayerSurfaceFixture({
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      slotField: "survivorSlot",
+      slot: "slot-5",
+      principalUserId: "player_sage",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "Player action unavailable: actor is not alive",
+      privateCount: 1,
+      privateReceipt: true,
+      boundary:
+        "Seeded browser survivor target received factional_kill private receipt after N04 resolution.",
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_sage`,
+    }),
+    actionPlayerPrivacyProof: nightFourResolutionPlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "Player action unavailable: phase locked",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player stayed alive with no target-only N04 receipt after host resolved Night 4.",
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function nightFourResolutionPlayerSurfaceFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  slotField,
+  slot,
+  principalUserId,
+  actorAlive,
+  actorStatus,
+  actionState,
+  statusText,
+  privateCount,
+  privateReceipt,
+  boundary,
+  commandStateEndpoint,
+  notificationsEndpoint,
+}) {
+  const proof = {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    [slotField]: slot,
+    principalUserId,
+    checkpoint: {
+      phaseId: "N04",
+      phaseState: "locked",
+      actorSlot: slot,
+      actionState,
+      receiptState: "idle",
+      statusText,
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: privateCount,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    voteButtonCount: 0,
+    projectionCommandState: {
+      actorSlot: slot,
+      actorAlive,
+      actorStatus,
+      phase: {
+        phaseId: "N04",
+        locked: true,
+      },
+      actions: [],
+      voteTargets: [],
+      boundary,
+    },
+    projectionNotifications: privateReceipt
+      ? [
+          {
+            effect: "player_killed",
+            status: "factional_kill",
+          },
+        ]
+      : [],
+    projectionDayVoteOutcomes: [
+      { phaseId: "D02", status: "Lynch" },
+      { phaseId: "D03", status: "Lynch" },
+      { phaseId: "D04", status: "NoLynch" },
+    ],
+    resyncFromSeq: 916,
+    resyncSnapshotCommandState: {
+      actorSlot: slot,
+      phase: {
+        phaseId: "N04",
+      },
+    },
+    resyncSnapshotNotifications: privateReceipt
+      ? [
+          {
+            status: "factional_kill",
+          },
+        ]
+      : [],
+    coldLoadEndpoints: {
+      notificationsEndpoint,
+      commandStateEndpoint,
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+  if (privateReceipt) {
+    proof.privateNotice = {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed factional_kill",
+      detailText: "Phase N04",
+    };
+  } else {
+    proof.privateEmptyText = "No private results visible";
+  }
+  return proof;
 }
 
 function postDayThreePlayerSurfaceFixture({
