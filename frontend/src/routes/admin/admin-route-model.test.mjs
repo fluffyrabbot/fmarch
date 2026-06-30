@@ -557,7 +557,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 82,
+    laneCount: 83,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1058,7 +1058,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "55 hardening lanes passed");
+  assert.equal(hardening.status, "56 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1119,12 +1119,13 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "stale-host-deadline",
       "stale-host-deadline-reload",
       "stale-cohost-deadline",
+      "stale-cohost-deadline-reload",
     ],
   );
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 82,
+    laneCount: 83,
     releaseReady: false,
     productionReady: false,
   });
@@ -1175,7 +1176,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 82,
+    laneCount: 83,
     releaseReady: false,
     productionReady: false,
   });
@@ -1236,7 +1237,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 55);
+  assert.equal(data.audit.checks.length, 56);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1295,6 +1296,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["stale-host-deadline", "passed"],
       ["stale-host-deadline-reload", "passed"],
       ["stale-cohost-deadline", "passed"],
+      ["stale-cohost-deadline-reload", "passed"],
     ],
   );
 });
@@ -1331,7 +1333,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "62 demo scenarios available locally");
+  assert.equal(seed.status, "63 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1365,6 +1367,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "concurrent-host-advance-race",
       "stale-host-advance-reload",
       "stale-host-deadline-reload",
+      "stale-cohost-deadline-reload",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-lifecycle-race",
       "concurrent-host-complete-race",
@@ -1403,7 +1406,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 62,
+    scenarioCount: 63,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -1422,7 +1425,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 62);
+  assert.equal(data.audit.scenarios.length, 63);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1457,6 +1460,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["concurrent-host-advance-race", "available_locally"],
       ["stale-host-advance-reload", "available_locally"],
       ["stale-host-deadline-reload", "available_locally"],
+      ["stale-cohost-deadline-reload", "available_locally"],
       ["concurrent-host-deadline-advance-race", "available_locally"],
       ["concurrent-host-lifecycle-race", "available_locally"],
       ["concurrent-host-complete-race", "available_locally"],
@@ -1857,6 +1861,7 @@ function proofRunFixture() {
     "stale-host-deadline",
     "stale-host-deadline-reload",
     "stale-cohost-deadline",
+    "stale-cohost-deadline-reload",
   ].map((id) => ({ id, label: id, status: "passed", evidence: {} }));
   return {
     version: 1,
@@ -1892,7 +1897,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 82,
+      laneCount: 83,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
@@ -2000,6 +2005,7 @@ function seedFixtureSummaryFixture() {
       seedScenario("concurrent-host-advance-race", "Concurrent host advance race", "host"),
       seedScenario("stale-host-advance-reload", "Stale host advance reload", "host"),
       seedScenario("stale-host-deadline-reload", "Stale host deadline reload", "host"),
+      seedScenario("stale-cohost-deadline-reload", "Stale cohost deadline reload", "cohost"),
       seedScenario(
         "concurrent-host-deadline-advance-race",
         "Concurrent host deadline advance race",

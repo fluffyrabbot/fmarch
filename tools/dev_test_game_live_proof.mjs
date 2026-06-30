@@ -4536,6 +4536,58 @@ assert.equal(
   session.verification.multiplayerHardening.staleCohostDeadline.apiPhaseAfterReject.deadline,
   null,
 );
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.rejectReceiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.phaseAfterReload.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.phaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.deadlineActionsAfterReload.includes(
+      "extend_deadline",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.phaseActionsAfterReload.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.apiPhaseAfterReload.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.apiPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline
+    .staleCohostDeadlineReloadAfterReject.apiPhaseAfterReload.deadline,
+  null,
+);
 
 console.log(`dev test-game live proof passed for ${session.game}`);
 

@@ -71,6 +71,7 @@ const requiredChecks = [
   "stale-host-deadline",
   "stale-host-deadline-reload",
   "stale-cohost-deadline",
+  "stale-cohost-deadline-reload",
 ];
 
 await runAdminAuditProof({

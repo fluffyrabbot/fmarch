@@ -460,6 +460,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "After a stale host ExtendDeadline rejects PhaseLocked, the host role URL reloads to open D02 deadline truth with current deadline/phase controls and API deadline state matching the console.",
     }),
     scenario({
+      id: "stale-cohost-deadline-reload",
+      title: "Stale cohost deadline reload",
+      role: "cohost",
+      provenBy: ["stale-cohost-deadline-reload"].filter(hasLane),
+      note: "After a stale cohost ExtendDeadline rejects PhaseLocked, the cohost role URL reloads to open D02 delegated deadline truth with host-only phase controls still absent and API deadline state matching the console.",
+    }),
+    scenario({
       id: "concurrent-host-deadline-advance-race",
       title: "Concurrent host deadline advance race",
       role: "host",
@@ -749,8 +756,9 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-deadline",
         "stale-host-deadline-reload",
         "stale-cohost-deadline",
+        "stale-cohost-deadline-reload",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, local vote/action and host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, public and stale completed-game player reloads, stale host resolve/advance/deadline/completed-game reloads, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection, and stale cohost deadline recovery.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, local vote/action and host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, public and stale completed-game player reloads, stale host resolve/advance/deadline/completed-game reloads, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection, and stale cohost deadline recovery plus reload.",
     }),
     scenario({
       id: "local-ops-readiness",

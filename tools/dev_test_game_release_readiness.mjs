@@ -281,6 +281,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-host-deadline",
         "stale-host-deadline-reload",
         "stale-cohost-deadline",
+        "stale-cohost-deadline-reload",
       ],
       ...(hardeningAdminProofEvidence === undefined
         ? {}
@@ -829,6 +830,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-host-deadline",
     "stale-host-deadline-reload",
     "stale-cohost-deadline",
+    "stale-cohost-deadline-reload",
   ];
   if (proof?.version !== 1) {
     throw new Error(`hardening admin proof version drifted: ${proof?.version}`);

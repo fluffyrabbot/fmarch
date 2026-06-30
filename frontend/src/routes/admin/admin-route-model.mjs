@@ -1307,6 +1307,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-deadline",
     "stale-host-deadline-reload",
     "stale-cohost-deadline",
+    "stale-cohost-deadline-reload",
   ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
