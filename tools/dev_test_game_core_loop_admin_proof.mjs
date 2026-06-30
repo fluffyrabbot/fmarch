@@ -16,6 +16,11 @@ import {
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  privateReceiptAssertionArgs,
+  privateReceiptProofArgs,
+  privateReceiptScenario,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -1291,26 +1296,20 @@ async function provePostDayThreeResolutionSurface({
   actionPlayerRoleUrl,
   targetRoleUrl,
 }) {
+  const targetReceiptScenario = privateReceiptScenario("d03-target-receipt");
+  const actionPlayerPrivacyScenario = privateReceiptScenario(
+    "d03-action-player-privacy",
+  );
   const targetReceiptProof = await provePostDayThreePlayerSurface({
     browser,
     frontendBaseUrl,
     roleUrl: targetRoleUrl,
     cookieValue: "fixture-normal",
-    expectedSlot: "slot-4",
-    principalUserId: "player_rowan",
-    slotField: "targetSlot",
+    ...privateReceiptProofArgs(targetReceiptScenario),
     commandState: seededPostDayThreeVoteTargetCommandState({
       boundary:
         "Seeded browser target role received day_vote private receipt after D03 resolution.",
     }),
-    notifications: [
-      {
-        effect: "player_killed",
-        phase_id: "D03",
-        status: "day_vote",
-      },
-    ],
-    resyncFromSeq: 908,
     threadBody: "Day 3 has resolved.",
   });
   const actionPlayerPrivacyProof = await provePostDayThreePlayerSurface({
@@ -1318,15 +1317,11 @@ async function provePostDayThreeResolutionSurface({
     frontendBaseUrl,
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
-    expectedSlot: "slot-7",
-    principalUserId: "player_mira",
-    slotField: "actionPlayerSlot",
+    ...privateReceiptProofArgs(actionPlayerPrivacyScenario),
     commandState: seededPostDayThreeActionPlayerCommandState({
       boundary:
         "Seeded browser action player stayed alive with no target-only D03 receipt after host resolved Day 3.",
     }),
-    notifications: [],
-    resyncFromSeq: 908,
     threadBody: "Day 3 has resolved.",
   });
   const hostAdvanceProof = await provePostDayThreeHostAdvance({
@@ -1501,6 +1496,10 @@ async function proveNightFourResolutionReceiptSurface({
   actionPlayerRoleUrl,
   survivorRoleUrl,
 }) {
+  const survivorReceiptScenario = privateReceiptScenario("n04-survivor-receipt");
+  const actionPlayerPrivacyScenario = privateReceiptScenario(
+    "n04-action-player-privacy",
+  );
   const hostResolutionProof = await proveNightFourHostResolution({
     browser,
     frontendBaseUrl,
@@ -1511,21 +1510,11 @@ async function proveNightFourResolutionReceiptSurface({
     frontendBaseUrl,
     roleUrl: survivorRoleUrl,
     cookieValue: "fixture-survivor",
-    expectedSlot: "slot-5",
-    principalUserId: "player_sage",
-    slotField: "survivorSlot",
+    ...privateReceiptProofArgs(survivorReceiptScenario),
     commandState: seededNightFourSurvivorKilledCommandState({
       boundary:
         "Seeded browser survivor target received factional_kill private receipt after N04 resolution.",
     }),
-    notifications: [
-      {
-        effect: "player_killed",
-        phase_id: "N04",
-        status: "factional_kill",
-      },
-    ],
-    resyncFromSeq: 916,
     threadBody: "Night 4 has resolved.",
     dayVoteOutcomesRows: [
       ...dayTwoVoteOutcomeRows(),
@@ -1538,15 +1527,11 @@ async function proveNightFourResolutionReceiptSurface({
     frontendBaseUrl,
     roleUrl: actionPlayerRoleUrl,
     cookieValue: "fixture-player",
-    expectedSlot: "slot-7",
-    principalUserId: "player_mira",
-    slotField: "actionPlayerSlot",
+    ...privateReceiptProofArgs(actionPlayerPrivacyScenario),
     commandState: seededNightFourActionPlayerResolvedCommandState({
       boundary:
         "Seeded browser action player stayed alive with no target-only N04 receipt after host resolved Night 4.",
     }),
-    notifications: [],
-    resyncFromSeq: 916,
     threadBody: "Night 4 has resolved.",
     dayVoteOutcomesRows: [
       ...dayTwoVoteOutcomeRows(),
@@ -10317,14 +10302,15 @@ function assertNormalPostDayVoteAdvanceSurface(normalSurface) {
 
 function assertNightActionResolutionReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
+  const scenario = privateReceiptScenario("n02-target-receipt");
   if (
     targetSurface?.status !== "passed" ||
     targetSurface.clickedThroughFromRoleUrl !== true ||
     targetSurface.releaseReady !== false ||
     targetSurface.productionReady !== false ||
     targetSurface.rawInviteTokensVisible !== false ||
-    targetSurface.targetSlot !== "slot-3" ||
-    targetSurface.principalUserId !== "player-seed" ||
+    targetSurface.targetSlot !== scenario.expectedSlot ||
+    targetSurface.principalUserId !== scenario.principalUserId ||
     typeof targetSurface.sourceRoleUrl !== "string" ||
     !targetSurface.sourceRoleUrl.includes("/g/") ||
     !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
@@ -10332,14 +10318,14 @@ function assertNightActionResolutionReceiptSurface(targetSurface) {
     !targetSurface.visitedRolePath.includes("/g/") ||
     !targetSurface.visitedRolePath.includes("private=notification-1") ||
     targetSurface.surfaceTestId !== "player-surface" ||
-    targetSurface.checkpoint?.phaseId !== "N02" ||
-    targetSurface.checkpoint.phaseState !== "locked" ||
-    targetSurface.checkpoint.actorSlot !== "slot-3" ||
-    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
+    targetSurface.checkpoint?.phaseId !== scenario.phaseId ||
+    targetSurface.checkpoint.phaseState !== scenario.phaseState ||
+    targetSurface.checkpoint.actorSlot !== scenario.expectedSlot ||
+    targetSurface.checkpoint.actionState !== scenario.actionState ||
     targetSurface.checkpoint.receiptState !== "idle" ||
     !String(targetSurface.checkpoint.statusText ?? "")
       .toLowerCase()
-      .includes("player action unavailable: actor is not alive") ||
+      .includes(`player action unavailable: ${scenario.statusText}`) ||
     targetSurface.privateQueueBoundary?.status !==
       "principal-scoped-private-projections" ||
     targetSurface.privateQueueBoundary.count !== 1 ||
@@ -10349,27 +10335,33 @@ function assertNightActionResolutionReceiptSurface(targetSurface) {
     targetSurface.privateNotice?.id !== "notification-1" ||
     targetSurface.privateNotice.kind !== "notification" ||
     !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
-    !String(targetSurface.privateNotice.text ?? "").includes("factional_kill") ||
-    targetSurface.privateNotice.detailText !== "Phase N02" ||
-    targetSurface.projectionCommandState?.actorSlot !== "slot-3" ||
-    targetSurface.projectionCommandState?.actorAlive !== false ||
-    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
-    targetSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(targetSurface.privateNotice.text ?? "").includes(
+      scenario.privateReceiptStatus,
+    ) ||
+    targetSurface.privateNotice.detailText !==
+      `Phase ${scenario.privateReceiptPhaseId}` ||
+    targetSurface.projectionCommandState?.actorSlot !== scenario.expectedSlot ||
+    targetSurface.projectionCommandState?.actorAlive !== scenario.actorAlive ||
+    targetSurface.projectionCommandState?.actorStatus !== scenario.actorStatus ||
+    targetSurface.projectionCommandState?.phase?.phaseId !== scenario.phaseId ||
     targetSurface.projectionCommandState?.phase?.locked !== true ||
     targetSurface.projectionCommandState?.actions?.length !== 0 ||
     !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
-      "night target role received factional_kill private receipt",
+      scenario.boundaryText,
     ) ||
     targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
-    targetSurface.projectionNotifications?.[0]?.status !== "factional_kill" ||
-    targetSurface.resyncFromSeq !== 904 ||
-    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-3" ||
-    targetSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
-    targetSurface.resyncSnapshotNotifications?.[0]?.status !== "factional_kill" ||
+    targetSurface.projectionNotifications?.[0]?.status !==
+      scenario.privateReceiptStatus ||
+    targetSurface.resyncFromSeq !== scenario.resyncFromSeq ||
+    targetSurface.resyncSnapshotCommandState?.actorSlot !== scenario.expectedSlot ||
+    targetSurface.resyncSnapshotCommandState?.phase?.phaseId !==
+      scenario.phaseId ||
+    targetSurface.resyncSnapshotNotifications?.[0]?.status !==
+      scenario.privateReceiptStatus ||
     targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player-seed` ||
+      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
     targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`
+      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`
   ) {
     throw new Error(
       `core-loop admin proof missing night action resolution receipt surface: ${JSON.stringify(
@@ -10381,14 +10373,15 @@ function assertNightActionResolutionReceiptSurface(targetSurface) {
 
 function assertNormalNightActionResolutionPrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  const scenario = privateReceiptScenario("n02-normal-privacy");
   if (
     normalSurface?.status !== "passed" ||
     normalSurface.clickedThroughFromRoleUrl !== true ||
     normalSurface.releaseReady !== false ||
     normalSurface.productionReady !== false ||
     normalSurface.rawInviteTokensVisible !== false ||
-    normalSurface.normalSlot !== "slot-4" ||
-    normalSurface.principalUserId !== "player_rowan" ||
+    normalSurface.normalSlot !== scenario.expectedSlot ||
+    normalSurface.principalUserId !== scenario.principalUserId ||
     normalSurface.targetReceiptVisible !== false ||
     typeof normalSurface.sourceRoleUrl !== "string" ||
     !normalSurface.sourceRoleUrl.includes("/g/") ||
@@ -10397,14 +10390,14 @@ function assertNormalNightActionResolutionPrivacySurface(normalSurface) {
     !normalSurface.visitedRolePath.includes("/g/") ||
     !normalSurface.visitedRolePath.includes("private=notification-1") ||
     normalSurface.surfaceTestId !== "player-surface" ||
-    normalSurface.checkpoint?.phaseId !== "N02" ||
-    normalSurface.checkpoint.phaseState !== "locked" ||
-    normalSurface.checkpoint.actorSlot !== "slot-4" ||
-    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
+    normalSurface.checkpoint?.phaseId !== scenario.phaseId ||
+    normalSurface.checkpoint.phaseState !== scenario.phaseState ||
+    normalSurface.checkpoint.actorSlot !== scenario.expectedSlot ||
+    normalSurface.checkpoint.actionState !== scenario.actionState ||
     normalSurface.checkpoint.receiptState !== "idle" ||
     !String(normalSurface.checkpoint.statusText ?? "")
       .toLowerCase()
-      .includes("player action unavailable: phase locked") ||
+      .includes(`player action unavailable: ${scenario.statusText}`) ||
     normalSurface.privateQueueBoundary?.status !==
       "principal-scoped-private-projections" ||
     normalSurface.privateQueueBoundary.count !== 0 ||
@@ -10414,24 +10407,26 @@ function assertNormalNightActionResolutionPrivacySurface(normalSurface) {
     !String(normalSurface.privateEmptyText ?? "").includes(
       "No private results visible",
     ) ||
-    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.projectionCommandState?.actorAlive !== true ||
-    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
-    normalSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.projectionCommandState?.actorSlot !== scenario.expectedSlot ||
+    normalSurface.projectionCommandState?.actorAlive !== scenario.actorAlive ||
+    normalSurface.projectionCommandState?.actorStatus !== scenario.actorStatus ||
+    normalSurface.projectionCommandState?.phase?.phaseId !== scenario.phaseId ||
     normalSurface.projectionCommandState?.phase?.locked !== true ||
     normalSurface.projectionCommandState?.actions?.length !== 0 ||
     !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
-      "normal role received no target-only private receipt",
+      scenario.boundaryText,
     ) ||
     normalSurface.projectionNotifications?.length !== 0 ||
-    normalSurface.resyncFromSeq !== 904 ||
-    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.resyncFromSeq !== scenario.resyncFromSeq ||
+    normalSurface.resyncSnapshotCommandState?.actorSlot !==
+      scenario.expectedSlot ||
+    normalSurface.resyncSnapshotCommandState?.phase?.phaseId !==
+      scenario.phaseId ||
     normalSurface.resyncSnapshotNotifications?.length !== 0 ||
     normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
+      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
     normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`
   ) {
     throw new Error(
       `core-loop admin proof missing normal night action resolution privacy surface: ${JSON.stringify(
@@ -10741,6 +10736,12 @@ function assertDayThreePlayerObservationProof({
   expectedPrivateCount,
   expectedPrivateReceipt,
   expectedBoundaryText,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedResyncFromSeq,
+  expectedPrivateReceiptStatus,
+  expectedPrivateReceiptPhaseId,
+  expectedPrivateQueueBoundaryStatus,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
 }) {
@@ -11010,49 +11011,25 @@ function assertPostDayThreeResolutionSurface(postDayThreeResolutionSurface) {
       )}`,
     );
   }
+  const targetReceiptScenario = privateReceiptScenario("d03-target-receipt");
+  const actionPlayerPrivacyScenario = privateReceiptScenario(
+    "d03-action-player-privacy",
+  );
   assertPostDayThreePlayerSurfaceProof({
     proof: targetReceiptProof,
-    expectedGame,
-    sourceRoleUrl: postDayThreeResolutionSurface.sourceTargetRoleUrl,
-    expectedSlot: "slot-4",
-    slotField: "targetSlot",
-    expectedPrincipalUserId: "player_rowan",
-    expectedPhaseId: "D03",
-    expectedPhaseState: "locked",
-    expectedActorAlive: false,
-    expectedActorStatus: "dead",
-    expectedActionState: "disabled:actor is not alive",
-    expectedStatusText: "actor is not alive",
-    expectedPrivateCount: 1,
-    expectedPrivateReceipt: true,
-    expectedBoundaryText: "target role received day_vote private receipt",
-    expectedResyncFromSeq: 908,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+    ...privateReceiptAssertionArgs({
+      scenario: targetReceiptScenario,
+      expectedGame,
+      sourceRoleUrl: postDayThreeResolutionSurface.sourceTargetRoleUrl,
+    }),
   });
   assertPostDayThreePlayerSurfaceProof({
     proof: actionPlayerPrivacyProof,
-    expectedGame,
-    sourceRoleUrl: postDayThreeResolutionSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "D03",
-    expectedPhaseState: "locked",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:phase locked",
-    expectedStatusText: "phase locked",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "action player stayed alive",
-    expectedResyncFromSeq: 908,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    ...privateReceiptAssertionArgs({
+      scenario: actionPlayerPrivacyScenario,
+      expectedGame,
+      sourceRoleUrl: postDayThreeResolutionSurface.sourceActionPlayerRoleUrl,
+    }),
   });
   assertPostDayThreeHostAdvanceProof({
     proof: hostAdvanceProof,
@@ -11295,6 +11272,10 @@ function assertNightFourResolutionReceiptSurface(
       )}`,
     );
   }
+  const survivorReceiptScenario = privateReceiptScenario("n04-survivor-receipt");
+  const actionPlayerPrivacyScenario = privateReceiptScenario(
+    "n04-action-player-privacy",
+  );
   assertNightFourHostResolutionProof({
     proof: nightFourResolutionReceiptSurface.hostResolutionProof,
     expectedGame,
@@ -11302,41 +11283,19 @@ function assertNightFourResolutionReceiptSurface(
   });
   assertNightFourResolutionPlayerSurfaceProof({
     proof: nightFourResolutionReceiptSurface.survivorReceiptProof,
-    expectedGame,
-    sourceRoleUrl: nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl,
-    expectedSlot: "slot-5",
-    slotField: "survivorSlot",
-    expectedPrincipalUserId: "player_sage",
-    expectedActorAlive: false,
-    expectedActorStatus: "dead",
-    expectedActionState: "disabled:actor is not alive",
-    expectedStatusText: "actor is not alive",
-    expectedPrivateCount: 1,
-    expectedPrivateReceipt: true,
-    expectedBoundaryText: "survivor target received factional_kill private receipt",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_sage`,
+    ...privateReceiptAssertionArgs({
+      scenario: survivorReceiptScenario,
+      expectedGame,
+      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl,
+    }),
   });
   assertNightFourResolutionPlayerSurfaceProof({
     proof: nightFourResolutionReceiptSurface.actionPlayerPrivacyProof,
-    expectedGame,
-    sourceRoleUrl: nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:phase locked",
-    expectedStatusText: "phase locked",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "action player stayed alive",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    ...privateReceiptAssertionArgs({
+      scenario: actionPlayerPrivacyScenario,
+      expectedGame,
+      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl,
+    }),
   });
 }
 
@@ -11391,6 +11350,12 @@ function assertNightFourResolutionPlayerSurfaceProof({
   expectedPrivateCount,
   expectedPrivateReceipt,
   expectedBoundaryText,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedResyncFromSeq,
+  expectedPrivateReceiptStatus,
+  expectedPrivateReceiptPhaseId,
+  expectedPrivateQueueBoundaryStatus,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
 }) {
@@ -11406,16 +11371,15 @@ function assertNightFourResolutionPlayerSurfaceProof({
     proof.surfaceTestId !== "player-surface" ||
     proof[slotField] !== expectedSlot ||
     proof.principalUserId !== expectedPrincipalUserId ||
-    proof.checkpoint?.phaseId !== "N04" ||
-    proof.checkpoint.phaseState !== "locked" ||
+    proof.checkpoint?.phaseId !== expectedPhaseId ||
+    proof.checkpoint.phaseState !== expectedPhaseState ||
     proof.checkpoint.actorSlot !== expectedSlot ||
     proof.checkpoint.actionState !== expectedActionState ||
     proof.checkpoint.receiptState !== "idle" ||
     !String(proof.checkpoint.statusText ?? "")
       .toLowerCase()
       .includes(expectedStatusText) ||
-    proof.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
+    proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
     proof.privateQueueBoundary.count !== expectedPrivateCount ||
     !String(proof.privateQueueBoundary.text ?? "").includes(
       "principal-scoped endpoints",
@@ -11424,17 +11388,18 @@ function assertNightFourResolutionPlayerSurfaceProof({
     proof.projectionCommandState?.actorSlot !== expectedSlot ||
     proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
     proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
-    proof.projectionCommandState?.phase?.phaseId !== "N04" ||
-    proof.projectionCommandState?.phase?.locked !== true ||
+    proof.projectionCommandState?.phase?.phaseId !== expectedPhaseId ||
+    proof.projectionCommandState?.phase?.locked !==
+      (expectedPhaseState === "locked") ||
     proof.projectionCommandState?.actions?.length !== 0 ||
     proof.projectionCommandState?.voteTargets?.length !== 0 ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
       expectedBoundaryText,
     ) ||
     proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D04" ||
-    proof.resyncFromSeq !== 916 ||
+    proof.resyncFromSeq !== expectedResyncFromSeq ||
     proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== "N04" ||
+    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
     proof.coldLoadEndpoints?.notificationsEndpoint !==
       expectedNotificationsEndpoint ||
     proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
@@ -11450,11 +11415,16 @@ function assertNightFourResolutionPlayerSurfaceProof({
     (proof.privateNotice?.id !== "notification-1" ||
       proof.privateNotice.kind !== "notification" ||
       !String(proof.privateNotice.text ?? "").includes("player_killed") ||
-      !String(proof.privateNotice.text ?? "").includes("factional_kill") ||
-      proof.privateNotice.detailText !== "Phase N04" ||
+      !String(proof.privateNotice.text ?? "").includes(
+        expectedPrivateReceiptStatus,
+      ) ||
+      proof.privateNotice.detailText !==
+        `Phase ${expectedPrivateReceiptPhaseId}` ||
       proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
-      proof.projectionNotifications?.[0]?.status !== "factional_kill" ||
-      proof.resyncSnapshotNotifications?.[0]?.status !== "factional_kill")
+      proof.projectionNotifications?.[0]?.status !==
+        expectedPrivateReceiptStatus ||
+      proof.resyncSnapshotNotifications?.[0]?.status !==
+        expectedPrivateReceiptStatus)
   ) {
     throw new Error(
       `core-loop admin proof missing Night 4 survivor receipt: ${JSON.stringify(

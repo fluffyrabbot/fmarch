@@ -1,0 +1,169 @@
+const privateQueueBoundaryStatus = "principal-scoped-private-projections";
+
+export function privateReceiptScenario(id) {
+  const scenario = privateReceiptScenarios().find((entry) => entry.id === id);
+  if (scenario === undefined) {
+    throw new Error(`unknown private receipt scenario: ${id}`);
+  }
+  return scenario;
+}
+
+export function privateReceiptScenarios() {
+  return [
+    {
+      id: "n02-target-receipt",
+      slotField: "targetSlot",
+      expectedSlot: "slot-3",
+      principalUserId: "player-seed",
+      phaseId: "N02",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "actor is not alive",
+      privateReceipt: true,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N02",
+      boundaryText: "night target role received factional_kill private receipt",
+      resyncFromSeq: 904,
+    },
+    {
+      id: "n02-normal-privacy",
+      slotField: "normalSlot",
+      expectedSlot: "slot-4",
+      principalUserId: "player_rowan",
+      phaseId: "N02",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "phase locked",
+      privateReceipt: false,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N02",
+      boundaryText: "normal role received no target-only private receipt",
+      resyncFromSeq: 904,
+    },
+    {
+      id: "d03-target-receipt",
+      slotField: "targetSlot",
+      expectedSlot: "slot-4",
+      principalUserId: "player_rowan",
+      phaseId: "D03",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "actor is not alive",
+      privateReceipt: true,
+      privateReceiptStatus: "day_vote",
+      privateReceiptPhaseId: "D03",
+      boundaryText: "target role received day_vote private receipt",
+      resyncFromSeq: 908,
+    },
+    {
+      id: "d03-action-player-privacy",
+      slotField: "actionPlayerSlot",
+      expectedSlot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "D03",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "phase locked",
+      privateReceipt: false,
+      privateReceiptStatus: "day_vote",
+      privateReceiptPhaseId: "D03",
+      boundaryText: "action player stayed alive",
+      resyncFromSeq: 908,
+    },
+    {
+      id: "n04-survivor-receipt",
+      slotField: "survivorSlot",
+      expectedSlot: "slot-5",
+      principalUserId: "player_sage",
+      phaseId: "N04",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "actor is not alive",
+      privateReceipt: true,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N04",
+      boundaryText: "survivor target received factional_kill private receipt",
+      resyncFromSeq: 916,
+    },
+    {
+      id: "n04-action-player-privacy",
+      slotField: "actionPlayerSlot",
+      expectedSlot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "N04",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "phase locked",
+      privateReceipt: false,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N04",
+      boundaryText: "action player stayed alive",
+      resyncFromSeq: 916,
+    },
+  ];
+}
+
+export function privateReceiptProofArgs(scenario) {
+  return {
+    expectedSlot: scenario.expectedSlot,
+    principalUserId: scenario.principalUserId,
+    slotField: scenario.slotField,
+    notifications: privateReceiptNotifications(scenario),
+    resyncFromSeq: scenario.resyncFromSeq,
+  };
+}
+
+export function privateReceiptAssertionArgs({
+  scenario,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  return {
+    sourceRoleUrl,
+    expectedSlot: scenario.expectedSlot,
+    slotField: scenario.slotField,
+    expectedPrincipalUserId: scenario.principalUserId,
+    expectedPhaseId: scenario.phaseId,
+    expectedPhaseState: scenario.phaseState,
+    expectedActorAlive: scenario.actorAlive,
+    expectedActorStatus: scenario.actorStatus,
+    expectedActionState: scenario.actionState,
+    expectedStatusText: scenario.statusText,
+    expectedPrivateCount: scenario.privateReceipt ? 1 : 0,
+    expectedPrivateReceipt: scenario.privateReceipt,
+    expectedBoundaryText: scenario.boundaryText,
+    expectedResyncFromSeq: scenario.resyncFromSeq,
+    expectedPrivateReceiptStatus: scenario.privateReceiptStatus,
+    expectedPrivateReceiptPhaseId: scenario.privateReceiptPhaseId,
+    expectedPrivateQueueBoundaryStatus: privateQueueBoundaryStatus,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+  };
+}
+
+function privateReceiptNotifications(scenario) {
+  if (!scenario.privateReceipt) {
+    return [];
+  }
+  return [
+    {
+      effect: "player_killed",
+      phase_id: scenario.privateReceiptPhaseId,
+      status: scenario.privateReceiptStatus,
+    },
+  ];
+}
