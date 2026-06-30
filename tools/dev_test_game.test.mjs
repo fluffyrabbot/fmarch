@@ -389,7 +389,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
     ],
-    roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.releaseRunbook, {
     script: devTestGameReleaseRunbookCommand,
@@ -1074,7 +1074,19 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     blockedPreflightAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    blockedPreflightAction.nextAction.unproven.proofGraphNodeId,
+    "admin-proof:hosted-evidence-lane",
+  );
+  assert.equal(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0].roleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0].proofGraphNodeId,
+    "admin-proof:hosted-evidence-lane",
   );
   assert.equal(
     blockedPreflightAction.generatedFrom.hostedTargetPreflightStatus,

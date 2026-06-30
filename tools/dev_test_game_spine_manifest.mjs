@@ -174,7 +174,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
         ],
-        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,

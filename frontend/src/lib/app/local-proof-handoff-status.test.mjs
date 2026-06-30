@@ -61,6 +61,8 @@ test("hosted matrix handoff summary derives destination proof assertions", () =>
       "remaining-gap-1",
       "remaining-gap-2",
     ],
+    requiredReconnectLaneIds: [],
+    requiredStaleConflictLaneIds: [],
     requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
   };
 

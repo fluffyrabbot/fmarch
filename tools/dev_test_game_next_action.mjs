@@ -1385,10 +1385,10 @@ const localBuildableReleaseReadinessItems = new Map([
       buildSlice:
         "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
       proofTarget: devTestGameHostedEvidenceLanePath,
-      roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-target-preflight",
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
       proofBoundary:
-        "Hosted target preflight handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target; it does not let local hosted-like evidence satisfy hosted deployment.",
+        "Hosted evidence lane handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target, then exposes the blocked or passed lane through its native admin role URL; it does not let local hosted-like evidence satisfy hosted deployment.",
     },
   ],
   [

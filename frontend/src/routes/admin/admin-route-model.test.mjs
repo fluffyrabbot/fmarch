@@ -3322,7 +3322,7 @@ function spineManifestFixture() {
       hostedEvidenceLane: {
         script: "test:dev-test-game-hosted-evidence-lane",
         proofArtifact: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
-        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
       nextAction: {
         script: "test:dev-test-game-next-action",
