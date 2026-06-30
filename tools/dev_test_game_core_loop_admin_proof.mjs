@@ -7,6 +7,7 @@ import {
   assertCompletedStaleRejectCases,
   completedGameEndgameStaleRejectAssertionCases,
   completedHostStaleCommandCases,
+  completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
@@ -1762,35 +1763,11 @@ async function proveCompletedGameEndgameSurface({
   const completedPlayerReloadProofs = await proveCompletedPlayerRoleReloadCases({
     browser,
     frontendBaseUrl,
-    cases: [
-      {
-        proofField: "completedPlayerReloadProof",
-        roleUrl: actionPlayerRoleUrl,
-        cookieValue: "fixture-player",
-        commandState: seededCompletedActionPlayerCommandState({
-          boundary:
-            "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
-        }),
-      },
-      {
-        proofField: "completedNormalPlayerReloadProof",
-        roleUrl: normalPlayerRoleUrl,
-        cookieValue: "fixture-normal",
-        commandState: seededCompletedNormalPlayerCommandState({
-          boundary:
-            "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
-        }),
-      },
-      {
-        proofField: "completedDeadPlayerReloadProof",
-        roleUrl: deadPlayerRoleUrl,
-        cookieValue: "fixture-target",
-        commandState: seededCompletedDeadPlayerCommandState({
-          boundary:
-            "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
-        }),
-      },
-    ],
+    cases: completedPlayerReloadProofCases({
+      actionPlayerRoleUrl,
+      normalPlayerRoleUrl,
+      deadPlayerRoleUrl,
+    }),
   });
   const completedDeadPlayerStaleVoteRecoveryProof =
     await proveCompletedDeadPlayerStaleVoteRecovery({
@@ -2879,6 +2856,44 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
   } finally {
     await page.close();
   }
+}
+
+function completedPlayerReloadProofCases({
+  actionPlayerRoleUrl,
+  normalPlayerRoleUrl,
+  deadPlayerRoleUrl,
+}) {
+  const roleUrlsByField = {
+    sourceActionPlayerRoleUrl: actionPlayerRoleUrl,
+    sourceNormalPlayerRoleUrl: normalPlayerRoleUrl,
+    sourceDeadPlayerRoleUrl: deadPlayerRoleUrl,
+  };
+  return completedPlayerReloadCases().map((scenario) => ({
+    ...scenario,
+    roleUrl: roleUrlsByField[scenario.sourceRoleUrlField],
+    commandState: completedPlayerReloadCommandState(scenario),
+  }));
+}
+
+function completedPlayerReloadCommandState(scenario) {
+  if (scenario.commandStateKind === "action-player") {
+    return seededCompletedActionPlayerCommandState({
+      boundary: scenario.boundary,
+    });
+  }
+  if (scenario.commandStateKind === "normal-player") {
+    return seededCompletedNormalPlayerCommandState({
+      boundary: scenario.boundary,
+    });
+  }
+  if (scenario.commandStateKind === "dead-player") {
+    return seededCompletedDeadPlayerCommandState({
+      boundary: scenario.boundary,
+    });
+  }
+  throw new Error(
+    `unknown completed player reload command state: ${scenario.commandStateKind}`,
+  );
 }
 
 async function proveCompletedPlayerRoleReloadCases({
@@ -12044,6 +12059,7 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
+      cases: completedPlayerReloadCases(),
     }),
   );
   assertCompletedStaleRejectCases(

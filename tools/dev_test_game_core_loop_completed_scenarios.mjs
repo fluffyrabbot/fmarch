@@ -27,36 +27,57 @@ export function completedHostStaleCommandCases() {
   ];
 }
 
-export function completedPlayerReloadAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-}) {
+export function completedPlayerReloadCases() {
   return [
     {
-      proof: completedGameEndgameSurface.completedPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      proofField: "completedPlayerReloadProof",
+      sourceRoleUrlField: "sourceActionPlayerRoleUrl",
+      cookieValue: "fixture-player",
+      commandStateKind: "action-player",
       expectedSlot: "slot-7",
       expectedBoundaryText: "completed action-player role URL reloaded",
       principalUserId: "player_mira",
+      boundary:
+        "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
     },
     {
-      proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+      proofField: "completedNormalPlayerReloadProof",
+      sourceRoleUrlField: "sourceNormalPlayerRoleUrl",
+      cookieValue: "fixture-normal",
+      commandStateKind: "normal-player",
       expectedSlot: "slot-4",
       expectedBoundaryText: "completed normal-player role URL reloaded",
       principalUserId: "player_rowan",
+      boundary:
+        "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
     },
     {
-      proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      proofField: "completedDeadPlayerReloadProof",
+      sourceRoleUrlField: "sourceDeadPlayerRoleUrl",
+      cookieValue: "fixture-target",
+      commandStateKind: "dead-player",
       expectedSlot: "slot-2",
       expectedBoundaryText: "completed dead-player role URL reloaded",
       principalUserId: "player_ilya",
+      boundary:
+        "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
     },
   ];
+}
+
+export function completedPlayerReloadAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+  cases = completedPlayerReloadCases(),
+}) {
+  return cases.map((scenario) => ({
+    proof: completedGameEndgameSurface[scenario.proofField],
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface[scenario.sourceRoleUrlField],
+    expectedSlot: scenario.expectedSlot,
+    expectedBoundaryText: scenario.expectedBoundaryText,
+    principalUserId: scenario.principalUserId,
+  }));
 }
 
 export function staleCompletedGamePlayerCommandCases() {

@@ -19,6 +19,7 @@ import {
 import {
   assertCompletedStaleRejectCases,
   completedGameEndgameStaleRejectAssertionCases,
+  completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -4178,6 +4179,7 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
+      cases: completedPlayerReloadCases(),
     }),
   );
   assertCompletedStaleRejectCases(
