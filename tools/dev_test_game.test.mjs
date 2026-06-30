@@ -914,6 +914,28 @@ test("session card and markdown include role credential URLs and tokens", () => 
         cookie: { valuePrefix: "invite-session-" },
       },
     },
+    proofStability: {
+      status: "passed",
+      hostConfirmClicks: {
+        total: 4,
+        firstClickCount: 3,
+        retryClickCount: 1,
+        domFallbackCount: 0,
+        forceFallbackCount: 0,
+        failureCount: 0,
+        maxAttempts: 2,
+        byAction: { resolve_phase: 2, extend_deadline: 2 },
+        byRole: { host: 2, cohost: 2 },
+        events: [
+          {
+            actionId: "resolve_phase",
+            roleLabel: "host",
+            method: "playwright-retry",
+            attempts: 2,
+          },
+        ],
+      },
+    },
     cohostConsole: {
       status: "passed",
       capabilityLabel: `CohostOf(${game})`,
@@ -5745,6 +5767,9 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes("replacement-session-refresh-token"));
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
   assert(markdown.includes("Credential token: dev-test-card-player"));
+  assert(markdown.includes("## Proof Stability Audit"));
+  assert(markdown.includes("Host confirms: 4 total; 1 retried; 0 DOM fallbacks; 0 force fallbacks"));
+  assert(markdown.includes("resolve_phase host: playwright-retry after 2 attempts"));
   assert(markdown.includes("## Cohost Console Proof"));
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
   assert(markdown.includes("Host-only controls visible: false"));
@@ -6070,6 +6095,16 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
   assert.equal(opsArtifacts.proofRun.laneCount, 104);
+  assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
+  assert.equal(
+    opsArtifacts.checks.some(
+      (check) =>
+        check.id === "proof-stability-summarized" &&
+        check.hostConfirmClicks === 4 &&
+        check.retryClickCount === 1,
+    ),
+    true,
+  );
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -6807,6 +6842,7 @@ function opsAdminProofFixture() {
         "source-artifacts-checksummed",
         "role-entrypoints-redacted",
         "proof-lanes-summarized",
+        "proof-stability-summarized",
         "release-boundary-carried",
       ],
       rawInviteTokensVisible: false,

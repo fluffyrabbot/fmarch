@@ -19,6 +19,7 @@ const requiredChecks = [
   "source-artifacts-checksummed",
   "role-entrypoints-redacted",
   "proof-lanes-summarized",
+  "proof-stability-summarized",
   "release-boundary-carried",
 ];
 

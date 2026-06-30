@@ -108,6 +108,7 @@ export function buildDevTestGameOpsArtifacts({
       })),
       nonClaims: proof.nonClaims,
     },
+    proofStability: session.verification?.proofStability ?? null,
     readiness: {
       status: readiness.status,
       releaseReady: readiness.releaseReady,
@@ -147,6 +148,18 @@ export function buildDevTestGameOpsArtifacts({
         id: "proof-lanes-summarized",
         status: "passed",
         laneCount: proof.lanes.length,
+      },
+      {
+        id: "proof-stability-summarized",
+        status: "passed",
+        hostConfirmClicks:
+          session.verification?.proofStability?.hostConfirmClicks?.total ?? 0,
+        retryClickCount:
+          session.verification?.proofStability?.hostConfirmClicks?.retryClickCount ?? 0,
+        domFallbackCount:
+          session.verification?.proofStability?.hostConfirmClicks?.domFallbackCount ?? 0,
+        forceFallbackCount:
+          session.verification?.proofStability?.hostConfirmClicks?.forceFallbackCount ?? 0,
       },
       {
         id: "release-boundary-carried",
@@ -192,6 +205,7 @@ export function assertDevTestGameOpsArtifacts(ops) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "proof-stability-summarized",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {

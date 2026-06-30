@@ -1011,6 +1011,7 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "proof-stability-summarized",
     "release-boundary-carried",
   ];
   if (ops?.version !== 1) {
@@ -1055,6 +1056,7 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
     "source-artifacts-checksummed",
     "role-entrypoints-redacted",
     "proof-lanes-summarized",
+    "proof-stability-summarized",
     "release-boundary-carried",
   ];
   if (proof?.version !== 1) {

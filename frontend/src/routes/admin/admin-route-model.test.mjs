@@ -543,7 +543,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
 
   const ops = data.audit.find((item) => item.id === "local-ops-artifacts");
   assert.equal(ops.label, "Local ops artifacts");
-  assert.equal(ops.status, "4 local ops checks passed");
+  assert.equal(ops.status, "5 local ops checks passed");
   assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
   assert.equal(ops.inspectHref, "/admin/audit/local-ops-artifacts?game=midsummer");
   assert.deepEqual(
@@ -552,6 +552,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
       "source-artifacts-checksummed",
       "role-entrypoints-redacted",
       "proof-lanes-summarized",
+      "proof-stability-summarized",
       "release-boundary-carried",
     ],
   );
@@ -1395,13 +1396,14 @@ test("admin local ops artifact detail data carries check rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local ops artifacts");
   assert.equal(data.audit.id, "local-ops-artifacts");
-  assert.equal(data.audit.checks.length, 4);
+  assert.equal(data.audit.checks.length, 5);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["source-artifacts-checksummed", "passed"],
       ["role-entrypoints-redacted", "passed"],
       ["proof-lanes-summarized", "passed"],
+      ["proof-stability-summarized", "passed"],
       ["release-boundary-carried", "passed"],
     ],
   );
@@ -2021,6 +2023,7 @@ function localOpsArtifactsFixture() {
       { id: "source-artifacts-checksummed", status: "passed" },
       { id: "role-entrypoints-redacted", status: "passed" },
       { id: "proof-lanes-summarized", status: "passed" },
+      { id: "proof-stability-summarized", status: "passed" },
       { id: "release-boundary-carried", status: "passed" },
     ],
   };

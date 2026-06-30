@@ -42,6 +42,7 @@ let commandEnvelopeId = 1;
 let serverOutput = "";
 let apiServerExit;
 let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
+let proofStabilityAudit;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   args = parseArgs(rawArgs);
@@ -567,6 +568,26 @@ export function markdownSessionCard(card) {
       }
       lines.push("");
     }
+    if (card.verification.proofStability !== undefined) {
+      const hostConfirmClicks = card.verification.proofStability.hostConfirmClicks;
+      lines.push(
+        "## Proof Stability Audit",
+        "",
+        `Status: ${card.verification.proofStability.status}`,
+        "",
+        `Host confirms: ${hostConfirmClicks.total} total; ${hostConfirmClicks.retryClickCount} retried; ${hostConfirmClicks.domFallbackCount} DOM fallbacks; ${hostConfirmClicks.forceFallbackCount} force fallbacks`,
+        "",
+      );
+      if (hostConfirmClicks.events.length > 0) {
+        lines.push("Host confirm retry/fallback events:", "");
+        for (const event of hostConfirmClicks.events) {
+          lines.push(
+            `- ${event.actionId} ${event.roleLabel}: ${event.method} after ${event.attempts} attempts`,
+          );
+        }
+        lines.push("");
+      }
+    }
     if (card.verification.coreLoop !== undefined) {
       lines.push(
         "## Core Loop Proof",
@@ -842,6 +863,7 @@ export function markdownSessionCard(card) {
 }
 
 async function verifySessionCard(card) {
+  resetProofStabilityAudit();
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   const roles = [];
@@ -1011,6 +1033,7 @@ async function verifySessionCard(card) {
     status: "passed",
     roles,
     sessions,
+    proofStability: buildProofStabilityAudit(),
     cohostConsole,
     coreLoop,
     dayVoteResolution,
@@ -18889,6 +18912,78 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   };
 }
 
+function resetProofStabilityAudit() {
+  proofStabilityAudit = {
+    hostConfirmClicks: {
+      total: 0,
+      firstClickCount: 0,
+      retryClickCount: 0,
+      domFallbackCount: 0,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 0,
+      byAction: {},
+      byRole: {},
+      events: [],
+    },
+  };
+}
+
+function ensureProofStabilityAudit() {
+  if (proofStabilityAudit === undefined) {
+    resetProofStabilityAudit();
+  }
+  return proofStabilityAudit;
+}
+
+function recordCriticalHostActionConfirmClick({
+  actionId,
+  roleLabel,
+  method,
+  attempts,
+}) {
+  const audit = ensureProofStabilityAudit().hostConfirmClicks;
+  audit.total += 1;
+  audit.maxAttempts = Math.max(audit.maxAttempts, attempts);
+  audit.byAction[actionId] = (audit.byAction[actionId] ?? 0) + 1;
+  audit.byRole[roleLabel] = (audit.byRole[roleLabel] ?? 0) + 1;
+  if (method === "playwright-first") {
+    audit.firstClickCount += 1;
+    return;
+  }
+  if (method === "playwright-retry") {
+    audit.retryClickCount += 1;
+  } else if (method === "dom-fallback") {
+    audit.domFallbackCount += 1;
+  } else if (method === "force-fallback") {
+    audit.forceFallbackCount += 1;
+  } else if (method === "failure") {
+    audit.failureCount += 1;
+  }
+  if (audit.events.length < 50) {
+    audit.events.push({ actionId, roleLabel, method, attempts });
+  }
+}
+
+function buildProofStabilityAudit() {
+  const audit = ensureProofStabilityAudit().hostConfirmClicks;
+  return {
+    status: audit.failureCount === 0 ? "passed" : "failed",
+    hostConfirmClicks: {
+      total: audit.total,
+      firstClickCount: audit.firstClickCount,
+      retryClickCount: audit.retryClickCount,
+      domFallbackCount: audit.domFallbackCount,
+      forceFallbackCount: audit.forceFallbackCount,
+      failureCount: audit.failureCount,
+      maxAttempts: audit.maxAttempts,
+      byAction: { ...audit.byAction },
+      byRole: { ...audit.byRole },
+      events: audit.events.map((event) => ({ ...event })),
+    },
+  };
+}
+
 async function clickCriticalHostActionConfirm(
   actionRoot,
   { actionId = "unknown", roleLabel = "host", timeoutMs = 10_000 } = {},
@@ -18908,6 +19003,12 @@ async function clickCriticalHostActionConfirm(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await confirm.click({ timeout: 5_000 });
+      recordCriticalHostActionConfirmClick({
+        actionId,
+        roleLabel,
+        method: attempt === 0 ? "playwright-first" : "playwright-retry",
+        attempts: attempt + 1,
+      });
       return;
     } catch (error) {
       lastError = error;
@@ -18916,12 +19017,25 @@ async function clickCriticalHostActionConfirm(
   }
   try {
     await confirm.evaluate((node) => node.click());
+    recordCriticalHostActionConfirmClick({
+      actionId,
+      roleLabel,
+      method: "dom-fallback",
+      attempts: 4,
+    });
     return;
   } catch (error) {
     lastError = error;
   }
   try {
     await confirm.click({ timeout: 5_000, force: true });
+    recordCriticalHostActionConfirmClick({
+      actionId,
+      roleLabel,
+      method: "force-fallback",
+      attempts: 5,
+    });
+    return;
   } catch {
     await throwCriticalHostActionConfirmClickError(actionRoot, {
       actionId,
@@ -18935,6 +19049,12 @@ async function throwCriticalHostActionConfirmClickError(
   actionRoot,
   { actionId, roleLabel, cause },
 ) {
+  recordCriticalHostActionConfirmClick({
+    actionId,
+    roleLabel,
+    method: "failure",
+    attempts: 0,
+  });
   const snapshot = await actionRoot
     .evaluate((node) => ({
       actionId: node.getAttribute("data-action-id"),
