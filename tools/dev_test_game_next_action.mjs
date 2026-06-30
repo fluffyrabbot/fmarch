@@ -1369,6 +1369,7 @@ const hostStaleControlLaneIds = Object.freeze([
   "stale-host-advance-reconnect-recovery",
   "stale-host-deadline",
   "stale-host-deadline-reload",
+  "stale-host-deadline-reconnect-recovery",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

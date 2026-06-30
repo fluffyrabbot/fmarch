@@ -550,6 +550,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "After a stale host ExtendDeadline rejects PhaseLocked, the host role URL reloads to open D02 deadline truth with current deadline/phase controls and API deadline state matching the console.",
     }),
     scenario({
+      id: "stale-host-deadline-reconnect-recovery",
+      title: "Stale host deadline reconnect",
+      role: "host",
+      provenBy: ["stale-host-deadline-reconnect-recovery"].filter(hasLane),
+      note: "After stale host ExtendDeadline recovery reloads to open D02 deadline truth, the same host role URL drops its live projection, reconnects, and recovers open D02 with current deadline/phase controls.",
+    }),
+    scenario({
       id: "stale-cohost-deadline-reload",
       title: "Stale cohost deadline reload",
       role: "cohost",
@@ -912,6 +919,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-advance-reconnect-recovery",
         "stale-host-deadline",
         "stale-host-deadline-reload",
+        "stale-host-deadline-reconnect-recovery",
         "stale-cohost-deadline",
         "stale-cohost-deadline-reload",
       ].filter(hasLane),

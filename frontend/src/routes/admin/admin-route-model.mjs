@@ -2210,6 +2210,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-advance-reconnect-recovery",
     "stale-host-deadline",
     "stale-host-deadline-reload",
+    "stale-host-deadline-reconnect-recovery",
     "stale-cohost-deadline",
     "stale-cohost-deadline-reload",
   ];

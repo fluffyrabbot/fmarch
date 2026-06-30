@@ -117,6 +117,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-advance-reconnect-recovery",
   "stale-host-deadline",
   "stale-host-deadline-reload",
+  "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline",
   "stale-cohost-deadline-reload",
 ]);
@@ -7168,6 +7169,57 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
           ?.apiPhaseAfterReload?.deadline === null,
     }),
+    lane(
+      "stale-host-deadline-reconnect-recovery",
+      "Stale host deadline recovery reconnects open phase console",
+      {
+        game: session.game ?? null,
+        reconnectingState:
+          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectingStatus
+            ?.state ?? null,
+        recoveryState:
+          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state ?? null,
+        recoveredPhase:
+          hardening.staleHostDeadline?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.id ?? null,
+        recoveredLocked:
+          hardening.staleHostDeadline?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.locked ?? null,
+        deadlineActions:
+          hardening.staleHostDeadline?.deadlineActionsAfterReconnect ?? null,
+        phaseActions:
+          hardening.staleHostDeadline?.phaseActionsAfterReconnect ?? null,
+        apiDeadline:
+          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.deadline ?? null,
+        passed:
+          hardening.staleHostDeadline?.status === "passed" &&
+          hardening.staleHostDeadline?.reject?.error === "PhaseLocked" &&
+          hardening.staleHostDeadline?.reconnectAfterReject?.status === "passed" &&
+          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectingStatus
+            ?.state === "reconnecting" &&
+          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state === "recovered" &&
+          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.attempt === 1 &&
+          hardening.staleHostDeadline?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.id === "D02" &&
+          hardening.staleHostDeadline?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.locked === false &&
+          hardening.staleHostDeadline?.deadlineActionsAfterReconnect?.includes(
+            "extend_deadline",
+          ) === true &&
+          hardening.staleHostDeadline?.phaseActionsAfterReconnect?.includes(
+            "resolve_phase",
+          ) === true &&
+          hardening.staleHostDeadline?.phaseActionsAfterReconnect?.includes(
+            "lock_thread",
+          ) === true &&
+          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.phase_id === "D02" &&
+          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.locked === false &&
+          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.deadline === null,
+      },
+    ),
     lane("stale-cohost-deadline", "Stale cohost deadline control rejects without drift", {
       rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
       stalePhase: hardening.staleCohostDeadline?.setup?.stalePhase?.id ?? null,

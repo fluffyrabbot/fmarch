@@ -417,6 +417,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-host-advance-reconnect-recovery",
         "stale-host-deadline",
         "stale-host-deadline-reload",
+        "stale-host-deadline-reconnect-recovery",
         "stale-cohost-deadline",
         "stale-cohost-deadline-reload",
       ],
@@ -1359,6 +1360,7 @@ const hostStaleControlLaneIds = Object.freeze([
   "stale-host-advance-reconnect-recovery",
   "stale-host-deadline",
   "stale-host-deadline-reload",
+  "stale-host-deadline-reconnect-recovery",
 ]);
 
 const replacementRaceReloadCellIds = Object.freeze([
@@ -1592,6 +1594,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-host-advance-reconnect-recovery",
     "stale-host-deadline",
     "stale-host-deadline-reload",
+    "stale-host-deadline-reconnect-recovery",
     "stale-cohost-deadline",
     "stale-cohost-deadline-reload",
   ];
@@ -1848,6 +1851,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "concurrent-host-mixed-advance-race-reload",
     "stale-host-resolve-reconnect-recovery",
     "stale-host-advance-reconnect-recovery",
+    "stale-host-deadline-reconnect-recovery",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
     "stale-action-reconnect-recovery",
@@ -1974,6 +1978,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "concurrent-host-mixed-advance-race-reload",
     "stale-host-resolve-reconnect-recovery",
     "stale-host-advance-reconnect-recovery",
+    "stale-host-deadline-reconnect-recovery",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
     "stale-action-reconnect-recovery",
