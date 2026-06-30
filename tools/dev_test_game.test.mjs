@@ -650,7 +650,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         rank: 1,
         id: "hosted-concurrent-race-matrix",
         status: "unproven",
-        priority: 0,
+        priority: 5,
         selected: true,
         command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
         buildSlice:

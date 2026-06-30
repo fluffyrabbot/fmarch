@@ -18,6 +18,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedMatrixExternalEvidenceCommand,
+  devTestGameHostedMatrixExternalEvidencePath,
+} from "./dev_test_game_hosted_matrix_external_evidence.mjs";
+import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
@@ -1300,9 +1304,24 @@ const terminalArtifactPaths = new Set([
 
 const localBuildableReleaseReadinessItems = new Map([
   [
-    "hosted-concurrent-race-matrix",
+    "hosted-deployment",
     {
       priority: 0,
+      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+      buildSlice:
+        "Attach externally reachable hosted frontend/API evidence to the hosted matrix lane, including health-checked target URLs and raw hosted race evidence.",
+      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofBoundary:
+        "External hosted evidence handoff. This command requires FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH from a real hosted target; it does not let local hosted-like evidence satisfy hosted deployment.",
+    },
+  ],
+  [
+    "hosted-concurrent-race-matrix",
+    {
+      priority: 5,
       command: `npm run ${devTestGameHostedConcurrentRaceMatrixCommand}`,
       buildSlice:
         "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
@@ -1315,9 +1334,24 @@ const localBuildableReleaseReadinessItems = new Map([
     },
   ],
   [
-    "human-release-runbook",
+    "real-hosted-concurrent-race-matrix",
     {
       priority: 10,
+      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+      buildSlice:
+        "Promote the local hosted-like matrix with externally reachable hosted race, reload, reconnect, and stale-client evidence.",
+      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofBoundary:
+        "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
+    },
+  ],
+  [
+    "human-release-runbook",
+    {
+      priority: 20,
       command: `npm run ${devTestGameReleaseRunbookCommand}`,
       buildSlice:
         "Create the local release-runbook rehearsal that maps remaining readiness gaps to rollback, support, owner, and evidence boundaries.",
