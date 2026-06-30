@@ -4398,6 +4398,67 @@ assert.equal(
   null,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.rejectReceiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.phaseAfterReload.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.phaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.deadlineActionsAfterReload.includes(
+      "extend_deadline",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.phaseActionsAfterReload.includes(
+      "resolve_phase",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.phaseActionsAfterReload.includes(
+      "lock_thread",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.apiPhaseAfterReload.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.apiPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostDeadline
+    .staleHostDeadlineReloadAfterReject.apiPhaseAfterReload.deadline,
+  null,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleCohostDeadline.status,
   "passed",
 );

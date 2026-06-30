@@ -279,6 +279,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-host-advance",
         "stale-host-advance-reload",
         "stale-host-deadline",
+        "stale-host-deadline-reload",
         "stale-cohost-deadline",
       ],
       ...(hardeningAdminProofEvidence === undefined
@@ -826,6 +827,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-host-advance",
     "stale-host-advance-reload",
     "stale-host-deadline",
+    "stale-host-deadline-reload",
     "stale-cohost-deadline",
   ];
   if (proof?.version !== 1) {

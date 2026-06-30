@@ -5391,6 +5391,17 @@ test("session card and markdown include role credential URLs and tokens", () => 
           projectionRefreshKeys: ["host"],
         },
         apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
+        staleHostDeadlineReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          rejectReceiptStatusText:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          surfaceText: "Host console",
+          phaseAfterReload: { id: "D02", locked: false },
+          deadlineActionsAfterReload: ["extend_deadline"],
+          phaseActionsAfterReload: ["resolve_phase", "lock_thread"],
+          apiPhaseAfterReload: { phase_id: "D02", locked: false, deadline: null },
+        },
       },
       staleCohostDeadline: {
         status: "passed",
@@ -5618,6 +5629,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-advance",
       "stale-host-advance-reload",
       "stale-host-deadline",
+      "stale-host-deadline-reload",
       "stale-cohost-deadline",
     ],
   );
@@ -5690,7 +5702,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 89);
+  assert.equal(opsArtifacts.proofRun.laneCount, 90);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5805,6 +5817,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-resolve-reload",
       "concurrent-host-advance-race",
       "stale-host-advance-reload",
+      "stale-host-deadline-reload",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-lifecycle-race",
       "concurrent-host-complete-race",
@@ -6365,6 +6378,7 @@ function hardeningAdminProofFixture() {
         "stale-host-advance",
         "stale-host-advance-reload",
         "stale-host-deadline",
+        "stale-host-deadline-reload",
         "stale-cohost-deadline",
       ],
       rawInviteTokensVisible: false,

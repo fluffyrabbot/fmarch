@@ -43,6 +43,7 @@ const requiredScenarios = [
   "stale-host-resolve-reload",
   "concurrent-host-advance-race",
   "stale-host-advance-reload",
+  "stale-host-deadline-reload",
   "concurrent-host-deadline-advance-race",
   "concurrent-host-lifecycle-race",
   "concurrent-host-complete-race",

@@ -69,6 +69,7 @@ const requiredChecks = [
   "stale-host-advance",
   "stale-host-advance-reload",
   "stale-host-deadline",
+  "stale-host-deadline-reload",
   "stale-cohost-deadline",
 ];
 
