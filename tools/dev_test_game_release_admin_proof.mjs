@@ -20,6 +20,11 @@ const requiredReleaseChecks = [
   "local-core-loop-proof",
   "local-hardening-proof",
 ];
+const requiredLocalPrerequisites = [
+  "local-proof-graph-admin-role-handoffs",
+  "local-proof-freshness-admin-surface",
+  "local-next-action-admin-surface",
+];
 const requiredUnprovenItems = ["hosted-deployment", "human-release-runbook"];
 
 await runAdminAuditProof({
@@ -38,6 +43,9 @@ await runAdminAuditProof({
       game: readiness.generatedFrom.game,
       auditId: "local-release-readiness",
       requiredChecks: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+      requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
+        .filter((check) => check.dependencyGated === true)
+        .map((check) => check.id),
       requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
     }),
   buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
@@ -53,6 +61,9 @@ await runAdminAuditProof({
       releaseReadinessChecklist: readinessRelativePath,
       game: readiness.generatedFrom.game,
       localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+      localPrerequisiteIds: readiness.localDevelopmentSpine.checks
+        .filter((check) => check.dependencyGated === true)
+        .map((check) => check.id),
       unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
     },
     adminRoleSurface,
@@ -80,6 +91,23 @@ export function assertReleaseAdminProof(evidence) {
   for (const checkId of evidence.generatedFrom?.localCheckIds ?? requiredReleaseChecks) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const prerequisiteId of
+    evidence.generatedFrom?.localPrerequisiteIds ?? requiredLocalPrerequisites) {
+    if (!evidence.adminRoleSurface?.visibleLocalPrerequisites?.includes(prerequisiteId)) {
+      throw new Error(
+        `release admin proof missing visible local prerequisite: ${prerequisiteId}`,
+      );
+    }
+    if (
+      typeof evidence.adminRoleSurface?.visibleLocalPrerequisiteRoleUrls?.[
+        prerequisiteId
+      ] !== "string"
+    ) {
+      throw new Error(
+        `release admin proof missing local prerequisite role URL: ${prerequisiteId}`,
+      );
     }
   }
   for (const itemId of evidence.generatedFrom?.unprovenIds ?? requiredUnprovenItems) {

@@ -12,6 +12,12 @@
   const evidenceTestId = "admin-audit-detail-evidence";
   const backTestId = "admin-audit-detail-back";
   $: auditView = buildAdminAuditPanelViewModel({ audit: [data.audit] }).items[0];
+
+  function prerequisiteRoleHref(prerequisite) {
+    const roleUrl = String(prerequisite?.roleUrl ?? "");
+    const game = String(data.audit?.artifactSummary?.game ?? "");
+    return roleUrl.replace("<seeded-game>", encodeURIComponent(game));
+  }
 </script>
 
 <svelte:head>
@@ -63,6 +69,36 @@
           </li>
         {/each}
       </ol>
+    {/if}
+    {#if data.audit.localPrerequisites?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-local-prerequisites"
+      >
+        <h2>Local prerequisites before hosted work</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.localPrerequisites as prerequisite}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-local-prerequisite-${prerequisite.id}`}
+            >
+              <strong>{prerequisite.label}</strong>
+              <span>{prerequisite.status}</span>
+              <span>{prerequisite.command}</span>
+              <span>{prerequisite.proofTarget}</span>
+              <span>{prerequisite.evidence}</span>
+              <span>{prerequisite.requiredEvidence}</span>
+              <a
+                data-testid={`admin-audit-local-prerequisite-role-url-${prerequisite.id}`}
+                data-min-touch-target-px="44"
+                href={prerequisiteRoleHref(prerequisite)}
+              >
+                {prerequisite.roleUrl}
+              </a>
+            </li>
+          {/each}
+        </ol>
+      </section>
     {/if}
     {#if data.audit.scenarios?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-scenarios">
@@ -170,6 +206,17 @@
     padding: 0;
   }
 
+  .admin-audit-detail__group {
+    display: grid;
+    gap: 10px;
+  }
+
+  .admin-audit-detail__group h2 {
+    color: #18212d;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
   .admin-audit-detail__entry {
     border: 1px solid #d7e0ea;
     border-radius: 8px;
@@ -182,6 +229,10 @@
 
   .admin-audit-detail__entry strong {
     color: #18212d;
+  }
+
+  .admin-audit-detail__entry--stack {
+    display: grid;
   }
 
   .admin-audit-detail__entry span {

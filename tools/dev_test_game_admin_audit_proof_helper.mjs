@@ -95,6 +95,7 @@ export async function proveAdminAuditDetail({
   auditId,
   requiredChecks = [],
   requiredCheckStatuses = {},
+  requiredLocalPrerequisites = [],
   requiredScenarios = [],
   requiredSessions = [],
   requiredUnproven = [],
@@ -152,6 +153,16 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-check",
       ids: Object.keys(requiredCheckStatuses),
     });
+    const visibleLocalPrerequisites = await waitForRows({
+      page,
+      prefix: "admin-audit-local-prerequisite",
+      ids: requiredLocalPrerequisites,
+    });
+    const visibleLocalPrerequisiteRoleUrls =
+      await waitForLocalPrerequisiteRoleUrls({
+        page,
+        ids: requiredLocalPrerequisites,
+      });
     const visibleScenarios = await waitForRows({
       page,
       prefix: "admin-audit-scenario",
@@ -266,6 +277,12 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleCheckStatuses).length === 0
         ? {}
         : { visibleCheckStatuses }),
+      ...(visibleLocalPrerequisites.length === 0
+        ? {}
+        : { visibleLocalPrerequisites }),
+      ...(Object.keys(visibleLocalPrerequisiteRoleUrls).length === 0
+        ? {}
+        : { visibleLocalPrerequisiteRoleUrls }),
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
@@ -312,6 +329,23 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
     visible.push(id);
   }
   return visible;
+}
+
+async function waitForLocalPrerequisiteRoleUrls({ page, ids }) {
+  const roleUrls = {};
+  for (const id of ids) {
+    const link = page.getByTestId(`admin-audit-local-prerequisite-role-url-${id}`);
+    await link.waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const href = await link.getAttribute("href");
+    if (typeof href !== "string" || href.trim() === "") {
+      throw new Error(`admin-audit-local-prerequisite-role-url-${id} missing href`);
+    }
+    roleUrls[id] = href;
+  }
+  return roleUrls;
 }
 
 async function readRowStatuses({ page, prefix, ids }) {
