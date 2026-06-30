@@ -10277,6 +10277,13 @@ async function submitConcurrentHostAdvanceRace({
     );
   }
 
+  const roleReloadAfterRace = await verifyConcurrentHostAdvanceRaceReload({
+    hostPage,
+    concurrentHostAdvancePage,
+    game,
+    apiBaseUrl,
+  });
+
   return {
     status: "passed",
     actionId,
@@ -10300,8 +10307,89 @@ async function submitConcurrentHostAdvanceRace({
     liveActivityRow,
     concurrentActivityRow,
     apiPhaseAfterRace: hostStateAfterRace.phase,
+    roleReloadAfterRace,
     proof:
-      "Two seeded host role pages submitted D02 advance_phase concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget stale-state recovery, and both browser projections plus the API converged to open N02.",
+      "Two seeded host role pages submitted D02 advance_phase concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget stale-state recovery, both browser projections plus the API converged to open N02, and both host role URLs reloaded to the same open N02 controls.",
+  };
+}
+
+async function verifyConcurrentHostAdvanceRaceReload({
+  hostPage,
+  concurrentHostAdvancePage,
+  game,
+  apiBaseUrl,
+}) {
+  const [liveReload, concurrentReload] = await Promise.all([
+    gotoHostConsole(hostPage, game),
+    gotoHostConsole(concurrentHostAdvancePage, game),
+  ]);
+  await Promise.all([
+    waitForHostProjectionPhase(hostPage, { phaseId: "N02", locked: false }),
+    waitForHostProjectionPhase(concurrentHostAdvancePage, {
+      phaseId: "N02",
+      locked: false,
+    }),
+  ]);
+  const [
+    livePhaseAfterReload,
+    concurrentPhaseAfterReload,
+    livePhaseActionsAfterReload,
+    concurrentPhaseActionsAfterReload,
+    liveDeadlineActionsAfterReload,
+    concurrentDeadlineActionsAfterReload,
+  ] = await Promise.all([
+    hostPage.evaluate(() => window.__fmarchHostProjection?.phase),
+    concurrentHostAdvancePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    visibleHostControlActions(hostPage, "phase"),
+    visibleHostControlActions(concurrentHostAdvancePage, "phase"),
+    visibleHostControlActions(hostPage, "deadline"),
+    visibleHostControlActions(concurrentHostAdvancePage, "deadline"),
+  ]);
+  const hostStateAfterReload = await fetchHostConsoleState({ apiBaseUrl, game });
+  const requiredOpenPhaseActions = (actions) =>
+    actions.includes("resolve_phase") &&
+    actions.includes("lock_thread") &&
+    !actions.includes("advance_phase") &&
+    !actions.includes("unlock_thread");
+  if (
+    liveReload.status !== 200 ||
+    concurrentReload.status !== 200 ||
+    livePhaseAfterReload?.id !== "N02" ||
+    livePhaseAfterReload?.locked !== false ||
+    concurrentPhaseAfterReload?.id !== "N02" ||
+    concurrentPhaseAfterReload?.locked !== false ||
+    requiredOpenPhaseActions(livePhaseActionsAfterReload) !== true ||
+    requiredOpenPhaseActions(concurrentPhaseActionsAfterReload) !== true ||
+    !liveDeadlineActionsAfterReload.includes("extend_deadline") ||
+    !concurrentDeadlineActionsAfterReload.includes("extend_deadline") ||
+    hostStateAfterReload.phase?.phase_id !== "N02" ||
+    hostStateAfterReload.phase?.locked !== false
+  ) {
+    throw new Error(
+      `concurrent host advance reload drifted: ${JSON.stringify({
+        liveReload,
+        concurrentReload,
+        livePhaseAfterReload,
+        concurrentPhaseAfterReload,
+        livePhaseActionsAfterReload,
+        concurrentPhaseActionsAfterReload,
+        liveDeadlineActionsAfterReload,
+        concurrentDeadlineActionsAfterReload,
+        apiPhase: hostStateAfterReload.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    liveRouteStatus: liveReload.status,
+    concurrentRouteStatus: concurrentReload.status,
+    livePhaseAfterReload,
+    concurrentPhaseAfterReload,
+    livePhaseActionsAfterReload,
+    concurrentPhaseActionsAfterReload,
+    liveDeadlineActionsAfterReload,
+    concurrentDeadlineActionsAfterReload,
+    apiPhaseAfterReload: hostStateAfterReload.phase,
   };
 }
 

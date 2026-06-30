@@ -4701,6 +4701,18 @@ test("session card and markdown include role credential URLs and tokens", () => 
           dispatchKind: "advance_phase",
         },
         apiPhaseAfterRace: { phase_id: "N02", locked: false },
+        roleReloadAfterRace: {
+          status: "passed",
+          liveRouteStatus: 200,
+          concurrentRouteStatus: 200,
+          livePhaseAfterReload: { id: "N02", locked: false },
+          concurrentPhaseAfterReload: { id: "N02", locked: false },
+          livePhaseActionsAfterReload: ["resolve_phase", "lock_thread"],
+          concurrentPhaseActionsAfterReload: ["resolve_phase", "lock_thread"],
+          liveDeadlineActionsAfterReload: ["extend_deadline"],
+          concurrentDeadlineActionsAfterReload: ["extend_deadline"],
+          apiPhaseAfterReload: { phase_id: "N02", locked: false },
+        },
       },
       concurrentHostDeadlineAdvanceRace: {
         status: "passed",
@@ -5758,6 +5770,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-resolve-race",
       "concurrent-host-resolve-race-reload",
       "concurrent-host-advance-race",
+      "concurrent-host-advance-race-reload",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-mixed-advance-race",
       "stale-host-resolve",
@@ -5839,7 +5852,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 97);
+  assert.equal(opsArtifacts.proofRun.laneCount, 98);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5959,6 +5972,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-resolve-race-reload",
       "stale-host-resolve-reload",
       "concurrent-host-advance-race",
+      "concurrent-host-advance-race-reload",
       "stale-host-advance-reload",
       "stale-host-deadline-reload",
       "stale-cohost-deadline-reload",
@@ -6514,6 +6528,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-resolve-race-reload",
         "concurrent-host-advance-race",
+        "concurrent-host-advance-race-reload",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
@@ -6641,6 +6656,7 @@ function seedAdminProofFixture() {
         "concurrent-host-resolve-race",
         "concurrent-host-resolve-race-reload",
         "concurrent-host-advance-race",
+        "concurrent-host-advance-race-reload",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",

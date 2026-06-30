@@ -4175,6 +4175,81 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .liveRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .livePhaseAfterReload.id,
+  "N02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .livePhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentPhaseAfterReload.id,
+  "N02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .livePhaseActionsAfterReload.includes("resolve_phase"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .livePhaseActionsAfterReload.includes("lock_thread"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .livePhaseActionsAfterReload.includes("advance_phase"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentPhaseActionsAfterReload.includes("resolve_phase"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentPhaseActionsAfterReload.includes("lock_thread"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .concurrentPhaseActionsAfterReload.includes("advance_phase"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .apiPhaseAfterReload.phase_id,
+  "N02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostAdvanceRace.roleReloadAfterRace
+    .apiPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.concurrentHostDeadlineAdvanceRace.status,
   "passed",
 );
