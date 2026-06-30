@@ -61,6 +61,12 @@ import {
   devTestGameProofGraphCommand,
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
+import {
+  assertDevTestGameRaceCoverage,
+  buildDevTestGameRaceCoverage,
+  devTestGameRaceCoverageCommand,
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_race_coverage.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -185,6 +191,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/admin-spine-proof.json",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
       "target/dev-test-game/admin-spine-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_RACE_COVERAGE: "target/dev-test-game/race-coverage.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -276,10 +283,16 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     script: proofFreshnessAdminProofCommand,
     proofArtifact: proofFreshnessAdminProofPath,
     dependsOn: [
+      devTestGameRaceCoveragePath,
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/admin-spine-proof.json",
       "target/dev-test-game/release-readiness-checklist.json",
     ],
+  });
+  assert.deepEqual(manifest.commands.raceCoverage, {
+    script: devTestGameRaceCoverageCommand,
+    proofArtifact: devTestGameRaceCoveragePath,
+    dependsOn: ["target/dev-test-game/proof-run.json"],
   });
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
@@ -382,6 +395,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
+  assert(manifest.artifacts.includes(devTestGameRaceCoveragePath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
@@ -650,7 +664,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         true,
         "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
       ],
-      [2, "release", "missing", 13, false, "npm run test:dev-test-game-release-admin-proof"],
+      [2, "release", "missing", 14, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
     ],
   );
@@ -5876,6 +5890,31 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-cohost-deadline-reload",
     ],
   );
+  const raceCoverage = buildDevTestGameRaceCoverage(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameRaceCoverage(raceCoverage);
+  assert.equal(raceCoverage.status, "passed");
+  assert.equal(raceCoverage.releaseReady, false);
+  assert.equal(raceCoverage.productionReady, false);
+  assert.equal(raceCoverage.summary.cellCount, 15);
+  assert.equal(raceCoverage.summary.provenCellCount, 15);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 12);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 12);
+  assert.equal(raceCoverage.summary.reloadGapCount, 0);
+  assert.deepEqual(
+    raceCoverage.cells
+      .filter((cell) => cell.actorPair === "host vs host")
+      .map((cell) => cell.id),
+    [
+      "host-resolve",
+      "host-advance",
+      "host-deadline-advance",
+      "host-lifecycle",
+      "host-mixed-advance",
+      "host-complete-game",
+    ],
+  );
   const readiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
   });
@@ -5925,6 +5964,29 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(
     hardeningReadiness.generatedFrom.hardeningAdminProof,
     "target/dev-test-game/hardening-admin-proof.json",
+  );
+  const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    raceCoveragePath: "target/dev-test-game/race-coverage.json",
+    raceCoverage,
+  });
+  assertDevTestGameReleaseReadiness(raceCoverageReadiness);
+  assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-race-coverage-inventory",
+    ).cellCount,
+    15,
+  );
+  assert.equal(
+    raceCoverageReadiness.generatedFrom.raceCoverage,
+    "target/dev-test-game/race-coverage.json",
+  );
+  assert(
+    raceCoverageReadiness.releaseReadiness.unproven.some(
+      (item) =>
+        item.id === "exhaustive-race-coverage" &&
+        item.requiredEvidence.includes("Hosted and broader concurrent command race matrix"),
+    ),
   );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,

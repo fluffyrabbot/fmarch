@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofPath,
@@ -34,6 +35,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "target/dev-test-game/admin-spine-proof.json",
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
     "target/dev-test-game/admin-spine-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_RACE_COVERAGE: devTestGameRaceCoveragePath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
 };
@@ -46,6 +48,7 @@ export async function runDevTestGameAdminSpine() {
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");
+  await runNodeScript("tools/dev_test_game_race_coverage.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
     env: adminSpineReadinessEvidenceEnv,
   });

@@ -383,6 +383,7 @@ const devSpineArtifactPriorities = new Map(
     ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
     ["seed", "target/dev-test-game/seed-admin-proof.json"],
     ["release-readiness", "target/dev-test-game/release-readiness-checklist.json"],
+    ["race-coverage", "target/dev-test-game/race-coverage.json"],
     ["release", "target/dev-test-game/release-admin-proof.json"],
     ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
     ["admin-spine-admin", "target/dev-test-game/admin-spine-admin-proof.json"],

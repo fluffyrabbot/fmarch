@@ -17,6 +17,10 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  devTestGameRaceCoverageCommand,
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_race_coverage.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -103,10 +107,16 @@ export function buildDevTestGameSpineManifest({
         script: proofFreshnessAdminProofCommand,
         proofArtifact: proofFreshnessAdminProofPath,
         dependsOn: [
+          devTestGameRaceCoveragePath,
           spineManifestPath,
           adminSpineProofPath,
           "target/dev-test-game/release-readiness-checklist.json",
         ],
+      },
+      raceCoverage: {
+        script: devTestGameRaceCoverageCommand,
+        proofArtifact: devTestGameRaceCoveragePath,
+        dependsOn: ["target/dev-test-game/proof-run.json"],
       },
       nextAction: {
         script: nextActionCommand,
@@ -236,6 +246,11 @@ export function buildDevTestGameSpineManifest({
         ],
       },
       {
+        id: "race-coverage-recorded",
+        status: "passed",
+        evidence: [devTestGameRaceCoverageCommand, devTestGameRaceCoveragePath],
+      },
+      {
         id: "terminal-artifacts-recorded",
         status: "passed",
         evidence: [
@@ -320,6 +335,16 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest proof freshness artifact drifted: ${manifest.commands.proofFreshness.proofArtifact}`,
     );
   }
+  if (manifest.commands?.raceCoverage?.script !== devTestGameRaceCoverageCommand) {
+    throw new Error(
+      `spine manifest race coverage command drifted: ${manifest.commands?.raceCoverage?.script}`,
+    );
+  }
+  if (manifest.commands.raceCoverage.proofArtifact !== devTestGameRaceCoveragePath) {
+    throw new Error(
+      `spine manifest race coverage artifact drifted: ${manifest.commands.raceCoverage.proofArtifact}`,
+    );
+  }
   if (manifest.commands?.nextAction?.script !== nextActionCommand) {
     throw new Error(
       `spine manifest next-action command drifted: ${manifest.commands?.nextAction?.script}`,
@@ -371,6 +396,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     spineManifestPath,
     spineManifestMarkdownPath,
     "target/dev-test-game/admin-spine-proof.json",
+    devTestGameRaceCoveragePath,
     proofFreshnessAdminProofPath,
     nextActionPath,
     nextActionAdminProofPath,
@@ -396,6 +422,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "evidence-env-wiring-recorded",
     "freshness-proof-recorded",
     "artifact-refresh-status-recorded",
+    "race-coverage-recorded",
     "terminal-artifacts-recorded",
     "release-boundary-carried",
   ]) {
@@ -612,6 +639,7 @@ const artifactRefreshCommands = Object.freeze({
   "ops-artifacts": "npm run test:dev-test-game-ops",
   "seed-fixture": "npm run test:dev-test-game-seed-fixture",
   "release-readiness": "npm run test:dev-test-game-readiness",
+  "race-coverage": "npm run test:dev-test-game-race-coverage",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",
