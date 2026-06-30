@@ -1396,16 +1396,17 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
       [
         "selected-feature-spine-declaration",
-        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
       ],
       [
         "selected-spine-target",
-        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
       ],
       [
         "selected-spine-drilldown",
-        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
       ],
+      ["selected-spine-admin-check", "action-loop"],
       [
         "selected-spine-rerun-command",
         "npm run test:dev-test-game-core-loop-admin-proof",
@@ -1483,6 +1484,7 @@ test("admin route data exposes local next action as a native audit row", async (
       roleUrlId: "d02-n02-actionPlayer",
       roleUrl: ACTIONABLE_SPINE_ROLE_URL,
       checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: "action-loop",
       browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     },
     selectedRoleUrl:
@@ -1542,6 +1544,7 @@ test("admin route data exposes local next action as a native audit row", async (
             roleUrlId: "d02-n02-actionPlayer",
             roleUrl: ACTIONABLE_SPINE_ROLE_URL,
             checkpointId: "d02-n02-n02-action-open",
+            adminCheckId: "action-loop",
             browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
           },
         },
@@ -3847,6 +3850,7 @@ function nextActionFixture({
             roleUrlId: "d02-n02-actionPlayer",
             roleUrl: ACTIONABLE_SPINE_ROLE_URL,
             checkpointId: "d02-n02-n02-action-open",
+            adminCheckId: "action-loop",
             browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
           },
         }
@@ -4429,6 +4433,7 @@ function productionFeatureSpineTargetFixture() {
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
+    adminCheckId: "action-loop",
   };
 }
 
@@ -4440,6 +4445,7 @@ function featureSpineDrilldownFixture() {
     cycleRowId: "d02-n02",
     roleUrlRowId: "d02-n02-actionPlayer",
     checkpointRowId: "d02-n02-n02-action-open",
+    adminCheckId: "action-loop",
     roleUrl: ACTIONABLE_SPINE_ROLE_URL,
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
     browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,

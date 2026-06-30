@@ -1943,6 +1943,9 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
     cycleIds,
     roleUrlIds,
     checkpointIds,
+    visibleAdminCheckIds: [...(coreLoopAdminProofEvidence.visibleChecks ?? [])].map(
+      (id) => String(id),
+    ),
     recoveryHookIds,
     roleUrlHrefs: { ...(rowIds.roleUrlHrefs ?? {}) },
   };
@@ -3326,24 +3329,32 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       typeof declaration?.cycleId !== "string" ||
       typeof declaration?.roleUrlId !== "string" ||
       typeof declaration?.checkpointId !== "string" ||
+      typeof declaration?.adminCheckId !== "string" ||
       typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
+      typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
       target.featureSlotId !== declaration.featureSlotId ||
+      target.adminCheckId !== declaration.adminCheckId ||
       typeof drilldown?.featureSlotId !== "string" ||
       typeof drilldown?.cycleRowId !== "string" ||
       typeof drilldown?.roleUrlRowId !== "string" ||
       typeof drilldown?.checkpointRowId !== "string" ||
+      typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
+      drilldown.adminCheckId !== declaration.adminCheckId ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target") ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-drilldown") ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-admin-check",
+      ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-rerun-command",
       ) ||
@@ -4000,7 +4011,10 @@ function validCoreLoopSpineTargets(spineTargets) {
     typeof spineTargets.roleUrlHrefs === "object" &&
     typeof spineTargets.roleUrlHrefs[spineTargets.defaultRoleUrlId] === "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes(spineTargets.defaultCheckpointId)
+    spineTargets.checkpointIds.includes(spineTargets.defaultCheckpointId) &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes("core-loop-spine") &&
+    spineTargets.visibleAdminCheckIds.includes("host-lifecycle-control")
   );
 }
 

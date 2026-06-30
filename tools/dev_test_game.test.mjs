@@ -9323,6 +9323,35 @@ function coreLoopSpineTargetsFixture() {
       "normalPlayerDirectActionReject",
       "staleActionConflictReject",
     ],
+    visibleAdminCheckIds: [
+      "core-loop-spine",
+      "core-loop",
+      "day-vote-resolution",
+      "day-vote-no-lynch",
+      "action-loop",
+      "host-deadline-advance",
+      "stale-deadline-advance",
+      "invalid-action-recovery",
+      "resolution-receipts",
+      "dead-player-recovery",
+      "player-action-boundary",
+      "private-channel",
+      "host-votecount-publication",
+      "host-lifecycle-control",
+      "host-modkill-control",
+      "replacement-host-issued-invite",
+      "replacement-pending-player",
+      "replacement-invalid-target-recovery",
+      "replacement-console",
+      "replacement-idempotent-retry",
+      "stale-host-invite-recovery",
+      "replacement-stale-success-recovery",
+      "replacement-stale-player",
+      "replacement-stale-action",
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+      "replacement-incoming-player",
+    ],
     roleUrlHrefs: {
       "d01-n01-d02-host":
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
@@ -9358,6 +9387,7 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
     roleUrlId: declaration.roleUrlId,
     roleUrl: coreLoopSpineTargetsFixture().roleUrlHrefs[declaration.roleUrlId],
     checkpointId: declaration.checkpointId,
+    adminCheckId: declaration.adminCheckId,
     browserProofCommand: devTestGameLiveProofCommand,
   };
 }
@@ -9371,6 +9401,7 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
     cycleRowId: target.cycleId,
     roleUrlRowId: target.roleUrlId,
     checkpointRowId: target.checkpointId,
+    adminCheckId: target.adminCheckId,
     roleUrl: target.roleUrl,
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
     browserProofCommand: target.browserProofCommand,
@@ -9384,6 +9415,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-host",
     checkpointId: "d02-n02-d02-vote-open",
+    adminCheckId: "host-lifecycle-control",
   }),
   "player-action-submission": Object.freeze({
     featureSlotId: "player-action-submission",
@@ -9391,6 +9423,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
+    adminCheckId: "action-loop",
   }),
   "private-channel": Object.freeze({
     featureSlotId: "private-channel",
@@ -9398,6 +9431,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-actionPlayer",
     checkpointId: "d01-n01-d02-n01-action-open",
+    adminCheckId: "private-channel",
   }),
   "stale-recovery": Object.freeze({
     featureSlotId: "stale-recovery",
@@ -9405,6 +9439,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-host",
     checkpointId: "d01-n01-d02-d01-resolved-locked",
+    adminCheckId: "stale-deadline-advance",
   }),
 });
 
@@ -10022,6 +10057,7 @@ function nextActionAdminProofFixture() {
         "selected-feature-spine-declaration",
         "selected-spine-target",
         "selected-spine-drilldown",
+        "selected-spine-admin-check",
         "selected-spine-rerun-command",
         "selected-spine-browser-proof",
         "release-readiness-selection-trace",

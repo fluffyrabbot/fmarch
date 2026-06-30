@@ -1271,15 +1271,19 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       : [
           Object.freeze({
             id: "selected-feature-spine-declaration",
-            status: `${selectedProductionFeatureSpineTarget.featureSlotId}:${selectedProductionFeatureSpineTarget.cycleId}/${selectedProductionFeatureSpineTarget.checkpointId}/${selectedProductionFeatureSpineTarget.roleUrlId}`,
+            status: `${selectedProductionFeatureSpineTarget.featureSlotId}:${selectedProductionFeatureSpineTarget.cycleId}/${selectedProductionFeatureSpineTarget.checkpointId}/${selectedProductionFeatureSpineTarget.roleUrlId}/${selectedProductionFeatureSpineTarget.adminCheckId}`,
           }),
           Object.freeze({
             id: "selected-spine-target",
-            status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}`,
+            status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}/${selectedSpineTarget.adminCheckId}`,
           }),
           Object.freeze({
             id: "selected-spine-drilldown",
-            status: `${selectedSpineDrilldown.featureSlotId}:${selectedSpineDrilldown.cycleRowId}/${selectedSpineDrilldown.checkpointRowId}/${selectedSpineDrilldown.roleUrlRowId}`,
+            status: `${selectedSpineDrilldown.featureSlotId}:${selectedSpineDrilldown.cycleRowId}/${selectedSpineDrilldown.checkpointRowId}/${selectedSpineDrilldown.roleUrlRowId}/${selectedSpineDrilldown.adminCheckId}`,
+          }),
+          Object.freeze({
+            id: "selected-spine-admin-check",
+            status: selectedSpineDrilldown.adminCheckId,
           }),
           Object.freeze({
             id: "selected-spine-rerun-command",
@@ -1689,6 +1693,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
       roleUrlId: "",
       roleUrl: "",
       checkpointId: "",
+      adminCheckId: "",
       browserProofCommand: "",
     });
   }
@@ -1700,6 +1705,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
     roleUrlId: String(spineTarget.roleUrlId ?? ""),
     roleUrl: String(spineTarget.roleUrl ?? ""),
     checkpointId: String(spineTarget.checkpointId ?? ""),
+    adminCheckId: String(spineTarget.adminCheckId ?? ""),
     browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
   });
 }
@@ -1712,6 +1718,7 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
       cycleId: "",
       roleUrlId: "",
       checkpointId: "",
+      adminCheckId: "",
     });
   }
   return Object.freeze({
@@ -1720,6 +1727,7 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
     cycleId: String(declaration.cycleId ?? ""),
     roleUrlId: String(declaration.roleUrlId ?? ""),
     checkpointId: String(declaration.checkpointId ?? ""),
+    adminCheckId: String(declaration.adminCheckId ?? ""),
   });
 }
 
@@ -1732,6 +1740,7 @@ function normalizeNextActionSpineDrilldown(drilldown) {
       cycleRowId: "",
       roleUrlRowId: "",
       checkpointRowId: "",
+      adminCheckId: "",
       roleUrl: "",
       rerunCommand: "",
       browserProofCommand: "",
@@ -1744,6 +1753,7 @@ function normalizeNextActionSpineDrilldown(drilldown) {
     cycleRowId: String(drilldown.cycleRowId ?? ""),
     roleUrlRowId: String(drilldown.roleUrlRowId ?? ""),
     checkpointRowId: String(drilldown.checkpointRowId ?? ""),
+    adminCheckId: String(drilldown.adminCheckId ?? ""),
     roleUrl: String(drilldown.roleUrl ?? ""),
     rerunCommand: String(drilldown.rerunCommand ?? ""),
     browserProofCommand: String(drilldown.browserProofCommand ?? ""),

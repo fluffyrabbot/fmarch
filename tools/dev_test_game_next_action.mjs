@@ -555,6 +555,9 @@ function coreLoopSpineTargetFromReadiness(readiness) {
     cycleIds: [...(targets.cycleIds ?? [])].map((id) => String(id)),
     roleUrlIds: [...(targets.roleUrlIds ?? [])].map((id) => String(id)),
     checkpointIds: [...(targets.checkpointIds ?? [])].map((id) => String(id)),
+    visibleAdminCheckIds: [...(targets.visibleAdminCheckIds ?? [])].map((id) =>
+      String(id),
+    ),
     roleUrlHrefs:
       targets.roleUrlHrefs !== null && typeof targets.roleUrlHrefs === "object"
         ? Object.fromEntries(
@@ -572,6 +575,7 @@ function coreLoopSpineTargetFromReadiness(readiness) {
     target.roleUrlId,
     target.roleUrl,
     target.checkpointId,
+    target.visibleAdminCheckIds.length > 0 ? "visible-admin-checks" : "",
     target.browserProofCommand,
   ].every((value) => value !== "")
     ? target
@@ -601,7 +605,8 @@ function resolveProductionFeatureSpineTarget({
   if (
     !coreLoopSpineTarget.cycleIds.includes(declaration.cycleId) ||
     !coreLoopSpineTarget.roleUrlIds.includes(declaration.roleUrlId) ||
-    !coreLoopSpineTarget.checkpointIds.includes(declaration.checkpointId)
+    !coreLoopSpineTarget.checkpointIds.includes(declaration.checkpointId) ||
+    !coreLoopSpineTarget.visibleAdminCheckIds.includes(declaration.adminCheckId)
   ) {
     throw new Error(
       `buildable release-readiness item ${itemId} production feature spine target is not in the core-loop proof`,
@@ -621,6 +626,7 @@ function resolveProductionFeatureSpineTarget({
     roleUrlId: declaration.roleUrlId,
     roleUrl,
     checkpointId: declaration.checkpointId,
+    adminCheckId: declaration.adminCheckId,
     browserProofCommand: coreLoopSpineTarget.browserProofCommand,
   };
 }
@@ -633,6 +639,7 @@ function buildProductionFeatureSpineDrilldown(spineTarget) {
     cycleRowId: spineTarget.cycleId,
     roleUrlRowId: spineTarget.roleUrlId,
     checkpointRowId: spineTarget.checkpointId,
+    adminCheckId: spineTarget.adminCheckId,
     roleUrl: spineTarget.roleUrl,
     rerunCommand: devTestGameCoreLoopAdminProofCommand,
     browserProofCommand: spineTarget.browserProofCommand,
@@ -651,7 +658,9 @@ function validProductionFeatureSpineDeclaration(declaration) {
     typeof declaration.roleUrlId === "string" &&
     declaration.roleUrlId.length > 0 &&
     typeof declaration.checkpointId === "string" &&
-    declaration.checkpointId.length > 0
+    declaration.checkpointId.length > 0 &&
+    typeof declaration.adminCheckId === "string" &&
+    declaration.adminCheckId.length > 0
   );
 }
 
@@ -1183,6 +1192,8 @@ function validActionableSpineTarget(spineTarget) {
     spineTarget.roleUrl.includes("/g/") &&
     typeof spineTarget.checkpointId === "string" &&
     spineTarget.checkpointId.length > 0 &&
+    typeof spineTarget.adminCheckId === "string" &&
+    spineTarget.adminCheckId.length > 0 &&
     typeof spineTarget.browserProofCommand === "string" &&
     spineTarget.browserProofCommand.includes("test:dev-test-game-live")
   );
@@ -1203,6 +1214,8 @@ function validProductionFeatureSpineDrilldown(drilldown) {
     drilldown.roleUrlRowId.length > 0 &&
     typeof drilldown.checkpointRowId === "string" &&
     drilldown.checkpointRowId.length > 0 &&
+    typeof drilldown.adminCheckId === "string" &&
+    drilldown.adminCheckId.length > 0 &&
     typeof drilldown.roleUrl === "string" &&
     drilldown.roleUrl.includes("/g/") &&
     drilldown.rerunCommand === devTestGameCoreLoopAdminProofCommand &&
@@ -1647,6 +1660,7 @@ const productionFeatureSpineTargets = Object.freeze({
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-host",
     checkpointId: "d02-n02-d02-vote-open",
+    adminCheckId: "host-lifecycle-control",
   }),
   playerActionSubmission: Object.freeze({
     featureSlotId: "player-action-submission",
@@ -1654,6 +1668,7 @@ const productionFeatureSpineTargets = Object.freeze({
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
+    adminCheckId: "action-loop",
   }),
   privateChannel: Object.freeze({
     featureSlotId: "private-channel",
@@ -1661,6 +1676,7 @@ const productionFeatureSpineTargets = Object.freeze({
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-actionPlayer",
     checkpointId: "d01-n01-d02-n01-action-open",
+    adminCheckId: "private-channel",
   }),
   staleRecovery: Object.freeze({
     featureSlotId: "stale-recovery",
@@ -1668,6 +1684,7 @@ const productionFeatureSpineTargets = Object.freeze({
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-host",
     checkpointId: "d01-n01-d02-d01-resolved-locked",
+    adminCheckId: "stale-deadline-advance",
   }),
 });
 

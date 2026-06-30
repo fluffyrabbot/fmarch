@@ -442,19 +442,24 @@ export function assertNextActionAdminProof(evidence) {
       typeof declaration?.cycleId !== "string" ||
       typeof declaration?.roleUrlId !== "string" ||
       typeof declaration?.checkpointId !== "string" ||
+      typeof declaration?.adminCheckId !== "string" ||
       typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
+      typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
       target.featureSlotId !== declaration.featureSlotId ||
+      target.adminCheckId !== declaration.adminCheckId ||
       typeof drilldown?.featureSlotId !== "string" ||
       typeof drilldown?.cycleRowId !== "string" ||
       typeof drilldown?.roleUrlRowId !== "string" ||
       typeof drilldown?.checkpointRowId !== "string" ||
+      typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
+      drilldown.adminCheckId !== declaration.adminCheckId ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||
@@ -463,6 +468,9 @@ export function assertNextActionAdminProof(evidence) {
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-drilldown",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-admin-check",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-rerun-command",
@@ -517,6 +525,7 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-feature-spine-declaration");
       checks.push("selected-spine-target");
       checks.push("selected-spine-drilldown");
+      checks.push("selected-spine-admin-check");
       checks.push("selected-spine-rerun-command");
       checks.push("selected-spine-browser-proof");
     }
@@ -612,6 +621,7 @@ function requiredChecksForEvidence(evidence) {
                 "selected-feature-spine-declaration",
                 "selected-spine-target",
                 "selected-spine-drilldown",
+                "selected-spine-admin-check",
                 "selected-spine-rerun-command",
                 "selected-spine-browser-proof",
               ]),
