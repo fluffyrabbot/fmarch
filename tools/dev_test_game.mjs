@@ -12135,6 +12135,18 @@ async function submitStaleHostAdvanceRecovery({
     deadlineActionsAfterReload,
     apiPhaseAfterReload: hostStateAfterReload.phase,
   };
+  const reconnectAfterReject = await verifyHostReconnectRecovery({
+    page: staleHostAdvancePage,
+    game,
+  });
+  const phaseActionsAfterReconnect = await visibleHostControlActions(
+    staleHostAdvancePage,
+    "phase",
+  );
+  const deadlineActionsAfterReconnect = await visibleHostControlActions(
+    staleHostAdvancePage,
+    "deadline",
+  );
   if (
     restoreAfterStaleHostResolve?.commandStatus?.state !== "ack" ||
     !Array.isArray(restoreAfterStaleHostResolve?.commandStatus?.streamSeqs) ||
@@ -12178,7 +12190,17 @@ async function submitStaleHostAdvanceRecovery({
       "extend_deadline",
     ) ||
     staleHostAdvanceReloadAfterReject.apiPhaseAfterReload?.phase_id !== "D02" ||
-    staleHostAdvanceReloadAfterReject.apiPhaseAfterReload?.locked !== false
+    staleHostAdvanceReloadAfterReject.apiPhaseAfterReload?.locked !== false ||
+    reconnectAfterReject?.status !== "passed" ||
+    reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    reconnectAfterReject?.recoveredHostProjection?.phase?.id !== "D02" ||
+    reconnectAfterReject?.recoveredHostProjection?.phase?.locked !== false ||
+    !phaseActionsAfterReconnect.includes("resolve_phase") ||
+    !phaseActionsAfterReconnect.includes("lock_thread") ||
+    phaseActionsAfterReconnect.includes("advance_phase") ||
+    !deadlineActionsAfterReconnect.includes("extend_deadline")
   ) {
     throw new Error(
       `stale host advance recovery drifted: ${JSON.stringify({
@@ -12194,6 +12216,9 @@ async function submitStaleHostAdvanceRecovery({
         dispatchPlan,
         apiPhase: hostStateAfterReject.phase,
         staleHostAdvanceReloadAfterReject,
+        reconnectAfterReject,
+        phaseActionsAfterReconnect,
+        deadlineActionsAfterReconnect,
       })}`,
     );
   }
@@ -12212,6 +12237,9 @@ async function submitStaleHostAdvanceRecovery({
     dispatchPlan,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleHostAdvanceReloadAfterReject,
+    reconnectAfterReject,
+    phaseActionsAfterReconnect,
+    deadlineActionsAfterReconnect,
   };
 }
 

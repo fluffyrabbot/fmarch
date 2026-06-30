@@ -536,6 +536,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "After a stale host AdvancePhase rejects InvalidTarget, the host role URL reloads to open D02 truth with current resolve/lock controls and API phase state matching the console.",
     }),
     scenario({
+      id: "stale-host-advance-reconnect-recovery",
+      title: "Stale host advance reconnect",
+      role: "host",
+      provenBy: ["stale-host-advance-reconnect-recovery"].filter(hasLane),
+      note: "After stale host AdvancePhase recovery reloads to open D02 truth, the same host role URL drops its live projection, reconnects, and recovers open D02 with current resolve/lock controls.",
+    }),
+    scenario({
       id: "stale-host-deadline-reload",
       title: "Stale host deadline reload",
       role: "host",
@@ -902,6 +909,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-host-resolve-reconnect-recovery",
         "stale-host-advance",
         "stale-host-advance-reload",
+        "stale-host-advance-reconnect-recovery",
         "stale-host-deadline",
         "stale-host-deadline-reload",
         "stale-cohost-deadline",

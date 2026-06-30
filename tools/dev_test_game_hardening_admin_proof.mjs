@@ -88,6 +88,7 @@ const requiredChecks = [
   "stale-host-resolve-reconnect-recovery",
   "stale-host-advance",
   "stale-host-advance-reload",
+  "stale-host-advance-reconnect-recovery",
   "stale-host-deadline",
   "stale-host-deadline-reload",
   "stale-cohost-deadline",
