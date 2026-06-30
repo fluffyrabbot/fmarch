@@ -9349,6 +9349,43 @@ function hostLifecycleRoleSurfaceFixture() {
       activityCount: 1,
       activityStatusText: "Ack: stream seqs 601",
     },
+    hostLifecycleStaleRejectProof: {
+      status: "passed",
+      clickedAction: "lock_thread",
+      commandKind: "LockThread",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "PhaseLocked",
+        message: "Reject PhaseLocked: phase locked",
+      },
+      commandOutcome: {
+        state: "reject",
+        error: "PhaseLocked",
+        message: "Reject PhaseLocked: phase locked",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "LockThread",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: ["host"],
+      },
+      projection: {
+        phase: {
+          id: "D01",
+          locked: false,
+        },
+      },
+      checkpointPhaseStateAfterReject: "open",
+      checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+      recoveryText:
+        "Stale recovery\nReject PhaseLocked: refresh host projection and use current lifecycle controls.",
+      activityCount: 1,
+      activityStatusText: "Reject PhaseLocked: phase locked",
+    },
     releaseReady: false,
     productionReady: false,
   };

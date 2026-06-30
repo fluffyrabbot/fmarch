@@ -1923,6 +1923,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
   const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
+  const staleRejectProof = hostRoleSurface?.hostLifecycleStaleRejectProof;
   if (
     hostRoleSurface?.status !== "passed" ||
     hostRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -1962,6 +1963,10 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
     clickProof,
     expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
   });
+  assertCoreLoopHostLifecycleStaleRejectProof({
+    staleRejectProof,
+    expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
+  });
 }
 
 function assertCoreLoopHostLifecycleClickProof({ clickProof, expectedGame }) {
@@ -1993,6 +1998,46 @@ function assertCoreLoopHostLifecycleClickProof({ clickProof, expectedGame }) {
       .includes("ack: stream seqs 601")
   ) {
     throw new Error("core-loop admin proof missing host lifecycle click ACK");
+  }
+}
+
+function assertCoreLoopHostLifecycleStaleRejectProof({
+  staleRejectProof,
+  expectedGame,
+}) {
+  if (
+    staleRejectProof?.status !== "passed" ||
+    staleRejectProof.clickedAction !== "lock_thread" ||
+    staleRejectProof.commandKind !== "LockThread" ||
+    staleRejectProof.command?.game !== expectedGame ||
+    staleRejectProof.commandStatus?.state !== "reject" ||
+    staleRejectProof.commandStatus.error !== "PhaseLocked" ||
+    !staleRejectProof.commandStatus?.message?.includes(
+      "Reject PhaseLocked: phase locked",
+    ) ||
+    staleRejectProof.commandOutcome?.state !== "reject" ||
+    staleRejectProof.commandOutcome.error !== "PhaseLocked" ||
+    !staleRejectProof.commandOutcome?.message?.includes(
+      "Reject PhaseLocked: phase locked",
+    ) ||
+    staleRejectProof.bridgePlan?.role !== "moderator" ||
+    staleRejectProof.bridgePlan.commandKind !== "LockThread" ||
+    staleRejectProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleRejectProof.bridgePlan.finalState !== "reject" ||
+    staleRejectProof.bridgePlan.projectionRefreshKeys?.[0] !== "host" ||
+    staleRejectProof.bridgePlan.projectionRefreshKeys?.length !== 1 ||
+    staleRejectProof.projection?.phase?.id !== "D01" ||
+    staleRejectProof.projection?.phase?.locked !== false ||
+    staleRejectProof.checkpointPhaseStateAfterReject !== "open" ||
+    staleRejectProof.checkpointDeadlineAffordanceAfterReject !==
+      "resolve_phase,lock_thread" ||
+    !String(staleRejectProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    staleRejectProof.activityCount !== 1 ||
+    !String(staleRejectProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked")
+  ) {
+    throw new Error("core-loop admin proof missing host stale lifecycle recovery");
   }
 }
 
