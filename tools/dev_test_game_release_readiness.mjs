@@ -3079,11 +3079,14 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 
 async function readOptionalCoreLoopAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultCoreLoopAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultCoreLoopAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     coreLoopAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3094,11 +3097,14 @@ async function readOptionalCoreLoopAdminProof() {
 
 async function readOptionalHardeningAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHardeningAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultHardeningAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     hardeningAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3109,11 +3115,11 @@ async function readOptionalHardeningAdminProof() {
 
 async function readOptionalOpsArtifacts() {
   const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS;
-  if (override === undefined || override.trim() === "") {
+  const opsPath = await resolveOptionalDefaultArtifactPath(override, defaultOpsArtifactsPath);
+  if (opsPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const opsPath = resolveArtifactPath(override, defaultOpsArtifactsPath);
   const artifact = await readFreshArtifactMetadata(opsPath, now);
   return {
     opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
@@ -3124,11 +3130,14 @@ async function readOptionalOpsArtifacts() {
 
 async function readOptionalBackupAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultBackupAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultBackupAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     backupAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3139,11 +3148,11 @@ async function readOptionalBackupAdminProof() {
 
 async function readOptionalOpsAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(override, defaultOpsAdminProofPath);
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultOpsAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     opsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3154,11 +3163,11 @@ async function readOptionalOpsAdminProof() {
 
 async function readOptionalSeedAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(override, defaultSeedAdminProofPath);
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultSeedAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     seedAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3169,11 +3178,14 @@ async function readOptionalSeedAdminProof() {
 
 async function readOptionalSeedFixtureSummary() {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY;
-  if (override === undefined || override.trim() === "") {
+  const fixturePath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultSeedFixtureSummaryPath,
+  );
+  if (fixturePath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const fixturePath = resolveArtifactPath(override, defaultSeedFixtureSummaryPath);
   const artifact = await readFreshArtifactMetadata(fixturePath, now);
   return {
     seedFixtureSummary: JSON.parse(await readFile(fixturePath, "utf8")),
@@ -3184,11 +3196,14 @@ async function readOptionalSeedFixtureSummary() {
 
 async function readOptionalIdentityAdapterProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultIdentityAdapterProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultIdentityAdapterProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     identityAdapterProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3199,11 +3214,14 @@ async function readOptionalIdentityAdapterProof() {
 
 async function readOptionalIdentityAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultIdentityAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultIdentityAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     identityAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3214,11 +3232,14 @@ async function readOptionalIdentityAdminProof() {
 
 async function readOptionalSpineManifest() {
   const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST;
-  if (override === undefined || override.trim() === "") {
+  const manifestPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultSpineManifestPath,
+  );
+  if (manifestPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const manifestPath = resolveArtifactPath(override, defaultSpineManifestPath);
   const artifact = await readFreshArtifactMetadata(manifestPath, now);
   return {
     spineManifest: JSON.parse(await readFile(manifestPath, "utf8")),
@@ -3229,14 +3250,14 @@ async function readOptionalSpineManifest() {
 
 async function readOptionalSpineManifestAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
-    return undefined;
-  }
-  const now = new Date();
-  const proofPath = resolveArtifactPath(
+  const proofPath = await resolveOptionalDefaultArtifactPath(
     override,
     defaultSpineManifestAdminProofPath,
   );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     spineManifestAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3248,17 +3269,29 @@ async function readOptionalSpineManifestAdminProof() {
 async function readOptionalBackupRestoreArtifacts() {
   const proofOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF;
   const dumpOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP;
-  if ((proofOverride === undefined) !== (dumpOverride === undefined)) {
+  if (
+    (proofOverride === undefined || proofOverride.trim() === "") !==
+    (dumpOverride === undefined || dumpOverride.trim() === "")
+  ) {
     throw new Error(
       "FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF and FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP must be set together",
     );
   }
-  if (proofOverride === undefined) {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    proofOverride,
+    defaultBackupRestoreProofPath,
+  );
+  const dumpPath = await resolveOptionalDefaultArtifactPath(
+    dumpOverride,
+    defaultBackupRestoreDumpPath,
+  );
+  if (proofPath === undefined && dumpPath === undefined) {
     return undefined;
   }
+  if (proofPath === undefined || dumpPath === undefined) {
+    throw new Error("dev-test-game backup/restore proof and dump artifacts must exist together");
+  }
   const now = new Date();
-  const proofPath = resolveArtifactPath(proofOverride, defaultBackupRestoreProofPath);
-  const dumpPath = resolveArtifactPath(dumpOverride, defaultBackupRestoreDumpPath);
   const [proofArtifact, dumpArtifact] = await Promise.all([
     readFreshArtifactMetadata(proofPath, now),
     readFreshArtifactMetadata(dumpPath, now),
@@ -3274,11 +3307,14 @@ async function readOptionalBackupRestoreArtifacts() {
 
 async function readOptionalAdminSpineProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultAdminSpineProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultAdminSpineProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     adminSpineProof: JSON.parse(await readFile(proofPath, "utf8")),
@@ -3289,11 +3325,14 @@ async function readOptionalAdminSpineProof() {
 
 async function readOptionalAdminSpineAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultAdminSpineAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultAdminSpineAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     adminSpineAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
