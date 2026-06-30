@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   buildSessionCard,
@@ -99,6 +100,7 @@ import {
   devTestGameHostedMatrixRawEvidencePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
 import {
+  assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
@@ -1528,7 +1530,7 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
 });
 
-test("session card and markdown include role credential URLs and tokens", () => {
+test("session card and markdown include role credential URLs and tokens", async () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
   const card = buildSessionCard({
@@ -7090,6 +7092,133 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(
     devTestGameHostedMatrixExternalEvidencePath,
     "target/dev-test-game/hosted-matrix-external.json",
+  );
+  const laneFrontendBaseUrl = "https://fmarch.example.test";
+  const laneApiBaseUrl = "https://api.fmarch.example.test";
+  const laneRawEvidence = {
+    ...rawEvidence,
+    frontendBaseUrl: laneFrontendBaseUrl,
+    apiBaseUrl: laneApiBaseUrl,
+  };
+  assertDevTestGameHostedMatrixRawEvidence(laneRawEvidence, {
+    frontendBaseUrl: laneFrontendBaseUrl,
+    apiBaseUrl: laneApiBaseUrl,
+  });
+  await mkdir("target/dev-test-game", { recursive: true });
+  await Promise.all([
+    writeFile(
+      devTestGameHostedConcurrentRaceMatrixPath,
+      `${JSON.stringify(hostedMatrix, null, 2)}\n`,
+    ),
+    writeFile(
+      devTestGameHostedMatrixRawEvidencePath,
+      `${JSON.stringify(laneRawEvidence, null, 2)}\n`,
+    ),
+  ]);
+  const passedLaneExternalEvidencePath =
+    "target/dev-test-game/hosted-matrix-external-lane-pass.json";
+  const passedLane = await runDevTestGameHostedEvidenceLane({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: laneFrontendBaseUrl,
+      FMARCH_HOSTED_MATRIX_API_URL: laneApiBaseUrl,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
+        devTestGameHostedMatrixRawEvidencePath,
+      FMARCH_HOSTED_MATRIX_EVIDENCE_PATH: passedLaneExternalEvidencePath,
+    },
+  });
+  assertDevTestGameHostedEvidenceLane(passedLane);
+  assert.equal(passedLane.status, "passed");
+  assert.equal(passedLane.preflightStatus, "passed");
+  assert.deepEqual(passedLane.blockedCheckIds, []);
+  assert.equal(
+    passedLane.nextCommand,
+    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+  );
+  assert.equal(passedLane.nextProofTarget, passedLaneExternalEvidencePath);
+  assert.deepEqual(
+    passedLane.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-target-preflight", "passed"],
+      ["external-hosted-evidence-written", "passed"],
+      ["release-claim-boundary-carried", "passed"],
+    ],
+  );
+  const passedLanePreflight = assertDevTestGameHostedTargetPreflight(
+    JSON.parse(await readFile(devTestGameHostedTargetPreflightPath, "utf8")),
+  );
+  assert.equal(passedLanePreflight.status, "passed");
+  assert.equal(
+    passedLanePreflight.nextProofTarget,
+    devTestGameHostedMatrixExternalEvidencePath,
+  );
+  const passedLaneExternalEvidence =
+    assertDevTestGameHostedMatrixExternalEvidence(
+      JSON.parse(await readFile(passedLaneExternalEvidencePath, "utf8")),
+      {
+        frontendBaseUrl: laneFrontendBaseUrl,
+        apiBaseUrl: laneApiBaseUrl,
+      },
+    );
+  assert.deepEqual(passedLaneExternalEvidence.generatedFrom, {
+    hostedConcurrentRaceMatrix: devTestGameHostedConcurrentRaceMatrixPath,
+    hostedConcurrentRaceMatrixGeneratedAt: hostedMatrix.generatedAt,
+    rawEvidence: devTestGameHostedMatrixRawEvidencePath,
+    rawEvidenceGeneratedAt: laneRawEvidence.generatedAt,
+  });
+  const laneFreshManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+        },
+      ],
+    },
+  });
+  const passedLaneNextAction = buildDevTestGameNextAction(laneFreshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [
+        {
+          id: "hosted-deployment",
+          status: "unproven",
+          requiredEvidence:
+            "Hosted API/frontend deployment proof with external health checks",
+        },
+      ],
+    }),
+    hostedTargetPreflight: passedLanePreflight,
+  });
+  assertDevTestGameNextAction(passedLaneNextAction);
+  assert.equal(
+    passedLaneNextAction.nextAction.unproven.proofTarget,
+    devTestGameHostedMatrixExternalEvidencePath,
+  );
+  assert.equal(
+    passedLaneNextAction.nextAction.unproven.roleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  );
+  assert.equal(
+    passedLaneNextAction.nextAction.unproven.proofGraphNodeId,
+    "admin-proof:hosted-concurrent-race-matrix",
   );
   const hostedMatrixWithProducedExternalEvidence =
     buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
