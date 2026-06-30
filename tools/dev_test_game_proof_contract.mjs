@@ -98,6 +98,7 @@ const requiredLaneIds = Object.freeze([
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
+  "stale-action-reconnect-recovery",
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
@@ -5914,6 +5915,49 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict?.commandStateAfterReject?.actions?.length ===
           0 &&
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
+    }),
+    lane("stale-action-reconnect-recovery", "Stale player action reconnect recovers current state", {
+      rejectError: hardening.staleActionConflict?.reject?.error ?? null,
+      reconnectingState:
+        hardening.staleActionConflict?.reconnectAfterReject?.reconnectingStatus?.state ??
+        null,
+      recoveryState:
+        hardening.staleActionConflict?.reconnectAfterReject?.reconnectRecoveryEvent
+          ?.state ?? null,
+      recoveredPhase:
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.phase?.phaseId ?? null,
+      recoveredActions:
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.actions?.length ?? null,
+      recoveredSnapshotContainsPost:
+        hardening.staleActionConflict?.reconnectAfterReject
+          ?.recoveredSnapshotContainsPost ?? null,
+      passed:
+        hardening.staleActionConflict?.status === "passed" &&
+        hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.status === "passed" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.reconnectingStatus
+          ?.state === "reconnecting" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.reconnectRecoveryEvent
+          ?.state === "recovered" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.reconnectRecoveryEvent
+          ?.attempt === 1 &&
+        hardening.staleActionConflict?.reconnectAfterReject
+          ?.recoveredSnapshotContainsPost === true &&
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.actorSlot === "slot_4" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.actorAlive === true &&
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.phase?.phaseId === "D02" &&
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.phase?.locked === false &&
+        hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
+          ?.actions?.length === 0 &&
+        hardening.staleActionConflict?.buttonsAfterReconnect?.some(
+          (button) => button.action === "submit_action:factional_kill",
+        ) !== true,
     }),
     lane("stale-host-control", "Stale host phase control rejects without drift", {
       rejectError: hardening.staleHostControl?.reject?.error ?? null,

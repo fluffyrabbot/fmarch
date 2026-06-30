@@ -949,6 +949,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
       ["replacement-reconnect-recovery", "passed"],
       ["replacement-action-reconnect", "passed"],
       ["replacement-stale-private-post-reconnect", "passed"],
+      ["stale-action-reconnect-recovery", "passed"],
     ],
   );
   assert.deepEqual(
@@ -973,7 +974,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     cellCount: 3,
     passedCellCount: 3,
     reloadCoveredCellCount: 3,
-    reconnectLaneCount: 4,
+    reconnectLaneCount: 5,
     staleConflictLaneCount: 4,
     roleSurfaceCount: 2,
     hostedEvidenceStatus: "not_configured",
@@ -1035,6 +1036,7 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       ["replacement-reconnect-recovery", "passed"],
       ["replacement-action-reconnect", "passed"],
       ["replacement-stale-private-post-reconnect", "passed"],
+      ["stale-action-reconnect-recovery", "passed"],
     ],
   );
   assert.deepEqual(
@@ -1495,7 +1497,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "72 hardening lanes passed");
+  assert.equal(hardening.status, "73 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1554,6 +1556,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
+      "stale-action-reconnect-recovery",
       "stale-host-control",
       "concurrent-host-resolve-race",
       "concurrent-host-resolve-race-reload",
@@ -1578,7 +1581,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 99,
+    laneCount: 100,
     releaseReady: false,
     productionReady: false,
   });
@@ -1629,7 +1632,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 99,
+    laneCount: 100,
     releaseReady: false,
     productionReady: false,
   });
@@ -1690,7 +1693,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 72);
+  assert.equal(data.audit.checks.length, 73);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1749,6 +1752,10 @@ test("admin local hardening detail data carries lane rows", async () => {
       [
         "stale-action-conflict-message",
         "passed: Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      ],
+      [
+        "stale-action-reconnect-recovery",
+        "passed: reconnecting -> recovered, phase D02",
       ],
       ["stale-host-control", "passed: Reject PhaseLocked, current D02"],
       ["concurrent-host-resolve-race", "passed: ack resolve, reject PhaseLocked"],
@@ -1809,7 +1816,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "77 demo scenarios available locally");
+  assert.equal(seed.status, "78 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1869,6 +1876,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "concurrent-host-mixed-advance-race-reload",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
+      "stale-action-reconnect-recovery",
       "stale-dead-action-conflict",
       "host-replacement-console",
       "replacement-host-issued-invite",
@@ -1896,7 +1904,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 77,
+    scenarioCount: 78,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -1915,7 +1923,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 77);
+  assert.equal(data.audit.scenarios.length, 78);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1976,6 +1984,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["concurrent-host-mixed-advance-race-reload", "available_locally"],
       ["stale-same-action-recovery", "available_locally"],
       ["stale-action-conflict-message", "available_locally"],
+      ["stale-action-reconnect-recovery", "available_locally"],
       ["stale-dead-action-conflict", "available_locally"],
       ["host-replacement-console", "available_locally"],
       ["replacement-host-issued-invite", "available_locally"],
@@ -2420,6 +2429,13 @@ function proofRunFixture() {
       receiptStatusText:
         "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
     },
+    "stale-action-reconnect-recovery": {
+      reconnectingState: "reconnecting",
+      recoveryState: "recovered",
+      recoveredPhase: "D02",
+      recoveredActions: 0,
+      recoveredSnapshotContainsPost: true,
+    },
     "stale-host-control": {
       rejectError: "PhaseLocked",
       stalePhase: "N01",
@@ -2535,6 +2551,7 @@ function proofRunFixture() {
     "stale-dead-action-conflict",
     "stale-action-conflict",
     "stale-action-conflict-message",
+    "stale-action-reconnect-recovery",
     "stale-host-control",
     "concurrent-host-resolve-race",
     "concurrent-host-resolve-race-reload",
@@ -2787,6 +2804,11 @@ function seedFixtureSummaryFixture() {
       seedScenario(
         "stale-action-conflict-message",
         "Stale action conflict message",
+        "actionPlayer",
+      ),
+      seedScenario(
+        "stale-action-reconnect-recovery",
+        "Stale action reconnect recovery",
         "actionPlayer",
       ),
       seedScenario("stale-dead-action-conflict", "Stale dead action conflict", "actionPlayer"),
@@ -3413,7 +3435,7 @@ function hostedConcurrentRaceMatrixFixture() {
       raceLaneCount: 3,
       reloadLaneCount: 3,
       reloadCoveredCellCount: 3,
-      reconnectLaneCount: 4,
+      reconnectLaneCount: 5,
       staleConflictLaneCount: 4,
       roleSurfaceCount: 2,
       hostedEvidenceStatus: "not_configured",
@@ -3443,6 +3465,7 @@ function hostedConcurrentRaceMatrixFixture() {
         "replacement-stale-private-post-reconnect",
         "Replacement stale private post reconnect",
       ),
+      laneFixture("stale-action-reconnect-recovery", "Stale action reconnect recovery"),
     ],
     staleConflictLanes: [
       laneFixture(

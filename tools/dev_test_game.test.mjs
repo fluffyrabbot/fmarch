@@ -5103,6 +5103,32 @@ test("session card and markdown include role credential URLs and tokens", () => 
           phase: { phase_id: "D02", locked: false },
           actions: [],
         },
+        reconnectAfterReject: {
+          status: "passed",
+          principalUserId: "player-goon-a",
+          actorSlot: "slot_4",
+          reconnectingStatus: { state: "reconnecting" },
+          reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+          recoveredSnapshotContainsPost: true,
+          reconnectCommand: {
+            principalUserId: "player-goon-a",
+            command: {
+              SubmitPost: {
+                actor_slot: "slot_4",
+                body: "Stale action reconnect proof from dev:test-game fixture",
+              },
+            },
+            streamSeqs: [60],
+          },
+          recoveredCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phase: { phaseId: "D02", locked: false },
+            actions: [],
+          },
+        },
+        buttonsAfterReconnect: [],
         actionVisibleAfterRefresh: false,
       },
       staleHostControl: {
@@ -6430,6 +6456,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-dead-action-conflict",
       "stale-action-conflict",
       "stale-action-conflict-message",
+      "stale-action-reconnect-recovery",
       "stale-host-control",
       "concurrent-host-resolve-race",
       "concurrent-host-resolve-race-reload",
@@ -6640,7 +6667,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(hostedMatrix.summary.cellCount, 16);
   assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
-  assert.equal(hostedMatrix.summary.reconnectLaneCount, 4);
+  assert.equal(hostedMatrix.summary.reconnectLaneCount, 5);
   assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
   assert.equal(hostedMatrix.summary.realHostedDeploymentStatus, "unproven");
@@ -6833,7 +6860,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 107);
+  assert.equal(opsArtifacts.proofRun.laneCount, 108);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -6986,6 +7013,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-mixed-advance-race-reload",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
+      "stale-action-reconnect-recovery",
       "stale-dead-action-conflict",
       "host-replacement-console",
       "replacement-host-issued-invite",
@@ -7662,7 +7690,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 107,
+      laneCount: 108,
     },
     summary: {
       cellCount: cells.length,
@@ -7928,7 +7956,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 107,
+      laneCount: 108,
       lanes: [],
       nonClaims: [],
     },
@@ -8139,6 +8167,7 @@ function hardeningAdminProofFixture() {
         "stale-dead-action-conflict",
         "stale-action-conflict",
         "stale-action-conflict-message",
+        "stale-action-reconnect-recovery",
         "stale-host-control",
         "concurrent-host-resolve-race",
         "concurrent-host-resolve-race-reload",
@@ -8295,6 +8324,7 @@ function seedAdminProofFixture() {
         "concurrent-host-mixed-advance-race-reload",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
+        "stale-action-reconnect-recovery",
         "stale-dead-action-conflict",
         "private-channel-member",
         "private-channel-denied",
@@ -8659,6 +8689,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       reconnectLaneIds: [
         "reconnect-recovery",
         "replacement-reconnect-recovery",
+        "stale-action-reconnect-recovery",
       ],
       staleConflictLaneIds: [
         "replacement-stale-conflict-message",
@@ -8701,6 +8732,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       visibleReconnectLanes: [
         "reconnect-recovery",
         "replacement-reconnect-recovery",
+        "stale-action-reconnect-recovery",
       ],
       visibleStaleConflictLanes: [
         "replacement-stale-conflict-message",

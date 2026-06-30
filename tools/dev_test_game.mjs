@@ -3773,6 +3773,38 @@ async function submitStaleActionConflict({
       })}`,
     );
   }
+  const reconnectAfterReject = await verifyRoleReconnectRecovery({
+    page: staleActionPage,
+    game,
+    principalUserId: "player-goon-a",
+    actorSlot: "slot_4",
+    postPrefix: "Stale action reconnect proof",
+    navigate: true,
+  });
+  const buttonsAfterReconnect = await playerCommandButtons(staleActionPage);
+  if (
+    reconnectAfterReject?.status !== "passed" ||
+    reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    reconnectAfterReject?.recoveredSnapshotContainsPost !== true ||
+    reconnectAfterReject?.recoveredCommandState?.actorSlot !== "slot_4" ||
+    reconnectAfterReject?.recoveredCommandState?.actorAlive !== true ||
+    reconnectAfterReject?.recoveredCommandState?.actorStatus !== "alive" ||
+    reconnectAfterReject?.recoveredCommandState?.phase?.phaseId !== "D02" ||
+    reconnectAfterReject?.recoveredCommandState?.phase?.locked !== false ||
+    reconnectAfterReject?.recoveredCommandState?.actions?.length !== 0 ||
+    buttonsAfterReconnect.some(
+      (button) => button.action === "submit_action:factional_kill",
+    )
+  ) {
+    throw new Error(
+      `stale action reconnect recovery drifted: ${JSON.stringify({
+        reconnectAfterReject,
+        buttonsAfterReconnect,
+      })}`,
+    );
+  }
   return {
     status: "passed",
     staleN01Phase: staleActionSetup.staleN01Phase,
@@ -3785,6 +3817,8 @@ async function submitStaleActionConflict({
     currentReceipt,
     receiptStatusText,
     apiCommandStateAfterReject,
+    reconnectAfterReject,
+    buttonsAfterReconnect,
     actionVisibleAfterRefresh: false,
   };
 }

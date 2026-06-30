@@ -81,7 +81,11 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
     )?.requiredReconnectLaneIds,
-    ["reconnect-recovery", "replacement-reconnect-recovery"],
+    [
+      "reconnect-recovery",
+      "replacement-reconnect-recovery",
+      "stale-action-reconnect-recovery",
+    ],
   );
   assert.deepEqual(
     handoffs.find(
@@ -146,6 +150,7 @@ function hostedMatrixFixture() {
     reconnectLanes: [
       { id: "reconnect-recovery" },
       { id: "replacement-reconnect-recovery" },
+      { id: "stale-action-reconnect-recovery" },
     ],
     staleConflictLanes: [
       { id: "replacement-stale-conflict-message" },

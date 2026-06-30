@@ -70,6 +70,7 @@ const requiredChecks = [
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
+  "stale-action-reconnect-recovery",
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
