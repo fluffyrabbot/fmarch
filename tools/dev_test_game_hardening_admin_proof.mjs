@@ -51,6 +51,7 @@ const requiredChecks = [
   "concurrent-player-complete-race",
   "public-player-complete-reload",
   "stale-player-complete",
+  "stale-player-complete-reload",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
   "stale-action-conflict",

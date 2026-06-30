@@ -79,6 +79,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-player-complete-race",
   "public-player-complete-reload",
   "stale-player-complete",
+  "stale-player-complete-reload",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
   "stale-action-conflict",
@@ -4697,6 +4698,81 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.stalePlayerComplete?.apiCommandStateAfterReject?.vote_targets?.length ===
           0,
     }),
+    lane(
+      "stale-player-complete-reload",
+      "Stale public player complete recovery reloads completed board",
+      {
+        game: hardening.stalePlayerComplete?.game ?? null,
+        routeStatus:
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.routeResponseStatus ?? null,
+        gameCompleted:
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.gameCompleted ?? null,
+        currentVote:
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadCurrentVote?.hasVote ?? null,
+        threadPostCount:
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadThreadPostBodies?.length ?? null,
+        passed:
+          hardening.stalePlayerComplete?.status === "passed" &&
+          hardening.stalePlayerComplete?.reject?.error ===
+            "GameAlreadyCompleted" &&
+          hardening.stalePlayerComplete?.currentVoteAfterReject?.hasVote ===
+            "false" &&
+          hardening.stalePlayerComplete?.currentVoteAfterReject?.text?.includes(
+            "No current vote",
+          ) === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject?.status ===
+            "passed" &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.routeResponseStatus === 200 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.threadPagerVisible === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.surfaceText?.includes("Endgame") === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.surfaceText?.includes("The game is complete.") === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.actorSlot === "slot-7" &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.gameCompleted === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.actions?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.voteTargets?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.recoveredCommandState?.boundary?.includes("game is complete") ===
+            true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadButtons?.some((button) => button.disabled !== true) ===
+            false &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadCurrentVote?.hasVote === "false" &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadCurrentVote?.text?.includes("No current vote") === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.reloadThreadPostBodies?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiCommandStateAfterReload?.game_completed === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiCommandStateAfterReload?.actions?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiCommandStateAfterReload?.vote_targets?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiThreadPostBodiesAfterReload?.length === 0 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiStateAfterReload?.completed === true &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiStateAfterReload?.slots?.length === 1 &&
+          hardening.stalePlayerComplete?.stalePublicReloadAfterReject
+            ?.apiStateAfterReload?.slots?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true,
+      },
+    ),
     lane("stale-same-action-recovery", "Stale duplicate player action rejects and refreshes", {
       rejectError: hardening.staleSameActionRecovery?.reject?.error ?? null,
       rejectMessage: hardening.staleSameActionRecovery?.reject?.message ?? null,

@@ -317,6 +317,8 @@ const replacementStalePrivatePostAfterComplete =
   session.verification.multiplayerHardening.replacementStalePrivatePostAfterComplete;
 const concurrentPlayerCompleteRace =
   session.verification.multiplayerHardening.concurrentPlayerCompleteRace;
+const stalePlayerComplete =
+  session.verification.multiplayerHardening.stalePlayerComplete;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -3041,6 +3043,98 @@ if (concurrentPlayerCompleteRace.post.state === "ack") {
     false,
   );
 }
+assert.equal(stalePlayerComplete.status, "passed");
+assert.equal(stalePlayerComplete.reject.error, "GameAlreadyCompleted");
+assert.equal(stalePlayerComplete.currentVoteAfterReject.hasVote, "false");
+assert.match(stalePlayerComplete.currentVoteAfterReject.text, /No current vote/);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.threadPagerVisible,
+  true,
+);
+assert.match(
+  stalePlayerComplete.stalePublicReloadAfterReject.surfaceText,
+  /Endgame/,
+);
+assert.match(
+  stalePlayerComplete.stalePublicReloadAfterReject.surfaceText,
+  /The game is complete\./,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.recoveredCommandState.actorSlot,
+  "slot-7",
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.recoveredCommandState.gameCompleted,
+  true,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.recoveredCommandState.actions.length,
+  0,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.recoveredCommandState.voteTargets
+    .length,
+  0,
+);
+assert.match(
+  stalePlayerComplete.stalePublicReloadAfterReject.recoveredCommandState.boundary,
+  /game is complete/,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.reloadButtons.some(
+    (button) => button.disabled !== true,
+  ),
+  false,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.reloadCurrentVote.hasVote,
+  "false",
+);
+assert.match(
+  stalePlayerComplete.stalePublicReloadAfterReject.reloadCurrentVote.text,
+  /No current vote/,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.reloadThreadPostBodies.length,
+  0,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiCommandStateAfterReload
+    .game_completed,
+  true,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiCommandStateAfterReload.actions
+    .length,
+  0,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiCommandStateAfterReload
+    .vote_targets.length,
+  0,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiThreadPostBodiesAfterReload.length,
+  0,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiStateAfterReload.completed,
+  true,
+);
+assert.equal(
+  stalePlayerComplete.stalePublicReloadAfterReject.apiStateAfterReload.slots.every(
+    (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+  ),
+  true,
+);
 assert.equal(
   session.verification.multiplayerHardening.staleDeadActionConflict.status,
   "passed",

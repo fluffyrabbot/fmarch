@@ -5248,10 +5248,51 @@ test("session card and markdown include role credential URLs and tokens", () => 
           { action: "withdraw_vote", disabled: true },
           { action: "submit_post", disabled: true },
         ],
+        currentVoteAfterReject: {
+          hasVote: "false",
+          text: "No current vote",
+        },
         apiCommandStateAfterReject: {
           game_completed: true,
           actions: [],
           vote_targets: [],
+        },
+        stalePublicReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          surfaceText:
+            "Endgame\nThe game is complete.\nNo current vote\nNo older posts",
+          threadPagerVisible: true,
+          recoveredCommandState: {
+            actorSlot: "slot-7",
+            gameCompleted: true,
+            actions: [],
+            voteTargets: [],
+            boundary:
+              "The game is complete; role actions, votes, and posts are closed.",
+          },
+          reloadButtons: [
+            { action: "submit_vote", disabled: true },
+            { action: "withdraw_vote", disabled: true },
+            { action: "submit_post", disabled: true },
+          ],
+          reloadCurrentVote: {
+            hasVote: "false",
+            text: "No current vote",
+          },
+          reloadThreadPostBodies: [],
+          apiCommandStateAfterReload: {
+            game_completed: true,
+            actions: [],
+            vote_targets: [],
+          },
+          apiThreadPostBodiesAfterReload: [],
+          apiStateAfterReload: {
+            completed: true,
+            slots: [
+              { role_revealed: true, alignment_revealed: true },
+            ],
+          },
         },
       },
       staleHostDeadline: {
@@ -5500,6 +5541,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-player-complete-race",
       "public-player-complete-reload",
       "stale-player-complete",
+      "stale-player-complete-reload",
       "stale-same-action-recovery",
       "stale-dead-action-conflict",
       "stale-action-conflict",
@@ -5584,7 +5626,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 84);
+  assert.equal(opsArtifacts.proofRun.laneCount, 85);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5702,6 +5744,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-complete-race",
       "concurrent-player-complete-race",
       "public-player-complete-reload",
+      "stale-player-complete-reload",
       "concurrent-host-mixed-advance-race",
       "stale-same-action-recovery",
       "stale-action-conflict-message",
@@ -6230,6 +6273,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-complete-race",
         "public-player-complete-reload",
         "stale-player-complete",
+        "stale-player-complete-reload",
         "stale-same-action-recovery",
         "stale-dead-action-conflict",
         "stale-action-conflict",
@@ -6242,6 +6286,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
         "public-player-complete-reload",
+        "stale-player-complete-reload",
         "concurrent-host-mixed-advance-race",
         "stale-host-resolve",
         "stale-host-advance",
@@ -6357,6 +6402,7 @@ function seedAdminProofFixture() {
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
         "public-player-complete-reload",
+        "stale-player-complete-reload",
         "concurrent-host-mixed-advance-race",
         "stale-same-action-recovery",
         "stale-action-conflict-message",
