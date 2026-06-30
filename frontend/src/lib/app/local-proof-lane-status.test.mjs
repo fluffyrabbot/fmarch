@@ -98,6 +98,18 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
+      id: "stale-host-resolve",
+      status: "passed",
+      evidence: {
+        rejectError: "PhaseLocked",
+        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+        locked: true,
+      },
+    }),
+    "passed: Reject PhaseLocked, role URL true, locked true",
+  );
+  assert.equal(
+    hardeningLaneStatus({
       id: "stale-host-resolve-reconnect-recovery",
       status: "passed",
       evidence: {

@@ -4987,6 +4987,45 @@ assert.equal(
   session.verification.multiplayerHardening.staleHostResolve.status,
   "passed",
 );
+assert.match(
+  session.verification.multiplayerHardening.staleHostResolve.setup.roleUrl,
+  new RegExp(`/g/${session.game}/host`),
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .roleUrl,
+  session.verification.multiplayerHardening.staleHostResolve.setup.roleUrl,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .clickedActionId,
+  "resolve_phase",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .receiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .dispatchRefreshKeys.includes("host"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .phaseActionsAfterReject.includes("unlock_thread"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .phaseActionsAfterReject.includes("advance_phase"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve.staleClickBrowserProof
+    .phaseActionsAfterReject.includes("resolve_phase"),
+  false,
+);
 assert.equal(
   session.verification.multiplayerHardening.staleHostResolve.setup.stalePhase.id,
   "D02",

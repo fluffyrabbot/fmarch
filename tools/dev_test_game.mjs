@@ -1295,6 +1295,7 @@ async function freezeStaleHostResolvePage({ staleHostResolvePage, game, frontend
   const stalePhase = await staleHostResolvePage.evaluate(
     () => window.__fmarchHostProjection?.phase,
   );
+  const roleUrl = staleHostResolvePage.url();
   const phaseActions = await visibleHostControlActions(staleHostResolvePage, "phase");
   const deadlineActions = await visibleHostControlActions(staleHostResolvePage, "deadline");
   const closedStatus = await staleHostResolvePage.evaluate(() =>
@@ -1318,6 +1319,7 @@ async function freezeStaleHostResolvePage({ staleHostResolvePage, game, frontend
     );
   }
   return {
+    roleUrl,
     stalePhase,
     phaseActions,
     deadlineActions,
@@ -11957,8 +11959,8 @@ async function submitStaleHostResolveRecovery({
     state: "visible",
   });
   await clickCriticalHostActionConfirm(staleActionRoot, {
-    actionId: "extend_deadline",
-    roleLabel: "stale cohost",
+    actionId,
+    roleLabel: "stale host",
   });
   await staleHostResolvePage.waitForFunction(
     (expectedActionId) =>
@@ -12004,6 +12006,18 @@ async function submitStaleHostResolveRecovery({
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
   const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  const staleClickBrowserProof = {
+    roleUrl: staleHostResolveSetup.roleUrl,
+    clickedActionId: actionId,
+    triggerTestId: `critical-host-action-${actionId}`,
+    receiptStatusText: activityStatusText,
+    activityRow,
+    dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
+    phaseAfterReject,
+    phaseActionsAfterReject,
+    deadlineActionsAfterReject,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
   const reloadResponse = await staleHostResolvePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
@@ -12058,6 +12072,8 @@ async function submitStaleHostResolveRecovery({
     "deadline",
   );
   if (
+    typeof staleHostResolveSetup.roleUrl !== "string" ||
+    !staleHostResolveSetup.roleUrl.includes(`/g/${game}/host`) ||
     liveResolveForStaleHostResolve?.commandStatus?.state !== "ack" ||
     !Array.isArray(liveResolveForStaleHostResolve?.commandStatus?.streamSeqs) ||
     liveResolveForStaleHostResolve.commandStatus.streamSeqs.length === 0 ||
@@ -12080,6 +12096,16 @@ async function submitStaleHostResolveRecovery({
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.roleUrl !== staleHostResolveSetup.roleUrl ||
+    staleClickBrowserProof.clickedActionId !== actionId ||
+    staleClickBrowserProof.receiptStatusText !== activityStatusText ||
+    staleClickBrowserProof.dispatchRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.phaseAfterReject?.id !== "D02" ||
+    staleClickBrowserProof.phaseAfterReject?.locked !== true ||
+    !staleClickBrowserProof.phaseActionsAfterReject.includes("unlock_thread") ||
+    !staleClickBrowserProof.phaseActionsAfterReject.includes("advance_phase") ||
+    staleClickBrowserProof.phaseActionsAfterReject.includes("resolve_phase") ||
+    staleClickBrowserProof.phaseActionsAfterReject.includes("lock_thread") ||
     hostStateAfterReject.phase?.phase_id !== "D02" ||
     hostStateAfterReject.phase?.locked !== true ||
     staleHostResolveReloadAfterReject.routeResponseStatus !== 200 ||
@@ -12129,6 +12155,7 @@ async function submitStaleHostResolveRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
+        staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleHostResolveReloadAfterReject,
         reconnectAfterReject,
@@ -12150,6 +12177,7 @@ async function submitStaleHostResolveRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
+    staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleHostResolveReloadAfterReject,
     reconnectAfterReject,

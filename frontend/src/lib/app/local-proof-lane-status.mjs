@@ -97,7 +97,7 @@ export function hardeningLaneStatus(lane) {
     case "concurrent-host-resolve-race-reload":
       return `${status}: locked ${String(evidence.apiLocked ?? "unknown")}, routes ${String(evidence.liveRouteStatus ?? "unknown")}/${String(evidence.concurrentRouteStatus ?? "unknown")}`;
     case "stale-host-resolve":
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-resolve-reload":
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
     case "stale-host-resolve-reconnect-recovery":
