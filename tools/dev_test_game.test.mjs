@@ -11349,7 +11349,9 @@ function postNightFourTransitionSurfaceFixture() {
         game,
         actor_slot: "slot-7",
         action_id: "factional_kill",
+        template_id: "factional_kill",
         targets: ["slot-5"],
+        grant_id: "grant-factional-kill-n04",
       },
       commandStatus: {
         state: "reject",

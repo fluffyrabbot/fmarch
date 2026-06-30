@@ -10,6 +10,11 @@ import {
   completedPlayerReloadAssertionCases,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  playerActionSubmissionScenario,
+  playerInvalidActionRecoveryScenario,
+  staleNightFourActionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -3570,6 +3575,7 @@ async function proveStaleNightFourActionRecovery({
   frontendBaseUrl,
   roleUrl,
 }) {
+  const scenario = staleNightFourActionRecoveryScenario();
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
@@ -3593,57 +3599,56 @@ async function proveStaleNightFourActionRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const setupSnapshot = await page.evaluate(async () => {
+    const setupSnapshot = await page.evaluate(async (fromSeq) => {
       if (typeof window.__fmarchTriggerPlayerResync !== "function") {
         throw new Error("player resync hook is unavailable");
       }
-      return window.__fmarchTriggerPlayerResync(916);
-    });
+      return window.__fmarchTriggerPlayerResync(fromSeq);
+    }, scenario.setupResyncFromSeq);
     await page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N04" &&
-        document.querySelector(
-          '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
-        ) !== null,
-      null,
+      (proofScenario) =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId ===
+          proofScenario.setupPhaseId &&
+        document.querySelector(proofScenario.commandButtonSelector) !== null,
+      scenario,
       { timeout: 15000 },
     );
-    const actionButton = page.locator(
-      '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
-    );
+    const actionButton = page.locator(scenario.commandButtonSelector);
     await actionButton.waitFor({ state: "visible", timeout: 15000 });
     await actionButton.click();
     await page.waitForFunction(
-      () =>
-        window.__fmarchPlayerCommandStatus?.state === "reject" &&
-        window.__fmarchPlayerCommandStatus?.error === "PhaseLocked" &&
+      (proofScenario) =>
+        window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&
+        window.__fmarchPlayerCommandStatus?.error === proofScenario.error &&
         window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
-          "SubmitAction" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05",
-      null,
+          proofScenario.commandKind &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId ===
+          proofScenario.refreshedPhaseId,
+      scenario,
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () =>
+      (proofScenario) =>
         document
           .querySelector('[data-testid="player-action-submission-checkpoint"]')
-          ?.getAttribute("data-receipt-state") === "reject:PhaseLocked" &&
+          ?.getAttribute("data-receipt-state") ===
+          proofScenario.checkpointReceiptState &&
         document
           .querySelector('[data-testid="player-action-submission-checkpoint"]')
-          ?.getAttribute("data-phase-id") === "D05" &&
+          ?.getAttribute("data-phase-id") === proofScenario.refreshedPhaseId &&
         document
           .querySelector('[data-testid="player-action-submission-checkpoint"]')
           ?.getAttribute("data-action-state") ===
-          "disabled:no legal action available",
-      null,
+          proofScenario.checkpointActionState,
+      scenario,
       { timeout: 15000 },
     );
     const proof = await collectPlayerStaleCommandProof({
       page,
       commandRequests,
-      clickedAction: "submit_action:factional_kill",
-      commandKind: "SubmitAction",
-      commandSelector: "SubmitAction",
+      clickedAction: scenario.clickedAction,
+      commandKind: scenario.commandKind,
+      commandSelector: scenario.commandSelector,
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3658,7 +3663,7 @@ async function proveStaleNightFourActionRecovery({
       visitedRolePath,
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
-      setupResyncFromSeq: 916,
+      setupResyncFromSeq: scenario.setupResyncFromSeq,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
@@ -4758,11 +4763,12 @@ async function provePlayerActionSubmissionCheckpoint({
 }
 
 async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequests }) {
+  const scenario = playerActionSubmissionScenario();
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.SubmitAction !== undefined) {
+    if (command?.[scenario.commandSelector] !== undefined) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -4772,7 +4778,7 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
           body: {
             kind: "Ack",
             body: {
-              stream_seqs: [501],
+              stream_seqs: [scenario.streamSeq],
             },
           },
         }),
@@ -4829,6 +4835,7 @@ async function provePlayerActionInvalidRecovery({
   frontendBaseUrl,
   roleUrl,
 }) {
+  const scenario = playerInvalidActionRecoveryScenario();
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
@@ -4852,26 +4859,25 @@ async function provePlayerActionInvalidRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const invalidButton = page.locator(
-      '[data-testid="player-action-commands"] button[data-action="submit_invalid_action:factional_kill"]',
-    );
+    const invalidButton = page.locator(scenario.commandButtonSelector);
     await invalidButton.waitFor({ state: "visible", timeout: 15000 });
     await invalidButton.click();
     await page.waitForFunction(
-      () =>
-        window.__fmarchPlayerCommandStatus?.state === "reject" &&
-        window.__fmarchPlayerCommandStatus?.error === "InvalidTarget" &&
+      (proofScenario) =>
+        window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&
+        window.__fmarchPlayerCommandStatus?.error === proofScenario.error &&
         window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
-          "SubmitAction",
-      null,
+          proofScenario.commandKind,
+      scenario,
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () =>
+      (proofScenario) =>
         document
           .querySelector('[data-testid="player-action-submission-checkpoint"]')
-          ?.getAttribute("data-receipt-state") === "reject:InvalidTarget",
-      null,
+          ?.getAttribute("data-receipt-state") ===
+        proofScenario.checkpointReceiptState,
+      scenario,
       { timeout: 15000 },
     );
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
@@ -4892,11 +4898,11 @@ async function provePlayerActionInvalidRecovery({
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("player invalid action proof leaked an invite URL token");
     }
-    const command = commandRequests.at(-1)?.SubmitAction ?? null;
+    const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
     return {
       status: "passed",
-      clickedAction: "submit_invalid_action:factional_kill",
-      commandKind: command === null ? null : "SubmitAction",
+      clickedAction: scenario.clickedAction,
+      commandKind: command === null ? null : scenario.commandKind,
       command,
       commandStatus,
       bridgePlan,
@@ -4917,11 +4923,14 @@ async function installPlayerActionInvalidRecoveryBrowserRoutes(
   page,
   { commandRequests },
 ) {
+  const scenario = playerInvalidActionRecoveryScenario();
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.SubmitAction?.action_id === "invalid_self_factional_kill") {
+    if (
+      command?.[scenario.commandSelector]?.action_id === scenario.actionId
+    ) {
       await route.fulfill({
         status: 409,
         contentType: "application/json",
@@ -7776,16 +7785,16 @@ async function installPostDayVoteAdvanceCommonRoutes(
 }
 
 async function provePlayerActionSubmissionClick({ page, commandRequests }) {
-  const actionButton = page.locator(
-    '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
-  );
+  const scenario = playerActionSubmissionScenario();
+  const actionButton = page.locator(scenario.commandButtonSelector);
   await actionButton.waitFor({ state: "visible", timeout: 15000 });
   await actionButton.click();
   await page.waitForFunction(
-    () =>
-      window.__fmarchPlayerCommandStatus?.state === "ack" &&
-      window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind === "SubmitAction",
-    null,
+    (proofScenario) =>
+      window.__fmarchPlayerCommandStatus?.state === proofScenario.finalState &&
+      window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+        proofScenario.commandKind,
+    scenario,
     { timeout: 15000 },
   );
   await page.waitForFunction(
@@ -7810,11 +7819,11 @@ async function provePlayerActionSubmissionClick({ page, commandRequests }) {
     .getByTestId("player-command-receipt-count")
     .innerText();
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
-  const command = commandRequests.at(-1)?.SubmitAction ?? null;
+  const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
   return {
     status: "passed",
-    clickedAction: "submit_action:factional_kill",
-    commandKind: command === null ? null : "SubmitAction",
+    clickedAction: scenario.clickedAction,
+    commandKind: command === null ? null : scenario.commandKind,
     command,
     commandStatus,
     bridgePlan,
@@ -9804,6 +9813,7 @@ function assertHostLifecycleStaleRejectProof({ staleRejectProof, expectedGame })
 }
 
 function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
+  const scenario = playerActionSubmissionScenario();
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
   const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
   const invalidRecoveryProof = playerRoleSurface?.playerActionInvalidRecoveryProof;
@@ -9821,12 +9831,14 @@ function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
     checkpoint?.proofCheckId !== "player-action-submission" ||
     checkpoint.phaseId !== "N02" ||
     checkpoint.phaseState !== "open" ||
-    checkpoint.actorSlot !== "slot-7" ||
-    checkpoint.actionState !== "enabled:submit_action:factional_kill" ||
-    checkpoint.selectedAction !== "factional_kill" ||
-    checkpoint.targetSlots !== "slot-3" ||
+    checkpoint.actorSlot !== scenario.actorSlot ||
+    checkpoint.actionState !== `enabled:${scenario.clickedAction}` ||
+    checkpoint.selectedAction !== scenario.actionId ||
+    checkpoint.targetSlots !== scenario.targetSlot ||
     checkpoint.receiptState !== "idle" ||
-    !checkpoint.targetText?.includes("factional_kill -> slot-3") ||
+    !checkpoint.targetText?.includes(
+      `${scenario.actionId} -> ${scenario.targetSlot}`,
+    ) ||
     !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
     !String(checkpoint.statusText ?? "")
       .toLowerCase()
@@ -9873,31 +9885,39 @@ function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
 }
 
 function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
+  const scenario = playerActionSubmissionScenario();
   if (
     clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== "submit_action:factional_kill" ||
-    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.clickedAction !== scenario.clickedAction ||
+    clickProof.commandKind !== scenario.commandKind ||
     clickProof.command?.game !== expectedGame ||
-    clickProof.command.action_id !== "factional_kill" ||
-    clickProof.command.actor_slot !== "slot-7" ||
-    clickProof.command.template_id !== "factional_kill" ||
-    clickProof.command.targets?.[0] !== "slot-3" ||
-    clickProof.commandStatus?.state !== "ack" ||
-    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 501") ||
+    clickProof.command.action_id !== scenario.actionId ||
+    clickProof.command.actor_slot !== scenario.actorSlot ||
+    clickProof.command.template_id !== scenario.templateId ||
+    clickProof.command.targets?.[0] !== scenario.targetSlot ||
+    clickProof.command.grant_id !== scenario.grantId ||
+    clickProof.commandStatus?.state !== scenario.finalState ||
+    !clickProof.commandStatus?.message?.includes(
+      `Ack: stream seqs ${scenario.streamSeq}`,
+    ) ||
     clickProof.bridgePlan?.role !== "player" ||
-    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandKind !== scenario.commandKind ||
     clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== "ack" ||
-    !clickProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
-    clickProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    clickProof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      clickProof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    clickProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    clickProof.projectionCommandState?.phase?.phaseId !==
+      scenario.refreshedPhaseId ||
     clickProof.projectionCommandState?.actions?.length !== 0 ||
     !String(clickProof.checkpointReceiptState ?? "").startsWith("ack:") ||
-    clickProof.checkpointActionStateAfterAck !== "disabled:no legal action available" ||
+    clickProof.checkpointActionStateAfterAck !== scenario.checkpointActionState ||
     clickProof.receiptCount !== 1 ||
     !String(clickProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("ack: stream seqs 501")
+      .includes(`ack: stream seqs ${scenario.streamSeq}`)
   ) {
     throw new Error(
       `core-loop admin proof missing player action click ACK: ${JSON.stringify(
@@ -10410,37 +10430,45 @@ function assertPlayerActionInvalidRecoveryProof({
   invalidRecoveryProof,
   expectedGame,
 }) {
+  const scenario = playerInvalidActionRecoveryScenario();
   if (
     invalidRecoveryProof?.status !== "passed" ||
-    invalidRecoveryProof.clickedAction !== "submit_invalid_action:factional_kill" ||
-    invalidRecoveryProof.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.clickedAction !== scenario.clickedAction ||
+    invalidRecoveryProof.commandKind !== scenario.commandKind ||
     invalidRecoveryProof.command?.game !== expectedGame ||
-    invalidRecoveryProof.command.action_id !== "invalid_self_factional_kill" ||
-    invalidRecoveryProof.command.actor_slot !== "slot-7" ||
-    invalidRecoveryProof.command.template_id !== "factional_kill" ||
-    invalidRecoveryProof.command.targets?.[0] !== "slot-7" ||
-    invalidRecoveryProof.commandStatus?.state !== "reject" ||
-    invalidRecoveryProof.commandStatus.error !== "InvalidTarget" ||
+    invalidRecoveryProof.command.action_id !== scenario.actionId ||
+    invalidRecoveryProof.command.actor_slot !== scenario.actorSlot ||
+    invalidRecoveryProof.command.template_id !== scenario.templateId ||
+    invalidRecoveryProof.command.targets?.[0] !== scenario.targetSlot ||
+    invalidRecoveryProof.command.grant_id !== scenario.grantId ||
+    invalidRecoveryProof.commandStatus?.state !== scenario.finalState ||
+    invalidRecoveryProof.commandStatus.error !== scenario.error ||
     !invalidRecoveryProof.commandStatus?.message?.includes(
-      "Reject InvalidTarget: invalid target",
+      scenario.messageIncludes,
     ) ||
     invalidRecoveryProof.bridgePlan?.role !== "player" ||
-    invalidRecoveryProof.bridgePlan.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.bridgePlan.commandKind !== scenario.commandKind ||
     invalidRecoveryProof.bridgePlan.commandEndpoint !== "/commands" ||
-    invalidRecoveryProof.bridgePlan.finalState !== "reject" ||
-    !invalidRecoveryProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    invalidRecoveryProof.receipts?.at?.(-1)?.state !== "reject" ||
-    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    invalidRecoveryProof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      invalidRecoveryProof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    invalidRecoveryProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !==
+      scenario.refreshedPhaseId ||
     invalidRecoveryProof.projectionCommandState?.actions?.[0]?.templateId !==
-      "factional_kill" ||
-    invalidRecoveryProof.checkpointReceiptState !== "reject:InvalidTarget" ||
+      scenario.refreshedActionTemplateId ||
+    invalidRecoveryProof.checkpointReceiptState !==
+      scenario.checkpointReceiptState ||
     invalidRecoveryProof.checkpointActionStateAfterReject !==
-      "enabled:submit_action:factional_kill" ||
-    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+      scenario.checkpointActionState ||
+    invalidRecoveryProof.checkpointTargetSlotsAfterReject !==
+      scenario.checkpointTargetSlots ||
     invalidRecoveryProof.receiptCount !== 1 ||
     !String(invalidRecoveryProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject invalidtarget: invalid target")
+      .includes(scenario.messageIncludes.toLowerCase())
   ) {
     throw new Error(
       `core-loop admin proof missing player invalid-action recovery: ${JSON.stringify(
@@ -11581,6 +11609,7 @@ function assertStaleNightFourActionRecoveryProof({
   expectedGame,
   sourceRoleUrl,
 }) {
+  const scenario = staleNightFourActionRecoveryScenario();
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -11592,50 +11621,51 @@ function assertStaleNightFourActionRecoveryProof({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.clickedAction !== "submit_action:factional_kill" ||
-    proof.commandKind !== "SubmitAction" ||
-    proof.setupResyncFromSeq !== 916 ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== "N04" ||
-    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !== "slot-5" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== scenario.setupPhaseId ||
+    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !==
+      scenario.targetSlot ||
     proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-7" ||
-    proof.command.action_id !== "factional_kill" ||
-    proof.command.targets?.[0] !== "slot-5" ||
-    proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "PhaseLocked" ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.action_id !== scenario.actionId ||
+    proof.command.template_id !== scenario.templateId ||
+    proof.command.targets?.[0] !== scenario.targetSlot ||
+    proof.command.grant_id !== scenario.grantId ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    proof.commandStatus.error !== scenario.error ||
     !String(proof.commandStatus.message ?? "").includes(
-      "stale action state, refresh and use current action controls",
+      scenario.messageIncludes,
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitAction" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "notifications",
-      "investigationResults",
-      "commandState",
-      "dayVoteOutcomes",
-    ]) ||
-    proof.receipts?.at?.(-1)?.state !== "reject" ||
-    proof.projectionCommandState?.actorSlot !== "slot-7" ||
-    proof.projectionCommandState?.phase?.phaseId !== "D05" ||
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.actorSlot !== scenario.actorSlot ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
     proof.projectionCommandState?.phase?.locked !== false ||
     proof.projectionCommandState?.actions?.length !== 0 ||
     proof.projectionCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "stale N04 action refreshed into current Day 5 controls",
+      scenario.refreshedBoundary,
     ) ||
-    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
-    proof.checkpointPhaseIdAfterReject !== "D05" ||
+    proof.checkpointReceiptState !== scenario.checkpointReceiptState ||
+    proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
     proof.checkpointActionStateAfterReject !==
-      "disabled:no legal action available" ||
-    proof.checkpointTargetSlotsAfterReject !== "" ||
-    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+      scenario.checkpointActionState ||
+    proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
+    !String(proof.recoveryText ?? "").includes(`Reject ${scenario.error}`) ||
     !String(proof.recoveryText ?? "").includes("refresh") ||
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject phaselocked")
+      .includes(`reject ${scenario.error.toLowerCase()}`)
   ) {
     throw new Error(
       `core-loop admin proof missing stale Night 4 action recovery: ${JSON.stringify(

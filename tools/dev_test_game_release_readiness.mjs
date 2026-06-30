@@ -21,6 +21,11 @@ import {
   completedGameEndgameStaleRejectAssertionCases,
   completedPlayerReloadAssertionCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  playerActionSubmissionScenario,
+  playerInvalidActionRecoveryScenario,
+  staleNightFourActionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
@@ -2111,6 +2116,7 @@ function assertCoreLoopHostLifecycleStaleRejectProof({
 }
 
 function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
+  const scenario = playerActionSubmissionScenario();
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
   const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
   const invalidRecoveryProof = playerRoleSurface?.playerActionInvalidRecoveryProof;
@@ -2128,12 +2134,14 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
     checkpoint?.proofCheckId !== "player-action-submission" ||
     checkpoint.phaseId !== "N02" ||
     checkpoint.phaseState !== "open" ||
-    checkpoint.actorSlot !== "slot-7" ||
-    checkpoint.actionState !== "enabled:submit_action:factional_kill" ||
-    checkpoint.selectedAction !== "factional_kill" ||
-    checkpoint.targetSlots !== "slot-3" ||
+    checkpoint.actorSlot !== scenario.actorSlot ||
+    checkpoint.actionState !== `enabled:${scenario.clickedAction}` ||
+    checkpoint.selectedAction !== scenario.actionId ||
+    checkpoint.targetSlots !== scenario.targetSlot ||
     checkpoint.receiptState !== "idle" ||
-    !checkpoint.targetText?.includes("factional_kill -> slot-3") ||
+    !checkpoint.targetText?.includes(
+      `${scenario.actionId} -> ${scenario.targetSlot}`,
+    ) ||
     !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
     !String(checkpoint.statusText ?? "")
       .toLowerCase()
@@ -2164,31 +2172,39 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
 }
 
 function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
+  const scenario = playerActionSubmissionScenario();
   if (
     clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== "submit_action:factional_kill" ||
-    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.clickedAction !== scenario.clickedAction ||
+    clickProof.commandKind !== scenario.commandKind ||
     clickProof.command?.game !== expectedGame ||
-    clickProof.command.action_id !== "factional_kill" ||
-    clickProof.command.actor_slot !== "slot-7" ||
-    clickProof.command.template_id !== "factional_kill" ||
-    clickProof.command.targets?.[0] !== "slot-3" ||
-    clickProof.commandStatus?.state !== "ack" ||
-    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 501") ||
+    clickProof.command.action_id !== scenario.actionId ||
+    clickProof.command.actor_slot !== scenario.actorSlot ||
+    clickProof.command.template_id !== scenario.templateId ||
+    clickProof.command.targets?.[0] !== scenario.targetSlot ||
+    clickProof.command.grant_id !== scenario.grantId ||
+    clickProof.commandStatus?.state !== scenario.finalState ||
+    !clickProof.commandStatus?.message?.includes(
+      `Ack: stream seqs ${scenario.streamSeq}`,
+    ) ||
     clickProof.bridgePlan?.role !== "player" ||
-    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandKind !== scenario.commandKind ||
     clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== "ack" ||
-    !clickProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
-    clickProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    clickProof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      clickProof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    clickProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    clickProof.projectionCommandState?.phase?.phaseId !==
+      scenario.refreshedPhaseId ||
     clickProof.projectionCommandState?.actions?.length !== 0 ||
     !String(clickProof.checkpointReceiptState ?? "").startsWith("ack:") ||
-    clickProof.checkpointActionStateAfterAck !== "disabled:no legal action available" ||
+    clickProof.checkpointActionStateAfterAck !== scenario.checkpointActionState ||
     clickProof.receiptCount !== 1 ||
     !String(clickProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("ack: stream seqs 501")
+      .includes(`ack: stream seqs ${scenario.streamSeq}`)
   ) {
     throw new Error("core-loop admin proof missing player action click ACK");
   }
@@ -2198,37 +2214,45 @@ function assertCoreLoopPlayerActionInvalidRecoveryProof({
   invalidRecoveryProof,
   expectedGame,
 }) {
+  const scenario = playerInvalidActionRecoveryScenario();
   if (
     invalidRecoveryProof?.status !== "passed" ||
-    invalidRecoveryProof.clickedAction !== "submit_invalid_action:factional_kill" ||
-    invalidRecoveryProof.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.clickedAction !== scenario.clickedAction ||
+    invalidRecoveryProof.commandKind !== scenario.commandKind ||
     invalidRecoveryProof.command?.game !== expectedGame ||
-    invalidRecoveryProof.command.action_id !== "invalid_self_factional_kill" ||
-    invalidRecoveryProof.command.actor_slot !== "slot-7" ||
-    invalidRecoveryProof.command.template_id !== "factional_kill" ||
-    invalidRecoveryProof.command.targets?.[0] !== "slot-7" ||
-    invalidRecoveryProof.commandStatus?.state !== "reject" ||
-    invalidRecoveryProof.commandStatus.error !== "InvalidTarget" ||
+    invalidRecoveryProof.command.action_id !== scenario.actionId ||
+    invalidRecoveryProof.command.actor_slot !== scenario.actorSlot ||
+    invalidRecoveryProof.command.template_id !== scenario.templateId ||
+    invalidRecoveryProof.command.targets?.[0] !== scenario.targetSlot ||
+    invalidRecoveryProof.command.grant_id !== scenario.grantId ||
+    invalidRecoveryProof.commandStatus?.state !== scenario.finalState ||
+    invalidRecoveryProof.commandStatus.error !== scenario.error ||
     !invalidRecoveryProof.commandStatus?.message?.includes(
-      "Reject InvalidTarget: invalid target",
+      scenario.messageIncludes,
     ) ||
     invalidRecoveryProof.bridgePlan?.role !== "player" ||
-    invalidRecoveryProof.bridgePlan.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.bridgePlan.commandKind !== scenario.commandKind ||
     invalidRecoveryProof.bridgePlan.commandEndpoint !== "/commands" ||
-    invalidRecoveryProof.bridgePlan.finalState !== "reject" ||
-    !invalidRecoveryProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    invalidRecoveryProof.receipts?.at?.(-1)?.state !== "reject" ||
-    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    invalidRecoveryProof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      invalidRecoveryProof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    invalidRecoveryProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !==
+      scenario.refreshedPhaseId ||
     invalidRecoveryProof.projectionCommandState?.actions?.[0]?.templateId !==
-      "factional_kill" ||
-    invalidRecoveryProof.checkpointReceiptState !== "reject:InvalidTarget" ||
+      scenario.refreshedActionTemplateId ||
+    invalidRecoveryProof.checkpointReceiptState !==
+      scenario.checkpointReceiptState ||
     invalidRecoveryProof.checkpointActionStateAfterReject !==
-      "enabled:submit_action:factional_kill" ||
-    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+      scenario.checkpointActionState ||
+    invalidRecoveryProof.checkpointTargetSlotsAfterReject !==
+      scenario.checkpointTargetSlots ||
     invalidRecoveryProof.receiptCount !== 1 ||
     !String(invalidRecoveryProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject invalidtarget: invalid target")
+      .includes(scenario.messageIncludes.toLowerCase())
   ) {
     throw new Error("core-loop admin proof missing player invalid-action recovery");
   }
@@ -3747,6 +3771,7 @@ function assertCoreLoopStaleNightFourActionRecoveryProof({
   expectedGame,
   sourceRoleUrl,
 }) {
+  const scenario = staleNightFourActionRecoveryScenario();
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -3758,50 +3783,51 @@ function assertCoreLoopStaleNightFourActionRecoveryProof({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.clickedAction !== "submit_action:factional_kill" ||
-    proof.commandKind !== "SubmitAction" ||
-    proof.setupResyncFromSeq !== 916 ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== "N04" ||
-    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !== "slot-5" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== scenario.setupPhaseId ||
+    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !==
+      scenario.targetSlot ||
     proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-7" ||
-    proof.command.action_id !== "factional_kill" ||
-    proof.command.targets?.[0] !== "slot-5" ||
-    proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "PhaseLocked" ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.action_id !== scenario.actionId ||
+    proof.command.template_id !== scenario.templateId ||
+    proof.command.targets?.[0] !== scenario.targetSlot ||
+    proof.command.grant_id !== scenario.grantId ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    proof.commandStatus.error !== scenario.error ||
     !String(proof.commandStatus.message ?? "").includes(
-      "stale action state, refresh and use current action controls",
+      scenario.messageIncludes,
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitAction" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "notifications",
-      "investigationResults",
-      "commandState",
-      "dayVoteOutcomes",
-    ]) ||
-    proof.receipts?.at?.(-1)?.state !== "reject" ||
-    proof.projectionCommandState?.actorSlot !== "slot-7" ||
-    proof.projectionCommandState?.phase?.phaseId !== "D05" ||
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.actorSlot !== scenario.actorSlot ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
     proof.projectionCommandState?.phase?.locked !== false ||
     proof.projectionCommandState?.actions?.length !== 0 ||
     proof.projectionCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "stale N04 action refreshed into current Day 5 controls",
+      scenario.refreshedBoundary,
     ) ||
-    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
-    proof.checkpointPhaseIdAfterReject !== "D05" ||
+    proof.checkpointReceiptState !== scenario.checkpointReceiptState ||
+    proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
     proof.checkpointActionStateAfterReject !==
-      "disabled:no legal action available" ||
-    proof.checkpointTargetSlotsAfterReject !== "" ||
-    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+      scenario.checkpointActionState ||
+    proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
+    !String(proof.recoveryText ?? "").includes(`Reject ${scenario.error}`) ||
     !String(proof.recoveryText ?? "").includes("refresh") ||
     proof.receiptCount !== 1 ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject phaselocked")
+      .includes(`reject ${scenario.error.toLowerCase()}`)
   ) {
     throw new Error("core-loop admin proof missing stale Night 4 action recovery");
   }
