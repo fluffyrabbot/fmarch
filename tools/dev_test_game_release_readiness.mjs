@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   assertLocalReadinessDependencyChecks,
+  buildNextActionAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -74,6 +75,10 @@ const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
 const defaultProofGraphAdminProofPath = path.join(
   artifactDir,
   "proof-graph-admin-proof.json",
+);
+const defaultNextActionAdminProofPath = path.join(
+  artifactDir,
+  "next-action-admin-proof.json",
 );
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
@@ -262,6 +267,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.proofGraphAdminProofPath ??
           "target/dev-test-game/proof-graph-admin-proof.json",
         artifact: options.proofGraphAdminProofArtifact,
+      })
+    : undefined;
+  const nextActionAdminProofEvidence = options.nextActionAdminProof
+    ? validateDevTestGameNextActionAdminProof(options.nextActionAdminProof, {
+        path:
+          options.nextActionAdminProofPath ??
+          "target/dev-test-game/next-action-admin-proof.json",
+        artifact: options.nextActionAdminProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -574,6 +587,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
     );
   }
+  if (nextActionAdminProofEvidence !== undefined) {
+    localChecks.push(
+      buildNextActionAdminSurfaceReadinessCheck(nextActionAdminProofEvidence),
+    );
+  }
   const unproven = [
     ...(identityAdapterEvidence === undefined
       ? [
@@ -796,7 +814,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         identityAdapterEvidence === undefined &&
         spineManifestEvidence === undefined &&
         adminSpineProofEvidence === undefined &&
-        proofGraphAdminProofEvidence === undefined)
+        proofGraphAdminProofEvidence === undefined &&
+        nextActionAdminProofEvidence === undefined)
         ? {}
         : {
             evidence: {
@@ -848,6 +867,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(raceCoveragePromotedMilestones === undefined
                 ? {}
                 : { raceCoveragePromotedMilestones }),
+              ...(nextActionAdminProofEvidence === undefined
+                ? {}
+                : { nextActionAdminProof: nextActionAdminProofEvidence }),
               staleConflictMessageMilestone: {
                 status: staleConflictMessageMilestone.status,
                 laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -2330,6 +2352,74 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
+  if (proof?.version !== 1) {
+    throw new Error(`next-action admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-next-action-admin-proof") {
+    throw new Error(`unexpected next-action admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`next-action admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-next-action-admin-surface") {
+    throw new Error(`next-action admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "next-action admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("next-action admin proof did not prove admin overview click-through");
+  }
+  const requiredChecks = [
+    "next-command",
+    proof.generatedFrom?.reason,
+    "selection-trace",
+  ].filter((checkId) => typeof checkId === "string");
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`next-action admin proof missing visible check: ${checkId}`);
+    }
+  }
+  const localTrace = proof.generatedFrom?.localReadinessDependencyTrace;
+  if (
+    localTrace?.strategy !== "local-readiness-dependency-before-hosted-work" ||
+    !Number.isInteger(localTrace.candidateCount) ||
+    !Array.isArray(localTrace.candidateIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing local readiness dependency trace",
+    );
+  }
+  const releaseTrace = proof.generatedFrom?.releaseReadinessTrace;
+  if (
+    releaseTrace?.strategy !== "local-dev-release-readiness-priority" ||
+    !Number.isInteger(releaseTrace.candidateCount) ||
+    !Array.isArray(releaseTrace.candidateIds)
+  ) {
+    throw new Error("next-action admin proof is missing release readiness trace");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/next-action-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    command: String(proof.generatedFrom?.command ?? ""),
+    reason: String(proof.generatedFrom?.reason ?? ""),
+    releaseReadinessCandidateCount: releaseTrace.candidateCount,
+    localReadinessDependencyCandidateCount: localTrace.candidateCount,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   const requiredChecks = [
     "local-role-url-browser-proof",
@@ -2790,6 +2880,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     raceCoverageAdminProofOptions,
     hostedConcurrentRaceMatrixAdminProofOptions,
     proofGraphAdminProofOptions,
+    nextActionAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
     readOptionalHardeningAdminProof(),
@@ -2809,6 +2900,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalRaceCoverageAdminProof(),
     readOptionalHostedConcurrentRaceMatrixAdminProof(),
     readOptionalProofGraphAdminProof(),
+    readOptionalNextActionAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -2830,6 +2922,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(raceCoverageAdminProofOptions ?? {}),
     ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
     ...(proofGraphAdminProofOptions ?? {}),
+    ...(nextActionAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -3137,6 +3230,24 @@ async function readOptionalProofGraphAdminProof() {
     proofGraphAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     proofGraphAdminProofPath: path.relative(repoRoot, proofPath),
     proofGraphAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalNextActionAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultNextActionAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    nextActionAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    nextActionAdminProofPath: path.relative(repoRoot, proofPath),
+    nextActionAdminProofArtifact: artifact,
   };
 }
 

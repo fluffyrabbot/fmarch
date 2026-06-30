@@ -2,9 +2,15 @@ import {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  nextActionAdminProofCommand,
+  nextActionAdminProofPath,
+} from "./dev_test_game_next_action_paths.mjs";
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
+export const localNextActionAdminSurfaceCheckId =
+  "local-next-action-admin-surface";
 
 export const localReadinessDependencies = Object.freeze([
   Object.freeze({
@@ -20,6 +26,20 @@ export const localReadinessDependencies = Object.freeze([
       "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
       "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
+    id: localNextActionAdminSurfaceCheckId,
+    label: "Next-action admin surface",
+    priority: 1,
+    command: `npm run ${nextActionAdminProofCommand}`,
+    buildSlice:
+      "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
+    proofTarget: nextActionAdminProofPath,
+    roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+    proofBoundary:
+      "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed next-action admin surface check in the generated release-readiness checklist",
   }),
 ]);
 
@@ -122,6 +142,35 @@ export function buildProofGraphAdminRoleHandoffsReadinessCheck(
     roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
     destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
     adminRoleSurface: proofGraphAdminProofEvidence,
+  };
+}
+
+export function buildNextActionAdminSurfaceReadinessCheck(
+  nextActionAdminProofEvidence,
+) {
+  const dependency = getLocalReadinessDependency(
+    localNextActionAdminSurfaceCheckId,
+  );
+  if (dependency === undefined) {
+    throw new Error(
+      "next-action admin surface readiness dependency is missing a recovery contract",
+    );
+  }
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "passed",
+    dependencyGated: true,
+    evidence: nextActionAdminProofEvidence.path,
+    proofBoundary: nextActionAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    selectedCommand: nextActionAdminProofEvidence.command,
+    selectedReason: nextActionAdminProofEvidence.reason,
+    releaseReadinessCandidateCount:
+      nextActionAdminProofEvidence.releaseReadinessCandidateCount,
+    localReadinessDependencyCandidateCount:
+      nextActionAdminProofEvidence.localReadinessDependencyCandidateCount,
+    adminRoleSurface: nextActionAdminProofEvidence,
   };
 }
 

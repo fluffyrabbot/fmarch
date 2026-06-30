@@ -37,22 +37,28 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
+import {
+  nextActionAdminProofCommand,
+  nextActionAdminProofPath,
+  nextActionCommand,
+  nextActionPath,
+  proofFreshnessAdminProofCommand,
+  proofFreshnessAdminProofPath,
+} from "./dev_test_game_next_action_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
 
 export const spineManifestPath = "target/dev-test-game/spine-manifest.json";
 export const spineManifestMarkdownPath = "target/dev-test-game/spine-manifest.md";
-export const proofFreshnessAdminProofPath =
-  "target/dev-test-game/proof-freshness-admin-proof.json";
-export const proofFreshnessAdminProofCommand =
-  "test:dev-test-game-proof-freshness-admin-proof";
-export const nextActionPath = "target/dev-test-game/next-action.json";
-export const nextActionCommand = "test:dev-test-game-next-action";
-export const nextActionAdminProofPath =
-  "target/dev-test-game/next-action-admin-proof.json";
-export const nextActionAdminProofCommand =
-  "test:dev-test-game-next-action-admin-proof";
+export {
+  nextActionAdminProofCommand,
+  nextActionAdminProofPath,
+  nextActionCommand,
+  nextActionPath,
+  proofFreshnessAdminProofCommand,
+  proofFreshnessAdminProofPath,
+};
 
 const manifestJsonPath = path.join(repoRoot, spineManifestPath);
 const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);

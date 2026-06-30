@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertLocalReadinessDependencyChecks,
+  buildNextActionAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   getLocalReadinessDependency,
+  localNextActionAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
   rankedMissingLocalReadinessDependencies,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -65,6 +67,46 @@ test("proof graph admin proof builds the matching local readiness check", () => 
       roleHandoffIds: ["admin-proof:release", "admin-proof:next-action"],
       destinationAuditIds: ["local-release-readiness", "local-next-action"],
       adminRoleSurface: proofGraphAdminProofEvidence,
+    },
+  );
+});
+
+test("next-action admin proof builds the matching local readiness check", () => {
+  const nextActionAdminProofEvidence = {
+    path: "target/dev-test-game/next-action-admin-proof.json",
+    proofBoundary: "Local next-action admin proof boundary.",
+    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+    reason: "release-readiness-unproven",
+    releaseReadinessCandidateCount: 1,
+    localReadinessDependencyCandidateCount: 0,
+    detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+  };
+
+  assert.deepEqual(
+    buildNextActionAdminSurfaceReadinessCheck(nextActionAdminProofEvidence),
+    {
+      id: "local-next-action-admin-surface",
+      label: "Next-action admin surface",
+      status: "passed",
+      dependencyGated: true,
+      evidence: "target/dev-test-game/next-action-admin-proof.json",
+      proofBoundary: "Local next-action admin proof boundary.",
+      recovery: {
+        command: "npm run test:dev-test-game-next-action-admin-proof",
+        buildSlice:
+          "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
+        proofTarget: "target/dev-test-game/next-action-admin-proof.json",
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        proofBoundary:
+          "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed next-action admin surface check in the generated release-readiness checklist",
+      },
+      selectedCommand: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+      selectedReason: "release-readiness-unproven",
+      releaseReadinessCandidateCount: 1,
+      localReadinessDependencyCandidateCount: 0,
+      adminRoleSurface: nextActionAdminProofEvidence,
     },
   );
 });
@@ -136,6 +178,21 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       requiredEvidence:
         "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
     },
+    {
+      id: "local-next-action-admin-surface",
+      status: "missing",
+      index: 1,
+      priority: 1,
+      command: "npm run test:dev-test-game-next-action-admin-proof",
+      buildSlice:
+        "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
+      proofTarget: "target/dev-test-game/next-action-admin-proof.json",
+      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      proofBoundary:
+        "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+      requiredEvidence:
+        "Passed next-action admin surface check in the generated release-readiness checklist",
+    },
   ]);
 
   assert.deepEqual(
@@ -144,6 +201,10 @@ test("missing local readiness dependencies rank before hosted readiness work", (
         checks: [
           {
             id: "local-proof-graph-admin-role-handoffs",
+            status: "passed",
+          },
+          {
+            id: localNextActionAdminSurfaceCheckId,
             status: "passed",
           },
         ],
