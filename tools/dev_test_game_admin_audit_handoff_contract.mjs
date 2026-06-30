@@ -7,10 +7,18 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
           auditId: handoff.auditId,
           requiredChecks: handoff.requiredCheckIds ?? [],
           requiredCheckStatuses: handoff.requiredCheckStatuses ?? {},
+          requiredScenarios: handoff.requiredScenarioIds ?? [],
+          requiredSessions: handoff.requiredSessionIds ?? [],
           requiredUnproven: handoff.requiredUnprovenIds ?? [],
           requiredRelatedLinks: handoff.requiredRelatedLinkIds ?? [],
         },
       ];
+}
+
+export function requiredRelatedDestinationsForHandoffs(handoffs) {
+  return Array.isArray(handoffs)
+    ? handoffs.flatMap((handoff) => requiredRelatedDestinationsForHandoff(handoff))
+    : [];
 }
 
 export function assertAdminAuditRelatedHandoff({
@@ -53,12 +61,40 @@ export function assertAdminAuditRelatedHandoff({
       );
     }
   }
+  for (const scenarioId of handoff.requiredScenarioIds ?? []) {
+    if (!destination.visibleScenarios?.includes(scenarioId)) {
+      throw new Error(
+        `${name} handoff destination missing scenario row: ${scenarioId}`,
+      );
+    }
+  }
+  for (const sessionId of handoff.requiredSessionIds ?? []) {
+    if (!destination.visibleSessions?.includes(sessionId)) {
+      throw new Error(
+        `${name} handoff destination missing session row: ${sessionId}`,
+      );
+    }
+  }
   for (const relatedLinkId of handoff.requiredRelatedLinkIds ?? []) {
     if (!destination.visibleRelatedLinks?.includes(relatedLinkId)) {
       throw new Error(
         `${name} handoff destination missing related link: ${relatedLinkId}`,
       );
     }
+  }
+}
+
+export function assertAdminAuditRelatedHandoffs({
+  adminRoleSurface,
+  handoffs,
+  proofName,
+}) {
+  for (const handoff of handoffs ?? []) {
+    assertAdminAuditRelatedHandoff({
+      adminRoleSurface,
+      handoff,
+      proofName,
+    });
   }
 }
 

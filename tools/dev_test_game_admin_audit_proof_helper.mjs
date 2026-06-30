@@ -105,6 +105,9 @@ export async function proveAdminAuditDetail({
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const linkTestId = `admin-audit-link-${auditId}`;
   const detailRoleUrl = `/admin/audit/${auditId}?game=<seeded-game>`;
+  const detailUrl = `${frontendBaseUrl}/admin/audit/${auditId}?game=${encodeURIComponent(
+    game,
+  )}`;
   try {
     await page.context().addCookies([
       {
@@ -177,6 +180,15 @@ export async function proveAdminAuditDetail({
       if (linkId === "" || destinationAuditId === "") {
         throw new Error(`${auditId} admin proof has a malformed related destination`);
       }
+      await page.goto(detailUrl, { waitUntil: "networkidle" });
+      await page.getByTestId("admin-audit-detail-surface").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      await page.getByTestId(`admin-audit-related-link-${linkId}`).waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
       await Promise.all([
         page.waitForURL(
           `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
@@ -196,6 +208,16 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-check",
         ids: destination.requiredChecks ?? [],
         expectedStatuses: destination.requiredCheckStatuses ?? {},
+      });
+      const destinationVisibleScenarios = await waitForRows({
+        page,
+        prefix: "admin-audit-scenario",
+        ids: destination.requiredScenarios ?? [],
+      });
+      const destinationVisibleSessions = await waitForRows({
+        page,
+        prefix: "admin-audit-session",
+        ids: destination.requiredSessions ?? [],
       });
       const destinationVisibleUnproven = await waitForRows({
         page,
@@ -219,6 +241,12 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleChecks.length === 0
           ? {}
           : { visibleChecks: destinationVisibleChecks }),
+        ...(destinationVisibleScenarios.length === 0
+          ? {}
+          : { visibleScenarios: destinationVisibleScenarios }),
+        ...(destinationVisibleSessions.length === 0
+          ? {}
+          : { visibleSessions: destinationVisibleSessions }),
         ...(destinationVisibleUnproven.length === 0
           ? {}
           : { visibleUnproven: destinationVisibleUnproven }),

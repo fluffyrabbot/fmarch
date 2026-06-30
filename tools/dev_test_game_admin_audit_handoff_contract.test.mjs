@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertAdminAuditRelatedHandoff,
+  assertAdminAuditRelatedHandoffs,
   requiredRelatedDestinationsForHandoff,
+  requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
@@ -12,11 +14,25 @@ test("related handoff requirements map to admin audit destination proof inputs",
       auditId: "local-hosted-concurrent-race-matrix",
       requiredChecks: ["real-hosted-deployment"],
       requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+      requiredScenarios: ["host-phase-controls"],
+      requiredSessions: ["host"],
       requiredUnproven: ["hosted-concurrent-race-matrix"],
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
   assert.deepEqual(requiredRelatedDestinationsForHandoff(null), []);
+  assert.deepEqual(requiredRelatedDestinationsForHandoffs([handoffFixture()]), [
+    {
+      linkId: "admin-proof:hosted-concurrent-race-matrix",
+      auditId: "local-hosted-concurrent-race-matrix",
+      requiredChecks: ["real-hosted-deployment"],
+      requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+      requiredScenarios: ["host-phase-controls"],
+      requiredSessions: ["host"],
+      requiredUnproven: ["hosted-concurrent-race-matrix"],
+      requiredRelatedLinks: ["local-next-action"],
+    },
+  ]);
 });
 
 test("related handoff assertion verifies source link and destination rows", () => {
@@ -25,6 +41,13 @@ test("related handoff assertion verifies source link and destination rows", () =
       adminRoleSurface: adminRoleSurfaceFixture(),
       handoff: handoffFixture(),
       proofName: "next-action admin proof",
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertAdminAuditRelatedHandoffs({
+      adminRoleSurface: adminRoleSurfaceFixture(),
+      handoffs: [handoffFixture()],
+      proofName: "proof graph admin proof",
     }),
   );
 });
@@ -55,6 +78,8 @@ function handoffFixture() {
     auditId: "local-hosted-concurrent-race-matrix",
     requiredCheckIds: ["real-hosted-deployment"],
     requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+    requiredScenarioIds: ["host-phase-controls"],
+    requiredSessionIds: ["host"],
     requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
     requiredRelatedLinkIds: ["local-next-action"],
   };
@@ -70,6 +95,8 @@ function adminRoleSurfaceFixture() {
         detailRoleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         visibleChecks: ["real-hosted-deployment"],
+        visibleScenarios: ["host-phase-controls"],
+        visibleSessions: ["host"],
         visibleUnproven: ["hosted-concurrent-race-matrix"],
         visibleRelatedLinks: ["local-next-action"],
       },

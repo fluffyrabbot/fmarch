@@ -14,10 +14,10 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
-  assertAdminAuditRelatedHandoff,
-  requiredRelatedDestinationsForHandoff,
+  assertAdminAuditRelatedHandoffs,
+  requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
-import { hostedMatrixHandoffSummaryForRoleLink } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
+import { adminProofGraphRoleHandoffs } from "./dev_test_game_proof_graph_handoffs.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -43,7 +43,6 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
-const hostedMatrixProofNodeId = "admin-proof:hosted-concurrent-race-matrix";
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-proof-graph-admin-proof",
@@ -79,8 +78,8 @@ await runAdminAuditProof({
       requiredRelatedLinks: source.proofGraph.nodes
         .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
         .map((node) => node.id),
-      requiredRelatedDestinations: requiredRelatedDestinationsForHandoff(
-        hostedMatrixProofGraphHandoff({
+      requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
+        adminProofGraphRoleHandoffs({
           proofGraph: source.proofGraph,
           hostedMatrix: source.hostedMatrix,
         }),
@@ -104,8 +103,7 @@ await runAdminAuditProof({
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
       edgeCount: source.proofGraph.edges.length,
       adminProofSurfaceIds: source.adminSpineProof.proofIds,
-      requiredHostedMatrixProofNodeId: hostedMatrixProofNodeId,
-      relatedHandoff: hostedMatrixProofGraphHandoff({
+      adminProofRoleHandoffs: adminProofGraphRoleHandoffs({
         proofGraph: source.proofGraph,
         hostedMatrix: source.hostedMatrix,
       }),
@@ -146,28 +144,15 @@ export function assertProofGraphAdminProof(evidence) {
   if (!Array.isArray(evidence.adminRoleSurface?.visibleRelatedLinks)) {
     throw new Error("proof graph admin proof did not prove related links");
   }
-  if (
-    !evidence.adminRoleSurface.visibleRelatedLinks.includes(
-      evidence.generatedFrom?.requiredHostedMatrixProofNodeId,
-    )
-  ) {
-    throw new Error("proof graph admin proof missing hosted matrix related link");
+  for (const handoff of evidence.generatedFrom?.adminProofRoleHandoffs ?? []) {
+    if (!evidence.adminRoleSurface.visibleRelatedLinks.includes(handoff.linkId)) {
+      throw new Error(`proof graph admin proof missing related link: ${handoff.linkId}`);
+    }
   }
-  assertAdminAuditRelatedHandoff({
+  assertAdminAuditRelatedHandoffs({
     adminRoleSurface: evidence.adminRoleSurface,
-    handoff: evidence.generatedFrom?.relatedHandoff,
+    handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
     proofName: "proof graph admin proof",
   });
   return evidence;
-}
-
-function hostedMatrixProofGraphHandoff({ proofGraph, hostedMatrix }) {
-  const node =
-    proofGraph.nodes.find((candidate) => candidate?.id === hostedMatrixProofNodeId) ??
-    null;
-  return hostedMatrixHandoffSummaryForRoleLink({
-    linkId: node?.id,
-    roleUrl: node?.roleUrl,
-    hostedMatrix,
-  });
 }
