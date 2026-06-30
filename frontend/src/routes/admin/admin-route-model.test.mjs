@@ -15,6 +15,8 @@ const LOCAL_PROOF_GRAPH_COMMAND =
   "npm run test:dev-test-game-proof-graph-admin-proof";
 const HOSTED_MATRIX_PROOF_TARGET =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
+const HOSTED_TARGET_PREFLIGHT_PROOF_TARGET =
+  "target/dev-test-game/hosted-target-preflight.json";
 
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
@@ -602,6 +604,46 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
   });
 });
 
+test("admin route data exposes hosted target preflight as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedTargetPreflight: localHostedTargetPreflightFixture(),
+  });
+
+  const preflight = data.audit.find(
+    (item) => item.id === "local-hosted-target-preflight",
+  );
+  assert.equal(preflight.label, "Hosted target preflight");
+  assert.equal(preflight.status, "1 passed, 5 blocked");
+  assert.equal(
+    preflight.inspectHref,
+    "/admin/audit/local-hosted-target-preflight?game=midsummer",
+  );
+  assert.deepEqual(
+    preflight.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-frontend-url-configured", "blocked"],
+      ["hosted-api-url-configured", "blocked"],
+      ["hosted-targets-external", "blocked"],
+      ["raw-evidence-path-configured", "blocked"],
+      ["raw-evidence-readable", "blocked"],
+      ["release-claim-boundary-carried", "passed"],
+    ],
+  );
+  assert.deepEqual(
+    preflight.unproven.map((item) => item.id),
+    [
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+  );
+  assert.equal(preflight.artifactSummary.nextProofTarget, HOSTED_TARGET_PREFLIGHT_PROOF_TARGET);
+});
+
 test("admin route data exposes local spine manifest as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -611,7 +653,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
   const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
   assert.equal(manifest.label, "Local spine manifest");
-  assert.equal(manifest.status, "8 manifest checks passed");
+  assert.equal(manifest.status, "9 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
   assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
   assert.deepEqual(
@@ -623,6 +665,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "freshness-proof-recorded",
       "artifact-refresh-status-recorded",
       "hosted-concurrent-race-matrix-recorded",
+      "hosted-target-preflight-recorded",
       "terminal-artifacts-recorded",
       "release-boundary-carried",
       "proof-freshness-handoff",
@@ -647,8 +690,8 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     },
   ]);
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 10,
-    artifactCount: 9,
+    commandCount: 11,
+    artifactCount: 10,
     terminalArtifactCount: 4,
     adminSpineStepCount: 8,
     artifactFreshnessStatus: "blocked",
@@ -675,7 +718,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 10);
+  assert.equal(data.audit.checks.length, 11);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -685,6 +728,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["freshness-proof-recorded", "passed"],
       ["artifact-refresh-status-recorded", "passed"],
       ["hosted-concurrent-race-matrix-recorded", "passed"],
+      ["hosted-target-preflight-recorded", "passed"],
       ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
       ["proof-freshness-handoff", "blocked"],
@@ -1893,6 +1937,34 @@ test("admin local hosted ops signals detail data carries signal rows", async () 
   );
 });
 
+test("admin hosted target preflight detail data carries blocked setup rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-hosted-target-preflight",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedTargetPreflight: localHostedTargetPreflightFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Hosted target preflight");
+  assert.equal(data.audit.id, "local-hosted-target-preflight");
+  assert.equal(data.audit.checks.length, 6);
+  assert.deepEqual(
+    data.audit.relatedLinks.map((link) => link.id),
+    ["local-hosted-concurrent-race-matrix", "local-next-action"],
+  );
+  assert.deepEqual(
+    data.audit.unproven.map((item) => [item.id, item.status]),
+    [
+      ["hosted-frontend-url-configured", "blocked"],
+      ["hosted-api-url-configured", "blocked"],
+      ["hosted-targets-external", "blocked"],
+      ["raw-evidence-path-configured", "blocked"],
+      ["raw-evidence-readable", "blocked"],
+    ],
+  );
+});
+
 test("admin route data exposes local seed fixture summary as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2795,6 +2867,44 @@ function localHostedOpsSignalsFixture() {
   };
 }
 
+function localHostedTargetPreflightFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-target-preflight",
+    status: "blocked",
+    releaseReady: false,
+    productionReady: false,
+    scope: "hosted-target-preflight",
+    proofBoundary: "Hosted target preflight without hosted deployment claims.",
+    target: {
+      frontendBaseUrl: null,
+      apiBaseUrl: null,
+      groupId: "replacement-race-reload",
+      rawEvidencePath: null,
+      rawEvidenceStatus: "blocked",
+    },
+    checks: [
+      { id: "hosted-frontend-url-configured", status: "blocked" },
+      { id: "hosted-api-url-configured", status: "blocked" },
+      {
+        id: "hosted-targets-external",
+        status: "blocked",
+        requiredEvidence: "Externally reachable hosted URLs.",
+      },
+      { id: "raw-evidence-path-configured", status: "blocked" },
+      { id: "raw-evidence-readable", status: "blocked" },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    nextCommand: "npm run test:dev-test-game-hosted-target-preflight",
+    nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+  };
+}
+
 function seedFixtureSummaryFixture() {
   return {
     version: 1,
@@ -3078,6 +3188,11 @@ function spineManifestFixture() {
         script: "test:dev-test-game-hosted-concurrent-race-matrix",
         proofArtifact: "target/dev-test-game/hosted-concurrent-race-matrix.json",
       },
+      hostedTargetPreflight: {
+        script: "test:dev-test-game-hosted-target-preflight",
+        proofArtifact: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+      },
       nextAction: {
         script: "test:dev-test-game-next-action",
         proofArtifact: "target/dev-test-game/next-action.json",
@@ -3163,6 +3278,7 @@ function spineManifestFixture() {
       "target/dev-test-game/spine-manifest-admin-proof.json",
       "target/dev-test-game/proof-freshness-admin-proof.json",
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",
       "target/dev-test-game/proof-graph.json",
@@ -3175,6 +3291,7 @@ function spineManifestFixture() {
       { id: "freshness-proof-recorded", status: "passed" },
       { id: "artifact-refresh-status-recorded", status: "passed" },
       { id: "hosted-concurrent-race-matrix-recorded", status: "passed" },
+      { id: "hosted-target-preflight-recorded", status: "passed" },
       { id: "terminal-artifacts-recorded", status: "passed" },
       {
         id: "release-boundary-carried",

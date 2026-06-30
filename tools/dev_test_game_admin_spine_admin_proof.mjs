@@ -31,6 +31,7 @@ const requiredChecks = [
   "release",
   "release-runbook",
   "race-coverage",
+  "hosted-target-preflight",
   "hosted-concurrent-race-matrix",
   "hosted-ops-signals",
   "spine-manifest",

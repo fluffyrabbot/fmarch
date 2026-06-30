@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
 import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import { devTestGameHostedTargetPreflightPath } from "./dev_test_game_hosted_target_preflight.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofPath,
@@ -55,6 +56,10 @@ export const adminSpineReadinessEvidenceEnv = {
     devTestGameHostedConcurrentRaceMatrixPath,
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
     "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
+    devTestGameHostedTargetPreflightPath,
+  FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
+    "target/dev-test-game/hosted-target-preflight-admin-proof.json",
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF: proofFreshnessAdminProofPath,
@@ -69,6 +74,7 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_race_coverage.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
   await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
+  await runNodeScript("tools/dev_test_game_hosted_target_preflight.mjs");
   await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");
   await runNodeScript("tools/dev_test_game_release_runbook.mjs");
   const evidence = await runAdminSpineProof();

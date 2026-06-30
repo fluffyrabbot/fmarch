@@ -2137,6 +2137,66 @@ export function validateDevTestGameHostedOpsSignalsAdminProof(proof, options = {
   };
 }
 
+export function validateDevTestGameHostedTargetPreflightAdminProof(
+  proof,
+  options = {},
+) {
+  const requiredChecks = [
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+    "release-claim-boundary-carried",
+  ];
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-target-preflight-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !== "local-dev-test-game-hosted-target-preflight-admin-surface"
+  ) {
+    throw new Error("hosted target preflight admin proof shape drifted");
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("hosted target preflight admin proof must not claim readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "hosted target preflight admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `hosted target preflight admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.blockedCheckIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
+      throw new Error(
+        `hosted target preflight admin proof missing blocked row: ${checkId}`,
+      );
+    }
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    preflightStatus: String(proof.generatedFrom?.status ?? "unknown"),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   const requiredChecks = [
     "role-entrypoints-redacted",
@@ -3278,6 +3338,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "release",
     "release-runbook",
     "race-coverage",
+    "hosted-target-preflight",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",
@@ -3390,6 +3451,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "release",
     "release-runbook",
     "race-coverage",
+    "hosted-target-preflight",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",

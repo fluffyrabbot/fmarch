@@ -22,6 +22,10 @@ import {
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
+  devTestGameHostedTargetPreflightCommand,
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_hosted_target_preflight.mjs";
+import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
@@ -1307,15 +1311,14 @@ const localBuildableReleaseReadinessItems = new Map([
     "hosted-deployment",
     {
       priority: 0,
-      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+      command: `npm run ${devTestGameHostedTargetPreflightCommand}`,
       buildSlice:
-        "Attach externally reachable hosted frontend/API evidence to the hosted matrix lane, including health-checked target URLs and raw hosted race evidence.",
-      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+        "Create the hosted target preflight handoff before attaching externally reachable frontend/API evidence to the hosted matrix lane.",
+      proofTarget: devTestGameHostedTargetPreflightPath,
+      roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-target-preflight",
       proofBoundary:
-        "External hosted evidence handoff. This command requires FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH from a real hosted target; it does not let local hosted-like evidence satisfy hosted deployment.",
+        "Hosted target preflight handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target; it does not let local hosted-like evidence satisfy hosted deployment.",
     },
   ],
   [

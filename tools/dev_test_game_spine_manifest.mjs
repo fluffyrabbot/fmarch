@@ -29,6 +29,10 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  devTestGameHostedTargetPreflightCommand,
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_hosted_target_preflight.mjs";
+import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
@@ -153,6 +157,12 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
         ],
       },
+      hostedTargetPreflight: {
+        script: devTestGameHostedTargetPreflightCommand,
+        proofArtifact: devTestGameHostedTargetPreflightPath,
+        dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
+        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+      },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -168,6 +178,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/release-readiness-checklist.json",
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
+          devTestGameHostedTargetPreflightPath,
         ],
       },
       nextActionAdminProof: {
@@ -208,6 +219,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/release-readiness-checklist.json",
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
+          devTestGameHostedTargetPreflightPath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -254,6 +266,7 @@ export function buildDevTestGameSpineManifest({
       nextActionPath,
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedTargetPreflightPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameReleaseRunbookPath,
       devTestGameProofGraphPath,
@@ -318,6 +331,14 @@ export function buildDevTestGameSpineManifest({
         id: "hosted-ops-signals-recorded",
         status: "passed",
         evidence: [devTestGameHostedOpsSignalsCommand, devTestGameHostedOpsSignalsPath],
+      },
+      {
+        id: "hosted-target-preflight-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedTargetPreflightCommand,
+          devTestGameHostedTargetPreflightPath,
+        ],
       },
       {
         id: "release-runbook-recorded",
@@ -399,6 +420,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_admin_proof.mjs",
     "tools/dev_test_game_release_runbook_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
+    "tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
@@ -447,6 +469,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.commands.hostedOpsSignals.proofArtifact !== devTestGameHostedOpsSignalsPath) {
     throw new Error(
       `spine manifest hosted ops signals artifact drifted: ${manifest.commands.hostedOpsSignals.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedTargetPreflight?.script !==
+    devTestGameHostedTargetPreflightCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted target preflight command drifted: ${manifest.commands?.hostedTargetPreflight?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedTargetPreflight.proofArtifact !==
+    devTestGameHostedTargetPreflightPath
+  ) {
+    throw new Error(
+      `spine manifest hosted target preflight artifact drifted: ${manifest.commands.hostedTargetPreflight.proofArtifact}`,
     );
   }
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
@@ -515,6 +553,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionPath,
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
+    devTestGameHostedTargetPreflightPath,
     devTestGameHostedOpsSignalsPath,
     devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
@@ -524,6 +563,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
     "target/dev-test-game/release-runbook-admin-proof.json",
+    "target/dev-test-game/hosted-target-preflight-admin-proof.json",
     "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -544,6 +584,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "artifact-refresh-status-recorded",
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
+    "hosted-target-preflight-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
@@ -569,7 +610,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !nextAction.dependsOn.includes("target/dev-test-game/ops-artifacts.json") ||
     !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json") ||
     !nextAction.dependsOn.includes(devTestGameRaceCoveragePath) ||
-    !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath)
+    !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath) ||
+    !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath)
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }

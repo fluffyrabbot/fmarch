@@ -92,6 +92,10 @@ import {
   devTestGameHostedMatrixRawEvidenceCommand,
   devTestGameHostedMatrixRawEvidencePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
+import {
+  devTestGameHostedTargetPreflightCommand,
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_hosted_target_preflight.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -231,6 +235,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
       "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
+      "target/dev-test-game/hosted-target-preflight.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
+      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -345,6 +353,12 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameRaceCoveragePath,
     ],
   });
+  assert.deepEqual(manifest.commands.hostedTargetPreflight, {
+    script: devTestGameHostedTargetPreflightCommand,
+    proofArtifact: devTestGameHostedTargetPreflightPath,
+    dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
+    roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  });
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
     proofArtifact: nextActionPath,
@@ -354,6 +368,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/release-readiness-checklist.json",
       devTestGameRaceCoveragePath,
       devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedTargetPreflightPath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -454,6 +469,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameRaceCoveragePath));
   assert(manifest.artifacts.includes(devTestGameHostedConcurrentRaceMatrixPath));
+  assert(manifest.artifacts.includes(devTestGameHostedTargetPreflightPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
@@ -1208,8 +1224,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 16);
-  assert.equal(graph.summary.roleUrlCount, 16);
+  assert.equal(graph.summary.nodeCount, 17);
+  assert.equal(graph.summary.roleUrlCount, 17);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -7383,7 +7399,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    12,
+    13,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -7399,6 +7415,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "release",
     "release-runbook",
     "race-coverage",
+    "hosted-target-preflight",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",
@@ -8765,6 +8782,7 @@ function proofGraphAdminProofFixture() {
         "release",
         "release-runbook",
         "race-coverage",
+        "hosted-target-preflight",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
         "spine-manifest",
@@ -9203,6 +9221,74 @@ function spineManifestAdminProofFixture() {
   };
 }
 
+function hostedTargetPreflightAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-target-preflight-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
+    proofBoundary: "Local admin hosted target preflight proof only.",
+    generatedFrom: {
+      hostedTargetPreflight: "target/dev-test-game/hosted-target-preflight.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      status: "blocked",
+      checkIds: [
+        "hosted-frontend-url-configured",
+        "hosted-api-url-configured",
+        "hosted-targets-external",
+        "raw-evidence-path-configured",
+        "raw-evidence-readable",
+        "release-claim-boundary-carried",
+      ],
+      blockedCheckIds: [
+        "hosted-frontend-url-configured",
+        "hosted-api-url-configured",
+        "hosted-targets-external",
+        "raw-evidence-path-configured",
+        "raw-evidence-readable",
+      ],
+      relatedAuditIds: [
+        "local-hosted-concurrent-race-matrix",
+        "local-next-action",
+      ],
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl:
+        "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-hosted-target-preflight",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "hosted-frontend-url-configured",
+        "hosted-api-url-configured",
+        "hosted-targets-external",
+        "raw-evidence-path-configured",
+        "raw-evidence-readable",
+        "release-claim-boundary-carried",
+      ],
+      visibleUnproven: [
+        "hosted-frontend-url-configured",
+        "hosted-api-url-configured",
+        "hosted-targets-external",
+        "raw-evidence-path-configured",
+        "raw-evidence-readable",
+      ],
+      visibleRelatedLinks: [
+        "local-hosted-concurrent-race-matrix",
+        "local-next-action",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function adminSpineAdminProofFixture() {
   return {
     version: 1,
@@ -9226,6 +9312,7 @@ function adminSpineAdminProofFixture() {
         "release",
         "release-runbook",
         "race-coverage",
+        "hosted-target-preflight",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
         "spine-manifest",
@@ -9248,6 +9335,7 @@ function adminSpineAdminProofFixture() {
         "release",
         "release-runbook",
         "race-coverage",
+        "hosted-target-preflight",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
         "spine-manifest",
@@ -9271,6 +9359,7 @@ function adminSpineProofFixture() {
     ["release", releaseAdminProofFixture()],
     ["release-runbook", releaseRunbookAdminProofFixture()],
     ["race-coverage", raceCoverageAdminProofFixture()],
+    ["hosted-target-preflight", hostedTargetPreflightAdminProofFixture()],
     [
       "hosted-concurrent-race-matrix",
       hostedConcurrentRaceMatrixAdminProofFixture(),

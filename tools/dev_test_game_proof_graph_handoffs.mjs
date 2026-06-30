@@ -85,6 +85,22 @@ const adminProofDestinationRequirements = [
     requiredCheckIds: ["player-vote-change", "player-night-action"],
   },
   {
+    linkId: "admin-proof:hosted-target-preflight",
+    auditId: "local-hosted-target-preflight",
+    requiredCheckIds: [
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+      "release-claim-boundary-carried",
+    ],
+    requiredRelatedLinkIds: [
+      "local-hosted-concurrent-race-matrix",
+      "local-next-action",
+    ],
+  },
+  {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
     auditId: "local-hosted-concurrent-race-matrix",
     fromHostedMatrix: true,
