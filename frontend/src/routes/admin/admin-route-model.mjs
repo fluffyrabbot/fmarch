@@ -1179,6 +1179,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     nextAction,
     proofGraph,
   });
+  const selectedSpineTarget = normalizeNextActionSpineTarget(unproven?.spineTarget);
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -1256,6 +1257,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "selected-proof-graph-node",
             status: selectedProofGraphNodeStatus,
+          }),
+        ]),
+    ...(selectedSpineTarget.checkpointId === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "selected-spine-target",
+            status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}`,
           }),
         ]),
     ...(stability === null
@@ -1471,6 +1480,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedRealHostedEvidenceProofTarget: String(
         unproven?.realHostedEvidenceInputs?.proofTarget ?? "",
       ),
+      selectedSpineTarget,
       selectedRoleUrl: unprovenRoleUrl,
       selectedRoleHref:
         unprovenRoleUrl === ""
@@ -1607,6 +1617,7 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         proofTarget: String(candidate.proofTarget ?? ""),
         roleUrl: String(candidate.roleUrl ?? ""),
         proofGraphNodeId: String(candidate.proofGraphNodeId ?? ""),
+        spineTarget: normalizeNextActionSpineTarget(candidate.spineTarget),
         ...(candidate.hostedEvidenceMode === undefined
           ? {}
           : { hostedEvidenceMode: String(candidate.hostedEvidenceMode) }),
@@ -1634,6 +1645,25 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         ? releaseReadinessTrace.selectedUnprovenId
         : null,
     candidates: Object.freeze(candidates),
+  });
+}
+
+function normalizeNextActionSpineTarget(spineTarget) {
+  if (spineTarget === null || typeof spineTarget !== "object") {
+    return Object.freeze({
+      sourceCheckId: "",
+      detailRoleUrl: "",
+      cycleId: "",
+      roleUrlId: "",
+      checkpointId: "",
+    });
+  }
+  return Object.freeze({
+    sourceCheckId: String(spineTarget.sourceCheckId ?? ""),
+    detailRoleUrl: String(spineTarget.detailRoleUrl ?? ""),
+    cycleId: String(spineTarget.cycleId ?? ""),
+    roleUrlId: String(spineTarget.roleUrlId ?? ""),
+    checkpointId: String(spineTarget.checkpointId ?? ""),
   });
 }
 

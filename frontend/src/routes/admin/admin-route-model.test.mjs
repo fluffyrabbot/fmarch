@@ -1390,6 +1390,10 @@ test("admin route data exposes local next action as a native audit row", async (
         "selected-proof-graph-node",
         "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       ],
+      [
+        "selected-spine-target",
+        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+      ],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1452,6 +1456,13 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRealHostedEvidenceStatus: "",
     selectedRealHostedEvidenceCommand: "",
     selectedRealHostedEvidenceProofTarget: "",
+    selectedSpineTarget: {
+      sourceCheckId: "local-core-loop-proof",
+      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      cycleId: "d02-n02",
+      roleUrlId: "d02-n02-actionPlayer",
+      checkpointId: "d02-n02-n02-action-open",
+    },
     selectedRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     selectedRoleHref:
@@ -1499,6 +1510,13 @@ test("admin route data exposes local next action as a native audit row", async (
           roleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+          spineTarget: {
+            sourceCheckId: "local-core-loop-proof",
+            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            cycleId: "d02-n02",
+            roleUrlId: "d02-n02-actionPlayer",
+            checkpointId: "d02-n02-n02-action-open",
+          },
         },
       ],
     },
@@ -3792,6 +3810,13 @@ function nextActionFixture({
           roleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+          spineTarget: {
+            sourceCheckId: "local-core-loop-proof",
+            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            cycleId: "d02-n02",
+            roleUrlId: "d02-n02-actionPlayer",
+            checkpointId: "d02-n02-n02-action-open",
+          },
         }
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
@@ -4357,6 +4382,7 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         proofTarget: unproven.proofTarget,
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
+        spineTarget: unproven.spineTarget,
       },
     ],
   };

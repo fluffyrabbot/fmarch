@@ -79,6 +79,7 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflight === null
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
+  const coreLoopSpineTarget = coreLoopSpineTargetFromReadiness(readiness);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
@@ -86,6 +87,7 @@ export function buildDevTestGameNextAction(
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
+    coreLoopSpineTarget,
   });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
@@ -181,6 +183,9 @@ export function buildDevTestGameNextAction(
               proofTarget: selectedUnproven.proofTarget,
               roleUrl: selectedUnproven.roleUrl,
               proofGraphNodeId: selectedUnproven.proofGraphNodeId,
+              ...(selectedUnproven.spineTarget == null
+                ? {}
+                : { spineTarget: selectedUnproven.spineTarget }),
               ...(selectedUnproven.hostedEvidenceMode === undefined
                 ? {}
                 : { hostedEvidenceMode: selectedUnproven.hostedEvidenceMode }),
@@ -505,9 +510,27 @@ function buildSelectionTrace(candidates) {
   };
 }
 
+function coreLoopSpineTargetFromReadiness(readiness) {
+  const coreLoopCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
+    (check) => check?.id === "local-core-loop-proof",
+  );
+  const targets = coreLoopCheck?.spineTargets;
+  if (targets === null || typeof targets !== "object") {
+    return null;
+  }
+  const target = {
+    sourceCheckId: "local-core-loop-proof",
+    detailRoleUrl: String(targets.detailRoleUrl ?? ""),
+    cycleId: String(targets.defaultCycleId ?? ""),
+    roleUrlId: String(targets.defaultRoleUrlId ?? ""),
+    checkpointId: String(targets.defaultCheckpointId ?? ""),
+  };
+  return Object.values(target).every((value) => value !== "") ? target : null;
+}
+
 function rankedBuildableReleaseReadinessItems(
   readiness,
-  { hostedTargetPreflight = null } = {},
+  { hostedTargetPreflight = null, coreLoopSpineTarget = null } = {},
 ) {
   if (readiness === null) {
     return [];
@@ -530,6 +553,7 @@ function rankedBuildableReleaseReadinessItems(
             roleUrl: buildable.roleUrl,
             proofGraphNodeId: buildable.proofGraphNodeId,
             proofBoundary: buildable.proofBoundary,
+            spineTarget: buildable.spineTarget ?? coreLoopSpineTarget,
             hostedEvidenceMode: buildable.hostedEvidenceMode,
             realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
             realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
@@ -591,6 +615,7 @@ function buildReleaseReadinessTrace(candidates) {
       proofGraphNodeId: candidate.proofGraphNodeId,
       proofBoundary: candidate.proofBoundary,
       requiredEvidence: candidate.item.requiredEvidence,
+      ...(candidate.spineTarget == null ? {} : { spineTarget: candidate.spineTarget }),
       ...(candidate.hostedEvidenceMode === undefined
         ? {}
         : { hostedEvidenceMode: candidate.hostedEvidenceMode }),
@@ -984,7 +1009,9 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       nextAction.unproven?.id !== selected.id ||
       nextAction.command !== selected.command ||
       nextAction.unproven?.roleUrl !== selected.roleUrl ||
-      nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId
+      nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId ||
+      JSON.stringify(nextAction.unproven?.spineTarget ?? null) !==
+        JSON.stringify(selected.spineTarget ?? null)
     ) {
       throw new Error("next-action release-readiness selection does not match action");
     }

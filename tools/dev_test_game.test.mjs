@@ -761,6 +761,13 @@ test("dev test-game next-action derives one local recovery command from the mani
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      spineTarget: {
+        sourceCheckId: "local-core-loop-proof",
+        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        cycleId: "d02-n02",
+        roleUrlId: "d02-n02-actionPlayer",
+        checkpointId: "d02-n02-n02-action-open",
+      },
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -805,6 +812,13 @@ test("dev test-game next-action derives one local recovery command from the mani
         roleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+        spineTarget: {
+          sourceCheckId: "local-core-loop-proof",
+          detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+          cycleId: "d02-n02",
+          roleUrlId: "d02-n02-actionPlayer",
+          checkpointId: "d02-n02-n02-action-open",
+        },
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
@@ -1236,6 +1250,17 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].proofGraphNodeId,
     "admin-proof:hosted-evidence-lane",
+  );
+  assert.deepEqual(blockedPreflightAction.nextAction.unproven.spineTarget, {
+    sourceCheckId: "local-core-loop-proof",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    checkpointId: "d02-n02-n02-action-open",
+  });
+  assert.deepEqual(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
+    blockedPreflightAction.nextAction.unproven.spineTarget,
   );
   assert.equal(
     blockedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
@@ -7179,6 +7204,12 @@ test("session card and markdown include role credential URLs and tokens", async 
     ).adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-core-loop?game=<seeded-game>",
   );
+  assert.deepEqual(
+    coreLoopReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-core-loop-proof",
+    ).spineTargets,
+    coreLoopSpineTargetsFixture(),
+  );
   assert.equal(
     coreLoopReadiness.generatedFrom.coreLoopAdminProof,
     "target/dev-test-game/core-loop-admin-proof.json",
@@ -8503,6 +8534,18 @@ function devTestGameReleaseReadinessChecklistFixture({
           evidence: "target/dev-test-game/proof-run.json",
         },
         {
+          id: "local-core-loop-proof",
+          label:
+            "Host controls, replacement, player actions, private channels, and day/night loop",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          adminRoleSurface: {
+            path: "target/dev-test-game/core-loop-admin-proof.json",
+            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+          },
+          spineTargets: coreLoopSpineTargetsFixture(),
+        },
+        {
           id: "local-stale-conflict-message-milestone",
           label: "Stale-client conflict messages",
           status: "passed",
@@ -9228,6 +9271,43 @@ function coreLoopAdminProofFixture() {
   };
 }
 
+function coreLoopSpineTargetsFixture() {
+  return {
+    status: "passed",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    defaultCycleId: "d02-n02",
+    defaultRoleUrlId: "d02-n02-actionPlayer",
+    defaultCheckpointId: "d02-n02-n02-action-open",
+    cycleIds: ["d01-n01-d02", "d02-n02"],
+    roleUrlIds: [
+      "d01-n01-d02-host",
+      "d01-n01-d02-actionPlayer",
+      "d01-n01-d02-normalPlayer",
+      "d01-n01-d02-target",
+      "d02-n02-host",
+      "d02-n02-actionPlayer",
+      "d02-n02-normalPlayer",
+      "d02-n02-target",
+    ],
+    checkpointIds: [
+      "d01-n01-d02-d01-resolved-locked",
+      "d01-n01-d02-n01-action-open",
+      "d01-n01-d02-n01-resolved-target-killed",
+      "d01-n01-d02-d02-day-controls-return",
+      "d02-n02-d02-vote-open",
+      "d02-n02-d02-deciding-vote-submitted",
+      "d02-n02-d02-resolved-target-killed",
+      "d02-n02-n02-action-open",
+    ],
+    recoveryHookIds: [
+      "staleLockedVoteReject",
+      "invalidActionReject",
+      "normalPlayerDirectActionReject",
+      "staleActionConflictReject",
+    ],
+  };
+}
+
 function hardeningAdminProofFixture() {
   return {
     version: 1,
@@ -9800,6 +9880,13 @@ function nextActionAdminProofFixture() {
       unprovenRoleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      unprovenSpineTarget: {
+        sourceCheckId: "local-core-loop-proof",
+        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        cycleId: "d02-n02",
+        roleUrlId: "d02-n02-actionPlayer",
+        checkpointId: "d02-n02-n02-action-open",
+      },
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
         status: "ready",
@@ -9836,6 +9923,7 @@ function nextActionAdminProofFixture() {
         "selection-trace",
         "hosted-concurrent-race-matrix",
         "selected-proof-graph-node",
+        "selected-spine-target",
         "release-readiness-selection-trace",
       ],
       visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],

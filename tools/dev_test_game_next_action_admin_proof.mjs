@@ -111,6 +111,8 @@ await runAdminAuditProof({
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
         source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
+      unprovenSpineTarget:
+        source.nextAction.nextAction.unproven?.spineTarget ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -424,6 +426,20 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing selected graph node row");
   }
+  if (
+    evidence.generatedFrom?.unprovenSpineTarget !== null &&
+    evidence.generatedFrom?.unprovenSpineTarget !== undefined
+  ) {
+    const target = evidence.generatedFrom.unprovenSpineTarget;
+    if (
+      typeof target.cycleId !== "string" ||
+      typeof target.roleUrlId !== "string" ||
+      typeof target.checkpointId !== "string" ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes("selected-spine-target")
+    ) {
+      throw new Error("next-action admin proof missing selected spine target row");
+    }
+  }
   const localCheckId = evidence.generatedFrom?.localCheckId;
   if (
     typeof localCheckId === "string" &&
@@ -463,6 +479,9 @@ function requiredChecksForNextAction(nextAction) {
       "selected-proof-graph-node",
       "release-readiness-selection-trace",
     );
+    if (nextAction.nextAction.unproven.spineTarget !== undefined) {
+      checks.push("selected-spine-target");
+    }
   }
   if (nextAction.nextAction.stability?.source !== undefined) {
     checks.push("proof-stability-drift");
@@ -548,6 +567,10 @@ function requiredChecksForEvidence(evidence) {
           evidence.generatedFrom.unprovenId,
           "selected-proof-graph-node",
           "release-readiness-selection-trace",
+          ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
+          evidence.generatedFrom?.unprovenSpineTarget === undefined
+            ? []
+            : ["selected-spine-target"]),
         ]
       : []),
     ...(evidence.generatedFrom?.stabilityStatus === "drifted"

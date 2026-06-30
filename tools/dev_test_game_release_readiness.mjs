@@ -430,7 +430,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ],
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
-        : { adminRoleSurface: coreLoopAdminProofEvidence }),
+        : {
+            adminRoleSurface: coreLoopAdminProofEvidence,
+            spineTargets: buildCoreLoopReadinessSpineTargets(
+              coreLoopAdminProofEvidence,
+            ),
+          }),
     },
     {
       id: "local-hardening-proof",
@@ -746,7 +751,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneStatus: hostedEvidenceLaneAdminProofEvidence.laneStatus,
       preflightStatus: hostedEvidenceLaneAdminProofEvidence.preflightStatus,
       blockedCheckCount:
-        hostedEvidenceLaneAdminProofEvidence.visibleUnproven.length,
+        hostedEvidenceLaneAdminProofEvidence.visibleUnproven?.length ?? 0,
       adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
     });
   }
@@ -1894,8 +1899,39 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleSpineCycles: proof.adminRoleSurface.visibleSpineCycles,
+    visibleSpineRoleUrls: proof.adminRoleSurface.visibleSpineRoleUrls,
     visibleSpineCheckpoints: proof.adminRoleSurface.visibleSpineCheckpoints,
+    visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
+    coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
+  const rowIds = coreLoopAdminProofEvidence.coreLoopSpineRows ?? {};
+  const cycleIds = [...(rowIds.cycles ?? [])];
+  const roleUrlIds = [...(rowIds.roleUrls ?? [])];
+  const checkpointIds = [...(rowIds.checkpoints ?? [])];
+  const recoveryHookIds = [...(rowIds.recoveryHooks ?? [])];
+  const defaultCycleId = cycleIds.includes("d02-n02")
+    ? "d02-n02"
+    : String(cycleIds[0] ?? "");
+  const defaultRoleUrlId =
+    roleUrlIds.find((id) => id === `${defaultCycleId}-actionPlayer`) ??
+    String(roleUrlIds[0] ?? "");
+  const defaultCheckpointId =
+    checkpointIds.find((id) => id === "d02-n02-n02-action-open") ??
+    String(checkpointIds[0] ?? "");
+  return {
+    status: "passed",
+    detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
+    defaultCycleId,
+    defaultRoleUrlId,
+    defaultCheckpointId,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    recoveryHookIds,
   };
 }
 
@@ -3265,6 +3301,20 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
     }
   }
+  if (
+    proof.generatedFrom?.unprovenSpineTarget !== null &&
+    proof.generatedFrom?.unprovenSpineTarget !== undefined
+  ) {
+    const target = proof.generatedFrom.unprovenSpineTarget;
+    if (
+      typeof target.cycleId !== "string" ||
+      typeof target.roleUrlId !== "string" ||
+      typeof target.checkpointId !== "string" ||
+      !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target")
+    ) {
+      throw new Error("next-action admin proof missing selected spine target");
+    }
+  }
   const localTrace = proof.generatedFrom?.localReadinessDependencyTrace;
   if (
     localTrace?.strategy !== "local-readiness-dependency-before-hosted-work" ||
@@ -3293,6 +3343,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     command: String(proof.generatedFrom?.command ?? ""),
     reason: String(proof.generatedFrom?.reason ?? ""),
+    unprovenSpineTarget: proof.generatedFrom?.unprovenSpineTarget ?? null,
     releaseReadinessCandidateCount: releaseTrace.candidateCount,
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
@@ -3754,6 +3805,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     }
   }
   assertLocalReadinessDependencyChecks(checklist.localDevelopmentSpine?.checks);
+  const coreLoopCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-core-loop-proof",
+  );
+  if (
+    coreLoopCheck?.spineTargets !== undefined &&
+    !validCoreLoopSpineTargets(coreLoopCheck.spineTargets)
+  ) {
+    throw new Error("dev-test-game core-loop readiness check is missing spine targets");
+  }
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
   }
@@ -3856,6 +3916,28 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     }
   }
   return checklist;
+}
+
+function validCoreLoopSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    typeof spineTargets.detailRoleUrl === "string" &&
+    spineTargets.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
+    typeof spineTargets.defaultCycleId === "string" &&
+    spineTargets.defaultCycleId.length > 0 &&
+    typeof spineTargets.defaultRoleUrlId === "string" &&
+    spineTargets.defaultRoleUrlId.length > 0 &&
+    typeof spineTargets.defaultCheckpointId === "string" &&
+    spineTargets.defaultCheckpointId.length > 0 &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes(spineTargets.defaultCycleId) &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes(spineTargets.defaultRoleUrlId) &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes(spineTargets.defaultCheckpointId)
+  );
 }
 
 function markdownChecklist(checklist) {
