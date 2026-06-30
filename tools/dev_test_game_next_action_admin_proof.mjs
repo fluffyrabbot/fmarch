@@ -105,6 +105,8 @@ await runAdminAuditProof({
       reason: source.nextAction.nextAction.reason,
       actionStatus: source.nextAction.nextAction.status,
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
+      localCheckId: source.nextAction.nextAction.localCheck?.id ?? null,
+      localCheckRoleUrl: source.nextAction.nextAction.localCheck?.roleUrl ?? null,
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
@@ -132,6 +134,16 @@ await runAdminAuditProof({
         selectedUnprovenId:
           source.nextAction.releaseReadinessTrace.selectedUnprovenId,
         candidateIds: source.nextAction.releaseReadinessTrace.candidates.map(
+          (candidate) => candidate.id,
+        ),
+      },
+      localReadinessDependencyTrace: {
+        strategy: source.nextAction.localReadinessDependencyTrace.strategy,
+        candidateCount:
+          source.nextAction.localReadinessDependencyTrace.candidateCount,
+        selectedCheckId:
+          source.nextAction.localReadinessDependencyTrace.selectedCheckId,
+        candidateIds: source.nextAction.localReadinessDependencyTrace.candidates.map(
           (candidate) => candidate.id,
         ),
       },
@@ -266,6 +278,20 @@ export function assertNextActionAdminProof(evidence) {
     throw new Error("next-action admin proof is missing release-readiness trace evidence");
   }
   if (
+    evidence.generatedFrom?.localReadinessDependencyTrace?.strategy !==
+      "local-readiness-dependency-before-hosted-work" ||
+    !Number.isInteger(
+      evidence.generatedFrom.localReadinessDependencyTrace.candidateCount,
+    ) ||
+    !Array.isArray(
+      evidence.generatedFrom.localReadinessDependencyTrace.candidateIds,
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof is missing local readiness dependency trace evidence",
+    );
+  }
+  if (
     evidence.generatedFrom?.stabilityTrace?.strategy !==
       "proof-stability-before-readiness" ||
     !["clean", "drifted"].includes(evidence.generatedFrom.stabilityTrace.status) ||
@@ -398,6 +424,19 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing selected graph node row");
   }
+  const localCheckId = evidence.generatedFrom?.localCheckId;
+  if (
+    typeof localCheckId === "string" &&
+    !evidence.adminRoleSurface?.visibleChecks?.includes(localCheckId)
+  ) {
+    throw new Error("next-action admin proof missing local readiness check row");
+  }
+  if (
+    typeof localCheckId === "string" &&
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(localCheckId)
+  ) {
+    throw new Error("next-action admin proof missing local readiness role URL");
+  }
   const relatedHandoff = evidence.generatedFrom?.relatedHandoff;
   assertAdminAuditRelatedHandoff({
     adminRoleSurface: evidence.adminRoleSurface,
@@ -411,6 +450,12 @@ function requiredChecksForNextAction(nextAction) {
   const checks = ["next-command", nextAction.nextAction.reason, "selection-trace"];
   if (nextAction.nextAction.artifact?.id !== undefined) {
     checks.push(nextAction.nextAction.artifact.id);
+  }
+  if (nextAction.nextAction.localCheck?.id !== undefined) {
+    checks.push(
+      nextAction.nextAction.localCheck.id,
+      "local-readiness-dependency-trace",
+    );
   }
   if (nextAction.nextAction.unproven?.id !== undefined) {
     checks.push(
@@ -427,6 +472,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   for (const candidate of nextAction.releaseReadinessTrace.candidates) {
     checks.push(`release-readiness-${candidate.id}`);
+  }
+  for (const candidate of nextAction.localReadinessDependencyTrace.candidates) {
+    checks.push(`local-readiness-dependency-${candidate.id}`);
   }
   checks.push("replacement-race-reload-milestone");
   for (const cell of nextAction.replacementRaceReloadTrace.cells) {
@@ -458,9 +506,15 @@ function requiredChecksForNextAction(nextAction) {
 
 function requiredRelatedLinksForNextAction(nextAction) {
   const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
-  return typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
-    ? [proofGraphNodeId]
-    : [];
+  const localCheckId = nextAction.nextAction.localCheck?.id;
+  return [
+    ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
+      ? [proofGraphNodeId]
+      : []),
+    ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
+      ? [localCheckId]
+      : []),
+  ];
 }
 
 function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
@@ -483,6 +537,12 @@ function requiredChecksForEvidence(evidence) {
     ...(typeof evidence.generatedFrom?.artifactId === "string"
       ? [evidence.generatedFrom.artifactId]
       : []),
+    ...(typeof evidence.generatedFrom?.localCheckId === "string"
+      ? [
+          evidence.generatedFrom.localCheckId,
+          "local-readiness-dependency-trace",
+        ]
+      : []),
     ...(typeof evidence.generatedFrom?.unprovenId === "string"
       ? [
           evidence.generatedFrom.unprovenId,
@@ -499,6 +559,13 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.releaseReadinessTrace?.candidateIds)
       ? evidence.generatedFrom.releaseReadinessTrace.candidateIds.map(
           (id) => `release-readiness-${id}`,
+        )
+      : []),
+    ...(Array.isArray(
+      evidence.generatedFrom?.localReadinessDependencyTrace?.candidateIds,
+    )
+      ? evidence.generatedFrom.localReadinessDependencyTrace.candidateIds.map(
+          (id) => `local-readiness-dependency-${id}`,
         )
       : []),
     "replacement-race-reload-milestone",

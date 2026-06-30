@@ -617,6 +617,12 @@ test("dev test-game next-action derives one local recovery command from the mani
     eventCount: 0,
     selected: false,
   });
+  assert.deepEqual(freshAction.localReadinessDependencyTrace, {
+    strategy: "local-readiness-dependency-before-hosted-work",
+    candidateCount: 0,
+    selectedCheckId: null,
+    candidates: [],
+  });
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
     candidateCount: 1,
@@ -639,6 +645,60 @@ test("dev test-game next-action derives one local recovery command from the mani
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
           "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
+      },
+    ],
+  });
+  const missingLocalDependencyAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      includeProofGraphHandoffCheck: false,
+      unproven: [
+        {
+          id: "hosted-concurrent-race-matrix",
+          status: "unproven",
+          requiredEvidence: "Hosted concurrent matrix evidence",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(missingLocalDependencyAction);
+  assert.deepEqual(missingLocalDependencyAction.nextAction, {
+    command: "npm run test:dev-test-game-proof-graph-admin-proof",
+    reason: "release-readiness-local-check-missing",
+    status: "blocked",
+    localCheck: {
+      id: "local-proof-graph-admin-role-handoffs",
+      status: "missing",
+      requiredEvidence:
+        "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+      buildSlice:
+        "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+      proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    },
+  });
+  assert.deepEqual(missingLocalDependencyAction.localReadinessDependencyTrace, {
+    strategy: "local-readiness-dependency-before-hosted-work",
+    candidateCount: 1,
+    selectedCheckId: "local-proof-graph-admin-role-handoffs",
+    candidates: [
+      {
+        rank: 1,
+        id: "local-proof-graph-admin-role-handoffs",
+        status: "missing",
+        priority: 0,
+        selected: true,
+        command: "npm run test:dev-test-game-proof-graph-admin-proof",
+        buildSlice:
+          "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+        proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        proofBoundary:
+          "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
       },
     ],
   });
@@ -7151,7 +7211,10 @@ function identityAdapterProofFixture(game) {
   };
 }
 
-function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
+function devTestGameReleaseReadinessChecklistFixture({
+  unproven,
+  includeProofGraphHandoffCheck = true,
+}) {
   return {
     version: 1,
     proof: "dev-test-game-release-readiness",
@@ -7194,6 +7257,19 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
           requiredLaneCount: 14,
           coveredLaneCount: 14,
         },
+        ...(includeProofGraphHandoffCheck
+          ? [
+              {
+                id: "local-proof-graph-admin-role-handoffs",
+                label: "Proof graph admin role handoffs",
+                status: "passed",
+                evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+                roleHandoffCount: 10,
+                roleHandoffIds: ["admin-proof:release"],
+                destinationAuditIds: ["local-release-readiness"],
+              },
+            ]
+          : []),
       ],
     },
     releaseReadiness: {

@@ -17,6 +17,7 @@ import {
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import { devTestGameProofGraphAdminProofPath } from "./dev_test_game_proof_graph_paths.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -57,6 +58,11 @@ export function buildDevTestGameNextAction(
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness);
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
+  const localReadinessDependencyCandidates =
+    rankedMissingLocalReadinessDependencies(readiness);
+  const localReadinessDependencyTrace = buildLocalReadinessDependencyTrace(
+    localReadinessDependencyCandidates,
+  );
   const replacementRaceReloadTrace = buildReplacementRaceReloadTrace(races, {
     source: raceCoverageSource,
   });
@@ -84,6 +90,7 @@ export function buildDevTestGameNextAction(
   const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
+  const selectedLocalReadinessDependency = localReadinessDependencyCandidates[0];
   const nextAction =
     artifact !== undefined
       ? {
@@ -117,6 +124,20 @@ export function buildDevTestGameNextAction(
               proofTarget: "target/dev-test-game/session.json",
             },
           }
+      : selectedLocalReadinessDependency !== undefined
+        ? {
+            command: selectedLocalReadinessDependency.command,
+            reason: "release-readiness-local-check-missing",
+            status: "blocked",
+            localCheck: {
+              id: selectedLocalReadinessDependency.id,
+              status: selectedLocalReadinessDependency.status,
+              requiredEvidence: selectedLocalReadinessDependency.requiredEvidence,
+              buildSlice: selectedLocalReadinessDependency.buildSlice,
+              proofTarget: selectedLocalReadinessDependency.proofTarget,
+              roleUrl: selectedLocalReadinessDependency.roleUrl,
+            },
+          }
       : selectedUnproven !== undefined
         ? {
             command: selectedUnproven.command,
@@ -143,6 +164,8 @@ export function buildDevTestGameNextAction(
       ? null
       : {
           status: readiness.releaseReadiness.status,
+          localCheckCount: readiness.localDevelopmentSpine.checks.length,
+          buildableLocalDependencyCount: localReadinessDependencyCandidates.length,
           unprovenCount: readiness.releaseReadiness.unproven.length,
           buildableUnprovenCount: releaseReadinessCandidates.length,
         };
@@ -155,7 +178,7 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, race coverage, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, records replacement, host, player, and cohost race-reload milestone coverage, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, race coverage, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, records replacement, host, player, and cohost race-reload milestone coverage, blocks on saved harness-stability drift, then recovers missing local readiness dependencies before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -217,6 +240,7 @@ export function buildDevTestGameNextAction(
     nextAction,
     selectionTrace,
     stabilityTrace,
+    localReadinessDependencyTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     hostConcurrentRaceReloadTrace,
@@ -257,6 +281,7 @@ export function assertDevTestGameNextAction(evidence) {
       "all-artifacts-fresh",
       "artifact-not-fresh",
       "harness-stability-drift",
+      "release-readiness-local-check-missing",
       "release-readiness-unproven",
     ].includes(evidence.nextAction.reason)
   ) {
@@ -273,6 +298,20 @@ export function assertDevTestGameNextAction(evidence) {
     typeof evidence.nextAction.unproven?.id !== "string"
   ) {
     throw new Error("next-action release-readiness recovery is missing an unproven id");
+  }
+  if (
+    evidence.nextAction.reason === "release-readiness-local-check-missing" &&
+    typeof evidence.nextAction.localCheck?.id !== "string"
+  ) {
+    throw new Error("next-action local readiness recovery is missing a check id");
+  }
+  if (evidence.nextAction.reason === "release-readiness-local-check-missing") {
+    if (
+      typeof evidence.nextAction.localCheck?.roleUrl !== "string" ||
+      !evidence.nextAction.localCheck.roleUrl.includes("?game=<seeded-game>")
+    ) {
+      throw new Error("next-action local readiness recovery is missing a seeded role URL");
+    }
   }
   if (evidence.nextAction.reason === "release-readiness-unproven") {
     if (
@@ -293,6 +332,10 @@ export function assertDevTestGameNextAction(evidence) {
   }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
+  assertLocalReadinessDependencyTrace(
+    evidence.localReadinessDependencyTrace,
+    evidence.nextAction,
+  );
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
   assertHostConcurrentRaceReloadTrace(evidence.hostConcurrentRaceReloadTrace);
@@ -417,6 +460,60 @@ function rankedBuildableReleaseReadinessItems(readiness) {
     })
     .filter((candidate) => candidate !== null)
     .sort((left, right) => left.priority - right.priority || left.index - right.index);
+}
+
+function rankedMissingLocalReadinessDependencies(readiness) {
+  if (readiness === null) {
+    return [];
+  }
+  const localChecks = new Map(
+    (readiness.localDevelopmentSpine?.checks ?? []).map((check, index) => [
+      check.id,
+      { check, index },
+    ]),
+  );
+  return [...localBuildableReadinessDependencies.entries()]
+    .map(([id, dependency], index) => {
+      const current = localChecks.get(id);
+      return current?.check?.status === "passed"
+        ? null
+        : {
+            id,
+            status: current?.check?.status ?? "missing",
+            index,
+            priority: dependency.priority,
+            command: dependency.command,
+            buildSlice: dependency.buildSlice,
+            proofTarget: dependency.proofTarget,
+            roleUrl: dependency.roleUrl,
+            proofBoundary: dependency.proofBoundary,
+            requiredEvidence: dependency.requiredEvidence,
+          };
+    })
+    .filter((candidate) => candidate !== null)
+    .sort((left, right) => left.priority - right.priority || left.index - right.index);
+}
+
+function buildLocalReadinessDependencyTrace(candidates) {
+  const selectedCheckId = candidates[0]?.id ?? null;
+  return {
+    strategy: "local-readiness-dependency-before-hosted-work",
+    candidateCount: candidates.length,
+    selectedCheckId,
+    candidates: candidates.map((candidate, index) => ({
+      rank: index + 1,
+      id: candidate.id,
+      status: candidate.status,
+      priority: candidate.priority,
+      selected: candidate.id === selectedCheckId,
+      command: candidate.command,
+      buildSlice: candidate.buildSlice,
+      proofTarget: candidate.proofTarget,
+      roleUrl: candidate.roleUrl,
+      proofBoundary: candidate.proofBoundary,
+      requiredEvidence: candidate.requiredEvidence,
+    })),
+  };
 }
 
 function buildReleaseReadinessTrace(candidates) {
@@ -836,6 +933,55 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
   }
 }
 
+function assertLocalReadinessDependencyTrace(localReadinessDependencyTrace, nextAction) {
+  if (
+    localReadinessDependencyTrace?.strategy !==
+      "local-readiness-dependency-before-hosted-work" ||
+    !Number.isInteger(localReadinessDependencyTrace.candidateCount) ||
+    !Array.isArray(localReadinessDependencyTrace.candidates)
+  ) {
+    throw new Error("next-action local readiness dependency trace is missing or malformed");
+  }
+  if (
+    localReadinessDependencyTrace.candidateCount !==
+    localReadinessDependencyTrace.candidates.length
+  ) {
+    throw new Error("next-action local readiness dependency count drifted");
+  }
+  if (localReadinessDependencyTrace.candidateCount === 0) {
+    if (
+      localReadinessDependencyTrace.selectedCheckId !== null ||
+      nextAction.reason === "release-readiness-local-check-missing"
+    ) {
+      throw new Error("next-action local readiness trace has no selected item");
+    }
+    return;
+  }
+  const [selected, ...rest] = localReadinessDependencyTrace.candidates;
+  if (
+    selected.selected !== true ||
+    selected.id !== localReadinessDependencyTrace.selectedCheckId
+  ) {
+    throw new Error("next-action local readiness trace does not match selection");
+  }
+  if (nextAction.reason === "release-readiness-local-check-missing") {
+    if (
+      nextAction.localCheck?.id !== selected.id ||
+      nextAction.command !== selected.command ||
+      nextAction.localCheck?.roleUrl !== selected.roleUrl
+    ) {
+      throw new Error("next-action local readiness selection does not match action");
+    }
+  }
+  for (const candidate of rest) {
+    if (candidate.selected === true) {
+      throw new Error(
+        `next-action local readiness trace has duplicate selection: ${candidate.id}`,
+      );
+    }
+  }
+}
+
 function assertProofStabilityTrace(stabilityTrace, nextAction) {
   if (
     stabilityTrace?.strategy !== "proof-stability-before-readiness" ||
@@ -1192,6 +1338,24 @@ const localBuildableReleaseReadinessItems = new Map([
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
+    },
+  ],
+]);
+
+const localBuildableReadinessDependencies = new Map([
+  [
+    "local-proof-graph-admin-role-handoffs",
+    {
+      priority: 0,
+      command: "npm run test:dev-test-game-proof-graph-admin-proof",
+      buildSlice:
+        "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+      proofTarget: devTestGameProofGraphAdminProofPath,
+      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      proofBoundary:
+        "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+      requiredEvidence:
+        "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
     },
   ],
 ]);

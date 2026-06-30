@@ -11,6 +11,8 @@ import {
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
+const LOCAL_PROOF_GRAPH_COMMAND =
+  "npm run test:dev-test-game-proof-graph-admin-proof";
 const HOSTED_MATRIX_PROOF_TARGET =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 
@@ -1200,6 +1202,13 @@ test("admin route data exposes local next action as a native audit row", async (
     releaseReadinessStatus: "not_ready",
     unprovenCount: 7,
     buildableUnprovenCount: 1,
+    localCheckCount: 18,
+    buildableLocalDependencyCount: 0,
+    selectedLocalCheckId: "",
+    selectedLocalCheckBuildSlice: "",
+    selectedLocalCheckProofTarget: "",
+    selectedLocalCheckRoleUrl: "",
+    selectedLocalCheckRoleHref: "",
     selectedUnprovenId: "hosted-concurrent-race-matrix",
     selectedBuildSlice:
       "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
@@ -1226,6 +1235,12 @@ test("admin route data exposes local next action as a native audit row", async (
       failureCount: 0,
       maxAttempts: 1,
       eventCount: 0,
+    },
+    localReadinessDependencyTrace: {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 0,
+      selectedCheckId: null,
+      candidates: [],
     },
     releaseReadinessTrace: {
       strategy: "local-dev-release-readiness-priority",
@@ -1258,6 +1273,65 @@ test("admin route data exposes local next action as a native audit row", async (
     releaseReady: false,
     productionReady: false,
   });
+});
+
+test("admin route data exposes local readiness dependency next action", async () => {
+  const localCheck = proofGraphHandoffLocalCheckFixture();
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "release-readiness-local-check-missing",
+      command: LOCAL_PROOF_GRAPH_COMMAND,
+      localCheck,
+      unproven: undefined,
+      localReadinessDependencyTrace: localReadinessDependencyTraceFixture({
+        localCheck,
+        command: LOCAL_PROOF_GRAPH_COMMAND,
+      }),
+      releaseReadinessTrace: releaseReadinessTraceFixture({
+        unproven: undefined,
+      }),
+    }),
+  });
+
+  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  assert.equal(nextAction.status, `blocked: ${LOCAL_PROOF_GRAPH_COMMAND}`);
+  assert.deepEqual(
+    nextAction.checks
+      .filter((check) =>
+        [
+          "release-readiness-local-check-missing",
+          "local-proof-graph-admin-role-handoffs",
+          "local-readiness-dependency-trace",
+          "local-readiness-dependency-local-proof-graph-admin-role-handoffs",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["release-readiness-local-check-missing", "blocked"],
+      ["local-proof-graph-admin-role-handoffs", "missing"],
+      ["local-readiness-dependency-trace", "1 missing local dependencies"],
+      [
+        "local-readiness-dependency-local-proof-graph-admin-role-handoffs",
+        "selected:missing",
+      ],
+    ],
+  );
+  assert.deepEqual(nextAction.relatedLinks, [
+    {
+      id: "local-proof-graph-admin-role-handoffs",
+      label: "local-proof-graph-admin-role-handoffs",
+      href: "/admin/audit/local-proof-graph?game=midsummer",
+      status: "missing",
+      command: LOCAL_PROOF_GRAPH_COMMAND,
+    },
+  ]);
+  assert.equal(
+    nextAction.artifactSummary.selectedLocalCheckRoleHref,
+    "/admin/audit/local-proof-graph?game=midsummer",
+  );
 });
 
 test("admin local next action detail data carries recovery check rows", async () => {
@@ -2881,8 +2955,11 @@ function nextActionFixture({
   reason = "release-readiness-unproven",
   command = LOCAL_RACE_COMMAND,
   artifact,
+  localCheck,
   unproven =
-    artifact === undefined && reason === "release-readiness-unproven"
+    artifact === undefined &&
+    localCheck === undefined &&
+    reason === "release-readiness-unproven"
       ? {
           id: "hosted-concurrent-race-matrix",
           status: "unproven",
@@ -2898,6 +2975,7 @@ function nextActionFixture({
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
   releaseReadinessTrace = releaseReadinessTraceFixture({ unproven, command }),
+  localReadinessDependencyTrace = localReadinessDependencyTraceFixture(),
   stability,
   stabilityTrace = stabilityTraceFixture({ stability }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
@@ -2931,6 +3009,9 @@ function nextActionFixture({
       releaseReadinessGeneratedAt: "2026-06-26T00:00:00.000Z",
       releaseReadinessSummary: {
         status: "not_ready",
+        localCheckCount: 18,
+        buildableLocalDependencyCount:
+          localReadinessDependencyTrace.candidateCount ?? 0,
         unprovenCount: 7,
         buildableUnprovenCount: unproven === undefined ? 0 : 1,
       },
@@ -2975,11 +3056,13 @@ function nextActionFixture({
       reason,
       status: actionStatus,
       ...(artifact === undefined ? {} : { artifact }),
+      ...(localCheck === undefined ? {} : { localCheck }),
       ...(unproven === undefined ? {} : { unproven }),
       ...(stability === undefined ? {} : { stability }),
     },
     selectionTrace,
     stabilityTrace,
+    localReadinessDependencyTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     hostConcurrentRaceReloadTrace,
@@ -2988,6 +3071,21 @@ function nextActionFixture({
     raceCoveragePromotedMilestones,
     staleConflictMessageTrace,
     hostStaleControlTrace,
+  };
+}
+
+function proofGraphHandoffLocalCheckFixture() {
+  return {
+    id: "local-proof-graph-admin-role-handoffs",
+    status: "missing",
+    requiredEvidence:
+      "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+    buildSlice:
+      "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+    proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    proofBoundary:
+      "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
   };
 }
 
@@ -3348,6 +3446,37 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         proofTarget: unproven.proofTarget,
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
+      },
+    ],
+  };
+}
+
+function localReadinessDependencyTraceFixture({ localCheck, command } = {}) {
+  if (localCheck === undefined) {
+    return {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 0,
+      selectedCheckId: null,
+      candidates: [],
+    };
+  }
+  return {
+    strategy: "local-readiness-dependency-before-hosted-work",
+    candidateCount: 1,
+    selectedCheckId: localCheck.id,
+    candidates: [
+      {
+        rank: 1,
+        id: localCheck.id,
+        status: localCheck.status,
+        priority: 0,
+        selected: true,
+        command,
+        buildSlice: localCheck.buildSlice,
+        proofTarget: localCheck.proofTarget,
+        roleUrl: localCheck.roleUrl,
+        proofBoundary: localCheck.proofBoundary ?? "",
+        requiredEvidence: localCheck.requiredEvidence,
       },
     ],
   };

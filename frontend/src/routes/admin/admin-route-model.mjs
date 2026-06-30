@@ -725,10 +725,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     action.artifact !== null && typeof action.artifact === "object"
       ? action.artifact
       : null;
+  const localCheck =
+    action.localCheck !== null && typeof action.localCheck === "object"
+      ? action.localCheck
+      : null;
   const unproven =
     action.unproven !== null && typeof action.unproven === "object"
       ? action.unproven
       : null;
+  const localCheckRoleUrl =
+    typeof localCheck?.roleUrl === "string" && localCheck.roleUrl.trim() !== ""
+      ? localCheck.roleUrl
+      : "";
   const unprovenRoleUrl =
     typeof unproven?.roleUrl === "string" && unproven.roleUrl.trim() !== ""
       ? unproven.roleUrl
@@ -750,6 +758,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
   );
+  const localReadinessDependencyTrace =
+    normalizeNextActionLocalReadinessDependencyTrace(
+      nextAction.localReadinessDependencyTrace,
+    );
   const replacementRaceReloadTrace = normalizeNextActionReplacementRaceReloadTrace(
     nextAction.replacementRaceReloadTrace,
   );
@@ -795,6 +807,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: String(artifact.id),
             status: String(artifact.status ?? "unknown"),
+          }),
+        ]),
+    ...(localCheck === null
+      ? []
+      : [
+          Object.freeze({
+            id: String(localCheck.id),
+            status: String(localCheck.status ?? "unknown"),
           }),
         ]),
     ...(unproven === null
@@ -847,6 +867,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           ...releaseReadinessTrace.candidates.map((candidate) =>
             Object.freeze({
               id: `release-readiness-${candidate.id}`,
+              status: candidate.selected
+                ? `selected:${candidate.status}`
+                : `rank-${candidate.rank}:${candidate.status}`,
+            }),
+          ),
+        ]),
+    ...(localReadinessDependencyTrace.candidateCount === 0
+      ? []
+      : [
+          Object.freeze({
+            id: "local-readiness-dependency-trace",
+            status: `${localReadinessDependencyTrace.candidateCount} missing local dependencies`,
+          }),
+          ...localReadinessDependencyTrace.candidates.map((candidate) =>
+            Object.freeze({
+              id: `local-readiness-dependency-${candidate.id}`,
               status: candidate.selected
                 ? `selected:${candidate.status}`
                 : `rank-${candidate.rank}:${candidate.status}`,
@@ -937,16 +973,31 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     inspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
     checks: Object.freeze(checks),
     relatedLinks:
-      unprovenRoleUrl === ""
+      unprovenRoleUrl === "" && localCheckRoleUrl === ""
         ? Object.freeze([])
         : Object.freeze([
-            Object.freeze({
-              id: unprovenProofGraphNodeId || String(unproven.id),
-              label: String(unproven.id ?? "Selected role surface"),
-              href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
-              status: String(unproven.status ?? actionStatus),
-              command,
-            }),
+            ...(unprovenRoleUrl === ""
+              ? []
+              : [
+                  Object.freeze({
+                    id: unprovenProofGraphNodeId || String(unproven.id),
+                    label: String(unproven.id ?? "Selected role surface"),
+                    href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
+                    status: String(unproven.status ?? actionStatus),
+                    command,
+                  }),
+                ]),
+            ...(localCheckRoleUrl === ""
+              ? []
+              : [
+                  Object.freeze({
+                    id: String(localCheck.id ?? "local-readiness-dependency"),
+                    label: String(localCheck.id ?? "Local readiness dependency"),
+                    href: seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
+                    status: String(localCheck.status ?? actionStatus),
+                    command,
+                  }),
+                ]),
           ]),
     artifactSummary: Object.freeze({
       command,
@@ -969,6 +1020,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       buildableUnprovenCount: Number(
         releaseReadinessSummary.buildableUnprovenCount ?? 0,
       ),
+      localCheckCount: Number(releaseReadinessSummary.localCheckCount ?? 0),
+      buildableLocalDependencyCount: Number(
+        releaseReadinessSummary.buildableLocalDependencyCount ?? 0,
+      ),
+      selectedLocalCheckId: String(localCheck?.id ?? ""),
+      selectedLocalCheckBuildSlice: String(localCheck?.buildSlice ?? ""),
+      selectedLocalCheckProofTarget: String(localCheck?.proofTarget ?? ""),
+      selectedLocalCheckRoleUrl: localCheckRoleUrl,
+      selectedLocalCheckRoleHref:
+        localCheckRoleUrl === ""
+          ? ""
+          : seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
@@ -988,6 +1051,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
       stabilityTrace,
+      localReadinessDependencyTrace,
       releaseReadinessTrace,
       replacementRaceReloadTrace,
       hostConcurrentRaceReloadTrace,
@@ -1115,6 +1179,53 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
     selectedUnprovenId:
       typeof releaseReadinessTrace.selectedUnprovenId === "string"
         ? releaseReadinessTrace.selectedUnprovenId
+        : null,
+    candidates: Object.freeze(candidates),
+  });
+}
+
+function normalizeNextActionLocalReadinessDependencyTrace(
+  localReadinessDependencyTrace,
+) {
+  if (
+    localReadinessDependencyTrace === null ||
+    typeof localReadinessDependencyTrace !== "object" ||
+    localReadinessDependencyTrace.strategy !==
+      "local-readiness-dependency-before-hosted-work" ||
+    !Array.isArray(localReadinessDependencyTrace.candidates)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      candidateCount: 0,
+      selectedCheckId: null,
+      candidates: Object.freeze([]),
+    });
+  }
+  const candidates = localReadinessDependencyTrace.candidates
+    .filter((candidate) => candidate !== null && typeof candidate === "object")
+    .map((candidate) =>
+      Object.freeze({
+        rank: Number(candidate.rank ?? 0),
+        id: String(candidate.id ?? "unknown"),
+        status: String(candidate.status ?? "unknown"),
+        priority: Number(candidate.priority ?? 0),
+        selected: candidate.selected === true,
+        command: String(candidate.command ?? ""),
+        buildSlice: String(candidate.buildSlice ?? ""),
+        proofTarget: String(candidate.proofTarget ?? ""),
+        roleUrl: String(candidate.roleUrl ?? ""),
+        proofBoundary: String(candidate.proofBoundary ?? ""),
+        requiredEvidence: String(candidate.requiredEvidence ?? ""),
+      }),
+    );
+  return Object.freeze({
+    strategy: localReadinessDependencyTrace.strategy,
+    candidateCount: Number(
+      localReadinessDependencyTrace.candidateCount ?? candidates.length,
+    ),
+    selectedCheckId:
+      typeof localReadinessDependencyTrace.selectedCheckId === "string"
+        ? localReadinessDependencyTrace.selectedCheckId
         : null,
     candidates: Object.freeze(candidates),
   });
