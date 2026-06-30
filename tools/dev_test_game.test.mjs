@@ -11681,7 +11681,7 @@ function completedGameEndgameSurfaceFixture() {
     sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_advance_phase:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11743,42 +11743,30 @@ function completedGameEndgameSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    completedHostStaleAdvanceRecoveryProof: {
-      status: "passed",
+    completedHostStaleResolveRecoveryProof: completedHostStaleCommandProofFixture({
       sourceRoleUrl: `${baseRoleUrl}/host`,
       visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
-      commandEndpoint: "/commands",
+      commandId: "completed-host-stale-resolve",
+      commandKind: "ResolvePhase",
+      game,
+      snapshot: completedHostReloadSnapshot,
+    }),
+    completedHostStaleAdvanceRecoveryProof: completedHostStaleCommandProofFixture({
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      commandId: "completed-host-stale-advance",
       commandKind: "AdvancePhase",
-      command: {
-        game,
-      },
-      commandResponse: {
-        ok: false,
-        status: 409,
-        body: {
-          v: 1,
-          id: "completed-host-stale-advance",
-          body: {
-            kind: "Reject",
-            body: {
-              error: "GameAlreadyCompleted",
-              retryable: false,
-              message: "Reject GameAlreadyCompleted: game already completed",
-            },
-          },
-        },
-      },
-      setupResyncFromSeq: 921,
-      setupResyncSnapshotHost: completedHostReloadSnapshot.projection,
-      recoveryResyncFromSeq: 921,
-      recoveryResyncSnapshotHost: completedHostReloadSnapshot.projection,
-      recoverySnapshot: completedHostReloadSnapshot,
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+      game,
+      snapshot: completedHostReloadSnapshot,
+    }),
+    completedHostStaleCompleteRecoveryProof: completedHostStaleCommandProofFixture({
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      commandId: "completed-host-stale-complete",
+      commandKind: "CompleteGame",
+      game,
+      snapshot: completedHostReloadSnapshot,
+    }),
     actionPlayerCompletedProof: postDayThreePlayerSurfaceFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
@@ -11971,6 +11959,52 @@ function completedPlayerReloadSnapshotFixture({
     disabledMutatingButtons: [
       { action: "submit_post", disabled: true, text: "Post" },
     ],
+  };
+}
+
+function completedHostStaleCommandProofFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  commandId,
+  commandKind,
+  game,
+  snapshot,
+}) {
+  return {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "host-console-surface",
+    clickedThroughFromRoleUrl: true,
+    commandEndpoint: "/commands",
+    commandKind,
+    command: {
+      game,
+    },
+    commandResponse: {
+      ok: false,
+      status: 409,
+      body: {
+        v: 1,
+        id: commandId,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "GameAlreadyCompleted",
+            retryable: false,
+            message: "Reject GameAlreadyCompleted: game already completed",
+          },
+        },
+      },
+    },
+    setupResyncFromSeq: 921,
+    setupResyncSnapshotHost: snapshot.projection,
+    recoveryResyncFromSeq: 921,
+    recoveryResyncSnapshotHost: snapshot.projection,
+    recoverySnapshot: snapshot,
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
   };
 }
 

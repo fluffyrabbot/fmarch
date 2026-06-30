@@ -4072,7 +4072,13 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
       "host:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_resolve_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
       "host:stale_advance_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_complete_game:reject:GameAlreadyCompleted",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:endgame:complete",
@@ -4141,13 +4147,13 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     }),
   );
   assertCoreLoopCompletedStaleRejectCases([
-    {
-      assertProof: assertCoreLoopCompletedHostStaleAdvanceRecoveryProof,
-      proof:
-        completedGameEndgameSurface.completedHostStaleAdvanceRecoveryProof,
+    ...coreLoopCompletedHostStaleCommandCases().map((scenario) => ({
+      assertProof: assertCoreLoopCompletedHostStaleCommandRecoveryProof,
+      proof: completedGameEndgameSurface[scenario.proofField],
       expectedGame,
       sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-    },
+      expectedCommandKind: scenario.commandKind,
+    })),
     {
       assertProof: assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
       proof:
@@ -4301,10 +4307,28 @@ function assertCoreLoopCompletedStaleRejectCases(cases) {
   }
 }
 
-function assertCoreLoopCompletedHostStaleAdvanceRecoveryProof({
+function coreLoopCompletedHostStaleCommandCases() {
+  return [
+    {
+      proofField: "completedHostStaleResolveRecoveryProof",
+      commandKind: "ResolvePhase",
+    },
+    {
+      proofField: "completedHostStaleAdvanceRecoveryProof",
+      commandKind: "AdvancePhase",
+    },
+    {
+      proofField: "completedHostStaleCompleteRecoveryProof",
+      commandKind: "CompleteGame",
+    },
+  ];
+}
+
+function assertCoreLoopCompletedHostStaleCommandRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  expectedCommandKind,
 }) {
   const snapshot = proof?.recoverySnapshot;
   if (
@@ -4318,7 +4342,7 @@ function assertCoreLoopCompletedHostStaleAdvanceRecoveryProof({
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== "host-console-surface" ||
     proof.commandEndpoint !== "/commands" ||
-    proof.commandKind !== "AdvancePhase" ||
+    proof.commandKind !== expectedCommandKind ||
     proof.command?.game !== expectedGame ||
     proof.commandResponse?.ok !== false ||
     proof.commandResponse?.status !== 409 ||
@@ -4350,7 +4374,7 @@ function assertCoreLoopCompletedHostStaleAdvanceRecoveryProof({
     snapshot.triggerButtons?.length !== 0
   ) {
     throw new Error(
-      "core-loop admin proof missing completed host stale advance recovery",
+      `core-loop admin proof missing completed host stale ${expectedCommandKind} recovery`,
     );
   }
 }

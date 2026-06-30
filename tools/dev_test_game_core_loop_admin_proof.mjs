@@ -1718,11 +1718,12 @@ async function proveCompletedGameEndgameSurface({
     frontendBaseUrl,
     roleUrl: hostRoleUrl,
   });
-  const completedHostStaleAdvanceRecoveryProof =
-    await proveCompletedHostStaleAdvanceRecovery({
+  const completedHostStaleRecoveryProofs =
+    await proveCompletedHostStaleCommandRecoveryCases({
       browser,
       frontendBaseUrl,
       roleUrl: hostRoleUrl,
+      cases: completedHostStaleCommandCases(),
     });
   const actionPlayerCompletedProof = await provePostDayThreePlayerSurface({
     browser,
@@ -1799,10 +1800,10 @@ async function proveCompletedGameEndgameSurface({
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_advance_phase:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof,
     completedHostReloadProof,
-    completedHostStaleAdvanceRecoveryProof,
+    ...completedHostStaleRecoveryProofs,
     actionPlayerCompletedProof,
     ...completedPlayerReloadProofs,
     completedDeadPlayerStaleVoteRecoveryProof,
@@ -2601,18 +2602,70 @@ async function proveCompletedHostRoleReload({
   }
 }
 
-async function proveCompletedHostStaleAdvanceRecovery({
+function completedHostStaleCommandCases() {
+  return [
+    {
+      proofField: "completedHostStaleResolveRecoveryProof",
+      commandKind: "ResolvePhase",
+      commandId: "completed-host-stale-resolve",
+      transitionToken: "host:stale_resolve_phase:reject:GameAlreadyCompleted",
+      boundary:
+        "Seeded browser completed host stale ResolvePhase rejected into completed host controls.",
+    },
+    {
+      proofField: "completedHostStaleAdvanceRecoveryProof",
+      commandKind: "AdvancePhase",
+      commandId: "completed-host-stale-advance",
+      transitionToken: "host:stale_advance_phase:reject:GameAlreadyCompleted",
+      boundary:
+        "Seeded browser completed host stale AdvancePhase rejected into completed host controls.",
+    },
+    {
+      proofField: "completedHostStaleCompleteRecoveryProof",
+      commandKind: "CompleteGame",
+      commandId: "completed-host-stale-complete",
+      transitionToken: "host:stale_complete_game:reject:GameAlreadyCompleted",
+      boundary:
+        "Seeded browser completed host stale CompleteGame rejected into completed host controls.",
+    },
+  ];
+}
+
+async function proveCompletedHostStaleCommandRecoveryCases({
   browser,
   frontendBaseUrl,
   roleUrl,
+  cases,
+}) {
+  const proofEntries = [];
+  for (const scenario of cases) {
+    proofEntries.push([
+      scenario.proofField,
+      await proveCompletedHostStaleCommandRecovery({
+        browser,
+        frontendBaseUrl,
+        roleUrl,
+        scenario,
+      }),
+    ]);
+  }
+  return Object.fromEntries(proofEntries);
+}
+
+async function proveCompletedHostStaleCommandRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+  scenario,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const expectedGame = gameFromRoleUrl(roleUrl);
   const commandRequests = [];
   try {
-    await installCompletedHostStaleAdvanceRecoveryBrowserRoutes(page, {
+    await installCompletedHostStaleCommandRecoveryBrowserRoutes(page, {
       commandRequests,
+      scenario,
     });
     await page.context().addCookies([
       {
@@ -2643,21 +2696,22 @@ async function proveCompletedHostStaleAdvanceRecovery({
       null,
       { timeout: 15000 },
     );
-    const commandResponse = await page.evaluate(async (game) => {
+    const commandResponse = await page.evaluate(async ({ game, scenario }) => {
+      const command = {
+        [scenario.commandKind]: {
+          game,
+        },
+      };
       const response = await fetch("/commands", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           v: 1,
-          id: "completed-host-stale-advance",
+          id: scenario.commandId,
           body: {
             kind: "IssueCommand",
             body: {
-              command: {
-                AdvancePhase: {
-                  game,
-                },
-              },
+              command,
             },
           },
         }),
@@ -2667,7 +2721,7 @@ async function proveCompletedHostStaleAdvanceRecovery({
         status: response.status,
         body: await response.json(),
       };
-    }, expectedGame);
+    }, { game: expectedGame, scenario });
     const recoveryResyncSnapshot = await page.evaluate(async () => {
       if (typeof window.__fmarchTriggerHostResync !== "function") {
         throw new Error("host resync hook is unavailable after reject");
@@ -2685,7 +2739,7 @@ async function proveCompletedHostStaleAdvanceRecovery({
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error(
-        "completed host stale advance proof leaked an invite URL token",
+        `completed host stale ${scenario.commandKind} proof leaked an invite URL token`,
       );
     }
     return {
@@ -2695,8 +2749,8 @@ async function proveCompletedHostStaleAdvanceRecovery({
       surfaceTestId: "host-console-surface",
       clickedThroughFromRoleUrl: true,
       commandEndpoint: "/commands",
-      commandKind: "AdvancePhase",
-      command: commandRequests.at(-1)?.AdvancePhase ?? null,
+      commandKind: scenario.commandKind,
+      command: commandRequests.at(-1)?.[scenario.commandKind] ?? null,
       commandResponse,
       setupResyncFromSeq: 921,
       setupResyncSnapshotHost: setupResyncSnapshot?.host ?? null,
@@ -7285,15 +7339,15 @@ async function installCompletedHostRoleReloadBrowserRoutes(page) {
   });
 }
 
-async function installCompletedHostStaleAdvanceRecoveryBrowserRoutes(
+async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
   page,
-  { commandRequests },
+  { commandRequests, scenario },
 ) {
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.AdvancePhase !== undefined) {
+    if (command?.[scenario.commandKind] !== undefined) {
       await fulfillJson(
         route,
         {
@@ -7317,14 +7371,13 @@ async function installCompletedHostStaleAdvanceRecoveryBrowserRoutes(
       route,
       {
         v: 1,
-        id: commandEnvelope?.id ?? "completed-host-stale-advance-reject",
+        id: commandEnvelope?.id ?? `${scenario.commandId}-reject`,
         body: {
           kind: "Reject",
           body: {
-            error: "WrongCompletedHostStaleAdvanceProofCommand",
+            error: "WrongCompletedHostStaleProofCommand",
             retryable: false,
-            message:
-              "completed-host stale advance proof only accepts AdvancePhase",
+            message: `completed-host stale proof only accepts ${scenario.commandKind}`,
           },
         },
       },
@@ -7339,8 +7392,7 @@ async function installCompletedHostStaleAdvanceRecoveryBrowserRoutes(
         phaseId: "N05",
         locked: false,
         seq: 921,
-        boundary:
-          "Seeded browser completed host stale AdvancePhase rejected into completed host controls.",
+        boundary: scenario.boundary,
       }),
     );
   });
@@ -11872,7 +11924,13 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       "host:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_resolve_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
       "host:stale_advance_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_complete_game:reject:GameAlreadyCompleted",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:endgame:complete",
@@ -11950,13 +12008,13 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     }),
   );
   assertCompletedStaleRejectCases([
-    {
-      assertProof: assertCompletedHostStaleAdvanceRecoveryProof,
-      proof:
-        completedGameEndgameSurface.completedHostStaleAdvanceRecoveryProof,
+    ...completedHostStaleCommandCases().map((scenario) => ({
+      assertProof: assertCompletedHostStaleCommandRecoveryProof,
+      proof: completedGameEndgameSurface[scenario.proofField],
       expectedGame,
       sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-    },
+      expectedCommandKind: scenario.commandKind,
+    })),
     {
       assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
       proof:
@@ -12120,10 +12178,11 @@ function assertCompletedStaleRejectCases(cases) {
   }
 }
 
-function assertCompletedHostStaleAdvanceRecoveryProof({
+function assertCompletedHostStaleCommandRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  expectedCommandKind,
 }) {
   const snapshot = proof?.recoverySnapshot;
   if (
@@ -12137,7 +12196,7 @@ function assertCompletedHostStaleAdvanceRecoveryProof({
     !proof.visitedRolePath.endsWith("/host") ||
     proof.surfaceTestId !== "host-console-surface" ||
     proof.commandEndpoint !== "/commands" ||
-    proof.commandKind !== "AdvancePhase" ||
+    proof.commandKind !== expectedCommandKind ||
     proof.command?.game !== expectedGame ||
     proof.commandResponse?.ok !== false ||
     proof.commandResponse?.status !== 409 ||
@@ -12169,7 +12228,7 @@ function assertCompletedHostStaleAdvanceRecoveryProof({
     snapshot.triggerButtons?.length !== 0
   ) {
     throw new Error(
-      `core-loop admin proof missing completed host stale advance recovery: ${JSON.stringify(
+      `core-loop admin proof missing completed host stale ${expectedCommandKind} recovery: ${JSON.stringify(
         proof,
       )}`,
     );
