@@ -762,15 +762,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-      spineTarget: {
-        sourceCheckId: "local-core-loop-proof",
-        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-        cycleId: "d02-n02",
-        roleUrlId: "d02-n02-actionPlayer",
-        roleUrl: "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-        checkpointId: "d02-n02-n02-action-open",
-        browserProofCommand: devTestGameLiveProofCommand,
-      },
+      spineTarget: resolvedFeatureSpineTargetFixture(),
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -816,16 +808,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
         productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-        spineTarget: {
-          sourceCheckId: "local-core-loop-proof",
-          detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-          cycleId: "d02-n02",
-          roleUrlId: "d02-n02-actionPlayer",
-          roleUrl:
-            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-          checkpointId: "d02-n02-n02-action-open",
-          browserProofCommand: devTestGameLiveProofCommand,
-        },
+        spineTarget: resolvedFeatureSpineTargetFixture(),
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
@@ -1258,18 +1241,13 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.releaseReadinessTrace.candidates[0].proofGraphNodeId,
     "admin-proof:hosted-evidence-lane",
   );
-  assert.deepEqual(blockedPreflightAction.nextAction.unproven.spineTarget, {
-    sourceCheckId: "local-core-loop-proof",
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    roleUrl: "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-    checkpointId: "d02-n02-n02-action-open",
-    browserProofCommand: devTestGameLiveProofCommand,
-  });
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.spineTarget,
+    resolvedFeatureSpineTargetFixture("host-phase-control"),
+  );
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.productionFeatureSpineTarget,
-    productionFeatureSpineTargetFixture(),
+    productionFeatureSpineTargetFixture("host-phase-control"),
   );
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
@@ -9339,17 +9317,75 @@ function coreLoopSpineTargetsFixture() {
       "normalPlayerDirectActionReject",
       "staleActionConflictReject",
     ],
+    roleUrlHrefs: {
+      "d01-n01-d02-host":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
+      "d01-n01-d02-actionPlayer":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+      "d01-n01-d02-normalPlayer":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+      "d01-n01-d02-target":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+      "d02-n02-host":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+      "d02-n02-actionPlayer":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+      "d02-n02-normalPlayer":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+      "d02-n02-target":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    },
   };
 }
 
-function productionFeatureSpineTargetFixture() {
+function productionFeatureSpineTargetFixture(slotId = "player-action-submission") {
+  return { ...productionFeatureSpineTargetFixtures[slotId] };
+}
+
+function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") {
+  const declaration = productionFeatureSpineTargetFixture(slotId);
   return {
+    featureSlotId: declaration.featureSlotId,
+    sourceCheckId: "local-core-loop-proof",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleId: declaration.cycleId,
+    roleUrlId: declaration.roleUrlId,
+    roleUrl: coreLoopSpineTargetsFixture().roleUrlHrefs[declaration.roleUrlId],
+    checkpointId: declaration.checkpointId,
+    browserProofCommand: devTestGameLiveProofCommand,
+  };
+}
+
+const productionFeatureSpineTargetFixtures = Object.freeze({
+  "host-phase-control": Object.freeze({
+    featureSlotId: "host-phase-control",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    checkpointId: "d02-n02-d02-vote-open",
+  }),
+  "player-action-submission": Object.freeze({
+    featureSlotId: "player-action-submission",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
-  };
-}
+  }),
+  "private-channel": Object.freeze({
+    featureSlotId: "private-channel",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d01-n01-d02",
+    roleUrlId: "d01-n01-d02-actionPlayer",
+    checkpointId: "d01-n01-d02-n01-action-open",
+  }),
+  "stale-recovery": Object.freeze({
+    featureSlotId: "stale-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d01-n01-d02",
+    roleUrlId: "d01-n01-d02-host",
+    checkpointId: "d01-n01-d02-d01-resolved-locked",
+  }),
+});
 
 function hardeningAdminProofFixture() {
   return {
@@ -9924,16 +9960,7 @@ function nextActionAdminProofFixture() {
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       unprovenProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-      unprovenSpineTarget: {
-        sourceCheckId: "local-core-loop-proof",
-        detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-        cycleId: "d02-n02",
-        roleUrlId: "d02-n02-actionPlayer",
-        roleUrl:
-          "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-        checkpointId: "d02-n02-n02-action-open",
-        browserProofCommand: devTestGameLiveProofCommand,
-      },
+      unprovenSpineTarget: resolvedFeatureSpineTargetFixture(),
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
         status: "ready",

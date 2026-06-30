@@ -435,14 +435,17 @@ export function assertNextActionAdminProof(evidence) {
     const declaration = evidence.generatedFrom.unprovenProductionFeatureSpineTarget;
     const target = evidence.generatedFrom.unprovenSpineTarget;
     if (
+      typeof declaration?.featureSlotId !== "string" ||
       typeof declaration?.cycleId !== "string" ||
       typeof declaration?.roleUrlId !== "string" ||
       typeof declaration?.checkpointId !== "string" ||
+      typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      target.featureSlotId !== declaration.featureSlotId ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||

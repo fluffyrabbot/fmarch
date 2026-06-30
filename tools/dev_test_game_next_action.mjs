@@ -542,8 +542,30 @@ function coreLoopSpineTargetFromReadiness(readiness) {
     roleUrl: String(targets.defaultRoleUrl ?? ""),
     checkpointId: String(targets.defaultCheckpointId ?? ""),
     browserProofCommand: String(targets.browserProofCommand ?? ""),
+    cycleIds: [...(targets.cycleIds ?? [])].map((id) => String(id)),
+    roleUrlIds: [...(targets.roleUrlIds ?? [])].map((id) => String(id)),
+    checkpointIds: [...(targets.checkpointIds ?? [])].map((id) => String(id)),
+    roleUrlHrefs:
+      targets.roleUrlHrefs !== null && typeof targets.roleUrlHrefs === "object"
+        ? Object.fromEntries(
+            Object.entries(targets.roleUrlHrefs).map(([id, href]) => [
+              String(id),
+              String(href ?? ""),
+            ]),
+          )
+        : {},
   };
-  return Object.values(target).every((value) => value !== "") ? target : null;
+  return [
+    target.sourceCheckId,
+    target.detailRoleUrl,
+    target.cycleId,
+    target.roleUrlId,
+    target.roleUrl,
+    target.checkpointId,
+    target.browserProofCommand,
+  ].every((value) => value !== "")
+    ? target
+    : null;
 }
 
 function resolveProductionFeatureSpineTarget({
@@ -561,23 +583,44 @@ function resolveProductionFeatureSpineTarget({
       `buildable release-readiness item ${itemId} has no core-loop spine target to resolve`,
     );
   }
-  if (
-    declaration.sourceCheckId !== coreLoopSpineTarget.sourceCheckId ||
-    declaration.cycleId !== coreLoopSpineTarget.cycleId ||
-    declaration.roleUrlId !== coreLoopSpineTarget.roleUrlId ||
-    declaration.checkpointId !== coreLoopSpineTarget.checkpointId
-  ) {
+  if (declaration.sourceCheckId !== coreLoopSpineTarget.sourceCheckId) {
     throw new Error(
       `buildable release-readiness item ${itemId} production feature spine target drifted`,
     );
   }
-  return { ...coreLoopSpineTarget };
+  if (
+    !coreLoopSpineTarget.cycleIds.includes(declaration.cycleId) ||
+    !coreLoopSpineTarget.roleUrlIds.includes(declaration.roleUrlId) ||
+    !coreLoopSpineTarget.checkpointIds.includes(declaration.checkpointId)
+  ) {
+    throw new Error(
+      `buildable release-readiness item ${itemId} production feature spine target is not in the core-loop proof`,
+    );
+  }
+  const roleUrl = coreLoopSpineTarget.roleUrlHrefs[declaration.roleUrlId];
+  if (typeof roleUrl !== "string" || roleUrl === "") {
+    throw new Error(
+      `buildable release-readiness item ${itemId} production feature role URL is missing`,
+    );
+  }
+  return {
+    featureSlotId: declaration.featureSlotId,
+    sourceCheckId: coreLoopSpineTarget.sourceCheckId,
+    detailRoleUrl: coreLoopSpineTarget.detailRoleUrl,
+    cycleId: declaration.cycleId,
+    roleUrlId: declaration.roleUrlId,
+    roleUrl,
+    checkpointId: declaration.checkpointId,
+    browserProofCommand: coreLoopSpineTarget.browserProofCommand,
+  };
 }
 
 function validProductionFeatureSpineDeclaration(declaration) {
   return (
     declaration !== null &&
     typeof declaration === "object" &&
+    typeof declaration.featureSlotId === "string" &&
+    declaration.featureSlotId.length > 0 &&
     declaration.sourceCheckId === "local-core-loop-proof" &&
     typeof declaration.cycleId === "string" &&
     declaration.cycleId.length > 0 &&
@@ -1097,6 +1140,8 @@ function validActionableSpineTarget(spineTarget) {
   return (
     spineTarget !== null &&
     typeof spineTarget === "object" &&
+    typeof spineTarget.featureSlotId === "string" &&
+    spineTarget.featureSlotId.length > 0 &&
     spineTarget.sourceCheckId === "local-core-loop-proof" &&
     typeof spineTarget.detailRoleUrl === "string" &&
     spineTarget.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
@@ -1526,7 +1571,7 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget:
-        productionFeatureSpineTargets.coreLoopNightAction,
+        productionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
         syntheticExternalTarget
           ? "Local demo hosted evidence handoff after passed synthetic target preflight. This command refreshes the blocked-to-passed local pass path, but does not satisfy real hosted deployment evidence."
@@ -1543,11 +1588,33 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
 }
 
 const productionFeatureSpineTargets = Object.freeze({
-  coreLoopNightAction: Object.freeze({
+  hostPhaseControl: Object.freeze({
+    featureSlotId: "host-phase-control",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    checkpointId: "d02-n02-d02-vote-open",
+  }),
+  playerActionSubmission: Object.freeze({
+    featureSlotId: "player-action-submission",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
     checkpointId: "d02-n02-n02-action-open",
+  }),
+  privateChannel: Object.freeze({
+    featureSlotId: "private-channel",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d01-n01-d02",
+    roleUrlId: "d01-n01-d02-actionPlayer",
+    checkpointId: "d01-n01-d02-n01-action-open",
+  }),
+  staleRecovery: Object.freeze({
+    featureSlotId: "stale-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d01-n01-d02",
+    roleUrlId: "d01-n01-d02-host",
+    checkpointId: "d01-n01-d02-d01-resolved-locked",
   }),
 });
 
@@ -1563,7 +1630,7 @@ const localBuildableReleaseReadinessItems = new Map([
       roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-evidence-lane",
       productionFeatureSpineTarget:
-        productionFeatureSpineTargets.coreLoopNightAction,
+        productionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
         "Hosted evidence lane handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target, then exposes the blocked or passed lane through its native admin role URL; it does not let local hosted-like evidence satisfy hosted deployment.",
       realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
@@ -1584,7 +1651,7 @@ const localBuildableReleaseReadinessItems = new Map([
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget:
-        productionFeatureSpineTargets.coreLoopNightAction,
+        productionFeatureSpineTargets.playerActionSubmission,
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
     },
@@ -1601,7 +1668,7 @@ const localBuildableReleaseReadinessItems = new Map([
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget:
-        productionFeatureSpineTargets.coreLoopNightAction,
+        productionFeatureSpineTargets.staleRecovery,
       proofBoundary:
         "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
     },
@@ -1617,7 +1684,7 @@ const localBuildableReleaseReadinessItems = new Map([
       roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:release-runbook",
       productionFeatureSpineTarget:
-        productionFeatureSpineTargets.coreLoopNightAction,
+        productionFeatureSpineTargets.privateChannel,
       proofBoundary:
         "Machine-readable local runbook rehearsal only. This can prove the release checklist is mapped and inspectable, but it does not prove human approval, beta readiness, release readiness, or production readiness.",
     },

@@ -1944,6 +1944,7 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
     roleUrlIds,
     checkpointIds,
     recoveryHookIds,
+    roleUrlHrefs: { ...(rowIds.roleUrlHrefs ?? {}) },
   };
 }
 
@@ -3320,14 +3321,17 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
     const target = proof.generatedFrom.unprovenSpineTarget;
     if (
+      typeof declaration?.featureSlotId !== "string" ||
       typeof declaration?.cycleId !== "string" ||
       typeof declaration?.roleUrlId !== "string" ||
       typeof declaration?.checkpointId !== "string" ||
+      typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      target.featureSlotId !== declaration.featureSlotId ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-feature-spine-declaration",
       ) ||
@@ -3980,6 +3984,9 @@ function validCoreLoopSpineTargets(spineTargets) {
     spineTargets.cycleIds.includes(spineTargets.defaultCycleId) &&
     Array.isArray(spineTargets.roleUrlIds) &&
     spineTargets.roleUrlIds.includes(spineTargets.defaultRoleUrlId) &&
+    spineTargets.roleUrlHrefs !== null &&
+    typeof spineTargets.roleUrlHrefs === "object" &&
+    typeof spineTargets.roleUrlHrefs[spineTargets.defaultRoleUrlId] === "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes(spineTargets.defaultCheckpointId)
   );

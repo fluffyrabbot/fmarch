@@ -1268,7 +1268,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       : [
           Object.freeze({
             id: "selected-feature-spine-declaration",
-            status: `${selectedProductionFeatureSpineTarget.cycleId}/${selectedProductionFeatureSpineTarget.checkpointId}/${selectedProductionFeatureSpineTarget.roleUrlId}`,
+            status: `${selectedProductionFeatureSpineTarget.featureSlotId}:${selectedProductionFeatureSpineTarget.cycleId}/${selectedProductionFeatureSpineTarget.checkpointId}/${selectedProductionFeatureSpineTarget.roleUrlId}`,
           }),
           Object.freeze({
             id: "selected-spine-target",
@@ -1668,6 +1668,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
   if (spineTarget === null || typeof spineTarget !== "object") {
     return Object.freeze({
       sourceCheckId: "",
+      featureSlotId: "",
       detailRoleUrl: "",
       cycleId: "",
       roleUrlId: "",
@@ -1678,6 +1679,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
   }
   return Object.freeze({
     sourceCheckId: String(spineTarget.sourceCheckId ?? ""),
+    featureSlotId: String(spineTarget.featureSlotId ?? ""),
     detailRoleUrl: String(spineTarget.detailRoleUrl ?? ""),
     cycleId: String(spineTarget.cycleId ?? ""),
     roleUrlId: String(spineTarget.roleUrlId ?? ""),
@@ -1691,6 +1693,7 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
   if (declaration === null || typeof declaration !== "object") {
     return Object.freeze({
       sourceCheckId: "",
+      featureSlotId: "",
       cycleId: "",
       roleUrlId: "",
       checkpointId: "",
@@ -1698,6 +1701,7 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
   }
   return Object.freeze({
     sourceCheckId: String(declaration.sourceCheckId ?? ""),
+    featureSlotId: String(declaration.featureSlotId ?? ""),
     cycleId: String(declaration.cycleId ?? ""),
     roleUrlId: String(declaration.roleUrlId ?? ""),
     checkpointId: String(declaration.checkpointId ?? ""),

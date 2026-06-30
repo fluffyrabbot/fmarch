@@ -1396,7 +1396,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
       [
         "selected-feature-spine-declaration",
-        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
       ],
       [
         "selected-spine-target",
@@ -1468,6 +1468,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
     selectedSpineTarget: {
       sourceCheckId: "local-core-loop-proof",
+      featureSlotId: "player-action-submission",
       detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
       cycleId: "d02-n02",
       roleUrlId: "d02-n02-actionPlayer",
@@ -1525,6 +1526,7 @@ test("admin route data exposes local next action as a native audit row", async (
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
+            featureSlotId: "player-action-submission",
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
             cycleId: "d02-n02",
             roleUrlId: "d02-n02-actionPlayer",
@@ -3828,6 +3830,7 @@ function nextActionFixture({
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
+            featureSlotId: "player-action-submission",
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
             cycleId: "d02-n02",
             roleUrlId: "d02-n02-actionPlayer",
@@ -4409,6 +4412,7 @@ function releaseReadinessTraceFixture({ unproven, command }) {
 
 function productionFeatureSpineTargetFixture() {
   return {
+    featureSlotId: "player-action-submission",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
