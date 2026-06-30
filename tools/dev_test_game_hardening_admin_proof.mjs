@@ -26,6 +26,7 @@ const requiredChecks = [
   "idempotent-retry",
   "action-idempotent-retry",
   "concurrent-action-race",
+  "concurrent-action-race-reload",
   "reconnect-recovery",
   "stale-player-vote",
   "concurrent-vote-race",

@@ -4275,6 +4275,29 @@ test("session card and markdown include role credential URLs and tokens", () => 
           status: "dead",
         },
         actionVisibleAfterRefresh: false,
+        roleReloadAfterRace: {
+          status: "passed",
+          actionRouteStatus: 200,
+          hostRouteStatus: 200,
+          actionCommandState: {
+            actorSlot: "slot_4",
+            phase: { phaseId: "N01", locked: true },
+            actions: [],
+          },
+          actionVisibleAfterReload: false,
+          hostPhase: { id: "N01", locked: true },
+          hostSlotsAfterReload: [],
+          apiCommandState: {
+            actor_slot: "slot_4",
+            phase: { phase_id: "N01", locked: true },
+            actions: [],
+          },
+          apiTargetSlot: {
+            slot_id: "slot-2",
+            alive: false,
+            status: "dead",
+          },
+        },
       },
       actionIdempotentRetry: {
         status: "passed",
@@ -5670,6 +5693,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "idempotent-retry",
       "action-idempotent-retry",
       "concurrent-action-race",
+      "concurrent-action-race-reload",
       "reconnect-recovery",
       "stale-player-vote",
       "stale-player-vote-after-change",
@@ -5802,7 +5826,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 95);
+  assert.equal(opsArtifacts.proofRun.laneCount, 96);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5900,6 +5924,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "night-action-loop",
       "action-idempotent-retry",
       "concurrent-action-race",
+      "concurrent-action-race-reload",
       "concurrent-vote-race-reload",
       "concurrent-player-vote-resolve-race",
       "concurrent-player-vote-resolve-race-reload",
@@ -6428,6 +6453,7 @@ function hardeningAdminProofFixture() {
         "idempotent-retry",
         "action-idempotent-retry",
         "concurrent-action-race",
+        "concurrent-action-race-reload",
         "reconnect-recovery",
         "stale-player-vote",
         "stale-player-vote-after-change",
@@ -6580,6 +6606,7 @@ function seedAdminProofFixture() {
         "replacement-incoming-player",
         "action-idempotent-retry",
         "concurrent-action-race",
+        "concurrent-action-race-reload",
         "concurrent-player-vote-resolve-race",
         "concurrent-player-vote-resolve-race-reload",
         "concurrent-player-action-advance-race",

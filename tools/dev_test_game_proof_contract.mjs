@@ -42,6 +42,7 @@ const requiredLaneIds = Object.freeze([
   "idempotent-retry",
   "action-idempotent-retry",
   "concurrent-action-race",
+  "concurrent-action-race-reload",
   "reconnect-recovery",
   "stale-player-vote",
   "stale-player-vote-after-change",
@@ -1631,6 +1632,69 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentActionRace?.resolvedTargetSlot?.status === "dead" &&
         hardening.concurrentActionRace?.actionVisibleAfterRefresh === false,
     }),
+    lane(
+      "concurrent-action-race-reload",
+      "Concurrent action race reloads resolved role projections",
+      {
+        targetSlot: hardening.concurrentActionRace?.targetSlot ?? null,
+        actionRouteStatus:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionRouteStatus ??
+          null,
+        hostRouteStatus:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostRouteStatus ??
+          null,
+        actionPhase:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionCommandState
+            ?.phase ?? null,
+        hostPhase:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostPhase ?? null,
+        hostSlotCount:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostSlotsAfterReload
+            ?.length ?? null,
+        apiTargetAlive:
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiTargetSlot?.alive ??
+          null,
+        passed:
+          hardening.concurrentActionRace?.status === "passed" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionRouteStatus ===
+            200 &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostRouteStatus ===
+            200 &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionCommandState
+            ?.actorSlot === "slot_4" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionCommandState
+            ?.phase?.phaseId === "N01" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionCommandState
+            ?.phase?.locked === true &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.actionCommandState
+            ?.actions?.length === 0 &&
+          hardening.concurrentActionRace?.roleReloadAfterRace
+            ?.actionVisibleAfterReload === false &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostPhase?.id ===
+            "N01" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.hostPhase?.locked ===
+            true &&
+          Array.isArray(
+            hardening.concurrentActionRace?.roleReloadAfterRace?.hostSlotsAfterReload,
+          ) === true &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiCommandState
+            ?.actor_slot === "slot_4" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiCommandState
+            ?.phase?.phase_id === "N01" &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiCommandState
+            ?.phase?.locked === true &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiCommandState
+            ?.actions?.length === 0 &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiTargetSlot
+            ?.slot_id === hardening.concurrentActionRace?.targetSlot &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiTargetSlot
+            ?.alive === false &&
+          hardening.concurrentActionRace?.roleReloadAfterRace?.apiTargetSlot
+            ?.status === "dead",
+      },
+    ),
     lane("reconnect-recovery", "Dropped player live projection reconnects", {
       reconnectingState: hardening.reconnect?.reconnectingStatus?.state ?? null,
       recoveryState: hardening.reconnect?.reconnectRecoveryEvent?.state ?? null,

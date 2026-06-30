@@ -26,6 +26,7 @@ const requiredScenarios = [
   "night-action-loop",
   "action-idempotent-retry",
   "concurrent-action-race",
+  "concurrent-action-race-reload",
   "concurrent-player-vote-resolve-race",
   "concurrent-player-vote-resolve-race-reload",
   "concurrent-player-action-advance-race",

@@ -3659,6 +3659,78 @@ assert.equal(
   false,
 );
 assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .actionRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .hostRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .actionCommandState.phase.phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .actionCommandState.phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .actionCommandState.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .actionVisibleAfterReload,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .hostPhase.id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .hostPhase.locked,
+  true,
+);
+assert.equal(
+  Array.isArray(
+    session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+      .hostSlotsAfterReload,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .apiCommandState.phase.phase_id,
+  "N01",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .apiCommandState.phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .apiCommandState.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentActionRace.roleReloadAfterRace
+    .apiTargetSlot.alive,
+  false,
+);
+assert.equal(
   session.verification.multiplayerHardening.actionIdempotentRetry.status,
   "passed",
 );
