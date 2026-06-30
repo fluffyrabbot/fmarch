@@ -3210,7 +3210,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
         buttonsAfterRace: [{ action: "submit_post", disabled: true }],
         hostReplacementAfterRace: { occupantLabel: "player-rowan" },
         apiSlotAfterRace: { occupant_user_id: "player-rowan" },
-        staleRoute: { status: 403 },
+        staleRoute: {
+          status: 403,
+          responseStatus: 403,
+          message: "Forbidden: requires scoped channel capability",
+        },
         postBody: "Replacement race private post fixture.",
         apiThreadPostBodies: ["Replacement race private post fixture."],
       },
@@ -6029,6 +6033,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
+      "concurrent-replacement-private-post-race-reload",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
@@ -6095,8 +6100,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(raceCoverage.productionReady, false);
   assert.equal(raceCoverage.summary.cellCount, 16);
   assert.equal(raceCoverage.summary.provenCellCount, 16);
-  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 13);
-  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 13);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 14);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 14);
   assert.equal(raceCoverage.summary.reloadGapCount, 0);
   assert.deepEqual(
     raceCoverage.cells
@@ -6216,7 +6221,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 104);
+  assert.equal(opsArtifacts.proofRun.laneCount, 105);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -6333,6 +6338,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
+      "concurrent-replacement-private-post-race-reload",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
@@ -6779,7 +6785,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 104,
+      laneCount: 105,
       lanes: [],
       nonClaims: [],
     },
@@ -6955,6 +6961,7 @@ function hardeningAdminProofFixture() {
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-cohost-deadline-resolve-race-reload",
         "concurrent-replacement-private-post-race",
+        "concurrent-replacement-private-post-race-reload",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
@@ -7111,6 +7118,7 @@ function seedAdminProofFixture() {
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-cohost-deadline-resolve-race-reload",
         "concurrent-replacement-private-post-race",
+        "concurrent-replacement-private-post-race-reload",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",

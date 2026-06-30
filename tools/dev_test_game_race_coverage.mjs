@@ -57,6 +57,7 @@ const raceCells = Object.freeze([
     actorPair: "replacement vs outgoing player",
     commandFamily: "private channel post",
     raceLaneId: "concurrent-replacement-private-post-race",
+    reloadLaneId: "concurrent-replacement-private-post-race-reload",
     roleSurfaces: ["player", "replacementPlayer", "host"],
   }),
   raceCell({

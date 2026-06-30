@@ -57,6 +57,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-cohost-deadline-resolve-race",
   "concurrent-cohost-deadline-resolve-race-reload",
   "concurrent-replacement-private-post-race",
+  "concurrent-replacement-private-post-race-reload",
   "concurrent-replacement-vote-race",
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
@@ -2907,6 +2908,64 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
             ?.occupant_user_id === "player-rowan" &&
           hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status === 403,
+      },
+    ),
+    lane(
+      "concurrent-replacement-private-post-race-reload",
+      "Concurrent replacement private-post race reloads scoped channel truth",
+      {
+        game: hardening.concurrentReplacementPrivatePostRace?.game ?? null,
+        staleRouteStatus:
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status ?? null,
+        staleRouteResponseStatus:
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute
+            ?.responseStatus ?? null,
+        staleRouteMessage:
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute?.message ?? null,
+        commandStateStatus:
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.status ?? null,
+        commandStateError:
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.error ?? null,
+        hostOccupant:
+          hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
+            ?.occupantLabel ?? null,
+        apiOccupant:
+          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
+            ?.occupant_user_id ?? null,
+        stalePostControlsEnabled:
+          hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.filter(
+            (button) =>
+              (button.action === "submit_post" ||
+                button.action?.startsWith("submit_action")) &&
+              button.disabled === false,
+          ).length ?? null,
+        passed:
+          hardening.concurrentReplacementPrivatePostRace?.status === "passed" &&
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status === 403 &&
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute
+            ?.responseStatus === 403 &&
+          hardening.concurrentReplacementPrivatePostRace?.staleRoute?.message?.includes(
+            "requires scoped channel capability",
+          ) === true &&
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.status === 403 &&
+          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
+            ?.error === "NotYourSlot" &&
+          hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.some(
+            (button) =>
+              (button.action === "submit_post" ||
+                button.action?.startsWith("submit_action")) &&
+              button.disabled === false,
+          ) === false &&
+          hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
+            ?.occupantLabel === "player-rowan" &&
+          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
+            ?.occupant_user_id === "player-rowan" &&
+          hardening.concurrentReplacementPrivatePostRace?.apiThreadPostBodies?.includes(
+            hardening.concurrentReplacementPrivatePostRace?.postBody,
+          ) === (hardening.concurrentReplacementPrivatePostRace?.post?.state === "ack"),
       },
     ),
     lane(
