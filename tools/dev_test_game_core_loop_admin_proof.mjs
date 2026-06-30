@@ -224,7 +224,9 @@ async function provePlayerActionSubmissionCheckpoint({
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
   try {
+    await installPlayerActionSubmissionBrowserRoutes(page, { commandRequests });
     await page.context().addCookies([
       {
         name: "fmarch_fixture_session",
@@ -274,6 +276,10 @@ async function provePlayerActionSubmissionCheckpoint({
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("player action checkpoint leaked an invite URL token");
     }
+    const clickProof = await provePlayerActionSubmissionClick({
+      page,
+      commandRequests,
+    });
     return {
       status: "passed",
       sourceRoleUrl: String(roleUrl),
@@ -295,12 +301,140 @@ async function provePlayerActionSubmissionCheckpoint({
         recoveryText,
         statusText,
       },
+      playerActionSubmissionClickProof: clickProof,
       releaseReady: false,
       productionReady: false,
     };
   } finally {
     await page.close();
   }
+}
+
+async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequests }) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitAction !== undefined) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Ack",
+            body: {
+              stream_seqs: [501],
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        v: 1,
+        id: commandEnvelope?.id ?? "player-action-submission-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPlayerActionProofCommand",
+            retryable: false,
+          },
+        },
+      }),
+    });
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, {
+      game: "seeded-action-open",
+      actorSlot: "slot-7",
+      actorAlive: true,
+      actorStatus: "alive",
+      roleKey: "mafia_goon",
+      gameCompleted: false,
+      phase: {
+        phaseId: "N02",
+        phaseKind: "Night",
+        phaseNumber: 2,
+        locked: false,
+      },
+      actions: [],
+      voteTargets: [],
+      currentVote: null,
+      boundary: "Seeded browser ACK refreshed action state.",
+    });
+  });
+}
+
+async function provePlayerActionSubmissionClick({ page, commandRequests }) {
+  const actionButton = page.locator(
+    '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+  );
+  await actionButton.waitFor({ state: "visible", timeout: 15000 });
+  await actionButton.click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "ack" &&
+      window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind === "SubmitAction",
+    null,
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-action-submission-checkpoint"]')
+        ?.getAttribute("data-receipt-state")
+        ?.startsWith("ack:") === true,
+    null,
+    { timeout: 15000 },
+  );
+  const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+  const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+  const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+  const receiptState = await checkpoint.getAttribute("data-receipt-state");
+  const actionStateAfterAck = await checkpoint.getAttribute("data-action-state");
+  const receiptCountText = await page
+    .getByTestId("player-command-receipt-count")
+    .innerText();
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+  const command = commandRequests.at(-1)?.SubmitAction ?? null;
+  return {
+    status: "passed",
+    clickedAction: "submit_action:factional_kill",
+    commandKind: command === null ? null : "SubmitAction",
+    command,
+    commandStatus,
+    bridgePlan,
+    receipts,
+    projectionCommandState: projection?.commandState ?? null,
+    checkpointReceiptState: receiptState,
+    checkpointActionStateAfterAck: actionStateAfterAck,
+    receiptCount: Number.parseInt(receiptCountText, 10),
+    receiptStatusText,
+  };
+}
+
+async function fulfillJson(route, payload, status = 200) {
+  await route.fulfill({
+    status,
+    contentType: "application/json",
+    body: JSON.stringify(payload),
+  });
 }
 
 function rolePathFromUrl(roleUrl) {
@@ -427,6 +561,7 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
 
 function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
+  const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
   if (
     playerRoleSurface?.status !== "passed" ||
     playerRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -481,6 +616,53 @@ function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`player action checkpoint missing visible row: ${rowId}`);
     }
+  }
+  assertPlayerActionSubmissionClickProof({
+    clickProof,
+    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
+  });
+}
+
+function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
+  if (
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "submit_action:factional_kill" ||
+    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.command.action_id !== "factional_kill" ||
+    clickProof.command.actor_slot !== "slot-7" ||
+    clickProof.command.template_id !== "factional_kill" ||
+    clickProof.command.targets?.[0] !== "slot-2" ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 501") ||
+    clickProof.bridgePlan?.role !== "player" ||
+    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    !clickProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
+    clickProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    clickProof.projectionCommandState?.actions?.length !== 0 ||
+    !String(clickProof.checkpointReceiptState ?? "").startsWith("ack:") ||
+    clickProof.checkpointActionStateAfterAck !== "disabled:no legal action available" ||
+    clickProof.receiptCount !== 1 ||
+    !String(clickProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 501")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing player action click ACK: ${JSON.stringify(
+        clickProof,
+      )}`,
+    );
+  }
+}
+
+function gameFromRoleUrl(roleUrl) {
+  try {
+    return new URL(roleUrl).pathname.split("/")[2] ?? "";
+  } catch {
+    return "";
   }
 }
 

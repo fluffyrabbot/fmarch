@@ -1961,6 +1961,7 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
 
 function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
+  const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
   if (
     playerRoleSurface?.status !== "passed" ||
     playerRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -1999,6 +2000,49 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`player action checkpoint missing visible row: ${rowId}`);
     }
+  }
+  assertCoreLoopPlayerActionClickProof({
+    clickProof,
+    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
+  });
+}
+
+function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
+  if (
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "submit_action:factional_kill" ||
+    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.command.action_id !== "factional_kill" ||
+    clickProof.command.actor_slot !== "slot-7" ||
+    clickProof.command.template_id !== "factional_kill" ||
+    clickProof.command.targets?.[0] !== "slot-2" ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 501") ||
+    clickProof.bridgePlan?.role !== "player" ||
+    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    !clickProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
+    clickProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    clickProof.projectionCommandState?.actions?.length !== 0 ||
+    !String(clickProof.checkpointReceiptState ?? "").startsWith("ack:") ||
+    clickProof.checkpointActionStateAfterAck !== "disabled:no legal action available" ||
+    clickProof.receiptCount !== 1 ||
+    !String(clickProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 501")
+  ) {
+    throw new Error("core-loop admin proof missing player action click ACK");
+  }
+}
+
+function gameFromRoleUrl(roleUrl) {
+  try {
+    return new URL(roleUrl).pathname.split("/")[2] ?? "";
+  } catch {
+    return "";
   }
 }
 

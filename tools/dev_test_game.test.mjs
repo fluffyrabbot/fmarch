@@ -9351,6 +9351,52 @@ function playerActionRoleSurfaceFixture() {
         "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
       statusText: "Player action submission is reachable from this role URL",
     },
+    playerActionSubmissionClickProof: {
+      status: "passed",
+      clickedAction: "submit_action:factional_kill",
+      commandKind: "SubmitAction",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        action_id: "factional_kill",
+        actor_slot: "slot-7",
+        template_id: "factional_kill",
+        targets: ["slot-2"],
+        grant_id: "grant-factional-kill",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 501",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitAction",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [
+          "notifications",
+          "investigationResults",
+          "commandState",
+        ],
+      },
+      receipts: [
+        {
+          actionId: "submit_action:factional_kill",
+          state: "ack",
+          message: "Ack: stream seqs 501",
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+        actions: [],
+      },
+      checkpointReceiptState: "ack:Ack: stream seqs 501",
+      checkpointActionStateAfterAck: "disabled:no legal action available",
+      receiptCount: 1,
+      receiptStatusText: "Ack: stream seqs 501",
+    },
     releaseReady: false,
     productionReady: false,
   };
