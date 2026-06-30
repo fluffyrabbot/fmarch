@@ -64,6 +64,12 @@ export function hostedMatrixHandoffSummaryForRoleLink({
         (_gap, index) => `remaining-gap-${index + 1}`,
       ),
     ].filter((id) => typeof id === "string" && id.trim() !== ""),
+    requiredReconnectLaneIds: (hostedMatrix?.reconnectLanes ?? [])
+      .map((lane) => lane.id)
+      .filter((id) => typeof id === "string" && id.trim() !== ""),
+    requiredStaleConflictLaneIds: (hostedMatrix?.staleConflictLanes ?? [])
+      .map((lane) => lane.id)
+      .filter((id) => typeof id === "string" && id.trim() !== ""),
     requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
   };
 }

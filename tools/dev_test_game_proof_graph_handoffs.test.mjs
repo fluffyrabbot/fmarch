@@ -77,6 +77,18 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
       "remaining-gap-2",
     ],
   );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
+    )?.requiredReconnectLaneIds,
+    ["reconnect-recovery", "replacement-reconnect-recovery"],
+  );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
+    )?.requiredStaleConflictLaneIds,
+    ["replacement-stale-conflict-message", "stale-action-conflict-message"],
+  );
 });
 
 test("admin proof graph role handoff coverage fails closed for unmapped nodes", () => {
@@ -131,6 +143,14 @@ function hostedMatrixFixture() {
       { id: "real-hosted-deployment" },
     ],
     cells: [{ id: "player-vote-change" }, { id: "player-night-action" }],
+    reconnectLanes: [
+      { id: "reconnect-recovery" },
+      { id: "replacement-reconnect-recovery" },
+    ],
+    staleConflictLanes: [
+      { id: "replacement-stale-conflict-message" },
+      { id: "stale-action-conflict-message" },
+    ],
     requestedEvidence: { id: "hosted-concurrent-race-matrix" },
     remainingGaps: [{ id: "gap-a" }, { id: "gap-b" }],
     summary: {

@@ -251,6 +251,16 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-session",
         ids: destination.requiredSessions ?? [],
       });
+      const destinationVisibleReconnectLanes = await waitForRows({
+        page,
+        prefix: "admin-audit-reconnect-lane",
+        ids: destination.requiredReconnectLanes ?? [],
+      });
+      const destinationVisibleStaleConflictLanes = await waitForRows({
+        page,
+        prefix: "admin-audit-stale-conflict-lane",
+        ids: destination.requiredStaleConflictLanes ?? [],
+      });
       const destinationVisibleUnproven = await waitForRows({
         page,
         prefix: "admin-audit-unproven",
@@ -306,6 +316,12 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleSessions.length === 0
           ? {}
           : { visibleSessions: destinationVisibleSessions }),
+        ...(destinationVisibleReconnectLanes.length === 0
+          ? {}
+          : { visibleReconnectLanes: destinationVisibleReconnectLanes }),
+        ...(destinationVisibleStaleConflictLanes.length === 0
+          ? {}
+          : { visibleStaleConflictLanes: destinationVisibleStaleConflictLanes }),
         ...(destinationVisibleUnproven.length === 0
           ? {}
           : { visibleUnproven: destinationVisibleUnproven }),

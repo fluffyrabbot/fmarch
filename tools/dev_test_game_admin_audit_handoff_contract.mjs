@@ -9,6 +9,8 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
           requiredCheckStatuses: handoff.requiredCheckStatuses ?? {},
           requiredScenarios: handoff.requiredScenarioIds ?? [],
           requiredSessions: handoff.requiredSessionIds ?? [],
+          requiredReconnectLanes: handoff.requiredReconnectLaneIds ?? [],
+          requiredStaleConflictLanes: handoff.requiredStaleConflictLaneIds ?? [],
           requiredUnproven: handoff.requiredUnprovenIds ?? [],
           requiredLocalPrerequisiteDestinations:
             handoff.requiredLocalPrerequisiteDestinations ?? [],
@@ -108,6 +110,20 @@ export function assertAdminAuditRelatedHandoff({
     if (!destination.visibleSessions?.includes(sessionId)) {
       throw new Error(
         `${name} handoff destination missing session row: ${sessionId}`,
+      );
+    }
+  }
+  for (const laneId of handoff.requiredReconnectLaneIds ?? []) {
+    if (!destination.visibleReconnectLanes?.includes(laneId)) {
+      throw new Error(
+        `${name} handoff destination missing reconnect lane: ${laneId}`,
+      );
+    }
+  }
+  for (const laneId of handoff.requiredStaleConflictLaneIds ?? []) {
+    if (!destination.visibleStaleConflictLanes?.includes(laneId)) {
+      throw new Error(
+        `${name} handoff destination missing stale-conflict lane: ${laneId}`,
       );
     }
   }
