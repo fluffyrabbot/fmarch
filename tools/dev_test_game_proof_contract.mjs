@@ -428,6 +428,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface?.buttons?.map(
           (button) => button.action,
         ) ?? null,
+      d02VoteGame: verification.actionLoop?.d02VoteNightTransition?.game ?? null,
+      d02VoteTarget:
+        verification.actionLoop?.d02VoteNightTransition?.voteTarget?.slotId ?? null,
+      d02VoteState:
+        verification.actionLoop?.d02VoteNightTransition?.finalVote?.state ?? null,
+      d02VoteOutcomeStatus:
+        verification.actionLoop?.d02VoteNightTransition?.dayVoteOutcome?.status ?? null,
+      d02VoteReceiptStatus:
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetNotice?.status ?? null,
+      nextNightPhase:
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface?.commandState
+          ?.phase?.phaseId ?? null,
+      nextNightActionButtons:
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface?.buttons?.map(
+          (button) => button.action,
+        ) ?? null,
+      nextNightNormalPlayerFactionalKillVisible:
+        verification.actionLoop?.d02VoteNightTransition?.n02NormalPlayerSurface
+          ?.factionalKillVisible ?? null,
       invalidActionError: verification.actionLoop?.invalidAction?.error ?? null,
       legalActionState: verification.actionLoop?.legalAction?.state ?? null,
       resolvedTargetAlive: verification.actionLoop?.resolvedTargetSlot?.alive ?? null,
@@ -552,6 +572,99 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface?.buttons?.some(
           (button) => String(button.action ?? "").startsWith("submit_vote"),
         ) === true &&
+        verification.actionLoop?.d02VoteNightTransition?.status === "passed" &&
+        typeof verification.actionLoop?.d02VoteNightTransition?.hostRoleUrl ===
+          "string" &&
+        verification.actionLoop?.d02VoteNightTransition?.hostRoleUrl.includes(
+          `/g/${verification.actionLoop?.d02VoteNightTransition?.game ?? ""}/host`,
+        ) === true &&
+        typeof verification.actionLoop?.d02VoteNightTransition?.actionRoleUrl ===
+          "string" &&
+        verification.actionLoop?.d02VoteNightTransition?.actionRoleUrl.includes(
+          `/g/${verification.actionLoop?.d02VoteNightTransition?.game ?? ""}`,
+        ) === true &&
+        typeof verification.actionLoop?.d02VoteNightTransition?.playerRoleUrl ===
+          "string" &&
+        verification.actionLoop?.d02VoteNightTransition?.playerRoleUrl.includes(
+          `/g/${verification.actionLoop?.d02VoteNightTransition?.game ?? ""}`,
+        ) === true &&
+        typeof verification.actionLoop?.d02VoteNightTransition?.targetRoleUrl ===
+          "string" &&
+        verification.actionLoop?.d02VoteNightTransition?.targetRoleUrl.includes(
+          `/g/${verification.actionLoop?.d02VoteNightTransition?.game ?? ""}`,
+        ) === true &&
+        verification.actionLoop?.d02VoteNightTransition?.hostBeforeVote?.phase?.id ===
+          "D02" &&
+        verification.actionLoop?.d02VoteNightTransition?.hostBeforeVote?.phase
+          ?.locked === false &&
+        verification.actionLoop?.d02VoteNightTransition?.voteTarget?.slotId ===
+          "slot-2" &&
+        verification.actionLoop?.d02VoteNightTransition?.finalVote?.state === "ack" &&
+        verification.actionLoop?.d02VoteNightTransition?.finalVote?.requestEnvelope
+          ?.body?.body?.command?.SubmitVote?.actor_slot === "slot_4" &&
+        verification.actionLoop?.d02VoteNightTransition?.finalVote?.requestEnvelope
+          ?.body?.body?.command?.SubmitVote?.target?.Slot === "slot-2" &&
+        verification.actionLoop?.d02VoteNightTransition?.apiVoteRow?.phaseId ===
+          "D02" &&
+        verification.actionLoop?.d02VoteNightTransition?.apiVoteRow?.target ===
+          "slot-2" &&
+        verification.actionLoop?.d02VoteNightTransition?.apiVoteRow?.count === 3 &&
+        verification.actionLoop?.d02VoteNightTransition?.resolveD02?.commandStatus
+          ?.state === "ack" &&
+        verification.actionLoop?.d02VoteNightTransition?.hostAfterResolve?.phase?.id ===
+          "D02" &&
+        verification.actionLoop?.d02VoteNightTransition?.hostAfterResolve?.phase
+          ?.locked === true &&
+        verification.actionLoop?.d02VoteNightTransition?.dayVoteOutcome?.phaseId ===
+          "D02" &&
+        verification.actionLoop?.d02VoteNightTransition?.dayVoteOutcome?.status ===
+          "Lynch" &&
+        verification.actionLoop?.d02VoteNightTransition?.dayVoteOutcome?.winnerSlot ===
+          "slot-2" &&
+        verification.actionLoop?.d02VoteNightTransition?.dayVoteOutcome?.tallies?.[
+          "slot-2"
+        ] === 3 &&
+        verification.actionLoop?.d02VoteNightTransition?.hostSlotAfterResolve?.alive ===
+          false &&
+        verification.actionLoop?.d02VoteNightTransition?.hostSlotAfterResolve?.status ===
+          "dead" &&
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetNotice?.audience_slot === "slot-2" &&
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetNotice?.effect === "player_killed" &&
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetNotice?.status === "day_vote" &&
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetCommandState?.actorAlive === false &&
+        verification.actionLoop?.d02VoteNightTransition?.targetReceiptSurface
+          ?.targetCommandState?.actorStatus === "dead" &&
+        verification.actionLoop?.d02VoteNightTransition?.advanceN02?.commandStatus
+          ?.state === "ack" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02HostSurface?.phase?.id ===
+          "N02" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02HostSurface?.phase
+          ?.locked === false &&
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface
+          ?.commandState?.actorSlot === "slot_4" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface
+          ?.commandState?.actorAlive === true &&
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface
+          ?.commandState?.phase?.phaseId === "N02" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface
+          ?.commandState?.actions?.some(
+            (action) => action.templateId === "factional_kill",
+          ) === true &&
+        verification.actionLoop?.d02VoteNightTransition?.n02ActionSurface?.buttons?.some(
+          (button) =>
+            button.action === "submit_action:factional_kill" &&
+            button.disabled === false,
+        ) === true &&
+        verification.actionLoop?.d02VoteNightTransition?.n02NormalPlayerSurface
+          ?.commandState?.actorSlot === "slot-7" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02NormalPlayerSurface
+          ?.commandState?.phase?.phaseId === "N02" &&
+        verification.actionLoop?.d02VoteNightTransition?.n02NormalPlayerSurface
+          ?.factionalKillVisible === false &&
         verification.actionLoop?.invalidAction?.error === "InvalidTarget" &&
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&

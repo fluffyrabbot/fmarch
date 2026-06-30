@@ -547,6 +547,128 @@ assert.equal(session.verification.actionLoop.resolveNight.commandStatus.state, "
 assert.equal(session.verification.actionLoop.resolvedTargetSlot.alive, false);
 assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
+assert.equal(session.verification.actionLoop.d02VoteNightTransition.status, "passed");
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition.hostRoleUrl,
+  new RegExp(`/g/${session.verification.actionLoop.d02VoteNightTransition.game}/host`),
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition.actionRoleUrl,
+  new RegExp(`/g/${session.verification.actionLoop.d02VoteNightTransition.game}`),
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition.playerRoleUrl,
+  new RegExp(`/g/${session.verification.actionLoop.d02VoteNightTransition.game}`),
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition.targetRoleUrl,
+  new RegExp(`/g/${session.verification.actionLoop.d02VoteNightTransition.game}`),
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostBeforeVote.phase.id,
+  "D02",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostBeforeVote.phase.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.voteTarget.slotId,
+  "slot-2",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.finalVote.state,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.finalVote.requestEnvelope.body.body
+    .command.SubmitVote.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.finalVote.requestEnvelope.body.body
+    .command.SubmitVote.target.Slot,
+  "slot-2",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.apiVoteRow.count,
+  3,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.resolveD02.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterResolve.phase.id,
+  "D02",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterResolve.phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.status,
+  "Lynch",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.winnerSlot,
+  "slot-2",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.tallies[
+    "slot-2"
+  ],
+  3,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostSlotAfterResolve.alive,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.targetReceiptSurface.targetNotice
+    .effect,
+  "player_killed",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.targetReceiptSurface.targetNotice
+    .status,
+  "day_vote",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.targetReceiptSurface
+    .targetCommandState.actorAlive,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.advanceN02.commandStatus.state,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.n02HostSurface.phase.id,
+  "N02",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState
+    .phase.phaseId,
+  "N02",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState.actions.some(
+    (action) => action.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.buttons.some(
+    (button) => button.action === "submit_action:factional_kill" && !button.disabled,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.n02NormalPlayerSurface
+    .factionalKillVisible,
+  false,
+);
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
 const voteResolveRace =

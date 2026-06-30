@@ -652,6 +652,8 @@ export function markdownSessionCard(card) {
         "",
         `Legal action: ${card.verification.actionLoop.legalAction.message}`,
         "",
+        `D02 vote/night: ${card.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.status} -> ${card.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState.phase.phaseId}`,
+        "",
       );
     }
     if (card.verification.invalidActionRecovery !== undefined) {
@@ -958,6 +960,7 @@ async function verifySessionCard(card) {
       frontendBaseUrl: card.frontendBaseUrl,
     });
     actionLoop = await verifySeededActionLoop({
+      browser,
       hostPage: roleEntries.host.page,
       playerPage: roleEntries.player.page,
       actionPage: roleEntries.actionPlayer.page,
@@ -2477,6 +2480,7 @@ async function seedDayVoteNoLynchGame({ game }) {
 }
 
 async function verifySeededActionLoop({
+  browser,
   hostPage,
   playerPage,
   actionPage,
@@ -2803,6 +2807,11 @@ async function verifySeededActionLoop({
     apiBaseUrl,
     game,
   });
+  const d02VoteNightTransition = await verifySeededD02VoteNightTransition({
+    browser,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
 
   return {
     status: "passed",
@@ -2829,9 +2838,455 @@ async function verifySeededActionLoop({
     d02PhaseText,
     staleDeadActionConflict,
     staleActionConflict,
+    d02VoteNightTransition,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while the target role URL received the private kill receipt, day vote controls returned for living role URLs, and a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while the target role URL received the private kill receipt, day vote controls returned for living role URLs, a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh, and a disposable D02 role proof submitted the deciding day vote, resolved that vote, advanced to N02, and restored the living mafia-goon night action surface.",
+  };
+}
+
+async function verifySeededD02VoteNightTransition({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const transitionGame = crypto.randomUUID();
+  const seed = await seedD02VoteNightTransitionGame({ game: transitionGame });
+  const hostSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-d02-night-host-${crypto.randomUUID()}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${transitionGame}/host`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const actionSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-d02-night-action-${crypto.randomUUID()}`,
+    principalUserId: "player-goon-a",
+    returnTo: `/g/${transitionGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const playerSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-d02-night-player-${crypto.randomUUID()}`,
+    principalUserId: "player-mira",
+    returnTo: `/g/${transitionGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const targetSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-d02-night-target-${crypto.randomUUID()}`,
+    principalUserId: "player-target",
+    returnTo: `/g/${transitionGame}`,
+    expectedCapabilityKind: "SlotOccupant",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const hostEntry = await openVerifiedRoleEntry({
+    browser,
+    session: hostSession,
+    game: transitionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const actionEntry = await openVerifiedRoleEntry({
+    browser,
+    session: actionSession,
+    game: transitionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const playerEntry = await openVerifiedRoleEntry({
+    browser,
+    session: playerSession,
+    game: transitionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const targetEntry = await openVerifiedRoleEntry({
+    browser,
+    session: targetSession,
+    game: transitionGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  try {
+    await Promise.all([
+      waitForHostProjectionPhase(hostEntry.page, { phaseId: "D02", locked: false }),
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+      playerEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+    ]);
+    const hostBeforeVote = {
+      roleUrl: hostEntry.page.url(),
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      votecount: await hostEntry.page.evaluate(
+        () => window.__fmarchHostVotecountProjection ?? [],
+      ),
+    };
+    const actionBeforeVote = {
+      roleUrl: actionEntry.page.url(),
+      commandState: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      currentVote: await playerCurrentVoteSnapshot(actionEntry.page),
+      buttons: await playerCommandButtons(actionEntry.page),
+    };
+    const voteTarget = actionBeforeVote.commandState?.voteTargets?.find(
+      (target) => target.kind === "slot" && target.slotId === "slot-2",
+    );
+    const voteButton = actionBeforeVote.buttons.find(
+      (button) =>
+        button.action === "submit_vote" &&
+        voteTarget?.label !== undefined &&
+        button.text?.includes(voteTarget.label) &&
+        button.disabled === false,
+    );
+    if (
+      hostBeforeVote.phase?.id !== "D02" ||
+      hostBeforeVote.phase?.locked !== false ||
+      !hostBeforeVote.phaseActions.includes("resolve_phase") ||
+      !hostBeforeVote.phaseActions.includes("lock_thread") ||
+      voteTarget?.slotId !== "slot-2" ||
+      voteButton === undefined ||
+      actionBeforeVote.commandState?.currentVote !== null ||
+      actionBeforeVote.currentVote.hasVote !== "false"
+    ) {
+      throw new Error(
+        `D02 vote setup drifted: ${JSON.stringify({
+          seed,
+          hostBeforeVote,
+          actionBeforeVote,
+          voteTarget,
+          voteButton,
+        })}`,
+      );
+    }
+
+    await actionEntry.page
+      .locator('[data-action="submit_vote"]', { hasText: voteTarget.label })
+      .first()
+      .click();
+    await actionEntry.page.waitForFunction(
+      (targetSlot) =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target?.Slot === targetSlot &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind === "slot" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+          targetSlot &&
+        window.__fmarchPlayerProjection?.votecount?.some(
+          (row) => row.target === targetSlot && row.count === 3,
+        ),
+      voteTarget.slotId,
+    );
+    const finalVote = await actionEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const actionAfterVote = {
+      commandState: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      currentVote: await playerCurrentVoteSnapshot(actionEntry.page),
+      votecount: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.votecount ?? [],
+      ),
+    };
+    const apiVotecountAfterVote = await fetchJson(
+      `${apiBaseUrl}/games/${transitionGame}/votecount`,
+    );
+    const apiVoteRow = normalizedVotecountRows(apiVotecountAfterVote).find(
+      (row) => row.phaseId === "D02" && row.target === voteTarget.slotId,
+    );
+    if (
+      finalVote?.state !== "ack" ||
+      finalVote?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+      finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
+        "slot_4" ||
+      finalVote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
+        voteTarget.slotId ||
+      actionAfterVote.commandState?.currentVote?.slotId !== voteTarget.slotId ||
+      actionAfterVote.currentVote.hasVote !== "true" ||
+      !actionAfterVote.currentVote.text.includes(voteTarget.label) ||
+      !actionAfterVote.votecount.some(
+        (row) => row.target === voteTarget.slotId && row.count === 3,
+      ) ||
+      apiVoteRow?.count !== 3
+    ) {
+      throw new Error(
+        `D02 final vote drifted: ${JSON.stringify({
+          finalVote,
+          actionAfterVote,
+          apiVoteRow,
+        })}`,
+      );
+    }
+
+    const resolveD02 = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "D02", locked: true });
+    await hostEntry.page.waitForFunction(
+      (targetSlot) =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D02" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === targetSlot,
+        ),
+      voteTarget.slotId,
+    );
+    const hostAfterResolve = {
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      dayVoteOutcomes: await hostEntry.page.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      outcomePanel: await hostEntry.page
+        .locator('[data-testid="host-day-vote-outcome-latest"]')
+        .innerText(),
+    };
+    const apiDayVoteOutcomes = await fetchJson(
+      `${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`,
+    );
+    const dayVoteOutcome = normalizeDayVoteOutcomeRows(apiDayVoteOutcomes).find(
+      (row) => row.phaseId === "D02" && row.winnerSlot === voteTarget.slotId,
+    );
+    const hostSlotAfterResolve = await fetchResolvedSlotState({
+      apiBaseUrl,
+      game: transitionGame,
+      slot: voteTarget.slotId,
+    });
+
+    await gotoPlayerBoard(targetEntry.page, transitionGame);
+    await targetEntry.page.waitForFunction(
+      (targetSlot) =>
+        window.__fmarchPlayerProjection?.notifications?.some(
+          (notice) =>
+            notice.audience_slot === targetSlot &&
+            notice.effect === "player_killed" &&
+            notice.status === "day_vote",
+        ) &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false,
+      voteTarget.slotId,
+    );
+    const targetReceiptSurface = {
+      roleUrl: targetEntry.page.url(),
+      targetNotice: await targetEntry.page.evaluate(
+        (targetSlot) =>
+          window.__fmarchPlayerProjection?.notifications?.find(
+            (notice) =>
+              notice.audience_slot === targetSlot &&
+              notice.effect === "player_killed" &&
+              notice.status === "day_vote",
+          ) ?? null,
+        voteTarget.slotId,
+      ),
+      targetCommandState: await targetEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      outcomePanel: await targetEntry.page
+        .locator('[data-testid="player-day-vote-outcome-latest"]')
+        .innerText(),
+    };
+
+    const advanceN02 = await confirmHostAction(hostEntry.page, "advance_phase");
+    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N02", locked: false });
+    await Promise.all([
+      gotoPlayerBoard(actionEntry.page, transitionGame),
+      gotoPlayerBoard(playerEntry.page, transitionGame),
+    ]);
+    await Promise.all([
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N02" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+          window.__fmarchPlayerProjection?.commandState?.actions?.some(
+            (action) => action.templateId === "factional_kill",
+          ),
+      ),
+      playerEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N02" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+    ]);
+    const n02HostSurface = {
+      roleUrl: hostEntry.page.url(),
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      deadlineActions: await visibleHostControlActions(hostEntry.page, "deadline"),
+    };
+    const n02ActionSurface = {
+      roleUrl: actionEntry.page.url(),
+      commandState: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      buttons: await playerCommandButtons(actionEntry.page),
+    };
+    const n02NormalPlayerSurface = {
+      roleUrl: playerEntry.page.url(),
+      commandState: await playerEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      buttons: await playerCommandButtons(playerEntry.page),
+      factionalKillVisible: await playerEntry.page
+        .locator('[data-action="submit_action:factional_kill"]')
+        .isVisible()
+        .catch(() => false),
+    };
+
+    if (
+      resolveD02.commandStatus?.state !== "ack" ||
+      hostAfterResolve.phase?.id !== "D02" ||
+      hostAfterResolve.phase?.locked !== true ||
+      !hostAfterResolve.phaseActions.includes("advance_phase") ||
+      !hostAfterResolve.dayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D02" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === voteTarget.slotId,
+      ) ||
+      dayVoteOutcome?.status !== "Lynch" ||
+      dayVoteOutcome?.winnerSlot !== voteTarget.slotId ||
+      dayVoteOutcome?.tallies?.[voteTarget.slotId] !== 3 ||
+      hostSlotAfterResolve?.alive !== false ||
+      hostSlotAfterResolve?.status !== "dead" ||
+      targetReceiptSurface.targetNotice?.audience_slot !== voteTarget.slotId ||
+      targetReceiptSurface.targetNotice?.effect !== "player_killed" ||
+      targetReceiptSurface.targetNotice?.status !== "day_vote" ||
+      targetReceiptSurface.targetCommandState?.actorSlot !== voteTarget.slotId ||
+      targetReceiptSurface.targetCommandState?.actorAlive !== false ||
+      targetReceiptSurface.targetCommandState?.actorStatus !== "dead" ||
+      targetReceiptSurface.targetCommandState?.phase?.phaseId !== "D02" ||
+      advanceN02.commandStatus?.state !== "ack" ||
+      n02HostSurface.phase?.id !== "N02" ||
+      n02HostSurface.phase?.locked !== false ||
+      !n02HostSurface.phaseActions.includes("resolve_phase") ||
+      !n02HostSurface.phaseActions.includes("lock_thread") ||
+      n02ActionSurface.commandState?.actorSlot !== "slot_4" ||
+      n02ActionSurface.commandState?.actorAlive !== true ||
+      n02ActionSurface.commandState?.phase?.phaseId !== "N02" ||
+      n02ActionSurface.commandState?.phase?.locked !== false ||
+      n02ActionSurface.commandState?.actions?.some(
+        (action) => action.templateId === "factional_kill",
+      ) !== true ||
+      !n02ActionSurface.buttons.some(
+        (button) =>
+          button.action === "submit_action:factional_kill" && button.disabled === false,
+      ) ||
+      n02NormalPlayerSurface.commandState?.actorSlot !== "slot-7" ||
+      n02NormalPlayerSurface.commandState?.phase?.phaseId !== "N02" ||
+      n02NormalPlayerSurface.factionalKillVisible !== false
+    ) {
+      throw new Error(
+        `D02 vote/night transition drifted: ${JSON.stringify({
+          transitionGame,
+          hostAfterResolve,
+          dayVoteOutcome,
+          hostSlotAfterResolve,
+          targetReceiptSurface,
+          advanceN02,
+          n02HostSurface,
+          n02ActionSurface,
+          n02NormalPlayerSurface,
+        })}`,
+      );
+    }
+
+    return {
+      status: "passed",
+      game: transitionGame,
+      seed,
+      hostRoleUrl: hostEntry.page.url(),
+      actionRoleUrl: actionEntry.page.url(),
+      playerRoleUrl: playerEntry.page.url(),
+      targetRoleUrl: targetEntry.page.url(),
+      hostBeforeVote,
+      actionBeforeVote,
+      voteTarget,
+      voteButton,
+      finalVote,
+      actionAfterVote,
+      apiVoteRow,
+      resolveD02,
+      hostAfterResolve,
+      dayVoteOutcome,
+      hostSlotAfterResolve,
+      targetReceiptSurface,
+      advanceN02,
+      n02HostSurface,
+      n02ActionSurface,
+      n02NormalPlayerSurface,
+      proof:
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, then advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not.",
+    };
+  } finally {
+    await hostEntry.context.close().catch(() => {});
+    await actionEntry.context.close().catch(() => {});
+    await playerEntry.context.close().catch(() => {});
+    await targetEntry.context.close().catch(() => {});
+  }
+}
+
+async function seedD02VoteNightTransitionGame({ game }) {
+  const plan = [
+    ...seedCommandPlanForGame(game),
+    ["host_h", { ResolvePhase: { game, seed: 73_201 } }],
+    ["host_h", { AdvancePhase: { game } }],
+    ["host_h", { ResolvePhase: { game, seed: 73_202 } }],
+    ["host_h", { AdvancePhase: { game } }],
+    [
+      "player-seed",
+      { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot-2" } } },
+    ],
+    [
+      "player-mira",
+      { SubmitVote: { game, actor_slot: "slot-7", target: { Slot: "slot-2" } } },
+    ],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    const result = await sendCommandResult(principalUserId, command);
+    if (result.body?.kind === "Reject") {
+      throw new Error(
+        `D02 vote/night transition seed command rejected: ${JSON.stringify({
+          principalUserId,
+          command,
+          result,
+        })}`,
+      );
+    }
+    commands.push(commandSummary(principalUserId, command, result));
+  }
+  return {
+    game,
+    commands: commands.length,
+    finalVoterSlot: "slot_4",
+    targetSlot: "slot-2",
+    expectedD02VoteCount: 3,
   };
 }
 
