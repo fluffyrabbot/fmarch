@@ -1028,6 +1028,10 @@ test("admin route data exposes local next action as a native audit row", async (
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ["stale-conflict-message-milestone", "3/3 covered"],
+      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
+      ["stale-conflict-message-stale-action-conflict-message", "covered"],
+      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
@@ -1088,6 +1092,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
     },
     replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
+    staleConflictMessageTrace: staleConflictMessageTraceFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -1127,6 +1132,10 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ["stale-conflict-message-milestone", "3/3 covered"],
+      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
+      ["stale-conflict-message-stale-action-conflict-message", "covered"],
+      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
     ],
   );
 });
@@ -1171,6 +1180,10 @@ test("admin local next action detail data carries harness stability drift rows",
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ["stale-conflict-message-milestone", "3/3 covered"],
+      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
+      ["stale-conflict-message-stale-action-conflict-message", "covered"],
+      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
     ],
   );
   assert.deepEqual(data.audit.artifactSummary.stabilityTrace, {
@@ -1711,7 +1724,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === "local-release-readiness");
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "3 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "4 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -1723,6 +1736,7 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-role-url-browser-proof",
       "local-core-loop-proof",
       "local-hardening-proof",
+      "local-stale-conflict-message-milestone",
     ],
   );
   assert.deepEqual(
@@ -1731,7 +1745,7 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 3,
+    localCheckCount: 4,
     unprovenCount: 2,
     releaseReady: false,
     productionReady: false,
@@ -1749,7 +1763,7 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, "local-release-readiness");
-  assert.equal(data.audit.checks.length, 3);
+  assert.equal(data.audit.checks.length, 4);
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
@@ -2569,6 +2583,7 @@ function nextActionFixture({
   stability,
   stabilityTrace = stabilityTraceFixture({ stability }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
+  staleConflictMessageTrace = staleConflictMessageTraceFixture(),
 } = {}) {
   return {
     version: 1,
@@ -2625,6 +2640,7 @@ function nextActionFixture({
     stabilityTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
+    staleConflictMessageTrace,
   };
 }
 
@@ -2892,6 +2908,22 @@ function replacementRaceReloadTraceFixture() {
   };
 }
 
+function staleConflictMessageTraceFixture() {
+  return {
+    strategy: "stale-conflict-message-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: 3,
+    coveredLaneCount: 3,
+    gapCount: 0,
+    laneIds: [
+      "replacement-stale-conflict-message",
+      "stale-action-conflict-message",
+      "stale-dead-action-conflict",
+    ],
+  };
+}
+
 function adminSpineProofFixture() {
   return {
     version: 1,
@@ -2986,6 +3018,7 @@ function releaseReadinessChecklistFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
+      staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -3008,6 +3041,15 @@ function releaseReadinessChecklistFixture() {
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
         },
+        {
+          id: "local-stale-conflict-message-milestone",
+          label: "Stale-client conflict messages",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: staleConflictMessageMilestoneFixture().laneIds,
+          requiredLaneCount: 3,
+          coveredLaneCount: 3,
+        },
       ],
     },
     releaseReadiness: {
@@ -3028,6 +3070,20 @@ function releaseReadinessChecklistFixture() {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function staleConflictMessageMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [
+      "replacement-stale-conflict-message",
+      "stale-action-conflict-message",
+      "stale-dead-action-conflict",
+    ],
+    requiredLaneCount: 3,
+    coveredLaneCount: 3,
+    gapCount: 0,
   };
 }
 

@@ -635,6 +635,19 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
     ],
   });
+  assert.deepEqual(freshAction.staleConflictMessageTrace, {
+    strategy: "stale-conflict-message-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: 3,
+    coveredLaneCount: 3,
+    gapCount: 0,
+    laneIds: [
+      "replacement-stale-conflict-message",
+      "stale-action-conflict-message",
+      "stale-dead-action-conflict",
+    ],
+  });
 });
 
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {
@@ -742,6 +755,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
     selected: true,
   });
   assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
+  assert.equal(action.staleConflictMessageTrace.status, "covered");
 });
 
 test("dev test-game next-action prioritizes development-spine recovery over manifest order", () => {
@@ -6760,6 +6774,7 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
+      staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -6770,6 +6785,15 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
         },
+        {
+          id: "local-stale-conflict-message-milestone",
+          label: "Stale-client conflict messages",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: staleConflictMessageMilestoneFixture().laneIds,
+          requiredLaneCount: 3,
+          coveredLaneCount: 3,
+        },
       ],
     },
     releaseReadiness: {
@@ -6779,6 +6803,20 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function staleConflictMessageMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [
+      "replacement-stale-conflict-message",
+      "stale-action-conflict-message",
+      "stale-dead-action-conflict",
+    ],
+    requiredLaneCount: 3,
+    coveredLaneCount: 3,
+    gapCount: 0,
   };
 }
 

@@ -564,6 +564,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
   const replacementRaceReloadTrace = normalizeNextActionReplacementRaceReloadTrace(
     nextAction.replacementRaceReloadTrace,
   );
+  const staleConflictMessageTrace = normalizeNextActionStaleConflictMessageTrace(
+    nextAction.staleConflictMessageTrace,
+  );
   const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
   const stability =
     action.stability !== null && typeof action.stability === "object"
@@ -644,6 +647,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
         status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
       }),
     ),
+    Object.freeze({
+      id: "stale-conflict-message-milestone",
+      status: `${staleConflictMessageTrace.coveredLaneCount}/${staleConflictMessageTrace.requiredLaneCount} ${staleConflictMessageTrace.status}`,
+    }),
+    ...staleConflictMessageTrace.laneIds.map((laneId) =>
+      Object.freeze({
+        id: `stale-conflict-message-${laneId}`,
+        status: staleConflictMessageTrace.status,
+      }),
+    ),
   ];
   const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
   const releaseReadinessSummary =
@@ -693,6 +706,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       stabilityTrace,
       releaseReadinessTrace,
       replacementRaceReloadTrace,
+      staleConflictMessageTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
@@ -854,6 +868,36 @@ function normalizeNextActionReplacementRaceReloadTrace(replacementRaceReloadTrac
     coveredCellCount: Number(replacementRaceReloadTrace.coveredCellCount ?? 0),
     gapCount: Number(replacementRaceReloadTrace.gapCount ?? 0),
     cells: Object.freeze(cells),
+  });
+}
+
+function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace) {
+  if (
+    staleConflictMessageTrace === null ||
+    typeof staleConflictMessageTrace !== "object" ||
+    staleConflictMessageTrace.strategy !== "stale-conflict-message-before-readiness" ||
+    !Array.isArray(staleConflictMessageTrace.laneIds)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      source: "",
+      requiredLaneCount: 0,
+      coveredLaneCount: 0,
+      gapCount: 0,
+      laneIds: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    strategy: staleConflictMessageTrace.strategy,
+    status: String(staleConflictMessageTrace.status ?? "unknown"),
+    source: String(staleConflictMessageTrace.source ?? ""),
+    requiredLaneCount: Number(staleConflictMessageTrace.requiredLaneCount ?? 0),
+    coveredLaneCount: Number(staleConflictMessageTrace.coveredLaneCount ?? 0),
+    gapCount: Number(staleConflictMessageTrace.gapCount ?? 0),
+    laneIds: Object.freeze(
+      staleConflictMessageTrace.laneIds.map((laneId) => String(laneId)),
+    ),
   });
 }
 

@@ -98,6 +98,14 @@ await runAdminAuditProof({
           (cell) => cell.id,
         ),
       },
+      staleConflictMessageTrace: {
+        strategy: source.nextAction.staleConflictMessageTrace.strategy,
+        status: source.nextAction.staleConflictMessageTrace.status,
+        requiredLaneCount: source.nextAction.staleConflictMessageTrace.requiredLaneCount,
+        coveredLaneCount: source.nextAction.staleConflictMessageTrace.coveredLaneCount,
+        gapCount: source.nextAction.staleConflictMessageTrace.gapCount,
+        laneIds: source.nextAction.staleConflictMessageTrace.laneIds,
+      },
     },
     adminRoleSurface,
   }),
@@ -159,6 +167,21 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing replacement-race reload trace evidence",
     );
   }
+  if (
+    evidence.generatedFrom?.staleConflictMessageTrace?.strategy !==
+      "stale-conflict-message-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(
+      evidence.generatedFrom.staleConflictMessageTrace.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.staleConflictMessageTrace.requiredLaneCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.laneIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing stale conflict-message trace evidence",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -191,6 +214,10 @@ function requiredChecksForNextAction(nextAction) {
   for (const cell of nextAction.replacementRaceReloadTrace.cells) {
     checks.push(`replacement-race-reload-${cell.id}`);
   }
+  checks.push("stale-conflict-message-milestone");
+  for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
+    checks.push(`stale-conflict-message-${laneId}`);
+  }
   return checks;
 }
 
@@ -220,6 +247,12 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.replacementRaceReloadTrace?.cellIds)
       ? evidence.generatedFrom.replacementRaceReloadTrace.cellIds.map(
           (id) => `replacement-race-reload-${id}`,
+        )
+      : []),
+    "stale-conflict-message-milestone",
+    ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
+      ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(
+          (id) => `stale-conflict-message-${id}`,
         )
       : []),
   ];

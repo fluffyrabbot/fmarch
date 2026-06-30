@@ -56,6 +56,7 @@ export function buildDevTestGameNextAction(
   const replacementRaceReloadTrace = buildReplacementRaceReloadTrace(races, {
     source: raceCoverageSource,
   });
+  const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
   const nextAction =
     artifact !== undefined
@@ -169,6 +170,7 @@ export function buildDevTestGameNextAction(
     stabilityTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
+    staleConflictMessageTrace,
   };
   assertDevTestGameNextAction(evidence);
   return evidence;
@@ -228,6 +230,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
+  assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
   return evidence;
 }
 
@@ -439,6 +442,42 @@ function buildReplacementRaceReloadTrace(
   };
 }
 
+function buildStaleConflictMessageTrace(readiness) {
+  const milestone =
+    readiness?.generatedFrom?.staleConflictMessageMilestone ??
+    readiness?.localDevelopmentSpine?.evidence?.staleConflictMessageMilestone ??
+    null;
+  const check = readiness?.localDevelopmentSpine?.checks?.find?.(
+    (candidate) => candidate.id === "local-stale-conflict-message-milestone",
+  );
+  const laneIds = Array.isArray(milestone?.laneIds)
+    ? milestone.laneIds.map((laneId) => String(laneId))
+    : staleConflictMessageLaneIds.map((laneId) => String(laneId));
+  const requiredLaneCount = Number(
+    milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
+  );
+  const coveredLaneCount = Number(
+    milestone?.coveredLaneCount ?? check?.coveredLaneCount ?? 0,
+  );
+  const gapCount = Number(
+    milestone?.gapCount ?? Math.max(requiredLaneCount - coveredLaneCount, 0),
+  );
+  return {
+    strategy: "stale-conflict-message-before-readiness",
+    status:
+      readiness === null
+        ? "unavailable"
+        : check?.status === "passed" && gapCount === 0
+          ? "covered"
+          : "gapped",
+    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
+    requiredLaneCount,
+    coveredLaneCount,
+    gapCount,
+    laneIds,
+  };
+}
+
 function assertSelectionTrace(selectionTrace, nextAction) {
   if (
     selectionTrace?.strategy !== "development-spine-priority" ||
@@ -576,6 +615,37 @@ function assertReplacementRaceReloadTrace(trace) {
   }
 }
 
+function assertStaleConflictMessageTrace(trace) {
+  if (
+    trace?.strategy !== "stale-conflict-message-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(trace.status) ||
+    !Number.isInteger(trace.requiredLaneCount) ||
+    !Number.isInteger(trace.coveredLaneCount) ||
+    !Number.isInteger(trace.gapCount) ||
+    !Array.isArray(trace.laneIds)
+  ) {
+    throw new Error("next-action stale conflict-message trace is missing or malformed");
+  }
+  if (
+    trace.requiredLaneCount !== staleConflictMessageLaneIds.length ||
+    trace.laneIds.length !== staleConflictMessageLaneIds.length ||
+    trace.coveredLaneCount + trace.gapCount !== trace.requiredLaneCount
+  ) {
+    throw new Error("next-action stale conflict-message trace count drifted");
+  }
+  for (const laneId of staleConflictMessageLaneIds) {
+    if (!trace.laneIds.includes(laneId)) {
+      throw new Error(`next-action stale conflict-message trace missing lane: ${laneId}`);
+    }
+  }
+  if (trace.status === "covered" && trace.gapCount !== 0) {
+    throw new Error("next-action stale conflict-message trace covered with gaps");
+  }
+  if (trace.status === "gapped" && trace.gapCount === 0) {
+    throw new Error("next-action stale conflict-message trace gapped without gaps");
+  }
+}
+
 function artifactAgeSeconds(artifact) {
   return typeof artifact.ageSeconds === "number" ? artifact.ageSeconds : 0;
 }
@@ -658,6 +728,12 @@ const replacementRaceReloadCellIds = Object.freeze([
   "replacement-private-post",
   "replacement-vote",
   "replacement-action",
+]);
+
+const staleConflictMessageLaneIds = Object.freeze([
+  "replacement-stale-conflict-message",
+  "stale-action-conflict-message",
+  "stale-dead-action-conflict",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

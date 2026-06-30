@@ -78,6 +78,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
+  const staleConflictMessageMilestone = buildStaleConflictMessageMilestone(proof, {
+    sourcePath,
+  });
   const coreLoopAdminProofEvidence = options.coreLoopAdminProof
     ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
         path:
@@ -322,6 +325,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...(hardeningAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: hardeningAdminProofEvidence }),
+    },
+    {
+      id: "local-stale-conflict-message-milestone",
+      label: "Stale-client conflict messages",
+      status: "passed",
+      evidence: sourcePath,
+      proofBoundary:
+        "Local seeded-game proof that stale replacement, stale action, and stale dead-actor action paths show explicit conflict messages and current-control recovery hints.",
+      laneIds: [...staleConflictMessageMilestone.laneIds],
+      requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
+      coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -576,6 +590,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { raceCoverageAdminProof: raceCoverageAdminProofEvidence.path }),
           }),
+      staleConflictMessageMilestone: {
+        status: staleConflictMessageMilestone.status,
+        laneIds: [...staleConflictMessageMilestone.laneIds],
+        requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
+        coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+        gapCount: staleConflictMessageMilestone.gapCount,
+      },
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -595,6 +616,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(hardeningAdminProofEvidence === undefined
                 ? {}
                 : { hardening: { adminRoleSurface: hardeningAdminProofEvidence } }),
+              staleConflictMessageMilestone: {
+                status: staleConflictMessageMilestone.status,
+                laneIds: [...staleConflictMessageMilestone.laneIds],
+                requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
+                coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+                gapCount: staleConflictMessageMilestone.gapCount,
+              },
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -704,7 +732,7 @@ function releaseReadinessReason({
     backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
     raceCoverageEvidence === undefined
       ? "race coverage inventory"
-      : "hosted and exhaustive races",
+      : "hosted and broader exhaustive races",
     opsArtifactsEvidence === undefined ? "observability" : "hosted observability",
     "human release evidence",
   ];
@@ -720,6 +748,35 @@ function joinEnglish(items) {
   }
   return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
 }
+
+function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
+  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
+  const laneIds = [...staleConflictMessageLaneIds];
+  const coveredLaneCount = laneIds.filter(
+    (laneId) => lanes.get(laneId)?.status === "passed",
+  ).length;
+  const gapCount = laneIds.length - coveredLaneCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `stale conflict-message milestone missing passed lanes from ${sourcePath}: ${laneIds
+        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    laneIds,
+    requiredLaneCount: laneIds.length,
+    coveredLaneCount,
+    gapCount,
+  };
+}
+
+const staleConflictMessageLaneIds = Object.freeze([
+  "replacement-stale-conflict-message",
+  "stale-action-conflict-message",
+  "stale-dead-action-conflict",
+]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
   const requiredChecks = [
