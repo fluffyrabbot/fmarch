@@ -7176,9 +7176,18 @@ test("session card and markdown include role credential URLs and tokens", async 
   });
   assertDevTestGameReleaseReadiness(readiness);
   assert.equal(readiness.status, "passed");
+  assert.equal(readiness.readinessStatus, "not_ready");
   assert.equal(readiness.releaseReady, false);
   assert.equal(readiness.productionReady, false);
   assert.equal(readiness.releaseReadiness.status, "not_ready");
+  assert.equal(
+    readiness.readinessSummary.status,
+    readiness.releaseReadiness.status,
+  );
+  assert.equal(
+    readiness.readinessSummary.unprovenCount,
+    readiness.releaseReadiness.unproven.length,
+  );
   assert(
     readiness.releaseReadiness.unproven.some(
       (item) => item.id === "production-identity" && item.status === "unproven",
@@ -8510,6 +8519,7 @@ function devTestGameReleaseReadinessChecklistFixture({
     version: 1,
     proof: "dev-test-game-release-readiness",
     status: "passed",
+    readinessStatus: "not_ready",
     releaseReady: false,
     productionReady: false,
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -8689,7 +8699,20 @@ function devTestGameReleaseReadinessChecklistFixture({
     releaseReadiness: {
       status: "not_ready",
       reason: "Local proof passed, but release evidence remains unproven.",
+      unprovenCount: unproven.length,
+      unprovenIds: unproven.map((item) => item.id),
       unproven,
+    },
+    readinessSummary: {
+      status: "not_ready",
+      proofStatus: "passed",
+      releaseReady: false,
+      productionReady: false,
+      localDevelopmentSpineStatus: "passed",
+      unprovenCount: unproven.length,
+      unprovenIds: unproven.map((item) => item.id),
+      firstUnprovenRequiredEvidence: unproven[0]?.requiredEvidence ?? null,
+      reason: "Local proof passed, but release evidence remains unproven.",
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",

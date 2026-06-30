@@ -911,10 +911,26 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     }),
     ...humanReleaseUnprovenItems({ releaseRunbookEvidence }),
   ];
+  const releaseReadinessStatus = "not_ready";
+  const releaseReadinessReasonText = releaseReadinessReason({
+    backupRestoreEvidence,
+    opsArtifactsEvidence,
+    hostedOpsSignalsEvidence,
+    seedFixtureEvidence,
+    identityAdapterEvidence,
+    spineManifestEvidence,
+    raceCoverageEvidence,
+    hostedConcurrentRaceMatrixEvidence,
+    proofGraphAdminProofEvidence,
+    proofFreshnessAdminProofEvidence,
+    nextActionAdminProofEvidence,
+    releaseRunbookEvidence,
+  });
   return {
     version: DEV_TEST_GAME_RELEASE_READINESS_VERSION,
     proof: "dev-test-game-release-readiness",
     status: "passed",
+    readinessStatus: releaseReadinessStatus,
     releaseReady: false,
     productionReady: false,
     generatedAt,
@@ -1267,22 +1283,22 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           }),
     },
     releaseReadiness: {
-      status: "not_ready",
-      reason: releaseReadinessReason({
-        backupRestoreEvidence,
-        opsArtifactsEvidence,
-        hostedOpsSignalsEvidence,
-        seedFixtureEvidence,
-        identityAdapterEvidence,
-        spineManifestEvidence,
-        raceCoverageEvidence,
-        hostedConcurrentRaceMatrixEvidence,
-        proofGraphAdminProofEvidence,
-        proofFreshnessAdminProofEvidence,
-        nextActionAdminProofEvidence,
-        releaseRunbookEvidence,
-      }),
+      status: releaseReadinessStatus,
+      reason: releaseReadinessReasonText,
+      unprovenCount: unproven.length,
+      unprovenIds: unproven.map((item) => item.id),
       unproven,
+    },
+    readinessSummary: {
+      status: releaseReadinessStatus,
+      proofStatus: "passed",
+      releaseReady: false,
+      productionReady: false,
+      localDevelopmentSpineStatus: "passed",
+      unprovenCount: unproven.length,
+      unprovenIds: unproven.map((item) => item.id),
+      firstUnprovenRequiredEvidence: unproven[0]?.requiredEvidence ?? null,
+      reason: releaseReadinessReasonText,
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact. Passing means the local harness evidence is coherent; it does not mean production, hosted, beta, or release readiness.",
@@ -7250,6 +7266,21 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (checklist.productionReady !== false || checklist.releaseReady !== false) {
     throw new Error("dev-test-game readiness must not claim production or release readiness");
   }
+  if (checklist.readinessStatus !== "not_ready") {
+    throw new Error(
+      `dev-test-game readinessStatus drifted: ${checklist.readinessStatus}`,
+    );
+  }
+  if (
+    checklist.readinessSummary?.status !== checklist.readinessStatus ||
+    checklist.readinessSummary?.proofStatus !== checklist.status ||
+    checklist.readinessSummary?.releaseReady !== checklist.releaseReady ||
+    checklist.readinessSummary?.productionReady !== checklist.productionReady ||
+    checklist.readinessSummary?.localDevelopmentSpineStatus !==
+      checklist.localDevelopmentSpine?.status
+  ) {
+    throw new Error("dev-test-game readiness summary drifted from checklist state");
+  }
   if (checklist.localDevelopmentSpine?.status !== "passed") {
     throw new Error("dev-test-game local development spine did not pass");
   }
@@ -7270,6 +7301,19 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   }
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
+  }
+  const releaseUnproven = checklist.releaseReadiness?.unproven ?? [];
+  const releaseUnprovenIds = releaseUnproven.map((item) => item.id);
+  if (
+    checklist.releaseReadiness?.unprovenCount !== releaseUnproven.length ||
+    !sameStringArray(checklist.releaseReadiness?.unprovenIds, releaseUnprovenIds) ||
+    checklist.readinessSummary?.unprovenCount !== releaseUnproven.length ||
+    !sameStringArray(checklist.readinessSummary?.unprovenIds, releaseUnprovenIds) ||
+    checklist.readinessSummary?.firstUnprovenRequiredEvidence !==
+      (releaseUnproven[0]?.requiredEvidence ?? null) ||
+    checklist.readinessSummary?.reason !== checklist.releaseReadiness?.reason
+  ) {
+    throw new Error("dev-test-game readiness summary drifted from unproven items");
   }
   const hasBackupCheck = checklist.localDevelopmentSpine?.checks?.some(
     (check) => check.id === "local-backup-restore-drill" && check.status === "passed",
