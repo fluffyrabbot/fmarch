@@ -9298,6 +9298,7 @@ function coreLoopAdminProofFixture() {
       normalNightActionResolutionPrivacySurfaceFixture(),
     hostNightActionTransitionSurface: hostNightActionTransitionSurfaceFixture(),
     dayThreeVoteResolutionSurface: dayThreeVoteResolutionSurfaceFixture(),
+    postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10694,6 +10695,215 @@ function dayThreeVoteResolutionSurfaceFixture() {
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function postDayThreeResolutionSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceTargetRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "target:D03:day_vote -> actionPlayer:D03:privacy -> host:advance_phase:ack:909 -> actionPlayer:N03",
+    targetReceiptProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      slotField: "targetSlot",
+      slot: "slot-4",
+      principalUserId: "player_rowan",
+      phaseId: "D03",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "Player action unavailable: actor is not alive",
+      privateCount: 1,
+      privateReceipt: true,
+      boundary:
+        "Seeded browser target role received day_vote private receipt after D03 resolution.",
+      resyncFromSeq: 908,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_rowan`,
+    }),
+    actionPlayerPrivacyProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "D03",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "Player action unavailable: phase locked",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player stayed alive with no target-only D03 receipt after host resolved Day 3.",
+      resyncFromSeq: 908,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+    }),
+    hostAdvanceProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 908,
+      setupSnapshotHost: {
+        phase: {
+          id: "D03",
+          state: "locked",
+        },
+      },
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: "advance_phase",
+        commandKind: "AdvancePhase",
+        streamSeq: 909,
+        phaseId: "N03",
+        phaseState: "open",
+        deadlineAffordance: "resolve_phase,lock_thread",
+        projectionRefreshKeys: [],
+        command: {
+          game,
+        },
+      }),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    actionPlayerNightThreeProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "N03",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:no legal action available",
+      statusText: "Player action unavailable: no legal action available",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player observed host AdvancePhase from locked D03 into open N03.",
+      resyncFromSeq: 909,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function postDayThreePlayerSurfaceFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  slotField,
+  slot,
+  principalUserId,
+  phaseId,
+  phaseState,
+  actorAlive,
+  actorStatus,
+  actionState,
+  statusText,
+  privateCount,
+  privateReceipt,
+  boundary,
+  resyncFromSeq,
+  commandStateEndpoint,
+  notificationsEndpoint,
+}) {
+  const proof = {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    [slotField]: slot,
+    principalUserId,
+    checkpoint: {
+      phaseId,
+      phaseState,
+      actorSlot: slot,
+      actionState,
+      receiptState: "idle",
+      statusText,
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: privateCount,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    voteButtonCount: 0,
+    projectionCommandState: {
+      actorSlot: slot,
+      actorAlive,
+      actorStatus,
+      phase: {
+        phaseId,
+        locked: phaseState === "locked",
+      },
+      actions: [],
+      voteTargets: [],
+      boundary,
+    },
+    projectionNotifications: privateReceipt
+      ? [
+          {
+            effect: "player_killed",
+            status: "day_vote",
+          },
+        ]
+      : [],
+    projectionDayVoteOutcomes: [
+      { phaseId: "D02", status: "Lynch" },
+      { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
+    ],
+    resyncFromSeq,
+    resyncSnapshotCommandState: {
+      actorSlot: slot,
+      phase: {
+        phaseId,
+      },
+    },
+    resyncSnapshotNotifications: privateReceipt
+      ? [
+          {
+            status: "day_vote",
+          },
+        ]
+      : [],
+    coldLoadEndpoints: {
+      notificationsEndpoint,
+      commandStateEndpoint,
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+  if (privateReceipt) {
+    proof.privateNotice = {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed day_vote",
+      detailText: "Phase D03",
+    };
+  } else {
+    proof.privateEmptyText = "No private results visible";
+  }
+  return proof;
 }
 
 function privateChannelRoleSurfaceFixture() {

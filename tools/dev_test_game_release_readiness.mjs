@@ -1915,6 +1915,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopDayThreeVoteResolutionSurface(
     proof.dayThreeVoteResolutionSurface,
   );
+  assertCoreLoopPostDayThreeResolutionSurface(
+    proof.postDayThreeResolutionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1949,6 +1952,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       proof.normalNightActionResolutionPrivacySurface,
     hostNightActionTransitionSurface: proof.hostNightActionTransitionSurface,
     dayThreeVoteResolutionSurface: proof.dayThreeVoteResolutionSurface,
+    postDayThreeResolutionSurface: proof.postDayThreeResolutionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3117,6 +3121,228 @@ function assertCoreLoopDayThreeHostVoteResolutionProof({
   ) {
     throw new Error("core-loop admin proof missing Day 3 host resolve projections");
   }
+}
+
+function assertCoreLoopPostDayThreeResolutionSurface(postDayThreeResolutionSurface) {
+  const expectedGame = gameFromRoleUrl(
+    postDayThreeResolutionSurface?.sourceHostRoleUrl,
+  );
+  if (
+    postDayThreeResolutionSurface?.status !== "passed" ||
+    postDayThreeResolutionSurface.clickedThroughFromRoleUrl !== true ||
+    postDayThreeResolutionSurface.releaseReady !== false ||
+    postDayThreeResolutionSurface.productionReady !== false ||
+    typeof postDayThreeResolutionSurface.sourceHostRoleUrl !== "string" ||
+    !postDayThreeResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof postDayThreeResolutionSurface.sourceActionPlayerRoleUrl !== "string" ||
+    !postDayThreeResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof postDayThreeResolutionSurface.sourceTargetRoleUrl !== "string" ||
+    !postDayThreeResolutionSurface.sourceTargetRoleUrl.includes("/g/") ||
+    !String(postDayThreeResolutionSurface.transition ?? "").includes(
+      "target:D03:day_vote",
+    ) ||
+    !String(postDayThreeResolutionSurface.transition ?? "").includes(
+      "host:advance_phase:ack:909",
+    ) ||
+    !String(postDayThreeResolutionSurface.transition ?? "").includes(
+      "actionPlayer:N03",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing post-Day 3 resolution");
+  }
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: postDayThreeResolutionSurface.targetReceiptProof,
+    sourceRoleUrl: postDayThreeResolutionSurface.sourceTargetRoleUrl,
+    expectedSlot: "slot-4",
+    slotField: "targetSlot",
+    expectedPrincipalUserId: "player_rowan",
+    expectedPhaseId: "D03",
+    expectedPhaseState: "locked",
+    expectedActorAlive: false,
+    expectedActorStatus: "dead",
+    expectedActionState: "disabled:actor is not alive",
+    expectedStatusText: "actor is not alive",
+    expectedPrivateCount: 1,
+    expectedPrivateReceipt: true,
+    expectedBoundaryText: "target role received day_vote private receipt",
+    expectedResyncFromSeq: 908,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+  });
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: postDayThreeResolutionSurface.actionPlayerPrivacyProof,
+    sourceRoleUrl: postDayThreeResolutionSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "D03",
+    expectedPhaseState: "locked",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:phase locked",
+    expectedStatusText: "phase locked",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "action player stayed alive",
+    expectedResyncFromSeq: 908,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertCoreLoopPostDayThreeHostAdvanceProof({
+    proof: postDayThreeResolutionSurface.hostAdvanceProof,
+    expectedGame,
+    sourceRoleUrl: postDayThreeResolutionSurface.sourceHostRoleUrl,
+  });
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: postDayThreeResolutionSurface.actionPlayerNightThreeProof,
+    sourceRoleUrl: postDayThreeResolutionSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N03",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "observed host AdvancePhase",
+    expectedResyncFromSeq: 909,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+}
+
+function assertCoreLoopPostDayThreePlayerSurfaceProof({
+  proof,
+  sourceRoleUrl,
+  expectedSlot,
+  slotField,
+  expectedPrincipalUserId,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedActorAlive,
+  expectedActorStatus,
+  expectedActionState,
+  expectedStatusText,
+  expectedPrivateCount,
+  expectedPrivateReceipt,
+  expectedBoundaryText,
+  expectedResyncFromSeq,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof[slotField] !== expectedSlot ||
+    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.checkpoint?.phaseId !== expectedPhaseId ||
+    proof.checkpoint.phaseState !== expectedPhaseState ||
+    proof.checkpoint.actorSlot !== expectedSlot ||
+    proof.checkpoint.actionState !== expectedActionState ||
+    proof.checkpoint.receiptState !== "idle" ||
+    !String(proof.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes(expectedStatusText) ||
+    proof.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    proof.privateQueueBoundary.count !== expectedPrivateCount ||
+    !String(proof.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    proof.voteButtonCount !== 0 ||
+    proof.projectionCommandState?.actorSlot !== expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
+    proof.projectionCommandState?.phase?.phaseId !== expectedPhaseId ||
+    proof.projectionCommandState?.phase?.locked !==
+      (expectedPhaseState === "locked") ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      expectedBoundaryText,
+    ) ||
+    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D03" ||
+    proof.resyncFromSeq !== expectedResyncFromSeq ||
+    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
+    proof.coldLoadEndpoints?.notificationsEndpoint !==
+      expectedNotificationsEndpoint ||
+    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
+  ) {
+    throw new Error("core-loop admin proof missing post-Day 3 player surface");
+  }
+  if (
+    expectedPrivateReceipt &&
+    (proof.privateNotice?.id !== "notification-1" ||
+      proof.privateNotice.kind !== "notification" ||
+      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
+      !String(proof.privateNotice.text ?? "").includes("day_vote") ||
+      proof.privateNotice.detailText !== "Phase D03" ||
+      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
+      proof.projectionNotifications?.[0]?.status !== "day_vote" ||
+      proof.resyncSnapshotNotifications?.[0]?.status !== "day_vote")
+  ) {
+    throw new Error("core-loop admin proof missing post-Day 3 target receipt");
+  }
+  if (
+    !expectedPrivateReceipt &&
+    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
+      proof.projectionNotifications?.length !== 0 ||
+      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.privateNotice !== undefined)
+  ) {
+    throw new Error("core-loop admin proof leaked post-Day 3 target receipt");
+  }
+}
+
+function assertCoreLoopPostDayThreeHostAdvanceProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 908 ||
+    proof.setupSnapshotHost?.phase?.id !== "D03" ||
+    proof.setupSnapshotHost?.phase?.state !== "locked"
+  ) {
+    throw new Error("core-loop admin proof missing post-Day 3 host advance");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 909,
+    expectedPhaseId: "N03",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
 }
 
 function assertCoreLoopHostStaleAdvanceAfterTransitionProof({
