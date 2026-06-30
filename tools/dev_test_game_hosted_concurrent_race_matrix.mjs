@@ -1,12 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  assertDevTestGameProofRun,
+} from "./dev_test_game_proof_contract.mjs";
+import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
 export const devTestGameReleaseReadinessPath =
   "target/dev-test-game/release-readiness-checklist.json";
+export const devTestGameSessionPath = "target/dev-test-game/session.json";
+export const devTestGameProofRunPath = "target/dev-test-game/proof-run.json";
+export const devTestGameRaceCoveragePath =
+  "target/dev-test-game/race-coverage.json";
 export const devTestGameHostedConcurrentRaceMatrixPath =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 export const devTestGameHostedConcurrentRaceMatrixCommand =
@@ -17,21 +25,56 @@ const hostedMatrixJsonPath = path.join(
   devTestGameHostedConcurrentRaceMatrixPath,
 );
 
-export function buildDevTestGameHostedConcurrentRaceMatrixRequest(
+const reconnectLaneIds = Object.freeze([
+  "reconnect-recovery",
+  "replacement-reconnect-recovery",
+  "replacement-action-reconnect",
+  "replacement-stale-private-post-reconnect",
+]);
+
+const staleConflictLaneIds = Object.freeze([
+  "replacement-stale-conflict-message",
+  "stale-action-conflict-message",
+  "stale-dead-action-conflict",
+  "stale-host-control",
+]);
+
+export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   releaseReadiness,
   {
+    raceCoverage,
+    proofRun,
+    session,
     generatedAt = new Date().toISOString(),
     releaseReadinessSource = devTestGameReleaseReadinessPath,
+    raceCoverageSource = devTestGameRaceCoveragePath,
+    proofRunSource = devTestGameProofRunPath,
+    sessionSource = devTestGameSessionPath,
   } = {},
 ) {
   const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
+  const coverage = assertDevTestGameRaceCoverage(raceCoverage);
+  const proof = assertDevTestGameProofRun(proofRun);
+  const sessionArtifact = session ?? proof.session;
+  if (
+    sessionArtifact?.game !== undefined &&
+    proof.session?.game !== undefined &&
+    sessionArtifact.game !== proof.session.game
+  ) {
+    throw new Error(
+      `hosted concurrent race matrix session game drifted: ${sessionArtifact.game}`,
+    );
+  }
   const promoted = readiness.generatedFrom?.raceCoveragePromotedMilestones;
   if (
     promoted?.status !== "passed" ||
+    promoted.cellCount !== coverage.summary.cellCount ||
     promoted.cellCount !== promoted.reloadCoveredCellCount ||
     promoted.groupCount !== promoted.passedGroupCount
   ) {
-    throw new Error("hosted concurrent race matrix request requires promoted local race milestones");
+    throw new Error(
+      "hosted concurrent race matrix evidence requires promoted local race milestones",
+    );
   }
   const unproven = readiness.releaseReadiness.unproven.find(
     (item) => item.id === "hosted-concurrent-race-matrix",
@@ -39,20 +82,34 @@ export function buildDevTestGameHostedConcurrentRaceMatrixRequest(
   if (unproven === undefined) {
     throw new Error("release readiness is missing hosted-concurrent-race-matrix");
   }
+  if (coverage.generatedFrom?.proofRun !== proofRunSource) {
+    throw new Error(
+      `race coverage proof-run source drifted: ${coverage.generatedFrom?.proofRun}`,
+    );
+  }
+  const laneById = new Map(proof.lanes.map((lane) => [lane.id, lane]));
+  const cells = coverage.cells.map((cell) => hostedMatrixCell(cell, laneById));
+  const reconnectLanes = proofLanesById(laneById, reconnectLaneIds);
+  const staleConflictLanes = proofLanesById(laneById, staleConflictLaneIds);
+  const roleSurfaces = roleSurfacesFromSession(sessionArtifact);
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION,
-    proof: "dev-test-game-hosted-concurrent-race-matrix-request",
-    status: "unproven",
+    proof: "dev-test-game-hosted-concurrent-race-matrix",
+    status: "passed",
     releaseReady: false,
     productionReady: false,
     generatedAt,
-    scope: "hosted-concurrent-race-matrix-request",
+    scope: "local-hosted-like-concurrent-race-matrix",
     proofBoundary:
-      "Machine-readable request for the first hosted-like concurrent race matrix proof. It is derived from promoted local dev-test-game race evidence, but it does not prove hosted deployment, multi-node command races, stale clients across reconnects, beta readiness, release readiness, or production readiness.",
+      "Local hosted-like concurrent race matrix over the saved dev-test-game browser/API proof. Passing means the seeded localhost API and frontend target has artifacted multi-session race, reload, reconnect, and stale-client evidence for the recorded cells; it does not prove hosted deployment, multi-node command races, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       releaseReadinessChecklist: releaseReadinessSource,
       releaseReadinessGeneratedAt: readiness.generatedAt,
-      raceCoverage: String(readiness.generatedFrom?.raceCoverage ?? ""),
+      proofRun: proofRunSource,
+      proofGeneratedAt: proof.generatedAt,
+      session: sessionSource,
+      raceCoverage: raceCoverageSource,
+      raceCoverageGeneratedAt: coverage.generatedAt,
       raceCoveragePromotedMilestones: {
         status: promoted.status,
         cellCount: promoted.cellCount,
@@ -66,6 +123,73 @@ export function buildDevTestGameHostedConcurrentRaceMatrixRequest(
         groupIds: promoted.groups.map((group) => group.id),
       },
     },
+    hostedLikeTarget: {
+      kind: "local-rust-api-plus-sveltekit-browser",
+      status: "passed",
+      game: proof.session.game,
+      seedMode: proof.session.seedMode,
+      frontendBaseUrl: proof.session.frontendBaseUrl,
+      apiBaseUrl: proof.session.apiBaseUrl,
+      roleSurfaces,
+      proofBoundary: proof.proofBoundary,
+    },
+    summary: {
+      cellCount: cells.length,
+      passedCellCount: cells.filter((cell) => cell.status === "passed").length,
+      raceLaneCount: cells.length,
+      reloadLaneCount: cells.filter((cell) => cell.reloadLane !== null).length,
+      reloadCoveredCellCount: cells.filter(
+        (cell) => cell.reloadLane?.status === "passed",
+      ).length,
+      reconnectLaneCount: reconnectLanes.length,
+      staleConflictLaneCount: staleConflictLanes.length,
+      roleSurfaceCount: roleSurfaces.length,
+    },
+    evidenceProgress: [
+      {
+        id: "hosted-like-api-frontend-target",
+        status: "passed",
+        evidence: [
+          proof.session.frontendBaseUrl,
+          proof.session.apiBaseUrl,
+          "target/dev-test-game/session.json",
+        ],
+      },
+      {
+        id: "multi-session-concurrent-command-matrix",
+        status: "passed",
+        evidence: cells.map((cell) => cell.id),
+      },
+      {
+        id: "reload-recovery-after-races",
+        status: "passed",
+        evidence: cells.map((cell) => cell.reloadLane.id),
+      },
+      {
+        id: "reconnect-recovery",
+        status: "passed",
+        evidence: reconnectLanes.map((lane) => lane.id),
+      },
+      {
+        id: "stale-client-conflict-messages",
+        status: "passed",
+        evidence: staleConflictLanes.map((lane) => lane.id),
+      },
+      {
+        id: "raw-role-credential-redaction",
+        status: "passed",
+        evidence: ["roleSurfaces.directUrl", "lane.evidence redaction"],
+      },
+      {
+        id: "real-hosted-deployment",
+        status: "unproven",
+        requiredEvidence:
+          "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reconnect/stale-client evidence.",
+      },
+    ],
+    cells,
+    reconnectLanes,
+    staleConflictLanes,
     requestedEvidence: {
       id: unproven.id,
       status: unproven.status,
@@ -77,35 +201,34 @@ export function buildDevTestGameHostedConcurrentRaceMatrixRequest(
         groupCount: promoted.groupCount,
         passedGroupCount: promoted.passedGroupCount,
       },
-      requiredHostedProof: [
-        "hosted or hosted-like API and frontend deployment target",
-        "multi-session concurrent command race matrix against that target",
-        "reload and reconnect recovery after each accepted or rejected race outcome",
-        "stale-client conflict messages across host, player, replacement, and cohost surfaces",
-        "artifacted command/event sequence evidence with raw role credentials redacted",
-      ],
     },
+    remainingGaps: [
+      "hosted API/frontend deployment proof with external health checks",
+      "multi-node concurrent command race execution against hosted storage",
+      "hosted reload/reconnect and stale-client conflict evidence",
+      "beta/release/operator readiness and human rollback path",
+    ],
     nextBuildSlice: {
       command: devTestGameHostedConcurrentRaceMatrixCommand,
       buildSlice:
-        "Create the first hosted-like concurrent race matrix proof from the promoted local race baseline without changing role-surface architecture.",
+        "Promote the local hosted-like matrix to a real hosted or multi-node matrix run while preserving the seeded role-surface architecture.",
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
     },
   };
-  assertDevTestGameHostedConcurrentRaceMatrixRequest(evidence);
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence);
   return evidence;
 }
 
-export function assertDevTestGameHostedConcurrentRaceMatrixRequest(evidence) {
+export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
   if (
     evidence?.version !== DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION ||
-    evidence.proof !== "dev-test-game-hosted-concurrent-race-matrix-request" ||
-    evidence.status !== "unproven" ||
+    evidence.proof !== "dev-test-game-hosted-concurrent-race-matrix" ||
+    evidence.status !== "passed" ||
     evidence.releaseReady !== false ||
     evidence.productionReady !== false ||
-    evidence.scope !== "hosted-concurrent-race-matrix-request"
+    evidence.scope !== "local-hosted-like-concurrent-race-matrix"
   ) {
-    throw new Error("hosted concurrent race matrix request shape drifted");
+    throw new Error("hosted concurrent race matrix evidence shape drifted");
   }
   const promoted = evidence.generatedFrom?.raceCoveragePromotedMilestones;
   if (
@@ -116,35 +239,162 @@ export function assertDevTestGameHostedConcurrentRaceMatrixRequest(evidence) {
     !Array.isArray(promoted.groupIds) ||
     promoted.groupIds.length !== promoted.groupCount
   ) {
-    throw new Error("hosted concurrent race matrix request promoted baseline drifted");
+    throw new Error("hosted concurrent race matrix promoted baseline drifted");
+  }
+  if (
+    evidence.summary?.cellCount !== promoted.cellCount ||
+    evidence.summary.passedCellCount !== promoted.cellCount ||
+    evidence.summary.reloadCoveredCellCount !== promoted.reloadCoveredCellCount ||
+    evidence.summary.reconnectLaneCount !== reconnectLaneIds.length ||
+    evidence.summary.staleConflictLaneCount !== staleConflictLaneIds.length
+  ) {
+    throw new Error("hosted concurrent race matrix summary drifted");
+  }
+  if (
+    evidence.hostedLikeTarget?.status !== "passed" ||
+    typeof evidence.hostedLikeTarget.frontendBaseUrl !== "string" ||
+    typeof evidence.hostedLikeTarget.apiBaseUrl !== "string" ||
+    !Array.isArray(evidence.hostedLikeTarget.roleSurfaces) ||
+    evidence.hostedLikeTarget.roleSurfaces.length === 0
+  ) {
+    throw new Error("hosted concurrent race matrix target drifted");
+  }
+  for (const surface of evidence.hostedLikeTarget.roleSurfaces) {
+    if (
+      typeof surface.role !== "string" ||
+      typeof surface.directUrl !== "string" ||
+      "token" in surface ||
+      "inviteToken" in surface ||
+      "loginUrl" in surface
+    ) {
+      throw new Error("hosted concurrent race matrix role surface leaked credentials");
+    }
+  }
+  if (!Array.isArray(evidence.cells) || evidence.cells.length !== promoted.cellCount) {
+    throw new Error("hosted concurrent race matrix cells drifted");
+  }
+  for (const cell of evidence.cells) {
+    if (
+      cell.status !== "passed" ||
+      cell.raceLane?.status !== "passed" ||
+      cell.reloadLane?.status !== "passed" ||
+      !Array.isArray(cell.roleSurfaces) ||
+      cell.roleSurfaces.length === 0
+    ) {
+      throw new Error(`hosted concurrent race matrix cell drifted: ${cell.id}`);
+    }
   }
   if (
     evidence.requestedEvidence?.id !== "hosted-concurrent-race-matrix" ||
     evidence.requestedEvidence.status !== "unproven" ||
-    !Array.isArray(evidence.requestedEvidence.requiredHostedProof) ||
-    evidence.requestedEvidence.requiredHostedProof.length < 5
+    !Array.isArray(evidence.remainingGaps) ||
+    evidence.remainingGaps.length === 0
   ) {
-    throw new Error("hosted concurrent race matrix request evidence drifted");
+    throw new Error("hosted concurrent race matrix remaining gap drifted");
   }
   if (
     evidence.nextBuildSlice?.command !==
       devTestGameHostedConcurrentRaceMatrixCommand ||
     evidence.nextBuildSlice?.proofTarget !== devTestGameHostedConcurrentRaceMatrixPath
   ) {
-    throw new Error("hosted concurrent race matrix request next slice drifted");
+    throw new Error("hosted concurrent race matrix next slice drifted");
   }
   return evidence;
 }
 
+function hostedMatrixCell(cell, laneById) {
+  const raceLane = laneSummary(laneById.get(cell.raceLaneId), cell.raceLaneId);
+  const reloadLane = laneSummary(laneById.get(cell.reloadLaneId), cell.reloadLaneId);
+  return {
+    id: cell.id,
+    actorPair: cell.actorPair,
+    commandFamily: cell.commandFamily,
+    roleSurfaces: [...cell.roleSurfaces],
+    status:
+      cell.status === "passed" &&
+      raceLane.status === "passed" &&
+      reloadLane.status === "passed"
+        ? "passed"
+        : "blocked",
+    raceLane,
+    reloadLane,
+  };
+}
+
+function proofLanesById(laneById, laneIds) {
+  return laneIds.map((laneId) => laneSummary(laneById.get(laneId), laneId));
+}
+
+function laneSummary(lane, laneId) {
+  if (lane?.status !== "passed") {
+    throw new Error(`hosted concurrent race matrix missing passed lane: ${laneId}`);
+  }
+  return {
+    id: lane.id,
+    label: lane.label,
+    status: lane.status,
+    evidence: redactSensitive(lane.evidence ?? {}),
+  };
+}
+
+function roleSurfacesFromSession(sessionArtifact) {
+  const sessions = sessionArtifact?.sessions ?? {};
+  return Object.entries(sessions)
+    .filter(([, session]) => typeof session?.directUrl === "string")
+    .map(([role, session]) => ({
+      role,
+      principalUserId: String(session.principalUserId ?? ""),
+      expectedCapabilityKind: String(session.expectedCapabilityKind ?? ""),
+      directUrl: session.directUrl,
+      returnTo: String(session.returnTo ?? ""),
+    }))
+    .sort((a, b) => a.role.localeCompare(b.role));
+}
+
+function redactSensitive(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitive(item));
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      isSensitiveKey(key) ? "[redacted]" : redactSensitive(child),
+    ]),
+  );
+}
+
+function isSensitiveKey(key) {
+  return /token|cookie|authorization|secret|password|databaseUrl|grant/i.test(key);
+}
+
 async function main() {
   const readinessPath = path.join(repoRoot, devTestGameReleaseReadinessPath);
-  const readiness = JSON.parse(await readFile(readinessPath, "utf8"));
-  const evidence = buildDevTestGameHostedConcurrentRaceMatrixRequest(readiness);
+  const sessionPath = path.join(repoRoot, devTestGameSessionPath);
+  const raceCoveragePath = path.join(repoRoot, devTestGameRaceCoveragePath);
+  const proofRunPath = path.join(repoRoot, devTestGameProofRunPath);
+  const [readiness, session, raceCoverage, proofRun] = await Promise.all([
+    readJson(readinessPath),
+    readJson(sessionPath),
+    readJson(raceCoveragePath),
+    readJson(proofRunPath),
+  ]);
+  const evidence = buildDevTestGameHostedConcurrentRaceMatrixEvidence(readiness, {
+    raceCoverage,
+    proofRun,
+    session,
+  });
   await mkdir(path.dirname(hostedMatrixJsonPath), { recursive: true });
   await writeFile(hostedMatrixJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(
     `wrote ${path.relative(repoRoot, hostedMatrixJsonPath)} (${evidence.status})`,
   );
+}
+
+async function readJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

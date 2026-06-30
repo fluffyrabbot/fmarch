@@ -69,8 +69,8 @@ import {
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
 import {
-  assertDevTestGameHostedConcurrentRaceMatrixRequest,
-  buildDevTestGameHostedConcurrentRaceMatrixRequest,
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence,
+  buildDevTestGameHostedConcurrentRaceMatrixEvidence,
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
@@ -6397,23 +6397,53 @@ test("session card and markdown include role credential URLs and tokens", () => 
         item.requiredEvidence.includes("Hosted or hosted-like concurrent command race matrix"),
     ),
   );
-  const hostedMatrixRequest =
-    buildDevTestGameHostedConcurrentRaceMatrixRequest(raceCoverageReadiness, {
+  const hostedMatrix =
+    buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
+      raceCoverage,
+      proofRun,
+      session: card,
       generatedAt: "2026-06-26T00:00:00.000Z",
     });
-  assertDevTestGameHostedConcurrentRaceMatrixRequest(hostedMatrixRequest);
-  assert.equal(hostedMatrixRequest.status, "unproven");
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence(hostedMatrix);
+  assert.equal(hostedMatrix.status, "passed");
+  assert.equal(hostedMatrix.releaseReady, false);
   assert.equal(
-    hostedMatrixRequest.requestedEvidence.firstProofTarget,
+    hostedMatrix.requestedEvidence.firstProofTarget,
     devTestGameHostedConcurrentRaceMatrixPath,
   );
+  assert.equal(hostedMatrix.summary.cellCount, 16);
+  assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
+  assert.equal(hostedMatrix.summary.reconnectLaneCount, 4);
+  assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
+  assert(
+    hostedMatrix.hostedLikeTarget.roleSurfaces.every(
+      (surface) =>
+        surface.directUrl.startsWith("http://") &&
+        !surface.directUrl.includes("invite=") &&
+        !("token" in surface) &&
+        !("inviteToken" in surface) &&
+        !("loginUrl" in surface),
+    ),
+  );
   assert.deepEqual(
-    hostedMatrixRequest.generatedFrom.raceCoveragePromotedMilestones.groupIds,
+    hostedMatrix.generatedFrom.raceCoveragePromotedMilestones.groupIds,
     [
       "replacement-race-reload",
       "host-concurrent-race-reload",
       "player-concurrent-action-reload",
       "cohost-deadline-race-reload",
+    ],
+  );
+  assert.deepEqual(
+    hostedMatrix.evidenceProgress.map((item) => [item.id, item.status]),
+    [
+      ["hosted-like-api-frontend-target", "passed"],
+      ["multi-session-concurrent-command-matrix", "passed"],
+      ["reload-recovery-after-races", "passed"],
+      ["reconnect-recovery", "passed"],
+      ["stale-client-conflict-messages", "passed"],
+      ["raw-role-credential-redaction", "passed"],
+      ["real-hosted-deployment", "unproven"],
     ],
   );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
