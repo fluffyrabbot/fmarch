@@ -217,6 +217,11 @@ await runAdminAuditProof({
         hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
         actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
       });
+    const dayFourSurvivorRoleSurface = await proveDayFourSurvivorRoleSurface({
+      browser,
+      frontendBaseUrl,
+      roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+    });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
@@ -241,6 +246,7 @@ await runAdminAuditProof({
       dayThreeVoteResolutionSurface,
       postDayThreeResolutionSurface,
       nightThreeEmptyResolutionSurface,
+      dayFourSurvivorRoleSurface,
       privateChannelRoleSurface,
     };
   },
@@ -252,7 +258,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-core-loop-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
@@ -279,6 +285,7 @@ await runAdminAuditProof({
     postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
     nightThreeEmptyResolutionSurface:
       surfaces.nightThreeEmptyResolutionSurface,
+    dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
@@ -1342,6 +1349,38 @@ async function proveNightThreeEmptyResolutionSurface({
     actionPlayerNoActionProof,
     hostTransitionProof,
     actionPlayerDayFourProof,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+async function proveDayFourSurvivorRoleSurface({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const survivorProof = await provePostDayThreePlayerSurface({
+    browser,
+    frontendBaseUrl,
+    roleUrl,
+    cookieValue: "fixture-survivor",
+    expectedSlot: "slot-5",
+    principalUserId: "player_sage",
+    slotField: "survivorSlot",
+    commandState: seededDayFourSurvivorCommandState({
+      boundary:
+        "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
+    }),
+    notifications: [],
+    resyncFromSeq: 911,
+    threadBody: "Day 4 has opened.",
+    expectedVoteButtonCount: 2,
+  });
+  return {
+    status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    clickedThroughFromRoleUrl: true,
+    survivorProof,
     releaseReady: false,
     productionReady: false,
   };
@@ -5268,6 +5307,31 @@ function seededDayFourActionPlayerCommandState({ boundary }) {
   };
 }
 
+function seededDayFourSurvivorCommandState({ boundary }) {
+  return {
+    game: "seeded-day-four-survivor",
+    actorSlot: "slot-5",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: null,
+    gameCompleted: false,
+    phase: {
+      phaseId: "D04",
+      phaseKind: "Day",
+      phaseNumber: 4,
+      locked: false,
+      deadline: 1782360000,
+    },
+    actions: [],
+    voteTargets: [
+      { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+      { kind: "no_lynch", slotId: null, label: "No lynch" },
+    ],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -5547,6 +5611,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertNightThreeEmptyResolutionSurface(
     evidence.nightThreeEmptyResolutionSurface,
   );
+  assertDayFourSurvivorRoleSurface(evidence.dayFourSurvivorRoleSurface);
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
@@ -6997,6 +7062,48 @@ function assertNightThreeEmptyResolutionSurface(nightThreeEmptyResolutionSurface
       `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
     expectedVoteButtonCount: 1,
     expectedVoteTargetCount: 1,
+  });
+}
+
+function assertDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
+  const expectedGame = gameFromRoleUrl(dayFourSurvivorRoleSurface?.sourceRoleUrl);
+  if (
+    dayFourSurvivorRoleSurface?.status !== "passed" ||
+    dayFourSurvivorRoleSurface.clickedThroughFromRoleUrl !== true ||
+    dayFourSurvivorRoleSurface.releaseReady !== false ||
+    dayFourSurvivorRoleSurface.productionReady !== false ||
+    typeof dayFourSurvivorRoleSurface.sourceRoleUrl !== "string" ||
+    !dayFourSurvivorRoleSurface.sourceRoleUrl.includes("/g/")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 4 survivor role surface: ${JSON.stringify(
+        dayFourSurvivorRoleSurface,
+      )}`,
+    );
+  }
+  assertPostDayThreePlayerSurfaceProof({
+    proof: dayFourSurvivorRoleSurface.survivorProof,
+    expectedGame,
+    sourceRoleUrl: dayFourSurvivorRoleSurface.sourceRoleUrl,
+    expectedSlot: "slot-5",
+    slotField: "survivorSlot",
+    expectedPrincipalUserId: "player_sage",
+    expectedPhaseId: "D04",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "survivor role opened D04",
+    expectedResyncFromSeq: 911,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_sage`,
+    expectedVoteButtonCount: 2,
+    expectedVoteTargetCount: 2,
   });
 }
 

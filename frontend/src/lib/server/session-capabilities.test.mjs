@@ -209,6 +209,20 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     [["SlotOccupant", "slot-4"]],
   );
 
+  const survivor = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-survivor"),
+    request: requestFor("/g/midsummer"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(survivor.principalUserId, "player_sage");
+  assert.deepEqual(
+    survivor.resolvedCapabilities.map((capability) => [
+      capability.kind,
+      capability.slot,
+    ]),
+    [["SlotOccupant", "slot-5"]],
+  );
+
   const host = await resolveAuthenticatedSession({
     cookies: fixtureCookieJar("fixture-host"),
     request: requestFor("/g/midsummer/host"),

@@ -9300,6 +9300,7 @@ function coreLoopAdminProofFixture() {
     dayThreeVoteResolutionSurface: dayThreeVoteResolutionSurfaceFixture(),
     postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
     nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
+    dayFourSurvivorRoleSurface: dayFourSurvivorRoleSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10906,6 +10907,44 @@ function nightThreeEmptyResolutionSurfaceFixture() {
       notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       voteButtonCount: 1,
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function dayFourSurvivorRoleSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    survivorProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "survivorSlot",
+      slot: "slot-5",
+      principalUserId: "player_sage",
+      phaseId: "D04",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:no legal action available",
+      statusText: "Player action unavailable: no legal action available",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
+      resyncFromSeq: 911,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_sage`,
+      voteButtonCount: 2,
+      voteTargets: [
+        { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+        { kind: "no_lynch", slotId: null, label: "No lynch" },
+      ],
     }),
     releaseReady: false,
     productionReady: false,

@@ -1921,6 +1921,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopNightThreeEmptyResolutionSurface(
     proof.nightThreeEmptyResolutionSurface,
   );
+  assertCoreLoopDayFourSurvivorRoleSurface(
+    proof.dayFourSurvivorRoleSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1957,6 +1960,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     dayThreeVoteResolutionSurface: proof.dayThreeVoteResolutionSurface,
     postDayThreeResolutionSurface: proof.postDayThreeResolutionSurface,
     nightThreeEmptyResolutionSurface: proof.nightThreeEmptyResolutionSurface,
+    dayFourSurvivorRoleSurface: proof.dayFourSurvivorRoleSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3303,6 +3307,43 @@ function assertCoreLoopNightThreeEmptyResolutionSurface(
       `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
     expectedVoteButtonCount: 1,
     expectedVoteTargetCount: 1,
+  });
+}
+
+function assertCoreLoopDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
+  const expectedGame = gameFromRoleUrl(dayFourSurvivorRoleSurface?.sourceRoleUrl);
+  if (
+    dayFourSurvivorRoleSurface?.status !== "passed" ||
+    dayFourSurvivorRoleSurface.clickedThroughFromRoleUrl !== true ||
+    dayFourSurvivorRoleSurface.releaseReady !== false ||
+    dayFourSurvivorRoleSurface.productionReady !== false ||
+    typeof dayFourSurvivorRoleSurface.sourceRoleUrl !== "string" ||
+    !dayFourSurvivorRoleSurface.sourceRoleUrl.includes("/g/")
+  ) {
+    throw new Error("core-loop admin proof missing Day 4 survivor role surface");
+  }
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: dayFourSurvivorRoleSurface.survivorProof,
+    sourceRoleUrl: dayFourSurvivorRoleSurface.sourceRoleUrl,
+    expectedSlot: "slot-5",
+    slotField: "survivorSlot",
+    expectedPrincipalUserId: "player_sage",
+    expectedPhaseId: "D04",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "survivor role opened D04",
+    expectedResyncFromSeq: 911,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_sage`,
+    expectedVoteButtonCount: 2,
+    expectedVoteTargetCount: 2,
   });
 }
 
