@@ -62,6 +62,10 @@ const defaultRaceCoverageAdminProofPath = path.join(
   artifactDir,
   "race-coverage-admin-proof.json",
 );
+const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
+  artifactDir,
+  "hosted-concurrent-race-matrix-admin-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -231,6 +235,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.raceCoverageAdminProofArtifact,
       })
     : undefined;
+  const hostedConcurrentRaceMatrixAdminProofEvidence =
+    options.hostedConcurrentRaceMatrixAdminProof
+      ? validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
+          options.hostedConcurrentRaceMatrixAdminProof,
+          {
+            path:
+              options.hostedConcurrentRaceMatrixAdminProofPath ??
+              "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+            artifact: options.hostedConcurrentRaceMatrixAdminProofArtifact,
+          },
+        )
+      : undefined;
   const localChecks = [
     {
       id: "local-role-url-browser-proof",
@@ -522,6 +538,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       groups: raceCoveragePromotedMilestones.groups,
     });
   }
+  if (hostedConcurrentRaceMatrixAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-concurrent-race-matrix-admin-surface",
+      label: "Local hosted matrix admin surface",
+      status: "passed",
+      evidence: hostedConcurrentRaceMatrixAdminProofEvidence.path,
+      proofBoundary: hostedConcurrentRaceMatrixAdminProofEvidence.proofBoundary,
+      hostedEvidenceStatus:
+        hostedConcurrentRaceMatrixAdminProofEvidence.hostedEvidenceStatus,
+      realHostedDeploymentStatus:
+        hostedConcurrentRaceMatrixAdminProofEvidence.realHostedDeploymentStatus,
+      adminRoleSurface: hostedConcurrentRaceMatrixAdminProofEvidence,
+    });
+  }
   const unproven = [
     ...(identityAdapterEvidence === undefined
       ? [
@@ -684,6 +714,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             ...(raceCoverageAdminProofEvidence === undefined
               ? {}
               : { raceCoverageAdminProof: raceCoverageAdminProofEvidence.path }),
+            ...(hostedConcurrentRaceMatrixAdminProofEvidence === undefined
+              ? {}
+              : {
+                  hostedConcurrentRaceMatrixAdminProof:
+                    hostedConcurrentRaceMatrixAdminProofEvidence.path,
+                }),
             hostConcurrentRaceReloadMilestone: {
               status: hostConcurrentRaceReloadMilestone.status,
               cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
@@ -860,6 +896,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                         ? {}
                         : { adminRoleSurface: raceCoverageAdminProofEvidence }),
                     },
+                  }),
+              ...(hostedConcurrentRaceMatrixAdminProofEvidence === undefined
+                ? {}
+                : {
+                    hostedConcurrentRaceMatrixAdminProof:
+                      hostedConcurrentRaceMatrixAdminProofEvidence,
                   }),
             },
           }),
@@ -2097,6 +2139,98 @@ export function validateDevTestGameRaceCoverageAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
+  proof,
+  options = {},
+) {
+  const requiredChecks = [
+    "hosted-like-api-frontend-target",
+    "multi-session-concurrent-command-matrix",
+    "reload-recovery-after-races",
+    "reconnect-recovery",
+    "stale-client-conflict-messages",
+    "raw-role-credential-redaction",
+    "real-hosted-deployment",
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(
+      `hosted concurrent race matrix admin proof version drifted: ${proof?.version}`,
+    );
+  }
+  if (
+    proof.proof !== "dev-test-game-hosted-concurrent-race-matrix-admin-proof"
+  ) {
+    throw new Error(
+      `unexpected hosted concurrent race matrix admin proof id: ${proof.proof}`,
+    );
+  }
+  if (proof.status !== "passed") {
+    throw new Error(
+      `hosted concurrent race matrix admin proof status is ${proof.status}`,
+    );
+  }
+  if (
+    proof.scope !==
+    "local-dev-test-game-hosted-concurrent-race-matrix-admin-surface"
+  ) {
+    throw new Error(
+      `hosted concurrent race matrix admin proof scope drifted: ${proof.scope}`,
+    );
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const cellId of proof.generatedFrom?.cellIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(cellId)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing visible cell: ${cellId}`,
+      );
+    }
+  }
+  if (
+    !proof.adminRoleSurface?.visibleUnproven?.includes(
+      proof.generatedFrom?.requestedEvidenceId,
+    )
+  ) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof missing requested evidence row",
+    );
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    hostedEvidenceStatus: String(proof.generatedFrom?.hostedEvidenceStatus ?? ""),
+    realHostedDeploymentStatus: String(
+      proof.generatedFrom?.realHostedDeploymentStatus ?? "",
+    ),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   const requiredChecks = [
     "local-role-url-browser-proof",
@@ -2254,6 +2388,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "seed",
     "release",
     "race-coverage",
+    "hosted-concurrent-race-matrix",
     "spine-manifest",
   ];
   if (proof?.version !== 1) {
@@ -2363,6 +2498,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "seed",
     "release",
     "race-coverage",
+    "hosted-concurrent-race-matrix",
     "spine-manifest",
     "recovery",
   ];
@@ -2536,6 +2672,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     adminSpineAdminProofOptions,
     raceCoverageOptions,
     raceCoverageAdminProofOptions,
+    hostedConcurrentRaceMatrixAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
     readOptionalHardeningAdminProof(),
@@ -2553,6 +2690,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalAdminSpineAdminProof(),
     readOptionalRaceCoverage(),
     readOptionalRaceCoverageAdminProof(),
+    readOptionalHostedConcurrentRaceMatrixAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -2572,6 +2710,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(adminSpineAdminProofOptions ?? {}),
     ...(raceCoverageOptions ?? {}),
     ...(raceCoverageAdminProofOptions ?? {}),
+    ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -2840,6 +2979,27 @@ async function readOptionalRaceCoverageAdminProof() {
     raceCoverageAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     raceCoverageAdminProofPath: path.relative(repoRoot, proofPath),
     raceCoverageAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedConcurrentRaceMatrixAdminProof() {
+  const override =
+    process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedConcurrentRaceMatrixAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hostedConcurrentRaceMatrixAdminProof: JSON.parse(
+      await readFile(proofPath, "utf8"),
+    ),
+    hostedConcurrentRaceMatrixAdminProofPath: path.relative(repoRoot, proofPath),
+    hostedConcurrentRaceMatrixAdminProofArtifact: artifact,
   };
 }
 

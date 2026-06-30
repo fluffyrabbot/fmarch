@@ -674,7 +674,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
 
   const adminSpine = data.audit.find((item) => item.id === "local-admin-spine");
   assert.equal(adminSpine.label, "Local admin spine");
-  assert.equal(adminSpine.status, "8 admin proof surfaces passed");
+  assert.equal(adminSpine.status, "10 admin proof surfaces passed");
   assert.equal(adminSpine.authority, "GlobalAdmin or GlobalMod");
   assert.equal(adminSpine.inspectHref, "/admin/audit/local-admin-spine?game=midsummer");
   assert.deepEqual(
@@ -687,6 +687,8 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "ops",
       "seed",
       "release",
+      "race-coverage",
+      "hosted-concurrent-race-matrix",
       "spine-manifest",
       "recovery",
       "spine-manifest-handoff",
@@ -703,9 +705,9 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   ]);
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
-    proofCount: 8,
+    proofCount: 10,
     recoveryStatus: "passed",
-    refreshedCount: 8,
+    refreshedCount: 10,
     nextCommand: "npm run test:dev-test-game-admin-spine",
     spineManifestInspectHref: "/admin/audit/local-spine-manifest?game=midsummer",
     releaseReady: false,
@@ -724,7 +726,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, "local-admin-spine");
-  assert.equal(data.audit.checks.length, 10);
+  assert.equal(data.audit.checks.length, 12);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -735,6 +737,8 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["ops", "passed"],
       ["seed", "passed"],
       ["release", "passed"],
+      ["race-coverage", "passed"],
+      ["hosted-concurrent-race-matrix", "passed"],
       ["spine-manifest", "passed"],
       ["recovery", "passed"],
       ["spine-manifest-handoff", "passed"],
@@ -3510,6 +3514,9 @@ function adminSpineProofFixture() {
         ops: "target/dev-test-game/ops-admin-proof.json",
         seed: "target/dev-test-game/seed-admin-proof.json",
         release: "target/dev-test-game/release-admin-proof.json",
+        "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
+        "hosted-concurrent-race-matrix":
+          "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
         "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
       },
     },
@@ -3521,12 +3528,14 @@ function adminSpineProofFixture() {
       adminSpineProofRow("ops"),
       adminSpineProofRow("seed"),
       adminSpineProofRow("release"),
+      adminSpineProofRow("race-coverage"),
+      adminSpineProofRow("hosted-concurrent-race-matrix"),
       adminSpineProofRow("spine-manifest"),
     ],
     recovery: {
       status: "passed",
-      surfaceCount: 8,
-      refreshedCount: 8,
+      surfaceCount: 10,
+      refreshedCount: 10,
       nextCommand: "npm run test:dev-test-game-admin-spine",
       proofBoundary: "Local aggregate recovery commands only.",
       surfaces: [
@@ -3537,6 +3546,8 @@ function adminSpineProofFixture() {
         adminSpineRecoveryRow("ops"),
         adminSpineRecoveryRow("seed"),
         adminSpineRecoveryRow("release"),
+        adminSpineRecoveryRow("race-coverage"),
+        adminSpineRecoveryRow("hosted-concurrent-race-matrix"),
         adminSpineRecoveryRow("spine-manifest"),
       ],
     },

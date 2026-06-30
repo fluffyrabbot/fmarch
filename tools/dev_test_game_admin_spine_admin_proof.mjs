@@ -30,6 +30,7 @@ const requiredChecks = [
   "seed",
   "release",
   "race-coverage",
+  "hosted-concurrent-race-matrix",
   "spine-manifest",
   "recovery",
   "spine-manifest-handoff",

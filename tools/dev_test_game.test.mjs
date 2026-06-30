@@ -215,6 +215,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/race-coverage-admin-proof.json",
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
+      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -981,8 +983,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 13);
-  assert.equal(graph.summary.roleUrlCount, 13);
+  assert.equal(graph.summary.nodeCount, 14);
+  assert.equal(graph.summary.roleUrlCount, 14);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -6950,7 +6952,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    9,
+    10,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -6965,6 +6967,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "seed",
     "release",
     "race-coverage",
+    "hosted-concurrent-race-matrix",
     "spine-manifest",
   ]);
   const manifestReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -8060,6 +8063,72 @@ function raceCoverageAdminProofFixture() {
   };
 }
 
+function hostedConcurrentRaceMatrixAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-concurrent-race-matrix-admin-surface",
+    proofBoundary: "Local admin hosted matrix proof only.",
+    generatedFrom: {
+      hostedConcurrentRaceMatrix:
+        "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      cellIds: [
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+      ],
+      progressCheckIds: [
+        "hosted-like-api-frontend-target",
+        "multi-session-concurrent-command-matrix",
+        "reload-recovery-after-races",
+        "reconnect-recovery",
+        "stale-client-conflict-messages",
+        "raw-role-credential-redaction",
+        "real-hosted-deployment",
+      ],
+      relatedAuditIds: ["local-race-coverage", "local-next-action"],
+      requestedEvidenceId: "hosted-concurrent-race-matrix",
+      hostedEvidenceStatus: "not_configured",
+      realHostedDeploymentStatus: "unproven",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-hosted-concurrent-race-matrix",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "hosted-like-api-frontend-target",
+        "multi-session-concurrent-command-matrix",
+        "reload-recovery-after-races",
+        "reconnect-recovery",
+        "stale-client-conflict-messages",
+        "raw-role-credential-redaction",
+        "real-hosted-deployment",
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+      ],
+      visibleUnproven: [
+        "hosted-concurrent-race-matrix",
+        "remaining-gap-1",
+        "remaining-gap-2",
+      ],
+      visibleRelatedLinks: ["local-race-coverage", "local-next-action"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function spineManifestFixture() {
   return {
     version: 1,
@@ -8223,6 +8292,7 @@ function adminSpineAdminProofFixture() {
         "seed",
         "release",
         "race-coverage",
+        "hosted-concurrent-race-matrix",
         "spine-manifest",
       ],
     },
@@ -8242,6 +8312,7 @@ function adminSpineAdminProofFixture() {
         "seed",
         "release",
         "race-coverage",
+        "hosted-concurrent-race-matrix",
         "spine-manifest",
         "recovery",
       ],
@@ -8262,6 +8333,10 @@ function adminSpineProofFixture() {
     ["seed", seedAdminProofFixture()],
     ["release", releaseAdminProofFixture()],
     ["race-coverage", raceCoverageAdminProofFixture()],
+    [
+      "hosted-concurrent-race-matrix",
+      hostedConcurrentRaceMatrixAdminProofFixture(),
+    ],
     ["spine-manifest", spineManifestAdminProofFixture()],
   ];
   return {

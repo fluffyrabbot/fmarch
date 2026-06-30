@@ -7,6 +7,7 @@ import {
   validateDevTestGameBackupAdminProof,
   validateDevTestGameCoreLoopAdminProof,
   validateDevTestGameHardeningAdminProof,
+  validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
   validateDevTestGameIdentityAdminProof,
   validateDevTestGameOpsAdminProof,
   validateDevTestGameRaceCoverageAdminProof,
@@ -83,6 +84,15 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-race-coverage-admin-proof",
     path: "target/dev-test-game/race-coverage-admin-proof.json",
     validate: validateDevTestGameRaceCoverageAdminProof,
+  },
+  {
+    id: "hosted-concurrent-race-matrix",
+    label: "Hosted concurrent race matrix admin role surface",
+    script: "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
+    rerunCommand:
+      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    path: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    validate: validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
   },
   {
     id: "spine-manifest",

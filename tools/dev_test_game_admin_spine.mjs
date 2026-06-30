@@ -41,6 +41,8 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/race-coverage-admin-proof.json",
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
     devTestGameHostedConcurrentRaceMatrixPath,
+  FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
+    "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
 };
@@ -51,13 +53,14 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 
 export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_race_coverage.mjs");
+  await runNodeScript("tools/dev_test_game_release_readiness.mjs");
+  await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
     env: adminSpineReadinessEvidenceEnv,
   });
-  await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   await runNodeScript("tools/dev_test_game_next_action.mjs");
   await runNodeScript("tools/dev_test_game_proof_graph.mjs");

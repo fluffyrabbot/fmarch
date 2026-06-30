@@ -357,6 +357,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_seed_admin_proof.mjs",
     "tools/dev_test_game_release_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
+    "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
   if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
@@ -457,6 +458,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
+    "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
