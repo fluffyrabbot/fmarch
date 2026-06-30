@@ -23,11 +23,13 @@ import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelReloadSnapshotAssertionCases,
   completedPrivateChannelTransition,
+  privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptProofArgs,
   privateReceiptScenario,
   staleCompletedPrivatePostScenario,
   staleCompletedPrivatePostSnapshotAssertionCases,
+  stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -7851,7 +7853,8 @@ async function provePrivateChannelRoleSurface({
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const privatePostBody = "Private role proof post";
+  const scenario = privateChannelSubmitPostScenario();
+  const privatePostBody = scenario.postBody;
   try {
     await installPrivateChannelBrowserRoutes(page, {
       commandRequests,
@@ -7979,8 +7982,8 @@ async function provePrivateChannelRoleSurface({
       },
       submitPostProof: {
         status: "passed",
-        clickedAction: "submit_post",
-        commandKind: command === null ? null : "SubmitPost",
+        clickedAction: scenario.clickedAction,
+        commandKind: command === null ? null : scenario.commandKind,
         command,
         commandStatus,
         bridgePlan,
@@ -8010,7 +8013,8 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const stalePrivatePostBody = "Stale private phase proof post";
+  const scenario = stalePrivateChannelPostPhaseLockedScenario();
+  const stalePrivatePostBody = scenario.stalePostBody;
   try {
     await installPrivateChannelStalePostBrowserRoutes(page, {
       commandRequests,
@@ -8070,7 +8074,7 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
     );
     const receiptStatusText = await page.getByTestId("player-command-status").innerText();
     const currentThreadText = await page.getByText(
-      "Current role-pm thread after stale private post reject",
+      scenario.currentThreadBody,
     ).innerText();
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -8081,8 +8085,8 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
       status: "passed",
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
-      clickedAction: "submit_post",
-      commandKind: command === null ? null : "SubmitPost",
+      clickedAction: scenario.clickedAction,
+      commandKind: command === null ? null : scenario.commandKind,
       command,
       commandStatus,
       bridgePlan,
@@ -8335,6 +8339,7 @@ async function installPrivateChannelBrowserRoutes(
   page,
   { commandRequests, privatePostBody },
 ) {
+  const scenario = privateChannelSubmitPostScenario();
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -8346,7 +8351,7 @@ async function installPrivateChannelBrowserRoutes(
         body: {
           kind: "Ack",
           body: {
-            stream_seqs: [701],
+            stream_seqs: [scenario.ackSeq],
           },
         },
       });
@@ -8375,9 +8380,9 @@ async function installPrivateChannelBrowserRoutes(
       next_before_seq: null,
       posts: [
         {
-          source_seq: 701,
-          stream_seq: 701,
-          author_slot: "slot-7",
+          source_seq: scenario.ackSeq,
+          stream_seq: scenario.ackSeq,
+          author_slot: scenario.actorSlot,
           author_user: "player_mira",
           body: privatePostBody,
           occurred_at: 1781928000,
@@ -8393,12 +8398,13 @@ async function installPrivateChannelBrowserRoutes(
   });
   await page.route("**/games/*/player-command-state?**", async (route) => {
     await fulfillJson(route, seededActionOpenCommandState({
-      boundary: "Seeded browser private post ACK refreshed role-pm state.",
+      boundary: scenario.routeBoundary,
     }));
   });
 }
 
 async function installPrivateChannelStalePostBrowserRoutes(page, { commandRequests }) {
+  const scenario = stalePrivateChannelPostPhaseLockedScenario();
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -8412,9 +8418,9 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
           body: {
             kind: "Reject",
             body: {
-              error: "PhaseLocked",
-              retryable: false,
-              message: "phase locked",
+            error: "PhaseLocked",
+            retryable: false,
+            message: "phase locked",
             },
           },
         },
@@ -8449,7 +8455,7 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
           stream_seq: 802,
           author_slot: "host",
           author_user: "host_h",
-          body: "Current role-pm thread after stale private post reject",
+          body: scenario.currentThreadBody,
           occurred_at: 1782014400,
         },
       ],
@@ -8477,8 +8483,7 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
       route,
       seededDayVoteOpenCommandState({
         locked: true,
-        boundary:
-          "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+        boundary: scenario.routeBoundary,
       }),
     );
   });
@@ -12893,6 +12898,8 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const completedProof =
     privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
+  const submitPostScenario = privateChannelSubmitPostScenario();
+  const stalePostScenario = stalePrivateChannelPostPhaseLockedScenario();
   if (
     privateChannelRoleSurface?.status !== "passed" ||
     privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -12933,29 +12940,34 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
   }
   if (
     submitPostProof?.status !== "passed" ||
-    submitPostProof.clickedAction !== "submit_post" ||
-    submitPostProof.commandKind !== "SubmitPost" ||
+    submitPostProof.clickedAction !== submitPostScenario.clickedAction ||
+    submitPostProof.commandKind !== submitPostScenario.commandKind ||
     submitPostProof.command?.game !== expectedGame ||
-    submitPostProof.command.channel_id !== "role-pm" ||
-    submitPostProof.command.actor_slot !== "slot-7" ||
+    submitPostProof.command.channel_id !== submitPostScenario.channelId ||
+    submitPostProof.command.actor_slot !== submitPostScenario.actorSlot ||
     submitPostProof.command.body !== submitPostProof.privatePostBody ||
+    submitPostProof.privatePostBody !== submitPostScenario.postBody ||
     submitPostProof.commandStatus?.state !== "ack" ||
-    !submitPostProof.commandStatus?.message?.includes("Ack: stream seqs 701") ||
+    !submitPostProof.commandStatus?.message?.includes(
+      `Ack: stream seqs ${submitPostScenario.ackSeq}`,
+    ) ||
     submitPostProof.bridgePlan?.role !== "player" ||
-    submitPostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    submitPostProof.bridgePlan.commandKind !== submitPostScenario.commandKind ||
     submitPostProof.bridgePlan.commandEndpoint !== "/commands" ||
     submitPostProof.bridgePlan.finalState !== "ack" ||
-    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("thread") ||
-    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    !sameStringArray(
+      submitPostProof.bridgePlan.projectionRefreshKeys,
+      submitPostScenario.expectedRefreshKeys,
+    ) ||
     submitPostProof.receipts?.at?.(-1)?.state !== "ack" ||
     submitPostProof.projectionThread?.posts?.at?.(-1)?.body !==
       submitPostProof.privatePostBody ||
     submitPostProof.receiptCount !== 1 ||
     !String(submitPostProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("ack: stream seqs 701") ||
+      .includes(`ack: stream seqs ${submitPostScenario.ackSeq}`) ||
     submitPostProof.receiptRefreshKeys !==
-      "thread,votecount,commandState,dayVoteOutcomes"
+      submitPostScenario.expectedRefreshKeys.join(",")
   ) {
     throw new Error(
       `core-loop admin proof missing private channel SubmitPost ACK: ${JSON.stringify(
@@ -12967,49 +12979,52 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
     stalePostProof?.status !== "passed" ||
     stalePostProof.sourceRoleUrl !== privateChannelRoleSurface.sourceRoleUrl ||
     stalePostProof.visitedRolePath !== privateChannelRoleSurface.visitedRolePath ||
-    stalePostProof.clickedAction !== "submit_post" ||
-    stalePostProof.commandKind !== "SubmitPost" ||
+    stalePostProof.clickedAction !== stalePostScenario.clickedAction ||
+    stalePostProof.commandKind !== stalePostScenario.commandKind ||
     stalePostProof.command?.game !== expectedGame ||
-    stalePostProof.command.channel_id !== "role-pm" ||
-    stalePostProof.command.actor_slot !== "slot-7" ||
+    stalePostProof.command.channel_id !== stalePostScenario.channelId ||
+    stalePostProof.command.actor_slot !== stalePostScenario.actorSlot ||
     stalePostProof.command.body !== stalePostProof.stalePrivatePostBody ||
+    stalePostProof.stalePrivatePostBody !== stalePostScenario.stalePostBody ||
     stalePostProof.commandStatus?.state !== "reject" ||
-    stalePostProof.commandStatus.error !== "PhaseLocked" ||
+    stalePostProof.commandStatus.error !== stalePostScenario.commandError ||
     !String(stalePostProof.commandStatus.message ?? "").includes(
-      "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+      stalePostScenario.commandMessageFragment,
     ) ||
     stalePostProof.bridgePlan?.role !== "player" ||
-    stalePostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    stalePostProof.bridgePlan.commandKind !== stalePostScenario.commandKind ||
     stalePostProof.bridgePlan.commandEndpoint !== "/commands" ||
     stalePostProof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(stalePostProof.bridgePlan.projectionRefreshKeys, [
-      "thread",
-      "votecount",
-      "commandState",
-      "dayVoteOutcomes",
-    ]) ||
+    !sameStringArray(
+      stalePostProof.bridgePlan.projectionRefreshKeys,
+      stalePostScenario.expectedRefreshKeys,
+    ) ||
     stalePostProof.receipts?.at?.(-1)?.state !== "reject" ||
-    stalePostProof.projectionCommandState?.phase?.phaseId !== "D02" ||
-    stalePostProof.projectionCommandState?.phase?.locked !== true ||
+    stalePostProof.projectionCommandState?.phase?.phaseId !==
+      stalePostScenario.expectedPhaseId ||
+    stalePostProof.projectionCommandState?.phase?.locked !==
+      stalePostScenario.expectedLocked ||
     !String(stalePostProof.projectionCommandState?.boundary ?? "").includes(
       "private post PhaseLocked recovery",
     ) ||
     stalePostProof.projectionThread?.posts?.at?.(-1)?.body !==
-      "Current role-pm thread after stale private post reject" ||
+      stalePostScenario.currentThreadBody ||
     stalePostProof.projectionThread?.posts?.some?.(
       (post) => post?.body === stalePostProof.stalePrivatePostBody,
     ) === true ||
     !String(stalePostProof.currentThreadText ?? "").includes(
-      "Current role-pm thread after stale private post reject",
+      stalePostScenario.currentThreadBody,
     ) ||
-    stalePostProof.checkpointPhaseId !== "D02" ||
-    stalePostProof.checkpointActionState !== "disabled:phase locked" ||
-    stalePostProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    stalePostProof.checkpointPhaseId !== stalePostScenario.expectedPhaseId ||
+    stalePostProof.checkpointActionState !==
+      stalePostScenario.expectedActionState ||
+    stalePostProof.checkpointReceiptState !==
+      stalePostScenario.expectedReceiptState ||
     !String(stalePostProof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject phaselocked: phase locked") ||
+      .includes(stalePostScenario.expectedReceiptStatusFragment) ||
     stalePostProof.receiptRefreshKeys !==
-      "thread,votecount,commandState,dayVoteOutcomes" ||
+      stalePostScenario.expectedRefreshKeys.join(",") ||
     stalePostProof.rawInviteTokensVisible !== false
   ) {
     throw new Error(

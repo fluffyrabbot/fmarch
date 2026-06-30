@@ -200,6 +200,51 @@ export function completedPrivateChannelReloadScenario() {
   };
 }
 
+export function privateChannelSubmitPostScenario() {
+  return {
+    clickedAction: "submit_post",
+    commandKind: "SubmitPost",
+    channelId: "role-pm",
+    actorSlot: "slot-7",
+    postBody: "Private role proof post",
+    ackSeq: 701,
+    expectedRefreshKeys: [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ],
+    routeBoundary: "Seeded browser private post ACK refreshed role-pm state.",
+  };
+}
+
+export function stalePrivateChannelPostPhaseLockedScenario() {
+  return {
+    clickedAction: "submit_post",
+    commandKind: "SubmitPost",
+    channelId: "role-pm",
+    actorSlot: "slot-7",
+    stalePostBody: "Stale private phase proof post",
+    commandError: "PhaseLocked",
+    commandMessageFragment:
+      "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+    expectedRefreshKeys: [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ],
+    currentThreadBody: "Current role-pm thread after stale private post reject",
+    expectedPhaseId: "D02",
+    expectedLocked: true,
+    expectedActionState: "disabled:phase locked",
+    expectedReceiptState: "reject:PhaseLocked",
+    expectedReceiptStatusFragment: "reject phaselocked: phase locked",
+    routeBoundary:
+      "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+  };
+}
+
 export function staleCompletedPrivatePostScenario() {
   return {
     transitionToken: "private:submit_post:reject:GameAlreadyCompleted",
