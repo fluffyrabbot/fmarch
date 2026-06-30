@@ -1303,6 +1303,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-resolve",
     "stale-host-resolve-reload",
     "stale-host-advance",
+    "stale-host-advance-reload",
     "stale-host-deadline",
     "stale-cohost-deadline",
   ];

@@ -277,6 +277,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-host-resolve",
         "stale-host-resolve-reload",
         "stale-host-advance",
+        "stale-host-advance-reload",
         "stale-host-deadline",
         "stale-cohost-deadline",
       ],
@@ -823,6 +824,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-host-resolve",
     "stale-host-resolve-reload",
     "stale-host-advance",
+    "stale-host-advance-reload",
     "stale-host-deadline",
     "stale-cohost-deadline",
   ];
