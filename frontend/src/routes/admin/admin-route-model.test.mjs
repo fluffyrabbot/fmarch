@@ -1135,6 +1135,7 @@ test("admin route data exposes local next action as a native audit row", async (
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture(),
+    proofGraph: proofGraphFixture(),
   });
 
   const nextAction = data.audit.find((item) => item.id === "local-next-action");
@@ -1148,6 +1149,10 @@ test("admin route data exposes local next action as a native audit row", async (
       ["next-command", "available"],
       ["release-readiness-unproven", "ready"],
       ["hosted-concurrent-race-matrix", "unproven"],
+      [
+        "selected-proof-graph-node",
+        "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      ],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1204,6 +1209,9 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRoleHref:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
     selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+    selectedProofGraphNodeStatus: "passed",
+    selectedProofGraphNodeProofCommand:
+      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",

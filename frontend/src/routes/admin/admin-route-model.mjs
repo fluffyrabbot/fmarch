@@ -181,7 +181,7 @@ export async function buildAdminRouteData({
           { game },
         ),
         nextAction,
-        { game },
+        { game, proofGraph },
       ),
       { game },
     ),
@@ -404,8 +404,8 @@ export function appendLocalProofFreshnessAudit(
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
-export function appendLocalNextActionAudit(audit, nextAction, { game }) {
-  const row = normalizeLocalNextActionAudit(nextAction, { game });
+export function appendLocalNextActionAudit(audit, nextAction, { game, proofGraph = null }) {
+  const row = normalizeLocalNextActionAudit(nextAction, { game, proofGraph });
   if (row === null) {
     return audit;
   }
@@ -696,7 +696,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
   });
 }
 
-export function normalizeLocalNextActionAudit(nextAction, { game }) {
+export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = null }) {
   if (
     nextAction === null ||
     typeof nextAction !== "object" ||
@@ -730,6 +730,15 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     unproven.proofGraphNodeId.trim() !== ""
       ? unproven.proofGraphNodeId
       : "";
+  const selectedProofGraphNode = selectedProofGraphNodeForNextAction(
+    proofGraph,
+    unprovenProofGraphNodeId,
+  );
+  const selectedProofGraphNodeCommand = String(
+    selectedProofGraphNode?.proofCommand ??
+      selectedProofGraphNode?.recoveryCommand ??
+      "",
+  );
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -787,6 +796,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
           Object.freeze({
             id: String(unproven.id),
             status: String(unproven.status ?? "unknown"),
+          }),
+        ]),
+    ...(selectedProofGraphNode === null
+      ? []
+      : [
+          Object.freeze({
+            id: "selected-proof-graph-node",
+            status: `${String(
+              selectedProofGraphNode.status ?? "unknown",
+            )}: ${selectedProofGraphNodeCommand}`,
           }),
         ]),
     ...(stability === null
@@ -954,6 +973,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
           ? ""
           : seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
       selectedProofGraphNodeId: unprovenProofGraphNodeId,
+      selectedProofGraphNodeStatus: String(
+        selectedProofGraphNode?.status ?? "",
+      ),
+      selectedProofGraphNodeProofCommand: selectedProofGraphNodeCommand,
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -1047,6 +1070,23 @@ function normalizeNextActionSelectionTrace(selectionTrace) {
         : null,
     candidates: Object.freeze(candidates),
   });
+}
+
+function selectedProofGraphNodeForNextAction(proofGraph, proofGraphNodeId) {
+  if (
+    proofGraphNodeId === "" ||
+    proofGraph === null ||
+    typeof proofGraph !== "object" ||
+    proofGraph.version !== 1 ||
+    proofGraph.proof !== "dev-test-game-proof-graph" ||
+    proofGraph.status !== "passed" ||
+    proofGraph.scope !== "local-dev-test-game-proof-graph" ||
+    !Array.isArray(proofGraph.nodes)
+  ) {
+    return null;
+  }
+  const node = proofGraph.nodes.find((candidate) => candidate?.id === proofGraphNodeId);
+  return node === undefined ? null : node;
 }
 
 function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {

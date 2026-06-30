@@ -2,6 +2,14 @@ import path from "node:path";
 import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
+  assertDevTestGameProofGraph,
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -18,8 +26,19 @@ const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
 );
+const proofGraphPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
+);
+const hostedMatrixPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX ??
+    devTestGameHostedConcurrentRaceMatrixPath,
+);
 const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
+const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const evidencePath = path.join(artifactDir, "next-action-admin-proof.json");
 
 await runAdminAuditProof({
@@ -28,10 +47,16 @@ await runAdminAuditProof({
   evidencePath,
   envOverrides: {
     FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
+    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
   },
   loadSource: async () => ({
     nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath)),
+    hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+      await readJson(hostedMatrixPath),
+    ),
   }),
   prove: async ({ browser, frontendBaseUrl, source }) =>
     await proveAdminAuditDetail({
@@ -40,7 +65,15 @@ await runAdminAuditProof({
       game: source.proofRun.session.game,
       auditId: "local-next-action",
       requiredChecks: requiredChecksForNextAction(source.nextAction),
+      requiredCheckStatuses: requiredCheckStatusesForNextAction(
+        source.nextAction,
+        source.proofGraph,
+      ),
       requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
+      requiredRelatedDestinations: requiredRelatedDestinationsForNextAction({
+        nextAction: source.nextAction,
+        hostedMatrix: source.hostedMatrix,
+      }),
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -54,6 +87,8 @@ await runAdminAuditProof({
     generatedFrom: {
       nextAction: nextActionRelativePath,
       proofRun: proofRunRelativePath,
+      proofGraph: proofGraphRelativePath,
+      hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
       game: source.proofRun.session.game,
       command: source.nextAction.nextAction.command,
       reason: source.nextAction.nextAction.reason,
@@ -63,6 +98,14 @@ await runAdminAuditProof({
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
         source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
+      selectedProofGraphNode: selectedProofGraphNodeSummary({
+        nextAction: source.nextAction,
+        proofGraph: source.proofGraph,
+      }),
+      relatedHandoff: relatedHandoffSummary({
+        nextAction: source.nextAction,
+        hostedMatrix: source.hostedMatrix,
+      }),
       stabilityStatus: source.nextAction.stabilityTrace.status,
       selectionTrace: {
         strategy: source.nextAction.selectionTrace.strategy,
@@ -337,6 +380,39 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing selected role URL handoff");
   }
+  if (
+    evidence.generatedFrom?.selectedProofGraphNode !== null &&
+    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
+    !evidence.adminRoleSurface?.visibleChecks?.includes("selected-proof-graph-node")
+  ) {
+    throw new Error("next-action admin proof missing selected graph node row");
+  }
+  const relatedHandoff = evidence.generatedFrom?.relatedHandoff;
+  if (relatedHandoff !== null && relatedHandoff !== undefined) {
+    const destination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (item) =>
+          item.linkId === relatedHandoff.linkId &&
+          item.auditId === relatedHandoff.auditId,
+      ) ?? null;
+    if (destination === null) {
+      throw new Error("next-action admin proof did not follow selected handoff");
+    }
+    for (const checkId of relatedHandoff.requiredCheckIds ?? []) {
+      if (!destination.visibleChecks?.includes(checkId)) {
+        throw new Error(
+          `next-action handoff destination missing visible check: ${checkId}`,
+        );
+      }
+    }
+    for (const unprovenId of relatedHandoff.requiredUnprovenIds ?? []) {
+      if (!destination.visibleUnproven?.includes(unprovenId)) {
+        throw new Error(
+          `next-action handoff destination missing unproven row: ${unprovenId}`,
+        );
+      }
+    }
+  }
   return evidence;
 }
 
@@ -348,6 +424,7 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.nextAction.unproven?.id !== undefined) {
     checks.push(
       nextAction.nextAction.unproven.id,
+      "selected-proof-graph-node",
       "release-readiness-selection-trace",
     );
   }
@@ -395,6 +472,81 @@ function requiredRelatedLinksForNextAction(nextAction) {
     : [];
 }
 
+function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
+  const selectedNode = selectedProofGraphNodeSummary({ nextAction, proofGraph });
+  return selectedNode === null
+    ? {}
+    : {
+        "selected-proof-graph-node": `${selectedNode.status}: ${selectedNode.proofCommand}`,
+      };
+}
+
+function requiredRelatedDestinationsForNextAction({ nextAction, hostedMatrix }) {
+  const summary = relatedHandoffSummary({ nextAction, hostedMatrix });
+  return summary === null
+    ? []
+    : [
+        {
+          linkId: summary.linkId,
+          auditId: summary.auditId,
+          requiredChecks: summary.requiredCheckIds,
+          requiredCheckStatuses: summary.requiredCheckStatuses,
+          requiredUnproven: summary.requiredUnprovenIds,
+          requiredRelatedLinks: summary.requiredRelatedLinkIds,
+        },
+      ];
+}
+
+function selectedProofGraphNodeSummary({ nextAction, proofGraph }) {
+  const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
+  const node =
+    typeof proofGraphNodeId === "string" && Array.isArray(proofGraph?.nodes)
+      ? proofGraph.nodes.find((candidate) => candidate?.id === proofGraphNodeId)
+      : undefined;
+  if (node === undefined) {
+    return null;
+  }
+  return {
+    id: String(node.id),
+    status: String(node.status ?? "unknown"),
+    proofCommand: String(node.proofCommand ?? node.recoveryCommand ?? ""),
+  };
+}
+
+function relatedHandoffSummary({ nextAction, hostedMatrix }) {
+  const linkId = nextAction.nextAction.unproven?.proofGraphNodeId;
+  const roleUrl = nextAction.nextAction.unproven?.roleUrl;
+  if (
+    linkId !== "admin-proof:hosted-concurrent-race-matrix" ||
+    typeof roleUrl !== "string" ||
+    !roleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
+  ) {
+    return null;
+  }
+  const requiredCheckIds = [
+    ...(hostedMatrix.evidenceProgress ?? []).map((item) => item.id),
+    ...(hostedMatrix.cells ?? []).map((cell) => cell.id),
+  ];
+  const requiredUnprovenIds = [
+    hostedMatrix.requestedEvidence?.id,
+    ...(hostedMatrix.remainingGaps ?? []).map(
+      (_gap, index) => `remaining-gap-${index + 1}`,
+    ),
+  ].filter((id) => typeof id === "string" && id.trim() !== "");
+  return {
+    linkId,
+    auditId: "local-hosted-concurrent-race-matrix",
+    requiredCheckIds,
+    requiredCheckStatuses: {
+      "real-hosted-deployment": String(
+        hostedMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+      ),
+    },
+    requiredUnprovenIds,
+    requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
+  };
+}
+
 function requiredChecksForEvidence(evidence) {
   return [
     "next-command",
@@ -404,7 +556,11 @@ function requiredChecksForEvidence(evidence) {
       ? [evidence.generatedFrom.artifactId]
       : []),
     ...(typeof evidence.generatedFrom?.unprovenId === "string"
-      ? [evidence.generatedFrom.unprovenId, "release-readiness-selection-trace"]
+      ? [
+          evidence.generatedFrom.unprovenId,
+          "selected-proof-graph-node",
+          "release-readiness-selection-trace",
+        ]
       : []),
     ...(evidence.generatedFrom?.stabilityStatus === "drifted"
       ? ["proof-stability-drift"]

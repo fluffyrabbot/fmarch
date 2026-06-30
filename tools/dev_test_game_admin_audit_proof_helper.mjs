@@ -99,6 +99,7 @@ export async function proveAdminAuditDetail({
   requiredSessions = [],
   requiredUnproven = [],
   requiredRelatedLinks = [],
+  requiredRelatedDestinations = [],
   forbiddenText = [],
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
@@ -163,14 +164,63 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-related-link",
       ids: requiredRelatedLinks,
     });
-    const bodyText = await page.locator("body").innerText();
-    if (/invite=(?!REDACTED)/.test(bodyText)) {
-      throw new Error(`${auditId} admin surface leaked an invite URL token`);
-    }
-    for (const token of forbiddenText) {
-      if (bodyText.includes(token)) {
-        throw new Error(`${auditId} admin surface leaked forbidden text`);
+    await assertAdminAuditBodyText({ page, auditId, forbiddenText });
+    const visibleRelatedDestinations = [];
+    for (const destination of requiredRelatedDestinations) {
+      const linkId = String(destination.linkId ?? "");
+      const destinationAuditId = String(destination.auditId ?? "");
+      if (linkId === "" || destinationAuditId === "") {
+        throw new Error(`${auditId} admin proof has a malformed related destination`);
       }
+      await Promise.all([
+        page.waitForURL(
+          `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+            game,
+          )}`,
+          { timeout: 15000 },
+        ),
+        page.getByTestId(`admin-audit-related-link-${linkId}`).click(),
+      ]);
+      await page.waitForLoadState("networkidle");
+      await page.getByTestId("admin-audit-detail-surface").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      const destinationVisibleChecks = await waitForRows({
+        page,
+        prefix: "admin-audit-check",
+        ids: destination.requiredChecks ?? [],
+        expectedStatuses: destination.requiredCheckStatuses ?? {},
+      });
+      const destinationVisibleUnproven = await waitForRows({
+        page,
+        prefix: "admin-audit-unproven",
+        ids: destination.requiredUnproven ?? [],
+      });
+      const destinationVisibleRelatedLinks = await waitForRows({
+        page,
+        prefix: "admin-audit-related-link",
+        ids: destination.requiredRelatedLinks ?? [],
+      });
+      await assertAdminAuditBodyText({
+        page,
+        auditId: destinationAuditId,
+        forbiddenText,
+      });
+      visibleRelatedDestinations.push({
+        linkId,
+        auditId: destinationAuditId,
+        detailRoleUrl: `/admin/audit/${destinationAuditId}?game=<seeded-game>`,
+        ...(destinationVisibleChecks.length === 0
+          ? {}
+          : { visibleChecks: destinationVisibleChecks }),
+        ...(destinationVisibleUnproven.length === 0
+          ? {}
+          : { visibleUnproven: destinationVisibleUnproven }),
+        ...(destinationVisibleRelatedLinks.length === 0
+          ? {}
+          : { visibleRelatedLinks: destinationVisibleRelatedLinks }),
+      });
     }
     return {
       status: "passed",
@@ -184,12 +234,27 @@ export async function proveAdminAuditDetail({
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
+      ...(visibleRelatedDestinations.length === 0
+        ? {}
+        : { visibleRelatedDestinations }),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     };
   } finally {
     await page.close();
+  }
+}
+
+async function assertAdminAuditBodyText({ page, auditId, forbiddenText }) {
+  const bodyText = await page.locator("body").innerText();
+  if (/invite=(?!REDACTED)/.test(bodyText)) {
+    throw new Error(`${auditId} admin surface leaked an invite URL token`);
+  }
+  for (const token of forbiddenText) {
+    if (bodyText.includes(token)) {
+      throw new Error(`${auditId} admin surface leaked forbidden text`);
+    }
   }
 }
 
