@@ -19,9 +19,15 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  assertCompletedPrivateChannelTransition,
+  completedPrivateChannelReloadScenario,
+  completedPrivateChannelReloadSnapshotAssertionCases,
+  completedPrivateChannelTransition,
   privateReceiptAssertionArgs,
   privateReceiptProofArgs,
   privateReceiptScenario,
+  staleCompletedPrivatePostScenario,
+  staleCompletedPrivatePostSnapshotAssertionCases,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -8118,8 +8124,7 @@ async function proveCompletedPrivateChannelRoleSurface({
     sourceRoleUrl: String(roleUrl),
     visitedRolePath: rolePathFromUrl(roleUrl),
     clickedThroughFromRoleUrl: true,
-    transition:
-      "private:role-pm:reload:complete -> private:submit_post:reject:GameAlreadyCompleted",
+    transition: completedPrivateChannelTransition(),
     reloadProof,
     staleCompletedPostRecoveryProof,
     releaseReady: false,
@@ -8223,7 +8228,8 @@ async function provePrivateChannelStaleCompletedPostRecovery({
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const stalePrivatePostBody = "Stale completed private proof post";
+  const scenario = staleCompletedPrivatePostScenario();
+  const stalePrivatePostBody = scenario.stalePostBody;
   try {
     await installStaleCompletedPrivateChannelBrowserRoutes(page, {
       commandRequests,
@@ -8505,6 +8511,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
   page,
   { commandRequests, stalePrivatePostBody },
 ) {
+  const scenario = staleCompletedPrivatePostScenario();
   let rejected = false;
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
@@ -8584,12 +8591,10 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
       route,
       rejected
         ? completedPrivateChannelCommandState({
-            boundary:
-              "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
+            boundary: scenario.routeBoundary,
           })
         : seededPrivateChannelPostOpenCommandState({
-            boundary:
-              "Seeded browser stale completed private-channel proof opened before completion refresh.",
+            boundary: scenario.staleBoundary,
         }),
     );
   });
@@ -8602,6 +8607,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
 }
 
 async function installCompletedPrivateChannelProjectionRoutes(page) {
+  const scenario = completedPrivateChannelReloadScenario();
   await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
     await fulfillJson(route, completedPrivateChannelThread());
   });
@@ -8620,8 +8626,7 @@ async function installCompletedPrivateChannelProjectionRoutes(page) {
     await fulfillJson(
       route,
       completedPrivateChannelCommandState({
-        boundary:
-          "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
+        boundary: scenario.routeBoundary,
       }),
     );
   });
@@ -13033,11 +13038,7 @@ function assertCompletedPrivateChannelProof({
     proof.releaseReady !== false ||
     proof.productionReady !== false ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
-    proof.visitedRolePath !== visitedRolePath ||
-    !String(proof.transition ?? "").includes("private:role-pm:reload:complete") ||
-    !String(proof.transition ?? "").includes(
-      "private:submit_post:reject:GameAlreadyCompleted",
-    )
+    proof.visitedRolePath !== visitedRolePath
   ) {
     throw new Error(
       `core-loop admin proof missing completed private channel shell: ${JSON.stringify(
@@ -13045,6 +13046,11 @@ function assertCompletedPrivateChannelProof({
       )}`,
     );
   }
+  assertCompletedPrivateChannelTransition({
+    transition: proof.transition,
+    failureMessage:
+      "core-loop admin proof missing completed private channel transition",
+  });
   assertCompletedPrivateChannelReloadProof({
     proof: proof.reloadProof,
     sourceRoleUrl,
@@ -13063,6 +13069,7 @@ function assertCompletedPrivateChannelReloadProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
+  const scenario = completedPrivateChannelReloadScenario();
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -13072,7 +13079,7 @@ function assertCompletedPrivateChannelReloadProof({
     proof.sourceRoleUrl !== sourceRoleUrl ||
     proof.visitedRolePath !== visitedRolePath ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.resyncFromSeq !== 921 ||
+    proof.resyncFromSeq !== scenario.resyncFromSeq ||
     proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
     proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
   ) {
@@ -13082,15 +13089,11 @@ function assertCompletedPrivateChannelReloadProof({
       )}`,
     );
   }
-  for (const [label, snapshot] of [
-    ["initial", proof.initialSnapshot],
-    ["reloaded", proof.reloadedSnapshot],
-  ]) {
-    assertCompletedPrivateChannelSnapshot({
-      snapshot,
-      label,
-      expectedBoundary: "completed private-channel role URL reloaded",
-    });
+  for (const snapshotCase of completedPrivateChannelReloadSnapshotAssertionCases({
+    proof,
+    scenario,
+  })) {
+    assertCompletedPrivateChannelSnapshot(snapshotCase);
   }
 }
 
@@ -13100,6 +13103,7 @@ function assertStaleCompletedPrivatePostRecoveryProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
+  const scenario = staleCompletedPrivatePostScenario();
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -13112,6 +13116,7 @@ function assertStaleCompletedPrivatePostRecoveryProof({
     proof.command.channel_id !== "role-pm" ||
     proof.command.actor_slot !== "slot-7" ||
     proof.command.body !== proof.stalePrivatePostBody ||
+    proof.stalePrivatePostBody !== scenario.stalePostBody ||
     proof.submitDisabledBeforeReject !== false ||
     proof.commandStatus?.state !== "reject" ||
     proof.commandStatus.error !== "GameAlreadyCompleted" ||
@@ -13122,18 +13127,15 @@ function assertStaleCompletedPrivatePostRecoveryProof({
     proof.bridgePlan.commandKind !== "SubmitPost" ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
     proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "thread",
-      "votecount",
-      "commandState",
-      "dayVoteOutcomes",
-    ]) ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
       .includes("reject gamealreadycompleted") ||
-    proof.receiptRefreshKeys !==
-      "thread,votecount,commandState,dayVoteOutcomes" ||
+    proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
     proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
   ) {
     throw new Error(
@@ -13142,19 +13144,11 @@ function assertStaleCompletedPrivatePostRecoveryProof({
       )}`,
     );
   }
-  for (const [label, snapshot] of [
-    ["afterReject", proof.snapshotAfterReject],
-    ["afterReload", proof.snapshotAfterReload],
-  ]) {
-    assertCompletedPrivateChannelSnapshot({
-      snapshot,
-      label,
-      expectedBoundary:
-        label === "afterReject"
-          ? "GameAlreadyCompleted recovery refreshed role-pm controls"
-          : "GameAlreadyCompleted recovery refreshed role-pm controls",
-      rejectedBody: proof.stalePrivatePostBody,
-    });
+  for (const snapshotCase of staleCompletedPrivatePostSnapshotAssertionCases({
+    proof,
+    scenario,
+  })) {
+    assertCompletedPrivateChannelSnapshot(snapshotCase);
   }
 }
 

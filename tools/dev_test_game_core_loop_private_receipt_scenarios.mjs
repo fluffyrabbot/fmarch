@@ -190,6 +190,96 @@ export function privateReceiptScenarios() {
   ];
 }
 
+export function completedPrivateChannelReloadScenario() {
+  return {
+    transitionToken: "private:role-pm:reload:complete",
+    resyncFromSeq: 921,
+    routeBoundary:
+      "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
+    expectedBoundary: "completed private-channel role URL reloaded",
+  };
+}
+
+export function staleCompletedPrivatePostScenario() {
+  return {
+    transitionToken: "private:submit_post:reject:GameAlreadyCompleted",
+    stalePostBody: "Stale completed private proof post",
+    expectedRefreshKeys: [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ],
+    routeBoundary:
+      "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
+    staleBoundary:
+      "Seeded browser stale completed private-channel proof opened before completion refresh.",
+    expectedBoundary: "GameAlreadyCompleted recovery refreshed role-pm controls",
+  };
+}
+
+export function completedPrivateChannelTransitionTokens() {
+  return [
+    completedPrivateChannelReloadScenario().transitionToken,
+    staleCompletedPrivatePostScenario().transitionToken,
+  ];
+}
+
+export function completedPrivateChannelTransition() {
+  return completedPrivateChannelTransitionTokens().join(" -> ");
+}
+
+export function assertCompletedPrivateChannelTransition({
+  transition,
+  failureMessage = "completed private-channel transition missing shared scenario tokens",
+}) {
+  const transitionText = String(transition ?? "");
+  const missingTokens = completedPrivateChannelTransitionTokens().filter(
+    (token) => !transitionText.includes(token),
+  );
+  if (missingTokens.length > 0) {
+    throw new Error(`${failureMessage}: ${missingTokens.join(", ")}`);
+  }
+}
+
+export function completedPrivateChannelReloadSnapshotAssertionCases({
+  proof,
+  scenario = completedPrivateChannelReloadScenario(),
+}) {
+  return [
+    {
+      label: "initial",
+      snapshot: proof?.initialSnapshot,
+      expectedBoundary: scenario.expectedBoundary,
+    },
+    {
+      label: "reloaded",
+      snapshot: proof?.reloadedSnapshot,
+      expectedBoundary: scenario.expectedBoundary,
+    },
+  ];
+}
+
+export function staleCompletedPrivatePostSnapshotAssertionCases({
+  proof,
+  scenario = staleCompletedPrivatePostScenario(),
+}) {
+  return [
+    {
+      label: "afterReject",
+      snapshot: proof?.snapshotAfterReject,
+      expectedBoundary: scenario.expectedBoundary,
+      rejectedBody: proof?.stalePrivatePostBody,
+    },
+    {
+      label: "afterReload",
+      snapshot: proof?.snapshotAfterReload,
+      expectedBoundary: scenario.expectedBoundary,
+      rejectedBody: proof?.stalePrivatePostBody,
+    },
+  ];
+}
+
 export function privateReceiptProofArgs(scenario) {
   return {
     expectedSlot: scenario.expectedSlot,
