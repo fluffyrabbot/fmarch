@@ -1397,6 +1397,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "concurrent-replacement-private-post-race",
     "concurrent-replacement-private-post-race-reload",
     "concurrent-replacement-vote-race",
+    "concurrent-replacement-vote-race-reload",
     "concurrent-replacement-action-race",
     "replacement-incoming-action",
     "replacement-action-reconnect",

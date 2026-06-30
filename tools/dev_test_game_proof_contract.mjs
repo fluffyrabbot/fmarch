@@ -59,6 +59,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-replacement-private-post-race",
   "concurrent-replacement-private-post-race-reload",
   "concurrent-replacement-vote-race",
+  "concurrent-replacement-vote-race-reload",
   "concurrent-replacement-action-race",
   "replacement-incoming-action",
   "replacement-action-reconnect",
@@ -3036,6 +3037,42 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.occupantLabel === "player-rowan" &&
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
             ?.occupant_user_id === "player-rowan",
+      },
+    ),
+    lane(
+      "concurrent-replacement-vote-race-reload",
+      "Concurrent replacement vote race reloads stale role rejection",
+      {
+        game: hardening.concurrentReplacementVoteRace?.game ?? null,
+        commandStateStatus:
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.status ??
+          null,
+        commandStateError:
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ??
+          null,
+        hostOccupant:
+          hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
+            ?.occupantLabel ?? null,
+        apiOccupant:
+          hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
+            ?.occupant_user_id ?? null,
+        voteState: hardening.concurrentReplacementVoteRace?.vote?.state ?? null,
+        targetCount:
+          hardening.concurrentReplacementVoteRace?.targetVotecount?.count ?? null,
+        passed:
+          hardening.concurrentReplacementVoteRace?.status === "passed" &&
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.status ===
+            403 &&
+          hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
+            "NotYourSlot" &&
+          hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
+            ?.occupantLabel === "player-rowan" &&
+          hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
+            ?.occupant_user_id === "player-rowan" &&
+          hardening.concurrentReplacementVoteRace?.targetVotecount?.count ===
+            (hardening.concurrentReplacementVoteRace?.vote?.state === "ack"
+              ? 1
+              : undefined),
       },
     ),
     lane(

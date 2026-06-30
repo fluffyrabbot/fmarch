@@ -6035,6 +6035,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-private-post-race-reload",
       "concurrent-replacement-vote-race",
+      "concurrent-replacement-vote-race-reload",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
       "replacement-action-reconnect",
@@ -6100,8 +6101,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(raceCoverage.productionReady, false);
   assert.equal(raceCoverage.summary.cellCount, 16);
   assert.equal(raceCoverage.summary.provenCellCount, 16);
-  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 14);
-  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 14);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 15);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 15);
   assert.equal(raceCoverage.summary.reloadGapCount, 0);
   assert.deepEqual(
     raceCoverage.cells
@@ -6221,7 +6222,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 105);
+  assert.equal(opsArtifacts.proofRun.laneCount, 106);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -6340,6 +6341,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-private-post-race-reload",
       "concurrent-replacement-vote-race",
+      "concurrent-replacement-vote-race-reload",
       "concurrent-replacement-action-race",
       "replacement-incoming-action",
       "replacement-action-reconnect",
@@ -6785,7 +6787,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 105,
+      laneCount: 106,
       lanes: [],
       nonClaims: [],
     },
@@ -6963,6 +6965,7 @@ function hardeningAdminProofFixture() {
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-private-post-race-reload",
         "concurrent-replacement-vote-race",
+        "concurrent-replacement-vote-race-reload",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
         "replacement-action-reconnect",
@@ -7120,6 +7123,7 @@ function seedAdminProofFixture() {
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-private-post-race-reload",
         "concurrent-replacement-vote-race",
+        "concurrent-replacement-vote-race-reload",
         "concurrent-replacement-action-race",
         "replacement-incoming-action",
         "replacement-action-reconnect",
@@ -7261,7 +7265,7 @@ function raceCoverageAdminProofFixture() {
         "player-vs-completed-game",
       ],
       cellCount: 16,
-      reloadCoveredCellCount: 13,
+      reloadCoveredCellCount: 14,
     },
     adminRoleSurface: {
       status: "passed",
