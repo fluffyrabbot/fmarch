@@ -1123,6 +1123,9 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     realHostedEvidenceStatus: "unproven",
     realHostedDeploymentStatus: "unproven",
     externalHostedEvidenceStatus: "not_configured",
+    realHostedEvidenceCommand: "npm run test:dev-test-game-hosted-evidence-lane",
+    realHostedEvidenceProofTarget:
+      "target/dev-test-game/hosted-matrix-external.json",
     nextCommand: "test:dev-test-game-hosted-concurrent-race-matrix",
     releaseReady: false,
     productionReady: false,
@@ -1171,6 +1174,38 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       [
         "remaining-gap-2",
         "beta/release/operator readiness and human rollback path",
+      ],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.realHostedEvidenceInputs.map((item) => [
+      item.id,
+      item.value,
+      item.required,
+    ]),
+    [
+      ["command", "npm run test:dev-test-game-hosted-evidence-lane", true],
+      ["proof-target", "target/dev-test-game/hosted-matrix-external.json", true],
+      [
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "Externally reachable frontend base URL.",
+        true,
+      ],
+      [
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "Externally reachable API base URL.",
+        true,
+      ],
+      ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
+      [
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        "Raw hosted matrix evidence captured from the real target.",
+        true,
+      ],
+      [
+        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+        "Optional normalized hosted matrix evidence output path.",
+        false,
       ],
     ],
   );
@@ -1406,6 +1441,8 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedProofTarget: HOSTED_MATRIX_PROOF_TARGET,
     selectedHostedEvidenceMode: "",
     selectedRealHostedEvidenceStatus: "",
+    selectedRealHostedEvidenceCommand: "",
+    selectedRealHostedEvidenceProofTarget: "",
     selectedRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     selectedRoleHref:
@@ -3984,6 +4021,7 @@ function hostedConcurrentRaceMatrixFixture() {
       { id: "real-hosted-evidence-required", status: "unproven" },
       { id: "real-hosted-deployment", status: "unproven" },
     ],
+    realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
     externalHostedEvidence: {
       status: "not_configured",
       frontendBaseUrl: null,
@@ -4053,6 +4091,44 @@ function hostedConcurrentRaceMatrixFixture() {
         "Promote the local hosted-like matrix to a real hosted or multi-node matrix run.",
       proofTarget: HOSTED_MATRIX_PROOF_TARGET,
     },
+  };
+}
+
+function realHostedEvidenceInputsFixture() {
+  return {
+    status: "unproven",
+    mode: "not_configured",
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+    proofTarget: "target/dev-test-game/hosted-matrix-external.json",
+    requiredEvidence:
+      "Raw hosted matrix evidence from a real externally reachable hosted target.",
+    env: [
+      {
+        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        required: true,
+        description: "Externally reachable frontend base URL.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_API_URL",
+        required: true,
+        description: "Externally reachable API base URL.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        required: true,
+        description: "Hosted matrix group to prove.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        required: true,
+        description: "Raw hosted matrix evidence captured from the real target.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+        required: false,
+        description: "Optional normalized hosted matrix evidence output path.",
+      },
+    ],
   };
 }
 

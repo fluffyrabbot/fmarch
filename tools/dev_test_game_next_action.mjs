@@ -187,6 +187,12 @@ export function buildDevTestGameNextAction(
                     realHostedEvidenceStatus:
                       selectedUnproven.realHostedEvidenceStatus,
                   }),
+              ...(selectedUnproven.realHostedEvidenceInputs === undefined
+                ? {}
+                : {
+                    realHostedEvidenceInputs:
+                      selectedUnproven.realHostedEvidenceInputs,
+                  }),
             },
           }
         : {
@@ -523,6 +529,7 @@ function rankedBuildableReleaseReadinessItems(
             proofBoundary: buildable.proofBoundary,
             hostedEvidenceMode: buildable.hostedEvidenceMode,
             realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
+            realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
           };
     })
     .filter((candidate) => candidate !== null)
@@ -587,6 +594,9 @@ function buildReleaseReadinessTrace(candidates) {
       ...(candidate.realHostedEvidenceStatus === undefined
         ? {}
         : { realHostedEvidenceStatus: candidate.realHostedEvidenceStatus }),
+      ...(candidate.realHostedEvidenceInputs === undefined
+        ? {}
+        : { realHostedEvidenceInputs: candidate.realHostedEvidenceInputs }),
     })),
   };
 }
@@ -1403,9 +1413,51 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
           : "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
       hostedEvidenceMode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
       realHostedEvidenceStatus: syntheticExternalTarget ? "unproven" : "passed",
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: syntheticExternalTarget ? "unproven" : "passed",
+        mode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
+      }),
     };
   }
   return localBuildableReleaseReadinessItems.get("hosted-deployment");
+}
+
+function buildRealHostedEvidenceInputs({ status, mode }) {
+  return {
+    status,
+    mode,
+    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+    proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+    requiredEvidence:
+      "Raw hosted matrix evidence from a real externally reachable hosted target.",
+    env: [
+      {
+        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        required: true,
+        description: "Externally reachable frontend base URL.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_API_URL",
+        required: true,
+        description: "Externally reachable API base URL.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        required: true,
+        description: "Hosted matrix group to prove.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        required: true,
+        description: "Raw hosted matrix evidence captured from the real target.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+        required: false,
+        description: "Optional normalized hosted matrix evidence output path.",
+      },
+    ],
+  };
 }
 
 const localBuildableReleaseReadinessItems = new Map([
@@ -1421,6 +1473,10 @@ const localBuildableReleaseReadinessItems = new Map([
       proofGraphNodeId: "admin-proof:hosted-evidence-lane",
       proofBoundary:
         "Hosted evidence lane handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target, then exposes the blocked or passed lane through its native admin role URL; it does not let local hosted-like evidence satisfy hosted deployment.",
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: "unproven",
+        mode: "not_configured",
+      }),
     },
   ],
   [

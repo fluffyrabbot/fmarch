@@ -40,6 +40,15 @@ const requiredProgressChecks = [
   "real-hosted-deployment",
 ];
 const requiredRelatedLinks = ["local-race-coverage", "local-next-action"];
+const requiredRealHostedEvidenceInputs = [
+  "command",
+  "proof-target",
+  "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  "FMARCH_HOSTED_MATRIX_API_URL",
+  "FMARCH_HOSTED_MATRIX_GROUP_ID",
+  "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+];
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -84,6 +93,7 @@ await runAdminAuditProof({
           (_gap, index) => `remaining-gap-${index + 1}`,
         ),
       ],
+      requiredRealHostedEvidenceInputs,
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -113,6 +123,7 @@ await runAdminAuditProof({
         source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
       realHostedEvidenceStatus:
         source.hostedMatrix.summary.realHostedEvidenceStatus,
+      realHostedEvidenceInputIds: requiredRealHostedEvidenceInputs,
       realHostedDeploymentStatus:
         source.hostedMatrix.summary.realHostedDeploymentStatus,
     },
@@ -187,6 +198,17 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     throw new Error(
       "hosted concurrent race matrix admin proof missing requested evidence row",
     );
+  }
+  for (const inputId of evidence.generatedFrom?.realHostedEvidenceInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleRealHostedEvidenceInputs?.includes(
+        inputId,
+      )
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing real hosted input: ${inputId}`,
+      );
+    }
   }
   return evidence;
 }

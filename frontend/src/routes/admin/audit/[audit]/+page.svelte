@@ -176,6 +176,26 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.realHostedEvidenceInputs?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-real-hosted-evidence-inputs"
+      >
+        <h2>Real hosted evidence inputs</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.realHostedEvidenceInputs as input}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-real-hosted-evidence-input-${input.id}`}
+            >
+              <strong>{input.label}</strong>
+              <span>{input.value}</span>
+              <span>{input.required ? "required" : "optional"}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.relatedLinks?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-related-links">
         {#each data.audit.relatedLinks as link}

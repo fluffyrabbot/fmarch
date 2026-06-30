@@ -855,6 +855,9 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     typeof hostedConcurrentRaceMatrix.requestedEvidence === "object"
       ? hostedConcurrentRaceMatrix.requestedEvidence
       : null;
+  const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
+    hostedConcurrentRaceMatrix.realHostedEvidenceInputs,
+  );
   return Object.freeze({
     id: "local-hosted-concurrent-race-matrix",
     label: "Local hosted matrix",
@@ -944,6 +947,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         ),
       ],
     ),
+    realHostedEvidenceInputs,
     artifactSummary: Object.freeze({
       game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
       cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
@@ -981,6 +985,12 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       ),
       externalHostedEvidenceStatus: String(
         hostedConcurrentRaceMatrix.externalHostedEvidence?.status ?? "unknown",
+      ),
+      realHostedEvidenceCommand: String(
+        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
+      ),
+      realHostedEvidenceProofTarget: String(
+        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
       ),
       nextCommand: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
@@ -1129,6 +1139,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     action.unproven !== null && typeof action.unproven === "object"
       ? action.unproven
       : null;
+  const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
+    unproven?.realHostedEvidenceInputs,
+  );
   const localCheckRoleUrl =
     typeof localCheck?.roleUrl === "string" && localCheck.roleUrl.trim() !== ""
       ? localCheck.roleUrl
@@ -1395,6 +1408,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                   }),
                 ]),
           ]),
+    realHostedEvidenceInputs,
     artifactSummary: Object.freeze({
       command,
       reason,
@@ -1434,6 +1448,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedHostedEvidenceMode: String(unproven?.hostedEvidenceMode ?? ""),
       selectedRealHostedEvidenceStatus: String(
         unproven?.realHostedEvidenceStatus ?? "",
+      ),
+      selectedRealHostedEvidenceCommand: String(
+        unproven?.realHostedEvidenceInputs?.command ?? "",
+      ),
+      selectedRealHostedEvidenceProofTarget: String(
+        unproven?.realHostedEvidenceInputs?.proofTarget ?? "",
       ),
       selectedRoleUrl: unprovenRoleUrl,
       selectedRoleHref:
@@ -1571,6 +1591,23 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         proofTarget: String(candidate.proofTarget ?? ""),
         roleUrl: String(candidate.roleUrl ?? ""),
         proofGraphNodeId: String(candidate.proofGraphNodeId ?? ""),
+        ...(candidate.hostedEvidenceMode === undefined
+          ? {}
+          : { hostedEvidenceMode: String(candidate.hostedEvidenceMode) }),
+        ...(candidate.realHostedEvidenceStatus === undefined
+          ? {}
+          : {
+              realHostedEvidenceStatus: String(
+                candidate.realHostedEvidenceStatus,
+              ),
+            }),
+        ...(candidate.realHostedEvidenceInputs === undefined
+          ? {}
+          : {
+              realHostedEvidenceInputs: normalizeRealHostedEvidenceInputs(
+                candidate.realHostedEvidenceInputs,
+              ),
+            }),
       }),
     );
   return Object.freeze({
@@ -1582,6 +1619,36 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         : null,
     candidates: Object.freeze(candidates),
   });
+}
+
+function normalizeRealHostedEvidenceInputs(inputs) {
+  if (inputs === null || typeof inputs !== "object") {
+    return Object.freeze([]);
+  }
+  const env = Array.isArray(inputs.env) ? inputs.env : [];
+  const rows = [
+    Object.freeze({
+      id: "command",
+      label: "Command",
+      value: String(inputs.command ?? ""),
+      required: true,
+    }),
+    Object.freeze({
+      id: "proof-target",
+      label: "Proof target",
+      value: String(inputs.proofTarget ?? ""),
+      required: true,
+    }),
+    ...env.map((item) =>
+      Object.freeze({
+        id: String(item?.name ?? ""),
+        label: String(item?.name ?? ""),
+        value: String(item?.description ?? ""),
+        required: item?.required === true,
+      }),
+    ),
+  ].filter((item) => item.id !== "" && item.value !== "");
+  return Object.freeze(rows);
 }
 
 function normalizeNextActionLocalReadinessDependencyTrace(

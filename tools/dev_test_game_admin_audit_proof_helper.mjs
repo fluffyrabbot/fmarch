@@ -101,6 +101,7 @@ export async function proveAdminAuditDetail({
   requiredReconnectLanes = [],
   requiredStaleConflictLanes = [],
   requiredUnproven = [],
+  requiredRealHostedEvidenceInputs = [],
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   forbiddenText = [],
@@ -189,6 +190,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-unproven",
       ids: requiredUnproven,
+    });
+    const visibleRealHostedEvidenceInputs = await waitForRows({
+      page,
+      prefix: "admin-audit-real-hosted-evidence-input",
+      ids: requiredRealHostedEvidenceInputs,
     });
     const visibleRelatedLinks = await waitForRows({
       page,
@@ -374,6 +380,9 @@ export async function proveAdminAuditDetail({
         ? {}
         : { visibleStaleConflictLanes }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
+      ...(visibleRealHostedEvidenceInputs.length === 0
+        ? {}
+        : { visibleRealHostedEvidenceInputs }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       ...(visibleRelatedDestinations.length === 0
         ? {}
