@@ -66,6 +66,10 @@ const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
   artifactDir,
   "hosted-concurrent-race-matrix-admin-proof.json",
 );
+const defaultProofGraphAdminProofPath = path.join(
+  artifactDir,
+  "proof-graph-admin-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -247,6 +251,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         )
       : undefined;
+  const proofGraphAdminProofEvidence = options.proofGraphAdminProof
+    ? validateDevTestGameProofGraphAdminProof(options.proofGraphAdminProof, {
+        path:
+          options.proofGraphAdminProofPath ??
+          "target/dev-test-game/proof-graph-admin-proof.json",
+        artifact: options.proofGraphAdminProofArtifact,
+      })
+    : undefined;
   const localChecks = [
     {
       id: "local-role-url-browser-proof",
@@ -552,6 +564,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedConcurrentRaceMatrixAdminProofEvidence,
     });
   }
+  if (proofGraphAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-proof-graph-admin-role-handoffs",
+      label: "Proof graph admin role handoffs",
+      status: "passed",
+      evidence: proofGraphAdminProofEvidence.path,
+      proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
+      roleHandoffCount: proofGraphAdminProofEvidence.roleHandoffCount,
+      roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
+      destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
+      adminRoleSurface: proofGraphAdminProofEvidence,
+    });
+  }
   const unproven = [
     ...(identityAdapterEvidence === undefined
       ? [
@@ -745,6 +770,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             },
             raceCoveragePromotedMilestones,
           }),
+      ...(proofGraphAdminProofEvidence === undefined
+        ? {}
+        : {
+            proofGraphAdminProof: proofGraphAdminProofEvidence.path,
+          }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
         laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -768,7 +798,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         seedFixtureEvidence === undefined &&
         identityAdapterEvidence === undefined &&
         spineManifestEvidence === undefined &&
-        adminSpineProofEvidence === undefined)
+        adminSpineProofEvidence === undefined &&
+        proofGraphAdminProofEvidence === undefined)
         ? {}
         : {
             evidence: {
@@ -903,6 +934,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                     hostedConcurrentRaceMatrixAdminProof:
                       hostedConcurrentRaceMatrixAdminProofEvidence,
                   }),
+              ...(proofGraphAdminProofEvidence === undefined
+                ? {}
+                : { proofGraphAdminProof: proofGraphAdminProofEvidence }),
             },
           }),
     },
@@ -915,6 +949,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         identityAdapterEvidence,
         spineManifestEvidence,
         raceCoverageEvidence,
+        proofGraphAdminProofEvidence,
       }),
       unproven,
     },
@@ -930,6 +965,7 @@ function releaseReadinessReason({
   identityAdapterEvidence,
   spineManifestEvidence,
   raceCoverageEvidence,
+  proofGraphAdminProofEvidence,
 }) {
   const passed = [
     "the local development-spine proof",
@@ -939,6 +975,9 @@ function releaseReadinessReason({
     ...(identityAdapterEvidence === undefined ? [] : ["local identity adapter"]),
     ...(spineManifestEvidence === undefined ? [] : ["local spine manifest"]),
     ...(raceCoverageEvidence === undefined ? [] : ["local race coverage inventory"]),
+    ...(proofGraphAdminProofEvidence === undefined
+      ? []
+      : ["proof graph admin role handoffs"]),
   ];
   const missing = [
     identityAdapterEvidence === undefined
@@ -2231,6 +2270,69 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
   };
 }
 
+export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
+  if (proof?.version !== 1) {
+    throw new Error(`proof graph admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-proof-graph-admin-proof") {
+    throw new Error(`unexpected proof graph admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`proof graph admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-proof-graph-admin-surface") {
+    throw new Error(`proof graph admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("proof graph admin proof must not claim production or release readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("proof graph admin proof did not prove admin overview click-through");
+  }
+  const handoffs = proof.generatedFrom?.adminProofRoleHandoffs;
+  if (!Array.isArray(handoffs) || handoffs.length === 0) {
+    throw new Error("proof graph admin proof is missing admin role handoff evidence");
+  }
+  const visibleDestinations = Array.isArray(
+    proof.adminRoleSurface?.visibleRelatedDestinations,
+  )
+    ? proof.adminRoleSurface.visibleRelatedDestinations
+    : [];
+  for (const handoff of handoffs) {
+    if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(handoff.linkId)) {
+      throw new Error(`proof graph admin proof missing related link: ${handoff.linkId}`);
+    }
+    const destination = visibleDestinations.find(
+      (item) => item.linkId === handoff.linkId && item.auditId === handoff.auditId,
+    );
+    if (destination === undefined) {
+      throw new Error(
+        `proof graph admin proof missing visible destination: ${handoff.linkId}`,
+      );
+    }
+  }
+  const destinationAuditIds = [
+    ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
+  ];
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/proof-graph-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleRelatedDestinations: visibleDestinations,
+    roleHandoffCount: handoffs.length,
+    roleHandoffIds: handoffs.map((handoff) => String(handoff.linkId)),
+    destinationAuditIds,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   const requiredChecks = [
     "local-role-url-browser-proof",
@@ -2259,12 +2361,12 @@ export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   ) {
     throw new Error("release admin proof did not prove admin overview click-through");
   }
-  for (const checkId of requiredChecks) {
+  for (const checkId of proof.generatedFrom?.localCheckIds ?? requiredChecks) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);
     }
   }
-  for (const itemId of requiredUnproven) {
+  for (const itemId of proof.generatedFrom?.unprovenIds ?? requiredUnproven) {
     if (!proof.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
       throw new Error(`release admin proof missing visible unproven item: ${itemId}`);
     }
@@ -2603,6 +2705,22 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (hasIdentityAdapterCheck && hasIdentityUnproven) {
     throw new Error("dev-test-game identity adapter cannot be both passed and unproven");
   }
+  const proofGraphHandoffCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-proof-graph-admin-role-handoffs",
+  );
+  if (
+    proofGraphHandoffCheck !== undefined &&
+    (!Number.isInteger(proofGraphHandoffCheck.roleHandoffCount) ||
+      proofGraphHandoffCheck.roleHandoffCount <= 0 ||
+      !Array.isArray(proofGraphHandoffCheck.roleHandoffIds) ||
+      !proofGraphHandoffCheck.roleHandoffIds.includes("admin-proof:release") ||
+      !Array.isArray(proofGraphHandoffCheck.destinationAuditIds) ||
+      !proofGraphHandoffCheck.destinationAuditIds.includes(
+        "local-release-readiness",
+      ))
+  ) {
+    throw new Error("dev-test-game proof graph admin handoff check is malformed");
+  }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
       throw new Error(`release item ${item.id} must remain unproven`);
@@ -2673,6 +2791,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     raceCoverageOptions,
     raceCoverageAdminProofOptions,
     hostedConcurrentRaceMatrixAdminProofOptions,
+    proofGraphAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
     readOptionalHardeningAdminProof(),
@@ -2691,6 +2810,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalRaceCoverage(),
     readOptionalRaceCoverageAdminProof(),
     readOptionalHostedConcurrentRaceMatrixAdminProof(),
+    readOptionalProofGraphAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -2711,6 +2831,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(raceCoverageOptions ?? {}),
     ...(raceCoverageAdminProofOptions ?? {}),
     ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
+    ...(proofGraphAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -3000,6 +3121,24 @@ async function readOptionalHostedConcurrentRaceMatrixAdminProof() {
     ),
     hostedConcurrentRaceMatrixAdminProofPath: path.relative(repoRoot, proofPath),
     hostedConcurrentRaceMatrixAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalProofGraphAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultProofGraphAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    proofGraphAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    proofGraphAdminProofPath: path.relative(repoRoot, proofPath),
+    proofGraphAdminProofArtifact: artifact,
   };
 }
 

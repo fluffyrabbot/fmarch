@@ -6976,6 +6976,33 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "hosted-concurrent-race-matrix",
     "spine-manifest",
   ]);
+  const proofGraphHandoffReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofGraphAdminProofPath: "target/dev-test-game/proof-graph-admin-proof.json",
+    proofGraphAdminProof: proofGraphAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(proofGraphHandoffReadiness);
+  assert.equal(
+    proofGraphHandoffReadiness.generatedFrom.proofGraphAdminProof,
+    "target/dev-test-game/proof-graph-admin-proof.json",
+  );
+  const handoffCheck =
+    proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-proof-graph-admin-role-handoffs",
+    );
+  assert.equal(handoffCheck.status, "passed");
+  assert.equal(handoffCheck.roleHandoffCount, 10);
+  assert(handoffCheck.roleHandoffIds.includes("admin-proof:release"));
+  assert(handoffCheck.destinationAuditIds.includes("local-release-readiness"));
+  assert.equal(
+    handoffCheck.adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-proof-graph?game=<seeded-game>",
+  );
+  assert.equal(
+    proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
+      .roleHandoffCount,
+    10,
+  );
   const manifestReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     spineManifestPath: "target/dev-test-game/spine-manifest.json",
@@ -7984,6 +8011,12 @@ function releaseAdminProofFixture() {
     generatedFrom: {
       releaseReadinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
       game: "00000000-0000-0000-0000-000000000001",
+      localCheckIds: [
+        "local-role-url-browser-proof",
+        "local-core-loop-proof",
+        "local-hardening-proof",
+      ],
+      unprovenIds: ["hosted-deployment", "human-release-runbook"],
     },
     adminRoleSurface: {
       status: "passed",
@@ -7998,6 +8031,83 @@ function releaseAdminProofFixture() {
         "local-hardening-proof",
       ],
       visibleUnproven: ["hosted-deployment", "human-release-runbook"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function proofGraphAdminProofFixture() {
+  const handoffs = [
+    ["admin-proof:core-loop", "local-core-loop"],
+    ["admin-proof:hardening", "local-hardening"],
+    ["admin-proof:identity", "local-identity-adapter"],
+    ["admin-proof:backup", "local-backup-restore"],
+    ["admin-proof:ops", "local-ops-artifacts"],
+    ["admin-proof:seed", "local-seed-fixtures"],
+    ["admin-proof:release", "local-release-readiness"],
+    ["admin-proof:race-coverage", "local-race-coverage"],
+    [
+      "admin-proof:hosted-concurrent-race-matrix",
+      "local-hosted-concurrent-race-matrix",
+    ],
+    ["admin-proof:spine-manifest", "local-spine-manifest"],
+  ].map(([linkId, auditId]) => ({
+    linkId,
+    auditId,
+    requiredCheckIds: [],
+    requiredCheckStatuses: {},
+    requiredScenarioIds: [],
+    requiredSessionIds: [],
+    requiredUnprovenIds: [],
+    requiredRelatedLinkIds: [],
+  }));
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-graph-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-proof-graph-admin-surface",
+    proofBoundary: "Local admin proof graph handoff proof only.",
+    generatedFrom: {
+      proofGraph: "target/dev-test-game/proof-graph.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
+      hostedConcurrentRaceMatrix:
+        "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      nodeIds: handoffs.map((handoff) => handoff.linkId),
+      edgeCount: 10,
+      adminProofSurfaceIds: [
+        "core-loop",
+        "hardening",
+        "identity",
+        "backup",
+        "ops",
+        "seed",
+        "release",
+        "race-coverage",
+        "hosted-concurrent-race-matrix",
+        "spine-manifest",
+      ],
+      adminProofRoleHandoffs: handoffs,
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-proof-graph",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: handoffs.map((handoff) => handoff.linkId),
+      visibleRelatedLinks: handoffs.map((handoff) => handoff.linkId),
+      visibleRelatedDestinations: handoffs.map((handoff) => ({
+        linkId: handoff.linkId,
+        auditId: handoff.auditId,
+        detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
+      })),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

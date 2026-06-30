@@ -40,6 +40,16 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     ["admin", "host", "player"],
   );
   assert.deepEqual(
+    handoffs.find((handoff) => handoff.linkId === "admin-proof:release")
+      ?.requiredCheckIds,
+    [
+      "local-role-url-browser-proof",
+      "local-core-loop-proof",
+      "local-hardening-proof",
+      "local-proof-graph-admin-role-handoffs",
+    ],
+  );
+  assert.deepEqual(
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
     )?.requiredUnprovenIds,

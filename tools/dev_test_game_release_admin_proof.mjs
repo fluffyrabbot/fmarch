@@ -52,6 +52,8 @@ await runAdminAuditProof({
     generatedFrom: {
       releaseReadinessChecklist: readinessRelativePath,
       game: readiness.generatedFrom.game,
+      localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+      unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
     },
     adminRoleSurface,
   }),
@@ -75,12 +77,12 @@ export function assertReleaseAdminProof(evidence) {
   ) {
     throw new Error("release admin proof did not prove admin overview click-through");
   }
-  for (const checkId of requiredReleaseChecks) {
+  for (const checkId of evidence.generatedFrom?.localCheckIds ?? requiredReleaseChecks) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);
     }
   }
-  for (const itemId of requiredUnprovenItems) {
+  for (const itemId of evidence.generatedFrom?.unprovenIds ?? requiredUnprovenItems) {
     if (!evidence.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
       throw new Error(`release admin proof missing visible unproven item: ${itemId}`);
     }

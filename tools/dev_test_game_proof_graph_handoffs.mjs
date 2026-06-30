@@ -48,6 +48,7 @@ const adminProofDestinationRequirements = [
       "local-role-url-browser-proof",
       "local-core-loop-proof",
       "local-hardening-proof",
+      "local-proof-graph-admin-role-handoffs",
     ],
     requiredUnprovenIds: ["hosted-deployment", "human-release-runbook"],
   },
