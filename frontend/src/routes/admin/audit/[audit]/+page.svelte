@@ -127,6 +127,41 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.reconnectLanes?.length > 0}
+      <section class="admin-audit-detail__group" data-testid="admin-audit-detail-reconnect-lanes">
+        <h2>Reconnect recovery lanes</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.reconnectLanes as lane}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-reconnect-lane-${lane.id}`}
+            >
+              <strong>{lane.label}</strong>
+              <span>{lane.status}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
+    {#if data.audit.staleConflictLanes?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-stale-conflict-lanes"
+      >
+        <h2>Stale-client conflict lanes</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.staleConflictLanes as lane}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-stale-conflict-lane-${lane.id}`}
+            >
+              <strong>{lane.label}</strong>
+              <span>{lane.status}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.unproven?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-unproven">
         {#each data.audit.unproven as item}

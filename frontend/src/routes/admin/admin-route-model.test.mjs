@@ -943,6 +943,24 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     ],
   );
   assert.deepEqual(
+    matrix.reconnectLanes.map((lane) => [lane.id, lane.status]),
+    [
+      ["reconnect-recovery", "passed"],
+      ["replacement-reconnect-recovery", "passed"],
+      ["replacement-action-reconnect", "passed"],
+      ["replacement-stale-private-post-reconnect", "passed"],
+    ],
+  );
+  assert.deepEqual(
+    matrix.staleConflictLanes.map((lane) => [lane.id, lane.status]),
+    [
+      ["replacement-stale-conflict-message", "passed"],
+      ["stale-action-conflict-message", "passed"],
+      ["stale-dead-action-conflict", "passed"],
+      ["stale-host-control", "passed"],
+    ],
+  );
+  assert.deepEqual(
     matrix.unproven.map((item) => [item.id, item.status]),
     [
       ["hosted-concurrent-race-matrix", "unproven"],
@@ -1008,6 +1026,24 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
         "remaining-gap-2",
         "beta/release/operator readiness and human rollback path",
       ],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.reconnectLanes.map((lane) => [lane.id, lane.status]),
+    [
+      ["reconnect-recovery", "passed"],
+      ["replacement-reconnect-recovery", "passed"],
+      ["replacement-action-reconnect", "passed"],
+      ["replacement-stale-private-post-reconnect", "passed"],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.staleConflictLanes.map((lane) => [lane.id, lane.status]),
+    [
+      ["replacement-stale-conflict-message", "passed"],
+      ["stale-action-conflict-message", "passed"],
+      ["stale-dead-action-conflict", "passed"],
+      ["stale-host-control", "passed"],
     ],
   );
 });
@@ -3289,6 +3325,15 @@ function raceCoverageCell({
   };
 }
 
+function laneFixture(id, label) {
+  return {
+    id,
+    label,
+    status: "passed",
+    evidence: {},
+  };
+}
+
 function hostedConcurrentRaceMatrixFixture() {
   const cells = raceCoverageFixture().cells.map((cell) => ({
     id: cell.id,
@@ -3390,8 +3435,24 @@ function hostedConcurrentRaceMatrixFixture() {
       evidencePath: null,
     },
     cells,
-    reconnectLanes: [],
-    staleConflictLanes: [],
+    reconnectLanes: [
+      laneFixture("reconnect-recovery", "Reconnect recovery"),
+      laneFixture("replacement-reconnect-recovery", "Replacement reconnect recovery"),
+      laneFixture("replacement-action-reconnect", "Replacement action reconnect"),
+      laneFixture(
+        "replacement-stale-private-post-reconnect",
+        "Replacement stale private post reconnect",
+      ),
+    ],
+    staleConflictLanes: [
+      laneFixture(
+        "replacement-stale-conflict-message",
+        "Replacement stale conflict message",
+      ),
+      laneFixture("stale-action-conflict-message", "Stale action conflict message"),
+      laneFixture("stale-dead-action-conflict", "Stale dead action conflict"),
+      laneFixture("stale-host-control", "Stale host control"),
+    ],
     requestedEvidence: {
       id: "hosted-concurrent-race-matrix",
       status: "unproven",

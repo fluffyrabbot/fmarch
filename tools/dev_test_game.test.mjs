@@ -8656,6 +8656,14 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "replacement-vote",
         "replacement-action",
       ],
+      reconnectLaneIds: [
+        "reconnect-recovery",
+        "replacement-reconnect-recovery",
+      ],
+      staleConflictLaneIds: [
+        "replacement-stale-conflict-message",
+        "stale-action-conflict-message",
+      ],
       progressCheckIds: [
         "hosted-like-api-frontend-target",
         "multi-session-concurrent-command-matrix",
@@ -8689,6 +8697,14 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "replacement-private-post",
         "replacement-vote",
         "replacement-action",
+      ],
+      visibleReconnectLanes: [
+        "reconnect-recovery",
+        "replacement-reconnect-recovery",
+      ],
+      visibleStaleConflictLanes: [
+        "replacement-stale-conflict-message",
+        "stale-action-conflict-message",
       ],
       visibleUnproven: [
         "hosted-concurrent-race-matrix",

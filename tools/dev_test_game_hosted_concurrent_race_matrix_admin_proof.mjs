@@ -62,6 +62,12 @@ await runAdminAuditProof({
         ...requiredProgressChecks,
         ...source.hostedMatrix.cells.map((cell) => cell.id),
       ],
+      requiredReconnectLanes: source.hostedMatrix.reconnectLanes.map(
+        (lane) => lane.id,
+      ),
+      requiredStaleConflictLanes: source.hostedMatrix.staleConflictLanes.map(
+        (lane) => lane.id,
+      ),
       requiredCheckStatuses: {
         "real-hosted-deployment":
           source.hostedMatrix.summary.realHostedDeploymentStatus,
@@ -88,6 +94,10 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       cellIds: source.hostedMatrix.cells.map((cell) => cell.id),
+      reconnectLaneIds: source.hostedMatrix.reconnectLanes.map((lane) => lane.id),
+      staleConflictLaneIds: source.hostedMatrix.staleConflictLanes.map(
+        (lane) => lane.id,
+      ),
       progressCheckIds: requiredProgressChecks,
       relatedAuditIds: requiredRelatedLinks,
       requestedEvidenceId: source.hostedMatrix.requestedEvidence.id,
@@ -134,6 +144,20 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(cellId)) {
       throw new Error(
         `hosted concurrent race matrix admin proof missing visible cell: ${cellId}`,
+      );
+    }
+  }
+  for (const laneId of evidence.generatedFrom?.reconnectLaneIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleReconnectLanes?.includes(laneId)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing reconnect lane: ${laneId}`,
+      );
+    }
+  }
+  for (const laneId of evidence.generatedFrom?.staleConflictLaneIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleStaleConflictLanes?.includes(laneId)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing stale-conflict lane: ${laneId}`,
       );
     }
   }

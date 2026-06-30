@@ -479,6 +479,14 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
   )
     ? hostedConcurrentRaceMatrix.hostedLikeTarget.roleSurfaces
     : [];
+  const reconnectLanes = Array.isArray(hostedConcurrentRaceMatrix.reconnectLanes)
+    ? hostedConcurrentRaceMatrix.reconnectLanes
+    : [];
+  const staleConflictLanes = Array.isArray(
+    hostedConcurrentRaceMatrix.staleConflictLanes,
+  )
+    ? hostedConcurrentRaceMatrix.staleConflictLanes
+    : [];
   const remainingGaps = Array.isArray(hostedConcurrentRaceMatrix.remainingGaps)
     ? hostedConcurrentRaceMatrix.remainingGaps
     : [];
@@ -538,6 +546,24 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       }),
     ]),
+    reconnectLanes: Object.freeze(
+      reconnectLanes.map((lane) =>
+        Object.freeze({
+          id: String(lane.id),
+          label: String(lane.label ?? lane.id ?? ""),
+          status: String(lane.status ?? "unknown"),
+        }),
+      ),
+    ),
+    staleConflictLanes: Object.freeze(
+      staleConflictLanes.map((lane) =>
+        Object.freeze({
+          id: String(lane.id),
+          label: String(lane.label ?? lane.id ?? ""),
+          status: String(lane.status ?? "unknown"),
+        }),
+      ),
+    ),
     unproven: Object.freeze(
       [
         ...(requestedEvidence === null
