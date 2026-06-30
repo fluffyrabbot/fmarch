@@ -88,6 +88,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-prompt-reload",
   "stale-host-complete",
   "stale-host-complete-reload",
+  "stale-host-complete-reconnect-recovery",
   "concurrent-host-complete-race",
   "concurrent-host-complete-race-reload",
   "concurrent-player-complete-race",
@@ -5199,6 +5200,54 @@ export function buildDevTestGameProofRun(session, options = {}) {
               (slot) =>
                 slot.role_revealed === true && slot.alignment_revealed === true,
             ) === true,
+      },
+    ),
+    lane(
+      "stale-host-complete-reconnect-recovery",
+      "Stale host complete recovery reconnects revealed console",
+      {
+        game: hardening.staleHostComplete?.game ?? null,
+        reconnectingState:
+          hardening.staleHostComplete?.reconnectAfterReject?.reconnectingStatus
+            ?.state ?? null,
+        recoveryState:
+          hardening.staleHostComplete?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state ?? null,
+        recoveredCompleted:
+          hardening.staleHostComplete?.reconnectAfterReject
+            ?.recoveredHostProjection?.completed ?? null,
+        revealedSlots:
+          hardening.staleHostComplete?.reconnectAfterReject
+            ?.recoveredHostProjection?.slots?.filter(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ).length ?? null,
+        completeActionVisible:
+          hardening.staleHostComplete?.roleActionsAfterReconnect?.includes(
+            "complete_game",
+          ) ?? null,
+        passed:
+          hardening.staleHostComplete?.status === "passed" &&
+          hardening.staleHostComplete?.reject?.error === "GameAlreadyCompleted" &&
+          hardening.staleHostComplete?.reconnectAfterReject?.status === "passed" &&
+          hardening.staleHostComplete?.reconnectAfterReject?.reconnectingStatus
+            ?.state === "reconnecting" &&
+          hardening.staleHostComplete?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state === "recovered" &&
+          hardening.staleHostComplete?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.attempt === 1 &&
+          hardening.staleHostComplete?.reconnectAfterReject
+            ?.recoveredHostProjection?.completed === true &&
+          hardening.staleHostComplete?.reconnectAfterReject
+            ?.recoveredHostProjection?.slots?.length === 1 &&
+          hardening.staleHostComplete?.reconnectAfterReject
+            ?.recoveredHostProjection?.slots?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true &&
+          hardening.staleHostComplete?.roleActionsAfterReconnect?.includes(
+            "complete_game",
+          ) === false,
       },
     ),
     lane("concurrent-host-complete-race", "Concurrent complete-game commands converge", {

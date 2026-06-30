@@ -5812,6 +5812,14 @@ async function submitStaleHostCompleteRecovery({
     roleActionsAfterReload,
     apiStateAfterReload,
   };
+  const reconnectAfterReject = await verifyHostReconnectRecovery({
+    page: staleCompletePage,
+    game: completeGame,
+  });
+  const roleActionsAfterReconnect = await visibleHostControlActions(
+    staleCompletePage,
+    "roles",
+  );
   if (
     setup?.roleActions?.includes(actionId) !== true ||
     liveComplete?.commandStatus?.state !== "ack" ||
@@ -5862,7 +5870,17 @@ async function submitStaleHostCompleteRecovery({
     staleHostReloadAfterReject.apiStateAfterReload.slots?.length !== 1 ||
     staleHostReloadAfterReject.apiStateAfterReload.slots.some(
       (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
-    )
+    ) ||
+    reconnectAfterReject?.status !== "passed" ||
+    reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    reconnectAfterReject?.recoveredHostProjection?.completed !== true ||
+    reconnectAfterReject?.recoveredHostProjection?.slots?.length !== 1 ||
+    reconnectAfterReject.recoveredHostProjection.slots.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    roleActionsAfterReconnect.includes(actionId)
   ) {
     throw new Error(
       `stale host complete recovery drifted: ${JSON.stringify({
@@ -5878,6 +5896,8 @@ async function submitStaleHostCompleteRecovery({
         dispatchPlan,
         apiStateAfterReject,
         staleHostReloadAfterReject,
+        reconnectAfterReject,
+        roleActionsAfterReconnect,
       })}`,
     );
   }
@@ -5893,6 +5913,8 @@ async function submitStaleHostCompleteRecovery({
     dispatchPlan,
     apiStateAfterReject,
     staleHostReloadAfterReject,
+    reconnectAfterReject,
+    roleActionsAfterReconnect,
   };
 }
 
@@ -12505,6 +12527,54 @@ async function verifyPlayerReconnectRecovery({ playerPage, game }) {
     postPrefix: "Player reconnect proof",
     navigate: true,
   });
+}
+
+async function verifyHostReconnectRecovery({ page, game, navigate = false }) {
+  if (navigate) {
+    await gotoHostConsole(page, game);
+  }
+  await page.waitForFunction(
+    () => typeof window.__fmarchDropHostLiveProjection === "function",
+  );
+  await page.evaluate(() => window.__fmarchDropHostLiveProjection());
+  await page.waitForFunction(
+    () => window.__fmarchHostLiveProjectionStatus?.state === "reconnecting",
+  );
+  const reconnectingStatus = await page.evaluate(
+    () => window.__fmarchHostLiveProjectionStatus,
+  );
+  await page.waitForFunction(
+    () =>
+      (window.__fmarchHostLiveProjectionEvents ?? []).some(
+        (event) =>
+          event?.kind === "reconnect" &&
+          event.attempt === 1 &&
+          event.state === "recovered",
+      ),
+  );
+  const recoveredStatus = await page.evaluate(
+    () => window.__fmarchHostLiveProjectionStatus,
+  );
+  const reconnectRecoveryEvent = await page.evaluate(() =>
+    (window.__fmarchHostLiveProjectionEvents ?? []).find(
+      (event) =>
+        event?.kind === "reconnect" &&
+        event.attempt === 1 &&
+        event.state === "recovered",
+    ),
+  );
+  await page.waitForFunction(() => window.__fmarchHostProjection !== undefined);
+  const recoveredHostProjection = await page.evaluate(
+    () => window.__fmarchHostProjection,
+  );
+  return {
+    status: "passed",
+    game,
+    reconnectingStatus,
+    reconnectRecoveryEvent,
+    recoveredStatus,
+    recoveredHostProjection,
+  };
 }
 
 async function verifyRoleReconnectRecovery({

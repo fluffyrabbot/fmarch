@@ -1359,6 +1359,7 @@ const hostStaleControlLaneIds = Object.freeze([
   "stale-host-prompt-reload",
   "stale-host-complete",
   "stale-host-complete-reload",
+  "stale-host-complete-reconnect-recovery",
   "stale-host-control",
   "stale-host-resolve",
   "stale-host-resolve-reload",

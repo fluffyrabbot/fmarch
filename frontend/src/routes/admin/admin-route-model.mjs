@@ -2179,6 +2179,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-prompt-reload",
     "stale-host-complete",
     "stale-host-complete-reload",
+    "stale-host-complete-reconnect-recovery",
     "concurrent-host-complete-race",
     "concurrent-host-complete-race-reload",
     "concurrent-player-complete-race",

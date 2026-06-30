@@ -62,6 +62,7 @@ const requiredScenarios = [
   "concurrent-host-complete-race-reload",
   "stale-host-prompt-reload",
   "stale-host-complete-reload",
+  "stale-host-complete-reconnect-recovery",
   "concurrent-player-complete-race",
   "public-player-complete-reload",
   "stale-player-complete-reload",

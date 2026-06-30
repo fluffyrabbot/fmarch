@@ -71,6 +71,18 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
     }),
     "passed: reconnecting -> recovered, phase D02",
   );
+  assert.equal(
+    hardeningLaneStatus({
+      id: "stale-host-complete-reconnect-recovery",
+      status: "passed",
+      evidence: {
+        reconnectingState: "reconnecting",
+        recoveryState: "recovered",
+        recoveredCompleted: true,
+      },
+    }),
+    "passed: reconnecting -> recovered, completed true",
+  );
   assert.equal(hardeningLaneStatus({ id: "unhighlighted", status: "passed" }), "passed");
 });
 
@@ -102,6 +114,15 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
           recoveredPhase: "D02",
         },
       },
+      {
+        id: "stale-host-complete-reconnect-recovery",
+        status: "passed",
+        evidence: {
+          reconnectingState: "reconnecting",
+          recoveryState: "recovered",
+          recoveredCompleted: true,
+        },
+      },
     ],
   };
 
@@ -122,6 +143,12 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-reconnect-recovery"],
     "passed: reconnecting -> recovered, phase D02",
+  );
+  assert.equal(
+    hardeningHighlightedLaneEvidence(proofRun)[
+      "stale-host-complete-reconnect-recovery"
+    ],
+    "passed: reconnecting -> recovered, completed true",
   );
   assert.equal(coreLoopHighlightedLaneEvidence(proofRun)["core-loop"], "unknown");
   assert.equal(hardeningHighlightedLaneEvidence(proofRun)["reconnect-recovery"], "unknown");

@@ -17,6 +17,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-action-conflict",
   "stale-action-conflict-message",
   "stale-action-reconnect-recovery",
+  "stale-host-complete-reconnect-recovery",
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
@@ -83,6 +84,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
     case "stale-action-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
+    case "stale-host-complete-reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;
     case "stale-host-control":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, current ${String(evidence.phaseId ?? "unknown")}`;
     case "concurrent-host-resolve-race":
