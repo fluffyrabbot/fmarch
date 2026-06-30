@@ -1909,6 +1909,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopNormalNightActionResolutionPrivacySurface(
     proof.normalNightActionResolutionPrivacySurface,
   );
+  assertCoreLoopHostNightActionTransitionSurface(
+    proof.hostNightActionTransitionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1941,6 +1944,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       proof.nightActionResolutionReceiptSurface,
     normalNightActionResolutionPrivacySurface:
       proof.normalNightActionResolutionPrivacySurface,
+    hostNightActionTransitionSurface: proof.hostNightActionTransitionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -2757,6 +2761,219 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
   });
+}
+
+function assertCoreLoopHostNightActionTransitionSurface(
+  hostNightActionTransitionSurface,
+) {
+  const expectedGame = gameFromRoleUrl(
+    hostNightActionTransitionSurface?.sourceHostRoleUrl,
+  );
+  const resolveProof = hostNightActionTransitionSurface?.resolveProof;
+  const advanceProof = hostNightActionTransitionSurface?.advanceProof;
+  const actionPlayerObservationProof =
+    hostNightActionTransitionSurface?.actionPlayerObservationProof;
+  const nightTargetObservationProof =
+    hostNightActionTransitionSurface?.nightTargetObservationProof;
+  const normalObservationProof =
+    hostNightActionTransitionSurface?.normalObservationProof;
+  if (
+    hostNightActionTransitionSurface?.status !== "passed" ||
+    hostNightActionTransitionSurface.clickedThroughFromRoleUrl !== true ||
+    hostNightActionTransitionSurface.releaseReady !== false ||
+    hostNightActionTransitionSurface.productionReady !== false ||
+    typeof hostNightActionTransitionSurface.sourceHostRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof hostNightActionTransitionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNightTargetRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceNightTargetRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNormalRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceNormalRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.visitedHostRolePath !== "string" ||
+    !hostNightActionTransitionSurface.visitedHostRolePath.endsWith("/host") ||
+    hostNightActionTransitionSurface.surfaceTestId !== "host-console-surface" ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "resolve_phase:ack:905",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:906",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "actionPlayer:D03",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "target:D03",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "normal:D03",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing host night action transition");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 905,
+    expectedPhaseId: "N02",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 906,
+    expectedPhaseId: "D03",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  assertCoreLoopDayThreePlayerObservationProof({
+    proof: actionPlayerObservationProof,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceActionPlayerRoleUrl,
+    expectedPrincipalUserId: "player_mira",
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "action player observed host AdvancePhase",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertCoreLoopDayThreePlayerObservationProof({
+    proof: nightTargetObservationProof,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceNightTargetRoleUrl,
+    expectedPrincipalUserId: "player-seed",
+    expectedSlot: "slot-3",
+    slotField: "targetSlot",
+    expectedActorAlive: false,
+    expectedActorStatus: "dead",
+    expectedActionState: "disabled:actor is not alive",
+    expectedStatusText: "actor is not alive",
+    expectedPrivateCount: 1,
+    expectedPrivateReceipt: true,
+    expectedBoundaryText: "killed target stayed dead",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player-seed`,
+  });
+  assertCoreLoopDayThreePlayerObservationProof({
+    proof: normalObservationProof,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceNormalRoleUrl,
+    expectedPrincipalUserId: "player_rowan",
+    expectedSlot: "slot-4",
+    slotField: "normalSlot",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "normal player observed open D03",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+  });
+}
+
+function assertCoreLoopDayThreePlayerObservationProof({
+  proof,
+  sourceRoleUrl,
+  expectedPrincipalUserId,
+  expectedSlot,
+  slotField,
+  expectedActorAlive,
+  expectedActorStatus,
+  expectedActionState,
+  expectedStatusText,
+  expectedPrivateCount,
+  expectedPrivateReceipt,
+  expectedBoundaryText,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof[slotField] !== expectedSlot ||
+    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.checkpoint?.phaseId !== "D03" ||
+    proof.checkpoint.phaseState !== "open" ||
+    proof.checkpoint.actorSlot !== expectedSlot ||
+    proof.checkpoint.actionState !== expectedActionState ||
+    proof.checkpoint.receiptState !== "idle" ||
+    !String(proof.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes(expectedStatusText) ||
+    proof.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    proof.privateQueueBoundary.count !== expectedPrivateCount ||
+    !String(proof.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    proof.projectionCommandState?.actorSlot !== expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
+    proof.projectionCommandState?.phase?.phaseId !== "D03" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      expectedBoundaryText,
+    ) ||
+    proof.resyncFromSeq !== 906 ||
+    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.resyncSnapshotCommandState?.phase?.phaseId !== "D03" ||
+    proof.coldLoadEndpoints?.notificationsEndpoint !==
+      expectedNotificationsEndpoint ||
+    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 role observation");
+  }
+  if (
+    expectedPrivateReceipt &&
+    (proof.privateNotice?.id !== "notification-1" ||
+      proof.privateNotice.kind !== "notification" ||
+      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
+      !String(proof.privateNotice.text ?? "").includes("factional_kill") ||
+      proof.privateNotice.detailText !== "Phase N02" ||
+      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
+      proof.projectionNotifications?.[0]?.status !== "factional_kill" ||
+      proof.resyncSnapshotNotifications?.[0]?.status !== "factional_kill")
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 target private receipt");
+  }
+  if (
+    !expectedPrivateReceipt &&
+    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
+      proof.projectionNotifications?.length !== 0 ||
+      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.privateNotice !== undefined)
+  ) {
+    throw new Error("core-loop admin proof leaked Day 3 target receipt");
+  }
 }
 
 function assertCoreLoopHostStaleAdvanceAfterTransitionProof({

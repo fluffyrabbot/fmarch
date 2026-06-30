@@ -180,6 +180,19 @@ await runAdminAuditProof({
           spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
         ),
       });
+    const hostNightActionTransitionSurface =
+      await proveHostNightActionTransitionSurface({
+        browser,
+        frontendBaseUrl,
+        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        nightTargetRoleUrl: targetResolutionReceiptRoleUrl(
+          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        ),
+        normalRoleUrl: normalResolutionPrivacyRoleUrl(
+          spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+        ),
+      });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
@@ -200,6 +213,7 @@ await runAdminAuditProof({
       normalPostDayVoteAdvanceSurface,
       nightActionResolutionReceiptSurface,
       normalNightActionResolutionPrivacySurface,
+      hostNightActionTransitionSurface,
       privateChannelRoleSurface,
     };
   },
@@ -211,7 +225,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-core-loop-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
@@ -233,6 +247,7 @@ await runAdminAuditProof({
       surfaces.nightActionResolutionReceiptSurface,
     normalNightActionResolutionPrivacySurface:
       surfaces.normalNightActionResolutionPrivacySurface,
+    hostNightActionTransitionSurface: surfaces.hostNightActionTransitionSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
@@ -675,6 +690,266 @@ async function proveHostPhaseTransitionSurface({
   }
 }
 
+async function proveHostNightActionTransitionSurface({
+  browser,
+  frontendBaseUrl,
+  hostRoleUrl,
+  actionPlayerRoleUrl,
+  nightTargetRoleUrl,
+  normalRoleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedHostRolePath = rolePathFromUrl(hostRoleUrl);
+  const commandRequests = [];
+  try {
+    await installHostNightActionTransitionBrowserRoutes(page, { commandRequests });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedHostRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const resolveProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+      expectedPhaseState: "locked",
+      expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    });
+    const advanceProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+      expectedPhaseState: "open",
+      expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    });
+    const actionPlayerObservationProof = await proveDayThreePlayerObservation({
+      browser,
+      frontendBaseUrl,
+      roleUrl: actionPlayerRoleUrl,
+      cookieValue: "fixture-player",
+      expectedPrincipalUserId: "player_mira",
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      commandState: seededDayThreeActionPlayerCommandState({
+        boundary:
+          "Seeded browser action player observed host AdvancePhase from resolved N02 into open D03.",
+      }),
+      notifications: [],
+    });
+    const nightTargetObservationProof = await proveDayThreePlayerObservation({
+      browser,
+      frontendBaseUrl,
+      roleUrl: nightTargetRoleUrl,
+      cookieValue: "fixture-night-target",
+      expectedPrincipalUserId: "player-seed",
+      expectedSlot: "slot-3",
+      slotField: "targetSlot",
+      commandState: seededDayThreeNightTargetCommandState({
+        boundary:
+          "Seeded browser killed target stayed dead with factional_kill receipt after host advanced N02 to D03.",
+      }),
+      notifications: [
+        {
+          effect: "player_killed",
+          phase_id: "N02",
+          status: "factional_kill",
+        },
+      ],
+    });
+    const normalObservationProof = await proveDayThreePlayerObservation({
+      browser,
+      frontendBaseUrl,
+      roleUrl: normalRoleUrl,
+      cookieValue: "fixture-normal",
+      expectedPrincipalUserId: "player_rowan",
+      expectedSlot: "slot-4",
+      slotField: "normalSlot",
+      commandState: seededDayThreeNormalCommandState({
+        boundary:
+          "Seeded browser normal player observed open D03 with no target-only private receipt after host advanced N02.",
+      }),
+      notifications: [],
+    });
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("host night action transition proof leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceHostRoleUrl: String(hostRoleUrl),
+      sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
+      sourceNightTargetRoleUrl: String(nightTargetRoleUrl),
+      sourceNormalRoleUrl: String(normalRoleUrl),
+      visitedHostRolePath,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      transition:
+        "resolve_phase:ack:905 -> advance_phase:ack:906 -> actionPlayer:D03 -> target:D03 -> normal:D03",
+      resolveProof,
+      advanceProof,
+      actionPlayerObservationProof,
+      nightTargetObservationProof,
+      normalObservationProof,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveDayThreePlayerObservation({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+  cookieValue,
+  expectedPrincipalUserId,
+  expectedSlot,
+  slotField,
+  commandState,
+  notifications,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  try {
+    await installDayThreePlayerObservationRoutes(page, {
+      commandState,
+      notifications,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: cookieValue,
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const resyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(906);
+    });
+    await page.waitForFunction(
+      ({ slot }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === slot &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03",
+      { slot: expectedSlot },
+      { timeout: 15000 },
+    );
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    await checkpoint.waitFor({ state: "visible", timeout: 15000 });
+    const privateQueue = page.locator('[data-component="player-private-queue"]');
+    await privateQueue.waitFor({ state: "visible", timeout: 15000 });
+    const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+    const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
+    const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
+    const checkpointActionState = await checkpoint.getAttribute("data-action-state");
+    const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
+    const privateBoundaryStatus = await privateQueue.getAttribute(
+      "data-boundary-status",
+    );
+    const privateCount = Number.parseInt(
+      await page.getByTestId("player-private-count").innerText(),
+      10,
+    );
+    const privateBoundaryText = await page
+      .getByTestId("player-private-boundary")
+      .innerText();
+    const actionStatusText = await page
+      .getByTestId("player-action-submission-status")
+      .innerText();
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const coldLoadEndpoints = await page.evaluate(
+      () => window.__fmarchPlayerColdLoadEndpoints,
+    );
+    const proof = {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      [slotField]: expectedSlot,
+      principalUserId: expectedPrincipalUserId,
+      checkpoint: {
+        phaseId: checkpointPhaseId,
+        phaseState: checkpointPhaseState,
+        actorSlot: checkpointActorSlot,
+        actionState: checkpointActionState,
+        receiptState: checkpointReceiptState,
+        statusText: actionStatusText,
+      },
+      privateQueueBoundary: {
+        status: privateBoundaryStatus,
+        count: privateCount,
+        text: privateBoundaryText,
+      },
+      projectionCommandState: projection?.commandState ?? null,
+      projectionNotifications: projection?.notifications ?? null,
+      resyncFromSeq: 906,
+      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
+      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      coldLoadEndpoints,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+    if (privateCount > 0) {
+      const privateNotice = page.getByTestId("player-private-notification-1");
+      await privateNotice.waitFor({ state: "visible", timeout: 15000 });
+      const privateNoticeDetail = page.getByTestId(
+        "player-private-detail-notification-1",
+      );
+      await privateNoticeDetail.waitFor({ state: "visible", timeout: 15000 });
+      proof.privateNotice = {
+        id: "notification-1",
+        kind: await privateNotice.getAttribute("data-kind"),
+        text: await privateNotice.innerText(),
+        detailText: await privateNoticeDetail.innerText(),
+      };
+    } else {
+      const privateEmpty = page.getByTestId("player-private-empty");
+      await privateEmpty.waitFor({ state: "visible", timeout: 15000 });
+      proof.privateEmptyText = await privateEmpty.innerText();
+    }
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("day three player observation leaked an invite URL token");
+    }
+    if (notifications.length === 0 && bodyText.includes("factional_kill")) {
+      throw new Error("day three player observation rendered target-only receipt");
+    }
+    return proof;
+  } finally {
+    await page.close();
+  }
+}
+
 async function proveHostPhaseActionClick({
   page,
   commandRequests,
@@ -1035,6 +1310,98 @@ async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }
   });
   await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
     await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+async function installHostNightActionTransitionBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let hostPhaseState = "open";
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.ResolvePhase !== undefined) {
+      hostPhaseState = "resolved";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [905],
+          },
+        },
+      });
+      return;
+    }
+    if (command?.AdvancePhase !== undefined) {
+      hostPhaseState = "advanced";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [906],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "host-night-action-transition-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongHostNightActionTransitionProofCommand",
+            retryable: false,
+            message:
+              "host night action transition proof only accepts phase controls",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      hostPhaseTransitionConsoleState({
+        phaseId: hostPhaseState === "advanced" ? "D03" : "N02",
+        locked: hostPhaseState === "resolved",
+        seq: hostPhaseState === "advanced" ? 906 : 905,
+        boundary:
+          hostPhaseState === "advanced"
+            ? "Seeded browser AdvancePhase ACK advanced the host projection to Day 3."
+            : "Seeded browser ResolvePhase ACK locked Night 2 for host advancement.",
+      }),
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      {
+        phase_id: "D02",
+        source_seq: 902,
+        event_index: 0,
+        status: "Lynch",
+        winner_slot: "slot-2",
+        tallies: { "slot-2": 4 },
+        majority: 4,
+        reason: null,
+      },
+    ]);
   });
   await page.route("**/games/*/host-prompts?**", async (route) => {
     await fulfillJson(route, []);
@@ -2882,6 +3249,59 @@ async function installNightActionResolutionCommonRoutes(
   });
 }
 
+async function installDayThreePlayerObservationRoutes(
+  page,
+  { notifications, commandState },
+) {
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 906,
+          stream_seq: 906,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Day 3 has opened.",
+          occurred_at: 1782187200,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      {
+        phase_id: "D02",
+        source_seq: 902,
+        event_index: 0,
+        status: "Lynch",
+        winner_slot: "slot-2",
+        tallies: { "slot-2": 4 },
+        majority: 4,
+        reason: null,
+      },
+    ]);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, notifications);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, commandState);
+  });
+}
+
 async function installPostDayVoteAdvanceCommonRoutes(
   page,
   { notifications, commandState },
@@ -3606,6 +4026,78 @@ function seededNightActionResolutionNormalCommandState({ boundary }) {
   };
 }
 
+function seededDayThreeActionPlayerCommandState({ boundary }) {
+  return {
+    game: "seeded-day-three-action-player",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "D03",
+      phaseKind: "Day",
+      phaseNumber: 3,
+      locked: false,
+      deadline: 1782187200,
+    },
+    actions: [],
+    voteTargets: [
+      { kind: "slot", slotId: "slot-4", label: "Slot 4" },
+      { kind: "no_lynch", slotId: null, label: "No lynch" },
+    ],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function seededDayThreeNightTargetCommandState({ boundary }) {
+  return {
+    game: "seeded-day-three-night-target",
+    actorSlot: "slot-3",
+    actorAlive: false,
+    actorStatus: "dead",
+    roleKey: null,
+    gameCompleted: false,
+    phase: {
+      phaseId: "D03",
+      phaseKind: "Day",
+      phaseNumber: 3,
+      locked: false,
+      deadline: 1782187200,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function seededDayThreeNormalCommandState({ boundary }) {
+  return {
+    game: "seeded-day-three-normal",
+    actorSlot: "slot-4",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: null,
+    gameCompleted: false,
+    phase: {
+      phaseId: "D03",
+      phaseKind: "Day",
+      phaseNumber: 3,
+      locked: false,
+      deadline: 1782187200,
+    },
+    actions: [],
+    voteTargets: [
+      { kind: "slot", slotId: "slot-7", label: "Slot 7" },
+      { kind: "no_lynch", slotId: null, label: "No lynch" },
+    ],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -3686,7 +4178,12 @@ function hostOpenConsoleState({ boundary }) {
   };
 }
 
-function hostPhaseTransitionConsoleState({ phaseId, locked, boundary }) {
+function hostPhaseTransitionConsoleState({
+  phaseId,
+  locked,
+  boundary,
+  seq = locked ? 801 : 802,
+}) {
   return {
     completed: false,
     phase: {
@@ -3706,7 +4203,7 @@ function hostPhaseTransitionConsoleState({ phaseId, locked, boundary }) {
     ],
     thread_posts: [
       {
-        seq: locked ? 801 : 802,
+        seq,
         author_slot: "host",
         body: boundary,
       },
@@ -3836,6 +4333,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertNormalNightActionResolutionPrivacySurface(
     evidence.normalNightActionResolutionPrivacySurface,
   );
+  assertHostNightActionTransitionSurface(evidence.hostNightActionTransitionSurface);
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
@@ -4712,6 +5210,236 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
   });
+}
+
+function assertHostNightActionTransitionSurface(hostNightActionTransitionSurface) {
+  const expectedGame = gameFromRoleUrl(
+    hostNightActionTransitionSurface?.sourceHostRoleUrl,
+  );
+  const resolveProof = hostNightActionTransitionSurface?.resolveProof;
+  const advanceProof = hostNightActionTransitionSurface?.advanceProof;
+  const actionPlayerObservationProof =
+    hostNightActionTransitionSurface?.actionPlayerObservationProof;
+  const nightTargetObservationProof =
+    hostNightActionTransitionSurface?.nightTargetObservationProof;
+  const normalObservationProof =
+    hostNightActionTransitionSurface?.normalObservationProof;
+  if (
+    hostNightActionTransitionSurface?.status !== "passed" ||
+    hostNightActionTransitionSurface.clickedThroughFromRoleUrl !== true ||
+    hostNightActionTransitionSurface.releaseReady !== false ||
+    hostNightActionTransitionSurface.productionReady !== false ||
+    typeof hostNightActionTransitionSurface.sourceHostRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof hostNightActionTransitionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNightTargetRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceNightTargetRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNormalRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceNormalRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.visitedHostRolePath !== "string" ||
+    !hostNightActionTransitionSurface.visitedHostRolePath.endsWith("/host") ||
+    hostNightActionTransitionSurface.surfaceTestId !== "host-console-surface" ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "resolve_phase:ack:905",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:906",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "actionPlayer:D03",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "target:D03",
+    ) ||
+    !String(hostNightActionTransitionSurface.transition ?? "").includes(
+      "normal:D03",
+    )
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host night action transition surface: ${JSON.stringify(
+        hostNightActionTransitionSurface,
+      )}`,
+    );
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 905,
+    expectedPhaseId: "N02",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertHostPhaseTransitionActionProof({
+    proof: advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 906,
+    expectedPhaseId: "D03",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  assertDayThreePlayerObservationProof({
+    proof: actionPlayerObservationProof,
+    expectedGame,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceActionPlayerRoleUrl,
+    expectedPrincipalUserId: "player_mira",
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "action player observed host AdvancePhase",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertDayThreePlayerObservationProof({
+    proof: nightTargetObservationProof,
+    expectedGame,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceNightTargetRoleUrl,
+    expectedPrincipalUserId: "player-seed",
+    expectedSlot: "slot-3",
+    slotField: "targetSlot",
+    expectedActorAlive: false,
+    expectedActorStatus: "dead",
+    expectedActionState: "disabled:actor is not alive",
+    expectedStatusText: "actor is not alive",
+    expectedPrivateCount: 1,
+    expectedPrivateReceipt: true,
+    expectedBoundaryText: "killed target stayed dead",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player-seed`,
+  });
+  assertDayThreePlayerObservationProof({
+    proof: normalObservationProof,
+    expectedGame,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceNormalRoleUrl,
+    expectedPrincipalUserId: "player_rowan",
+    expectedSlot: "slot-4",
+    slotField: "normalSlot",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "normal player observed open D03",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+  });
+}
+
+function assertDayThreePlayerObservationProof({
+  proof,
+  sourceRoleUrl,
+  expectedPrincipalUserId,
+  expectedSlot,
+  slotField,
+  expectedActorAlive,
+  expectedActorStatus,
+  expectedActionState,
+  expectedStatusText,
+  expectedPrivateCount,
+  expectedPrivateReceipt,
+  expectedBoundaryText,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof[slotField] !== expectedSlot ||
+    proof.principalUserId !== expectedPrincipalUserId ||
+    proof.checkpoint?.phaseId !== "D03" ||
+    proof.checkpoint.phaseState !== "open" ||
+    proof.checkpoint.actorSlot !== expectedSlot ||
+    proof.checkpoint.actionState !== expectedActionState ||
+    proof.checkpoint.receiptState !== "idle" ||
+    !String(proof.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes(expectedStatusText) ||
+    proof.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    proof.privateQueueBoundary.count !== expectedPrivateCount ||
+    !String(proof.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    proof.projectionCommandState?.actorSlot !== expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
+    proof.projectionCommandState?.phase?.phaseId !== "D03" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      expectedBoundaryText,
+    ) ||
+    proof.resyncFromSeq !== 906 ||
+    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
+    proof.resyncSnapshotCommandState?.phase?.phaseId !== "D03" ||
+    proof.coldLoadEndpoints?.notificationsEndpoint !==
+      expectedNotificationsEndpoint ||
+    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 3 role observation: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  if (
+    expectedPrivateReceipt &&
+    (proof.privateNotice?.id !== "notification-1" ||
+      proof.privateNotice.kind !== "notification" ||
+      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
+      !String(proof.privateNotice.text ?? "").includes("factional_kill") ||
+      proof.privateNotice.detailText !== "Phase N02" ||
+      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
+      proof.projectionNotifications?.[0]?.status !== "factional_kill" ||
+      proof.resyncSnapshotNotifications?.[0]?.status !== "factional_kill")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 3 target private receipt: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  if (
+    !expectedPrivateReceipt &&
+    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
+      proof.projectionNotifications?.length !== 0 ||
+      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.privateNotice !== undefined)
+  ) {
+    throw new Error(
+      `core-loop admin proof leaked Day 3 target receipt: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
 }
 
 function assertHostStaleAdvanceAfterTransitionProof({ staleProof, expectedGame }) {
