@@ -2627,7 +2627,10 @@ async function submitStaleDeadlineAdvanceRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "unlock_thread",
+    roleLabel: "stale host",
+  });
   await staleHostPage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
@@ -4968,8 +4971,14 @@ async function submitConcurrentHostCompleteRace({
     secondRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    firstRoot.getByTestId("critical-host-action-confirm").click(),
-    secondRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(firstRoot, {
+      actionId,
+      roleLabel: "first complete",
+    }),
+    clickCriticalHostActionConfirm(secondRoot, {
+      actionId,
+      roleLabel: "second complete",
+    }),
   ]);
   await Promise.all([
     firstCompletePage.waitForFunction(
@@ -6755,7 +6764,10 @@ async function submitStaleHostPublishRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "unlock_thread",
+    roleLabel: "stale host",
+  });
   await staleHostPublishPage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
@@ -6866,7 +6878,10 @@ async function submitStaleHostPublishAfterClearRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "unlock_thread",
+    roleLabel: "stale host",
+  });
   await staleHostPublishPage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
@@ -9428,7 +9443,10 @@ async function submitStaleHostControlRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "unlock_thread",
+    roleLabel: "stale host",
+  });
   await staleHostPage.waitForFunction(
     () =>
       window.__fmarchHostCommandStatuses?.unlock_thread?.state === "reject" &&
@@ -9915,8 +9933,14 @@ async function submitConcurrentHostLifecycleRace({
     modkillActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    deadActionRoot.getByTestId("critical-host-action-confirm").click(),
-    modkillActionRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(deadActionRoot, {
+      actionId: deadActionId,
+      roleLabel: "mark-dead",
+    }),
+    clickCriticalHostActionConfirm(modkillActionRoot, {
+      actionId: modkillActionId,
+      roleLabel: "modkill",
+    }),
   ]);
   await Promise.all([
     deadRacePage.waitForFunction(
@@ -10362,8 +10386,14 @@ async function submitConcurrentHostResolveRace({
     concurrentActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    liveActionRoot.getByTestId("critical-host-action-confirm").click(),
-    concurrentActionRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(liveActionRoot, {
+      actionId,
+      roleLabel: "live resolve",
+    }),
+    clickCriticalHostActionConfirm(concurrentActionRoot, {
+      actionId,
+      roleLabel: "concurrent resolve",
+    }),
   ]);
   await Promise.all([
     hostPage.waitForFunction(
@@ -10703,8 +10733,14 @@ async function submitConcurrentHostAdvanceRace({
     concurrentActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    liveActionRoot.getByTestId("critical-host-action-confirm").click(),
-    concurrentActionRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(liveActionRoot, {
+      actionId,
+      roleLabel: "live advance",
+    }),
+    clickCriticalHostActionConfirm(concurrentActionRoot, {
+      actionId,
+      roleLabel: "concurrent advance",
+    }),
   ]);
   await Promise.all([
     hostPage.waitForFunction(
@@ -11025,8 +11061,14 @@ async function submitConcurrentHostDeadlineAdvanceRace({
     concurrentActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    liveActionRoot.getByTestId("critical-host-action-confirm").click(),
-    concurrentActionRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(liveActionRoot, {
+      actionId,
+      roleLabel: "live deadline advance",
+    }),
+    clickCriticalHostActionConfirm(concurrentActionRoot, {
+      actionId,
+      roleLabel: "concurrent deadline advance",
+    }),
   ]);
   await Promise.all([
     hostPage.waitForFunction(
@@ -11368,8 +11410,14 @@ async function submitConcurrentHostMixedAdvanceRace({
     deadlineActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
   ]);
   await Promise.all([
-    normalActionRoot.getByTestId("critical-host-action-confirm").click(),
-    deadlineActionRoot.getByTestId("critical-host-action-confirm").click(),
+    clickCriticalHostActionConfirm(normalActionRoot, {
+      actionId: normalActionId,
+      roleLabel: "normal mixed advance",
+    }),
+    clickCriticalHostActionConfirm(deadlineActionRoot, {
+      actionId: deadlineActionId,
+      roleLabel: "deadline mixed advance",
+    }),
   ]);
   await Promise.all([
     normalAdvancePage.waitForFunction(
@@ -11694,7 +11742,10 @@ async function submitStaleHostResolveRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "extend_deadline",
+    roleLabel: "stale cohost",
+  });
   await staleHostResolvePage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
@@ -11878,7 +11929,7 @@ async function submitStaleHostAdvanceRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, { actionId, roleLabel: "stale host" });
   await staleHostAdvancePage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
@@ -12057,7 +12108,7 @@ async function submitStaleHostDeadlineRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, { actionId, roleLabel: "stale host" });
   await staleHostDeadlinePage.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "reject" &&
@@ -12224,7 +12275,10 @@ async function submitStaleCohostDeadlineRecovery({
   await staleActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
     state: "visible",
   });
-  await staleActionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(staleActionRoot, {
+    actionId: "extend_deadline",
+    roleLabel: "stale cohost",
+  });
   await staleCohostPage.waitForFunction(
     () =>
       window.__fmarchHostCommandStatuses?.extend_deadline?.state === "reject" &&
@@ -14391,7 +14445,10 @@ async function verifyConcurrentPlayerActionAdvanceRace({
       .waitFor({ state: "visible" });
     await Promise.all([
       actionEntry.page.locator('[data-action="submit_action:factional_kill"]').click(),
-      advanceActionRoot.getByTestId("critical-host-action-confirm").click(),
+      clickCriticalHostActionConfirm(advanceActionRoot, {
+        actionId: "advance_phase",
+        roleLabel: "host advance",
+      }),
     ]);
     await Promise.all([
       actionEntry.page.waitForFunction(
@@ -14725,6 +14782,10 @@ async function verifyConcurrentCohostDeadlineResolveRace({
     const cohostActionRoot = cohostEntry.page.getByTestId(
       "critical-host-action-extend_deadline",
     );
+    const hostConfirmButton = hostActionRoot.getByTestId("critical-host-action-confirm");
+    const cohostConfirmButton = cohostActionRoot.getByTestId(
+      "critical-host-action-confirm",
+    );
     await Promise.all([
       hostActionRoot.getByTestId("critical-host-action-trigger").click(),
       cohostActionRoot.getByTestId("critical-host-action-trigger").click(),
@@ -14736,6 +14797,8 @@ async function verifyConcurrentCohostDeadlineResolveRace({
       cohostActionRoot.getByTestId("critical-host-action-confirmation").waitFor({
         state: "visible",
       }),
+      hostConfirmButton.waitFor({ state: "visible" }),
+      cohostConfirmButton.waitFor({ state: "visible" }),
     ]);
     const [hostConfirmationMessage, cohostConfirmationMessage] = await Promise.all([
       hostActionRoot.getByTestId("critical-host-action-confirmation-message").innerText(),
@@ -14744,8 +14807,14 @@ async function verifyConcurrentCohostDeadlineResolveRace({
         .innerText(),
     ]);
     await Promise.all([
-      clickCriticalHostActionConfirm(hostActionRoot),
-      clickCriticalHostActionConfirm(cohostActionRoot),
+      clickCriticalHostActionConfirm(hostActionRoot, {
+        actionId: "resolve_phase",
+        roleLabel: "host",
+      }),
+      clickCriticalHostActionConfirm(cohostActionRoot, {
+        actionId: "extend_deadline",
+        roleLabel: "cohost",
+      }),
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
@@ -18801,7 +18870,7 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   const confirmationMessage = await actionRoot
     .getByTestId("critical-host-action-confirmation-message")
     .innerText();
-  await actionRoot.getByTestId("critical-host-action-confirm").click();
+  await clickCriticalHostActionConfirm(actionRoot, { actionId });
 
   await page.waitForFunction(
     ({ expectedActionId, state }) =>
@@ -18820,22 +18889,77 @@ async function confirmHostAction(page, actionId, expectedState = "ack") {
   };
 }
 
-async function clickCriticalHostActionConfirm(actionRoot) {
+async function clickCriticalHostActionConfirm(
+  actionRoot,
+  { actionId = "unknown", roleLabel = "host", timeoutMs = 10_000 } = {},
+) {
   const confirm = actionRoot.getByTestId("critical-host-action-confirm");
   let lastError;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  try {
+    await confirm.waitFor({ state: "visible", timeout: timeoutMs });
+  } catch (error) {
+    lastError = error;
+    await throwCriticalHostActionConfirmClickError(actionRoot, {
+      actionId,
+      roleLabel,
+      cause: lastError,
+    });
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await confirm.click({ timeout: 5_000 });
       return;
     } catch (error) {
       lastError = error;
+      await delay(100);
     }
+  }
+  try {
+    await confirm.evaluate((node) => node.click());
+    return;
+  } catch (error) {
+    lastError = error;
   }
   try {
     await confirm.click({ timeout: 5_000, force: true });
   } catch {
-    throw lastError;
+    await throwCriticalHostActionConfirmClickError(actionRoot, {
+      actionId,
+      roleLabel,
+      cause: lastError,
+    });
   }
+}
+
+async function throwCriticalHostActionConfirmClickError(
+  actionRoot,
+  { actionId, roleLabel, cause },
+) {
+  const snapshot = await actionRoot
+    .evaluate((node) => ({
+      actionId: node.getAttribute("data-action-id"),
+      text: node.textContent?.trim() ?? "",
+      confirmationVisible:
+        node.querySelector('[data-testid="critical-host-action-confirmation"]') !==
+        null,
+      confirmPresent:
+        node.querySelector('[data-testid="critical-host-action-confirm"]') !== null,
+      confirmDisabled:
+        node
+          .querySelector('[data-testid="critical-host-action-confirm"]')
+          ?.hasAttribute("disabled") ?? null,
+      triggerDisabled:
+        node
+          .querySelector('[data-testid="critical-host-action-trigger"]')
+          ?.hasAttribute("disabled") ?? null,
+    }))
+    .catch((error) => ({ snapshotError: error.message }));
+  throw new Error(
+    `critical host action confirm click failed for ${roleLabel} ${actionId}: ${JSON.stringify(
+      snapshot,
+    )}`,
+    { cause },
+  );
 }
 
 async function importFrontendModule(relativePath) {
