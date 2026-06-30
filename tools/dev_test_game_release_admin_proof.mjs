@@ -109,6 +109,19 @@ export function assertReleaseAdminProof(evidence) {
         `release admin proof missing local prerequisite role URL: ${prerequisiteId}`,
       );
     }
+    const visitedDestination =
+      evidence.adminRoleSurface?.visitedLocalPrerequisiteDestinations?.find(
+        (destination) =>
+          destination?.id === prerequisiteId &&
+          destination.clickedThrough === true &&
+          typeof destination.auditId === "string" &&
+          typeof destination.detailRoleUrl === "string",
+      );
+    if (visitedDestination === undefined) {
+      throw new Error(
+        `release admin proof did not navigate local prerequisite: ${prerequisiteId}`,
+      );
+    }
   }
   for (const itemId of evidence.generatedFrom?.unprovenIds ?? requiredUnprovenItems) {
     if (!evidence.adminRoleSurface?.visibleUnproven?.includes(itemId)) {

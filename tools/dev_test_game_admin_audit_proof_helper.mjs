@@ -184,6 +184,15 @@ export async function proveAdminAuditDetail({
       ids: requiredRelatedLinks,
     });
     await assertAdminAuditBodyText({ page, auditId, forbiddenText });
+    const visitedLocalPrerequisiteDestinations =
+      await visitLocalPrerequisiteDestinations({
+        page,
+        frontendBaseUrl,
+        detailUrl,
+        game,
+        ids: requiredLocalPrerequisites,
+        forbiddenText,
+      });
     const visibleRelatedDestinations = [];
     for (const destination of requiredRelatedDestinations) {
       const linkId = String(destination.linkId ?? "");
@@ -283,6 +292,9 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleLocalPrerequisiteRoleUrls).length === 0
         ? {}
         : { visibleLocalPrerequisiteRoleUrls }),
+      ...(visitedLocalPrerequisiteDestinations.length === 0
+        ? {}
+        : { visitedLocalPrerequisiteDestinations }),
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
@@ -346,6 +358,65 @@ async function waitForLocalPrerequisiteRoleUrls({ page, ids }) {
     roleUrls[id] = href;
   }
   return roleUrls;
+}
+
+async function visitLocalPrerequisiteDestinations({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  ids,
+  forbiddenText,
+}) {
+  const destinations = [];
+  for (const id of ids) {
+    await page.goto(detailUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const link = page.getByTestId(`admin-audit-local-prerequisite-role-url-${id}`);
+    await link.waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const href = await link.getAttribute("href");
+    if (typeof href !== "string" || href.trim() === "") {
+      throw new Error(`admin-audit-local-prerequisite-role-url-${id} missing href`);
+    }
+    const expectedUrl = new URL(href, frontendBaseUrl);
+    const expectedGame = expectedUrl.searchParams.get("game");
+    if (expectedGame !== game) {
+      throw new Error(
+        `admin-audit-local-prerequisite-role-url-${id} points at ${expectedGame} instead of ${game}`,
+      );
+    }
+    await Promise.all([
+      page.waitForURL(expectedUrl.toString(), { timeout: 15000 }),
+      link.click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const destinationAuditId = expectedUrl.pathname.split("/").filter(Boolean).pop();
+    if (destinationAuditId === undefined || destinationAuditId === "") {
+      throw new Error(`admin-audit-local-prerequisite-role-url-${id} has no audit id`);
+    }
+    await assertAdminAuditBodyText({
+      page,
+      auditId: destinationAuditId,
+      forbiddenText,
+    });
+    destinations.push({
+      id,
+      auditId: destinationAuditId,
+      detailRoleUrl: `${expectedUrl.pathname}?game=<seeded-game>`,
+      clickedThrough: true,
+    });
+  }
+  return destinations;
 }
 
 async function readRowStatuses({ page, prefix, ids }) {
