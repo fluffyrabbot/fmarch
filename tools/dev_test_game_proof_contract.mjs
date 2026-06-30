@@ -385,12 +385,79 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ),
     }),
     lane("action-loop", "Day/night action submission and resolution", {
+      hostRoleUrl: verification.actionLoop?.dayNightTransition?.hostRoleUrl ?? null,
+      actionRoleUrl: verification.actionLoop?.dayNightTransition?.actionRoleUrl ?? null,
+      normalPlayerRoleUrl:
+        verification.actionLoop?.dayNightTransition?.normalPlayerRoleUrl ?? null,
+      dayPhase:
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface
+          ?.commandState?.phase?.phaseId ?? null,
+      dayLocked:
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface
+          ?.commandState?.phase?.locked ?? null,
+      nightPhase:
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.commandState
+          ?.phase?.phaseId ?? null,
+      nightActionButtons:
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.buttons?.map(
+          (button) => button.action,
+        ) ?? null,
+      normalPlayerActionCount:
+        verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
+          ?.commandActions?.length ?? null,
       invalidActionError: verification.actionLoop?.invalidAction?.error ?? null,
       legalActionState: verification.actionLoop?.legalAction?.state ?? null,
       resolvedTargetAlive: verification.actionLoop?.resolvedTargetSlot?.alive ?? null,
       advancedPhase: verification.actionLoop?.d02Phase?.phaseId ?? null,
       passed:
         verification.actionLoop?.status === "passed" &&
+        verification.actionLoop?.dayNightTransition?.status === "passed" &&
+        typeof verification.actionLoop?.dayNightTransition?.hostRoleUrl === "string" &&
+        verification.actionLoop?.dayNightTransition?.hostRoleUrl.includes(
+          `/g/${session?.game ?? ""}/host`,
+        ) === true &&
+        typeof verification.actionLoop?.dayNightTransition?.actionRoleUrl === "string" &&
+        verification.actionLoop?.dayNightTransition?.actionRoleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        typeof verification.actionLoop?.dayNightTransition?.normalPlayerRoleUrl ===
+          "string" &&
+        verification.actionLoop?.dayNightTransition?.normalPlayerRoleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        verification.actionLoop?.dayNightTransition?.resolveDayState === "ack" &&
+        verification.actionLoop?.dayNightTransition?.advanceNightState === "ack" &&
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface
+          ?.commandState?.phase?.phaseId === "D01" &&
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface
+          ?.commandState?.phase?.locked === true &&
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface?.buttons?.some(
+          (button) => String(button.action ?? "").startsWith("submit_action"),
+        ) === false &&
+        verification.actionLoop?.dayNightTransition?.dayLockedActionSurface?.buttons?.some(
+          (button) => String(button.action ?? "").startsWith("submit_vote"),
+        ) === false &&
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.commandState
+          ?.phase?.phaseId === "N01" &&
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.commandState
+          ?.phase?.locked === false &&
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.commandState?.actions?.some(
+          (action) => action.templateId === "factional_kill",
+        ) === true &&
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.buttons?.some(
+          (button) => button.action === "submit_action:factional_kill" && !button.disabled,
+        ) === true &&
+        verification.actionLoop?.dayNightTransition?.nightActionSurface?.buttons?.some(
+          (button) => button.action === "submit_invalid_action:factional_kill",
+        ) === true &&
+        verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface?.phase
+          ?.phaseId === "N01" &&
+        verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
+          ?.commandActions?.length === 0 &&
+        verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
+          ?.factionalKillVisible === false &&
+        verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
+          ?.directRejectError === "InvalidTarget" &&
         verification.actionLoop?.invalidAction?.error === "InvalidTarget" &&
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&

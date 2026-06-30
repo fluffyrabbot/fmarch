@@ -197,6 +197,97 @@ assert.match(session.verification.privateChannel.denied.recoveredUrl, /\/$/);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");
+assert.equal(session.verification.actionLoop.dayNightTransition.status, "passed");
+assert.match(
+  session.verification.actionLoop.dayNightTransition.hostRoleUrl,
+  new RegExp(`/g/${session.game}/host`),
+);
+assert.match(
+  session.verification.actionLoop.dayNightTransition.actionRoleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.match(
+  session.verification.actionLoop.dayNightTransition.normalPlayerRoleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.resolveDayState,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.advanceNightState,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.dayLockedActionSurface.commandState
+    .phase.phaseId,
+  "D01",
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.dayLockedActionSurface.commandState
+    .phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.dayLockedActionSurface.buttons.some(
+    (button) => String(button.action ?? "").startsWith("submit_action"),
+  ),
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.dayLockedActionSurface.buttons.some(
+    (button) => String(button.action ?? "").startsWith("submit_vote"),
+  ),
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.nightActionSurface.commandState
+    .phase.phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.nightActionSurface.commandState
+    .phase.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.nightActionSurface.commandState.actions.some(
+    (action) => action.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.nightActionSurface.buttons.some(
+    (button) => button.action === "submit_action:factional_kill" && !button.disabled,
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.nightActionSurface.buttons.some(
+    (button) => button.action === "submit_invalid_action:factional_kill",
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.normalPlayerNightSurface.phase
+    .phaseId,
+  "N01",
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.normalPlayerNightSurface
+    .commandActions.length,
+  0,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.normalPlayerNightSurface
+    .factionalKillVisible,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.dayNightTransition.normalPlayerNightSurface
+    .directRejectError,
+  "InvalidTarget",
+);
 assert.equal(session.verification.actionLoop.deadlineAdvance.status, "passed");
 assert.equal(
   session.verification.actionLoop.deadlineAdvance.advance.commandStatus.requestEnvelope.body.body

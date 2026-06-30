@@ -2494,6 +2494,18 @@ async function verifySeededActionLoop({
   await expectHostPhaseActions(hostPage, ["resolve_phase", "lock_thread"]);
   const resolveDay = await confirmHostAction(hostPage, "resolve_phase");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D01", locked: true });
+  await actionPage.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+  );
+  const d01LockedActionSurface = {
+    roleUrl: actionPage.url(),
+    commandState: await actionPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    ),
+    buttons: await playerCommandButtons(actionPage),
+  };
   const staleDeadlineAdvanceSetup = await freezeStaleDeadlineAdvancePage({
     staleHostPage,
     game,
@@ -2512,10 +2524,6 @@ async function verifySeededActionLoop({
     game,
   });
   await waitForHostProjectionPhase(hostPage, { phaseId: "N01", locked: false });
-  const playerActionBoundary = await verifySeededPlayerActionBoundary({
-    playerPage,
-    game,
-  });
 
   await actionPage.locator('[data-action="submit_invalid_action:factional_kill"]').waitFor({
     state: "visible",
@@ -2523,6 +2531,74 @@ async function verifySeededActionLoop({
   const n01Phase = await actionPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
+  const n01ActionSurface = {
+    roleUrl: actionPage.url(),
+    commandState: await actionPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    ),
+    buttons: await playerCommandButtons(actionPage),
+  };
+  const playerActionBoundary = await verifySeededPlayerActionBoundary({
+    playerPage,
+    game,
+  });
+  const dayNightTransition = {
+    status: "passed",
+    hostRoleUrl: hostPage.url(),
+    actionRoleUrl: n01ActionSurface.roleUrl,
+    normalPlayerRoleUrl: playerActionBoundary.roleUrl,
+    resolveDayState: resolveDay.commandStatus?.state ?? null,
+    advanceNightState: advanceNight.commandStatus?.state ?? null,
+    dayLockedActionSurface: d01LockedActionSurface,
+    nightActionSurface: n01ActionSurface,
+    normalPlayerNightSurface: {
+      roleUrl: playerActionBoundary.roleUrl,
+      phase: playerActionBoundary.phase,
+      commandActions: playerActionBoundary.commandActions,
+      buttons: playerActionBoundary.commandButtons,
+      factionalKillVisible: playerActionBoundary.factionalKillVisible,
+      directRejectError:
+        playerActionBoundary.directFactionalKill?.serverEnvelope?.body?.body?.error ??
+        null,
+    },
+  };
+  if (
+    !dayNightTransition.hostRoleUrl.includes(`/g/${game}/host`) ||
+    !dayNightTransition.actionRoleUrl.includes(`/g/${game}`) ||
+    !dayNightTransition.normalPlayerRoleUrl.includes(`/g/${game}`) ||
+    dayNightTransition.resolveDayState !== "ack" ||
+    dayNightTransition.advanceNightState !== "ack" ||
+    d01LockedActionSurface.commandState?.phase?.phaseId !== "D01" ||
+    d01LockedActionSurface.commandState?.phase?.locked !== true ||
+    d01LockedActionSurface.buttons.some((button) =>
+      String(button.action ?? "").startsWith("submit_action"),
+    ) ||
+    d01LockedActionSurface.buttons.some((button) =>
+      String(button.action ?? "").startsWith("submit_vote"),
+    ) ||
+    n01ActionSurface.commandState?.phase?.phaseId !== "N01" ||
+    n01ActionSurface.commandState?.phase?.locked !== false ||
+    n01ActionSurface.commandState?.actions?.some(
+      (action) => action.templateId === "factional_kill",
+    ) !== true ||
+    !n01ActionSurface.buttons.some(
+      (button) => button.action === "submit_action:factional_kill" && !button.disabled,
+    ) ||
+    !n01ActionSurface.buttons.some(
+      (button) => button.action === "submit_invalid_action:factional_kill",
+    ) ||
+    playerActionBoundary.phase?.phaseId !== "N01" ||
+    playerActionBoundary.commandActions?.length !== 0 ||
+    playerActionBoundary.factionalKillVisible !== false ||
+    playerActionBoundary.directFactionalKill?.serverEnvelope?.body?.body?.error !==
+      "InvalidTarget"
+  ) {
+    throw new Error(
+      `day/night transition role surface drifted: ${JSON.stringify({
+        dayNightTransition,
+      })}`,
+    );
+  }
   const concurrentActionSetup = await freezeStaleActionPage({
     staleActionPage: concurrentActionPage,
     game,
@@ -2646,6 +2722,7 @@ async function verifySeededActionLoop({
     status: "passed",
     resolveDay,
     advanceNight,
+    dayNightTransition,
     n01Phase,
     invalidAction,
     invalidActionRecovery,
@@ -3232,12 +3309,14 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
       Array.isArray(window.__fmarchPlayerProjection?.commandState?.actions) &&
       window.__fmarchPlayerProjection.commandState.actions.length === 0,
   );
+  const roleUrl = playerPage.url();
   const phase = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.phase,
   );
   const commandActions = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState?.actions ?? [],
   );
+  const commandButtons = await playerCommandButtons(playerPage);
   const factionalKillVisible = await playerPage
     .locator('[data-action="submit_action:factional_kill"]')
     .isVisible()
@@ -3289,8 +3368,10 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
   }
   return {
     status: "passed",
+    roleUrl,
     phase,
     commandActions,
+    commandButtons,
     factionalKillVisible,
     directFactionalKill: {
       ...directRaw,
