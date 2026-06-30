@@ -1540,17 +1540,17 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
-      ["core-loop", "passed"],
+      ["core-loop", "passed: PhaseLocked vote reject, lock ack/unlock ack"],
       ["day-vote-resolution", "passed"],
       ["day-vote-no-lynch", "passed"],
-      ["action-loop", "passed"],
-      ["host-deadline-advance", "passed"],
+      ["action-loop", "passed: legal action ack, advanced D02"],
+      ["host-deadline-advance", "passed: D01 deadline -> N01"],
       ["stale-deadline-advance", "passed"],
-      ["invalid-action-recovery", "passed"],
-      ["resolution-receipts", "passed"],
+      ["invalid-action-recovery", "passed: Reject InvalidTarget, legal action visible true"],
+      ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["dead-player-recovery", "passed"],
-      ["player-action-boundary", "passed"],
-      ["private-channel", "passed"],
+      ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
+      ["private-channel", "passed: private:mafia_day_chat, denied 403"],
       ["host-votecount-publication", "passed"],
       ["host-lifecycle-control", "passed"],
       ["host-modkill-control", "passed"],
@@ -2168,6 +2168,52 @@ function identityLifecycleAuditFixture() {
 }
 
 function proofRunFixture() {
+  const laneEvidence = {
+    "core-loop": {
+      rejectedVoteError: "PhaseLocked",
+      lockState: "ack",
+      unlockState: "ack",
+    },
+    "action-loop": {
+      invalidActionError: "InvalidTarget",
+      legalActionState: "ack",
+      resolvedTargetAlive: false,
+      advancedPhase: "D02",
+    },
+    "host-deadline-advance": {
+      advanceState: "ack",
+      commandPhase: "D01",
+      observedAt: 1781928001,
+      deadline: 1781928000,
+      browserPhaseAfter: "N01",
+      apiPhaseAfter: "N01",
+    },
+    "invalid-action-recovery": {
+      rejectError: "InvalidTarget",
+      receiptActionId: "submit_invalid_action:factional_kill",
+      receiptState: "reject",
+      phase: "N01",
+      actionCount: 1,
+      legalActionVisible: true,
+      refreshKeys: ["notifications", "investigationResults", "commandState"],
+    },
+    "resolution-receipts": {
+      targetSlot: "slot-2",
+      hostSlotAlive: false,
+      targetNoticeStatus: "factional_kill",
+    },
+    "player-action-boundary": {
+      commandActionCount: 0,
+      factionalKillVisible: false,
+      directRejectError: "InvalidTarget",
+      phaseAfterReject: "N01",
+    },
+    "private-channel": {
+      channel: "private:mafia_day_chat",
+      allowedState: "ack",
+      deniedStatus: 403,
+    },
+  };
   const lanes = [
     "browser-entry",
     "cohost-console",
@@ -2268,7 +2314,12 @@ function proofRunFixture() {
     "stale-host-deadline-reload",
     "stale-cohost-deadline",
     "stale-cohost-deadline-reload",
-  ].map((id) => ({ id, label: id, status: "passed", evidence: {} }));
+  ].map((id) => ({
+    id,
+    label: id,
+    status: "passed",
+    evidence: laneEvidence[id] ?? {},
+  }));
   return {
     version: 1,
     proof: "dev-test-game-proof-run",

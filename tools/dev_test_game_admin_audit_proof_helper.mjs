@@ -144,6 +144,11 @@ export async function proveAdminAuditDetail({
       ids: requiredChecks,
       expectedStatuses: requiredCheckStatuses,
     });
+    const visibleCheckStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-check",
+      ids: Object.keys(requiredCheckStatuses),
+    });
     const visibleScenarios = await waitForRows({
       page,
       prefix: "admin-audit-scenario",
@@ -230,6 +235,9 @@ export async function proveAdminAuditDetail({
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       ...(visibleChecks.length === 0 ? {} : { visibleChecks }),
+      ...(Object.keys(visibleCheckStatuses).length === 0
+        ? {}
+        : { visibleCheckStatuses }),
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
@@ -276,6 +284,14 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
     visible.push(id);
   }
   return visible;
+}
+
+async function readRowStatuses({ page, prefix, ids }) {
+  const statuses = {};
+  for (const id of ids) {
+    statuses[id] = await page.getByTestId(`${prefix}-${id}`).innerText();
+  }
+  return statuses;
 }
 
 async function startFrontend() {

@@ -1951,7 +1951,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
         const lane = laneById.get(id);
         return Object.freeze({
           id,
-          status: String(lane.status),
+          status: coreLoopLaneStatus(lane),
         });
       }),
     ),
@@ -1965,6 +1965,32 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
       productionReady: proofRun.productionReady === true,
     }),
   });
+}
+
+function coreLoopLaneStatus(lane) {
+  const status = String(lane?.status ?? "unknown");
+  const evidence =
+    lane?.evidence !== null && typeof lane?.evidence === "object"
+      ? lane.evidence
+      : {};
+  switch (lane?.id) {
+    case "core-loop":
+      return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote reject, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
+    case "action-loop":
+      return `${status}: legal action ${String(evidence.legalActionState ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
+    case "host-deadline-advance":
+      return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
+    case "invalid-action-recovery":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
+    case "player-action-boundary":
+      return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
+    case "private-channel":
+      return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
+    case "resolution-receipts":
+      return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
+    default:
+      return status;
+  }
 }
 
 export function appendLocalHardeningAudit(audit, proofRun, { game }) {
