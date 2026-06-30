@@ -181,6 +181,20 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
     [["SlotOccupant", "slot-2"]],
   );
 
+  const normal = await resolveAuthenticatedSession({
+    cookies: fixtureCookieJar("fixture-normal"),
+    request: requestFor("/g/midsummer?private=notification-1"),
+    env: { FMARCH_FRONTEND_FIXTURE_SESSION: "1" },
+  });
+  assert.equal(normal.principalUserId, "player_rowan");
+  assert.deepEqual(
+    normal.resolvedCapabilities.map((capability) => [
+      capability.kind,
+      capability.slot,
+    ]),
+    [["SlotOccupant", "slot-4"]],
+  );
+
   const host = await resolveAuthenticatedSession({
     cookies: fixtureCookieJar("fixture-host"),
     request: requestFor("/g/midsummer/host"),

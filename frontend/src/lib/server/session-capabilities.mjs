@@ -165,6 +165,18 @@ function fixtureSession({ token, context }) {
           },
         ]),
       });
+    case "fixture-normal":
+      return Object.freeze({
+        principalUserId: "player_rowan",
+        resolvedCapabilities: normalizeCapabilities([
+          {
+            kind: "SlotOccupant",
+            game,
+            slot: "slot-4",
+            source: "fixture",
+          },
+        ]),
+      });
     case "fixture-host":
       return Object.freeze({
         principalUserId: "host_h",

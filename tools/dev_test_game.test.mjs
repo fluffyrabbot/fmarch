@@ -9286,6 +9286,7 @@ function coreLoopAdminProofFixture() {
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
+    normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
     hostPhaseTransitionSurface: hostPhaseTransitionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
@@ -9588,6 +9589,63 @@ function targetResolutionReceiptSurfaceFixture() {
         "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_ilya",
       commandStateEndpoint:
         "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_ilya&slot_id=slot-2",
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function normalResolutionPrivacySurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    visitedRolePath:
+      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    normalSlot: "slot-4",
+    principalUserId: "player_rowan",
+    checkpoint: {
+      phaseId: "N01",
+      phaseState: "locked",
+      actorSlot: "slot-4",
+      actionState: "disabled:phase locked",
+      receiptState: "idle",
+      statusText: "Player action unavailable: phase locked",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 0,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    privateEmptyText: "No private results visible to this session.",
+    targetReceiptVisible: false,
+    projectionCommandState: {
+      actorSlot: "slot-4",
+      actorAlive: true,
+      actorStatus: "alive",
+      phase: {
+        phaseId: "N01",
+        locked: true,
+      },
+      actions: [],
+      boundary:
+        "Seeded browser normal role received no target-only private receipt after N01 resolution.",
+    },
+    projectionNotifications: [],
+    resyncFromSeq: 901,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-4",
+    },
+    resyncSnapshotNotifications: [],
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_rowan",
+      commandStateEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_rowan&slot_id=slot-4",
     },
     rawInviteTokensVisible: false,
     releaseReady: false,

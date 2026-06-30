@@ -1893,6 +1893,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
+  assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
   assertCoreLoopHostPhaseTransitionSurface(proof.hostPhaseTransitionSurface);
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
@@ -2224,6 +2225,63 @@ function assertCoreLoopTargetResolutionReceiptSurface(targetSurface) {
       `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`
   ) {
     throw new Error("core-loop admin proof missing target resolution receipt surface");
+  }
+}
+
+function assertCoreLoopNormalResolutionPrivacySurface(normalSurface) {
+  const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  if (
+    normalSurface?.status !== "passed" ||
+    normalSurface.clickedThroughFromRoleUrl !== true ||
+    normalSurface.releaseReady !== false ||
+    normalSurface.productionReady !== false ||
+    normalSurface.rawInviteTokensVisible !== false ||
+    normalSurface.normalSlot !== "slot-4" ||
+    normalSurface.principalUserId !== "player_rowan" ||
+    normalSurface.targetReceiptVisible !== false ||
+    typeof normalSurface.sourceRoleUrl !== "string" ||
+    !normalSurface.sourceRoleUrl.includes("/g/") ||
+    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof normalSurface.visitedRolePath !== "string" ||
+    !normalSurface.visitedRolePath.includes("/g/") ||
+    !normalSurface.visitedRolePath.includes("private=notification-1") ||
+    normalSurface.surfaceTestId !== "player-surface" ||
+    normalSurface.checkpoint?.phaseId !== "N01" ||
+    normalSurface.checkpoint.phaseState !== "locked" ||
+    normalSurface.checkpoint.actorSlot !== "slot-4" ||
+    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
+    normalSurface.checkpoint.receiptState !== "idle" ||
+    !String(normalSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: phase locked") ||
+    normalSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    normalSurface.privateQueueBoundary.count !== 0 ||
+    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    !String(normalSurface.privateEmptyText ?? "").includes(
+      "No private results visible",
+    ) ||
+    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.projectionCommandState?.actorAlive !== true ||
+    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
+    normalSurface.projectionCommandState?.phase?.phaseId !== "N01" ||
+    normalSurface.projectionCommandState?.phase?.locked !== true ||
+    normalSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
+      "normal role received no target-only private receipt",
+    ) ||
+    normalSurface.projectionNotifications?.length !== 0 ||
+    normalSurface.resyncFromSeq !== 901 ||
+    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
+    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
+    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+  ) {
+    throw new Error("core-loop admin proof missing normal resolution privacy surface");
   }
 }
 

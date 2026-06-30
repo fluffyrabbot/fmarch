@@ -120,6 +120,14 @@ await runAdminAuditProof({
           spineRows.roleUrlHrefs["d01-n01-d02-target"],
         ),
       });
+    const normalResolutionPrivacySurface =
+      await proveNormalResolutionPrivacySurface({
+        browser,
+        frontendBaseUrl,
+        roleUrl: normalResolutionPrivacyRoleUrl(
+          spineRows.roleUrlHrefs["d01-n01-d02-normalPlayer"],
+        ),
+      });
     const hostPhaseTransitionSurface = await proveHostPhaseTransitionSurface({
       browser,
       frontendBaseUrl,
@@ -138,6 +146,7 @@ await runAdminAuditProof({
       hostRoleSurface,
       playerRoleSurface,
       targetResolutionReceiptSurface,
+      normalResolutionPrivacySurface,
       hostPhaseTransitionSurface,
       privateChannelRoleSurface,
     };
@@ -162,6 +171,7 @@ await runAdminAuditProof({
     hostRoleSurface: surfaces.hostRoleSurface,
     playerRoleSurface: surfaces.playerRoleSurface,
     targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
+    normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
     hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
@@ -1768,6 +1778,161 @@ async function installTargetResolutionReceiptBrowserRoutes(page) {
   });
 }
 
+async function proveNormalResolutionPrivacySurface({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  try {
+    await installNormalResolutionPrivacyBrowserRoutes(page);
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-normal",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const resyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(901);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-4" &&
+        Array.isArray(window.__fmarchPlayerProjection?.notifications) &&
+        window.__fmarchPlayerProjection.notifications.length === 0,
+      null,
+      { timeout: 15000 },
+    );
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    await checkpoint.waitFor({ state: "visible", timeout: 15000 });
+    const privateQueue = page.locator('[data-component="player-private-queue"]');
+    await privateQueue.waitFor({ state: "visible", timeout: 15000 });
+    const privateEmpty = page.getByTestId("player-private-empty");
+    await privateEmpty.waitFor({ state: "visible", timeout: 15000 });
+    const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+    const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
+    const checkpointActorSlot = await checkpoint.getAttribute("data-actor-slot");
+    const checkpointActionState = await checkpoint.getAttribute("data-action-state");
+    const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
+    const privateBoundaryStatus = await privateQueue.getAttribute(
+      "data-boundary-status",
+    );
+    const privateCount = Number.parseInt(
+      await page.getByTestId("player-private-count").innerText(),
+      10,
+    );
+    const privateBoundaryText = await page
+      .getByTestId("player-private-boundary")
+      .innerText();
+    const privateEmptyText = await privateEmpty.innerText();
+    const actionStatusText = await page
+      .getByTestId("player-action-submission-status")
+      .innerText();
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const coldLoadEndpoints = await page.evaluate(
+      () => window.__fmarchPlayerColdLoadEndpoints,
+    );
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("normal resolution privacy proof leaked an invite URL token");
+    }
+    if (bodyText.includes("player_killed") || bodyText.includes("factional_kill")) {
+      throw new Error("normal resolution privacy proof rendered target-only receipt");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      normalSlot: "slot-4",
+      principalUserId: "player_rowan",
+      checkpoint: {
+        phaseId: checkpointPhaseId,
+        phaseState: checkpointPhaseState,
+        actorSlot: checkpointActorSlot,
+        actionState: checkpointActionState,
+        receiptState: checkpointReceiptState,
+        statusText: actionStatusText,
+      },
+      privateQueueBoundary: {
+        status: privateBoundaryStatus,
+        count: privateCount,
+        text: privateBoundaryText,
+      },
+      privateEmptyText,
+      targetReceiptVisible: false,
+      projectionCommandState: projection?.commandState ?? null,
+      projectionNotifications: projection?.notifications ?? null,
+      resyncFromSeq: 901,
+      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
+      resyncSnapshotNotifications: resyncSnapshot?.notifications ?? null,
+      coldLoadEndpoints,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function installNormalResolutionPrivacyBrowserRoutes(page) {
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 901,
+          stream_seq: 901,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Night 1 has resolved.",
+          occurred_at: 1781841600,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, seededNormalResolvedCommandState({
+      boundary:
+        "Seeded browser normal role received no target-only private receipt after N01 resolution.",
+    }));
+  });
+}
+
 async function provePlayerActionSubmissionClick({ page, commandRequests }) {
   const actionButton = page.locator(
     '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
@@ -2290,6 +2455,27 @@ function seededTargetKilledCommandState({ boundary }) {
   };
 }
 
+function seededNormalResolvedCommandState({ boundary }) {
+  return {
+    game: "seeded-normal-resolved",
+    actorSlot: "slot-4",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: null,
+    gameCompleted: false,
+    phase: {
+      phaseId: "N01",
+      phaseKind: "Night",
+      phaseNumber: 1,
+      locked: true,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -2426,6 +2612,15 @@ function targetResolutionReceiptRoleUrl(roleUrl) {
   return parsed.toString();
 }
 
+function normalResolutionPrivacyRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("normal resolution proof missing source role URL");
+  }
+  const parsed = new URL(roleUrl);
+  parsed.search = "?private=notification-1";
+  return parsed.toString();
+}
+
 export function assertCoreLoopAdminProof(evidence) {
   if (
     evidence?.version !== 1 ||
@@ -2499,6 +2694,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   assertTargetResolutionReceiptSurface(evidence.targetResolutionReceiptSurface);
+  assertNormalResolutionPrivacySurface(evidence.normalResolutionPrivacySurface);
   assertHostPhaseTransitionSurface(evidence.hostPhaseTransitionSurface);
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
@@ -2790,6 +2986,67 @@ function assertTargetResolutionReceiptSurface(targetSurface) {
     throw new Error(
       `core-loop admin proof missing target resolution receipt surface: ${JSON.stringify(
         targetSurface,
+      )}`,
+    );
+  }
+}
+
+function assertNormalResolutionPrivacySurface(normalSurface) {
+  const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  if (
+    normalSurface?.status !== "passed" ||
+    normalSurface.clickedThroughFromRoleUrl !== true ||
+    normalSurface.releaseReady !== false ||
+    normalSurface.productionReady !== false ||
+    normalSurface.rawInviteTokensVisible !== false ||
+    normalSurface.normalSlot !== "slot-4" ||
+    normalSurface.principalUserId !== "player_rowan" ||
+    normalSurface.targetReceiptVisible !== false ||
+    typeof normalSurface.sourceRoleUrl !== "string" ||
+    !normalSurface.sourceRoleUrl.includes("/g/") ||
+    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof normalSurface.visitedRolePath !== "string" ||
+    !normalSurface.visitedRolePath.includes("/g/") ||
+    !normalSurface.visitedRolePath.includes("private=notification-1") ||
+    normalSurface.surfaceTestId !== "player-surface" ||
+    normalSurface.checkpoint?.phaseId !== "N01" ||
+    normalSurface.checkpoint.phaseState !== "locked" ||
+    normalSurface.checkpoint.actorSlot !== "slot-4" ||
+    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
+    normalSurface.checkpoint.receiptState !== "idle" ||
+    !String(normalSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: phase locked") ||
+    normalSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    normalSurface.privateQueueBoundary.count !== 0 ||
+    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    !String(normalSurface.privateEmptyText ?? "").includes(
+      "No private results visible",
+    ) ||
+    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.projectionCommandState?.actorAlive !== true ||
+    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
+    normalSurface.projectionCommandState?.phase?.phaseId !== "N01" ||
+    normalSurface.projectionCommandState?.phase?.locked !== true ||
+    normalSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
+      "normal role received no target-only private receipt",
+    ) ||
+    normalSurface.projectionNotifications?.length !== 0 ||
+    normalSurface.resyncFromSeq !== 901 ||
+    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
+    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
+    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+  ) {
+    throw new Error(
+      `core-loop admin proof missing normal resolution privacy surface: ${JSON.stringify(
+        normalSurface,
       )}`,
     );
   }
