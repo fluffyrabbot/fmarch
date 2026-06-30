@@ -25,6 +25,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedEvidenceLaneCommand,
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
@@ -163,6 +167,15 @@ export function buildDevTestGameSpineManifest({
         dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
         roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
       },
+      hostedEvidenceLane: {
+        script: devTestGameHostedEvidenceLaneCommand,
+        proofArtifact: devTestGameHostedEvidenceLanePath,
+        dependsOn: [
+          devTestGameHostedConcurrentRaceMatrixPath,
+          devTestGameHostedTargetPreflightPath,
+        ],
+        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+      },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -179,6 +192,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
+          devTestGameHostedEvidenceLanePath,
         ],
       },
       nextActionAdminProof: {
@@ -220,6 +234,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
+          devTestGameHostedEvidenceLanePath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -267,6 +282,7 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
+      devTestGameHostedEvidenceLanePath,
       devTestGameHostedOpsSignalsPath,
       devTestGameReleaseRunbookPath,
       devTestGameProofGraphPath,
@@ -338,6 +354,14 @@ export function buildDevTestGameSpineManifest({
         evidence: [
           devTestGameHostedTargetPreflightCommand,
           devTestGameHostedTargetPreflightPath,
+        ],
+      },
+      {
+        id: "hosted-evidence-lane-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedEvidenceLaneCommand,
+          devTestGameHostedEvidenceLanePath,
         ],
       },
       {
@@ -487,6 +511,22 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest hosted target preflight artifact drifted: ${manifest.commands.hostedTargetPreflight.proofArtifact}`,
     );
   }
+  if (
+    manifest.commands?.hostedEvidenceLane?.script !==
+    devTestGameHostedEvidenceLaneCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane command drifted: ${manifest.commands?.hostedEvidenceLane?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLane.proofArtifact !==
+    devTestGameHostedEvidenceLanePath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane artifact drifted: ${manifest.commands.hostedEvidenceLane.proofArtifact}`,
+    );
+  }
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
       `spine manifest release runbook command drifted: ${manifest.commands?.releaseRunbook?.script}`,
@@ -554,6 +594,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameHostedTargetPreflightPath,
+    devTestGameHostedEvidenceLanePath,
     devTestGameHostedOpsSignalsPath,
     devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
@@ -585,6 +626,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
     "hosted-target-preflight-recorded",
+    "hosted-evidence-lane-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
@@ -611,7 +653,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json") ||
     !nextAction.dependsOn.includes(devTestGameRaceCoveragePath) ||
     !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath) ||
-    !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath)
+    !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath) ||
+    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLanePath)
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }

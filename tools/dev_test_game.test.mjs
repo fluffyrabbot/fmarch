@@ -87,6 +87,12 @@ import {
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
+  assertDevTestGameHostedEvidenceLane,
+  devTestGameHostedEvidenceLaneCommand,
+  devTestGameHostedEvidenceLanePath,
+  runDevTestGameHostedEvidenceLane,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
   assertDevTestGameHostedMatrixRawEvidence,
   buildDevTestGameHostedMatrixRawEvidence,
   devTestGameHostedMatrixRawEvidenceCommand,
@@ -96,6 +102,10 @@ import {
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_runbook.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -353,11 +363,35 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameRaceCoveragePath,
     ],
   });
+  assert.deepEqual(manifest.commands.hostedOpsSignals, {
+    script: devTestGameHostedOpsSignalsCommand,
+    proofArtifact: devTestGameHostedOpsSignalsPath,
+    dependsOn: [
+      "target/dev-test-game/ops-artifacts.json",
+      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameHostedConcurrentRaceMatrixPath,
+    ],
+  });
   assert.deepEqual(manifest.commands.hostedTargetPreflight, {
     script: devTestGameHostedTargetPreflightCommand,
     proofArtifact: devTestGameHostedTargetPreflightPath,
     dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
     roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  });
+  assert.deepEqual(manifest.commands.hostedEvidenceLane, {
+    script: devTestGameHostedEvidenceLaneCommand,
+    proofArtifact: devTestGameHostedEvidenceLanePath,
+    dependsOn: [
+      devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedTargetPreflightPath,
+    ],
+    roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  });
+  assert.deepEqual(manifest.commands.releaseRunbook, {
+    script: devTestGameReleaseRunbookCommand,
+    proofArtifact: devTestGameReleaseRunbookPath,
+    dependsOn: ["target/dev-test-game/release-readiness-checklist.json"],
+    roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
@@ -369,6 +403,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameRaceCoveragePath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
+      devTestGameHostedEvidenceLanePath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -469,7 +504,10 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameRaceCoveragePath));
   assert(manifest.artifacts.includes(devTestGameHostedConcurrentRaceMatrixPath));
+  assert(manifest.artifacts.includes(devTestGameHostedOpsSignalsPath));
   assert(manifest.artifacts.includes(devTestGameHostedTargetPreflightPath));
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLanePath));
+  assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
@@ -1024,7 +1062,11 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assertDevTestGameNextAction(blockedPreflightAction);
   assert.equal(
     blockedPreflightAction.nextAction.command,
-    "npm run test:dev-test-game-hosted-target-preflight",
+    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+  );
+  assert.equal(
+    blockedPreflightAction.nextAction.unproven.proofTarget,
+    devTestGameHostedEvidenceLanePath,
   );
   assert.equal(
     blockedPreflightAction.nextAction.unproven.roleUrl,
@@ -1045,7 +1087,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assertDevTestGameNextAction(passedPreflightAction);
   assert.equal(
     passedPreflightAction.nextAction.command,
-    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
   assert.equal(
     passedPreflightAction.nextAction.unproven.proofTarget,
@@ -1061,7 +1103,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.equal(
     passedPreflightAction.releaseReadinessTrace.candidates[0].command,
-    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
   assert.equal(
     passedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
@@ -1071,6 +1113,31 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     passedPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
     devTestGameHostedMatrixExternalEvidencePath,
   );
+});
+
+test("dev test-game hosted evidence lane records blocked preflight state", async () => {
+  const lane = await runDevTestGameHostedEvidenceLane({
+    env: {},
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+
+  assertDevTestGameHostedEvidenceLane(lane);
+  assert.equal(lane.status, "blocked");
+  assert.equal(lane.releaseReady, false);
+  assert.equal(lane.productionReady, false);
+  assert.equal(lane.preflightStatus, "blocked");
+  assert.deepEqual(lane.blockedCheckIds, [
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+  ]);
+  assert.equal(lane.nextCommand, `npm run ${devTestGameHostedEvidenceLaneCommand}`);
+  assert.equal(lane.nextProofTarget, devTestGameHostedEvidenceLanePath);
+  assert.deepEqual(lane.generatedFrom, {
+    hostedTargetPreflight: devTestGameHostedTargetPreflightPath,
+  });
 });
 
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {

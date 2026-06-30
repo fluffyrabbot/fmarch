@@ -18,12 +18,15 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedEvidenceLaneCommand,
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
   devTestGameHostedMatrixExternalEvidenceCommand,
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
-  devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
@@ -1359,9 +1362,9 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   if (hostedTargetPreflight?.status === "passed") {
     return {
       priority: 0,
-      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
       buildSlice:
-        "Attach externally reachable hosted frontend/API evidence to the hosted matrix lane now that the hosted target preflight passed.",
+        "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
       proofTarget: devTestGameHostedMatrixExternalEvidencePath,
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
@@ -1378,10 +1381,10 @@ const localBuildableReleaseReadinessItems = new Map([
     "hosted-deployment",
     {
       priority: 0,
-      command: `npm run ${devTestGameHostedTargetPreflightCommand}`,
+      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
       buildSlice:
-        "Create the hosted target preflight handoff before attaching externally reachable frontend/API evidence to the hosted matrix lane.",
-      proofTarget: devTestGameHostedTargetPreflightPath,
+        "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
+      proofTarget: devTestGameHostedEvidenceLanePath,
       roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-target-preflight",
       proofBoundary:
