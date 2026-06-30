@@ -10965,6 +10965,13 @@ async function submitConcurrentHostMixedAdvanceRace({
     );
   }
 
+  const roleReloadAfterRace = await verifyConcurrentHostMixedAdvanceRaceReload({
+    normalAdvancePage,
+    deadlineAdvancePage,
+    game,
+    apiBaseUrl,
+  });
+
   return {
     status: "passed",
     actionId: "mixed_advance_phase",
@@ -10990,8 +10997,93 @@ async function submitConcurrentHostMixedAdvanceRace({
     normalActivityRow,
     deadlineActivityRow,
     apiPhaseAfterRace: hostStateAfterRace.phase,
+    roleReloadAfterRace,
     proof:
-      "Two seeded host role pages submitted D01 advance_phase and advance_phase_by_deadline concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget stale recovery, and both browser projections plus the API converged to open N01 with no carried deadline.",
+      "Two seeded host role pages submitted D01 advance_phase and advance_phase_by_deadline concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget stale recovery, both browser projections plus the API converged to open N01 with no carried deadline, and both host role URLs reloaded to the same open N01 controls.",
+  };
+}
+
+async function verifyConcurrentHostMixedAdvanceRaceReload({
+  normalAdvancePage,
+  deadlineAdvancePage,
+  game,
+  apiBaseUrl,
+}) {
+  const [normalReload, deadlineReload] = await Promise.all([
+    gotoHostConsole(normalAdvancePage, game),
+    gotoHostConsole(deadlineAdvancePage, game),
+  ]);
+  await Promise.all([
+    waitForHostProjectionPhase(normalAdvancePage, { phaseId: "N01", locked: false }),
+    waitForHostProjectionPhase(deadlineAdvancePage, {
+      phaseId: "N01",
+      locked: false,
+    }),
+  ]);
+  const [
+    normalPhaseAfterReload,
+    deadlinePhaseAfterReload,
+    normalPhaseActionsAfterReload,
+    deadlinePhaseActionsAfterReload,
+    normalDeadlineActionsAfterReload,
+    deadlineDeadlineActionsAfterReload,
+  ] = await Promise.all([
+    normalAdvancePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    deadlineAdvancePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    visibleHostControlActions(normalAdvancePage, "phase"),
+    visibleHostControlActions(deadlineAdvancePage, "phase"),
+    visibleHostControlActions(normalAdvancePage, "deadline"),
+    visibleHostControlActions(deadlineAdvancePage, "deadline"),
+  ]);
+  const hostStateAfterReload = await fetchHostConsoleState({ apiBaseUrl, game });
+  const requiredOpenPhaseActions = (actions) =>
+    actions.includes("resolve_phase") &&
+    actions.includes("lock_thread") &&
+    !actions.includes("advance_phase") &&
+    !actions.includes("unlock_thread") &&
+    !actions.includes("advance_phase_by_deadline");
+  if (
+    normalReload.status !== 200 ||
+    deadlineReload.status !== 200 ||
+    normalPhaseAfterReload?.id !== "N01" ||
+    normalPhaseAfterReload?.locked !== false ||
+    normalPhaseAfterReload?.deadline !== null ||
+    deadlinePhaseAfterReload?.id !== "N01" ||
+    deadlinePhaseAfterReload?.locked !== false ||
+    deadlinePhaseAfterReload?.deadline !== null ||
+    requiredOpenPhaseActions(normalPhaseActionsAfterReload) !== true ||
+    requiredOpenPhaseActions(deadlinePhaseActionsAfterReload) !== true ||
+    !normalDeadlineActionsAfterReload.includes("extend_deadline") ||
+    !deadlineDeadlineActionsAfterReload.includes("extend_deadline") ||
+    hostStateAfterReload.phase?.phase_id !== "N01" ||
+    hostStateAfterReload.phase?.locked !== false ||
+    hostStateAfterReload.phase?.deadline !== null
+  ) {
+    throw new Error(
+      `concurrent host mixed advance reload drifted: ${JSON.stringify({
+        normalReload,
+        deadlineReload,
+        normalPhaseAfterReload,
+        deadlinePhaseAfterReload,
+        normalPhaseActionsAfterReload,
+        deadlinePhaseActionsAfterReload,
+        normalDeadlineActionsAfterReload,
+        deadlineDeadlineActionsAfterReload,
+        apiPhase: hostStateAfterReload.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    normalRouteStatus: normalReload.status,
+    deadlineRouteStatus: deadlineReload.status,
+    normalPhaseAfterReload,
+    deadlinePhaseAfterReload,
+    normalPhaseActionsAfterReload,
+    deadlinePhaseActionsAfterReload,
+    normalDeadlineActionsAfterReload,
+    deadlineDeadlineActionsAfterReload,
+    apiPhaseAfterReload: hostStateAfterReload.phase,
   };
 }
 

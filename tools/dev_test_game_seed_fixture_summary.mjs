@@ -589,6 +589,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D01 advance_phase and advance_phase_by_deadline concurrently with distinct command ids, prove exactly one ACK plus one InvalidTarget recovery, and converge to the next open phase without duplicate deadline evidence.",
     }),
     scenario({
+      id: "concurrent-host-mixed-advance-race-reload",
+      title: "Concurrent host mixed advance reload",
+      role: "host",
+      provenBy: ["concurrent-host-mixed-advance-race-reload"].filter(hasLane),
+      note: "After host role pages race D01 advance_phase and advance_phase_by_deadline, both host role URLs reload to open N01 with current resolve/lock controls, no stale advance controls, no carried deadline, and matching API phase truth.",
+    }),
+    scenario({
       id: "stale-same-action-recovery",
       title: "Stale same action recovery",
       role: "actionPlayer",
@@ -816,6 +823,7 @@ function demoScenarios({ roles, laneIds }) {
         "public-player-complete-reload",
         "stale-player-complete-reload",
         "concurrent-host-mixed-advance-race",
+        "concurrent-host-mixed-advance-race-reload",
         "stale-host-resolve",
         "stale-host-resolve-reload",
         "stale-host-advance",
