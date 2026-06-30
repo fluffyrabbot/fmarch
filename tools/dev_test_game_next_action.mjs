@@ -22,6 +22,9 @@ import {
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   devTestGameHostedMatrixExternalEvidenceCommand,
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
@@ -1330,6 +1333,10 @@ const devSpineArtifactPriorities = new Map(
     ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
     ["race-coverage", "target/dev-test-game/race-coverage.json"],
     ["race-coverage-admin", "target/dev-test-game/race-coverage-admin-proof.json"],
+    ["hosted-concurrent-race-matrix", devTestGameHostedConcurrentRaceMatrixPath],
+    ["hosted-target-preflight", devTestGameHostedTargetPreflightPath],
+    ["hosted-evidence-lane-demo", devTestGameHostedEvidenceLaneDemoProofPath],
+    ["hosted-evidence-lane", devTestGameHostedEvidenceLanePath],
     ["release", "target/dev-test-game/release-admin-proof.json"],
     ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
     ["admin-spine-admin", "target/dev-test-game/admin-spine-admin-proof.json"],

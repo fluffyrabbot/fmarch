@@ -427,6 +427,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
+      devTestGameHostedEvidenceLaneDemoProofPath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -630,6 +631,67 @@ test("dev test-game next-action derives one local recovery command from the mani
         refreshCommand: "npm run test:dev-test-game-core-loop-admin-proof",
         refreshSource: "admin-spine-recovery",
         ageSeconds: 90000,
+        maxAgeSeconds: 86400,
+      },
+    ],
+  });
+  const missingDemoProofManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 0,
+        staleCount: 0,
+        missingCount: 1,
+      },
+      artifacts: [
+        {
+          id: "hosted-evidence-lane-demo",
+          label: "Hosted evidence lane demo proof",
+          path: devTestGameHostedEvidenceLaneDemoProofPath,
+          status: "missing",
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+  const missingDemoProofAction = buildDevTestGameNextAction(missingDemoProofManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+  assertDevTestGameNextAction(missingDemoProofAction);
+  assert.deepEqual(missingDemoProofAction.nextAction, {
+    command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    reason: "artifact-not-fresh",
+    status: "blocked",
+    artifact: {
+      id: "hosted-evidence-lane-demo",
+      label: "Hosted evidence lane demo proof",
+      path: devTestGameHostedEvidenceLaneDemoProofPath,
+      status: "missing",
+      refreshSource: "manifest-default",
+    },
+  });
+  assert.deepEqual(missingDemoProofAction.selectionTrace, {
+    strategy: "development-spine-priority",
+    candidateCount: 1,
+    selectedArtifactId: "hosted-evidence-lane-demo",
+    candidates: [
+      {
+        rank: 1,
+        id: "hosted-evidence-lane-demo",
+        label: "Hosted evidence lane demo proof",
+        path: devTestGameHostedEvidenceLaneDemoProofPath,
+        status: "missing",
+        priority: 19,
+        selected: true,
+        refreshCommand: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+        refreshSource: "manifest-default",
         maxAgeSeconds: 86400,
       },
     ],
@@ -937,6 +999,67 @@ test("dev test-game next-action derives one local recovery command from the mani
             "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
           requiredEvidence:
             "Passed next-action admin surface check in the generated release-readiness checklist",
+        },
+      ],
+    },
+  );
+  const missingDemoReadinessDependencyAction = buildDevTestGameNextAction(
+    freshManifest,
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeHostedEvidenceLaneDemoProofCheck: false,
+        unproven: [
+          {
+            id: "hosted-deployment",
+            status: "unproven",
+            requiredEvidence:
+              "Hosted API/frontend deployment proof with external health checks",
+          },
+        ],
+      }),
+    },
+  );
+  assertDevTestGameNextAction(missingDemoReadinessDependencyAction);
+  assert.deepEqual(missingDemoReadinessDependencyAction.nextAction, {
+    command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    reason: "release-readiness-local-check-missing",
+    status: "blocked",
+    localCheck: {
+      id: "local-hosted-evidence-lane-demo-proof",
+      status: "missing",
+      requiredEvidence:
+        "Passed local hosted evidence lane demo proof with synthetic external target warning",
+      buildSlice:
+        "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
+      proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    },
+  });
+  assert.deepEqual(
+    missingDemoReadinessDependencyAction.localReadinessDependencyTrace,
+    {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 1,
+      selectedCheckId: "local-hosted-evidence-lane-demo-proof",
+      candidates: [
+        {
+          rank: 1,
+          id: "local-hosted-evidence-lane-demo-proof",
+          status: "missing",
+          priority: 3,
+          selected: true,
+          command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+          buildSlice:
+            "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
+          proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
+          roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+          proofBoundary:
+            "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
+          requiredEvidence:
+            "Passed local hosted evidence lane demo proof with synthetic external target warning",
         },
       ],
     },
@@ -1376,7 +1499,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         true,
         devTestGameLiveProofCommand,
       ],
-      [2, "release", "missing", 17, false, "npm run test:dev-test-game-release-admin-proof"],
+      [2, "release", "missing", 21, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
     ],
   );
@@ -7534,6 +7657,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-hosted-evidence-lane-demo-proof",
     );
   assert.equal(hostedEvidenceLaneDemoCheck.status, "passed");
+  assert.equal(hostedEvidenceLaneDemoCheck.dependencyGated, true);
   assert.equal(hostedEvidenceLaneDemoCheck.demoOnly, true);
   assert.equal(hostedEvidenceLaneDemoCheck.syntheticExternalTarget, true);
   assert.equal(hostedEvidenceLaneDemoCheck.blockedLaneStatus, "blocked");
@@ -8080,6 +8204,7 @@ function devTestGameReleaseReadinessChecklistFixture({
   includeProofGraphHandoffCheck = true,
   includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
+  includeHostedEvidenceLaneDemoProofCheck = true,
 }) {
   return {
     version: 1,
@@ -8208,6 +8333,42 @@ function devTestGameReleaseReadinessChecklistFixture({
                 selectedReason: "release-readiness-unproven",
                 releaseReadinessCandidateCount: 1,
                 localReadinessDependencyCandidateCount: 0,
+              },
+            ]
+          : []),
+        ...(includeHostedEvidenceLaneDemoProofCheck
+          ? [
+              {
+                id: "local-hosted-evidence-lane-demo-proof",
+                label: "Local hosted evidence lane demo proof",
+                status: "passed",
+                dependencyGated: true,
+                evidence:
+                  "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+                proofBoundary:
+                  "Local demo proof for the hosted evidence lane pass path.",
+                demoOnly: true,
+                syntheticExternalTarget: true,
+                blockedLaneStatus: "blocked",
+                passedLaneStatus: "passed",
+                passedRoleUrl:
+                  "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+                externalEvidencePath:
+                  "target/dev-test-game/hosted-matrix-demo-external.json",
+                recovery: {
+                  command:
+                    "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
+                  buildSlice:
+                    "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
+                  proofTarget:
+                    "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+                  roleUrl:
+                    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+                  proofBoundary:
+                    "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed local hosted evidence lane demo proof with synthetic external target warning",
+                },
               },
             ]
           : []),

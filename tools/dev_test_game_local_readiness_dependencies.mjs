@@ -15,6 +15,13 @@ export const localProofFreshnessAdminSurfaceCheckId =
   "local-proof-freshness-admin-surface";
 export const localNextActionAdminSurfaceCheckId =
   "local-next-action-admin-surface";
+export const localHostedEvidenceLaneDemoProofCheckId =
+  "local-hosted-evidence-lane-demo-proof";
+
+const devTestGameHostedEvidenceLaneDemoProofCommand =
+  "test:dev-test-game-hosted-evidence-lane-demo-proof";
+const devTestGameHostedEvidenceLaneDemoProofPath =
+  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
 export const localReadinessDependencies = Object.freeze([
   Object.freeze({
@@ -58,6 +65,20 @@ export const localReadinessDependencies = Object.freeze([
       "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
       "Passed next-action admin surface check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
+    id: localHostedEvidenceLaneDemoProofCheckId,
+    label: "Local hosted evidence lane demo proof",
+    priority: 3,
+    command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    buildSlice:
+      "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
+    proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    proofBoundary:
+      "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed local hosted evidence lane demo proof with synthetic external target warning",
   }),
 ]);
 

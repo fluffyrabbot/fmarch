@@ -66,6 +66,10 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
         id: "local-next-action-admin-surface",
         auditId: "local-next-action",
       },
+      {
+        id: "local-hosted-evidence-lane-demo-proof",
+        auditId: "local-hosted-evidence-lane",
+      },
     ],
   );
   assert.deepEqual(

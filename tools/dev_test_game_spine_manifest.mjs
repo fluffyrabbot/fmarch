@@ -208,6 +208,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
           devTestGameHostedEvidenceLanePath,
+          devTestGameHostedEvidenceLaneDemoProofPath,
         ],
       },
       nextActionAdminProof: {
@@ -250,6 +251,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
           devTestGameHostedEvidenceLanePath,
+          devTestGameHostedEvidenceLaneDemoProofPath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -709,7 +711,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !nextAction.dependsOn.includes(devTestGameRaceCoveragePath) ||
     !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath) ||
     !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath) ||
-    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLanePath)
+    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLanePath) ||
+    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLaneDemoProofPath)
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }
@@ -912,6 +915,10 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
   "hosted-concurrent-race-matrix-admin":
     "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+  "hosted-target-preflight": "npm run test:dev-test-game-hosted-target-preflight",
+  "hosted-evidence-lane": "npm run test:dev-test-game-hosted-evidence-lane",
+  "hosted-evidence-lane-demo":
+    "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
   "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
   "hosted-ops-signals-admin":
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",

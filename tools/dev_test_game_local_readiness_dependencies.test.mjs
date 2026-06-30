@@ -7,6 +7,7 @@ import {
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   getLocalReadinessDependency,
   localNextActionAdminSurfaceCheckId,
+  localHostedEvidenceLaneDemoProofCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
   rankedMissingLocalReadinessDependencies,
@@ -255,6 +256,21 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       requiredEvidence:
         "Passed next-action admin surface check in the generated release-readiness checklist",
     },
+    {
+      id: "local-hosted-evidence-lane-demo-proof",
+      status: "missing",
+      index: 3,
+      priority: 3,
+      command: "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
+      buildSlice:
+        "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
+      proofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      proofBoundary:
+        "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
+      requiredEvidence:
+        "Passed local hosted evidence lane demo proof with synthetic external target warning",
+    },
   ]);
 
   assert.deepEqual(
@@ -271,6 +287,10 @@ test("missing local readiness dependencies rank before hosted readiness work", (
           },
           {
             id: localNextActionAdminSurfaceCheckId,
+            status: "passed",
+          },
+          {
+            id: localHostedEvidenceLaneDemoProofCheckId,
             status: "passed",
           },
         ],

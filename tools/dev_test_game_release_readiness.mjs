@@ -6,13 +6,14 @@ import {
   buildNextActionAdminSurfaceReadinessCheck,
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
+  getLocalReadinessDependency,
+  localHostedEvidenceLaneDemoProofCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
-  devTestGameHostedEvidenceLaneDemoProofCommand,
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 
@@ -750,10 +751,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     });
   }
   if (hostedEvidenceLaneDemoProofEvidence !== undefined) {
+    const dependency = getLocalReadinessDependency(
+      localHostedEvidenceLaneDemoProofCheckId,
+    );
+    if (dependency === undefined) {
+      throw new Error("hosted evidence lane demo proof dependency is missing");
+    }
     localChecks.push({
-      id: "local-hosted-evidence-lane-demo-proof",
-      label: "Local hosted evidence lane demo proof",
+      id: dependency.id,
+      label: dependency.label,
       status: "passed",
+      dependencyGated: true,
       evidence: hostedEvidenceLaneDemoProofEvidence.path,
       proofBoundary: hostedEvidenceLaneDemoProofEvidence.proofBoundary,
       demoOnly: true,
@@ -765,15 +773,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       externalEvidencePath:
         hostedEvidenceLaneDemoProofEvidence.externalEvidencePath,
       recovery: {
-        command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
-        buildSlice:
-          "Refresh the local hosted evidence lane demo proof before relying on the blocked-to-passed handoff packet.",
-        proofTarget: hostedEvidenceLaneDemoProofEvidence.path,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-        proofBoundary:
-          hostedEvidenceLaneDemoProofEvidence.proofBoundary,
-        requiredEvidence:
-          "Passed local hosted evidence lane demo proof with synthetic external target warning",
+        command: dependency.command,
+        buildSlice: dependency.buildSlice,
+        proofTarget: dependency.proofTarget,
+        roleUrl: dependency.roleUrl,
+        proofBoundary: dependency.proofBoundary,
+        requiredEvidence: dependency.requiredEvidence,
       },
     });
   }

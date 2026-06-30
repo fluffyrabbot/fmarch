@@ -7,6 +7,9 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedEvidenceLaneDemoBlockedPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -38,10 +41,19 @@ const hostedMatrixPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX ??
     devTestGameHostedConcurrentRaceMatrixPath,
 );
+const hostedEvidenceLanePath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE ??
+    devTestGameHostedEvidenceLaneDemoBlockedPath,
+);
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
+const hostedEvidenceLaneRelativePath = path.relative(
+  repoRoot,
+  hostedEvidenceLanePath,
+);
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
 
 await runAdminAuditProof({
@@ -52,6 +64,7 @@ await runAdminAuditProof({
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLaneRelativePath,
   },
   loadSource: async () => {
     const adminSpineProof = await readJson(adminSpineProofPath);

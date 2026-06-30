@@ -63,6 +63,10 @@ const adminProofDestinationRequirements = [
         id: "local-next-action-admin-surface",
         auditId: "local-next-action",
       },
+      {
+        id: "local-hosted-evidence-lane-demo-proof",
+        auditId: "local-hosted-evidence-lane",
+      },
     ],
     requiredUnprovenIds: ["hosted-deployment", "human-release-approval"],
   },

@@ -24,6 +24,7 @@ const requiredLocalPrerequisites = [
   "local-proof-graph-admin-role-handoffs",
   "local-proof-freshness-admin-surface",
   "local-next-action-admin-surface",
+  "local-hosted-evidence-lane-demo-proof",
 ];
 const requiredUnprovenItems = ["hosted-deployment", "human-release-runbook"];
 
