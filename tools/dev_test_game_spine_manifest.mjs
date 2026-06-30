@@ -699,6 +699,8 @@ const artifactRefreshCommands = Object.freeze({
   "race-coverage-admin": "npm run test:dev-test-game-race-coverage-admin-proof",
   "hosted-concurrent-race-matrix":
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+  "hosted-concurrent-race-matrix-admin":
+    "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

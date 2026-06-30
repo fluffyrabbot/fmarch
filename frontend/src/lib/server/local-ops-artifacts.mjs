@@ -21,6 +21,10 @@ const DEFAULT_PROOF_GRAPH_ADMIN_PROOF =
 const DEFAULT_RACE_COVERAGE = "target/dev-test-game/race-coverage.json";
 const DEFAULT_RACE_COVERAGE_ADMIN_PROOF =
   "target/dev-test-game/race-coverage-admin-proof.json";
+const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX =
+  "target/dev-test-game/hosted-concurrent-race-matrix.json";
+const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
+  "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -156,6 +160,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     env: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF",
     fallback: DEFAULT_RACE_COVERAGE_ADMIN_PROOF,
   }),
+  Object.freeze({
+    id: "hosted-concurrent-race-matrix",
+    label: "Hosted concurrent race matrix",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX",
+    fallback: DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX,
+  }),
+  Object.freeze({
+    id: "hosted-concurrent-race-matrix-admin",
+    label: "Hosted concurrent race matrix admin proof",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
+    fallback: DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF,
+  }),
 ]);
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
@@ -234,6 +250,15 @@ export async function readLocalRaceCoverage({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE,
     fallback: DEFAULT_RACE_COVERAGE,
+  });
+}
+
+export async function readLocalHostedConcurrentRaceMatrix({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX,
+    fallback: DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX,
   });
 }
 

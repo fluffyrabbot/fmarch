@@ -30,6 +30,7 @@ export async function buildAdminRouteData({
   adminSpineProof = null,
   proofGraph = null,
   raceCoverage = null,
+  hostedConcurrentRaceMatrix = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -130,49 +131,53 @@ export async function buildAdminRouteData({
     ...coldData,
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
-        appendLocalRaceCoverageAudit(
-          appendLocalProofGraphAudit(
-            appendLocalProofFreshnessAudit(
-              appendLocalAdminSpineAudit(
-                appendLocalSpineManifestAudit(
-                  appendLocalIdentityAdapterAudit(
-                    appendLocalBackupRestoreAudit(
-                      appendLocalReleaseReadinessAudit(
-                        appendLocalSeedFixtureAudit(
-                          appendLocalOpsArtifactsAudit(
-                            appendLocalHardeningAudit(
-                              appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                              proofRun,
+        appendLocalHostedConcurrentRaceMatrixAudit(
+          appendLocalRaceCoverageAudit(
+            appendLocalProofGraphAudit(
+              appendLocalProofFreshnessAudit(
+                appendLocalAdminSpineAudit(
+                  appendLocalSpineManifestAudit(
+                    appendLocalIdentityAdapterAudit(
+                      appendLocalBackupRestoreAudit(
+                        appendLocalReleaseReadinessAudit(
+                          appendLocalSeedFixtureAudit(
+                            appendLocalOpsArtifactsAudit(
+                              appendLocalHardeningAudit(
+                                appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                proofRun,
+                                { game },
+                              ),
+                              opsArtifacts,
                               { game },
                             ),
-                            opsArtifacts,
+                            seedFixtureSummary,
                             { game },
                           ),
-                          seedFixtureSummary,
+                          releaseReadinessChecklist,
                           { game },
                         ),
-                        releaseReadinessChecklist,
+                        backupRestoreProof,
                         { game },
                       ),
-                      backupRestoreProof,
+                      identityAdapterProof,
                       { game },
                     ),
-                    identityAdapterProof,
+                    spineManifest,
                     { game },
                   ),
-                  spineManifest,
+                  adminSpineProof,
                   { game },
                 ),
-                adminSpineProof,
-                { game },
+                proofFreshness,
+                { game, nextAction },
               ),
-              proofFreshness,
-              { game, nextAction },
+              proofGraph,
+              { game },
             ),
-            proofGraph,
+            raceCoverage,
             { game },
           ),
-          raceCoverage,
+          hostedConcurrentRaceMatrix,
           { game },
         ),
         nextAction,
@@ -233,6 +238,7 @@ export async function buildAdminAuditDetailData({
   adminSpineProof = null,
   proofGraph = null,
   raceCoverage = null,
+  hostedConcurrentRaceMatrix = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -254,6 +260,7 @@ export async function buildAdminAuditDetailData({
     adminSpineProof,
     proofGraph,
     raceCoverage,
+    hostedConcurrentRaceMatrix,
     nextAction,
     proofFreshness,
   });
@@ -419,6 +426,163 @@ export function appendLocalRaceCoverageAudit(audit, raceCoverage, { game }) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalHostedConcurrentRaceMatrixAudit(
+  audit,
+  hostedConcurrentRaceMatrix,
+  { game },
+) {
+  const row = normalizeLocalHostedConcurrentRaceMatrixAudit(
+    hostedConcurrentRaceMatrix,
+    { game },
+  );
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalHostedConcurrentRaceMatrixAudit(
+  hostedConcurrentRaceMatrix,
+  { game },
+) {
+  if (
+    hostedConcurrentRaceMatrix === null ||
+    typeof hostedConcurrentRaceMatrix !== "object" ||
+    hostedConcurrentRaceMatrix.version !== 1 ||
+    hostedConcurrentRaceMatrix.proof !==
+      "dev-test-game-hosted-concurrent-race-matrix" ||
+    hostedConcurrentRaceMatrix.status !== "passed" ||
+    hostedConcurrentRaceMatrix.scope !== "local-hosted-like-concurrent-race-matrix" ||
+    hostedConcurrentRaceMatrix.releaseReady !== false ||
+    hostedConcurrentRaceMatrix.productionReady !== false
+  ) {
+    return null;
+  }
+  const cells = Array.isArray(hostedConcurrentRaceMatrix.cells)
+    ? hostedConcurrentRaceMatrix.cells
+    : [];
+  const progress = Array.isArray(hostedConcurrentRaceMatrix.evidenceProgress)
+    ? hostedConcurrentRaceMatrix.evidenceProgress
+    : [];
+  const roleSurfaces = Array.isArray(
+    hostedConcurrentRaceMatrix.hostedLikeTarget?.roleSurfaces,
+  )
+    ? hostedConcurrentRaceMatrix.hostedLikeTarget.roleSurfaces
+    : [];
+  const remainingGaps = Array.isArray(hostedConcurrentRaceMatrix.remainingGaps)
+    ? hostedConcurrentRaceMatrix.remainingGaps
+    : [];
+  const requestedEvidence =
+    hostedConcurrentRaceMatrix.requestedEvidence !== null &&
+    typeof hostedConcurrentRaceMatrix.requestedEvidence === "object"
+      ? hostedConcurrentRaceMatrix.requestedEvidence
+      : null;
+  return Object.freeze({
+    id: "local-hosted-concurrent-race-matrix",
+    label: "Local hosted matrix",
+    status: `${Number(
+      hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
+    )} hosted-like race cells passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local hosted-like concurrency matrix",
+    boundaryDetail:
+      hostedConcurrentRaceMatrix.proofBoundary ??
+      "Local hosted-like concurrency matrix without hosted deployment or release claims.",
+    href: "target/dev-test-game/hosted-concurrent-race-matrix.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-hosted-concurrent-race-matrix",
+    }),
+    checks: Object.freeze(
+      [
+        ...progress.map((item) =>
+          Object.freeze({
+            id: String(item.id),
+            status: String(item.status),
+          }),
+        ),
+        ...cells.map((cell) =>
+          Object.freeze({
+            id: String(cell.id),
+            status: String(cell.status),
+          }),
+        ),
+      ],
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-race-coverage",
+        label: "Race coverage",
+        href: adminAuditInspectHref({ game, audit: "local-race-coverage" }),
+        status: String(
+          hostedConcurrentRaceMatrix.generatedFrom?.raceCoveragePromotedMilestones
+            ?.status ?? "unknown",
+        ),
+        command: "test:dev-test-game-race-coverage",
+      }),
+      Object.freeze({
+        id: "local-next-action",
+        label: "Ranked next action",
+        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        status: String(requestedEvidence?.status ?? "unknown"),
+        command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
+      }),
+    ]),
+    unproven: Object.freeze(
+      [
+        ...(requestedEvidence === null
+          ? []
+          : [
+              Object.freeze({
+                id: String(requestedEvidence.id),
+                status: String(requestedEvidence.status ?? "unknown"),
+                requiredEvidence: String(requestedEvidence.requiredEvidence ?? ""),
+              }),
+            ]),
+        ...remainingGaps.map((gap, index) =>
+          Object.freeze({
+            id: `remaining-gap-${index + 1}`,
+            status: "unproven",
+            requiredEvidence: String(gap),
+          }),
+        ),
+      ],
+    ),
+    artifactSummary: Object.freeze({
+      game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
+      cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
+      passedCellCount: Number(
+        hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
+      ),
+      reloadCoveredCellCount: Number(
+        hostedConcurrentRaceMatrix.summary?.reloadCoveredCellCount ?? 0,
+      ),
+      reconnectLaneCount: Number(
+        hostedConcurrentRaceMatrix.summary?.reconnectLaneCount ?? 0,
+      ),
+      staleConflictLaneCount: Number(
+        hostedConcurrentRaceMatrix.summary?.staleConflictLaneCount ?? 0,
+      ),
+      roleSurfaceCount: Number(
+        hostedConcurrentRaceMatrix.summary?.roleSurfaceCount ??
+          roleSurfaces.length,
+      ),
+      hostedEvidenceStatus: String(
+        hostedConcurrentRaceMatrix.summary?.hostedEvidenceStatus ?? "unknown",
+      ),
+      realHostedDeploymentStatus: String(
+        hostedConcurrentRaceMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+      ),
+      externalHostedEvidenceStatus: String(
+        hostedConcurrentRaceMatrix.externalHostedEvidence?.status ?? "unknown",
+      ),
+      nextCommand: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
+      releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
+      productionReady: hostedConcurrentRaceMatrix.productionReady === true,
+    }),
+  });
 }
 
 export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {

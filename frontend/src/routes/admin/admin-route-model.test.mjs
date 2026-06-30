@@ -887,6 +887,115 @@ test("admin local race coverage detail data carries race cell rows", async () =>
   );
 });
 
+test("admin route data exposes local hosted matrix as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
+  });
+
+  const matrix = data.audit.find(
+    (item) => item.id === "local-hosted-concurrent-race-matrix",
+  );
+  assert.equal(matrix.label, "Local hosted matrix");
+  assert.equal(matrix.status, "3 hosted-like race cells passed");
+  assert.equal(matrix.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    matrix.inspectHref,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+  );
+  assert.deepEqual(
+    matrix.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-like-api-frontend-target", "passed"],
+      ["multi-session-concurrent-command-matrix", "passed"],
+      ["reload-recovery-after-races", "passed"],
+      ["reconnect-recovery", "passed"],
+      ["stale-client-conflict-messages", "passed"],
+      ["raw-role-credential-redaction", "passed"],
+      ["real-hosted-deployment", "unproven"],
+      ["player-vote-change", "passed"],
+      ["host-resolve", "passed"],
+      ["host-complete-game", "passed"],
+    ],
+  );
+  assert.deepEqual(
+    matrix.relatedLinks.map((link) => [link.id, link.href]),
+    [
+      ["local-race-coverage", "/admin/audit/local-race-coverage?game=midsummer"],
+      ["local-next-action", "/admin/audit/local-next-action?game=midsummer"],
+    ],
+  );
+  assert.deepEqual(
+    matrix.unproven.map((item) => [item.id, item.status]),
+    [
+      ["hosted-concurrent-race-matrix", "unproven"],
+      ["remaining-gap-1", "unproven"],
+      ["remaining-gap-2", "unproven"],
+    ],
+  );
+  assert.deepEqual(matrix.artifactSummary, {
+    game: "00000000-0000-0000-0000-000000000001",
+    cellCount: 3,
+    passedCellCount: 3,
+    reloadCoveredCellCount: 3,
+    reconnectLaneCount: 4,
+    staleConflictLaneCount: 4,
+    roleSurfaceCount: 2,
+    hostedEvidenceStatus: "not_configured",
+    realHostedDeploymentStatus: "unproven",
+    externalHostedEvidenceStatus: "not_configured",
+    nextCommand: "test:dev-test-game-hosted-concurrent-race-matrix",
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local hosted matrix detail data carries progress and gap rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-hosted-concurrent-race-matrix",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local hosted matrix");
+  assert.equal(data.audit.id, "local-hosted-concurrent-race-matrix");
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-like-api-frontend-target", "passed"],
+      ["multi-session-concurrent-command-matrix", "passed"],
+      ["reload-recovery-after-races", "passed"],
+      ["reconnect-recovery", "passed"],
+      ["stale-client-conflict-messages", "passed"],
+      ["raw-role-credential-redaction", "passed"],
+      ["real-hosted-deployment", "unproven"],
+      ["player-vote-change", "passed"],
+      ["host-resolve", "passed"],
+      ["host-complete-game", "passed"],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.unproven.map((item) => [item.id, item.requiredEvidence]),
+    [
+      [
+        "hosted-concurrent-race-matrix",
+        "Hosted or hosted-like concurrent command race matrix beyond promoted local milestones.",
+      ],
+      [
+        "remaining-gap-1",
+        "hosted API/frontend deployment proof with external health checks",
+      ],
+      [
+        "remaining-gap-2",
+        "beta/release/operator readiness and human rollback path",
+      ],
+    ],
+  );
+});
+
 test("admin route data exposes local proof freshness as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2840,6 +2949,135 @@ function raceCoverageCell({
     reloadCoverage: "passed",
     missingLaneIds: [],
     provenBy: [raceLaneId, reloadLaneId],
+  };
+}
+
+function hostedConcurrentRaceMatrixFixture() {
+  const cells = raceCoverageFixture().cells.map((cell) => ({
+    id: cell.id,
+    actorPair: cell.actorPair,
+    commandFamily: cell.commandFamily,
+    roleSurfaces: cell.roleSurfaces,
+    status: "passed",
+    raceLane: {
+      id: cell.raceLaneId,
+      label: `${cell.id} race`,
+      status: "passed",
+      evidence: {},
+    },
+    reloadLane: {
+      id: cell.reloadLaneId,
+      label: `${cell.id} reload`,
+      status: "passed",
+      evidence: {},
+    },
+  }));
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-concurrent-race-matrix",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-hosted-like-concurrent-race-matrix",
+    proofBoundary: "Local hosted-like concurrency matrix.",
+    generatedFrom: {
+      releaseReadinessChecklist:
+        "target/dev-test-game/release-readiness-checklist.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      session: "target/dev-test-game/session.json",
+      raceCoverage: "target/dev-test-game/race-coverage.json",
+      raceCoveragePromotedMilestones: {
+        status: "passed",
+        cellCount: 3,
+        provenCellCount: 3,
+        reloadCoveredCellCount: 3,
+        groupCount: 2,
+        passedGroupCount: 2,
+        requiredCellCount: 3,
+        coveredCellCount: 3,
+        gapCount: 0,
+        groupIds: ["player-vote", "host-control"],
+      },
+    },
+    hostedLikeTarget: {
+      kind: "local-rust-api-plus-sveltekit-browser",
+      status: "passed",
+      game: "00000000-0000-0000-0000-000000000001",
+      seedMode: "dev-test-game",
+      frontendBaseUrl: "http://127.0.0.1:4173",
+      apiBaseUrl: "http://127.0.0.1:3000",
+      roleSurfaces: [
+        {
+          role: "host",
+          principalUserId: "host_h",
+          expectedCapabilityKind: "HostOf",
+          directUrl: "/g/midsummer/host",
+          returnTo: "/g/midsummer/host",
+        },
+        {
+          role: "player",
+          principalUserId: "player_p",
+          expectedCapabilityKind: "PlayerSlot",
+          directUrl: "/g/midsummer/player",
+          returnTo: "/g/midsummer/player",
+        },
+      ],
+      proofBoundary: "Local role surfaces.",
+    },
+    summary: {
+      cellCount: 3,
+      passedCellCount: 3,
+      raceLaneCount: 3,
+      reloadLaneCount: 3,
+      reloadCoveredCellCount: 3,
+      reconnectLaneCount: 4,
+      staleConflictLaneCount: 4,
+      roleSurfaceCount: 2,
+      hostedEvidenceStatus: "not_configured",
+      realHostedDeploymentStatus: "unproven",
+    },
+    evidenceProgress: [
+      { id: "hosted-like-api-frontend-target", status: "passed" },
+      { id: "multi-session-concurrent-command-matrix", status: "passed" },
+      { id: "reload-recovery-after-races", status: "passed" },
+      { id: "reconnect-recovery", status: "passed" },
+      { id: "stale-client-conflict-messages", status: "passed" },
+      { id: "raw-role-credential-redaction", status: "passed" },
+      { id: "real-hosted-deployment", status: "unproven" },
+    ],
+    externalHostedEvidence: {
+      status: "not_configured",
+      frontendBaseUrl: null,
+      apiBaseUrl: null,
+      evidencePath: null,
+    },
+    cells,
+    reconnectLanes: [],
+    staleConflictLanes: [],
+    requestedEvidence: {
+      id: "hosted-concurrent-race-matrix",
+      status: "unproven",
+      requiredEvidence:
+        "Hosted or hosted-like concurrent command race matrix beyond promoted local milestones.",
+      firstProofTarget: HOSTED_MATRIX_PROOF_TARGET,
+      localBaseline: {
+        cellCount: 3,
+        reloadCoveredCellCount: 3,
+        groupCount: 2,
+        passedGroupCount: 2,
+      },
+    },
+    remainingGaps: [
+      "hosted API/frontend deployment proof with external health checks",
+      "beta/release/operator readiness and human rollback path",
+    ],
+    nextBuildSlice: {
+      command: "test:dev-test-game-hosted-concurrent-race-matrix",
+      buildSlice:
+        "Promote the local hosted-like matrix to a real hosted or multi-node matrix run.",
+      proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+    },
   };
 }
 

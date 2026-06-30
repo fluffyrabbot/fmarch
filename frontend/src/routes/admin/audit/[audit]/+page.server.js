@@ -3,6 +3,7 @@ import {
   readLocalBackupRestoreProof,
   readLocalAdminSpineProof,
   readLocalDevTestGameProofRun,
+  readLocalHostedConcurrentRaceMatrix,
   readLocalIdentityAdapterProof,
   readLocalNextAction,
   readLocalOpsArtifacts,
@@ -41,6 +42,7 @@ export async function load({ cookies, locals, fetch, params, url }) {
     adminSpineProof: await readLocalAdminSpineProof(),
     proofGraph: await readLocalProofGraph(),
     raceCoverage: await readLocalRaceCoverage(),
+    hostedConcurrentRaceMatrix: await readLocalHostedConcurrentRaceMatrix(),
     nextAction: await readLocalNextAction(),
     proofFreshness: await readLocalProofFreshness(),
   });
