@@ -31,6 +31,7 @@ const requiredChecks = [
   "concurrent-vote-race",
   "concurrent-player-vote-resolve-race",
   "concurrent-player-action-advance-race",
+  "concurrent-player-action-advance-race-reload",
   "concurrent-cohost-deadline-resolve-race",
   "concurrent-cohost-deadline-resolve-race-reload",
   "concurrent-replacement-private-post-race",

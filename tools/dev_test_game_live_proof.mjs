@@ -299,6 +299,8 @@ assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ac
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+const actionAdvanceRace =
+  session.verification.multiplayerHardening.concurrentPlayerActionAdvanceRace;
 const cohostDeadlineResolveRace =
   session.verification.multiplayerHardening.concurrentCohostDeadlineResolveRace;
 const replacementPrivatePostRace =
@@ -1507,6 +1509,103 @@ assert.equal(
     (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
   ),
   true,
+);
+assert.equal(actionAdvanceRace.status, "passed");
+assert.equal(actionAdvanceRace.hostEntry.capabilityKinds.includes("HostOf"), true);
+assert.equal(
+  actionAdvanceRace.actionEntry.capabilityKinds.includes("SlotOccupant"),
+  true,
+);
+assert.equal(actionAdvanceRace.setupCommandState.actorSlot, "slot_4");
+assert.equal(actionAdvanceRace.setupCommandState.phase.phaseId, "N01");
+assert.equal(actionAdvanceRace.setupCommandState.phase.locked, false);
+assert.equal(
+  actionAdvanceRace.setupCommandState.actions.some(
+    (action) => action.templateId === "factional_kill",
+  ),
+  true,
+);
+assert.equal(actionAdvanceRace.setupActionButton.disabled, false);
+assert.equal(actionAdvanceRace.setupHostPhase.id, "N01");
+assert.equal(actionAdvanceRace.setupHostPhase.locked, false);
+assert.equal(actionAdvanceRace.setupHostPhaseActions.includes("resolve_phase"), true);
+assert.equal(actionAdvanceRace.closedStatus.state, "closed");
+assert.equal(actionAdvanceRace.resolveNight.commandStatus.state, "ack");
+assert.equal(actionAdvanceRace.lockedHostPhase.id, "N01");
+assert.equal(actionAdvanceRace.lockedHostPhase.locked, true);
+assert.equal(actionAdvanceRace.lockedHostPhaseActions.includes("advance_phase"), true);
+assert.equal(actionAdvanceRace.reject.state, "reject");
+assert.equal(["PhaseLocked", "InvalidTarget"].includes(actionAdvanceRace.reject.error), true);
+assert.equal(actionAdvanceRace.reject.serverEnvelope.body.kind, "Reject");
+assert.equal(Array.isArray(actionAdvanceRace.reject.streamSeqs), false);
+assert.equal(
+  actionAdvanceRace.reject.requestEnvelope.body.body.command.SubmitAction.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  actionAdvanceRace.reject.requestEnvelope.body.body.command.SubmitAction.action_id,
+  "role_factional_kill",
+);
+assert.equal(
+  actionAdvanceRace.reject.requestEnvelope.body.body.command.SubmitAction.template_id,
+  "factional_kill",
+);
+assert.equal(actionAdvanceRace.advance.state, "ack");
+assert.equal(actionAdvanceRace.advance.serverEnvelope.body.kind, "Ack");
+assert.equal(actionAdvanceRace.advance.streamSeqs.length, 1);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.status, "passed");
+assert.equal(actionAdvanceRace.roleReloadAfterRace.actionRouteResponseStatus, 200);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.hostRouteResponseStatus, 200);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.commandStateAfterReload.actorSlot, "slot_4");
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.commandStateAfterReload.phase.phaseId,
+  "D02",
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.commandStateAfterReload.phase.locked,
+  false,
+);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.commandStateAfterReload.actions.length, 0);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.buttonsAfterReload.some(
+    (button) => button.action === "submit_action:factional_kill",
+  ),
+  false,
+);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.hostPhaseAfterReload.id, "D02");
+assert.equal(actionAdvanceRace.roleReloadAfterRace.hostPhaseAfterReload.locked, false);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.hostPhaseActionsAfterReload.includes(
+    "resolve_phase",
+  ),
+  true,
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.hostPhaseActionsAfterReload.includes(
+    "advance_phase",
+  ),
+  false,
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.apiCommandStateAfterReload.actor_slot,
+  "slot_4",
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.apiCommandStateAfterReload.phase.phase_id,
+  "D02",
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.apiCommandStateAfterReload.phase.locked,
+  false,
+);
+assert.equal(actionAdvanceRace.roleReloadAfterRace.apiCommandStateAfterReload.actions.length, 0);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.apiHostStateAfterReload.phase.phase_id,
+  "D02",
+);
+assert.equal(
+  actionAdvanceRace.roleReloadAfterRace.apiHostStateAfterReload.phase.locked,
+  false,
 );
 assert.equal(cohostDeadlineResolveRace.status, "passed");
 assert.equal(cohostDeadlineResolveRace.hostEntry.capabilityKinds.includes("HostOf"), true);

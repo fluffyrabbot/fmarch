@@ -51,6 +51,7 @@ const requiredLaneIds = Object.freeze([
   "stale-player-post-after-phase-closure",
   "concurrent-player-vote-resolve-race",
   "concurrent-player-action-advance-race",
+  "concurrent-player-action-advance-race-reload",
   "concurrent-cohost-deadline-resolve-race",
   "concurrent-cohost-deadline-resolve-race-reload",
   "concurrent-replacement-private-post-race",
@@ -2411,6 +2412,65 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.phase_id === "D02" &&
           hardening.concurrentPlayerActionAdvanceRace?.apiHostStateAfterRace?.phase
             ?.locked === false,
+      },
+    ),
+    lane(
+      "concurrent-player-action-advance-race-reload",
+      "Concurrent player action and host advance reload role surfaces",
+      {
+        game: hardening.concurrentPlayerActionAdvanceRace?.game ?? null,
+        actionRouteStatus:
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.actionRouteResponseStatus ?? null,
+        hostRouteStatus:
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus ?? null,
+        phaseAfterReload:
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.phaseId ?? null,
+        hostPhaseAfterReload:
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.id ?? null,
+        passed:
+          hardening.concurrentPlayerActionAdvanceRace?.status === "passed" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.actionRouteResponseStatus === 200 &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus === 200 &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.actorSlot === "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.phaseId === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.phase?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.commandStateAfterReload?.actions?.length === 0 &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.buttonsAfterReload?.some(
+              (button) => button.action === "submit_action:factional_kill",
+            ) === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.id === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("resolve_phase") === true &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("advance_phase") === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.actor_slot === "slot_4" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.phase?.phase_id === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.phase?.locked === false &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiCommandStateAfterReload?.actions?.length === 0 &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiHostStateAfterReload?.phase?.phase_id === "D02" &&
+          hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
+            ?.apiHostStateAfterReload?.phase?.locked === false,
       },
     ),
     lane(
