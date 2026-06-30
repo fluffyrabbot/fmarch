@@ -7296,6 +7296,29 @@ test("session card and markdown include role credential URLs and tokens", () => 
         item.status === "unproven",
     ),
   );
+  const hostedEvidenceLaneReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    hostedEvidenceLaneAdminProofPath:
+      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    hostedEvidenceLaneAdminProof: hostedEvidenceLaneAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(hostedEvidenceLaneReadiness);
+  const hostedEvidenceLaneCheck =
+    hostedEvidenceLaneReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-evidence-lane-admin-surface",
+    );
+  assert.equal(hostedEvidenceLaneCheck.status, "passed");
+  assert.equal(hostedEvidenceLaneCheck.laneStatus, "blocked");
+  assert.equal(hostedEvidenceLaneCheck.preflightStatus, "blocked");
+  assert.equal(hostedEvidenceLaneCheck.blockedCheckCount, 5);
+  assert.equal(
+    hostedEvidenceLaneCheck.adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
+    "blocked",
+  );
   const seedFixture = buildDevTestGameSeedFixtureSummary({
     session: card,
     proofRun,

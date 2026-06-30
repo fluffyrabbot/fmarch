@@ -82,6 +82,10 @@ const defaultHostedConcurrentRaceMatrixPath = path.join(
   artifactDir,
   "hosted-concurrent-race-matrix.json",
 );
+const defaultHostedEvidenceLaneAdminProofPath = path.join(
+  artifactDir,
+  "hosted-evidence-lane-admin-proof.json",
+);
 const defaultProofGraphAdminProofPath = path.join(
   artifactDir,
   "proof-graph-admin-proof.json",
@@ -307,6 +311,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.hostedConcurrentRaceMatrixAdminProofPath ??
               "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
             artifact: options.hostedConcurrentRaceMatrixAdminProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedEvidenceLaneAdminProofEvidence =
+    options.hostedEvidenceLaneAdminProof
+      ? validateDevTestGameHostedEvidenceLaneAdminProof(
+          options.hostedEvidenceLaneAdminProof,
+          {
+            path:
+              options.hostedEvidenceLaneAdminProofPath ??
+              "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+            artifact: options.hostedEvidenceLaneAdminProofArtifact,
           },
         )
       : undefined;
@@ -697,6 +713,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       realHostedDeploymentStatus:
         hostedConcurrentRaceMatrixAdminProofEvidence.realHostedDeploymentStatus,
       adminRoleSurface: hostedConcurrentRaceMatrixAdminProofEvidence,
+    });
+  }
+  if (hostedEvidenceLaneAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-lane-admin-surface",
+      label: "Local hosted evidence lane admin surface",
+      status: "passed",
+      evidence: hostedEvidenceLaneAdminProofEvidence.path,
+      proofBoundary: hostedEvidenceLaneAdminProofEvidence.proofBoundary,
+      laneStatus: hostedEvidenceLaneAdminProofEvidence.laneStatus,
+      preflightStatus: hostedEvidenceLaneAdminProofEvidence.preflightStatus,
+      blockedCheckCount:
+        hostedEvidenceLaneAdminProofEvidence.visibleUnproven.length,
+      adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
     });
   }
   if (proofGraphAdminProofEvidence !== undefined) {
@@ -1116,6 +1146,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedConcurrentRaceMatrixAdminProof:
                       hostedConcurrentRaceMatrixAdminProofEvidence,
+                  }),
+              ...(hostedEvidenceLaneAdminProofEvidence === undefined
+                ? {}
+                : {
+                    hostedEvidenceLaneAdminProof:
+                      hostedEvidenceLaneAdminProofEvidence,
                   }),
               ...(hostedConcurrentRaceMatrixEvidence === undefined
                 ? {}
@@ -3737,6 +3773,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     hostedConcurrentRaceMatrixOptions,
     raceCoverageAdminProofOptions,
     hostedConcurrentRaceMatrixAdminProofOptions,
+    hostedEvidenceLaneAdminProofOptions,
     proofGraphAdminProofOptions,
     proofFreshnessAdminProofOptions,
     nextActionAdminProofOptions,
@@ -3763,6 +3800,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalHostedConcurrentRaceMatrix(),
     readOptionalRaceCoverageAdminProof(),
     readOptionalHostedConcurrentRaceMatrixAdminProof(),
+    readOptionalHostedEvidenceLaneAdminProof(),
     readOptionalProofGraphAdminProof(),
     readOptionalProofFreshnessAdminProof(),
     readOptionalNextActionAdminProof(),
@@ -3791,6 +3829,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(hostedConcurrentRaceMatrixOptions ?? {}),
     ...(raceCoverageAdminProofOptions ?? {}),
     ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
+    ...(hostedEvidenceLaneAdminProofOptions ?? {}),
     ...(proofGraphAdminProofOptions ?? {}),
     ...(proofFreshnessAdminProofOptions ?? {}),
     ...(nextActionAdminProofOptions ?? {}),
@@ -4204,6 +4243,24 @@ async function readOptionalHostedConcurrentRaceMatrixAdminProof() {
     ),
     hostedConcurrentRaceMatrixAdminProofPath: path.relative(repoRoot, proofPath),
     hostedConcurrentRaceMatrixAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedEvidenceLaneAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedEvidenceLaneAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hostedEvidenceLaneAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    hostedEvidenceLaneAdminProofPath: path.relative(repoRoot, proofPath),
+    hostedEvidenceLaneAdminProofArtifact: artifact,
   };
 }
 
