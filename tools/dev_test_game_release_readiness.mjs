@@ -1,6 +1,10 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  buildProofGraphAdminRoleHandoffsReadinessCheck,
+  localProofGraphAdminRoleHandoffsCheckId,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
 
@@ -565,17 +569,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     });
   }
   if (proofGraphAdminProofEvidence !== undefined) {
-    localChecks.push({
-      id: "local-proof-graph-admin-role-handoffs",
-      label: "Proof graph admin role handoffs",
-      status: "passed",
-      evidence: proofGraphAdminProofEvidence.path,
-      proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
-      roleHandoffCount: proofGraphAdminProofEvidence.roleHandoffCount,
-      roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
-      destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
-      adminRoleSurface: proofGraphAdminProofEvidence,
-    });
+    localChecks.push(
+      buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
+    );
   }
   const unproven = [
     ...(identityAdapterEvidence === undefined
@@ -2706,7 +2702,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     throw new Error("dev-test-game identity adapter cannot be both passed and unproven");
   }
   const proofGraphHandoffCheck = checklist.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-proof-graph-admin-role-handoffs",
+    (check) => check.id === localProofGraphAdminRoleHandoffsCheckId,
   );
   if (
     proofGraphHandoffCheck !== undefined &&

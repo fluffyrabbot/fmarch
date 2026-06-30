@@ -17,7 +17,7 @@ import {
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
-import { devTestGameProofGraphAdminProofPath } from "./dev_test_game_proof_graph_paths.mjs";
+import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -456,38 +456,6 @@ function rankedBuildableReleaseReadinessItems(readiness) {
             roleUrl: buildable.roleUrl,
             proofGraphNodeId: buildable.proofGraphNodeId,
             proofBoundary: buildable.proofBoundary,
-          };
-    })
-    .filter((candidate) => candidate !== null)
-    .sort((left, right) => left.priority - right.priority || left.index - right.index);
-}
-
-function rankedMissingLocalReadinessDependencies(readiness) {
-  if (readiness === null) {
-    return [];
-  }
-  const localChecks = new Map(
-    (readiness.localDevelopmentSpine?.checks ?? []).map((check, index) => [
-      check.id,
-      { check, index },
-    ]),
-  );
-  return [...localBuildableReadinessDependencies.entries()]
-    .map(([id, dependency], index) => {
-      const current = localChecks.get(id);
-      return current?.check?.status === "passed"
-        ? null
-        : {
-            id,
-            status: current?.check?.status ?? "missing",
-            index,
-            priority: dependency.priority,
-            command: dependency.command,
-            buildSlice: dependency.buildSlice,
-            proofTarget: dependency.proofTarget,
-            roleUrl: dependency.roleUrl,
-            proofBoundary: dependency.proofBoundary,
-            requiredEvidence: dependency.requiredEvidence,
           };
     })
     .filter((candidate) => candidate !== null)
@@ -1338,24 +1306,6 @@ const localBuildableReleaseReadinessItems = new Map([
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
-    },
-  ],
-]);
-
-const localBuildableReadinessDependencies = new Map([
-  [
-    "local-proof-graph-admin-role-handoffs",
-    {
-      priority: 0,
-      command: "npm run test:dev-test-game-proof-graph-admin-proof",
-      buildSlice:
-        "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
-      proofTarget: devTestGameProofGraphAdminProofPath,
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-      proofBoundary:
-        "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
-      requiredEvidence:
-        "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
     },
   ],
 ]);
