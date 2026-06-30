@@ -39,6 +39,11 @@ const defaultBackupRestoreDumpPath = path.join(
 const defaultBackupAdminProofPath = path.join(artifactDir, "backup-admin-proof.json");
 const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
 const defaultOpsAdminProofPath = path.join(artifactDir, "ops-admin-proof.json");
+const defaultHostedOpsSignalsPath = path.join(artifactDir, "hosted-ops-signals.json");
+const defaultHostedOpsSignalsAdminProofPath = path.join(
+  artifactDir,
+  "hosted-ops-signals-admin-proof.json",
+);
 const defaultSeedFixtureSummaryPath = path.join(
   artifactDir,
   "seed-fixture-summary.json",
@@ -156,6 +161,25 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         path: options.opsAdminProofPath ?? "target/dev-test-game/ops-admin-proof.json",
         artifact: options.opsAdminProofArtifact,
       })
+    : undefined;
+  const hostedOpsSignalsEvidence = options.hostedOpsSignals
+    ? validateDevTestGameHostedOpsSignals(options.hostedOpsSignals, {
+        path:
+          options.hostedOpsSignalsPath ??
+          "target/dev-test-game/hosted-ops-signals.json",
+        artifact: options.hostedOpsSignalsArtifact,
+      })
+    : undefined;
+  const hostedOpsSignalsAdminProofEvidence = options.hostedOpsSignalsAdminProof
+    ? validateDevTestGameHostedOpsSignalsAdminProof(
+        options.hostedOpsSignalsAdminProof,
+        {
+          path:
+            options.hostedOpsSignalsAdminProofPath ??
+            "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+          artifact: options.hostedOpsSignalsAdminProofArtifact,
+        },
+      )
     : undefined;
   const seedFixtureEvidence = options.seedFixtureSummary
     ? validateDevTestGameSeedFixtureSummary(options.seedFixtureSummary, {
@@ -489,6 +513,24 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : { adminRoleSurface: opsAdminProofEvidence }),
     });
   }
+  if (hostedOpsSignalsEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-ops-signals",
+      label: "Local hosted-like ops signals",
+      status: "passed",
+      evidence: hostedOpsSignalsEvidence.path,
+      proofBoundary: hostedOpsSignalsEvidence.proofBoundary,
+      cellCount: hostedOpsSignalsEvidence.cellCount,
+      reconnectLaneCount: hostedOpsSignalsEvidence.reconnectLaneCount,
+      staleConflictLaneCount: hostedOpsSignalsEvidence.staleConflictLaneCount,
+      realHostedDeploymentStatus:
+        hostedOpsSignalsEvidence.realHostedDeploymentStatus,
+      hostedTelemetryStatus: hostedOpsSignalsEvidence.hostedTelemetryStatus,
+      ...(hostedOpsSignalsAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: hostedOpsSignalsAdminProofEvidence }),
+    });
+  }
   if (seedFixtureEvidence !== undefined) {
     localChecks.push({
       id: "local-seed-demo-fixture",
@@ -716,23 +758,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       raceCoverageEvidence,
       hostedConcurrentRaceMatrixEvidence,
     }),
-    ...(opsArtifactsEvidence === undefined
-      ? [
-          {
-            id: "observability-and-operations",
-            status: "unproven",
-            requiredEvidence:
-              "Saved local proof artifacts, redacted role entrypoints, checksums, logs/metrics/traces, and operator runbook evidence for the seeded game flow",
-          },
-        ]
-      : [
-          {
-            id: "hosted-observability-and-operations",
-            status: "unproven",
-            requiredEvidence:
-              "Hosted logs, metrics, traces, paging/SLOs, and incident response evidence",
-          },
-        ]),
+    ...observabilityUnprovenItems({
+      opsArtifactsEvidence,
+      hostedOpsSignalsEvidence,
+    }),
     {
       id: "human-release-runbook",
       status: "unproven",
@@ -769,8 +798,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...(opsArtifactsEvidence === undefined
         ? {}
         : {
-            opsArtifacts: opsArtifactsEvidence.path,
-          }),
+          opsArtifacts: opsArtifactsEvidence.path,
+          ...(hostedOpsSignalsEvidence === undefined
+            ? {}
+            : {
+                hostedOpsSignals: hostedOpsSignalsEvidence.path,
+                ...(hostedOpsSignalsAdminProofEvidence === undefined
+                  ? {}
+                  : {
+                      hostedOpsSignalsAdminProof:
+                        hostedOpsSignalsAdminProofEvidence.path,
+                    }),
+              }),
+        }),
       ...(seedFixtureEvidence === undefined
         ? {}
         : {
@@ -973,6 +1013,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(opsArtifactsEvidence === undefined
                 ? {}
                 : { opsArtifacts: opsArtifactsEvidence }),
+              ...(hostedOpsSignalsEvidence === undefined
+                ? {}
+                : {
+                    hostedOpsSignals: {
+                      ...hostedOpsSignalsEvidence,
+                      ...(hostedOpsSignalsAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: hostedOpsSignalsAdminProofEvidence }),
+                    },
+                  }),
               ...(seedFixtureEvidence === undefined
                 ? {}
                 : {
@@ -1046,6 +1096,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       reason: releaseReadinessReason({
         backupRestoreEvidence,
         opsArtifactsEvidence,
+        hostedOpsSignalsEvidence,
         seedFixtureEvidence,
         identityAdapterEvidence,
         spineManifestEvidence,
@@ -1099,9 +1150,44 @@ function raceMatrixUnprovenItems({
   ];
 }
 
+function observabilityUnprovenItems({ opsArtifactsEvidence, hostedOpsSignalsEvidence }) {
+  if (opsArtifactsEvidence === undefined) {
+    return [
+      {
+        id: "observability-and-operations",
+        status: "unproven",
+        requiredEvidence:
+          "Saved local proof artifacts, redacted role entrypoints, checksums, logs/metrics/traces, and operator runbook evidence for the seeded game flow",
+      },
+    ];
+  }
+  if (hostedOpsSignalsEvidence === undefined) {
+    return [
+      {
+        id: "hosted-observability-and-operations",
+        status: "unproven",
+        requiredEvidence:
+          "Hosted-like or hosted ops signal bundle tying matrix/readiness artifacts to logs, metrics, traces, paging/SLOs, and incident response boundaries",
+      },
+    ];
+  }
+  if (hostedOpsSignalsEvidence.hostedTelemetryStatus === "passed") {
+    return [];
+  }
+  return [
+    {
+      id: "real-hosted-observability-and-operations",
+      status: "unproven",
+      requiredEvidence:
+        "Hosted logs, metrics, traces, paging/SLOs, and incident response evidence from an externally reachable deployment",
+    },
+  ];
+}
+
 function releaseReadinessReason({
   backupRestoreEvidence,
   opsArtifactsEvidence,
+  hostedOpsSignalsEvidence,
   seedFixtureEvidence,
   identityAdapterEvidence,
   spineManifestEvidence,
@@ -1115,6 +1201,9 @@ function releaseReadinessReason({
     "the local development-spine proof",
     ...(backupRestoreEvidence === undefined ? [] : ["local backup/restore drill"]),
     ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
+    ...(hostedOpsSignalsEvidence === undefined
+      ? []
+      : ["local hosted-like ops signals"]),
     ...(seedFixtureEvidence === undefined ? [] : ["local seed/demo fixture"]),
     ...(identityAdapterEvidence === undefined ? [] : ["local identity adapter"]),
     ...(spineManifestEvidence === undefined ? [] : ["local spine manifest"]),
@@ -1144,7 +1233,11 @@ function releaseReadinessReason({
       : hostedConcurrentRaceMatrixEvidence === undefined
         ? "hosted concurrent race matrix"
         : "real hosted multi-node race evidence",
-    opsArtifactsEvidence === undefined ? "observability" : "hosted observability",
+    opsArtifactsEvidence === undefined
+      ? "observability"
+      : hostedOpsSignalsEvidence === undefined
+        ? "hosted observability"
+        : "real hosted telemetry",
     "human release evidence",
   ];
   return `${joinEnglish(passed)} passed, but ${joinEnglish(missing)} remain unproven.`;
@@ -1858,6 +1951,112 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostedOpsSignals(signals, options = {}) {
+  const requiredChecks = [
+    "hosted-matrix-artifact-checksummed",
+    "local-target-signals-carried",
+    "matrix-health-counters-carried",
+    "readiness-boundary-carried",
+    "hosted-telemetry-boundary-carried",
+  ];
+  if (
+    signals?.version !== 1 ||
+    signals.proof !== "dev-test-game-hosted-ops-signals" ||
+    signals.status !== "passed" ||
+    signals.scope !== "local-hosted-like-ops-signals"
+  ) {
+    throw new Error("hosted ops signals shape drifted");
+  }
+  if (signals.productionReady !== false || signals.releaseReady !== false) {
+    throw new Error("hosted ops signals must not claim production or release readiness");
+  }
+  const checks = new Map((signals.checks ?? []).map((check) => [check.id, check.status]));
+  for (const id of requiredChecks) {
+    if (!["passed", "unproven"].includes(String(checks.get(id)))) {
+      throw new Error(`hosted ops signals missing check: ${id}`);
+    }
+  }
+  if (checks.get("readiness-boundary-carried") !== "passed") {
+    throw new Error("hosted ops signals readiness boundary did not pass");
+  }
+  if (
+    Number(signals.matrix?.cellCount ?? 0) <= 0 ||
+    signals.matrix?.passedCellCount !== signals.matrix?.cellCount ||
+    signals.matrix?.reloadCoveredCellCount !== signals.matrix?.cellCount ||
+    Number(signals.matrix?.reconnectLaneCount ?? 0) <= 0 ||
+    Number(signals.matrix?.staleConflictLaneCount ?? 0) <= 0
+  ) {
+    throw new Error("hosted ops signals matrix counters drifted");
+  }
+  if (
+    typeof signals.target?.game !== "string" ||
+    typeof signals.target?.apiBaseUrl !== "string" ||
+    typeof signals.target?.frontendBaseUrl !== "string"
+  ) {
+    throw new Error("hosted ops signals target drifted");
+  }
+  if (/invite=(?!REDACTED)/.test(JSON.stringify(signals))) {
+    throw new Error("hosted ops signals leaked an invite URL token");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/hosted-ops-signals.json",
+    proofBoundary: signals.proofBoundary,
+    cellCount: signals.matrix.cellCount,
+    reconnectLaneCount: signals.matrix.reconnectLaneCount,
+    staleConflictLaneCount: signals.matrix.staleConflictLaneCount,
+    realHostedDeploymentStatus: String(
+      signals.target.realHostedDeploymentStatus ?? "unknown",
+    ),
+    hostedTelemetryStatus: String(
+      checks.get("hosted-telemetry-boundary-carried") ?? "unknown",
+    ),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostedOpsSignalsAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "hosted-matrix-artifact-checksummed",
+    "local-target-signals-carried",
+    "matrix-health-counters-carried",
+    "readiness-boundary-carried",
+    "hosted-telemetry-boundary-carried",
+  ];
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-ops-signals-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !== "local-dev-test-game-hosted-ops-signals-admin-surface"
+  ) {
+    throw new Error("hosted ops signals admin proof shape drifted");
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("hosted ops signals admin proof must not claim production readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("hosted ops signals admin proof did not prove admin overview click-through");
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`hosted ops signals admin proof missing visible check: ${checkId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -2890,6 +3089,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "release",
     "race-coverage",
     "hosted-concurrent-race-matrix",
+    "hosted-ops-signals",
     "spine-manifest",
   ];
   if (proof?.version !== 1) {
@@ -3000,6 +3200,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "release",
     "race-coverage",
     "hosted-concurrent-race-matrix",
+    "hosted-ops-signals",
     "spine-manifest",
     "recovery",
   ];
@@ -3086,6 +3287,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   );
   if (hasOpsCheck && hasOpsUnproven) {
     throw new Error("dev-test-game ops artifacts cannot be both passed and unproven");
+  }
+  const hasHostedOpsSignalsCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) => check.id === "local-hosted-ops-signals" && check.status === "passed",
+  );
+  const hasHostedOpsUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "hosted-observability-and-operations",
+  );
+  if (hasHostedOpsSignalsCheck && hasHostedOpsUnproven) {
+    throw new Error("dev-test-game hosted ops signals cannot be both passed and unproven");
   }
   const hasSeedFixtureCheck = checklist.localDevelopmentSpine?.checks?.some(
     (check) => check.id === "local-seed-demo-fixture" && check.status === "passed",
@@ -3192,6 +3402,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     identityAdapterOptions,
     identityAdminProofOptions,
     opsAdminProofOptions,
+    hostedOpsSignalsOptions,
+    hostedOpsSignalsAdminProofOptions,
     seedAdminProofOptions,
     spineManifestOptions,
     spineManifestAdminProofOptions,
@@ -3214,6 +3426,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalIdentityAdapterProof(),
     readOptionalIdentityAdminProof(),
     readOptionalOpsAdminProof(),
+    readOptionalHostedOpsSignals(),
+    readOptionalHostedOpsSignalsAdminProof(),
     readOptionalSeedAdminProof(),
     readOptionalSpineManifest(),
     readOptionalSpineManifestAdminProof(),
@@ -3238,6 +3452,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(identityAdapterOptions ?? {}),
     ...(identityAdminProofOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
+    ...(hostedOpsSignalsOptions ?? {}),
+    ...(hostedOpsSignalsAdminProofOptions ?? {}),
     ...(seedAdminProofOptions ?? {}),
     ...(spineManifestOptions ?? {}),
     ...(spineManifestAdminProofOptions ?? {}),
@@ -3341,6 +3557,42 @@ async function readOptionalOpsAdminProof() {
     opsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     opsAdminProofPath: path.relative(repoRoot, proofPath),
     opsAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedOpsSignals() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS;
+  const signalsPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedOpsSignalsPath,
+  );
+  if (signalsPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(signalsPath, now);
+  return {
+    hostedOpsSignals: JSON.parse(await readFile(signalsPath, "utf8")),
+    hostedOpsSignalsPath: path.relative(repoRoot, signalsPath),
+    hostedOpsSignalsArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedOpsSignalsAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedOpsSignalsAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hostedOpsSignalsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    hostedOpsSignalsAdminProofPath: path.relative(repoRoot, proofPath),
+    hostedOpsSignalsAdminProofArtifact: artifact,
   };
 }
 

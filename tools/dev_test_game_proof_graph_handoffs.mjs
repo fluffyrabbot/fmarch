@@ -77,6 +77,21 @@ const adminProofDestinationRequirements = [
     fromHostedMatrix: true,
   },
   {
+    linkId: "admin-proof:hosted-ops-signals",
+    auditId: "local-hosted-ops-signals",
+    requiredCheckIds: [
+      "hosted-matrix-artifact-checksummed",
+      "local-target-signals-carried",
+      "matrix-health-counters-carried",
+      "readiness-boundary-carried",
+      "hosted-telemetry-boundary-carried",
+    ],
+    requiredRelatedLinkIds: [
+      "local-hosted-concurrent-race-matrix",
+      "local-ops-artifacts",
+    ],
+  },
+  {
     linkId: "admin-proof:spine-manifest",
     auditId: "local-spine-manifest",
     requiredCheckIds: [

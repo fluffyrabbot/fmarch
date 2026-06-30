@@ -21,6 +21,12 @@ import {
   buildDevTestGameOpsArtifacts,
 } from "./dev_test_game_ops_artifacts.mjs";
 import {
+  assertDevTestGameHostedOpsSignals,
+  buildDevTestGameHostedOpsSignals,
+  devTestGameHostedOpsSignalsCommand,
+  devTestGameHostedOpsSignalsPath,
+} from "./dev_test_game_hosted_ops_signals.mjs";
+import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
@@ -195,6 +201,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
     FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF:
       "target/dev-test-game/ops-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS:
+      "target/dev-test-game/hosted-ops-signals.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
+      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
@@ -1194,8 +1204,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 14);
-  assert.equal(graph.summary.roleUrlCount, 14);
+  assert.equal(graph.summary.nodeCount, 15);
+  assert.equal(graph.summary.roleUrlCount, 15);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -6947,6 +6957,18 @@ test("session card and markdown include role credential URLs and tokens", () => 
         item.status === "unproven",
     ),
   );
+  const refreshedHostedMatrix =
+    buildDevTestGameHostedConcurrentRaceMatrixEvidence(hostedMatrixReadiness, {
+      raceCoverage,
+      proofRun,
+      session: card,
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence(refreshedHostedMatrix);
+  assert.equal(
+    refreshedHostedMatrix.requestedEvidence.id,
+    "real-hosted-concurrent-race-matrix",
+  );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
@@ -7026,6 +7048,65 @@ test("session card and markdown include role credential URLs and tokens", () => 
     opsReadiness.releaseReadiness.unproven.some(
       (item) =>
         item.id === "hosted-observability-and-operations" &&
+        item.status === "unproven",
+    ),
+  );
+  const hostedOpsSignals = buildDevTestGameHostedOpsSignals({
+    opsArtifacts,
+    hostedConcurrentRaceMatrix: hostedMatrix,
+    readiness: opsReadiness,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    artifacts: {
+      opsArtifacts: artifactSummary("target/dev-test-game/ops-artifacts.json"),
+      hostedConcurrentRaceMatrix: artifactSummary(
+        "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      ),
+      readiness: artifactSummary(
+        "target/dev-test-game/release-readiness-checklist.json",
+      ),
+    },
+  });
+  assertDevTestGameHostedOpsSignals(hostedOpsSignals);
+  assert.equal(devTestGameHostedOpsSignalsCommand, "test:dev-test-game-hosted-ops-signals");
+  assert.equal(
+    devTestGameHostedOpsSignalsPath,
+    "target/dev-test-game/hosted-ops-signals.json",
+  );
+  assert.equal(hostedOpsSignals.matrix.cellCount, 16);
+  assert.equal(
+    hostedOpsSignals.checks.find((check) => check.id === "hosted-telemetry-boundary-carried")
+      .status,
+    "unproven",
+  );
+  const hostedOpsReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifacts,
+    hostedOpsSignalsPath: devTestGameHostedOpsSignalsPath,
+    hostedOpsSignals,
+    hostedOpsSignalsAdminProofPath:
+      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    hostedOpsSignalsAdminProof: hostedOpsSignalsAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(hostedOpsReadiness);
+  assert(
+    hostedOpsReadiness.localDevelopmentSpine.checks.some(
+      (item) =>
+        item.id === "local-hosted-ops-signals" &&
+        item.status === "passed" &&
+        item.cellCount === 16,
+    ),
+  );
+  assert.equal(
+    hostedOpsReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-observability-and-operations",
+    ),
+    false,
+  );
+  assert(
+    hostedOpsReadiness.releaseReadiness.unproven.some(
+      (item) =>
+        item.id === "real-hosted-observability-and-operations" &&
         item.status === "unproven",
     ),
   );
@@ -7298,7 +7379,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    10,
+    11,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -7314,6 +7395,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "release",
     "race-coverage",
     "hosted-concurrent-race-matrix",
+    "hosted-ops-signals",
     "spine-manifest",
   ]);
   const proofGraphHandoffReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -7329,9 +7411,9 @@ test("session card and markdown include role credential URLs and tokens", () => 
   const handoffCheck =
     proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-proof-graph-admin-role-handoffs",
-    );
+  );
   assert.equal(handoffCheck.status, "passed");
-  assert.equal(handoffCheck.roleHandoffCount, 10);
+  assert.equal(handoffCheck.roleHandoffCount, 11);
   assert(handoffCheck.roleHandoffIds.includes("admin-proof:release"));
   assert(handoffCheck.destinationAuditIds.includes("local-release-readiness"));
   assert.equal(
@@ -7341,7 +7423,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(
     proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
       .roleHandoffCount,
-    10,
+    11,
   );
   const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -8357,6 +8439,44 @@ function opsAdminProofFixture() {
   };
 }
 
+function hostedOpsSignalsAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-ops-signals-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-ops-signals-admin-surface",
+    proofBoundary: "Local admin hosted ops signals proof only.",
+    generatedFrom: {
+      hostedOpsSignals: "target/dev-test-game/hosted-ops-signals.json",
+      game: "00000000-0000-0000-0000-000000000001",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-hosted-ops-signals?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-hosted-ops-signals",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "hosted-matrix-artifact-checksummed",
+        "local-target-signals-carried",
+        "matrix-health-counters-carried",
+        "readiness-boundary-carried",
+        "hosted-telemetry-boundary-carried",
+      ],
+      visibleRelatedLinks: [
+        "local-hosted-concurrent-race-matrix",
+        "local-ops-artifacts",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function seedAdminProofFixture() {
   return {
     version: 1,
@@ -8554,6 +8674,7 @@ function proofGraphAdminProofFixture() {
       "admin-proof:hosted-concurrent-race-matrix",
       "local-hosted-concurrent-race-matrix",
     ],
+    ["admin-proof:hosted-ops-signals", "local-hosted-ops-signals"],
     ["admin-proof:spine-manifest", "local-spine-manifest"],
   ].map(([linkId, auditId]) => ({
     linkId,
@@ -8592,6 +8713,7 @@ function proofGraphAdminProofFixture() {
         "release",
         "race-coverage",
         "hosted-concurrent-race-matrix",
+        "hosted-ops-signals",
         "spine-manifest",
       ],
       adminProofRoleHandoffs: handoffs,
@@ -9051,6 +9173,7 @@ function adminSpineAdminProofFixture() {
         "release",
         "race-coverage",
         "hosted-concurrent-race-matrix",
+        "hosted-ops-signals",
         "spine-manifest",
       ],
     },
@@ -9071,6 +9194,7 @@ function adminSpineAdminProofFixture() {
         "release",
         "race-coverage",
         "hosted-concurrent-race-matrix",
+        "hosted-ops-signals",
         "spine-manifest",
         "recovery",
       ],
@@ -9095,6 +9219,7 @@ function adminSpineProofFixture() {
       "hosted-concurrent-race-matrix",
       hostedConcurrentRaceMatrixAdminProofFixture(),
     ],
+    ["hosted-ops-signals", hostedOpsSignalsAdminProofFixture()],
     ["spine-manifest", spineManifestAdminProofFixture()],
   ];
   return {

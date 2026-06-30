@@ -25,6 +25,8 @@ const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
   "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
+const DEFAULT_HOSTED_OPS_SIGNALS =
+  "target/dev-test-game/hosted-ops-signals.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -172,12 +174,25 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     env: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
     fallback: DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF,
   }),
+  Object.freeze({
+    id: "hosted-ops-signals",
+    label: "Hosted ops signals",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
+    fallback: DEFAULT_HOSTED_OPS_SIGNALS,
+  }),
 ]);
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS,
     fallback: DEFAULT_OPS_ARTIFACTS,
+  });
+}
+
+export async function readLocalHostedOpsSignals({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS,
+    fallback: DEFAULT_HOSTED_OPS_SIGNALS,
   });
 }
 

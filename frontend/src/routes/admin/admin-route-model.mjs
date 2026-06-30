@@ -39,6 +39,7 @@ export async function buildAdminRouteData({
   proofGraph = null,
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
+  hostedOpsSignals = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -139,53 +140,57 @@ export async function buildAdminRouteData({
     ...coldData,
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
-        appendLocalHostedConcurrentRaceMatrixAudit(
-          appendLocalRaceCoverageAudit(
-            appendLocalProofGraphAudit(
-              appendLocalProofFreshnessAudit(
-                appendLocalAdminSpineAudit(
-                  appendLocalSpineManifestAudit(
-                    appendLocalIdentityAdapterAudit(
-                      appendLocalBackupRestoreAudit(
-                        appendLocalReleaseReadinessAudit(
-                          appendLocalSeedFixtureAudit(
-                            appendLocalOpsArtifactsAudit(
-                              appendLocalHardeningAudit(
-                                appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                                proofRun,
+        appendLocalHostedOpsSignalsAudit(
+          appendLocalHostedConcurrentRaceMatrixAudit(
+            appendLocalRaceCoverageAudit(
+              appendLocalProofGraphAudit(
+                appendLocalProofFreshnessAudit(
+                  appendLocalAdminSpineAudit(
+                    appendLocalSpineManifestAudit(
+                      appendLocalIdentityAdapterAudit(
+                        appendLocalBackupRestoreAudit(
+                          appendLocalReleaseReadinessAudit(
+                            appendLocalSeedFixtureAudit(
+                              appendLocalOpsArtifactsAudit(
+                                appendLocalHardeningAudit(
+                                  appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                  proofRun,
+                                  { game },
+                                ),
+                                opsArtifacts,
                                 { game },
                               ),
-                              opsArtifacts,
+                              seedFixtureSummary,
                               { game },
                             ),
-                            seedFixtureSummary,
+                            releaseReadinessChecklist,
                             { game },
                           ),
-                          releaseReadinessChecklist,
+                          backupRestoreProof,
                           { game },
                         ),
-                        backupRestoreProof,
+                        identityAdapterProof,
                         { game },
                       ),
-                      identityAdapterProof,
+                      spineManifest,
                       { game },
                     ),
-                    spineManifest,
+                    adminSpineProof,
                     { game },
                   ),
-                  adminSpineProof,
-                  { game },
+                  proofFreshness,
+                  { game, nextAction },
                 ),
-                proofFreshness,
-                { game, nextAction },
+                proofGraph,
+                { game },
               ),
-              proofGraph,
+              raceCoverage,
               { game },
             ),
-            raceCoverage,
+            hostedConcurrentRaceMatrix,
             { game },
           ),
-          hostedConcurrentRaceMatrix,
+          hostedOpsSignals,
           { game },
         ),
         nextAction,
@@ -247,6 +252,7 @@ export async function buildAdminAuditDetailData({
   proofGraph = null,
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
+  hostedOpsSignals = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -269,6 +275,7 @@ export async function buildAdminAuditDetailData({
     proofGraph,
     raceCoverage,
     hostedConcurrentRaceMatrix,
+    hostedOpsSignals,
     nextAction,
     proofFreshness,
   });
@@ -398,6 +405,85 @@ export function appendLocalOpsArtifactsAudit(audit, opsArtifacts, { game }) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalHostedOpsSignalsAudit(audit, hostedOpsSignals, { game }) {
+  const row = normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) {
+  if (
+    hostedOpsSignals === null ||
+    typeof hostedOpsSignals !== "object" ||
+    hostedOpsSignals.version !== 1 ||
+    hostedOpsSignals.proof !== "dev-test-game-hosted-ops-signals" ||
+    hostedOpsSignals.status !== "passed" ||
+    hostedOpsSignals.scope !== "local-hosted-like-ops-signals" ||
+    hostedOpsSignals.releaseReady !== false ||
+    hostedOpsSignals.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(hostedOpsSignals.checks)
+    ? hostedOpsSignals.checks
+    : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  return Object.freeze({
+    id: "local-hosted-ops-signals",
+    label: "Local hosted ops signals",
+    status: `${passedChecks.length} hosted-like ops signals passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local hosted-like ops signal bundle",
+    boundaryDetail:
+      hostedOpsSignals.proofBoundary ??
+      "Local hosted-like ops signal bundle without hosted telemetry or release claims.",
+    href: "target/dev-test-game/hosted-ops-signals.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-hosted-ops-signals" }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-hosted-concurrent-race-matrix",
+        label: "Hosted matrix",
+        href: adminAuditInspectHref({
+          game,
+          audit: "local-hosted-concurrent-race-matrix",
+        }),
+        status: String(hostedOpsSignals.matrix?.hostedEvidenceStatus ?? "unknown"),
+        command: "test:dev-test-game-hosted-concurrent-race-matrix",
+      }),
+      Object.freeze({
+        id: "local-ops-artifacts",
+        label: "Ops artifacts",
+        href: adminAuditInspectHref({ game, audit: "local-ops-artifacts" }),
+        status: "passed",
+        command: "test:dev-test-game-ops-artifacts",
+      }),
+    ]),
+    artifactSummary: Object.freeze({
+      game: String(hostedOpsSignals.target?.game ?? ""),
+      cellCount: Number(hostedOpsSignals.matrix?.cellCount ?? 0),
+      reconnectLaneCount: Number(hostedOpsSignals.matrix?.reconnectLaneCount ?? 0),
+      staleConflictLaneCount: Number(
+        hostedOpsSignals.matrix?.staleConflictLaneCount ?? 0,
+      ),
+      realHostedDeploymentStatus: String(
+        hostedOpsSignals.target?.realHostedDeploymentStatus ?? "unknown",
+      ),
+      releaseReady: hostedOpsSignals.releaseReady === true,
+      productionReady: hostedOpsSignals.productionReady === true,
+    }),
+  });
 }
 
 export function appendLocalProofFreshnessAudit(

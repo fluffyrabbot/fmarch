@@ -31,6 +31,7 @@ const requiredChecks = [
   "release",
   "race-coverage",
   "hosted-concurrent-race-matrix",
+  "hosted-ops-signals",
   "spine-manifest",
   "recovery",
   "spine-manifest-handoff",

@@ -6,6 +6,7 @@ import {
   readLocalAdminSpineProof,
   readLocalDevTestGameProofRun,
   readLocalHostedConcurrentRaceMatrix,
+  readLocalHostedOpsSignals,
   readLocalIdentityAdapterProof,
   readLocalNextAction,
   readLocalOpsArtifacts,
@@ -45,6 +46,7 @@ export async function load({ cookies, locals, fetch, url }) {
     proofGraph: await readLocalProofGraph(),
     raceCoverage: await readLocalRaceCoverage(),
     hostedConcurrentRaceMatrix: await readLocalHostedConcurrentRaceMatrix(),
+    hostedOpsSignals: await readLocalHostedOpsSignals(),
     nextAction: await readLocalNextAction(),
     proofFreshness: await readLocalProofFreshness(),
   });

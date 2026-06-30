@@ -83,11 +83,15 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       "hosted concurrent race matrix evidence requires promoted local race milestones",
     );
   }
-  const unproven = readiness.releaseReadiness.unproven.find(
-    (item) => item.id === "hosted-concurrent-race-matrix",
+  const unproven = readiness.releaseReadiness.unproven.find((item) =>
+    ["hosted-concurrent-race-matrix", "real-hosted-concurrent-race-matrix"].includes(
+      item.id,
+    ),
   );
   if (unproven === undefined) {
-    throw new Error("release readiness is missing hosted-concurrent-race-matrix");
+    throw new Error(
+      "release readiness is missing hosted-concurrent-race-matrix or real-hosted-concurrent-race-matrix",
+    );
   }
   if (coverage.generatedFrom?.proofRun !== proofRunSource) {
     throw new Error(
@@ -320,7 +324,9 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     }
   }
   if (
-    evidence.requestedEvidence?.id !== "hosted-concurrent-race-matrix" ||
+    !["hosted-concurrent-race-matrix", "real-hosted-concurrent-race-matrix"].includes(
+      evidence.requestedEvidence?.id,
+    ) ||
     evidence.requestedEvidence.status !== "unproven" ||
     !Array.isArray(evidence.remainingGaps) ||
     evidence.remainingGaps.length === 0

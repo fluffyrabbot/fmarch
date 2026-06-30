@@ -25,6 +25,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedOpsSignalsCommand,
+  devTestGameHostedOpsSignalsPath,
+} from "./dev_test_game_hosted_ops_signals.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -136,6 +140,15 @@ export function buildDevTestGameSpineManifest({
           devTestGameRaceCoveragePath,
         ],
       },
+      hostedOpsSignals: {
+        script: devTestGameHostedOpsSignalsCommand,
+        proofArtifact: devTestGameHostedOpsSignalsPath,
+        dependsOn: [
+          "target/dev-test-game/ops-artifacts.json",
+          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameHostedConcurrentRaceMatrixPath,
+        ],
+      },
       nextAction: {
         script: nextActionCommand,
         proofArtifact: nextActionPath,
@@ -231,6 +244,7 @@ export function buildDevTestGameSpineManifest({
       nextActionPath,
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedOpsSignalsPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
@@ -288,6 +302,11 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixCommand,
           devTestGameHostedConcurrentRaceMatrixPath,
         ],
+      },
+      {
+        id: "hosted-ops-signals-recorded",
+        status: "passed",
+        evidence: [devTestGameHostedOpsSignalsCommand, devTestGameHostedOpsSignalsPath],
       },
       {
         id: "terminal-artifacts-recorded",
@@ -364,6 +383,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
+    "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
   if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
@@ -400,6 +420,16 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted concurrent race matrix artifact drifted: ${manifest.commands.hostedConcurrentRaceMatrix.proofArtifact}`,
+    );
+  }
+  if (manifest.commands?.hostedOpsSignals?.script !== devTestGameHostedOpsSignalsCommand) {
+    throw new Error(
+      `spine manifest hosted ops signals command drifted: ${manifest.commands?.hostedOpsSignals?.script}`,
+    );
+  }
+  if (manifest.commands.hostedOpsSignals.proofArtifact !== devTestGameHostedOpsSignalsPath) {
+    throw new Error(
+      `spine manifest hosted ops signals artifact drifted: ${manifest.commands.hostedOpsSignals.proofArtifact}`,
     );
   }
   if (manifest.commands?.nextAction?.script !== nextActionCommand) {
@@ -458,6 +488,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionPath,
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
+    devTestGameHostedOpsSignalsPath,
     devTestGameProofGraphPath,
     devTestGameProofGraphAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
@@ -465,6 +496,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
     "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
@@ -483,6 +515,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "artifact-refresh-status-recorded",
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
+    "hosted-ops-signals-recorded",
     "terminal-artifacts-recorded",
     "release-boundary-carried",
   ]) {
@@ -709,6 +742,9 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
   "hosted-concurrent-race-matrix-admin":
     "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+  "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
+  "hosted-ops-signals-admin":
+    "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

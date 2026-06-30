@@ -569,6 +569,39 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   });
 });
 
+test("admin route data exposes local hosted ops signals as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedOpsSignals: localHostedOpsSignalsFixture(),
+  });
+
+  const ops = data.audit.find((item) => item.id === "local-hosted-ops-signals");
+  assert.equal(ops.label, "Local hosted ops signals");
+  assert.equal(ops.status, "4 hosted-like ops signals passed");
+  assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(ops.inspectHref, "/admin/audit/local-hosted-ops-signals?game=midsummer");
+  assert.deepEqual(
+    ops.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-matrix-artifact-checksummed", "passed"],
+      ["local-target-signals-carried", "passed"],
+      ["matrix-health-counters-carried", "passed"],
+      ["readiness-boundary-carried", "passed"],
+      ["hosted-telemetry-boundary-carried", "unproven"],
+    ],
+  );
+  assert.deepEqual(ops.artifactSummary, {
+    game: "game-a",
+    cellCount: 16,
+    reconnectLaneCount: 10,
+    staleConflictLaneCount: 4,
+    realHostedDeploymentStatus: "unproven",
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
 test("admin route data exposes local spine manifest as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1842,6 +1875,24 @@ test("admin local ops artifact detail data carries check rows", async () => {
   );
 });
 
+test("admin local hosted ops signals detail data carries signal rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-hosted-ops-signals",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedOpsSignals: localHostedOpsSignalsFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local hosted ops signals");
+  assert.equal(data.audit.id, "local-hosted-ops-signals");
+  assert.equal(data.audit.checks.length, 5);
+  assert.deepEqual(
+    data.audit.relatedLinks.map((link) => link.id),
+    ["local-hosted-concurrent-race-matrix", "local-ops-artifacts"],
+  );
+});
+
 test("admin route data exposes local seed fixture summary as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2708,6 +2759,38 @@ function localOpsArtifactsFixture() {
       { id: "proof-lanes-summarized", status: "passed" },
       { id: "proof-stability-summarized", status: "passed" },
       { id: "release-boundary-carried", status: "passed" },
+    ],
+  };
+}
+
+function localHostedOpsSignalsFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-ops-signals",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-hosted-like-ops-signals",
+    proofBoundary: "Local hosted-like ops signal bundle.",
+    target: {
+      game: "game-a",
+      roleSurfaceCount: 7,
+      realHostedDeploymentStatus: "unproven",
+    },
+    matrix: {
+      cellCount: 16,
+      passedCellCount: 16,
+      reloadCoveredCellCount: 16,
+      reconnectLaneCount: 10,
+      staleConflictLaneCount: 4,
+      hostedEvidenceStatus: "not_configured",
+    },
+    checks: [
+      { id: "hosted-matrix-artifact-checksummed", status: "passed" },
+      { id: "local-target-signals-carried", status: "passed" },
+      { id: "matrix-health-counters-carried", status: "passed" },
+      { id: "readiness-boundary-carried", status: "passed" },
+      { id: "hosted-telemetry-boundary-carried", status: "unproven" },
     ],
   };
 }

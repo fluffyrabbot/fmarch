@@ -29,6 +29,8 @@
     "test:dev-test-game-race-coverage-admin-proof": "node tools/dev_test_game_race_coverage_admin_proof.mjs",
     "test:dev-test-game-hosted-concurrent-race-matrix": "node tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
     "test:dev-test-game-hosted-concurrent-race-matrix-admin-proof": "node tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
+    "test:dev-test-game-hosted-ops-signals": "node tools/dev_test_game_hosted_ops_signals.mjs",
+    "test:dev-test-game-hosted-ops-signals-admin-proof": "node tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     "test:dev-test-game-hosted-matrix-raw-evidence": "node tools/dev_test_game_hosted_matrix_raw_evidence.mjs",
     "test:dev-test-game-hosted-matrix-external-evidence": "node tools/dev_test_game_hosted_matrix_external_evidence.mjs",
     "test:dev-test-game-proof-graph-admin-proof": "node tools/dev_test_game_proof_graph_admin_proof.mjs",
