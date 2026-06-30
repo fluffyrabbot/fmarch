@@ -761,6 +761,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
       spineTarget: {
         sourceCheckId: "local-core-loop-proof",
         detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -814,6 +815,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         roleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+        productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
         spineTarget: {
           sourceCheckId: "local-core-loop-proof",
           detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -1265,6 +1267,10 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     checkpointId: "d02-n02-n02-action-open",
     browserProofCommand: devTestGameLiveProofCommand,
   });
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.productionFeatureSpineTarget,
+    productionFeatureSpineTargetFixture(),
+  );
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
     blockedPreflightAction.nextAction.unproven.spineTarget,
@@ -9336,6 +9342,15 @@ function coreLoopSpineTargetsFixture() {
   };
 }
 
+function productionFeatureSpineTargetFixture() {
+  return {
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    checkpointId: "d02-n02-n02-action-open",
+  };
+}
+
 function hardeningAdminProofFixture() {
   return {
     version: 1,
@@ -9908,6 +9923,7 @@ function nextActionAdminProofFixture() {
       unprovenRoleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      unprovenProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
       unprovenSpineTarget: {
         sourceCheckId: "local-core-loop-proof",
         detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -9954,6 +9970,7 @@ function nextActionAdminProofFixture() {
         "selection-trace",
         "hosted-concurrent-race-matrix",
         "selected-proof-graph-node",
+        "selected-feature-spine-declaration",
         "selected-spine-target",
         "selected-spine-browser-proof",
         "release-readiness-selection-trace",

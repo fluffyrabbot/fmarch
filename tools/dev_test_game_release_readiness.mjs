@@ -3317,13 +3317,20 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     proof.generatedFrom?.unprovenSpineTarget !== null &&
     proof.generatedFrom?.unprovenSpineTarget !== undefined
   ) {
+    const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
     const target = proof.generatedFrom.unprovenSpineTarget;
     if (
+      typeof declaration?.cycleId !== "string" ||
+      typeof declaration?.roleUrlId !== "string" ||
+      typeof declaration?.checkpointId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-feature-spine-declaration",
+      ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target") ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
@@ -3360,6 +3367,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     command: String(proof.generatedFrom?.command ?? ""),
     reason: String(proof.generatedFrom?.reason ?? ""),
+    unprovenProductionFeatureSpineTarget:
+      proof.generatedFrom?.unprovenProductionFeatureSpineTarget ?? null,
     unprovenSpineTarget: proof.generatedFrom?.unprovenSpineTarget ?? null,
     releaseReadinessCandidateCount: releaseTrace.candidateCount,
     localReadinessDependencyCandidateCount: localTrace.candidateCount,

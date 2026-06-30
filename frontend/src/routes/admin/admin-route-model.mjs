@@ -1180,6 +1180,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     proofGraph,
   });
   const selectedSpineTarget = normalizeNextActionSpineTarget(unproven?.spineTarget);
+  const selectedProductionFeatureSpineTarget =
+    normalizeNextActionFeatureSpineDeclaration(
+      unproven?.productionFeatureSpineTarget,
+    );
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -1262,6 +1266,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     ...(selectedSpineTarget.checkpointId === ""
       ? []
       : [
+          Object.freeze({
+            id: "selected-feature-spine-declaration",
+            status: `${selectedProductionFeatureSpineTarget.cycleId}/${selectedProductionFeatureSpineTarget.checkpointId}/${selectedProductionFeatureSpineTarget.roleUrlId}`,
+          }),
           Object.freeze({
             id: "selected-spine-target",
             status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}`,
@@ -1484,6 +1492,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedRealHostedEvidenceProofTarget: String(
         unproven?.realHostedEvidenceInputs?.proofTarget ?? "",
       ),
+      selectedProductionFeatureSpineTarget,
       selectedSpineTarget,
       selectedRoleUrl: unprovenRoleUrl,
       selectedRoleHref:
@@ -1621,6 +1630,9 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         proofTarget: String(candidate.proofTarget ?? ""),
         roleUrl: String(candidate.roleUrl ?? ""),
         proofGraphNodeId: String(candidate.proofGraphNodeId ?? ""),
+        productionFeatureSpineTarget: normalizeNextActionFeatureSpineDeclaration(
+          candidate.productionFeatureSpineTarget,
+        ),
         spineTarget: normalizeNextActionSpineTarget(candidate.spineTarget),
         ...(candidate.hostedEvidenceMode === undefined
           ? {}
@@ -1672,6 +1684,23 @@ function normalizeNextActionSpineTarget(spineTarget) {
     roleUrl: String(spineTarget.roleUrl ?? ""),
     checkpointId: String(spineTarget.checkpointId ?? ""),
     browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
+  });
+}
+
+function normalizeNextActionFeatureSpineDeclaration(declaration) {
+  if (declaration === null || typeof declaration !== "object") {
+    return Object.freeze({
+      sourceCheckId: "",
+      cycleId: "",
+      roleUrlId: "",
+      checkpointId: "",
+    });
+  }
+  return Object.freeze({
+    sourceCheckId: String(declaration.sourceCheckId ?? ""),
+    cycleId: String(declaration.cycleId ?? ""),
+    roleUrlId: String(declaration.roleUrlId ?? ""),
+    checkpointId: String(declaration.checkpointId ?? ""),
   });
 }
 

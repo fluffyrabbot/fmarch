@@ -1395,6 +1395,10 @@ test("admin route data exposes local next action as a native audit row", async (
         "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       ],
       [
+        "selected-feature-spine-declaration",
+        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
+      ],
+      [
         "selected-spine-target",
         "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
       ],
@@ -1461,6 +1465,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRealHostedEvidenceStatus: "",
     selectedRealHostedEvidenceCommand: "",
     selectedRealHostedEvidenceProofTarget: "",
+    selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
     selectedSpineTarget: {
       sourceCheckId: "local-core-loop-proof",
       detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -1517,6 +1522,7 @@ test("admin route data exposes local next action as a native audit row", async (
           roleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+          productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -3819,6 +3825,7 @@ function nextActionFixture({
           roleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+          productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineTarget: {
             sourceCheckId: "local-core-loop-proof",
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -4393,9 +4400,19 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         proofTarget: unproven.proofTarget,
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
+        productionFeatureSpineTarget: unproven.productionFeatureSpineTarget,
         spineTarget: unproven.spineTarget,
       },
     ],
+  };
+}
+
+function productionFeatureSpineTargetFixture() {
+  return {
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    checkpointId: "d02-n02-n02-action-open",
   };
 }
 

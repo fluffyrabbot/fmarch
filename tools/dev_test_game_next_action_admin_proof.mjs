@@ -111,6 +111,8 @@ await runAdminAuditProof({
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
         source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
+      unprovenProductionFeatureSpineTarget:
+        source.nextAction.nextAction.unproven?.productionFeatureSpineTarget ?? null,
       unprovenSpineTarget:
         source.nextAction.nextAction.unproven?.spineTarget ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
@@ -430,13 +432,20 @@ export function assertNextActionAdminProof(evidence) {
     evidence.generatedFrom?.unprovenSpineTarget !== null &&
     evidence.generatedFrom?.unprovenSpineTarget !== undefined
   ) {
+    const declaration = evidence.generatedFrom.unprovenProductionFeatureSpineTarget;
     const target = evidence.generatedFrom.unprovenSpineTarget;
     if (
+      typeof declaration?.cycleId !== "string" ||
+      typeof declaration?.roleUrlId !== "string" ||
+      typeof declaration?.checkpointId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-feature-spine-declaration",
+      ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-target",
       ) ||
@@ -487,6 +496,7 @@ function requiredChecksForNextAction(nextAction) {
       "release-readiness-selection-trace",
     );
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
+      checks.push("selected-feature-spine-declaration");
       checks.push("selected-spine-target");
       checks.push("selected-spine-browser-proof");
     }
@@ -578,7 +588,11 @@ function requiredChecksForEvidence(evidence) {
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined
             ? []
-            : ["selected-spine-target", "selected-spine-browser-proof"]),
+            : [
+                "selected-feature-spine-declaration",
+                "selected-spine-target",
+                "selected-spine-browser-proof",
+              ]),
         ]
       : []),
     ...(evidence.generatedFrom?.stabilityStatus === "drifted"
