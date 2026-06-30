@@ -11681,7 +11681,7 @@ function completedGameEndgameSurfaceFixture() {
     sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_post:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11851,63 +11851,109 @@ function completedGameEndgameSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    staleCompletedVoteRecoveryProof: {
-      status: "passed",
+    staleCompletedVoteRecoveryProof: staleCompletedPlayerCommandProofFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      surfaceTestId: "player-surface",
-      clickedThroughFromRoleUrl: true,
       clickedAction: "submit_vote:no_lynch",
       commandKind: "SubmitVote",
-      setupResyncFromSeq: 918,
-      setupSnapshotCommandState: {
-        phase: { phaseId: "D05" },
-        voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
-      },
+      projectionRefreshKeys: ["votecount", "commandState"],
       command: {
         game,
         actor_slot: "slot-7",
         target: "NoLynch",
       },
-      commandStatus: {
-        state: "reject",
-        error: "GameAlreadyCompleted",
-        message: "Reject GameAlreadyCompleted: game already completed",
+      boundary:
+        "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
+    }),
+    staleCompletedPostRecoveryProof: staleCompletedPlayerCommandProofFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      clickedAction: "submit_post",
+      commandKind: "SubmitPost",
+      projectionRefreshKeys: [
+        "thread",
+        "votecount",
+        "commandState",
+        "dayVoteOutcomes",
+      ],
+      command: {
+        game,
+        actor_slot: "slot-7",
+        channel_id: "main",
+        body: "Stale completed game proof post",
       },
-      bridgePlan: {
-        role: "player",
-        commandKind: "SubmitVote",
-        commandEndpoint: "/commands",
-        finalState: "reject",
-        projectionRefreshKeys: ["votecount", "commandState"],
-      },
-      receipts: [{ state: "reject" }],
-      projectionCommandState: {
-        actorSlot: "slot-7",
-        phase: {
-          phaseId: "N05",
-          locked: false,
-        },
-        gameCompleted: true,
-        actions: [],
-        voteTargets: [],
-        boundary:
-          "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
-      },
-      checkpointReceiptState: "reject:GameAlreadyCompleted",
-      checkpointPhaseIdAfterReject: "N05",
-      checkpointActionStateAfterReject: "disabled:game complete",
-      checkpointTargetSlotsAfterReject: "",
-      receiptCount: 1,
-      receiptStatusText: "Reject GameAlreadyCompleted",
-      rawInviteTokensVisible: false,
-      targetOnlyReceiptVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+      boundary:
+        "Seeded browser GameAlreadyCompleted stale D05 post refreshed into completed endgame controls.",
+      stalePostBody: "Stale completed game proof post",
+    }),
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function staleCompletedPlayerCommandProofFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  clickedAction,
+  commandKind,
+  projectionRefreshKeys,
+  command,
+  boundary,
+  stalePostBody,
+}) {
+  const proof = {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    clickedAction,
+    commandKind,
+    setupResyncFromSeq: 918,
+    setupSnapshotCommandState: {
+      phase: { phaseId: "D05" },
+      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+    },
+    command,
+    commandStatus: {
+      state: "reject",
+      error: "GameAlreadyCompleted",
+      message: "Reject GameAlreadyCompleted: game already completed",
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind,
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys,
+    },
+    receipts: [{ state: "reject" }],
+    projectionCommandState: {
+      actorSlot: "slot-7",
+      phase: {
+        phaseId: "N05",
+        locked: false,
+      },
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary,
+    },
+    checkpointReceiptState: "reject:GameAlreadyCompleted",
+    checkpointPhaseIdAfterReject: "N05",
+    checkpointActionStateAfterReject: "disabled:game complete",
+    checkpointTargetSlotsAfterReject: "",
+    receiptCount: 1,
+    receiptStatusText: "Reject GameAlreadyCompleted",
+    rawInviteTokensVisible: false,
+    targetOnlyReceiptVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+  if (stalePostBody !== undefined) {
+    proof.stalePostBody = stalePostBody;
+  }
+  return proof;
 }
 
 function completedPlayerReloadSnapshotFixture({

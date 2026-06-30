@@ -16,6 +16,11 @@ import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
+  assertCompletedStaleRejectCases,
+  completedGameEndgameStaleRejectAssertionCases,
+  completedPlayerReloadAssertionCases,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
@@ -4097,6 +4102,9 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "stale:D05:submit_post:reject:GameAlreadyCompleted",
     )
   ) {
     throw new Error("core-loop admin proof missing completed-game endgame surface");
@@ -4141,33 +4149,27 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     throw new Error("core-loop admin proof missing completed player command state");
   }
   assertCoreLoopCompletedPlayerReloadCases(
-    coreLoopCompletedPlayerReloadAssertionCases({
+    completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
     }),
   );
-  assertCoreLoopCompletedStaleRejectCases([
-    ...coreLoopCompletedHostStaleCommandCases().map((scenario) => ({
-      assertProof: assertCoreLoopCompletedHostStaleCommandRecoveryProof,
-      proof: completedGameEndgameSurface[scenario.proofField],
+  assertCompletedStaleRejectCases(
+    completedGameEndgameStaleRejectAssertionCases({
+      completedGameEndgameSurface,
       expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-      expectedCommandKind: scenario.commandKind,
-    })),
-    {
-      assertProof: assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
-      proof:
-        completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-    },
-    {
-      assertProof: assertCoreLoopStaleCompletedGameVoteRecoveryProof,
-      proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    },
-  ]);
+      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+      sourceDeadPlayerRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      sourceActionPlayerRoleUrl:
+        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      assertCompletedHostStaleCommandRecoveryProof:
+        assertCoreLoopCompletedHostStaleCommandRecoveryProof,
+      assertCompletedDeadPlayerStaleVoteRecoveryProof:
+        assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
+      assertStaleCompletedGamePlayerCommandRecoveryProof:
+        assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof,
+    }),
+  );
 }
 
 function assertCoreLoopHostCompleteGameProof({
@@ -4257,38 +4259,6 @@ function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
   }
 }
 
-function coreLoopCompletedPlayerReloadAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-}) {
-  return [
-    {
-      proof: completedGameEndgameSurface.completedPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-      expectedSlot: "slot-7",
-      expectedBoundaryText: "completed action-player role URL reloaded",
-      principalUserId: "player_mira",
-    },
-    {
-      proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
-      expectedSlot: "slot-4",
-      expectedBoundaryText: "completed normal-player role URL reloaded",
-      principalUserId: "player_rowan",
-    },
-    {
-      proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-      expectedSlot: "slot-2",
-      expectedBoundaryText: "completed dead-player role URL reloaded",
-      principalUserId: "player_ilya",
-    },
-  ];
-}
-
 function assertCoreLoopCompletedPlayerReloadCases(cases) {
   for (const scenario of cases) {
     assertCoreLoopCompletedPlayerReloadProof({
@@ -4299,29 +4269,6 @@ function assertCoreLoopCompletedPlayerReloadCases(cases) {
         `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
     });
   }
-}
-
-function assertCoreLoopCompletedStaleRejectCases(cases) {
-  for (const { assertProof, ...scenario } of cases) {
-    assertProof(scenario);
-  }
-}
-
-function coreLoopCompletedHostStaleCommandCases() {
-  return [
-    {
-      proofField: "completedHostStaleResolveRecoveryProof",
-      commandKind: "ResolvePhase",
-    },
-    {
-      proofField: "completedHostStaleAdvanceRecoveryProof",
-      commandKind: "AdvancePhase",
-    },
-    {
-      proofField: "completedHostStaleCompleteRecoveryProof",
-      commandKind: "CompleteGame",
-    },
-  ];
 }
 
 function assertCoreLoopCompletedHostStaleCommandRecoveryProof({
@@ -4501,10 +4448,11 @@ function assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof({
   }
 }
 
-function assertCoreLoopStaleCompletedGameVoteRecoveryProof({
+function assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  scenario,
 }) {
   if (
     proof?.status !== "passed" ||
@@ -4517,27 +4465,25 @@ function assertCoreLoopStaleCompletedGameVoteRecoveryProof({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.clickedAction !== "submit_vote:no_lynch" ||
-    proof.commandKind !== "SubmitVote" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
     proof.setupResyncFromSeq !== 918 ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
-    proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
     proof.command?.game !== expectedGame ||
     proof.command.actor_slot !== "slot-7" ||
-    proof.command.target !== "NoLynch" ||
     proof.commandStatus?.state !== "reject" ||
     proof.commandStatus.error !== "GameAlreadyCompleted" ||
     !String(proof.commandStatus.message ?? "").includes(
       "Reject GameAlreadyCompleted: game already completed",
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
     proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "votecount",
-      "commandState",
-    ]) ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     proof.projectionCommandState?.actorSlot !== "slot-7" ||
     proof.projectionCommandState?.phase?.phaseId !== "N05" ||
@@ -4545,7 +4491,7 @@ function assertCoreLoopStaleCompletedGameVoteRecoveryProof({
     proof.projectionCommandState?.actions?.length !== 0 ||
     proof.projectionCommandState?.voteTargets?.length !== 0 ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "stale D05 vote refreshed into completed endgame controls",
+      scenario.rejectedBoundary,
     ) ||
     proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
     proof.checkpointPhaseIdAfterReject !== "N05" ||
@@ -4556,7 +4502,30 @@ function assertCoreLoopStaleCompletedGameVoteRecoveryProof({
       .toLowerCase()
       .includes("reject gamealreadycompleted")
   ) {
-    throw new Error("core-loop admin proof missing stale completed-game vote recovery");
+    throw new Error(
+      `core-loop admin proof missing stale completed-game ${scenario.commandKind} recovery`,
+    );
+  }
+  if (scenario.commandKind === "SubmitVote") {
+    if (
+      proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+      proof.command.target !== "NoLynch"
+    ) {
+      throw new Error(
+        "core-loop admin proof missing stale completed-game vote command",
+      );
+    }
+  }
+  if (scenario.commandKind === "SubmitPost") {
+    if (
+      proof.command.channel_id !== "main" ||
+      proof.command.body !== scenario.postBody ||
+      proof.stalePostBody !== scenario.postBody
+    ) {
+      throw new Error(
+        "core-loop admin proof missing stale completed-game post command",
+      );
+    }
   }
 }
 

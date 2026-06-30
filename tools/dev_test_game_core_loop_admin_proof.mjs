@@ -3,6 +3,13 @@ import {
   coreLoopHighlightedLaneEvidence,
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
+import {
+  assertCompletedStaleRejectCases,
+  completedGameEndgameStaleRejectAssertionCases,
+  completedHostStaleCommandCases,
+  completedPlayerReloadAssertionCases,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -1786,11 +1793,12 @@ async function proveCompletedGameEndgameSurface({
       frontendBaseUrl,
       roleUrl: deadPlayerRoleUrl,
     });
-  const staleCompletedVoteRecoveryProof =
-    await proveStaleCompletedGameVoteRecovery({
+  const staleCompletedPlayerRecoveryProofs =
+    await proveStaleCompletedGamePlayerCommandRecoveryCases({
       browser,
       frontendBaseUrl,
       roleUrl: actionPlayerRoleUrl,
+      cases: staleCompletedGamePlayerCommandCases(),
     });
   return {
     status: "passed",
@@ -1800,14 +1808,14 @@ async function proveCompletedGameEndgameSurface({
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_post:reject:GameAlreadyCompleted",
     hostCompleteProof,
     completedHostReloadProof,
     ...completedHostStaleRecoveryProofs,
     actionPlayerCompletedProof,
     ...completedPlayerReloadProofs,
     completedDeadPlayerStaleVoteRecoveryProof,
-    staleCompletedVoteRecoveryProof,
+    ...staleCompletedPlayerRecoveryProofs,
     releaseReady: false,
     productionReady: false,
   };
@@ -2602,35 +2610,6 @@ async function proveCompletedHostRoleReload({
   }
 }
 
-function completedHostStaleCommandCases() {
-  return [
-    {
-      proofField: "completedHostStaleResolveRecoveryProof",
-      commandKind: "ResolvePhase",
-      commandId: "completed-host-stale-resolve",
-      transitionToken: "host:stale_resolve_phase:reject:GameAlreadyCompleted",
-      boundary:
-        "Seeded browser completed host stale ResolvePhase rejected into completed host controls.",
-    },
-    {
-      proofField: "completedHostStaleAdvanceRecoveryProof",
-      commandKind: "AdvancePhase",
-      commandId: "completed-host-stale-advance",
-      transitionToken: "host:stale_advance_phase:reject:GameAlreadyCompleted",
-      boundary:
-        "Seeded browser completed host stale AdvancePhase rejected into completed host controls.",
-    },
-    {
-      proofField: "completedHostStaleCompleteRecoveryProof",
-      commandKind: "CompleteGame",
-      commandId: "completed-host-stale-complete",
-      transitionToken: "host:stale_complete_game:reject:GameAlreadyCompleted",
-      boundary:
-        "Seeded browser completed host stale CompleteGame rejected into completed host controls.",
-    },
-  ];
-}
-
 async function proveCompletedHostStaleCommandRecoveryCases({
   browser,
   frontendBaseUrl,
@@ -2766,17 +2745,40 @@ async function proveCompletedHostStaleCommandRecovery({
   }
 }
 
-async function proveStaleCompletedGameVoteRecovery({
+async function proveStaleCompletedGamePlayerCommandRecoveryCases({
   browser,
   frontendBaseUrl,
   roleUrl,
+  cases,
+}) {
+  const proofEntries = [];
+  for (const scenario of cases) {
+    proofEntries.push([
+      scenario.proofField,
+      await proveStaleCompletedGamePlayerCommandRecovery({
+        browser,
+        frontendBaseUrl,
+        roleUrl,
+        scenario,
+      }),
+    ]);
+  }
+  return Object.fromEntries(proofEntries);
+}
+
+async function proveStaleCompletedGamePlayerCommandRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+  scenario,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   const commandRequests = [];
   try {
-    await installStaleCompletedGameVoteRecoveryBrowserRoutes(page, {
+    await installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(page, {
       commandRequests,
+      scenario,
     });
     await page.context().addCookies([
       {
@@ -2801,27 +2803,28 @@ async function proveStaleCompletedGameVoteRecovery({
       return window.__fmarchTriggerPlayerResync(918);
     });
     await page.waitForFunction(
-      () =>
+      (selector) =>
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
-        document.querySelector(
-          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
-        ) !== null,
-      null,
+        document.querySelector(selector) !== null,
+      scenario.setupReadySelector,
       { timeout: 15000 },
     );
-    const voteButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
-    );
-    await voteButton.waitFor({ state: "visible", timeout: 15000 });
-    await voteButton.click();
+    const commandButton = page.locator(scenario.commandButtonSelector);
+    await commandButton.waitFor({ state: "visible", timeout: 15000 });
+    if (scenario.postBody !== undefined) {
+      await page.locator('[data-testid="player-composer"] textarea').fill(
+        scenario.postBody,
+      );
+    }
+    await commandButton.click();
     await page.waitForFunction(
-      () =>
+      (commandKind) =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
         window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted" &&
         window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
-          "SubmitVote" &&
+          commandKind &&
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true,
-      null,
+      scenario.commandKind,
       { timeout: 15000 },
     );
     await page.waitForFunction(
@@ -2839,16 +2842,20 @@ async function proveStaleCompletedGameVoteRecovery({
     const proof = await collectPlayerStaleCommandProof({
       page,
       commandRequests,
-      clickedAction: "submit_vote:no_lynch",
-      commandKind: "SubmitVote",
-      commandSelector: "SubmitVote",
+      clickedAction: scenario.clickedAction,
+      commandKind: scenario.commandKind,
+      commandSelector: scenario.commandSelector,
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
-      throw new Error("completed-game stale vote proof leaked an invite URL token");
+      throw new Error(
+        `completed-game stale ${scenario.commandKind} proof leaked an invite URL token`,
+      );
     }
     if (bodyText.includes("factional_kill")) {
-      throw new Error("completed-game stale vote proof leaked target-only night receipt");
+      throw new Error(
+        `completed-game stale ${scenario.commandKind} proof leaked target-only night receipt`,
+      );
     }
     return {
       ...proof,
@@ -2858,6 +2865,7 @@ async function proveStaleCompletedGameVoteRecovery({
       clickedThroughFromRoleUrl: true,
       setupResyncFromSeq: 918,
       setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
+      stalePostBody: scenario.postBody,
       rawInviteTokensVisible: false,
       targetOnlyReceiptVisible: false,
       releaseReady: false,
@@ -7412,16 +7420,16 @@ async function installCompletedHostStaleCommandRecoveryBrowserRoutes(
   });
 }
 
-async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
+async function installStaleCompletedGamePlayerCommandRecoveryBrowserRoutes(
   page,
-  { commandRequests },
+  { commandRequests, scenario },
 ) {
   let rejected = false;
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.SubmitVote !== undefined) {
+    if (command?.[scenario.commandKind] !== undefined) {
       rejected = true;
       await fulfillJson(
         route,
@@ -7446,13 +7454,13 @@ async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
       route,
       {
         v: 1,
-        id: commandEnvelope?.id ?? "stale-completed-game-vote-recovery-reject",
+        id: commandEnvelope?.id ?? `stale-completed-game-${scenario.commandKind}-reject`,
         body: {
           kind: "Reject",
           body: {
-            error: "WrongCompletedGameStaleVoteProofCommand",
+            error: "WrongCompletedGameStalePlayerProofCommand",
             retryable: false,
-            message: "completed-game stale vote proof only accepts SubmitVote",
+            message: `completed-game stale proof only accepts ${scenario.commandKind}`,
           },
         },
       },
@@ -7470,7 +7478,7 @@ async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
           author_user: "host_h",
           body: rejected
             ? "The game is complete."
-            : "Day 5 has opened but this client still has stale vote controls.",
+            : "Day 5 has opened but this client still has stale controls.",
           occurred_at: rejected ? 1782619200 : 1782532800,
         },
       ],
@@ -7504,12 +7512,10 @@ async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
       route,
       rejected
         ? seededCompletedActionPlayerCommandState({
-            boundary:
-              "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
+            boundary: scenario.rejectedBoundary,
           })
         : seededDayFiveActionPlayerCommandState({
-            boundary:
-              "Seeded browser stale completed-game vote proof opened with old Day 5 no-lynch controls.",
+            boundary: scenario.staleBoundary,
           }),
     );
   });
@@ -11949,6 +11955,9 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "stale:D05:submit_post:reject:GameAlreadyCompleted",
     )
   ) {
     throw new Error(
@@ -12007,28 +12016,19 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       expectedGame,
     }),
   );
-  assertCompletedStaleRejectCases([
-    ...completedHostStaleCommandCases().map((scenario) => ({
-      assertProof: assertCompletedHostStaleCommandRecoveryProof,
-      proof: completedGameEndgameSurface[scenario.proofField],
+  assertCompletedStaleRejectCases(
+    completedGameEndgameStaleRejectAssertionCases({
+      completedGameEndgameSurface,
       expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-      expectedCommandKind: scenario.commandKind,
-    })),
-    {
-      assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
-      proof:
-        completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-    },
-    {
-      assertProof: assertStaleCompletedGameVoteRecoveryProof,
-      proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    },
-  ]);
+      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+      sourceDeadPlayerRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      sourceActionPlayerRoleUrl:
+        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      assertCompletedHostStaleCommandRecoveryProof,
+      assertCompletedDeadPlayerStaleVoteRecoveryProof,
+      assertStaleCompletedGamePlayerCommandRecoveryProof,
+    }),
+  );
 }
 
 function assertHostCompleteGameProof({ proof, expectedGame, sourceRoleUrl }) {
@@ -12128,38 +12128,6 @@ function assertCompletedHostReloadProof({ proof, sourceRoleUrl }) {
   }
 }
 
-function completedPlayerReloadAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-}) {
-  return [
-    {
-      proof: completedGameEndgameSurface.completedPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-      expectedSlot: "slot-7",
-      expectedBoundaryText: "completed action-player role URL reloaded",
-      principalUserId: "player_mira",
-    },
-    {
-      proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
-      expectedSlot: "slot-4",
-      expectedBoundaryText: "completed normal-player role URL reloaded",
-      principalUserId: "player_rowan",
-    },
-    {
-      proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
-      expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-      expectedSlot: "slot-2",
-      expectedBoundaryText: "completed dead-player role URL reloaded",
-      principalUserId: "player_ilya",
-    },
-  ];
-}
-
 function assertCompletedPlayerReloadCases(cases) {
   for (const scenario of cases) {
     assertCompletedPlayerReloadProof({
@@ -12169,12 +12137,6 @@ function assertCompletedPlayerReloadCases(cases) {
       expectedNotificationsEndpoint:
         `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
     });
-  }
-}
-
-function assertCompletedStaleRejectCases(cases) {
-  for (const { assertProof, ...scenario } of cases) {
-    assertProof(scenario);
   }
 }
 
@@ -12365,10 +12327,11 @@ function assertCompletedDeadPlayerStaleVoteRecoveryProof({
   }
 }
 
-function assertStaleCompletedGameVoteRecoveryProof({
+function assertStaleCompletedGamePlayerCommandRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  scenario,
 }) {
   if (
     proof?.status !== "passed" ||
@@ -12381,27 +12344,25 @@ function assertStaleCompletedGameVoteRecoveryProof({
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
     proof.surfaceTestId !== "player-surface" ||
-    proof.clickedAction !== "submit_vote:no_lynch" ||
-    proof.commandKind !== "SubmitVote" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
     proof.setupResyncFromSeq !== 918 ||
     proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
-    proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
     proof.command?.game !== expectedGame ||
     proof.command.actor_slot !== "slot-7" ||
-    proof.command.target !== "NoLynch" ||
     proof.commandStatus?.state !== "reject" ||
     proof.commandStatus.error !== "GameAlreadyCompleted" ||
     !String(proof.commandStatus.message ?? "").includes(
       "Reject GameAlreadyCompleted: game already completed",
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
     proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "votecount",
-      "commandState",
-    ]) ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     proof.projectionCommandState?.actorSlot !== "slot-7" ||
     proof.projectionCommandState?.phase?.phaseId !== "N05" ||
@@ -12409,7 +12370,7 @@ function assertStaleCompletedGameVoteRecoveryProof({
     proof.projectionCommandState?.actions?.length !== 0 ||
     proof.projectionCommandState?.voteTargets?.length !== 0 ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "stale D05 vote refreshed into completed endgame controls",
+      scenario.rejectedBoundary,
     ) ||
     proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
     proof.checkpointPhaseIdAfterReject !== "N05" ||
@@ -12421,10 +12382,35 @@ function assertStaleCompletedGameVoteRecoveryProof({
       .includes("reject gamealreadycompleted")
   ) {
     throw new Error(
-      `core-loop admin proof missing stale completed-game vote recovery: ${JSON.stringify(
+      `core-loop admin proof missing stale completed-game ${scenario.commandKind} recovery: ${JSON.stringify(
         proof,
       )}`,
     );
+  }
+  if (scenario.commandKind === "SubmitVote") {
+    if (
+      proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+      proof.command.target !== "NoLynch"
+    ) {
+      throw new Error(
+        `core-loop admin proof missing stale completed-game vote command: ${JSON.stringify(
+          proof,
+        )}`,
+      );
+    }
+  }
+  if (scenario.commandKind === "SubmitPost") {
+    if (
+      proof.command.channel_id !== "main" ||
+      proof.command.body !== scenario.postBody ||
+      proof.stalePostBody !== scenario.postBody
+    ) {
+      throw new Error(
+        `core-loop admin proof missing stale completed-game post command: ${JSON.stringify(
+          proof,
+        )}`,
+      );
+    }
   }
 }
 
