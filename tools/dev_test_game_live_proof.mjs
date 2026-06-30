@@ -2855,6 +2855,69 @@ assert.equal(
     .status,
   session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
 );
+assert.equal(session.verification.multiplayerHardening.staleHostComplete.status, "passed");
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete.reject.error,
+  "GameAlreadyCompleted",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostComplete.activityStatusText,
+  /Reject GameAlreadyCompleted/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.rejectReceiptStatusText,
+  /Reject GameAlreadyCompleted/,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.surfaceText,
+  /All 1 slots revealed/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.slotsAfterReload.length,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.slotsAfterReload.every(
+      (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+    ),
+  true,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.revealTextAfterReload,
+  /All 1 slots revealed/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.roleActionsAfterReload.includes("complete_game"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.apiStateAfterReload.completed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostComplete
+    .staleHostReloadAfterReject.apiStateAfterReload.slots.every(
+      (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+    ),
+  true,
+);
 assert.equal(
   session.verification.multiplayerHardening.concurrentHostCompleteRace.status,
   "passed",

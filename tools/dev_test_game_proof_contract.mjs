@@ -75,6 +75,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-lifecycle-race",
   "stale-host-prompt",
   "stale-host-complete",
+  "stale-host-complete-reload",
   "concurrent-host-complete-race",
   "concurrent-player-complete-race",
   "public-player-complete-reload",
@@ -4388,6 +4389,61 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
+    lane(
+      "stale-host-complete-reload",
+      "Stale host complete recovery reloads revealed console",
+      {
+        game: hardening.staleHostComplete?.game ?? null,
+        routeStatus:
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.routeResponseStatus ?? null,
+        rejectReceipt:
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.rejectReceiptStatusText ?? null,
+        revealedSlots:
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.slotsAfterReload?.filter(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ).length ?? null,
+        completeActionVisible:
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.roleActionsAfterReload?.includes("complete_game") ?? null,
+        passed:
+          hardening.staleHostComplete?.status === "passed" &&
+          hardening.staleHostComplete?.reject?.error === "GameAlreadyCompleted" &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject?.status ===
+            "passed" &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.routeResponseStatus === 200 &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.rejectReceiptStatusText?.includes("Reject GameAlreadyCompleted") ===
+            true &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject?.surfaceText?.includes(
+            "All 1 slots revealed",
+          ) === true &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.slotsAfterReload?.length === 1 &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.slotsAfterReload?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.revealTextAfterReload?.includes("All 1 slots revealed") === true &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.roleActionsAfterReload?.includes("complete_game") === false &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.apiStateAfterReload?.completed === true &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.apiStateAfterReload?.slots?.length === 1 &&
+          hardening.staleHostComplete?.staleHostReloadAfterReject
+            ?.apiStateAfterReload?.slots?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true,
+      },
+    ),
     lane("concurrent-host-complete-race", "Concurrent complete-game commands converge", {
       ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
       rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,

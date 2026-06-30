@@ -4994,6 +4994,24 @@ test("session card and markdown include role credential URLs and tokens", () => 
             { role_revealed: true, alignment_revealed: true },
           ],
         },
+        staleHostReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          rejectReceiptStatusText:
+            "Reject GameAlreadyCompleted: game already completed",
+          surfaceText: "All 1 slots revealed",
+          slotsAfterReload: [
+            { role_revealed: true, alignment_revealed: true },
+          ],
+          revealTextAfterReload: "All 1 slots revealed",
+          roleActionsAfterReload: [],
+          apiStateAfterReload: {
+            completed: true,
+            slots: [
+              { role_revealed: true, alignment_revealed: true },
+            ],
+          },
+        },
       },
       concurrentHostCompleteRace: {
         status: "passed",
@@ -5537,6 +5555,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-lifecycle-race",
       "stale-host-prompt",
       "stale-host-complete",
+      "stale-host-complete-reload",
       "concurrent-host-complete-race",
       "concurrent-player-complete-race",
       "public-player-complete-reload",
@@ -5626,7 +5645,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 85);
+  assert.equal(opsArtifacts.proofRun.laneCount, 86);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5742,6 +5761,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-deadline-advance-race",
       "concurrent-host-lifecycle-race",
       "concurrent-host-complete-race",
+      "stale-host-complete-reload",
       "concurrent-player-complete-race",
       "public-player-complete-reload",
       "stale-player-complete-reload",
@@ -6269,6 +6289,7 @@ function hardeningAdminProofFixture() {
         "stale-host-modkill",
         "stale-host-prompt",
         "stale-host-complete",
+        "stale-host-complete-reload",
         "concurrent-host-complete-race",
         "concurrent-player-complete-race",
         "public-player-complete-reload",
@@ -6284,6 +6305,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
+        "stale-host-complete-reload",
         "concurrent-player-complete-race",
         "public-player-complete-reload",
         "stale-player-complete-reload",
@@ -6400,6 +6422,7 @@ function seedAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
+        "stale-host-complete-reload",
         "concurrent-player-complete-race",
         "public-player-complete-reload",
         "stale-player-complete-reload",
