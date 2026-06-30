@@ -29,6 +29,7 @@ const requiredChecks = [
   "ops",
   "seed",
   "release",
+  "race-coverage",
   "spine-manifest",
   "recovery",
   "spine-manifest-handoff",

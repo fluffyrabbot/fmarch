@@ -323,6 +323,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
     "tools/dev_test_game_release_admin_proof.mjs",
+    "tools/dev_test_game_race_coverage_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
   if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
@@ -640,6 +641,7 @@ const artifactRefreshCommands = Object.freeze({
   "seed-fixture": "npm run test:dev-test-game-seed-fixture",
   "release-readiness": "npm run test:dev-test-game-readiness",
   "race-coverage": "npm run test:dev-test-game-race-coverage",
+  "race-coverage-admin": "npm run test:dev-test-game-race-coverage-admin-proof",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

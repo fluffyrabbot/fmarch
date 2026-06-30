@@ -9,6 +9,7 @@ import {
   validateDevTestGameHardeningAdminProof,
   validateDevTestGameIdentityAdminProof,
   validateDevTestGameOpsAdminProof,
+  validateDevTestGameRaceCoverageAdminProof,
   validateDevTestGameReleaseAdminProof,
   validateDevTestGameSeedAdminProof,
   validateDevTestGameSpineManifestAdminProof,
@@ -74,6 +75,14 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-release-admin-proof",
     path: "target/dev-test-game/release-admin-proof.json",
     validate: validateDevTestGameReleaseAdminProof,
+  },
+  {
+    id: "race-coverage",
+    label: "Race coverage admin role surface",
+    script: "tools/dev_test_game_race_coverage_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-race-coverage-admin-proof",
+    path: "target/dev-test-game/race-coverage-admin-proof.json",
+    validate: validateDevTestGameRaceCoverageAdminProof,
   },
   {
     id: "spine-manifest",

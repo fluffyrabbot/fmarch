@@ -19,6 +19,8 @@ const DEFAULT_PROOF_GRAPH = "target/dev-test-game/proof-graph.json";
 const DEFAULT_PROOF_GRAPH_ADMIN_PROOF =
   "target/dev-test-game/proof-graph-admin-proof.json";
 const DEFAULT_RACE_COVERAGE = "target/dev-test-game/race-coverage.json";
+const DEFAULT_RACE_COVERAGE_ADMIN_PROOF =
+  "target/dev-test-game/race-coverage-admin-proof.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -148,6 +150,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     env: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE",
     fallback: DEFAULT_RACE_COVERAGE,
   }),
+  Object.freeze({
+    id: "race-coverage-admin",
+    label: "Race coverage admin proof",
+    env: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF",
+    fallback: DEFAULT_RACE_COVERAGE_ADMIN_PROOF,
+  }),
 ]);
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
@@ -219,6 +227,13 @@ export async function readLocalProofGraph({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH,
     fallback: DEFAULT_PROOF_GRAPH,
+  });
+}
+
+export async function readLocalRaceCoverage({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE,
+    fallback: DEFAULT_RACE_COVERAGE,
   });
 }
 

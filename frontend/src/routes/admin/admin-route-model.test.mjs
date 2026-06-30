@@ -825,6 +825,63 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   );
 });
 
+test("admin route data exposes local race coverage as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    raceCoverage: raceCoverageFixture(),
+  });
+
+  const raceCoverage = data.audit.find((item) => item.id === "local-race-coverage");
+  assert.equal(raceCoverage.label, "Local race coverage");
+  assert.equal(raceCoverage.status, "3 race cells passed");
+  assert.equal(raceCoverage.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    raceCoverage.inspectHref,
+    "/admin/audit/local-race-coverage?game=midsummer",
+  );
+  assert.deepEqual(
+    raceCoverage.checks.map((check) => [check.id, check.status]),
+    [
+      ["player-vote-change", "passed"],
+      ["host-resolve", "passed"],
+      ["host-complete-game", "passed"],
+    ],
+  );
+  assert.deepEqual(raceCoverage.artifactSummary, {
+    game: "00000000-0000-0000-0000-000000000001",
+    cellCount: 3,
+    provenCellCount: 3,
+    unprovenCellCount: 0,
+    reloadRequiredCellCount: 3,
+    reloadCoveredCellCount: 3,
+    reloadGapCount: 0,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local race coverage detail data carries race cell rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-race-coverage",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    raceCoverage: raceCoverageFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local race coverage");
+  assert.equal(data.audit.id, "local-race-coverage");
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["player-vote-change", "passed"],
+      ["host-resolve", "passed"],
+      ["host-complete-game", "passed"],
+    ],
+  );
+});
+
 test("admin route data exposes local proof freshness as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2486,6 +2543,82 @@ function proofGraphFixture() {
       { from: "spine-manifest", to: "next-action", relationship: "records" },
       { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
     ],
+  };
+}
+
+function raceCoverageFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-race-coverage",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-race-coverage",
+    proofBoundary: "Generated local race coverage.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      laneCount: 102,
+    },
+    summary: {
+      cellCount: 3,
+      provenCellCount: 3,
+      unprovenCellCount: 0,
+      reloadRequiredCellCount: 3,
+      reloadCoveredCellCount: 3,
+      reloadGapCount: 0,
+      actorPairs: ["host vs host", "player vs player"],
+      commandFamilies: ["day vote", "phase resolution", "complete game"],
+    },
+    cells: [
+      raceCoverageCell({
+        id: "player-vote-change",
+        actorPair: "player vs player",
+        commandFamily: "day vote",
+        raceLaneId: "concurrent-vote-race",
+        reloadLaneId: "concurrent-vote-race-reload",
+      }),
+      raceCoverageCell({
+        id: "host-resolve",
+        actorPair: "host vs host",
+        commandFamily: "phase resolution",
+        raceLaneId: "concurrent-host-resolve-race",
+        reloadLaneId: "concurrent-host-resolve-race-reload",
+      }),
+      raceCoverageCell({
+        id: "host-complete-game",
+        actorPair: "host vs host",
+        commandFamily: "complete game",
+        raceLaneId: "concurrent-host-complete-race",
+        reloadLaneId: "concurrent-host-complete-race-reload",
+      }),
+    ],
+    unprovenCells: [],
+    reloadGaps: [],
+  };
+}
+
+function raceCoverageCell({
+  id,
+  actorPair,
+  commandFamily,
+  raceLaneId,
+  reloadLaneId,
+}) {
+  return {
+    id,
+    actorPair,
+    commandFamily,
+    raceLaneId,
+    reloadLaneId,
+    roleSurfaces: ["host"],
+    status: "passed",
+    raceStatus: "passed",
+    reloadStatus: "passed",
+    reloadCoverage: "passed",
+    missingLaneIds: [],
+    provenBy: [raceLaneId, reloadLaneId],
   };
 }
 

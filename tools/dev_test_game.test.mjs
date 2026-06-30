@@ -192,6 +192,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
       "target/dev-test-game/admin-spine-admin-proof.json",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE: "target/dev-test-game/race-coverage.json",
+    FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
+      "target/dev-test-game/race-coverage-admin-proof.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -664,7 +666,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         true,
         "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
       ],
-      [2, "release", "missing", 14, false, "npm run test:dev-test-game-release-admin-proof"],
+      [2, "release", "missing", 15, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
     ],
   );
@@ -716,8 +718,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 12);
-  assert.equal(graph.summary.roleUrlCount, 12);
+  assert.equal(graph.summary.nodeCount, 13);
+  assert.equal(graph.summary.roleUrlCount, 13);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -5969,6 +5971,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
     raceCoverage,
+    raceCoverageAdminProofPath: "target/dev-test-game/race-coverage-admin-proof.json",
+    raceCoverageAdminProof: raceCoverageAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(raceCoverageReadiness);
   assert.equal(
@@ -5978,8 +5982,18 @@ test("session card and markdown include role credential URLs and tokens", () => 
     15,
   );
   assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-race-coverage-inventory",
+    ).adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-race-coverage?game=<seeded-game>",
+  );
+  assert.equal(
     raceCoverageReadiness.generatedFrom.raceCoverage,
     "target/dev-test-game/race-coverage.json",
+  );
+  assert.equal(
+    raceCoverageReadiness.generatedFrom.raceCoverageAdminProof,
+    "target/dev-test-game/race-coverage-admin-proof.json",
   );
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
@@ -6319,7 +6333,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    8,
+    9,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -6333,6 +6347,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "ops",
     "seed",
     "release",
+    "race-coverage",
     "spine-manifest",
   ]);
   const manifestReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -6919,6 +6934,70 @@ function releaseAdminProofFixture() {
   };
 }
 
+function raceCoverageAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-race-coverage-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-race-coverage-admin-surface",
+    proofBoundary: "Local admin race coverage proof only.",
+    generatedFrom: {
+      raceCoverage: "target/dev-test-game/race-coverage.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      cellIds: [
+        "player-vote-change",
+        "player-night-action",
+        "player-vote-vs-host-resolve",
+        "player-action-vs-host-advance",
+        "cohost-deadline-vs-host-resolve",
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+        "host-resolve",
+        "host-advance",
+        "host-deadline-advance",
+        "host-lifecycle",
+        "host-mixed-advance",
+        "host-complete-game",
+        "player-vs-completed-game",
+      ],
+      cellCount: 15,
+      reloadCoveredCellCount: 12,
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-race-coverage?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-race-coverage",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "player-vote-change",
+        "player-night-action",
+        "player-vote-vs-host-resolve",
+        "player-action-vs-host-advance",
+        "cohost-deadline-vs-host-resolve",
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+        "host-resolve",
+        "host-advance",
+        "host-deadline-advance",
+        "host-lifecycle",
+        "host-mixed-advance",
+        "host-complete-game",
+        "player-vs-completed-game",
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function spineManifestFixture() {
   return {
     version: 1,
@@ -7081,6 +7160,7 @@ function adminSpineAdminProofFixture() {
         "ops",
         "seed",
         "release",
+        "race-coverage",
         "spine-manifest",
       ],
     },
@@ -7099,6 +7179,7 @@ function adminSpineAdminProofFixture() {
         "ops",
         "seed",
         "release",
+        "race-coverage",
         "spine-manifest",
         "recovery",
       ],
@@ -7118,6 +7199,7 @@ function adminSpineProofFixture() {
     ["ops", opsAdminProofFixture()],
     ["seed", seedAdminProofFixture()],
     ["release", releaseAdminProofFixture()],
+    ["race-coverage", raceCoverageAdminProofFixture()],
     ["spine-manifest", spineManifestAdminProofFixture()],
   ];
   return {

@@ -58,6 +58,10 @@ const defaultAdminSpineAdminProofPath = path.join(
   "admin-spine-admin-proof.json",
 );
 const defaultRaceCoveragePath = path.join(artifactDir, "race-coverage.json");
+const defaultRaceCoverageAdminProofPath = path.join(
+  artifactDir,
+  "race-coverage-admin-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -182,6 +186,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameRaceCoverage(options.raceCoverage, {
         path: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
         artifact: options.raceCoverageArtifact,
+      })
+    : undefined;
+  const raceCoverageAdminProofEvidence = options.raceCoverageAdminProof
+    ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
+        path:
+          options.raceCoverageAdminProofPath ??
+          "target/dev-test-game/race-coverage-admin-proof.json",
+        artifact: options.raceCoverageAdminProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -394,6 +406,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofBoundary: raceCoverageEvidence.proofBoundary,
       cellCount: raceCoverageEvidence.cellCount,
       reloadCoveredCellCount: raceCoverageEvidence.reloadCoveredCellCount,
+      ...(raceCoverageAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: raceCoverageAdminProofEvidence }),
     });
   }
   const unproven = [
@@ -552,6 +567,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             raceCoverage: raceCoverageEvidence.path,
+            ...(raceCoverageAdminProofEvidence === undefined
+              ? {}
+              : { raceCoverageAdminProof: raceCoverageAdminProofEvidence.path }),
           }),
     },
     localDevelopmentSpine: {
@@ -627,7 +645,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                   }),
               ...(raceCoverageEvidence === undefined
                 ? {}
-                : { raceCoverage: raceCoverageEvidence }),
+                : {
+                    raceCoverage: {
+                      ...raceCoverageEvidence,
+                      ...(raceCoverageAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: raceCoverageAdminProofEvidence }),
+                    },
+                  }),
             },
           }),
     },
@@ -1500,6 +1525,46 @@ export function validateDevTestGameRaceCoverage(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameRaceCoverageAdminProof(proof, options = {}) {
+  if (proof?.version !== 1) {
+    throw new Error(`race coverage admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-race-coverage-admin-proof") {
+    throw new Error(`unexpected race coverage admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`race coverage admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-race-coverage-admin-surface") {
+    throw new Error(`race coverage admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "race coverage admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("race coverage admin proof did not prove admin overview click-through");
+  }
+  for (const cellId of proof.generatedFrom?.cellIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(cellId)) {
+      throw new Error(`race coverage admin proof missing visible cell: ${cellId}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/race-coverage-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   const requiredChecks = [
     "local-role-url-browser-proof",
@@ -1656,6 +1721,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "ops",
     "seed",
     "release",
+    "race-coverage",
     "spine-manifest",
   ];
   if (proof?.version !== 1) {
@@ -1764,6 +1830,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "ops",
     "seed",
     "release",
+    "race-coverage",
     "spine-manifest",
     "recovery",
   ];
@@ -1936,6 +2003,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     adminSpineProofOptions,
     adminSpineAdminProofOptions,
     raceCoverageOptions,
+    raceCoverageAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
     readOptionalHardeningAdminProof(),
@@ -1952,6 +2020,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalAdminSpineProof(),
     readOptionalAdminSpineAdminProof(),
     readOptionalRaceCoverage(),
+    readOptionalRaceCoverageAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -1970,6 +2039,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(adminSpineProofOptions ?? {}),
     ...(adminSpineAdminProofOptions ?? {}),
     ...(raceCoverageOptions ?? {}),
+    ...(raceCoverageAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -2217,6 +2287,21 @@ async function readOptionalRaceCoverage() {
     raceCoverage: JSON.parse(await readFile(proofPath, "utf8")),
     raceCoveragePath: path.relative(repoRoot, proofPath),
     raceCoverageArtifact: artifact,
+  };
+}
+
+async function readOptionalRaceCoverageAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF;
+  if (override === undefined || override.trim() === "") {
+    return undefined;
+  }
+  const now = new Date();
+  const proofPath = resolveArtifactPath(override, defaultRaceCoverageAdminProofPath);
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    raceCoverageAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    raceCoverageAdminProofPath: path.relative(repoRoot, proofPath),
+    raceCoverageAdminProofArtifact: artifact,
   };
 }
 

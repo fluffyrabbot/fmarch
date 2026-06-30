@@ -29,6 +29,7 @@ export async function buildAdminRouteData({
   spineManifest = null,
   adminSpineProof = null,
   proofGraph = null,
+  raceCoverage = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -129,45 +130,49 @@ export async function buildAdminRouteData({
     ...coldData,
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
-        appendLocalProofGraphAudit(
-          appendLocalProofFreshnessAudit(
-            appendLocalAdminSpineAudit(
-              appendLocalSpineManifestAudit(
-                appendLocalIdentityAdapterAudit(
-                  appendLocalBackupRestoreAudit(
-                    appendLocalReleaseReadinessAudit(
-                      appendLocalSeedFixtureAudit(
-                        appendLocalOpsArtifactsAudit(
-                          appendLocalHardeningAudit(
-                            appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                            proofRun,
+        appendLocalRaceCoverageAudit(
+          appendLocalProofGraphAudit(
+            appendLocalProofFreshnessAudit(
+              appendLocalAdminSpineAudit(
+                appendLocalSpineManifestAudit(
+                  appendLocalIdentityAdapterAudit(
+                    appendLocalBackupRestoreAudit(
+                      appendLocalReleaseReadinessAudit(
+                        appendLocalSeedFixtureAudit(
+                          appendLocalOpsArtifactsAudit(
+                            appendLocalHardeningAudit(
+                              appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                              proofRun,
+                              { game },
+                            ),
+                            opsArtifacts,
                             { game },
                           ),
-                          opsArtifacts,
+                          seedFixtureSummary,
                           { game },
                         ),
-                        seedFixtureSummary,
+                        releaseReadinessChecklist,
                         { game },
                       ),
-                      releaseReadinessChecklist,
+                      backupRestoreProof,
                       { game },
                     ),
-                    backupRestoreProof,
+                    identityAdapterProof,
                     { game },
                   ),
-                  identityAdapterProof,
+                  spineManifest,
                   { game },
                 ),
-                spineManifest,
+                adminSpineProof,
                 { game },
               ),
-              adminSpineProof,
-              { game },
+              proofFreshness,
+              { game, nextAction },
             ),
-            proofFreshness,
-            { game, nextAction },
+            proofGraph,
+            { game },
           ),
-          proofGraph,
+          raceCoverage,
           { game },
         ),
         nextAction,
@@ -227,6 +232,7 @@ export async function buildAdminAuditDetailData({
   spineManifest = null,
   adminSpineProof = null,
   proofGraph = null,
+  raceCoverage = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -247,6 +253,7 @@ export async function buildAdminAuditDetailData({
     spineManifest,
     adminSpineProof,
     proofGraph,
+    raceCoverage,
     nextAction,
     proofFreshness,
   });
@@ -404,6 +411,66 @@ export function appendLocalProofGraphAudit(audit, proofGraph, { game }) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalRaceCoverageAudit(audit, raceCoverage, { game }) {
+  const row = normalizeLocalRaceCoverageAudit(raceCoverage, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {
+  if (
+    raceCoverage === null ||
+    typeof raceCoverage !== "object" ||
+    raceCoverage.version !== 1 ||
+    raceCoverage.proof !== "dev-test-game-race-coverage" ||
+    raceCoverage.status !== "passed" ||
+    raceCoverage.scope !== "local-dev-test-game-race-coverage" ||
+    raceCoverage.releaseReady !== false ||
+    raceCoverage.productionReady !== false
+  ) {
+    return null;
+  }
+  const cells = Array.isArray(raceCoverage.cells) ? raceCoverage.cells : [];
+  const passedCells = cells.filter((cell) => cell?.status === "passed");
+  return Object.freeze({
+    id: "local-race-coverage",
+    label: "Local race coverage",
+    status: `${passedCells.length} race cells passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local race-coverage inventory",
+    boundaryDetail:
+      raceCoverage.proofBoundary ??
+      "Generated local race-coverage inventory without hosted concurrency claims.",
+    href: "target/dev-test-game/race-coverage.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-race-coverage" }),
+    checks: Object.freeze(
+      cells.map((cell) =>
+        Object.freeze({
+          id: String(cell.id),
+          status: String(cell.status),
+        }),
+      ),
+    ),
+    artifactSummary: Object.freeze({
+      game: String(raceCoverage.generatedFrom?.game ?? ""),
+      cellCount: Number(raceCoverage.summary?.cellCount ?? cells.length),
+      provenCellCount: Number(raceCoverage.summary?.provenCellCount ?? passedCells.length),
+      unprovenCellCount: Number(raceCoverage.summary?.unprovenCellCount ?? 0),
+      reloadRequiredCellCount: Number(
+        raceCoverage.summary?.reloadRequiredCellCount ?? 0,
+      ),
+      reloadCoveredCellCount: Number(
+        raceCoverage.summary?.reloadCoveredCellCount ?? 0,
+      ),
+      reloadGapCount: Number(raceCoverage.summary?.reloadGapCount ?? 0),
+      releaseReady: raceCoverage.releaseReady === true,
+      productionReady: raceCoverage.productionReady === true,
+    }),
+  });
 }
 
 export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
