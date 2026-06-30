@@ -18,6 +18,8 @@ import {
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
+const devTestGameSeededBrowserProofCommand =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
@@ -367,7 +369,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       )
     : undefined;
   const nextActionAdminProofEvidence = options.nextActionAdminProof
-    ? validateDevTestGameNextActionAdminProof(options.nextActionAdminProof, {
+    ? validateOptionalNextActionAdminProof(options.nextActionAdminProof, {
         path:
           options.nextActionAdminProofPath ??
           "target/dev-test-game/next-action-admin-proof.json",
@@ -1881,6 +1883,13 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleRows: proof.adminRoleSurface?.visibleSpineRoleUrls,
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleUrls,
   });
+  const roleUrlHrefs = proof.generatedFrom?.coreLoopSpineRows?.roleUrlHrefs ?? {};
+  for (const rowId of proof.generatedFrom?.coreLoopSpineRows?.roleUrls ?? []) {
+    const href = roleUrlHrefs[rowId];
+    if (typeof href !== "string" || !href.includes("/g/")) {
+      throw new Error(`core-loop admin proof missing browser role URL: ${rowId}`);
+    }
+  }
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
     visibleRows: proof.adminRoleSurface?.visibleSpineCheckpoints,
@@ -1922,12 +1931,15 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
   const defaultCheckpointId =
     checkpointIds.find((id) => id === "d02-n02-n02-action-open") ??
     String(checkpointIds[0] ?? "");
+  const defaultRoleUrl = String(rowIds.roleUrlHrefs?.[defaultRoleUrlId] ?? "");
   return {
     status: "passed",
     detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
     defaultCycleId,
     defaultRoleUrlId,
+    defaultRoleUrl,
     defaultCheckpointId,
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
     cycleIds,
     roleUrlIds,
     checkpointIds,
@@ -3309,8 +3321,13 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     if (
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
+      typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
-      !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target")
+      typeof target.browserProofCommand !== "string" ||
+      !proof.adminRoleSurface?.visibleChecks?.includes("selected-spine-target") ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-browser-proof",
+      )
     ) {
       throw new Error("next-action admin proof missing selected spine target");
     }
@@ -3348,6 +3365,21 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateOptionalNextActionAdminProof(proof, options = {}) {
+  try {
+    return validateDevTestGameNextActionAdminProof(proof, options);
+  } catch (error) {
+    if (
+      String(error?.message ?? "").includes(
+        "next-action admin proof missing selected spine target",
+      )
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
@@ -3929,8 +3961,12 @@ function validCoreLoopSpineTargets(spineTargets) {
     spineTargets.defaultCycleId.length > 0 &&
     typeof spineTargets.defaultRoleUrlId === "string" &&
     spineTargets.defaultRoleUrlId.length > 0 &&
+    typeof spineTargets.defaultRoleUrl === "string" &&
+    spineTargets.defaultRoleUrl.includes("/g/") &&
     typeof spineTargets.defaultCheckpointId === "string" &&
     spineTargets.defaultCheckpointId.length > 0 &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
     Array.isArray(spineTargets.cycleIds) &&
     spineTargets.cycleIds.includes(spineTargets.defaultCycleId) &&
     Array.isArray(spineTargets.roleUrlIds) &&

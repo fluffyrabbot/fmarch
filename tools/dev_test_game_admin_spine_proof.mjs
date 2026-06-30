@@ -150,6 +150,9 @@ export async function runAdminSpineProof() {
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
   for (const spec of devTestGameAdminSpineProofPlan) {
+    if (spec.id === "release") {
+      await runNodeScript("tools/dev_test_game_release_readiness.mjs");
+    }
     await runNodeScript(spec.script);
     const proofPath = path.join(repoRoot, spec.path);
     const proof = JSON.parse(await readFile(proofPath, "utf8"));

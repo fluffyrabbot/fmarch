@@ -434,8 +434,15 @@ export function assertNextActionAdminProof(evidence) {
     if (
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
+      typeof target.roleUrl !== "string" ||
       typeof target.checkpointId !== "string" ||
-      !evidence.adminRoleSurface?.visibleChecks?.includes("selected-spine-target")
+      typeof target.browserProofCommand !== "string" ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-target",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-browser-proof",
+      )
     ) {
       throw new Error("next-action admin proof missing selected spine target row");
     }
@@ -481,6 +488,7 @@ function requiredChecksForNextAction(nextAction) {
     );
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
       checks.push("selected-spine-target");
+      checks.push("selected-spine-browser-proof");
     }
   }
   if (nextAction.nextAction.stability?.source !== undefined) {
@@ -570,7 +578,7 @@ function requiredChecksForEvidence(evidence) {
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined
             ? []
-            : ["selected-spine-target"]),
+            : ["selected-spine-target", "selected-spine-browser-proof"]),
         ]
       : []),
     ...(evidence.generatedFrom?.stabilityStatus === "drifted"

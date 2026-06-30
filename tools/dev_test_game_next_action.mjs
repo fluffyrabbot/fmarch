@@ -384,6 +384,11 @@ export function assertDevTestGameNextAction(evidence) {
     if (typeof evidence.nextAction.unproven?.proofGraphNodeId !== "string") {
       throw new Error("next-action release-readiness recovery is missing a graph node id");
     }
+    if (!validActionableSpineTarget(evidence.nextAction.unproven?.spineTarget)) {
+      throw new Error(
+        "next-action release-readiness recovery is missing an actionable spine target",
+      );
+    }
   }
   if (
     evidence.nextAction.reason === "harness-stability-drift" &&
@@ -523,7 +528,9 @@ function coreLoopSpineTargetFromReadiness(readiness) {
     detailRoleUrl: String(targets.detailRoleUrl ?? ""),
     cycleId: String(targets.defaultCycleId ?? ""),
     roleUrlId: String(targets.defaultRoleUrlId ?? ""),
+    roleUrl: String(targets.defaultRoleUrl ?? ""),
     checkpointId: String(targets.defaultCheckpointId ?? ""),
+    browserProofCommand: String(targets.browserProofCommand ?? ""),
   };
   return Object.values(target).every((value) => value !== "") ? target : null;
 }
@@ -1023,6 +1030,26 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       );
     }
   }
+}
+
+function validActionableSpineTarget(spineTarget) {
+  return (
+    spineTarget !== null &&
+    typeof spineTarget === "object" &&
+    spineTarget.sourceCheckId === "local-core-loop-proof" &&
+    typeof spineTarget.detailRoleUrl === "string" &&
+    spineTarget.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
+    typeof spineTarget.cycleId === "string" &&
+    spineTarget.cycleId.length > 0 &&
+    typeof spineTarget.roleUrlId === "string" &&
+    spineTarget.roleUrlId.length > 0 &&
+    typeof spineTarget.roleUrl === "string" &&
+    spineTarget.roleUrl.includes("/g/") &&
+    typeof spineTarget.checkpointId === "string" &&
+    spineTarget.checkpointId.length > 0 &&
+    typeof spineTarget.browserProofCommand === "string" &&
+    spineTarget.browserProofCommand.includes("test:dev-test-game-live")
+  );
 }
 
 function assertLocalReadinessDependencyTrace(localReadinessDependencyTrace, nextAction) {

@@ -766,7 +766,9 @@ test("dev test-game next-action derives one local recovery command from the mani
         detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
         cycleId: "d02-n02",
         roleUrlId: "d02-n02-actionPlayer",
+        roleUrl: "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         checkpointId: "d02-n02-n02-action-open",
+        browserProofCommand: devTestGameLiveProofCommand,
       },
     },
   });
@@ -817,7 +819,10 @@ test("dev test-game next-action derives one local recovery command from the mani
           detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
           cycleId: "d02-n02",
           roleUrlId: "d02-n02-actionPlayer",
+          roleUrl:
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
           checkpointId: "d02-n02-n02-action-open",
+          browserProofCommand: devTestGameLiveProofCommand,
         },
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
@@ -1256,7 +1261,9 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
+    roleUrl: "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     checkpointId: "d02-n02-n02-action-open",
+    browserProofCommand: devTestGameLiveProofCommand,
   });
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
@@ -9180,6 +9187,24 @@ function coreLoopAdminProofFixture() {
           "d02-n02-normalPlayer",
           "d02-n02-target",
         ],
+        roleUrlHrefs: {
+          "d01-n01-d02-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
+          "d01-n01-d02-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+          "d01-n01-d02-normalPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+          "d01-n01-d02-target":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+          "d02-n02-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "d02-n02-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d02-n02-normalPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d02-n02-target":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+        },
         checkpoints: [
           "d01-n01-d02-d01-resolved-locked",
           "d01-n01-d02-n01-action-open",
@@ -9277,7 +9302,10 @@ function coreLoopSpineTargetsFixture() {
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     defaultCycleId: "d02-n02",
     defaultRoleUrlId: "d02-n02-actionPlayer",
+    defaultRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     defaultCheckpointId: "d02-n02-n02-action-open",
+    browserProofCommand: devTestGameLiveProofCommand,
     cycleIds: ["d01-n01-d02", "d02-n02"],
     roleUrlIds: [
       "d01-n01-d02-host",
@@ -9885,7 +9913,10 @@ function nextActionAdminProofFixture() {
         detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
         cycleId: "d02-n02",
         roleUrlId: "d02-n02-actionPlayer",
+        roleUrl:
+          "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         checkpointId: "d02-n02-n02-action-open",
+        browserProofCommand: devTestGameLiveProofCommand,
       },
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
@@ -9924,6 +9955,7 @@ function nextActionAdminProofFixture() {
         "hosted-concurrent-race-matrix",
         "selected-proof-graph-node",
         "selected-spine-target",
+        "selected-spine-browser-proof",
         "release-readiness-selection-trace",
       ],
       visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],

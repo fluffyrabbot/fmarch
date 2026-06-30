@@ -13,6 +13,10 @@ const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
 const LOCAL_PROOF_GRAPH_COMMAND =
   "npm run test:dev-test-game-proof-graph-admin-proof";
+const LIVE_BROWSER_PROOF_COMMAND =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+const ACTIONABLE_SPINE_ROLE_URL =
+  "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002";
 const HOSTED_MATRIX_PROOF_TARGET =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 const HOSTED_TARGET_PREFLIGHT_PROOF_TARGET =
@@ -1394,6 +1398,7 @@ test("admin route data exposes local next action as a native audit row", async (
         "selected-spine-target",
         "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer",
       ],
+      ["selected-spine-browser-proof", LIVE_BROWSER_PROOF_COMMAND],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1461,7 +1466,9 @@ test("admin route data exposes local next action as a native audit row", async (
       detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
       cycleId: "d02-n02",
       roleUrlId: "d02-n02-actionPlayer",
+      roleUrl: ACTIONABLE_SPINE_ROLE_URL,
       checkpointId: "d02-n02-n02-action-open",
+      browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     },
     selectedRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
@@ -1515,7 +1522,9 @@ test("admin route data exposes local next action as a native audit row", async (
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
             cycleId: "d02-n02",
             roleUrlId: "d02-n02-actionPlayer",
+            roleUrl: ACTIONABLE_SPINE_ROLE_URL,
             checkpointId: "d02-n02-n02-action-open",
+            browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
           },
         },
       ],
@@ -3815,7 +3824,9 @@ function nextActionFixture({
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
             cycleId: "d02-n02",
             roleUrlId: "d02-n02-actionPlayer",
+            roleUrl: ACTIONABLE_SPINE_ROLE_URL,
             checkpointId: "d02-n02-n02-action-open",
+            browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
           },
         }
       : undefined,

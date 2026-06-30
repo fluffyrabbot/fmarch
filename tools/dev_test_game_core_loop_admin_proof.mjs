@@ -59,6 +59,14 @@ const requiredSpineRows = (proofRun) => {
         (roleId) => `${String(cycle.id)}-${String(roleId)}`,
       ),
     ),
+    roleUrlHrefs: Object.fromEntries(
+      cycles.flatMap((cycle) =>
+        Object.entries(cycle.roleUrls ?? {}).map(([roleId, href]) => [
+          `${String(cycle.id)}-${String(roleId)}`,
+          String(href ?? ""),
+        ]),
+      ),
+    ),
     checkpoints: cycles.flatMap((cycle) =>
       (cycle.checkpoints ?? []).map(
         (checkpoint) => `${String(cycle.id)}-${String(checkpoint.id)}`,
@@ -154,6 +162,13 @@ export function assertCoreLoopAdminProof(evidence) {
     evidence.adminRoleSurface?.visibleSpineRoleUrls,
     evidence.generatedFrom?.coreLoopSpineRows?.roleUrls,
   );
+  const roleUrlHrefs = evidence.generatedFrom?.coreLoopSpineRows?.roleUrlHrefs ?? {};
+  for (const rowId of evidence.generatedFrom?.coreLoopSpineRows?.roleUrls ?? []) {
+    const href = roleUrlHrefs[rowId];
+    if (typeof href !== "string" || !href.includes("/g/")) {
+      throw new Error(`core-loop admin proof missing actionable role URL: ${rowId}`);
+    }
+  }
   assertVisibleRows(
     "core-loop admin proof missing visible spine checkpoint",
     evidence.adminRoleSurface?.visibleSpineCheckpoints,

@@ -1266,6 +1266,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             id: "selected-spine-target",
             status: `${selectedSpineTarget.cycleId}/${selectedSpineTarget.checkpointId}/${selectedSpineTarget.roleUrlId}`,
           }),
+          Object.freeze({
+            id: "selected-spine-browser-proof",
+            status: selectedSpineTarget.browserProofCommand,
+          }),
         ]),
     ...(stability === null
       ? []
@@ -1655,7 +1659,9 @@ function normalizeNextActionSpineTarget(spineTarget) {
       detailRoleUrl: "",
       cycleId: "",
       roleUrlId: "",
+      roleUrl: "",
       checkpointId: "",
+      browserProofCommand: "",
     });
   }
   return Object.freeze({
@@ -1663,7 +1669,9 @@ function normalizeNextActionSpineTarget(spineTarget) {
     detailRoleUrl: String(spineTarget.detailRoleUrl ?? ""),
     cycleId: String(spineTarget.cycleId ?? ""),
     roleUrlId: String(spineTarget.roleUrlId ?? ""),
+    roleUrl: String(spineTarget.roleUrl ?? ""),
     checkpointId: String(spineTarget.checkpointId ?? ""),
+    browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
   });
 }
 
