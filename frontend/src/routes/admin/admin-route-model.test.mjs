@@ -1976,7 +1976,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === "local-release-readiness");
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "5 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "8 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -1990,6 +1990,33 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-hardening-proof",
       "local-stale-conflict-message-milestone",
       "local-host-stale-control-milestone",
+      "local-proof-graph-admin-role-handoffs",
+      "local-proof-freshness-admin-surface",
+      "local-next-action-admin-surface",
+    ],
+  );
+  assert.deepEqual(
+    readiness.localPrerequisites.map((check) => [
+      check.id,
+      check.command,
+      check.roleUrl,
+    ]),
+    [
+      [
+        "local-proof-graph-admin-role-handoffs",
+        "npm run test:dev-test-game-proof-graph-admin-proof",
+        "/admin/audit/local-proof-graph?game=<seeded-game>",
+      ],
+      [
+        "local-proof-freshness-admin-surface",
+        "npm run test:dev-test-game-proof-freshness-admin-proof",
+        "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      ],
+      [
+        "local-next-action-admin-surface",
+        "npm run test:dev-test-game-next-action-admin-proof",
+        "/admin/audit/local-next-action?game=<seeded-game>",
+      ],
     ],
   );
   assert.deepEqual(
@@ -1998,7 +2025,8 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 5,
+    localCheckCount: 8,
+    localPrerequisiteCount: 3,
     unprovenCount: 2,
     releaseReady: false,
     productionReady: false,
@@ -2016,7 +2044,24 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, "local-release-readiness");
-  assert.equal(data.audit.checks.length, 5);
+  assert.equal(data.audit.checks.length, 8);
+  assert.deepEqual(
+    data.audit.localPrerequisites.map((item) => [item.id, item.proofTarget]),
+    [
+      [
+        "local-proof-graph-admin-role-handoffs",
+        "target/dev-test-game/proof-graph-admin-proof.json",
+      ],
+      [
+        "local-proof-freshness-admin-surface",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+      ],
+      [
+        "local-next-action-admin-surface",
+        "target/dev-test-game/next-action-admin-proof.json",
+      ],
+    ],
+  );
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
@@ -3958,6 +4003,54 @@ function releaseReadinessChecklistFixture() {
           laneIds: hostStaleControlMilestoneFixture().laneIds,
           requiredLaneCount: 14,
           coveredLaneCount: 14,
+        },
+        {
+          id: "local-proof-graph-admin-role-handoffs",
+          label: "Proof graph admin role handoffs",
+          status: "passed",
+          dependencyGated: true,
+          evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+          recovery: {
+            command: "npm run test:dev-test-game-proof-graph-admin-proof",
+            proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+            roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+            proofBoundary:
+              "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+            requiredEvidence:
+              "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+          },
+        },
+        {
+          id: "local-proof-freshness-admin-surface",
+          label: "Proof freshness admin surface",
+          status: "passed",
+          dependencyGated: true,
+          evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
+          recovery: {
+            command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+            proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+            roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+            proofBoundary:
+              "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff.",
+            requiredEvidence:
+              "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+          },
+        },
+        {
+          id: "local-next-action-admin-surface",
+          label: "Next-action admin surface",
+          status: "passed",
+          dependencyGated: true,
+          evidence: "target/dev-test-game/next-action-admin-proof.json",
+          recovery: {
+            command: "npm run test:dev-test-game-next-action-admin-proof",
+            proofTarget: "target/dev-test-game/next-action-admin-proof.json",
+            roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+            proofBoundary:
+              "Local browser proof that the next-action admin surface exposes the selected command and readiness traces.",
+            requiredEvidence:
+              "Passed next-action admin surface check in the generated release-readiness checklist",
+          },
         },
       ],
     },

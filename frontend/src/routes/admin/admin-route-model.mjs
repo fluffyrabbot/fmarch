@@ -1933,6 +1933,9 @@ export function normalizeLocalReleaseReadinessAudit(
   const checks = Array.isArray(releaseReadinessChecklist.localDevelopmentSpine?.checks)
     ? releaseReadinessChecklist.localDevelopmentSpine.checks
     : [];
+  const localPrerequisites = checks.filter(
+    (check) => check?.dependencyGated === true,
+  );
   const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
@@ -1955,6 +1958,22 @@ export function normalizeLocalReleaseReadinessAudit(
         Object.freeze({
           id: String(check.id),
           status: String(check.status),
+          dependencyGated: check.dependencyGated === true,
+        }),
+      ),
+    ),
+    localPrerequisites: Object.freeze(
+      localPrerequisites.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          label: String(check.label ?? check.id ?? ""),
+          status: String(check.status),
+          evidence: String(check.evidence ?? ""),
+          command: String(check.recovery?.command ?? ""),
+          proofTarget: String(check.recovery?.proofTarget ?? ""),
+          roleUrl: String(check.recovery?.roleUrl ?? ""),
+          requiredEvidence: String(check.recovery?.requiredEvidence ?? ""),
+          proofBoundary: String(check.recovery?.proofBoundary ?? ""),
         }),
       ),
     ),
@@ -1970,6 +1989,7 @@ export function normalizeLocalReleaseReadinessAudit(
     artifactSummary: Object.freeze({
       game: String(releaseReadinessChecklist.generatedFrom?.game ?? ""),
       localCheckCount: checks.length,
+      localPrerequisiteCount: localPrerequisites.length,
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
