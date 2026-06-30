@@ -22,6 +22,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
       ["admin-proof:seed", "local-seed-fixtures"],
       ["admin-proof:release", "local-release-readiness"],
       ["admin-proof:race-coverage", "local-race-coverage"],
+      ["admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"],
       [
         "admin-proof:hosted-concurrent-race-matrix",
         "local-hosted-concurrent-race-matrix",
@@ -98,6 +99,29 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     )?.requiredStaleConflictLaneIds,
     ["replacement-stale-conflict-message", "stale-action-conflict-message"],
   );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
+    )?.requiredCheckIds,
+    [
+      "hosted-target-preflight",
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+  );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
+    )?.requiredRelatedLinkIds,
+    [
+      "local-hosted-target-preflight",
+      "local-hosted-concurrent-race-matrix",
+      "local-next-action",
+    ],
+  );
 });
 
 test("admin proof graph role handoff coverage fails closed for unmapped nodes", () => {
@@ -133,6 +157,7 @@ function proofGraphFixture() {
         "admin-proof:hosted-concurrent-race-matrix",
         "local-hosted-concurrent-race-matrix",
       ),
+      roleNode("admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"),
       roleNode("admin-proof:spine-manifest", "local-spine-manifest"),
     ],
   };

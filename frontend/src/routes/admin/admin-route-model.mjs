@@ -42,6 +42,7 @@ export async function buildAdminRouteData({
   hostedConcurrentRaceMatrix = null,
   hostedOpsSignals = null,
   hostedTargetPreflight = null,
+  hostedEvidenceLane = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -143,61 +144,65 @@ export async function buildAdminRouteData({
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
         appendLocalHostedOpsSignalsAudit(
-          appendLocalHostedTargetPreflightAudit(
-            appendLocalHostedConcurrentRaceMatrixAudit(
-              appendLocalRaceCoverageAudit(
-                appendLocalProofGraphAudit(
-                  appendLocalProofFreshnessAudit(
-                    appendLocalAdminSpineAudit(
-                      appendLocalSpineManifestAudit(
-                        appendLocalIdentityAdapterAudit(
-                          appendLocalBackupRestoreAudit(
-                            appendLocalReleaseRunbookAudit(
-                              appendLocalReleaseReadinessAudit(
-                                appendLocalSeedFixtureAudit(
-                                  appendLocalOpsArtifactsAudit(
-                                    appendLocalHardeningAudit(
-                                      appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                                      proofRun,
+          appendLocalHostedEvidenceLaneAudit(
+            appendLocalHostedTargetPreflightAudit(
+              appendLocalHostedConcurrentRaceMatrixAudit(
+                appendLocalRaceCoverageAudit(
+                  appendLocalProofGraphAudit(
+                    appendLocalProofFreshnessAudit(
+                      appendLocalAdminSpineAudit(
+                        appendLocalSpineManifestAudit(
+                          appendLocalIdentityAdapterAudit(
+                            appendLocalBackupRestoreAudit(
+                              appendLocalReleaseRunbookAudit(
+                                appendLocalReleaseReadinessAudit(
+                                  appendLocalSeedFixtureAudit(
+                                    appendLocalOpsArtifactsAudit(
+                                      appendLocalHardeningAudit(
+                                        appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                        proofRun,
+                                        { game },
+                                      ),
+                                      opsArtifacts,
                                       { game },
                                     ),
-                                    opsArtifacts,
+                                    seedFixtureSummary,
                                     { game },
                                   ),
-                                  seedFixtureSummary,
+                                  releaseReadinessChecklist,
                                   { game },
                                 ),
-                                releaseReadinessChecklist,
+                                releaseRunbook,
                                 { game },
                               ),
-                              releaseRunbook,
+                              backupRestoreProof,
                               { game },
                             ),
-                            backupRestoreProof,
+                            identityAdapterProof,
                             { game },
                           ),
-                          identityAdapterProof,
+                          spineManifest,
                           { game },
                         ),
-                        spineManifest,
+                        adminSpineProof,
                         { game },
                       ),
-                      adminSpineProof,
-                      { game },
+                      proofFreshness,
+                      { game, nextAction },
                     ),
-                    proofFreshness,
-                    { game, nextAction },
+                    proofGraph,
+                    { game },
                   ),
-                  proofGraph,
+                  raceCoverage,
                   { game },
                 ),
-                raceCoverage,
+                hostedConcurrentRaceMatrix,
                 { game },
               ),
-              hostedConcurrentRaceMatrix,
+              hostedTargetPreflight,
               { game },
             ),
-            hostedTargetPreflight,
+            hostedEvidenceLane,
             { game },
           ),
           hostedOpsSignals,
@@ -265,6 +270,7 @@ export async function buildAdminAuditDetailData({
   hostedConcurrentRaceMatrix = null,
   hostedOpsSignals = null,
   hostedTargetPreflight = null,
+  hostedEvidenceLane = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -290,6 +296,7 @@ export async function buildAdminAuditDetailData({
     hostedConcurrentRaceMatrix,
     hostedOpsSignals,
     hostedTargetPreflight,
+    hostedEvidenceLane,
     nextAction,
     proofFreshness,
   });
@@ -524,6 +531,116 @@ export function normalizeLocalHostedTargetPreflightAudit(
       nextProofTarget: String(hostedTargetPreflight.nextProofTarget ?? ""),
       releaseReady: hostedTargetPreflight.releaseReady === true,
       productionReady: hostedTargetPreflight.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalHostedEvidenceLaneAudit(audit, hostedEvidenceLane, { game }) {
+  const row = normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game }) {
+  if (
+    hostedEvidenceLane === null ||
+    typeof hostedEvidenceLane !== "object" ||
+    hostedEvidenceLane.version !== 1 ||
+    hostedEvidenceLane.proof !== "dev-test-game-hosted-evidence-lane" ||
+    !["passed", "blocked"].includes(hostedEvidenceLane.status) ||
+    hostedEvidenceLane.scope !== "hosted-evidence-lane" ||
+    hostedEvidenceLane.releaseReady !== false ||
+    hostedEvidenceLane.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(hostedEvidenceLane.checks)
+    ? hostedEvidenceLane.checks
+    : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  const blockedChecks = checks.filter((check) => check?.status === "blocked");
+  const blockedCheckIds = Array.isArray(hostedEvidenceLane.blockedCheckIds)
+    ? hostedEvidenceLane.blockedCheckIds.map((id) => String(id))
+    : blockedChecks.map((check) => String(check.id));
+  const blockedCheckIdSet = new Set(blockedCheckIds);
+  return Object.freeze({
+    id: "local-hosted-evidence-lane",
+    label: "Hosted evidence lane",
+    status: `${hostedEvidenceLane.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Hosted evidence lane",
+    boundaryDetail:
+      hostedEvidenceLane.proofBoundary ??
+      "Hosted evidence lane without hosted deployment or release claims.",
+    href: "target/dev-test-game/hosted-evidence-lane.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-hosted-evidence-lane",
+    }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    unproven: Object.freeze(
+      checks
+        .filter((check) => blockedCheckIdSet.has(String(check.id)))
+        .map((check) =>
+          Object.freeze({
+            id: String(check.id),
+            status: "blocked",
+            requiredEvidence: String(check.requiredEvidence ?? ""),
+          }),
+        ),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-hosted-target-preflight",
+        label: "Hosted target preflight",
+        href: adminAuditInspectHref({
+          game,
+          audit: "local-hosted-target-preflight",
+        }),
+        status: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
+        command: "test:dev-test-game-hosted-target-preflight",
+      }),
+      Object.freeze({
+        id: "local-hosted-concurrent-race-matrix",
+        label: "Hosted matrix",
+        href: adminAuditInspectHref({
+          game,
+          audit: "local-hosted-concurrent-race-matrix",
+        }),
+        status: String(hostedEvidenceLane.target?.rawEvidenceStatus ?? "unknown"),
+        command: "test:dev-test-game-hosted-concurrent-race-matrix",
+      }),
+      Object.freeze({
+        id: "local-next-action",
+        label: "Ranked next action",
+        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        status: String(hostedEvidenceLane.status ?? "unknown"),
+        command: "test:dev-test-game-next-action",
+      }),
+    ]),
+    artifactSummary: Object.freeze({
+      preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
+      blockedCheckCount: blockedCheckIds.length,
+      frontendBaseUrl: String(hostedEvidenceLane.target?.frontendBaseUrl ?? ""),
+      apiBaseUrl: String(hostedEvidenceLane.target?.apiBaseUrl ?? ""),
+      groupId: String(hostedEvidenceLane.target?.groupId ?? ""),
+      rawEvidencePath: String(hostedEvidenceLane.target?.rawEvidencePath ?? ""),
+      rawEvidenceStatus: String(
+        hostedEvidenceLane.target?.rawEvidenceStatus ?? "unknown",
+      ),
+      nextCommand: String(hostedEvidenceLane.nextCommand ?? ""),
+      nextProofTarget: String(hostedEvidenceLane.nextProofTarget ?? ""),
+      releaseReady: hostedEvidenceLane.releaseReady === true,
+      productionReady: hostedEvidenceLane.productionReady === true,
     }),
   });
 }

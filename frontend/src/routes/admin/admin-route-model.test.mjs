@@ -646,6 +646,44 @@ test("admin route data exposes hosted target preflight as a native audit row", a
   assert.equal(preflight.artifactSummary.nextProofTarget, HOSTED_TARGET_PREFLIGHT_PROOF_TARGET);
 });
 
+test("admin route data exposes hosted evidence lane as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedEvidenceLane: localHostedEvidenceLaneFixture(),
+  });
+
+  const lane = data.audit.find((item) => item.id === "local-hosted-evidence-lane");
+  assert.equal(lane.label, "Hosted evidence lane");
+  assert.equal(lane.status, "blocked: 1 passed, 5 blocked");
+  assert.equal(lane.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(lane.inspectHref, "/admin/audit/local-hosted-evidence-lane?game=midsummer");
+  assert.deepEqual(
+    lane.checks.map((check) => check.id),
+    [
+      "hosted-target-preflight",
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+      "release-claim-boundary-carried",
+    ],
+  );
+  assert.deepEqual(
+    lane.relatedLinks.map((link) => link.id),
+    [
+      "local-hosted-target-preflight",
+      "local-hosted-concurrent-race-matrix",
+      "local-next-action",
+    ],
+  );
+  assert.equal(lane.artifactSummary.nextCommand, "npm run test:dev-test-game-hosted-evidence-lane");
+  assert.equal(lane.artifactSummary.nextProofTarget, HOSTED_EVIDENCE_LANE_PROOF_TARGET);
+  assert.equal(lane.artifactSummary.preflightStatus, "blocked");
+  assert.equal(lane.artifactSummary.blockedCheckCount, 5);
+});
+
 test("admin route data exposes local spine manifest as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -1151,7 +1189,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
   const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
   assert.equal(freshness.label, "Local proof freshness");
-  assert.equal(freshness.status, "20 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.status, "22 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
@@ -1180,6 +1218,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "admin-spine-admin",
       "proof-graph",
       "proof-graph-admin",
+      "hosted-evidence-lane",
+      "hosted-evidence-lane-admin",
       "next-action-handoff",
     ],
   );
@@ -1193,8 +1233,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     },
   ]);
   assert.deepEqual(freshness.artifactSummary, {
-    artifactCount: 20,
-    freshCount: 20,
+    artifactCount: 22,
+    freshCount: 22,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
@@ -1317,8 +1357,8 @@ test("admin route data exposes local next action as a native audit row", async (
     actionStatus: "ready",
     sourceManifest: "target/dev-test-game/spine-manifest.json",
     artifactFreshnessStatus: "passed",
-    artifactCount: 20,
-    freshCount: 20,
+    artifactCount: 22,
+    freshCount: 22,
     staleCount: 0,
     missingCount: 0,
     selectionTrace: {
@@ -1956,6 +1996,38 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     ["local-hosted-concurrent-race-matrix", "local-next-action"],
+  );
+  assert.deepEqual(
+    data.audit.unproven.map((item) => [item.id, item.status]),
+    [
+      ["hosted-frontend-url-configured", "blocked"],
+      ["hosted-api-url-configured", "blocked"],
+      ["hosted-targets-external", "blocked"],
+      ["raw-evidence-path-configured", "blocked"],
+      ["raw-evidence-readable", "blocked"],
+    ],
+  );
+});
+
+test("admin hosted evidence lane detail data carries blocked setup rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-hosted-evidence-lane",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedEvidenceLane: localHostedEvidenceLaneFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Hosted evidence lane");
+  assert.equal(data.audit.id, "local-hosted-evidence-lane");
+  assert.equal(data.audit.checks.length, 7);
+  assert.deepEqual(
+    data.audit.relatedLinks.map((link) => link.id),
+    [
+      "local-hosted-target-preflight",
+      "local-hosted-concurrent-race-matrix",
+      "local-next-action",
+    ],
   );
   assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
@@ -2909,6 +2981,56 @@ function localHostedTargetPreflightFixture() {
   };
 }
 
+function localHostedEvidenceLaneFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-lane",
+    status: "blocked",
+    releaseReady: false,
+    productionReady: false,
+    scope: "hosted-evidence-lane",
+    proofBoundary: "Hosted evidence lane without hosted deployment claims.",
+    preflightStatus: "blocked",
+    blockedCheckIds: [
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+    target: {
+      frontendBaseUrl: null,
+      apiBaseUrl: null,
+      groupId: "replacement-race-reload",
+      rawEvidencePath: null,
+      rawEvidenceStatus: "blocked",
+    },
+    checks: [
+      { id: "hosted-target-preflight", status: "blocked" },
+      { id: "hosted-frontend-url-configured", status: "blocked" },
+      { id: "hosted-api-url-configured", status: "blocked" },
+      {
+        id: "hosted-targets-external",
+        status: "blocked",
+        requiredEvidence: "Externally reachable hosted URLs.",
+      },
+      { id: "raw-evidence-path-configured", status: "blocked" },
+      { id: "raw-evidence-readable", status: "blocked" },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    generatedFrom: {
+      hostedTargetPreflight: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+    },
+    nextCommand: "npm run test:dev-test-game-hosted-evidence-lane",
+    nextProofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+  };
+}
+
 function seedFixtureSummaryFixture() {
   return {
     version: 1,
@@ -3337,6 +3459,8 @@ function proofFreshnessFixture({
     freshnessArtifact("admin-spine-admin", "fresh"),
     freshnessArtifact("proof-graph", "fresh"),
     freshnessArtifact("proof-graph-admin", "fresh"),
+    freshnessArtifact("hosted-evidence-lane", "fresh"),
+    freshnessArtifact("hosted-evidence-lane-admin", "fresh"),
   ],
 } = {}) {
   const summary = {
@@ -3428,8 +3552,8 @@ function nextActionFixture({
       manifestGeneratedAt: "2026-06-26T00:00:00.000Z",
       artifactFreshnessStatus: "passed",
       artifactFreshnessSummary: {
-        artifactCount: 20,
-        freshCount: 20,
+        artifactCount: 22,
+        freshCount: 22,
         staleCount: 0,
         missingCount: 0,
       },

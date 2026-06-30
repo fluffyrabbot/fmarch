@@ -8,6 +8,7 @@ import {
   validateDevTestGameCoreLoopAdminProof,
   validateDevTestGameHardeningAdminProof,
   validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
+  validateDevTestGameHostedEvidenceLaneAdminProof,
   validateDevTestGameHostedOpsSignalsAdminProof,
   validateDevTestGameHostedTargetPreflightAdminProof,
   validateDevTestGameIdentityAdminProof,
@@ -103,6 +104,14 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hosted-target-preflight-admin-proof",
     path: "target/dev-test-game/hosted-target-preflight-admin-proof.json",
     validate: validateDevTestGameHostedTargetPreflightAdminProof,
+  },
+  {
+    id: "hosted-evidence-lane",
+    label: "Hosted evidence lane admin role surface",
+    script: "tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-hosted-evidence-lane-admin-proof",
+    path: "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    validate: validateDevTestGameHostedEvidenceLaneAdminProof,
   },
   {
     id: "hosted-concurrent-race-matrix",

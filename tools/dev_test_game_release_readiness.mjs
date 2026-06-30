@@ -2197,6 +2197,64 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
   };
 }
 
+export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options = {}) {
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-evidence-lane-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !== "local-dev-test-game-hosted-evidence-lane-admin-surface"
+  ) {
+    throw new Error("hosted evidence lane admin proof shape drifted");
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("hosted evidence lane admin proof must not claim readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "hosted evidence lane admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of proof.generatedFrom?.checkIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.blockedCheckIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing blocked row: ${checkId}`,
+      );
+    }
+  }
+  for (const linkId of proof.generatedFrom?.relatedAuditIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing related link: ${linkId}`,
+      );
+    }
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
+    preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   const requiredChecks = [
     "role-entrypoints-redacted",
@@ -3339,6 +3397,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "release-runbook",
     "race-coverage",
     "hosted-target-preflight",
+    "hosted-evidence-lane",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",
@@ -3452,6 +3511,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "release-runbook",
     "race-coverage",
     "hosted-target-preflight",
+    "hosted-evidence-lane",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",

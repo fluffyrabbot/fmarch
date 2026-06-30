@@ -31,6 +31,10 @@ const DEFAULT_HOSTED_TARGET_PREFLIGHT =
   "target/dev-test-game/hosted-target-preflight.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF =
   "target/dev-test-game/hosted-target-preflight-admin-proof.json";
+const DEFAULT_HOSTED_EVIDENCE_LANE =
+  "target/dev-test-game/hosted-evidence-lane.json";
+const DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF =
+  "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
 const DEFAULT_RELEASE_RUNBOOK = "target/dev-test-game/release-runbook.json";
 const DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF =
   "target/dev-test-game/release-runbook-admin-proof.json";
@@ -200,6 +204,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: DEFAULT_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF,
   }),
   Object.freeze({
+    id: "hosted-evidence-lane",
+    label: "Hosted evidence lane",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE",
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE,
+  }),
+  Object.freeze({
+    id: "hosted-evidence-lane-admin",
+    label: "Hosted evidence lane admin proof",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF",
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF,
+  }),
+  Object.freeze({
     id: "release-runbook",
     label: "Release runbook",
     env: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK",
@@ -231,6 +247,13 @@ export async function readLocalHostedTargetPreflight({ env = process.env } = {})
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT,
     fallback: DEFAULT_HOSTED_TARGET_PREFLIGHT,
+  });
+}
+
+export async function readLocalHostedEvidenceLane({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE,
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE,
   });
 }
 

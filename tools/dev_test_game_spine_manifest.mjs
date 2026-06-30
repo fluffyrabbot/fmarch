@@ -445,6 +445,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_runbook_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
     "tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",
+    "tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",

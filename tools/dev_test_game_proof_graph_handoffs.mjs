@@ -101,6 +101,23 @@ const adminProofDestinationRequirements = [
     ],
   },
   {
+    linkId: "admin-proof:hosted-evidence-lane",
+    auditId: "local-hosted-evidence-lane",
+    requiredCheckIds: [
+      "hosted-target-preflight",
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+    requiredRelatedLinkIds: [
+      "local-hosted-target-preflight",
+      "local-hosted-concurrent-race-matrix",
+      "local-next-action",
+    ],
+  },
+  {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
     auditId: "local-hosted-concurrent-race-matrix",
     fromHostedMatrix: true,
