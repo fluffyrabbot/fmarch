@@ -11,6 +11,10 @@ import {
   buildDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  assertRealHostedEvidenceInputs,
+  buildRealHostedEvidenceInputs,
+} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_VERSION = 1;
@@ -85,11 +89,14 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       evidence.preflightStatus !== "blocked" ||
       !Array.isArray(evidence.blockedCheckIds) ||
       evidence.blockedCheckIds.length === 0 ||
+      evidence.hostedEvidence?.realHostedEvidenceStatus !== "unproven" ||
+      evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
       evidence.nextCommand !== `npm run ${devTestGameHostedEvidenceLaneCommand}` ||
       evidence.nextProofTarget !== devTestGameHostedEvidenceLanePath
     ) {
       throw new Error("blocked hosted evidence lane drifted");
     }
+    assertRealHostedEvidenceInputs(evidence.hostedEvidence.realHostedEvidenceInputs);
   }
   if (evidence.status === "passed") {
     if (
@@ -99,12 +106,14 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       !["passed", "unproven"].includes(
         evidence.hostedEvidence?.realHostedEvidenceStatus,
       ) ||
+      evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
       evidence.nextCommand !==
         `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}` ||
       !isNonEmptyString(evidence.nextProofTarget)
     ) {
       throw new Error("passed hosted evidence lane drifted");
     }
+    assertRealHostedEvidenceInputs(evidence.hostedEvidence.realHostedEvidenceInputs);
   }
   return evidence;
 }
@@ -130,6 +139,10 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
       mode: "blocked",
       syntheticExternalTarget: false,
       realHostedEvidenceStatus: "unproven",
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: "unproven",
+        mode: "blocked",
+      }),
       requiredEvidence:
         "Passed hosted target preflight and normalized hosted matrix evidence.",
     },
@@ -184,6 +197,10 @@ function buildPassedHostedEvidenceLane({
       externalEvidencePath,
       externalEvidenceSourceMode: externalEvidence.sourceMode,
       realHostedEvidenceStatus,
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: realHostedEvidenceStatus,
+        mode: hostedEvidenceMode,
+      }),
       ...(syntheticExternalTarget
         ? {
             requiredEvidence:

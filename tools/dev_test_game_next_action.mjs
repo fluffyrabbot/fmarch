@@ -33,6 +33,9 @@ import {
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  buildRealHostedEvidenceInputs,
+} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
@@ -1420,44 +1423,6 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
     };
   }
   return localBuildableReleaseReadinessItems.get("hosted-deployment");
-}
-
-function buildRealHostedEvidenceInputs({ status, mode }) {
-  return {
-    status,
-    mode,
-    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
-    proofTarget: devTestGameHostedMatrixExternalEvidencePath,
-    requiredEvidence:
-      "Raw hosted matrix evidence from a real externally reachable hosted target.",
-    env: [
-      {
-        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        required: true,
-        description: "Externally reachable frontend base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_API_URL",
-        required: true,
-        description: "Externally reachable API base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        required: true,
-        description: "Hosted matrix group to prove.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        required: true,
-        description: "Raw hosted matrix evidence captured from the real target.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-        required: false,
-        description: "Optional normalized hosted matrix evidence output path.",
-      },
-    ],
-  };
 }
 
 const localBuildableReleaseReadinessItems = new Map([

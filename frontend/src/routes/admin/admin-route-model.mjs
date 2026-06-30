@@ -580,6 +580,9 @@ export function normalizeLocalHostedEvidenceLaneAudit(
   const blockedCheckIdSet = new Set(blockedCheckIds);
   const demoProofSummary =
     normalizeLocalHostedEvidenceLaneDemoProofSummary(hostedEvidenceLaneDemoProof);
+  const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
+    hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs,
+  );
   return Object.freeze({
     id: "local-hosted-evidence-lane",
     label: "Hosted evidence lane",
@@ -642,9 +645,21 @@ export function normalizeLocalHostedEvidenceLaneAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
+    realHostedEvidenceInputs,
     artifactSummary: Object.freeze({
       preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
       blockedCheckCount: blockedCheckIds.length,
+      realHostedEvidenceStatus: String(
+        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceStatus ?? "unknown",
+      ),
+      realHostedEvidenceCommand: String(
+        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
+          "",
+      ),
+      realHostedEvidenceProofTarget: String(
+        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs
+          ?.proofTarget ?? "",
+      ),
       ...(demoProofSummary === null ? {} : demoProofSummary),
       frontendBaseUrl: String(hostedEvidenceLane.target?.frontendBaseUrl ?? ""),
       apiBaseUrl: String(hostedEvidenceLane.target?.apiBaseUrl ?? ""),

@@ -685,6 +685,15 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.nextProofTarget, HOSTED_EVIDENCE_LANE_PROOF_TARGET);
   assert.equal(lane.artifactSummary.preflightStatus, "blocked");
   assert.equal(lane.artifactSummary.blockedCheckCount, 5);
+  assert.equal(lane.artifactSummary.realHostedEvidenceStatus, "unproven");
+  assert.equal(
+    lane.artifactSummary.realHostedEvidenceCommand,
+    "npm run test:dev-test-game-hosted-evidence-lane",
+  );
+  assert.equal(
+    lane.artifactSummary.realHostedEvidenceProofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
   assert.equal(lane.artifactSummary.demoProofStatus, "passed");
   assert.equal(
     lane.artifactSummary.demoProofTarget,
@@ -2101,6 +2110,38 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ["raw-evidence-readable", "blocked"],
     ],
   );
+  assert.deepEqual(
+    data.audit.realHostedEvidenceInputs.map((item) => [
+      item.id,
+      item.value,
+      item.required,
+    ]),
+    [
+      ["command", "npm run test:dev-test-game-hosted-evidence-lane", true],
+      ["proof-target", "target/dev-test-game/hosted-matrix-external.json", true],
+      [
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "Externally reachable frontend base URL.",
+        true,
+      ],
+      [
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "Externally reachable API base URL.",
+        true,
+      ],
+      ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
+      [
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        "Raw hosted matrix evidence captured from the real target.",
+        true,
+      ],
+      [
+        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+        "Optional normalized hosted matrix evidence output path.",
+        false,
+      ],
+    ],
+  );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
   assert.equal(
@@ -3072,6 +3113,15 @@ function localHostedEvidenceLaneFixture() {
       groupId: "replacement-race-reload",
       rawEvidencePath: null,
       rawEvidenceStatus: "blocked",
+    },
+    hostedEvidence: {
+      status: "blocked",
+      mode: "blocked",
+      syntheticExternalTarget: false,
+      realHostedEvidenceStatus: "unproven",
+      realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
+      requiredEvidence:
+        "Passed hosted target preflight and normalized hosted matrix evidence.",
     },
     checks: [
       { id: "hosted-target-preflight", status: "blocked" },

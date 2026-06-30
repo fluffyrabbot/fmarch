@@ -2,6 +2,9 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  realHostedEvidenceInputIds,
+} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -50,6 +53,7 @@ await runAdminAuditProof({
         source.lane.checks.map((check) => [check.id, check.status]),
       ),
       requiredUnproven: source.lane.blockedCheckIds,
+      requiredRealHostedEvidenceInputs: realHostedEvidenceInputIds,
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -72,6 +76,7 @@ await runAdminAuditProof({
         source.lane.checks.map((check) => [check.id, check.status]),
       ),
       blockedCheckIds: source.lane.blockedCheckIds,
+      realHostedEvidenceInputIds,
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -104,6 +109,17 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
   for (const checkId of evidence.generatedFrom?.blockedCheckIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
       throw new Error(`hosted evidence lane admin proof missing blocked row: ${checkId}`);
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.realHostedEvidenceInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleRealHostedEvidenceInputs?.includes(
+        inputId,
+      )
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing real hosted input: ${inputId}`,
+      );
     }
   }
   for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {

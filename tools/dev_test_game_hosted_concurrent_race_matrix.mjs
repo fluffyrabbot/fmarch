@@ -7,6 +7,10 @@ import {
 import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
+import {
+  assertRealHostedEvidenceInputs,
+  buildRealHostedEvidenceInputs,
+} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
 export const devTestGameReleaseReadinessPath =
@@ -19,10 +23,6 @@ export const devTestGameHostedConcurrentRaceMatrixPath =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 export const devTestGameHostedConcurrentRaceMatrixCommand =
   "test:dev-test-game-hosted-concurrent-race-matrix";
-const devTestGameHostedEvidenceLaneCommand =
-  "test:dev-test-game-hosted-evidence-lane";
-const devTestGameHostedMatrixExternalEvidencePath =
-  "target/dev-test-game/hosted-matrix-external.json";
 
 const hostedMatrixJsonPath = path.join(
   repoRoot,
@@ -334,13 +334,13 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
       evidence.summary.localDemoHostedEvidenceStatus,
     ) ||
     !["passed", "unproven"].includes(evidence.summary.realHostedEvidenceStatus) ||
-    !isRealHostedEvidenceInputs(evidence.realHostedEvidenceInputs) ||
     !["passed", "unproven"].includes(
       evidence.summary.realHostedDeploymentStatus,
     )
   ) {
     throw new Error("hosted concurrent race matrix summary drifted");
   }
+  assertRealHostedEvidenceInputs(evidence.realHostedEvidenceInputs);
   assertExternalHostedEvidence(evidence.externalHostedEvidence, promoted);
   if (
     evidence.hostedLikeTarget?.status !== "passed" ||
@@ -394,66 +394,6 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     throw new Error("hosted concurrent race matrix next slice drifted");
   }
   return evidence;
-}
-
-function buildRealHostedEvidenceInputs({ status, mode }) {
-  return {
-    status,
-    mode,
-    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
-    proofTarget: devTestGameHostedMatrixExternalEvidencePath,
-    requiredEvidence:
-      "Raw hosted matrix evidence from a real externally reachable hosted target.",
-    env: [
-      {
-        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        required: true,
-        description: "Externally reachable frontend base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_API_URL",
-        required: true,
-        description: "Externally reachable API base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        required: true,
-        description: "Hosted matrix group to prove.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        required: true,
-        description: "Raw hosted matrix evidence captured from the real target.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-        required: false,
-        description: "Optional normalized hosted matrix evidence output path.",
-      },
-    ],
-  };
-}
-
-function isRealHostedEvidenceInputs(inputs) {
-  return (
-    inputs !== null &&
-    typeof inputs === "object" &&
-    ["passed", "unproven"].includes(inputs.status) &&
-    typeof inputs.command === "string" &&
-    inputs.command !== "" &&
-    typeof inputs.proofTarget === "string" &&
-    inputs.proofTarget !== "" &&
-    Array.isArray(inputs.env) &&
-    inputs.env.length === 5 &&
-    inputs.env.every(
-      (item) =>
-        typeof item?.name === "string" &&
-        item.name.startsWith("FMARCH_HOSTED_MATRIX_") &&
-        typeof item.description === "string" &&
-        item.description !== "" &&
-        typeof item.required === "boolean",
-    )
-  );
 }
 
 export function hostedMatrixTargetFromEnv(env = process.env) {

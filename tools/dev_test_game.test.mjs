@@ -9973,6 +9973,15 @@ function hostedEvidenceLaneAdminProofFixture() {
         "raw-evidence-path-configured",
         "raw-evidence-readable",
       ],
+      realHostedEvidenceInputIds: [
+        "command",
+        "proof-target",
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+      ],
       relatedAuditIds: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -10001,6 +10010,15 @@ function hostedEvidenceLaneAdminProofFixture() {
         "hosted-targets-external",
         "raw-evidence-path-configured",
         "raw-evidence-readable",
+      ],
+      visibleRealHostedEvidenceInputs: [
+        "command",
+        "proof-target",
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
       ],
       visibleRelatedLinks: [
         "local-hosted-target-preflight",
