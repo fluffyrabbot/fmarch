@@ -29,6 +29,10 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_runbook.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -149,6 +153,12 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
         ],
       },
+      releaseRunbook: {
+        script: devTestGameReleaseRunbookCommand,
+        proofArtifact: devTestGameReleaseRunbookPath,
+        dependsOn: ["target/dev-test-game/release-readiness-checklist.json"],
+        roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      },
       nextAction: {
         script: nextActionCommand,
         proofArtifact: nextActionPath,
@@ -245,6 +255,7 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedOpsSignalsPath,
+      devTestGameReleaseRunbookPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
@@ -307,6 +318,11 @@ export function buildDevTestGameSpineManifest({
         id: "hosted-ops-signals-recorded",
         status: "passed",
         evidence: [devTestGameHostedOpsSignalsCommand, devTestGameHostedOpsSignalsPath],
+      },
+      {
+        id: "release-runbook-recorded",
+        status: "passed",
+        evidence: [devTestGameReleaseRunbookCommand, devTestGameReleaseRunbookPath],
       },
       {
         id: "terminal-artifacts-recorded",
@@ -381,6 +397,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
     "tools/dev_test_game_release_admin_proof.mjs",
+    "tools/dev_test_game_release_runbook_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
@@ -430,6 +447,16 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.commands.hostedOpsSignals.proofArtifact !== devTestGameHostedOpsSignalsPath) {
     throw new Error(
       `spine manifest hosted ops signals artifact drifted: ${manifest.commands.hostedOpsSignals.proofArtifact}`,
+    );
+  }
+  if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
+    throw new Error(
+      `spine manifest release runbook command drifted: ${manifest.commands?.releaseRunbook?.script}`,
+    );
+  }
+  if (manifest.commands.releaseRunbook.proofArtifact !== devTestGameReleaseRunbookPath) {
+    throw new Error(
+      `spine manifest release runbook artifact drifted: ${manifest.commands.releaseRunbook.proofArtifact}`,
     );
   }
   if (manifest.commands?.nextAction?.script !== nextActionCommand) {
@@ -489,12 +516,14 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameHostedOpsSignalsPath,
+    devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
     devTestGameProofGraphAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
+    "target/dev-test-game/release-runbook-admin-proof.json",
     "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -516,6 +545,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
     "hosted-ops-signals-recorded",
+    "release-runbook-recorded",
     "terminal-artifacts-recorded",
     "release-boundary-carried",
   ]) {
@@ -745,6 +775,8 @@ const artifactRefreshCommands = Object.freeze({
   "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
   "hosted-ops-signals-admin":
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
+  "release-runbook": "npm run test:dev-test-game-release-runbook",
+  "release-runbook-admin": "npm run test:dev-test-game-release-runbook-admin-proof",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

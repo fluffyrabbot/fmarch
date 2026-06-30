@@ -32,6 +32,7 @@ export async function buildAdminRouteData({
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
+  releaseRunbook = null,
   backupRestoreProof = null,
   identityAdapterProof = null,
   spineManifest = null,
@@ -149,6 +150,7 @@ export async function buildAdminRouteData({
                     appendLocalSpineManifestAudit(
                       appendLocalIdentityAdapterAudit(
                         appendLocalBackupRestoreAudit(
+                        appendLocalReleaseRunbookAudit(
                           appendLocalReleaseReadinessAudit(
                             appendLocalSeedFixtureAudit(
                               appendLocalOpsArtifactsAudit(
@@ -166,6 +168,9 @@ export async function buildAdminRouteData({
                             releaseReadinessChecklist,
                             { game },
                           ),
+                          releaseRunbook,
+                          { game },
+                        ),
                           backupRestoreProof,
                           { game },
                         ),
@@ -245,6 +250,7 @@ export async function buildAdminAuditDetailData({
   opsArtifacts = null,
   seedFixtureSummary = null,
   releaseReadinessChecklist = null,
+  releaseRunbook = null,
   backupRestoreProof = null,
   identityAdapterProof = null,
   spineManifest = null,
@@ -268,6 +274,7 @@ export async function buildAdminAuditDetailData({
     opsArtifacts,
     seedFixtureSummary,
     releaseReadinessChecklist,
+    releaseRunbook,
     backupRestoreProof,
     identityAdapterProof,
     spineManifest,
@@ -2105,6 +2112,83 @@ export function normalizeLocalReleaseReadinessAudit(
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
+    }),
+  });
+}
+
+export function appendLocalReleaseRunbookAudit(audit, releaseRunbook, { game }) {
+  const row = normalizeLocalReleaseRunbookAudit(releaseRunbook, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
+  if (
+    releaseRunbook === null ||
+    typeof releaseRunbook !== "object" ||
+    releaseRunbook.version !== 1 ||
+    releaseRunbook.proof !== "dev-test-game-release-runbook" ||
+    releaseRunbook.status !== "passed" ||
+    releaseRunbook.scope !== "local-dev-test-game-release-runbook-rehearsal" ||
+    releaseRunbook.releaseReady !== false ||
+    releaseRunbook.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(releaseRunbook.checks) ? releaseRunbook.checks : [];
+  const runbookItems = Array.isArray(releaseRunbook.runbookItems)
+    ? releaseRunbook.runbookItems
+    : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  return Object.freeze({
+    id: "local-release-runbook",
+    label: "Local release runbook",
+    status: `${passedChecks.length} runbook checks passed, ${runbookItems.length} gaps rehearsed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local release-runbook rehearsal",
+    boundaryDetail:
+      releaseRunbook.proofBoundary ??
+      "Local release-runbook rehearsal without human approval or release claims.",
+    href: "target/dev-test-game/release-runbook.json",
+    inspectHref: adminAuditInspectHref({ game, audit: "local-release-runbook" }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    unproven: Object.freeze(
+      runbookItems.map((item) =>
+        Object.freeze({
+          id: String(item.id),
+          status: String(item.status),
+          requiredEvidence: String(item.requiredEvidence ?? ""),
+          command: String(item.command ?? ""),
+          proofTarget: String(item.proofTarget ?? ""),
+          roleUrl: String(item.roleUrl ?? ""),
+        }),
+      ),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-release-readiness",
+        label: "Release readiness",
+        href: adminAuditInspectHref({ game, audit: "local-release-readiness" }),
+        status: "not_ready",
+        command: "test:dev-test-game-readiness",
+      }),
+    ]),
+    artifactSummary: Object.freeze({
+      game: String(releaseRunbook.generatedFrom?.game ?? ""),
+      runbookItemCount: runbookItems.length,
+      rollbackStatus: String(releaseRunbook.rollbackPath?.status ?? "unknown"),
+      supportStatus: String(releaseRunbook.supportPath?.status ?? "unknown"),
+      releaseReady: releaseRunbook.releaseReady === true,
+      productionReady: releaseRunbook.productionReady === true,
     }),
   });
 }

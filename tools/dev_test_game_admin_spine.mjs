@@ -34,6 +34,10 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     "target/dev-test-game/seed-fixture-summary.json",
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: "target/dev-test-game/seed-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
+    "target/dev-test-game/release-runbook.json",
+  FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
+    "target/dev-test-game/release-runbook-admin-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
@@ -66,6 +70,7 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
   await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
   await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");
+  await runNodeScript("tools/dev_test_game_release_runbook.mjs");
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");

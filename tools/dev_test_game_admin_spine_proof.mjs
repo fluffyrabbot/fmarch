@@ -13,6 +13,7 @@ import {
   validateDevTestGameOpsAdminProof,
   validateDevTestGameRaceCoverageAdminProof,
   validateDevTestGameReleaseAdminProof,
+  validateDevTestGameReleaseRunbookAdminProof,
   validateDevTestGameSeedAdminProof,
   validateDevTestGameSpineManifestAdminProof,
 } from "./dev_test_game_release_readiness.mjs";
@@ -77,6 +78,14 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-release-admin-proof",
     path: "target/dev-test-game/release-admin-proof.json",
     validate: validateDevTestGameReleaseAdminProof,
+  },
+  {
+    id: "release-runbook",
+    label: "Release runbook admin role surface",
+    script: "tools/dev_test_game_release_runbook_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-release-runbook-admin-proof",
+    path: "target/dev-test-game/release-runbook-admin-proof.json",
+    validate: validateDevTestGameReleaseRunbookAdminProof,
   },
   {
     id: "race-coverage",

@@ -29,6 +29,7 @@ const requiredChecks = [
   "ops",
   "seed",
   "release",
+  "release-runbook",
   "race-coverage",
   "hosted-concurrent-race-matrix",
   "hosted-ops-signals",

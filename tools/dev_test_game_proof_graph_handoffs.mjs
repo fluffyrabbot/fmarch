@@ -64,7 +64,20 @@ const adminProofDestinationRequirements = [
         auditId: "local-next-action",
       },
     ],
-    requiredUnprovenIds: ["hosted-deployment", "human-release-runbook"],
+    requiredUnprovenIds: ["hosted-deployment", "human-release-approval"],
+  },
+  {
+    linkId: "admin-proof:release-runbook",
+    auditId: "local-release-runbook",
+    requiredCheckIds: [
+      "remaining-readiness-gaps-mapped",
+      "rollback-path-carried",
+      "support-path-carried",
+      "release-claim-boundary-carried",
+      "human-approval-boundary-carried",
+    ],
+    requiredUnprovenIds: ["human-release-approval"],
+    requiredRelatedLinkIds: ["local-release-readiness"],
   },
   {
     linkId: "admin-proof:race-coverage",

@@ -17,6 +17,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
+  devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_runbook.mjs";
 import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
@@ -1262,6 +1266,8 @@ const devSpineArtifactPriorities = new Map(
     ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
     ["seed", "target/dev-test-game/seed-admin-proof.json"],
     ["release-readiness", "target/dev-test-game/release-readiness-checklist.json"],
+    ["release-runbook", "target/dev-test-game/release-runbook.json"],
+    ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
     ["race-coverage", "target/dev-test-game/race-coverage.json"],
     ["race-coverage-admin", "target/dev-test-game/race-coverage-admin-proof.json"],
     ["release", "target/dev-test-game/release-admin-proof.json"],
@@ -1306,6 +1312,20 @@ const localBuildableReleaseReadinessItems = new Map([
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
+    },
+  ],
+  [
+    "human-release-runbook",
+    {
+      priority: 10,
+      command: `npm run ${devTestGameReleaseRunbookCommand}`,
+      buildSlice:
+        "Create the local release-runbook rehearsal that maps remaining readiness gaps to rollback, support, owner, and evidence boundaries.",
+      proofTarget: devTestGameReleaseRunbookPath,
+      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:release-runbook",
+      proofBoundary:
+        "Machine-readable local runbook rehearsal only. This can prove the release checklist is mapped and inspectable, but it does not prove human approval, beta readiness, release readiness, or production readiness.",
     },
   ],
 ]);

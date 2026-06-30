@@ -94,6 +94,11 @@ const defaultNextActionAdminProofPath = path.join(
   artifactDir,
   "next-action-admin-proof.json",
 );
+const defaultReleaseRunbookPath = path.join(artifactDir, "release-runbook.json");
+const defaultReleaseRunbookAdminProofPath = path.join(
+  artifactDir,
+  "release-runbook-admin-proof.json",
+);
 const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const maxBackupArtifactAgeHours = Number.parseFloat(
@@ -330,6 +335,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.nextActionAdminProofPath ??
           "target/dev-test-game/next-action-admin-proof.json",
         artifact: options.nextActionAdminProofArtifact,
+      })
+    : undefined;
+  const releaseRunbookEvidence = options.releaseRunbook
+    ? validateDevTestGameReleaseRunbook(options.releaseRunbook, {
+        path: options.releaseRunbookPath ?? "target/dev-test-game/release-runbook.json",
+        artifact: options.releaseRunbookArtifact,
+      })
+    : undefined;
+  const releaseRunbookAdminProofEvidence = options.releaseRunbookAdminProof
+    ? validateDevTestGameReleaseRunbookAdminProof(options.releaseRunbookAdminProof, {
+        path:
+          options.releaseRunbookAdminProofPath ??
+          "target/dev-test-game/release-runbook-admin-proof.json",
+        artifact: options.releaseRunbookAdminProofArtifact,
       })
     : undefined;
   const localChecks = [
@@ -697,6 +716,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       buildNextActionAdminSurfaceReadinessCheck(nextActionAdminProofEvidence),
     );
   }
+  if (releaseRunbookEvidence !== undefined) {
+    localChecks.push({
+      id: "local-human-release-runbook-rehearsal",
+      label: "Local human release runbook rehearsal",
+      status: "passed",
+      evidence: releaseRunbookEvidence.path,
+      proofBoundary: releaseRunbookEvidence.proofBoundary,
+      runbookItemCount: releaseRunbookEvidence.runbookItemCount,
+      rollbackStatus: releaseRunbookEvidence.rollbackStatus,
+      supportStatus: releaseRunbookEvidence.supportStatus,
+      ...(releaseRunbookAdminProofEvidence === undefined
+        ? {}
+        : { adminRoleSurface: releaseRunbookAdminProofEvidence }),
+    });
+  }
   const unproven = [
     ...(identityAdapterEvidence === undefined
       ? [
@@ -762,11 +796,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       opsArtifactsEvidence,
       hostedOpsSignalsEvidence,
     }),
-    {
-      id: "human-release-runbook",
-      status: "unproven",
-      requiredEvidence: "Human-executed beta/release checklist with rollback and support path",
-    },
+    ...humanReleaseUnprovenItems({ releaseRunbookEvidence }),
   ];
   return {
     version: DEV_TEST_GAME_RELEASE_READINESS_VERSION,
@@ -901,6 +931,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : {
             nextActionAdminProof: nextActionAdminProofEvidence.path,
+          }),
+      ...(releaseRunbookEvidence === undefined
+        ? {}
+        : {
+            releaseRunbook: releaseRunbookEvidence.path,
+            ...(releaseRunbookAdminProofEvidence === undefined
+              ? {}
+              : { releaseRunbookAdminProof: releaseRunbookAdminProofEvidence.path }),
           }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
@@ -1088,6 +1126,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(proofGraphAdminProofEvidence === undefined
                 ? {}
                 : { proofGraphAdminProof: proofGraphAdminProofEvidence }),
+              ...(releaseRunbookEvidence === undefined
+                ? {}
+                : {
+                    releaseRunbook: {
+                      ...releaseRunbookEvidence,
+                      ...(releaseRunbookAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: releaseRunbookAdminProofEvidence }),
+                    },
+                  }),
             },
           }),
     },
@@ -1105,6 +1153,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofGraphAdminProofEvidence,
         proofFreshnessAdminProofEvidence,
         nextActionAdminProofEvidence,
+        releaseRunbookEvidence,
       }),
       unproven,
     },
@@ -1184,6 +1233,27 @@ function observabilityUnprovenItems({ opsArtifactsEvidence, hostedOpsSignalsEvid
   ];
 }
 
+function humanReleaseUnprovenItems({ releaseRunbookEvidence }) {
+  if (releaseRunbookEvidence === undefined) {
+    return [
+      {
+        id: "human-release-runbook",
+        status: "unproven",
+        requiredEvidence:
+          "Human-executed beta/release checklist with rollback and support path",
+      },
+    ];
+  }
+  return [
+    {
+      id: "human-release-approval",
+      status: "unproven",
+      requiredEvidence:
+        "Human release owner executes the local runbook rehearsal, verifies rollback/support staffing, and records explicit beta/release approval",
+    },
+  ];
+}
+
 function releaseReadinessReason({
   backupRestoreEvidence,
   opsArtifactsEvidence,
@@ -1196,6 +1266,7 @@ function releaseReadinessReason({
   proofGraphAdminProofEvidence,
   proofFreshnessAdminProofEvidence,
   nextActionAdminProofEvidence,
+  releaseRunbookEvidence,
 }) {
   const passed = [
     "the local development-spine proof",
@@ -1220,6 +1291,9 @@ function releaseReadinessReason({
     ...(nextActionAdminProofEvidence === undefined
       ? []
       : ["next-action admin surface"]),
+    ...(releaseRunbookEvidence === undefined
+      ? []
+      : ["local release-runbook rehearsal"]),
   ];
   const missing = [
     identityAdapterEvidence === undefined
@@ -1238,7 +1312,9 @@ function releaseReadinessReason({
       : hostedOpsSignalsEvidence === undefined
         ? "hosted observability"
         : "real hosted telemetry",
-    "human release evidence",
+    releaseRunbookEvidence === undefined
+      ? "human release runbook"
+      : "human release approval",
   ];
   return `${joinEnglish(passed)} passed, but ${joinEnglish(missing)} remain unproven.`;
 }
@@ -2981,6 +3057,119 @@ export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameReleaseRunbook(runbook, options = {}) {
+  if (
+    runbook?.version !== 1 ||
+    runbook.proof !== "dev-test-game-release-runbook" ||
+    runbook.status !== "passed" ||
+    runbook.releaseReady !== false ||
+    runbook.productionReady !== false ||
+    runbook.scope !== "local-dev-test-game-release-runbook-rehearsal"
+  ) {
+    throw new Error("release runbook evidence shape drifted");
+  }
+  const checks = new Map((runbook.checks ?? []).map((check) => [check.id, check]));
+  for (const id of [
+    "remaining-readiness-gaps-mapped",
+    "rollback-path-carried",
+    "support-path-carried",
+    "release-claim-boundary-carried",
+    "human-approval-boundary-carried",
+  ]) {
+    if (!checks.has(id)) {
+      throw new Error(`release runbook missing check: ${id}`);
+    }
+  }
+  if (checks.get("human-approval-boundary-carried").status !== "unproven") {
+    throw new Error("release runbook must keep human approval unproven");
+  }
+  if (
+    checks.get("release-claim-boundary-carried").releaseReady !== false ||
+    checks.get("release-claim-boundary-carried").productionReady !== false
+  ) {
+    throw new Error("release runbook made readiness claims");
+  }
+  if (
+    !Array.isArray(runbook.runbookItems) ||
+    runbook.runbookItems.length === 0 ||
+    !Array.isArray(runbook.generatedFrom?.unprovenIds)
+  ) {
+    throw new Error("release runbook item inventory drifted");
+  }
+  const itemIds = new Set(runbook.runbookItems.map((item) => item.id));
+  for (const id of runbook.generatedFrom.unprovenIds) {
+    if (!itemIds.has(id)) {
+      throw new Error(`release runbook missing runbook item: ${id}`);
+    }
+  }
+  if (
+    runbook.rollbackPath?.status !== "rehearsed_locally" ||
+    runbook.supportPath?.status !== "local_admin_surface_available"
+  ) {
+    throw new Error("release runbook rollback/support path drifted");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/release-runbook.json",
+    proofBoundary: runbook.proofBoundary,
+    runbookItemCount: runbook.runbookItems.length,
+    runbookItemIds: runbook.runbookItems.map((item) => item.id),
+    rollbackStatus: runbook.rollbackPath.status,
+    supportStatus: runbook.supportPath.status,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameReleaseRunbookAdminProof(proof, options = {}) {
+  const requiredChecks = [
+    "remaining-readiness-gaps-mapped",
+    "rollback-path-carried",
+    "support-path-carried",
+    "release-claim-boundary-carried",
+    "human-approval-boundary-carried",
+  ];
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-release-runbook-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.scope !== "local-dev-test-game-release-runbook-admin-surface"
+  ) {
+    throw new Error("release runbook admin proof shape drifted");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("release runbook admin proof did not prove click-through");
+  }
+  for (const checkId of proof.generatedFrom?.checkIds ?? requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`release runbook admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const itemId of proof.generatedFrom?.runbookItemIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
+      throw new Error(`release runbook admin proof missing runbook item: ${itemId}`);
+    }
+  }
+  if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes("local-release-readiness")) {
+    throw new Error("release runbook admin proof missing release-readiness link");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/release-runbook-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameSpineManifest(manifest, options = {}) {
   const requiredChecks = [
     "live-spine-order-recorded",
@@ -3087,6 +3276,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "ops",
     "seed",
     "release",
+    "release-runbook",
     "race-coverage",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
@@ -3198,6 +3388,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "ops",
     "seed",
     "release",
+    "release-runbook",
     "race-coverage",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
@@ -3324,6 +3515,17 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (hasHostedMatrixCheck && hasHostedMatrixUnproven) {
     throw new Error("dev-test-game hosted matrix cannot be both passed and unproven");
   }
+  const hasReleaseRunbookCheck = checklist.localDevelopmentSpine?.checks?.some(
+    (check) =>
+      check.id === "local-human-release-runbook-rehearsal" &&
+      check.status === "passed",
+  );
+  const hasReleaseRunbookUnproven = checklist.releaseReadiness?.unproven?.some(
+    (item) => item.id === "human-release-runbook",
+  );
+  if (hasReleaseRunbookCheck && hasReleaseRunbookUnproven) {
+    throw new Error("dev-test-game release runbook cannot be both passed and unproven");
+  }
   const proofGraphHandoffCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === localProofGraphAdminRoleHandoffsCheckId,
   );
@@ -3416,6 +3618,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     proofGraphAdminProofOptions,
     proofFreshnessAdminProofOptions,
     nextActionAdminProofOptions,
+    releaseRunbookOptions,
+    releaseRunbookAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
     readOptionalHardeningAdminProof(),
@@ -3440,6 +3644,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalProofGraphAdminProof(),
     readOptionalProofFreshnessAdminProof(),
     readOptionalNextActionAdminProof(),
+    readOptionalReleaseRunbook(),
+    readOptionalReleaseRunbookAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
     sourcePath: path.relative(repoRoot, proofPath),
@@ -3466,6 +3672,8 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(proofGraphAdminProofOptions ?? {}),
     ...(proofFreshnessAdminProofOptions ?? {}),
     ...(nextActionAdminProofOptions ?? {}),
+    ...(releaseRunbookOptions ?? {}),
+    ...(releaseRunbookAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
   await mkdir(artifactDir, { recursive: true });
@@ -3751,9 +3959,22 @@ async function readOptionalAdminSpineProof() {
   }
   const now = new Date();
   const artifact = await readFreshArtifactMetadata(proofPath, now);
+  const proof = JSON.parse(await readFile(proofPath, "utf8"));
+  const relativePath = path.relative(repoRoot, proofPath);
+  try {
+    validateDevTestGameAdminSpineProof(proof, {
+      path: relativePath,
+      artifact,
+    });
+  } catch (error) {
+    if (override === undefined || override.trim() === "") {
+      return undefined;
+    }
+    throw error;
+  }
   return {
-    adminSpineProof: JSON.parse(await readFile(proofPath, "utf8")),
-    adminSpineProofPath: path.relative(repoRoot, proofPath),
+    adminSpineProof: proof,
+    adminSpineProofPath: relativePath,
     adminSpineProofArtifact: artifact,
   };
 }
@@ -3769,9 +3990,22 @@ async function readOptionalAdminSpineAdminProof() {
   }
   const now = new Date();
   const artifact = await readFreshArtifactMetadata(proofPath, now);
+  const proof = JSON.parse(await readFile(proofPath, "utf8"));
+  const relativePath = path.relative(repoRoot, proofPath);
+  try {
+    validateDevTestGameAdminSpineAdminProof(proof, {
+      path: relativePath,
+      artifact,
+    });
+  } catch (error) {
+    if (override === undefined || override.trim() === "") {
+      return undefined;
+    }
+    throw error;
+  }
   return {
-    adminSpineAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    adminSpineAdminProofPath: path.relative(repoRoot, proofPath),
+    adminSpineAdminProof: proof,
+    adminSpineAdminProofPath: relativePath,
     adminSpineAdminProofArtifact: artifact,
   };
 }
@@ -3902,6 +4136,42 @@ async function readOptionalNextActionAdminProof() {
     nextActionAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     nextActionAdminProofPath: path.relative(repoRoot, proofPath),
     nextActionAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalReleaseRunbook() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultReleaseRunbookPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    releaseRunbook: JSON.parse(await readFile(proofPath, "utf8")),
+    releaseRunbookPath: path.relative(repoRoot, proofPath),
+    releaseRunbookArtifact: artifact,
+  };
+}
+
+async function readOptionalReleaseRunbookAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultReleaseRunbookAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    releaseRunbookAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    releaseRunbookAdminProofPath: path.relative(repoRoot, proofPath),
+    releaseRunbookAdminProofArtifact: artifact,
   };
 }
 

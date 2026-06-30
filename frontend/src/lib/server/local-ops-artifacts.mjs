@@ -27,6 +27,9 @@ const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
   "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
 const DEFAULT_HOSTED_OPS_SIGNALS =
   "target/dev-test-game/hosted-ops-signals.json";
+const DEFAULT_RELEASE_RUNBOOK = "target/dev-test-game/release-runbook.json";
+const DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF =
+  "target/dev-test-game/release-runbook-admin-proof.json";
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -180,6 +183,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     env: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
     fallback: DEFAULT_HOSTED_OPS_SIGNALS,
   }),
+  Object.freeze({
+    id: "release-runbook",
+    label: "Release runbook",
+    env: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK",
+    fallback: DEFAULT_RELEASE_RUNBOOK,
+  }),
+  Object.freeze({
+    id: "release-runbook-admin",
+    label: "Release runbook admin proof",
+    env: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF",
+    fallback: DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF,
+  }),
 ]);
 
 export async function readLocalOpsArtifacts({ env = process.env } = {}) {
@@ -216,6 +231,13 @@ export async function readLocalReleaseReadinessChecklist({
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS,
     fallback: DEFAULT_RELEASE_READINESS_CHECKLIST,
+  });
+}
+
+export async function readLocalReleaseRunbook({ env = process.env } = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK,
+    fallback: DEFAULT_RELEASE_RUNBOOK,
   });
 }
 

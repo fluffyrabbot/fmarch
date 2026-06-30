@@ -209,6 +209,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
       "target/dev-test-game/seed-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
+      "target/dev-test-game/release-runbook.json",
+    FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
+      "target/dev-test-game/release-runbook-admin-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
@@ -1152,7 +1156,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         true,
         devTestGameLiveProofCommand,
       ],
-      [2, "release", "missing", 15, false, "npm run test:dev-test-game-release-admin-proof"],
+      [2, "release", "missing", 17, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
     ],
   );
@@ -1204,8 +1208,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 15);
-  assert.equal(graph.summary.roleUrlCount, 15);
+  assert.equal(graph.summary.nodeCount, 16);
+  assert.equal(graph.summary.roleUrlCount, 16);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -7379,7 +7383,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    11,
+    12,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -7393,6 +7397,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     "ops",
     "seed",
     "release",
+    "release-runbook",
     "race-coverage",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
@@ -7413,7 +7418,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       (item) => item.id === "local-proof-graph-admin-role-handoffs",
   );
   assert.equal(handoffCheck.status, "passed");
-  assert.equal(handoffCheck.roleHandoffCount, 11);
+  assert.equal(handoffCheck.roleHandoffCount, 12);
   assert(handoffCheck.roleHandoffIds.includes("admin-proof:release"));
   assert(handoffCheck.destinationAuditIds.includes("local-release-readiness"));
   assert.equal(
@@ -7423,7 +7428,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(
     proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
       .roleHandoffCount,
-    11,
+    12,
   );
   const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -8660,6 +8665,52 @@ function releaseAdminProofFixture() {
   };
 }
 
+function releaseRunbookAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-release-runbook-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-release-runbook-admin-surface",
+    proofBoundary: "Local admin release-runbook proof only.",
+    generatedFrom: {
+      releaseRunbook: "target/dev-test-game/release-runbook.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      checkIds: [
+        "remaining-readiness-gaps-mapped",
+        "rollback-path-carried",
+        "support-path-carried",
+        "release-claim-boundary-carried",
+        "human-approval-boundary-carried",
+      ],
+      runbookItemIds: ["hosted-deployment", "human-release-approval"],
+      relatedAuditIds: ["local-release-readiness"],
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-release-runbook",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "remaining-readiness-gaps-mapped",
+        "rollback-path-carried",
+        "support-path-carried",
+        "release-claim-boundary-carried",
+        "human-approval-boundary-carried",
+      ],
+      visibleUnproven: ["hosted-deployment", "human-release-approval"],
+      visibleRelatedLinks: ["local-release-readiness"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function proofGraphAdminProofFixture() {
   const handoffs = [
     ["admin-proof:core-loop", "local-core-loop"],
@@ -8669,6 +8720,7 @@ function proofGraphAdminProofFixture() {
     ["admin-proof:ops", "local-ops-artifacts"],
     ["admin-proof:seed", "local-seed-fixtures"],
     ["admin-proof:release", "local-release-readiness"],
+    ["admin-proof:release-runbook", "local-release-runbook"],
     ["admin-proof:race-coverage", "local-race-coverage"],
     [
       "admin-proof:hosted-concurrent-race-matrix",
@@ -8711,6 +8763,7 @@ function proofGraphAdminProofFixture() {
         "ops",
         "seed",
         "release",
+        "release-runbook",
         "race-coverage",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
@@ -9171,6 +9224,7 @@ function adminSpineAdminProofFixture() {
         "ops",
         "seed",
         "release",
+        "release-runbook",
         "race-coverage",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
@@ -9192,6 +9246,7 @@ function adminSpineAdminProofFixture() {
         "ops",
         "seed",
         "release",
+        "release-runbook",
         "race-coverage",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
@@ -9214,6 +9269,7 @@ function adminSpineProofFixture() {
     ["ops", opsAdminProofFixture()],
     ["seed", seedAdminProofFixture()],
     ["release", releaseAdminProofFixture()],
+    ["release-runbook", releaseRunbookAdminProofFixture()],
     ["race-coverage", raceCoverageAdminProofFixture()],
     [
       "hosted-concurrent-race-matrix",
