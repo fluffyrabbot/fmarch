@@ -1903,6 +1903,12 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopNormalPostDayVoteAdvanceSurface(
     proof.normalPostDayVoteAdvanceSurface,
   );
+  assertCoreLoopNightActionResolutionReceiptSurface(
+    proof.nightActionResolutionReceiptSurface,
+  );
+  assertCoreLoopNormalNightActionResolutionPrivacySurface(
+    proof.normalNightActionResolutionPrivacySurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1931,6 +1937,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
     targetPostDayVoteAdvanceSurface: proof.targetPostDayVoteAdvanceSurface,
     normalPostDayVoteAdvanceSurface: proof.normalPostDayVoteAdvanceSurface,
+    nightActionResolutionReceiptSurface:
+      proof.nightActionResolutionReceiptSurface,
+    normalNightActionResolutionPrivacySurface:
+      proof.normalNightActionResolutionPrivacySurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -2078,9 +2088,9 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
     checkpoint.actorSlot !== "slot-7" ||
     checkpoint.actionState !== "enabled:submit_action:factional_kill" ||
     checkpoint.selectedAction !== "factional_kill" ||
-    checkpoint.targetSlots !== "slot-2" ||
+    checkpoint.targetSlots !== "slot-3" ||
     checkpoint.receiptState !== "idle" ||
-    !checkpoint.targetText?.includes("factional_kill -> slot-2") ||
+    !checkpoint.targetText?.includes("factional_kill -> slot-3") ||
     !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
     !String(checkpoint.statusText ?? "")
       .toLowerCase()
@@ -2119,7 +2129,7 @@ function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
     clickProof.command.action_id !== "factional_kill" ||
     clickProof.command.actor_slot !== "slot-7" ||
     clickProof.command.template_id !== "factional_kill" ||
-    clickProof.command.targets?.[0] !== "slot-2" ||
+    clickProof.command.targets?.[0] !== "slot-3" ||
     clickProof.commandStatus?.state !== "ack" ||
     !clickProof.commandStatus?.message?.includes("Ack: stream seqs 501") ||
     clickProof.bridgePlan?.role !== "player" ||
@@ -2171,7 +2181,7 @@ function assertCoreLoopPlayerActionInvalidRecoveryProof({
     invalidRecoveryProof.checkpointReceiptState !== "reject:InvalidTarget" ||
     invalidRecoveryProof.checkpointActionStateAfterReject !==
       "enabled:submit_action:factional_kill" ||
-    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-3" ||
     invalidRecoveryProof.receiptCount !== 1 ||
     !String(invalidRecoveryProof.receiptStatusText ?? "")
       .toLowerCase()
@@ -2534,6 +2544,128 @@ function assertCoreLoopNormalPostDayVoteAdvanceSurface(normalSurface) {
   }
 }
 
+function assertCoreLoopNightActionResolutionReceiptSurface(targetSurface) {
+  const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
+  if (
+    targetSurface?.status !== "passed" ||
+    targetSurface.clickedThroughFromRoleUrl !== true ||
+    targetSurface.releaseReady !== false ||
+    targetSurface.productionReady !== false ||
+    targetSurface.rawInviteTokensVisible !== false ||
+    targetSurface.targetSlot !== "slot-3" ||
+    targetSurface.principalUserId !== "player-seed" ||
+    typeof targetSurface.sourceRoleUrl !== "string" ||
+    !targetSurface.sourceRoleUrl.includes("/g/") ||
+    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof targetSurface.visitedRolePath !== "string" ||
+    !targetSurface.visitedRolePath.includes("/g/") ||
+    !targetSurface.visitedRolePath.includes("private=notification-1") ||
+    targetSurface.surfaceTestId !== "player-surface" ||
+    targetSurface.checkpoint?.phaseId !== "N02" ||
+    targetSurface.checkpoint.phaseState !== "locked" ||
+    targetSurface.checkpoint.actorSlot !== "slot-3" ||
+    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
+    targetSurface.checkpoint.receiptState !== "idle" ||
+    !String(targetSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: actor is not alive") ||
+    targetSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    targetSurface.privateQueueBoundary.count !== 1 ||
+    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    targetSurface.privateNotice?.id !== "notification-1" ||
+    targetSurface.privateNotice.kind !== "notification" ||
+    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
+    !String(targetSurface.privateNotice.text ?? "").includes("factional_kill") ||
+    targetSurface.privateNotice.detailText !== "Phase N02" ||
+    targetSurface.projectionCommandState?.actorSlot !== "slot-3" ||
+    targetSurface.projectionCommandState?.actorAlive !== false ||
+    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
+    targetSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    targetSurface.projectionCommandState?.phase?.locked !== true ||
+    targetSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
+      "night target role received factional_kill private receipt",
+    ) ||
+    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
+    targetSurface.projectionNotifications?.[0]?.status !== "factional_kill" ||
+    targetSurface.resyncFromSeq !== 904 ||
+    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-3" ||
+    targetSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    targetSurface.resyncSnapshotNotifications?.[0]?.status !== "factional_kill" ||
+    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player-seed` ||
+    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`
+  ) {
+    throw new Error(
+      "core-loop admin proof missing night action resolution receipt surface",
+    );
+  }
+}
+
+function assertCoreLoopNormalNightActionResolutionPrivacySurface(normalSurface) {
+  const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  if (
+    normalSurface?.status !== "passed" ||
+    normalSurface.clickedThroughFromRoleUrl !== true ||
+    normalSurface.releaseReady !== false ||
+    normalSurface.productionReady !== false ||
+    normalSurface.rawInviteTokensVisible !== false ||
+    normalSurface.normalSlot !== "slot-4" ||
+    normalSurface.principalUserId !== "player_rowan" ||
+    normalSurface.targetReceiptVisible !== false ||
+    typeof normalSurface.sourceRoleUrl !== "string" ||
+    !normalSurface.sourceRoleUrl.includes("/g/") ||
+    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
+    typeof normalSurface.visitedRolePath !== "string" ||
+    !normalSurface.visitedRolePath.includes("/g/") ||
+    !normalSurface.visitedRolePath.includes("private=notification-1") ||
+    normalSurface.surfaceTestId !== "player-surface" ||
+    normalSurface.checkpoint?.phaseId !== "N02" ||
+    normalSurface.checkpoint.phaseState !== "locked" ||
+    normalSurface.checkpoint.actorSlot !== "slot-4" ||
+    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
+    normalSurface.checkpoint.receiptState !== "idle" ||
+    !String(normalSurface.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action unavailable: phase locked") ||
+    normalSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    normalSurface.privateQueueBoundary.count !== 0 ||
+    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    !String(normalSurface.privateEmptyText ?? "").includes(
+      "No private results visible",
+    ) ||
+    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.projectionCommandState?.actorAlive !== true ||
+    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
+    normalSurface.projectionCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.projectionCommandState?.phase?.locked !== true ||
+    normalSurface.projectionCommandState?.actions?.length !== 0 ||
+    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
+      "normal role received no target-only private receipt",
+    ) ||
+    normalSurface.projectionNotifications?.length !== 0 ||
+    normalSurface.resyncFromSeq !== 904 ||
+    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
+    normalSurface.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
+    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
+    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+  ) {
+    throw new Error(
+      "core-loop admin proof missing normal night action resolution privacy surface",
+    );
+  }
+}
+
 function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
   const expectedGame = gameFromRoleUrl(
     hostPhaseTransitionSurface?.sourceHostRoleUrl,
@@ -2612,7 +2744,7 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     playerObservationProof.checkpointPhaseState !== "open" ||
     playerObservationProof.checkpointActionState !==
       "enabled:submit_action:factional_kill" ||
-    playerObservationProof.checkpointTargetSlots !== "slot-2" ||
+    playerObservationProof.checkpointTargetSlots !== "slot-3" ||
     playerObservationProof.checkpointReceiptState !== "reject:PhaseLocked"
   ) {
     throw new Error("core-loop admin proof missing player phase transition observation");
@@ -2753,7 +2885,7 @@ function assertCoreLoopPlayerStaleVoteAfterTransitionProof({
     staleProof.checkpointPhaseIdAfterReject !== "N02" ||
     staleProof.checkpointActionStateAfterReject !==
       "enabled:submit_action:factional_kill" ||
-    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-3" ||
     !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
     staleProof.receiptCount !== 1 ||
     !String(staleProof.receiptStatusText ?? "")
@@ -2778,7 +2910,7 @@ function assertCoreLoopPlayerStaleActionAfterTransitionProof({
     staleProof.command.action_id !== "factional_kill" ||
     staleProof.command.actor_slot !== "slot-7" ||
     staleProof.command.template_id !== "factional_kill" ||
-    staleProof.command.targets?.[0] !== "slot-2" ||
+    staleProof.command.targets?.[0] !== "slot-3" ||
     staleProof.commandStatus?.state !== "reject" ||
     staleProof.commandStatus.error !== "PhaseLocked" ||
     !String(staleProof.commandStatus.message ?? "").includes(
@@ -2798,7 +2930,7 @@ function assertCoreLoopPlayerStaleActionAfterTransitionProof({
     staleProof.checkpointPhaseIdAfterReject !== "N02" ||
     staleProof.checkpointActionStateAfterReject !==
       "enabled:submit_action:factional_kill" ||
-    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-3" ||
     !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
     staleProof.receiptCount !== 2 ||
     !String(staleProof.receiptStatusText ?? "")

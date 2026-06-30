@@ -9292,6 +9292,10 @@ function coreLoopAdminProofFixture() {
     hostPhaseTransitionSurface: hostPhaseTransitionSurfaceFixture(),
     targetPostDayVoteAdvanceSurface: targetPostDayVoteAdvanceSurfaceFixture(),
     normalPostDayVoteAdvanceSurface: normalPostDayVoteAdvanceSurfaceFixture(),
+    nightActionResolutionReceiptSurface:
+      nightActionResolutionReceiptSurfaceFixture(),
+    normalNightActionResolutionPrivacySurface:
+      normalNightActionResolutionPrivacySurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -9415,7 +9419,7 @@ function playerActionRoleSurfaceFixture() {
       actorSlot: "slot-7",
       actionState: "enabled:submit_action:factional_kill",
       selectedAction: "factional_kill",
-      targetSlots: "slot-2",
+      targetSlots: "slot-3",
       receiptState: "idle",
       visibleRows: [
         "phase",
@@ -9425,7 +9429,7 @@ function playerActionRoleSurfaceFixture() {
         "receipt",
         "recovery",
       ],
-      targetText: "Selected target\nfactional_kill -> slot-2",
+      targetText: "Selected target\nfactional_kill -> slot-3",
       recoveryText:
         "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
       statusText: "Player action submission is reachable from this role URL",
@@ -9439,7 +9443,7 @@ function playerActionRoleSurfaceFixture() {
         action_id: "factional_kill",
         actor_slot: "slot-7",
         template_id: "factional_kill",
-        targets: ["slot-2"],
+        targets: ["slot-3"],
         grant_id: "grant-factional-kill",
       },
       commandStatus: {
@@ -9524,7 +9528,7 @@ function playerActionRoleSurfaceFixture() {
       },
       checkpointReceiptState: "reject:InvalidTarget",
       checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-      checkpointTargetSlotsAfterReject: "slot-2",
+      checkpointTargetSlotsAfterReject: "slot-3",
       receiptCount: 1,
       receiptStatusText: "Reject InvalidTarget: invalid target",
     },
@@ -9919,6 +9923,140 @@ function normalPostDayVoteAdvanceSurfaceFixture() {
   };
 }
 
+function nightActionResolutionReceiptSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    visitedRolePath:
+      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    targetSlot: "slot-3",
+    principalUserId: "player-seed",
+    checkpoint: {
+      phaseId: "N02",
+      phaseState: "locked",
+      actorSlot: "slot-3",
+      actionState: "disabled:actor is not alive",
+      receiptState: "idle",
+      statusText: "Player action unavailable: actor is not alive",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 1,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    privateNotice: {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed\nfactional_kill\nReview player_killed",
+      detailText: "Phase N02",
+    },
+    projectionCommandState: {
+      actorSlot: "slot-3",
+      actorAlive: false,
+      actorStatus: "dead",
+      phase: {
+        phaseId: "N02",
+        locked: true,
+      },
+      actions: [],
+      boundary:
+        "Seeded browser night target role received factional_kill private receipt after N02 resolution.",
+    },
+    projectionNotifications: [
+      {
+        effect: "player_killed",
+        phase_id: "N02",
+        status: "factional_kill",
+      },
+    ],
+    resyncFromSeq: 904,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-3",
+      phase: {
+        phaseId: "N02",
+      },
+    },
+    resyncSnapshotNotifications: [
+      {
+        status: "factional_kill",
+      },
+    ],
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player-seed",
+      commandStateEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function normalNightActionResolutionPrivacySurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    visitedRolePath:
+      "/g/00000000-0000-0000-0000-000000000002?private=notification-1",
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    normalSlot: "slot-4",
+    principalUserId: "player_rowan",
+    checkpoint: {
+      phaseId: "N02",
+      phaseState: "locked",
+      actorSlot: "slot-4",
+      actionState: "disabled:phase locked",
+      receiptState: "idle",
+      statusText: "Player action unavailable: phase locked",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 0,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    privateEmptyText: "No private results visible to this session.",
+    targetReceiptVisible: false,
+    projectionCommandState: {
+      actorSlot: "slot-4",
+      actorAlive: true,
+      actorStatus: "alive",
+      phase: {
+        phaseId: "N02",
+        locked: true,
+      },
+      actions: [],
+      boundary:
+        "Seeded browser normal role received no target-only private receipt after N02 resolution.",
+    },
+    projectionNotifications: [],
+    resyncFromSeq: 904,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-4",
+      phase: {
+        phaseId: "N02",
+      },
+    },
+    resyncSnapshotNotifications: [],
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/notifications?principal_user_id=player_rowan",
+      commandStateEndpoint:
+        "/games/00000000-0000-0000-0000-000000000002/player-command-state?principal_user_id=player_rowan&slot_id=slot-4",
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 function hostPhaseTransitionSurfaceFixture() {
   return {
     status: "passed",
@@ -10082,7 +10220,7 @@ function hostPhaseTransitionSurfaceFixture() {
         checkpointReceiptState: "reject:PhaseLocked",
         checkpointPhaseIdAfterReject: "N02",
         checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-        checkpointTargetSlotsAfterReject: "slot-2",
+        checkpointTargetSlotsAfterReject: "slot-3",
         recoveryText:
           "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
         receiptCount: 1,
@@ -10098,7 +10236,7 @@ function hostPhaseTransitionSurfaceFixture() {
           action_id: "factional_kill",
           actor_slot: "slot-7",
           template_id: "factional_kill",
-          targets: ["slot-2"],
+          targets: ["slot-3"],
           grant_id: "grant-factional-kill",
         },
         commandStatus: {
@@ -10144,7 +10282,7 @@ function hostPhaseTransitionSurfaceFixture() {
         checkpointReceiptState: "reject:PhaseLocked",
         checkpointPhaseIdAfterReject: "N02",
         checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-        checkpointTargetSlotsAfterReject: "slot-2",
+        checkpointTargetSlotsAfterReject: "slot-3",
         recoveryText:
           "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
         receiptCount: 2,
@@ -10166,7 +10304,7 @@ function hostPhaseTransitionSurfaceFixture() {
       checkpointPhaseId: "N02",
       checkpointPhaseState: "open",
       checkpointActionState: "enabled:submit_action:factional_kill",
-      checkpointTargetSlots: "slot-2",
+      checkpointTargetSlots: "slot-3",
       checkpointReceiptState: "reject:PhaseLocked",
       releaseReady: false,
       productionReady: false,

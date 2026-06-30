@@ -216,7 +216,7 @@ test("player route data exposes action-open state for seeded UUID role URLs", as
       {
         action: "submit_action:factional_kill",
         templateId: "factional_kill",
-        targets: ["slot-2"],
+        targets: ["slot-3"],
       },
       {
         action: "submit_invalid_action:factional_kill",
