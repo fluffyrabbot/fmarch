@@ -6914,6 +6914,39 @@ test("session card and markdown include role credential URLs and tokens", () => 
     ).status,
     "unproven",
   );
+  const hostedMatrixReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    raceCoveragePath: "target/dev-test-game/race-coverage.json",
+    raceCoverage,
+    hostedConcurrentRaceMatrixPath: devTestGameHostedConcurrentRaceMatrixPath,
+    hostedConcurrentRaceMatrix: hostedMatrix,
+    hostedConcurrentRaceMatrixAdminProofPath:
+      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    hostedConcurrentRaceMatrixAdminProof:
+      hostedConcurrentRaceMatrixAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(hostedMatrixReadiness);
+  assert(
+    hostedMatrixReadiness.localDevelopmentSpine.checks.some(
+      (item) =>
+        item.id === "local-hosted-concurrent-race-matrix" &&
+        item.status === "passed" &&
+        item.cellCount === 16,
+    ),
+  );
+  assert.equal(
+    hostedMatrixReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-concurrent-race-matrix",
+    ),
+    false,
+  );
+  assert(
+    hostedMatrixReadiness.releaseReadiness.unproven.some(
+      (item) =>
+        item.id === "real-hosted-concurrent-race-matrix" &&
+        item.status === "unproven",
+    ),
+  );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
