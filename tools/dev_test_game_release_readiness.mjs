@@ -2175,6 +2175,8 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
   );
   const resolveProof = hostPhaseTransitionSurface?.resolveProof;
   const advanceProof = hostPhaseTransitionSurface?.advanceProof;
+  const staleHostAdvanceRecoveryProof =
+    hostPhaseTransitionSurface?.staleHostAdvanceRecoveryProof;
   const playerObservationProof =
     hostPhaseTransitionSurface?.playerObservationProof;
   if (
@@ -2222,6 +2224,10 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
+  assertCoreLoopHostStaleAdvanceAfterTransitionProof({
+    staleProof: staleHostAdvanceRecoveryProof,
+    expectedGame,
+  });
   if (
     playerObservationProof?.status !== "passed" ||
     playerObservationProof.releaseReady !== false ||
@@ -2254,6 +2260,57 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
   });
+}
+
+function assertCoreLoopHostStaleAdvanceAfterTransitionProof({
+  staleProof,
+  expectedGame,
+}) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.releaseReady !== false ||
+    staleProof.productionReady !== false ||
+    typeof staleProof.sourceRoleUrl !== "string" ||
+    !staleProof.sourceRoleUrl.endsWith("/host") ||
+    typeof staleProof.visitedRolePath !== "string" ||
+    !staleProof.visitedRolePath.endsWith("/host") ||
+    staleProof.surfaceTestId !== "host-console-surface" ||
+    staleProof.setupResyncFromSeq !== 801 ||
+    staleProof.setupSnapshotHost?.phase?.id !== "D02" ||
+    staleProof.setupSnapshotHost?.phase?.state !== "locked" ||
+    staleProof.clickedAction !== "advance_phase" ||
+    staleProof.commandKind !== "AdvancePhase" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "InvalidTarget" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    staleProof.commandOutcome?.state !== "reject" ||
+    staleProof.commandOutcome.error !== "InvalidTarget" ||
+    !String(staleProof.commandOutcome.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "moderator" ||
+    staleProof.bridgePlan.commandKind !== "AdvancePhase" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(staleProof.bridgePlan.projectionRefreshKeys, ["host"]) ||
+    staleProof.projection?.phase?.id !== "N02" ||
+    staleProof.projection?.phase?.state !== "open" ||
+    staleProof.projection?.phase?.locked !== false ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointPhaseStateAfterReject !== "open" ||
+    staleProof.checkpointDeadlineAffordanceAfterReject !==
+      "resolve_phase,lock_thread" ||
+    !String(staleProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("reject invalidtarget: invalid target")
+  ) {
+    throw new Error(
+      "core-loop admin proof missing host stale advance recovery after transition",
+    );
+  }
 }
 
 function assertCoreLoopHostPhaseTransitionActionProof({

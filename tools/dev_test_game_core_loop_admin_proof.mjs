@@ -560,6 +560,12 @@ async function proveHostPhaseTransitionSurface({
       expectedPhaseState: "open",
       expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
+    const staleHostAdvanceRecoveryProof =
+      await proveHostStaleAdvanceAfterTransition({
+        browser,
+        frontendBaseUrl,
+        roleUrl: hostRoleUrl,
+      });
     const playerObservationProof = await provePlayerPhaseTransitionObservation({
       browser,
       frontendBaseUrl,
@@ -579,6 +585,7 @@ async function proveHostPhaseTransitionSurface({
       transition: "resolve_phase:ack:801 -> advance_phase:ack:802 -> player:N02",
       resolveProof,
       advanceProof,
+      staleHostAdvanceRecoveryProof,
       playerObservationProof,
       releaseReady: false,
       productionReady: false,
@@ -674,6 +681,208 @@ async function proveHostPhaseActionClick({
     checkpointDeadlineAffordance,
     activityStatusText,
   };
+}
+
+async function proveHostStaleAdvanceAfterTransition({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installHostStaleAdvanceBrowserRoutes(page, { commandRequests });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerHostResync !== "function") {
+        throw new Error("host resync hook is unavailable");
+      }
+      return window.__fmarchTriggerHostResync(801);
+    });
+    await page.waitForFunction(
+      () => {
+        const checkpoint = document.querySelector(
+          '[data-testid="host-lifecycle-control-checkpoint"]',
+        );
+        return (
+          checkpoint?.getAttribute("data-phase-id") === "D02" &&
+          checkpoint?.getAttribute("data-phase-state") === "locked" &&
+          checkpoint?.getAttribute("data-deadline-affordance") ===
+            "unlock_thread,advance_phase"
+        );
+      },
+      null,
+      { timeout: 15000 },
+    );
+    const actionTile = page.getByTestId("critical-host-action-advance_phase");
+    await actionTile.waitFor({ state: "visible", timeout: 15000 });
+    await actionTile.getByTestId("critical-host-action-trigger").click();
+    await actionTile.getByTestId("critical-host-action-confirm").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await actionTile.getByTestId("critical-host-action-confirm").click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchHostCommandStatuses?.advance_phase?.state === "reject" &&
+        window.__fmarchHostCommandStatuses?.advance_phase?.error ===
+          "InvalidTarget" &&
+        window.__fmarchHostCommandDispatchBridgePlan?.commandKind ===
+          "AdvancePhase",
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      () => {
+        const checkpoint = document.querySelector(
+          '[data-testid="host-lifecycle-control-checkpoint"]',
+        );
+        return (
+          checkpoint?.getAttribute("data-phase-id") === "N02" &&
+          checkpoint?.getAttribute("data-phase-state") === "open" &&
+          checkpoint?.getAttribute("data-deadline-affordance") ===
+            "resolve_phase,lock_thread"
+        );
+      },
+      null,
+      { timeout: 15000 },
+    );
+    const commandStatuses = await page.evaluate(
+      () => window.__fmarchHostCommandStatuses,
+    );
+    const commandOutcomes = await page.evaluate(
+      () => window.__fmarchHostCommandOutcomes,
+    );
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchHostCommandDispatchBridgePlan,
+    );
+    const projection = await page.evaluate(() => window.__fmarchHostProjection);
+    const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+    const checkpointPhaseIdAfterReject = await checkpoint.getAttribute(
+      "data-phase-id",
+    );
+    const checkpointPhaseStateAfterReject = await checkpoint.getAttribute(
+      "data-phase-state",
+    );
+    const checkpointDeadlineAffordanceAfterReject = await checkpoint.getAttribute(
+      "data-deadline-affordance",
+    );
+    const activityStatusText = await page
+      .getByTestId("host-command-activity-status-advance_phase")
+      .innerText();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("host stale advance proof leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.AdvancePhase ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "host-console-surface",
+      setupResyncFromSeq: 801,
+      setupSnapshotHost: setupSnapshot?.host ?? null,
+      clickedAction: "advance_phase",
+      commandKind: command === null ? null : "AdvancePhase",
+      command,
+      commandStatus: commandStatuses?.advance_phase ?? null,
+      commandOutcome: commandOutcomes?.at?.(-1) ?? null,
+      bridgePlan,
+      projection,
+      checkpointPhaseIdAfterReject,
+      checkpointPhaseStateAfterReject,
+      checkpointDeadlineAffordanceAfterReject,
+      activityStatusText,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function installHostStaleAdvanceBrowserRoutes(page, { commandRequests }) {
+  let hostPhaseState = "stale-locked";
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.AdvancePhase !== undefined) {
+      hostPhaseState = "current-open";
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "InvalidTarget",
+              retryable: false,
+              message: "invalid target",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "host-stale-advance-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongHostStaleAdvanceProofCommand",
+            retryable: false,
+            message: "host stale advance proof only accepts AdvancePhase",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      hostPhaseTransitionConsoleState({
+        phaseId: hostPhaseState === "current-open" ? "N02" : "D02",
+        locked: hostPhaseState !== "current-open",
+        boundary:
+          hostPhaseState === "current-open"
+            ? "Seeded browser InvalidTarget recovery refreshed host projection to Night 2."
+            : "Seeded browser stale host view still showed locked Day 2 advance controls.",
+      }),
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
 }
 
 async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }) {
@@ -2172,6 +2381,8 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
   );
   const resolveProof = hostPhaseTransitionSurface?.resolveProof;
   const advanceProof = hostPhaseTransitionSurface?.advanceProof;
+  const staleHostAdvanceRecoveryProof =
+    hostPhaseTransitionSurface?.staleHostAdvanceRecoveryProof;
   const playerObservationProof =
     hostPhaseTransitionSurface?.playerObservationProof;
   if (
@@ -2223,6 +2434,10 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
+  assertHostStaleAdvanceAfterTransitionProof({
+    staleProof: staleHostAdvanceRecoveryProof,
+    expectedGame,
+  });
   if (
     playerObservationProof?.status !== "passed" ||
     playerObservationProof.releaseReady !== false ||
@@ -2259,6 +2474,56 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
   });
+}
+
+function assertHostStaleAdvanceAfterTransitionProof({ staleProof, expectedGame }) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.releaseReady !== false ||
+    staleProof.productionReady !== false ||
+    typeof staleProof.sourceRoleUrl !== "string" ||
+    !staleProof.sourceRoleUrl.endsWith("/host") ||
+    typeof staleProof.visitedRolePath !== "string" ||
+    !staleProof.visitedRolePath.endsWith("/host") ||
+    staleProof.surfaceTestId !== "host-console-surface" ||
+    staleProof.setupResyncFromSeq !== 801 ||
+    staleProof.setupSnapshotHost?.phase?.id !== "D02" ||
+    staleProof.setupSnapshotHost?.phase?.state !== "locked" ||
+    staleProof.clickedAction !== "advance_phase" ||
+    staleProof.commandKind !== "AdvancePhase" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "InvalidTarget" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    staleProof.commandOutcome?.state !== "reject" ||
+    staleProof.commandOutcome.error !== "InvalidTarget" ||
+    !String(staleProof.commandOutcome.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "moderator" ||
+    staleProof.bridgePlan.commandKind !== "AdvancePhase" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(staleProof.bridgePlan.projectionRefreshKeys, ["host"]) ||
+    staleProof.projection?.phase?.id !== "N02" ||
+    staleProof.projection?.phase?.state !== "open" ||
+    staleProof.projection?.phase?.locked !== false ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointPhaseStateAfterReject !== "open" ||
+    staleProof.checkpointDeadlineAffordanceAfterReject !==
+      "resolve_phase,lock_thread" ||
+    !String(staleProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("reject invalidtarget: invalid target")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host stale advance recovery after transition: ${JSON.stringify(
+        staleProof,
+      )}`,
+    );
+  }
 }
 
 function assertHostPhaseTransitionActionProof({

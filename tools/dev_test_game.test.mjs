@@ -9568,6 +9568,58 @@ function hostPhaseTransitionSurfaceFixture() {
         game: "00000000-0000-0000-0000-000000000002",
       },
     }),
+    staleHostAdvanceRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl:
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+      visitedRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
+      surfaceTestId: "host-console-surface",
+      setupResyncFromSeq: 801,
+      setupSnapshotHost: {
+        phase: {
+          id: "D02",
+          state: "locked",
+        },
+      },
+      clickedAction: "advance_phase",
+      commandKind: "AdvancePhase",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "InvalidTarget",
+        message:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      },
+      commandOutcome: {
+        state: "reject",
+        error: "InvalidTarget",
+        message:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "AdvancePhase",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: ["host"],
+      },
+      projection: {
+        phase: {
+          id: "N02",
+          state: "open",
+          locked: false,
+        },
+      },
+      checkpointPhaseIdAfterReject: "N02",
+      checkpointPhaseStateAfterReject: "open",
+      checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+      activityStatusText:
+        "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      releaseReady: false,
+      productionReady: false,
+    },
     playerObservationProof: {
       status: "passed",
       sourceRoleUrl:
