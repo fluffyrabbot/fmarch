@@ -9305,6 +9305,7 @@ function coreLoopAdminProofFixture() {
     nightFourResolutionReceiptSurface: nightFourResolutionReceiptSurfaceFixture(),
     postNightFourTransitionSurface: postNightFourTransitionSurfaceFixture(),
     dayFiveNoLynchResolutionSurface: dayFiveNoLynchResolutionSurfaceFixture(),
+    completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -11605,6 +11606,150 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
   };
 }
 
+function completedGameEndgameSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  const dayFiveOutcomes = [
+    { phaseId: "D02", status: "Lynch" },
+    { phaseId: "D03", status: "Lynch" },
+    { phaseId: "D04", status: "NoLynch" },
+    { phaseId: "D05", status: "NoLynch" },
+  ];
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "host:N05:complete_game:ack:921 -> actionPlayer:endgame:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    hostCompleteProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 920,
+      setupSnapshotHost: {
+        completed: false,
+        phase: {
+          id: "N05",
+          state: "open",
+        },
+      },
+      completeProof: {
+        ...hostPhaseTransitionActionFixture({
+          actionId: "complete_game",
+          commandKind: "CompleteGame",
+          streamSeq: 921,
+          phaseId: "N05",
+          phaseState: "open",
+          deadlineAffordance: "none",
+          projectionRefreshKeys: [],
+          command: {
+            game,
+          },
+        }),
+        projection: {
+          completed: true,
+          phase: {
+            id: "N05",
+            state: "open",
+            locked: false,
+          },
+          slots: [
+            {
+              role_revealed: true,
+              alignment_revealed: true,
+            },
+          ],
+        },
+      },
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    actionPlayerCompletedProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "N05",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      gameCompleted: true,
+      actionState: "disabled:game complete",
+      statusText: "Player action unavailable: game complete",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
+      resyncFromSeq: 921,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+      dayVoteOutcomes: dayFiveOutcomes,
+    }),
+    staleCompletedVoteRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_vote:no_lynch",
+      commandKind: "SubmitVote",
+      setupResyncFromSeq: 918,
+      setupSnapshotCommandState: {
+        phase: { phaseId: "D05" },
+        voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+      },
+      command: {
+        game,
+        actor_slot: "slot-7",
+        target: "NoLynch",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        message: "Reject GameAlreadyCompleted: game already completed",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitVote",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: ["votecount", "commandState"],
+      },
+      receipts: [{ state: "reject" }],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "N05",
+          locked: false,
+        },
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+        boundary:
+          "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
+      },
+      checkpointReceiptState: "reject:GameAlreadyCompleted",
+      checkpointPhaseIdAfterReject: "N05",
+      checkpointActionStateAfterReject: "disabled:game complete",
+      checkpointTargetSlotsAfterReject: "",
+      receiptCount: 1,
+      receiptStatusText: "Reject GameAlreadyCompleted",
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 function nightFourResolutionPlayerSurfaceFixture({
   sourceRoleUrl,
   visitedRolePath,
@@ -11714,6 +11859,7 @@ function postDayThreePlayerSurfaceFixture({
   phaseState,
   actorAlive,
   actorStatus,
+  gameCompleted = false,
   actionState,
   statusText,
   privateCount,
@@ -11758,6 +11904,7 @@ function postDayThreePlayerSurfaceFixture({
       actorSlot: slot,
       actorAlive,
       actorStatus,
+      gameCompleted,
       phase: {
         phaseId,
         locked: phaseState === "locked",
@@ -11778,6 +11925,7 @@ function postDayThreePlayerSurfaceFixture({
     resyncFromSeq,
     resyncSnapshotCommandState: {
       actorSlot: slot,
+      gameCompleted,
       phase: {
         phaseId,
       },

@@ -1936,6 +1936,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopDayFiveNoLynchResolutionSurface(
     proof.dayFiveNoLynchResolutionSurface,
   );
+  assertCoreLoopCompletedGameEndgameSurface(proof.completedGameEndgameSurface);
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1977,6 +1978,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     nightFourResolutionReceiptSurface: proof.nightFourResolutionReceiptSurface,
     postNightFourTransitionSurface: proof.postNightFourTransitionSurface,
     dayFiveNoLynchResolutionSurface: proof.dayFiveNoLynchResolutionSurface,
+    completedGameEndgameSurface: proof.completedGameEndgameSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -4043,6 +4045,174 @@ function assertCoreLoopStaleDayFiveVoteRecoveryProof({
       .includes("reject phaselocked")
   ) {
     throw new Error("core-loop admin proof missing stale Day 5 vote recovery");
+  }
+}
+
+function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
+  const expectedGame = gameFromRoleUrl(
+    completedGameEndgameSurface?.sourceHostRoleUrl,
+  );
+  if (
+    completedGameEndgameSurface?.status !== "passed" ||
+    completedGameEndgameSurface.clickedThroughFromRoleUrl !== true ||
+    completedGameEndgameSurface.releaseReady !== false ||
+    completedGameEndgameSurface.productionReady !== false ||
+    typeof completedGameEndgameSurface.sourceHostRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:N05:complete_game:ack:921",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "actionPlayer:endgame:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing completed-game endgame surface");
+  }
+  assertCoreLoopHostCompleteGameProof({
+    proof: completedGameEndgameSurface.hostCompleteProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+  });
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: completedGameEndgameSurface.actionPlayerCompletedProof,
+    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:game complete",
+    expectedStatusText: "game complete",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "completed game endgame state",
+    expectedResyncFromSeq: 921,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    expectedLastVoteOutcomePhaseId: "D05",
+  });
+  if (
+    completedGameEndgameSurface.actionPlayerCompletedProof?.projectionCommandState
+      ?.gameCompleted !== true ||
+    completedGameEndgameSurface.actionPlayerCompletedProof?.resyncSnapshotCommandState
+      ?.gameCompleted !== true
+  ) {
+    throw new Error("core-loop admin proof missing completed player command state");
+  }
+  assertCoreLoopStaleCompletedGameVoteRecoveryProof({
+    proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+  });
+}
+
+function assertCoreLoopHostCompleteGameProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 920 ||
+    proof.setupSnapshotHost?.phase?.id !== "N05" ||
+    proof.setupSnapshotHost?.phase?.state !== "open" ||
+    proof.setupSnapshotHost?.completed !== false
+  ) {
+    throw new Error("core-loop admin proof missing host complete-game setup");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.completeProof,
+    expectedGame,
+    actionId: "complete_game",
+    commandKind: "CompleteGame",
+    streamSeq: 921,
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "none",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.completeProof?.projection?.completed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.role_revealed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.alignment_revealed !== true
+  ) {
+    throw new Error("core-loop admin proof missing completed host projection");
+  }
+}
+
+function assertCoreLoopStaleCompletedGameVoteRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.setupResyncFromSeq !== 918 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
+    proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N05" ||
+    proof.projectionCommandState?.gameCompleted !== true ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "stale D05 vote refreshed into completed endgame controls",
+    ) ||
+    proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
+    proof.checkpointPhaseIdAfterReject !== "N05" ||
+    proof.checkpointActionStateAfterReject !== "disabled:game complete" ||
+    proof.checkpointTargetSlotsAfterReject !== "" ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject gamealreadycompleted")
+  ) {
+    throw new Error("core-loop admin proof missing stale completed-game vote recovery");
   }
 }
 

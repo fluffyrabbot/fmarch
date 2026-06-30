@@ -256,6 +256,12 @@ await runAdminAuditProof({
         hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
         actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
       });
+    const completedGameEndgameSurface = await proveCompletedGameEndgameSurface({
+      browser,
+      frontendBaseUrl,
+      hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+      actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+    });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
@@ -285,6 +291,7 @@ await runAdminAuditProof({
       nightFourResolutionReceiptSurface,
       postNightFourTransitionSurface,
       dayFiveNoLynchResolutionSurface,
+      completedGameEndgameSurface,
       privateChannelRoleSurface,
     };
   },
@@ -296,7 +303,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-core-loop-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 action submission against the survivor, Night 4 target receipt/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus stale Night 4 action recovery, and Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 action submission against the survivor, Night 4 target receipt/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus stale Night 4 action recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame player surfaces plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
@@ -332,6 +339,8 @@ await runAdminAuditProof({
       surfaces.postNightFourTransitionSurface,
     dayFiveNoLynchResolutionSurface:
       surfaces.dayFiveNoLynchResolutionSurface,
+    completedGameEndgameSurface:
+      surfaces.completedGameEndgameSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
@@ -1687,6 +1696,60 @@ async function proveDayFiveNoLynchResolutionSurface({
   };
 }
 
+async function proveCompletedGameEndgameSurface({
+  browser,
+  frontendBaseUrl,
+  hostRoleUrl,
+  actionPlayerRoleUrl,
+}) {
+  const hostCompleteProof = await proveHostCompleteGameFromNightFive({
+    browser,
+    frontendBaseUrl,
+    roleUrl: hostRoleUrl,
+  });
+  const actionPlayerCompletedProof = await provePostDayThreePlayerSurface({
+    browser,
+    frontendBaseUrl,
+    roleUrl: actionPlayerRoleUrl,
+    cookieValue: "fixture-player",
+    expectedSlot: "slot-7",
+    principalUserId: "player_mira",
+    slotField: "actionPlayerSlot",
+    commandState: seededCompletedActionPlayerCommandState({
+      boundary:
+        "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
+    }),
+    notifications: [],
+    resyncFromSeq: 921,
+    threadBody: "The game is complete.",
+    dayVoteOutcomesRows: [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ],
+  });
+  const staleCompletedVoteRecoveryProof =
+    await proveStaleCompletedGameVoteRecovery({
+      browser,
+      frontendBaseUrl,
+      roleUrl: actionPlayerRoleUrl,
+    });
+  return {
+    status: "passed",
+    sourceHostRoleUrl: String(hostRoleUrl),
+    sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "host:N05:complete_game:ack:921 -> actionPlayer:endgame:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    hostCompleteProof,
+    actionPlayerCompletedProof,
+    staleCompletedVoteRecoveryProof,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 async function proveNightFourHostResolution({
   browser,
   frontendBaseUrl,
@@ -2294,6 +2357,189 @@ async function proveStaleDayFiveVoteRecovery({
     }
     if (bodyText.includes("factional_kill")) {
       throw new Error("Day 5 stale vote proof leaked target-only night receipt");
+    }
+    return {
+      ...proof,
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 918,
+      setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveHostCompleteGameFromNightFive({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installHostCompleteGameFromNightFiveBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerHostResync !== "function") {
+        throw new Error("host resync hook is unavailable");
+      }
+      return window.__fmarchTriggerHostResync(920);
+    });
+    await page.waitForFunction(
+      () => {
+        const checkpoint = document.querySelector(
+          '[data-testid="host-lifecycle-control-checkpoint"]',
+        );
+        return (
+          checkpoint?.getAttribute("data-phase-id") === "N05" &&
+          checkpoint?.getAttribute("data-phase-state") === "open" &&
+          checkpoint?.getAttribute("data-deadline-affordance") ===
+            "resolve_phase,lock_thread"
+        );
+      },
+      null,
+      { timeout: 15000 },
+    );
+    const completeProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "complete_game",
+      commandKind: "CompleteGame",
+      streamSeq: 921,
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedDeadlineAffordance: "none",
+    });
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("completed-game host proof leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 920,
+      setupSnapshotHost: setupSnapshot?.host ?? null,
+      completeProof,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveStaleCompletedGameVoteRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installStaleCompletedGameVoteRecoveryBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(918);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
+        document.querySelector(
+          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+        ) !== null,
+      null,
+      { timeout: 15000 },
+    );
+    const voteButton = page.locator(
+      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+    );
+    await voteButton.waitFor({ state: "visible", timeout: 15000 });
+    await voteButton.click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted" &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitVote" &&
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true,
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-action-submission-checkpoint"]')
+          ?.getAttribute("data-receipt-state") ===
+          "reject:GameAlreadyCompleted" &&
+        document
+          .querySelector('[data-testid="player-action-submission-checkpoint"]')
+          ?.getAttribute("data-action-state") === "disabled:game complete",
+      null,
+      { timeout: 15000 },
+    );
+    const proof = await collectPlayerStaleCommandProof({
+      page,
+      commandRequests,
+      clickedAction: "submit_vote:no_lynch",
+      commandKind: "SubmitVote",
+      commandSelector: "SubmitVote",
+    });
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("completed-game stale vote proof leaked an invite URL token");
+    }
+    if (bodyText.includes("factional_kill")) {
+      throw new Error("completed-game stale vote proof leaked target-only night receipt");
     }
     return {
       ...proof,
@@ -6238,6 +6484,180 @@ async function installStaleDayFiveVoteRecoveryBrowserRoutes(
   });
 }
 
+async function installHostCompleteGameFromNightFiveBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let completed = false;
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.CompleteGame !== undefined) {
+      completed = true;
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [921],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "host-complete-game-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongCompletedGameHostProofCommand",
+            retryable: false,
+            message: "completed-game host proof only accepts CompleteGame",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      hostCompletedConsoleState({
+        completed,
+        phaseId: "N05",
+        locked: false,
+        seq: completed ? 921 : 920,
+        boundary: completed
+          ? "Seeded browser CompleteGame ACK revealed endgame role and alignment facts."
+          : "Seeded browser host opened Night 5 with final completion control available.",
+      }),
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let rejected = false;
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitVote !== undefined) {
+      rejected = true;
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "GameAlreadyCompleted",
+              retryable: false,
+              message: "Reject GameAlreadyCompleted: game already completed",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "stale-completed-game-vote-recovery-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongCompletedGameStaleVoteProofCommand",
+            retryable: false,
+            message: "completed-game stale vote proof only accepts SubmitVote",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: rejected ? 921 : 917,
+          stream_seq: rejected ? 921 : 917,
+          author_slot: "host",
+          author_user: "host_h",
+          body: rejected
+            ? "The game is complete."
+            : "Day 5 has opened but this client still has stale vote controls.",
+          occurred_at: rejected ? 1782619200 : 1782532800,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, rejected ? [] : dayFiveNoLynchVotecountRows());
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      rejected
+        ? seededCompletedActionPlayerCommandState({
+            boundary:
+              "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
+          })
+        : seededDayFiveActionPlayerCommandState({
+            boundary:
+              "Seeded browser stale completed-game vote proof opened with old Day 5 no-lynch controls.",
+          }),
+    );
+  });
+}
+
 async function installPostDayThreePlayerBrowserRoutes(
   page,
   {
@@ -7494,6 +7914,27 @@ function seededNightFiveActionPlayerCommandState({ boundary }) {
   };
 }
 
+function seededCompletedActionPlayerCommandState({ boundary }) {
+  return {
+    game: "seeded-completed-action-player",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: true,
+    phase: {
+      phaseId: "N05",
+      phaseKind: "Night",
+      phaseNumber: 5,
+      locked: false,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -7595,6 +8036,54 @@ function hostPhaseTransitionConsoleState({
         status: "alive",
         status_tags: ["alive"],
         role_key: "mafia_goon",
+      },
+    ],
+    thread_posts: [
+      {
+        seq,
+        author_slot: "host",
+        body: boundary,
+      },
+    ],
+  };
+}
+
+function hostCompletedConsoleState({
+  completed,
+  phaseId,
+  locked,
+  boundary,
+  seq,
+}) {
+  return {
+    completed,
+    phase: {
+      phase_id: phaseId,
+      locked,
+      deadline: null,
+    },
+    slots: [
+      {
+        slot_id: "slot-7",
+        occupant_user_id: "player-mira",
+        alive: true,
+        status: "alive",
+        status_tags: ["alive"],
+        role_key: "mafia_goon",
+        alignment: "mafia",
+        role_revealed: completed,
+        alignment_revealed: completed,
+      },
+      {
+        slot_id: "slot-5",
+        occupant_user_id: "player-sage",
+        alive: false,
+        status: "dead",
+        status_tags: ["dead"],
+        role_key: "vanilla_townie",
+        alignment: "town",
+        role_revealed: completed,
+        alignment_revealed: completed,
       },
     ],
     thread_posts: [
@@ -7830,6 +8319,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertDayFiveNoLynchResolutionSurface(
     evidence.dayFiveNoLynchResolutionSurface,
   );
+  assertCompletedGameEndgameSurface(evidence.completedGameEndgameSurface);
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
@@ -10057,6 +10547,191 @@ function assertStaleDayFiveVoteRecoveryProof({
   ) {
     throw new Error(
       `core-loop admin proof missing stale Day 5 vote recovery: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+}
+
+function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
+  const expectedGame = gameFromRoleUrl(
+    completedGameEndgameSurface?.sourceHostRoleUrl,
+  );
+  if (
+    completedGameEndgameSurface?.status !== "passed" ||
+    completedGameEndgameSurface.clickedThroughFromRoleUrl !== true ||
+    completedGameEndgameSurface.releaseReady !== false ||
+    completedGameEndgameSurface.productionReady !== false ||
+    typeof completedGameEndgameSurface.sourceHostRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:N05:complete_game:ack:921",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "actionPlayer:endgame:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "stale:D05:submit_vote:reject:GameAlreadyCompleted",
+    )
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed-game endgame surface: ${JSON.stringify(
+        completedGameEndgameSurface,
+      )}`,
+    );
+  }
+  assertHostCompleteGameProof({
+    proof: completedGameEndgameSurface.hostCompleteProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+  });
+  assertPostDayThreePlayerSurfaceProof({
+    proof: completedGameEndgameSurface.actionPlayerCompletedProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:game complete",
+    expectedStatusText: "game complete",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "completed game endgame state",
+    expectedResyncFromSeq: 921,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    expectedLastVoteOutcomePhaseId: "D05",
+  });
+  if (
+    completedGameEndgameSurface.actionPlayerCompletedProof?.projectionCommandState
+      ?.gameCompleted !== true ||
+    completedGameEndgameSurface.actionPlayerCompletedProof?.resyncSnapshotCommandState
+      ?.gameCompleted !== true
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed player command state: ${JSON.stringify(
+        completedGameEndgameSurface.actionPlayerCompletedProof,
+      )}`,
+    );
+  }
+  assertStaleCompletedGameVoteRecoveryProof({
+    proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+  });
+}
+
+function assertHostCompleteGameProof({ proof, expectedGame, sourceRoleUrl }) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 920 ||
+    proof.setupSnapshotHost?.phase?.id !== "N05" ||
+    proof.setupSnapshotHost?.phase?.state !== "open" ||
+    proof.setupSnapshotHost?.completed !== false
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host complete-game setup: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: proof.completeProof,
+    expectedGame,
+    actionId: "complete_game",
+    commandKind: "CompleteGame",
+    streamSeq: 921,
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "none",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.completeProof?.projection?.completed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.role_revealed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.alignment_revealed !== true
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed host projection: ${JSON.stringify(
+        proof.completeProof,
+      )}`,
+    );
+  }
+}
+
+function assertStaleCompletedGameVoteRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.setupResyncFromSeq !== 918 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
+    proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N05" ||
+    proof.projectionCommandState?.gameCompleted !== true ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "stale D05 vote refreshed into completed endgame controls",
+    ) ||
+    proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
+    proof.checkpointPhaseIdAfterReject !== "N05" ||
+    proof.checkpointActionStateAfterReject !== "disabled:game complete" ||
+    proof.checkpointTargetSlotsAfterReject !== "" ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject gamealreadycompleted")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing stale completed-game vote recovery: ${JSON.stringify(
         proof,
       )}`,
     );
