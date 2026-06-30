@@ -7263,7 +7263,21 @@ function devTestGameReleaseReadinessChecklistFixture({
                 id: "local-proof-graph-admin-role-handoffs",
                 label: "Proof graph admin role handoffs",
                 status: "passed",
+                dependencyGated: true,
                 evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+                proofBoundary:
+                  "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+                recovery: {
+                  command: "npm run test:dev-test-game-proof-graph-admin-proof",
+                  buildSlice:
+                    "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+                  proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  proofBoundary:
+                    "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+                },
                 roleHandoffCount: 10,
                 roleHandoffIds: ["admin-proof:release"],
                 destinationAuditIds: ["local-release-readiness"],

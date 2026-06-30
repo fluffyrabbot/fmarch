@@ -27,8 +27,44 @@ const localReadinessDependencyById = new Map(
   localReadinessDependencies.map((dependency) => [dependency.id, dependency]),
 );
 
+assertLocalReadinessDependencyRegistry();
+
 export function getLocalReadinessDependency(id) {
   return localReadinessDependencyById.get(id);
+}
+
+export function assertLocalReadinessDependencyRegistry() {
+  const ids = new Set();
+  for (const dependency of localReadinessDependencies) {
+    if (ids.has(dependency.id)) {
+      throw new Error(`duplicate local readiness dependency id: ${dependency.id}`);
+    }
+    ids.add(dependency.id);
+    assertLocalReadinessDependencyDescriptor(dependency);
+  }
+  return localReadinessDependencies;
+}
+
+export function assertLocalReadinessDependencyChecks(checks) {
+  assertLocalReadinessDependencyRegistry();
+  for (const check of checks ?? []) {
+    const dependency = getLocalReadinessDependency(check?.id);
+    if (check?.dependencyGated === true && dependency === undefined) {
+      throw new Error(
+        `local readiness dependency check ${check?.id} has no recovery contract`,
+      );
+    }
+    if (dependency === undefined) {
+      continue;
+    }
+    if (check.dependencyGated !== true) {
+      throw new Error(
+        `local readiness dependency check ${check.id} is missing dependencyGated=true`,
+      );
+    }
+    assertLocalReadinessDependencyCheckMatchesContract(check, dependency);
+  }
+  return checks;
 }
 
 export function rankedMissingLocalReadinessDependencies(readiness) {
@@ -78,11 +114,67 @@ export function buildProofGraphAdminRoleHandoffsReadinessCheck(
     id: dependency.id,
     label: dependency.label,
     status: "passed",
+    dependencyGated: true,
     evidence: proofGraphAdminProofEvidence.path,
     proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
     roleHandoffCount: proofGraphAdminProofEvidence.roleHandoffCount,
     roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
     destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
+}
+
+function buildLocalReadinessDependencyRecovery(dependency) {
+  return {
+    command: dependency.command,
+    buildSlice: dependency.buildSlice,
+    proofTarget: dependency.proofTarget,
+    roleUrl: dependency.roleUrl,
+    proofBoundary: dependency.proofBoundary,
+    requiredEvidence: dependency.requiredEvidence,
+  };
+}
+
+function assertLocalReadinessDependencyDescriptor(dependency) {
+  if (
+    typeof dependency?.id !== "string" ||
+    dependency.id.length === 0 ||
+    typeof dependency.label !== "string" ||
+    dependency.label.length === 0 ||
+    !Number.isInteger(dependency.priority) ||
+    dependency.priority < 0 ||
+    typeof dependency.command !== "string" ||
+    !dependency.command.startsWith("npm run ") ||
+    typeof dependency.buildSlice !== "string" ||
+    dependency.buildSlice.length === 0 ||
+    typeof dependency.proofTarget !== "string" ||
+    dependency.proofTarget.length === 0 ||
+    typeof dependency.roleUrl !== "string" ||
+    !dependency.roleUrl.includes("?game=<seeded-game>") ||
+    typeof dependency.proofBoundary !== "string" ||
+    dependency.proofBoundary.length === 0 ||
+    typeof dependency.requiredEvidence !== "string" ||
+    dependency.requiredEvidence.length === 0
+  ) {
+    throw new Error(
+      `local readiness dependency ${dependency?.id ?? "<unknown>"} is missing recovery metadata`,
+    );
+  }
+}
+
+function assertLocalReadinessDependencyCheckMatchesContract(check, dependency) {
+  const expectedRecovery = buildLocalReadinessDependencyRecovery(dependency);
+  if (check.label !== dependency.label) {
+    throw new Error(
+      `local readiness dependency check ${check.id} label drifted from registry`,
+    );
+  }
+  for (const [field, expected] of Object.entries(expectedRecovery)) {
+    if (check.recovery?.[field] !== expected) {
+      throw new Error(
+        `local readiness dependency check ${check.id} recovery ${field} drifted from registry`,
+      );
+    }
+  }
 }

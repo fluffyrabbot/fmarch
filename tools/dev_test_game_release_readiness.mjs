@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  assertLocalReadinessDependencyChecks,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -2662,6 +2663,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       throw new Error(`dev-test-game local check ${check.id} did not pass`);
     }
   }
+  assertLocalReadinessDependencyChecks(checklist.localDevelopmentSpine?.checks);
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
   }
