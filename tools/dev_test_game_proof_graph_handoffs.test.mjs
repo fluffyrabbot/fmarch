@@ -50,6 +50,24 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     ],
   );
   assert.deepEqual(
+    handoffs.find((handoff) => handoff.linkId === "admin-proof:release")
+      ?.requiredLocalPrerequisiteDestinations,
+    [
+      {
+        id: "local-proof-graph-admin-role-handoffs",
+        auditId: "local-proof-graph",
+      },
+      {
+        id: "local-proof-freshness-admin-surface",
+        auditId: "local-proof-freshness",
+      },
+      {
+        id: "local-next-action-admin-surface",
+        auditId: "local-next-action",
+      },
+    ],
+  );
+  assert.deepEqual(
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
     )?.requiredUnprovenIds,

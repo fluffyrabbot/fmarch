@@ -10,6 +10,8 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
           requiredScenarios: handoff.requiredScenarioIds ?? [],
           requiredSessions: handoff.requiredSessionIds ?? [],
           requiredUnproven: handoff.requiredUnprovenIds ?? [],
+          requiredLocalPrerequisiteDestinations:
+            handoff.requiredLocalPrerequisiteDestinations ?? [],
           requiredRelatedLinks: handoff.requiredRelatedLinkIds ?? [],
         },
       ];
@@ -58,6 +60,40 @@ export function assertAdminAuditRelatedHandoff({
     if (!destination.visibleUnproven?.includes(unprovenId)) {
       throw new Error(
         `${name} handoff destination missing unproven row: ${unprovenId}`,
+      );
+    }
+  }
+  for (const prerequisite of handoff.requiredLocalPrerequisiteDestinations ?? []) {
+    const prerequisiteId = String(prerequisite?.id ?? "");
+    const prerequisiteAuditId = String(prerequisite?.auditId ?? "");
+    if (prerequisiteId === "" || prerequisiteAuditId === "") {
+      throw new Error(`${name} handoff has a malformed local prerequisite`);
+    }
+    if (!destination.visibleLocalPrerequisites?.includes(prerequisiteId)) {
+      throw new Error(
+        `${name} handoff destination missing local prerequisite: ${prerequisiteId}`,
+      );
+    }
+    if (
+      typeof destination.visibleLocalPrerequisiteRoleUrls?.[prerequisiteId] !==
+      "string"
+    ) {
+      throw new Error(
+        `${name} handoff destination missing local prerequisite role URL: ${prerequisiteId}`,
+      );
+    }
+    const visitedDestination =
+      destination.visitedLocalPrerequisiteDestinations?.find(
+        (item) =>
+          item?.id === prerequisiteId &&
+          item.auditId === prerequisiteAuditId &&
+          item.detailRoleUrl ===
+            `/admin/audit/${prerequisiteAuditId}?game=<seeded-game>` &&
+          item.clickedThrough === true,
+      ) ?? null;
+    if (visitedDestination === null) {
+      throw new Error(
+        `${name} handoff destination did not navigate local prerequisite: ${prerequisiteId}`,
       );
     }
   }

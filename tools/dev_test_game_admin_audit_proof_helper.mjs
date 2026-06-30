@@ -244,6 +244,33 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-unproven",
         ids: destination.requiredUnproven ?? [],
       });
+      const destinationRequiredLocalPrerequisites =
+        destination.requiredLocalPrerequisiteDestinations?.map((item) =>
+          String(item.id),
+        ) ??
+        destination.requiredLocalPrerequisites ??
+        [];
+      const destinationVisibleLocalPrerequisites = await waitForRows({
+        page,
+        prefix: "admin-audit-local-prerequisite",
+        ids: destinationRequiredLocalPrerequisites,
+      });
+      const destinationVisibleLocalPrerequisiteRoleUrls =
+        await waitForLocalPrerequisiteRoleUrls({
+          page,
+          ids: destinationRequiredLocalPrerequisites,
+        });
+      const destinationVisitedLocalPrerequisiteDestinations =
+        await visitLocalPrerequisiteDestinations({
+          page,
+          frontendBaseUrl,
+          detailUrl: `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+            game,
+          )}`,
+          game,
+          ids: destinationRequiredLocalPrerequisites,
+          forbiddenText,
+        });
       const destinationVisibleRelatedLinks = await waitForRows({
         page,
         prefix: "admin-audit-related-link",
@@ -270,6 +297,21 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleUnproven.length === 0
           ? {}
           : { visibleUnproven: destinationVisibleUnproven }),
+        ...(destinationVisibleLocalPrerequisites.length === 0
+          ? {}
+          : { visibleLocalPrerequisites: destinationVisibleLocalPrerequisites }),
+        ...(Object.keys(destinationVisibleLocalPrerequisiteRoleUrls).length === 0
+          ? {}
+          : {
+              visibleLocalPrerequisiteRoleUrls:
+                destinationVisibleLocalPrerequisiteRoleUrls,
+            }),
+        ...(destinationVisitedLocalPrerequisiteDestinations.length === 0
+          ? {}
+          : {
+              visitedLocalPrerequisiteDestinations:
+                destinationVisitedLocalPrerequisiteDestinations,
+            }),
         ...(destinationVisibleRelatedLinks.length === 0
           ? {}
           : { visibleRelatedLinks: destinationVisibleRelatedLinks }),

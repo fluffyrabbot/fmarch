@@ -50,6 +50,20 @@ const adminProofDestinationRequirements = [
       "local-hardening-proof",
       "local-proof-graph-admin-role-handoffs",
     ],
+    requiredLocalPrerequisiteDestinations: [
+      {
+        id: "local-proof-graph-admin-role-handoffs",
+        auditId: "local-proof-graph",
+      },
+      {
+        id: "local-proof-freshness-admin-surface",
+        auditId: "local-proof-freshness",
+      },
+      {
+        id: "local-next-action-admin-surface",
+        auditId: "local-next-action",
+      },
+    ],
     requiredUnprovenIds: ["hosted-deployment", "human-release-runbook"],
   },
   {
@@ -99,6 +113,8 @@ export function adminProofGraphRoleHandoffs({ proofGraph, hostedMatrix }) {
         requiredScenarioIds: requirement.requiredScenarioIds ?? [],
         requiredSessionIds: requirement.requiredSessionIds ?? [],
         requiredUnprovenIds: requirement.requiredUnprovenIds ?? [],
+        requiredLocalPrerequisiteDestinations:
+          requirement.requiredLocalPrerequisiteDestinations ?? [],
         requiredRelatedLinkIds: requirement.requiredRelatedLinkIds ?? [],
       },
     ];

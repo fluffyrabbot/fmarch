@@ -17,6 +17,12 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredUnproven: ["hosted-concurrent-race-matrix"],
+      requiredLocalPrerequisiteDestinations: [
+        {
+          id: "local-proof-freshness-admin-surface",
+          auditId: "local-proof-freshness",
+        },
+      ],
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -30,6 +36,12 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredUnproven: ["hosted-concurrent-race-matrix"],
+      requiredLocalPrerequisiteDestinations: [
+        {
+          id: "local-proof-freshness-admin-surface",
+          auditId: "local-proof-freshness",
+        },
+      ],
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -72,6 +84,26 @@ test("related handoff assertion fails closed for missing destination rows", () =
   );
 });
 
+test("related handoff assertion fails closed for missing local prerequisite navigation", () => {
+  assert.throws(
+    () =>
+      assertAdminAuditRelatedHandoff({
+        adminRoleSurface: {
+          ...adminRoleSurfaceFixture(),
+          visibleRelatedDestinations: [
+            {
+              ...adminRoleSurfaceFixture().visibleRelatedDestinations[0],
+              visitedLocalPrerequisiteDestinations: [],
+            },
+          ],
+        },
+        handoff: handoffFixture(),
+        proofName: "proof graph admin proof",
+      }),
+    /proof graph admin proof handoff destination did not navigate local prerequisite: local-proof-freshness-admin-surface/,
+  );
+});
+
 function handoffFixture() {
   return {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
@@ -81,6 +113,12 @@ function handoffFixture() {
     requiredScenarioIds: ["host-phase-controls"],
     requiredSessionIds: ["host"],
     requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
+    requiredLocalPrerequisiteDestinations: [
+      {
+        id: "local-proof-freshness-admin-surface",
+        auditId: "local-proof-freshness",
+      },
+    ],
     requiredRelatedLinkIds: ["local-next-action"],
   };
 }
@@ -98,6 +136,19 @@ function adminRoleSurfaceFixture() {
         visibleScenarios: ["host-phase-controls"],
         visibleSessions: ["host"],
         visibleUnproven: ["hosted-concurrent-race-matrix"],
+        visibleLocalPrerequisites: ["local-proof-freshness-admin-surface"],
+        visibleLocalPrerequisiteRoleUrls: {
+          "local-proof-freshness-admin-surface":
+            "/admin/audit/local-proof-freshness?game=game-a",
+        },
+        visitedLocalPrerequisiteDestinations: [
+          {
+            id: "local-proof-freshness-admin-surface",
+            auditId: "local-proof-freshness",
+            detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+            clickedThrough: true,
+          },
+        ],
         visibleRelatedLinks: ["local-next-action"],
       },
     ],
