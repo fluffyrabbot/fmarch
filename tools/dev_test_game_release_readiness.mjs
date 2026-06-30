@@ -1922,6 +1922,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
+  const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
   if (
     hostRoleSurface?.status !== "passed" ||
     hostRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -1956,6 +1957,42 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
     }
+  }
+  assertCoreLoopHostLifecycleClickProof({
+    clickProof,
+    expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
+  });
+}
+
+function assertCoreLoopHostLifecycleClickProof({ clickProof, expectedGame }) {
+  if (
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "lock_thread" ||
+    clickProof.commandKind !== "LockThread" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 601") ||
+    clickProof.commandOutcome?.state !== "ack" ||
+    !clickProof.commandOutcome?.message?.includes("Ack: stream seqs 601") ||
+    clickProof.bridgePlan?.role !== "moderator" ||
+    clickProof.bridgePlan.commandKind !== "LockThread" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    clickProof.bridgePlan.projectionRefreshKeys?.length !== 0 ||
+    clickProof.projection?.phase?.id !== "D01" ||
+    clickProof.projection?.phase?.locked !== true ||
+    clickProof.checkpointPhaseStateAfterAck !== "locked" ||
+    clickProof.checkpointDeadlineAffordanceAfterAck !==
+      "unlock_thread,advance_phase" ||
+    !String(clickProof.statusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 601") ||
+    clickProof.activityCount !== 1 ||
+    !String(clickProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 601")
+  ) {
+    throw new Error("core-loop admin proof missing host lifecycle click ACK");
   }
 }
 

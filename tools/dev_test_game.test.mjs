@@ -9315,6 +9315,40 @@ function hostLifecycleRoleSurfaceFixture() {
         "Stale recovery\nReject PhaseLocked: refresh host projection and use current lifecycle controls.",
       statusText: "Host lifecycle controls are reachable from this role URL",
     },
+    hostLifecycleControlClickProof: {
+      status: "passed",
+      clickedAction: "lock_thread",
+      commandKind: "LockThread",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 601",
+      },
+      commandOutcome: {
+        state: "ack",
+        message: "Ack: stream seqs 601",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "LockThread",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: {
+        phase: {
+          id: "D01",
+          locked: true,
+        },
+      },
+      checkpointPhaseStateAfterAck: "locked",
+      checkpointDeadlineAffordanceAfterAck: "unlock_thread,advance_phase",
+      statusText: "Ack: stream seqs 601",
+      activityCount: 1,
+      activityStatusText: "Ack: stream seqs 601",
+    },
     releaseReady: false,
     productionReady: false,
   };

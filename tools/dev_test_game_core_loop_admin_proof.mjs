@@ -145,7 +145,9 @@ async function proveHostLifecycleControlCheckpoint({
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
   try {
+    await installHostLifecycleControlBrowserRoutes(page, { commandRequests });
     await page.context().addCookies([
       {
         name: "fmarch_fixture_session",
@@ -191,6 +193,10 @@ async function proveHostLifecycleControlCheckpoint({
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("host lifecycle checkpoint leaked an invite URL token");
     }
+    const clickProof = await proveHostLifecycleControlClick({
+      page,
+      commandRequests,
+    });
     return {
       status: "passed",
       sourceRoleUrl: String(roleUrl),
@@ -209,12 +215,121 @@ async function proveHostLifecycleControlCheckpoint({
         recoveryText,
         statusText,
       },
+      hostLifecycleControlClickProof: clickProof,
       releaseReady: false,
       productionReady: false,
     };
   } finally {
     await page.close();
   }
+}
+
+async function installHostLifecycleControlBrowserRoutes(page, { commandRequests }) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.LockThread !== undefined) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Ack",
+            body: {
+              stream_seqs: [601],
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        v: 1,
+        id: commandEnvelope?.id ?? "host-lifecycle-control-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongHostLifecycleProofCommand",
+            retryable: false,
+            message: "host lifecycle proof only accepts LockThread",
+          },
+        },
+      }),
+    });
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(route, hostLockedConsoleState());
+  });
+}
+
+async function proveHostLifecycleControlClick({ page, commandRequests }) {
+  const actionTile = page.getByTestId("critical-host-action-lock_thread");
+  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  await actionTile.getByTestId("critical-host-action-trigger").click();
+  await actionTile.getByTestId("critical-host-action-confirm").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await actionTile.getByTestId("critical-host-action-confirm").click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchHostCommandStatuses?.lock_thread?.state === "ack" &&
+      window.__fmarchHostCommandDispatchBridgePlan?.commandKind === "LockThread",
+    null,
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="host-lifecycle-control-checkpoint"]')
+        ?.getAttribute("data-phase-state") === "locked",
+    null,
+    { timeout: 15000 },
+  );
+  const commandStatuses = await page.evaluate(
+    () => window.__fmarchHostCommandStatuses,
+  );
+  const commandOutcomes = await page.evaluate(
+    () => window.__fmarchHostCommandOutcomes,
+  );
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const projection = await page.evaluate(() => window.__fmarchHostProjection);
+  const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+  const phaseStateAfterAck = await checkpoint.getAttribute("data-phase-state");
+  const deadlineAffordanceAfterAck = await checkpoint.getAttribute(
+    "data-deadline-affordance",
+  );
+  const activityCountText = await page
+    .getByTestId("host-command-activity-count")
+    .innerText();
+  const activityStatusText = await page
+    .getByTestId("host-command-activity-status-lock_thread")
+    .innerText();
+  const command = commandRequests.at(-1)?.LockThread ?? null;
+  return {
+    status: "passed",
+    clickedAction: "lock_thread",
+    commandKind: command === null ? null : "LockThread",
+    command,
+    commandStatus: commandStatuses?.lock_thread ?? null,
+    commandOutcome: commandOutcomes?.at?.(-1) ?? null,
+    bridgePlan,
+    projection,
+    checkpointPhaseStateAfterAck: phaseStateAfterAck,
+    checkpointDeadlineAffordanceAfterAck: deadlineAffordanceAfterAck,
+    statusText: commandStatuses?.lock_thread?.message ?? null,
+    activityCount: Number.parseInt(activityCountText, 10),
+    activityStatusText,
+  };
 }
 
 async function provePlayerActionSubmissionCheckpoint({
@@ -625,6 +740,33 @@ function seededActionOpenCommandState({ boundary }) {
   };
 }
 
+function hostLockedConsoleState() {
+  return {
+    completed: false,
+    phase: {
+      phase_id: "D01",
+      locked: true,
+      deadline: null,
+    },
+    slots: [
+      {
+        slot_id: "slot-7",
+        occupant_user_id: "player-mira",
+        alive: true,
+        status: "alive",
+        status_tags: ["alive"],
+        role_key: "mafia_goon",
+      },
+    ],
+    thread_posts: [
+      {
+        seq: 41,
+        author_slot: "slot-7",
+      },
+    ],
+  };
+}
+
 function rolePathFromUrl(roleUrl) {
   if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
     throw new Error("core-loop role proof missing source role URL");
@@ -710,6 +852,7 @@ export function assertCoreLoopAdminProof(evidence) {
 
 function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
   const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
+  const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
   if (
     hostRoleSurface?.status !== "passed" ||
     hostRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -744,6 +887,46 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
     }
+  }
+  assertHostLifecycleControlClickProof({
+    clickProof,
+    expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
+  });
+}
+
+function assertHostLifecycleControlClickProof({ clickProof, expectedGame }) {
+  if (
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "lock_thread" ||
+    clickProof.commandKind !== "LockThread" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 601") ||
+    clickProof.commandOutcome?.state !== "ack" ||
+    !clickProof.commandOutcome?.message?.includes("Ack: stream seqs 601") ||
+    clickProof.bridgePlan?.role !== "moderator" ||
+    clickProof.bridgePlan.commandKind !== "LockThread" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    clickProof.bridgePlan.projectionRefreshKeys?.length !== 0 ||
+    clickProof.projection?.phase?.id !== "D01" ||
+    clickProof.projection?.phase?.locked !== true ||
+    clickProof.checkpointPhaseStateAfterAck !== "locked" ||
+    clickProof.checkpointDeadlineAffordanceAfterAck !==
+      "unlock_thread,advance_phase" ||
+    !String(clickProof.statusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 601") ||
+    clickProof.activityCount !== 1 ||
+    !String(clickProof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 601")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host lifecycle click ACK: ${JSON.stringify(
+        clickProof,
+      )}`,
+    );
   }
 }
 
