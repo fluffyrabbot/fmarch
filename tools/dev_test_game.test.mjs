@@ -9297,6 +9297,7 @@ function coreLoopAdminProofFixture() {
     normalNightActionResolutionPrivacySurface:
       normalNightActionResolutionPrivacySurfaceFixture(),
     hostNightActionTransitionSurface: hostNightActionTransitionSurfaceFixture(),
+    dayThreeVoteResolutionSurface: dayThreeVoteResolutionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10550,6 +10551,149 @@ function dayThreeObservationFixture({
     proof.privateEmptyText = "No private results visible";
   }
   return proof;
+}
+
+function dayThreeVoteResolutionSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    clickedThroughFromRoleUrl: true,
+    transition: "player:submit_vote:ack:907 -> host:resolve_phase:ack:908",
+    playerVoteProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_vote",
+      commandKind: "SubmitVote",
+      command: {
+        game,
+        actor_slot: "slot-7",
+        target: { Slot: "slot-4" },
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 907",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitVote",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: ["votecount", "commandState"],
+      },
+      receipts: [
+        {
+          actionId: "submit_vote",
+          state: "ack",
+          message: "Ack: stream seqs 907",
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "D03",
+          locked: false,
+        },
+        currentVote: {
+          kind: "slot",
+          slotId: "slot-4",
+          label: "Slot 4",
+        },
+        boundary:
+          "Seeded browser Day 3 vote ACK refreshed current vote and votecount projection.",
+      },
+      projectionVotecount: [
+        {
+          target: "slot-4 / Rowan",
+          count: 2,
+          needed: 2,
+        },
+      ],
+      projectionDayVoteOutcomes: [
+        {
+          phaseId: "D02",
+          status: "Lynch",
+        },
+      ],
+      setupResyncFromSeq: 906,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: "D03",
+        },
+      },
+      currentVote: {
+        hasVote: "true",
+        text: "Current vote Slot 4",
+      },
+      receiptCount: 1,
+      receiptStatusText: "Ack: stream seqs 907",
+      receiptRefreshKeys: "votecount,commandState",
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    hostResolutionProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      resolveProof: {
+        ...hostPhaseTransitionActionFixture({
+          actionId: "resolve_phase",
+          commandKind: "ResolvePhase",
+          streamSeq: 908,
+          phaseId: "D03",
+          phaseState: "locked",
+          deadlineAffordance: "unlock_thread,advance_phase",
+          projectionRefreshKeys: [
+            "host",
+            "votecount",
+            "dayVoteOutcomes",
+            "hostPrompts",
+          ],
+          command: {
+            game,
+            seed: 918273,
+          },
+        }),
+        votecountProjection: [
+          {
+            target: "slot-4 / Rowan",
+            count: 2,
+            needed: 2,
+          },
+        ],
+        dayVoteOutcomesProjection: [
+          { phaseId: "D02", status: "Lynch" },
+          { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
+        ],
+      },
+      hostVotecountProjection: [
+        {
+          target: "slot-4 / Rowan",
+          count: 2,
+          needed: 2,
+        },
+      ],
+      hostDayVoteOutcomesProjection: [
+        { phaseId: "D02", status: "Lynch" },
+        { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
+      ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
 }
 
 function privateChannelRoleSurfaceFixture() {

@@ -1912,6 +1912,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostNightActionTransitionSurface(
     proof.hostNightActionTransitionSurface,
   );
+  assertCoreLoopDayThreeVoteResolutionSurface(
+    proof.dayThreeVoteResolutionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1945,6 +1948,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     normalNightActionResolutionPrivacySurface:
       proof.normalNightActionResolutionPrivacySurface,
     hostNightActionTransitionSurface: proof.hostNightActionTransitionSurface,
+    dayThreeVoteResolutionSurface: proof.dayThreeVoteResolutionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -2973,6 +2977,145 @@ function assertCoreLoopDayThreePlayerObservationProof({
       proof.privateNotice !== undefined)
   ) {
     throw new Error("core-loop admin proof leaked Day 3 target receipt");
+  }
+}
+
+function assertCoreLoopDayThreeVoteResolutionSurface(
+  dayThreeVoteResolutionSurface,
+) {
+  const expectedGame = gameFromRoleUrl(
+    dayThreeVoteResolutionSurface?.sourceActionPlayerRoleUrl,
+  );
+  const playerVoteProof = dayThreeVoteResolutionSurface?.playerVoteProof;
+  const hostResolutionProof = dayThreeVoteResolutionSurface?.hostResolutionProof;
+  if (
+    dayThreeVoteResolutionSurface?.status !== "passed" ||
+    dayThreeVoteResolutionSurface.clickedThroughFromRoleUrl !== true ||
+    dayThreeVoteResolutionSurface.releaseReady !== false ||
+    dayThreeVoteResolutionSurface.productionReady !== false ||
+    typeof dayThreeVoteResolutionSurface.sourceActionPlayerRoleUrl !== "string" ||
+    !dayThreeVoteResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof dayThreeVoteResolutionSurface.sourceHostRoleUrl !== "string" ||
+    !dayThreeVoteResolutionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !dayThreeVoteResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    !String(dayThreeVoteResolutionSurface.transition ?? "").includes(
+      "player:submit_vote:ack:907",
+    ) ||
+    !String(dayThreeVoteResolutionSurface.transition ?? "").includes(
+      "host:resolve_phase:ack:908",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 vote resolution");
+  }
+  assertCoreLoopDayThreePlayerVoteProof({
+    proof: playerVoteProof,
+    expectedGame,
+    sourceRoleUrl: dayThreeVoteResolutionSurface.sourceActionPlayerRoleUrl,
+  });
+  assertCoreLoopDayThreeHostVoteResolutionProof({
+    proof: hostResolutionProof,
+    expectedGame,
+    sourceRoleUrl: dayThreeVoteResolutionSurface.sourceHostRoleUrl,
+  });
+}
+
+function assertCoreLoopDayThreePlayerVoteProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target?.Slot !== "slot-4" ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes("Ack: stream seqs 907") ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "ack" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "D03" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.currentVote?.slotId !== "slot-4" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "Day 3 vote ACK",
+    ) ||
+    proof.projectionVotecount?.[0]?.target !== "slot-4 / Rowan" ||
+    proof.projectionVotecount?.[0]?.count !== 2 ||
+    proof.projectionVotecount?.[0]?.needed !== 2 ||
+    proof.projectionDayVoteOutcomes?.[0]?.phaseId !== "D02" ||
+    proof.setupResyncFromSeq !== 906 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D03" ||
+    proof.currentVote?.hasVote !== "true" ||
+    !String(proof.currentVote?.text ?? "").includes("Slot 4") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 907") ||
+    proof.receiptRefreshKeys !== "votecount,commandState"
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 player vote ACK");
+  }
+}
+
+function assertCoreLoopDayThreeHostVoteResolutionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.hostVotecountProjection?.[0]?.target !== "slot-4 / Rowan" ||
+    proof.hostVotecountProjection?.[0]?.count !== 2 ||
+    proof.hostVotecountProjection?.[0]?.needed !== 2 ||
+    proof.hostDayVoteOutcomesProjection?.[1]?.phaseId !== "D03" ||
+    proof.hostDayVoteOutcomesProjection?.[1]?.status !== "Lynch" ||
+    proof.hostDayVoteOutcomesProjection?.[1]?.winnerSlot !== "slot-4"
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 host vote resolution");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 908,
+    expectedPhaseId: "D03",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  if (
+    proof.resolveProof?.votecountProjection?.[0]?.target !== "slot-4 / Rowan" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.[1]?.phaseId !== "D03"
+  ) {
+    throw new Error("core-loop admin proof missing Day 3 host resolve projections");
   }
 }
 
