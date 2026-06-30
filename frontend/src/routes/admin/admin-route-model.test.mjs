@@ -10,7 +10,9 @@ import {
 } from "./admin-route-model.mjs";
 
 const LOCAL_RACE_COMMAND =
-  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+  "npm run test:dev-test-game-hosted-concurrent-race-matrix";
+const HOSTED_MATRIX_PROOF_TARGET =
+  "target/dev-test-game/hosted-concurrent-race-matrix.json";
 
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
@@ -574,7 +576,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
   const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
   assert.equal(manifest.label, "Local spine manifest");
-  assert.equal(manifest.status, "7 manifest checks passed");
+  assert.equal(manifest.status, "8 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
   assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
   assert.deepEqual(
@@ -585,6 +587,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "evidence-env-wiring-recorded",
       "freshness-proof-recorded",
       "artifact-refresh-status-recorded",
+      "hosted-concurrent-race-matrix-recorded",
       "terminal-artifacts-recorded",
       "release-boundary-carried",
       "proof-freshness-handoff",
@@ -609,8 +612,8 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     },
   ]);
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 9,
-    artifactCount: 8,
+    commandCount: 10,
+    artifactCount: 9,
     terminalArtifactCount: 4,
     adminSpineStepCount: 8,
     artifactFreshnessStatus: "blocked",
@@ -637,7 +640,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 9);
+  assert.equal(data.audit.checks.length, 10);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -646,6 +649,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["evidence-env-wiring-recorded", "passed"],
       ["freshness-proof-recorded", "passed"],
       ["artifact-refresh-status-recorded", "passed"],
+      ["hosted-concurrent-race-matrix-recorded", "passed"],
       ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
       ["proof-freshness-handoff", "blocked"],
@@ -1020,10 +1024,10 @@ test("admin route data exposes local next action as a native audit row", async (
     [
       ["next-command", "available"],
       ["release-readiness-unproven", "ready"],
-      ["exhaustive-race-coverage", "unproven"],
+      ["hosted-concurrent-race-matrix", "unproven"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
-      ["release-readiness-exhaustive-race-coverage", "selected:unproven"],
+      ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -1059,10 +1063,10 @@ test("admin route data exposes local next action as a native audit row", async (
     releaseReadinessStatus: "not_ready",
     unprovenCount: 7,
     buildableUnprovenCount: 1,
-    selectedUnprovenId: "exhaustive-race-coverage",
+    selectedUnprovenId: "hosted-concurrent-race-matrix",
     selectedBuildSlice:
-      "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-    selectedProofTarget: "target/dev-test-game/proof-run.json",
+      "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+    selectedProofTarget: HOSTED_MATRIX_PROOF_TARGET,
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -1081,18 +1085,18 @@ test("admin route data exposes local next action as a native audit row", async (
     releaseReadinessTrace: {
       strategy: "local-dev-release-readiness-priority",
       candidateCount: 1,
-      selectedUnprovenId: "exhaustive-race-coverage",
+      selectedUnprovenId: "hosted-concurrent-race-matrix",
       candidates: [
         {
           rank: 1,
-          id: "exhaustive-race-coverage",
+          id: "hosted-concurrent-race-matrix",
           status: "unproven",
           priority: 0,
           selected: true,
           command: LOCAL_RACE_COMMAND,
           buildSlice:
-            "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-          proofTarget: "target/dev-test-game/proof-run.json",
+            "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+          proofTarget: HOSTED_MATRIX_PROOF_TARGET,
         },
       ],
     },
@@ -2412,6 +2416,10 @@ function spineManifestFixture() {
         script: "test:dev-test-game-proof-freshness-admin-proof",
         proofArtifact: "target/dev-test-game/proof-freshness-admin-proof.json",
       },
+      hostedConcurrentRaceMatrix: {
+        script: "test:dev-test-game-hosted-concurrent-race-matrix",
+        proofArtifact: "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      },
       nextAction: {
         script: "test:dev-test-game-next-action",
         proofArtifact: "target/dev-test-game/next-action.json",
@@ -2496,6 +2504,7 @@ function spineManifestFixture() {
       "target/dev-test-game/spine-manifest.md",
       "target/dev-test-game/spine-manifest-admin-proof.json",
       "target/dev-test-game/proof-freshness-admin-proof.json",
+      "target/dev-test-game/hosted-concurrent-race-matrix.json",
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",
       "target/dev-test-game/proof-graph.json",
@@ -2507,6 +2516,7 @@ function spineManifestFixture() {
       { id: "evidence-env-wiring-recorded", status: "passed" },
       { id: "freshness-proof-recorded", status: "passed" },
       { id: "artifact-refresh-status-recorded", status: "passed" },
+      { id: "hosted-concurrent-race-matrix-recorded", status: "passed" },
       { id: "terminal-artifacts-recorded", status: "passed" },
       {
         id: "release-boundary-carried",
@@ -2590,13 +2600,13 @@ function nextActionFixture({
   unproven =
     artifact === undefined && reason === "release-readiness-unproven"
       ? {
-          id: "exhaustive-race-coverage",
+          id: "hosted-concurrent-race-matrix",
           status: "unproven",
           requiredEvidence:
-            "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
+            "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
           buildSlice:
-            "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-          proofTarget: "target/dev-test-game/proof-run.json",
+            "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+          proofTarget: HOSTED_MATRIX_PROOF_TARGET,
         }
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),

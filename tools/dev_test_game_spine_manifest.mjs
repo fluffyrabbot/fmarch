@@ -21,6 +21,10 @@ import {
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
 import {
+  devTestGameHostedConcurrentRaceMatrixCommand,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
   backupRestoreFinalReadinessEnv,
@@ -118,6 +122,14 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: devTestGameRaceCoveragePath,
         dependsOn: ["target/dev-test-game/proof-run.json"],
       },
+      hostedConcurrentRaceMatrix: {
+        script: devTestGameHostedConcurrentRaceMatrixCommand,
+        proofArtifact: devTestGameHostedConcurrentRaceMatrixPath,
+        dependsOn: [
+          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameRaceCoveragePath,
+        ],
+      },
       nextAction: {
         script: nextActionCommand,
         proofArtifact: nextActionPath,
@@ -126,6 +138,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/ops-artifacts.json",
           "target/dev-test-game/release-readiness-checklist.json",
           devTestGameRaceCoveragePath,
+          devTestGameHostedConcurrentRaceMatrixPath,
         ],
       },
       nextActionAdminProof: {
@@ -165,6 +178,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/ops-artifacts.json",
           "target/dev-test-game/release-readiness-checklist.json",
           devTestGameRaceCoveragePath,
+          devTestGameHostedConcurrentRaceMatrixPath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -210,6 +224,7 @@ export function buildDevTestGameSpineManifest({
       proofFreshnessAdminProofPath,
       nextActionPath,
       nextActionAdminProofPath,
+      devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
@@ -259,6 +274,14 @@ export function buildDevTestGameSpineManifest({
         id: "race-coverage-recorded",
         status: "passed",
         evidence: [devTestGameRaceCoverageCommand, devTestGameRaceCoveragePath],
+      },
+      {
+        id: "hosted-concurrent-race-matrix-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedConcurrentRaceMatrixCommand,
+          devTestGameHostedConcurrentRaceMatrixPath,
+        ],
       },
       {
         id: "terminal-artifacts-recorded",
@@ -356,6 +379,22 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest race coverage artifact drifted: ${manifest.commands.raceCoverage.proofArtifact}`,
     );
   }
+  if (
+    manifest.commands?.hostedConcurrentRaceMatrix?.script !==
+    devTestGameHostedConcurrentRaceMatrixCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted concurrent race matrix command drifted: ${manifest.commands?.hostedConcurrentRaceMatrix?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedConcurrentRaceMatrix.proofArtifact !==
+    devTestGameHostedConcurrentRaceMatrixPath
+  ) {
+    throw new Error(
+      `spine manifest hosted concurrent race matrix artifact drifted: ${manifest.commands.hostedConcurrentRaceMatrix.proofArtifact}`,
+    );
+  }
   if (manifest.commands?.nextAction?.script !== nextActionCommand) {
     throw new Error(
       `spine manifest next-action command drifted: ${manifest.commands?.nextAction?.script}`,
@@ -411,6 +450,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     proofFreshnessAdminProofPath,
     nextActionPath,
     nextActionAdminProofPath,
+    devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameProofGraphPath,
     devTestGameProofGraphAdminProofPath,
     "target/dev-test-game/core-loop-admin-proof.json",
@@ -434,6 +474,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "freshness-proof-recorded",
     "artifact-refresh-status-recorded",
     "race-coverage-recorded",
+    "hosted-concurrent-race-matrix-recorded",
     "terminal-artifacts-recorded",
     "release-boundary-carried",
   ]) {
@@ -456,7 +497,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !nextAction.dependsOn.includes(spineManifestPath) ||
     !nextAction.dependsOn.includes("target/dev-test-game/ops-artifacts.json") ||
     !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json") ||
-    !nextAction.dependsOn.includes(devTestGameRaceCoveragePath)
+    !nextAction.dependsOn.includes(devTestGameRaceCoveragePath) ||
+    !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath)
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }
@@ -655,6 +697,8 @@ const artifactRefreshCommands = Object.freeze({
   "release-readiness": "npm run test:dev-test-game-readiness",
   "race-coverage": "npm run test:dev-test-game-race-coverage",
   "race-coverage-admin": "npm run test:dev-test-game-race-coverage-admin-proof",
+  "hosted-concurrent-race-matrix":
+    "npm run test:dev-test-game-hosted-concurrent-race-matrix",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

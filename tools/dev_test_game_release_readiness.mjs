@@ -511,7 +511,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: raceCoverageEvidence.path,
       proofBoundary:
-        "Local race-coverage aggregate showing all promoted replacement, host, player, and cohost race-reload milestone groups are covered before the remaining exhaustive-race-coverage gap is treated as hosted or broader matrix work.",
+        "Local race-coverage aggregate showing all promoted replacement, host, player, and cohost race-reload milestone groups are covered before the remaining hosted-concurrent-race-matrix gap is treated as hosted matrix work.",
       cellCount: raceCoveragePromotedMilestones.cellCount,
       provenCellCount: raceCoveragePromotedMilestones.provenCellCount,
       reloadCoveredCellCount: raceCoveragePromotedMilestones.reloadCoveredCellCount,
@@ -580,12 +580,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         ]),
     {
-      id: "exhaustive-race-coverage",
+      id:
+        raceCoverageEvidence === undefined
+          ? "exhaustive-race-coverage"
+          : "hosted-concurrent-race-matrix",
       status: "unproven",
       requiredEvidence:
         raceCoverageEvidence === undefined
           ? "Machine-readable local race coverage inventory tied to the saved dev-test-game proof-run"
-          : "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
+          : "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
     },
     ...(opsArtifactsEvidence === undefined
       ? [
@@ -904,7 +907,7 @@ function releaseReadinessReason({
     backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
     raceCoverageEvidence === undefined
       ? "race coverage inventory"
-      : "hosted and broader exhaustive races",
+      : "hosted concurrent race matrix",
     opsArtifactsEvidence === undefined ? "observability" : "hosted observability",
     "human release evidence",
   ];

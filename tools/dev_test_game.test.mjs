@@ -68,6 +68,12 @@ import {
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
+import {
+  assertDevTestGameHostedConcurrentRaceMatrixRequest,
+  buildDevTestGameHostedConcurrentRaceMatrixRequest,
+  devTestGameHostedConcurrentRaceMatrixCommand,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -195,6 +201,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE: "target/dev-test-game/race-coverage.json",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
       "target/dev-test-game/race-coverage-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+      "target/dev-test-game/hosted-concurrent-race-matrix.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -297,6 +305,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: devTestGameRaceCoveragePath,
     dependsOn: ["target/dev-test-game/proof-run.json"],
   });
+  assert.deepEqual(manifest.commands.hostedConcurrentRaceMatrix, {
+    script: devTestGameHostedConcurrentRaceMatrixCommand,
+    proofArtifact: devTestGameHostedConcurrentRaceMatrixPath,
+    dependsOn: [
+      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameRaceCoveragePath,
+    ],
+  });
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
     proofArtifact: nextActionPath,
@@ -305,6 +321,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/ops-artifacts.json",
       "target/dev-test-game/release-readiness-checklist.json",
       devTestGameRaceCoveragePath,
+      devTestGameHostedConcurrentRaceMatrixPath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -404,6 +421,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
   assert(manifest.artifacts.includes(proofFreshnessAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameRaceCoveragePath));
+  assert(manifest.artifacts.includes(devTestGameHostedConcurrentRaceMatrixPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
@@ -541,27 +559,27 @@ test("dev test-game next-action derives one local recovery command from the mani
           requiredEvidence: "Hosted account lifecycle",
         },
         {
-          id: "exhaustive-race-coverage",
+          id: "hosted-concurrent-race-matrix",
           status: "unproven",
           requiredEvidence:
-            "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
+            "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
         },
       ],
     }),
   });
   assertDevTestGameNextAction(freshAction);
   assert.deepEqual(freshAction.nextAction, {
-    command: devTestGameLiveProofCommand,
+    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     reason: "release-readiness-unproven",
     status: "ready",
     unproven: {
-      id: "exhaustive-race-coverage",
+      id: "hosted-concurrent-race-matrix",
       status: "unproven",
       requiredEvidence:
-        "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
+        "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
       buildSlice:
-        "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-      proofTarget: "target/dev-test-game/proof-run.json",
+        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -585,22 +603,22 @@ test("dev test-game next-action derives one local recovery command from the mani
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
     candidateCount: 1,
-    selectedUnprovenId: "exhaustive-race-coverage",
+    selectedUnprovenId: "hosted-concurrent-race-matrix",
     candidates: [
       {
         rank: 1,
-        id: "exhaustive-race-coverage",
+        id: "hosted-concurrent-race-matrix",
         status: "unproven",
         priority: 0,
         selected: true,
-        command: devTestGameLiveProofCommand,
+        command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
         buildSlice:
-          "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-        proofTarget: "target/dev-test-game/proof-run.json",
+          "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
         proofBoundary:
-          "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
+          "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
-          "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
+          "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
       },
     ],
   });
@@ -772,9 +790,9 @@ test("dev test-game next-action blocks readiness work on saved harness stability
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
       unproven: [
         {
-          id: "exhaustive-race-coverage",
+          id: "hosted-concurrent-race-matrix",
           status: "unproven",
-          requiredEvidence: "Broader concurrent command race matrix",
+          requiredEvidence: "Hosted or hosted-like concurrent command race matrix",
         },
       ],
     }),
@@ -811,7 +829,10 @@ test("dev test-game next-action blocks readiness work on saved harness stability
     eventCount: 2,
     selected: true,
   });
-  assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
+  assert.equal(
+    action.releaseReadinessTrace.selectedUnprovenId,
+    "hosted-concurrent-race-matrix",
+  );
   assert.equal(action.hostConcurrentRaceReloadTrace.status, "covered");
   assert.equal(action.playerConcurrentActionReloadTrace.status, "covered");
   assert.equal(action.cohostDeadlineRaceReloadTrace.status, "covered");
@@ -6372,9 +6393,28 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
       (item) =>
-        item.id === "exhaustive-race-coverage" &&
-        item.requiredEvidence.includes("Hosted and broader concurrent command race matrix"),
+        item.id === "hosted-concurrent-race-matrix" &&
+        item.requiredEvidence.includes("Hosted or hosted-like concurrent command race matrix"),
     ),
+  );
+  const hostedMatrixRequest =
+    buildDevTestGameHostedConcurrentRaceMatrixRequest(raceCoverageReadiness, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+  assertDevTestGameHostedConcurrentRaceMatrixRequest(hostedMatrixRequest);
+  assert.equal(hostedMatrixRequest.status, "unproven");
+  assert.equal(
+    hostedMatrixRequest.requestedEvidence.firstProofTarget,
+    devTestGameHostedConcurrentRaceMatrixPath,
+  );
+  assert.deepEqual(
+    hostedMatrixRequest.generatedFrom.raceCoveragePromotedMilestones.groupIds,
+    [
+      "replacement-race-reload",
+      "host-concurrent-race-reload",
+      "player-concurrent-action-reload",
+      "cohost-deadline-race-reload",
+    ],
   );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,

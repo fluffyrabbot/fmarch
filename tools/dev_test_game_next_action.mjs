@@ -13,6 +13,10 @@ import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
+import {
+  devTestGameHostedConcurrentRaceMatrixCommand,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -1157,15 +1161,15 @@ const terminalArtifactPaths = new Set([
 
 const localBuildableReleaseReadinessItems = new Map([
   [
-    "exhaustive-race-coverage",
+    "hosted-concurrent-race-matrix",
     {
       priority: 0,
-      command: devTestGameLiveProofCommand,
+      command: `npm run ${devTestGameHostedConcurrentRaceMatrixCommand}`,
       buildSlice:
-        "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
-      proofTarget: "target/dev-test-game/proof-run.json",
+        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
       proofBoundary:
-        "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
+        "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
     },
   ],
 ]);
