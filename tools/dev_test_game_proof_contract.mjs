@@ -52,6 +52,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-player-vote-resolve-race",
   "concurrent-player-action-advance-race",
   "concurrent-cohost-deadline-resolve-race",
+  "concurrent-cohost-deadline-resolve-race-reload",
   "concurrent-replacement-private-post-race",
   "concurrent-replacement-vote-race",
   "concurrent-replacement-action-race",
@@ -2532,6 +2533,88 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.phase_id === "D01" &&
           hardening.concurrentCohostDeadlineResolveRace?.cohostStateAfterRace?.phase
             ?.locked === true,
+      },
+    ),
+    lane(
+      "concurrent-cohost-deadline-resolve-race-reload",
+      "Concurrent cohost deadline and host resolve reload role surfaces",
+      {
+        game: hardening.concurrentCohostDeadlineResolveRace?.game ?? null,
+        expectedDeadline:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.expectedDeadline ?? null,
+        hostRouteStatus:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus ?? null,
+        cohostRouteStatus:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostRouteResponseStatus ?? null,
+        hostPhaseActions:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload ?? null,
+        cohostPhaseActions:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostPhaseActionsAfterReload ?? null,
+        hostDeadline:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostApiPhaseAfterReload?.deadline ?? null,
+        cohostDeadline:
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostApiPhaseAfterReload?.deadline ?? null,
+        passed:
+          hardening.concurrentCohostDeadlineResolveRace?.status === "passed" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostRouteResponseStatus === 200 &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostRouteResponseStatus === 200 &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.id === "D01" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.locked === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseAfterReload?.deadline ===
+            hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+              ?.expectedDeadline &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostPhaseAfterReload?.id === "D01" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostPhaseAfterReload?.locked === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostPhaseAfterReload?.deadline ===
+            hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+              ?.expectedDeadline &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("unlock_thread") === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("advance_phase") === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("resolve_phase") === false &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostPhaseActionsAfterReload?.includes("lock_thread") === false &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostPhaseActionsAfterReload?.length === 0 &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostApiPhaseAfterReload?.phase_id === "D01" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostApiPhaseAfterReload?.locked === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.hostApiPhaseAfterReload?.deadline ===
+            hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+              ?.expectedDeadline &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostApiPhaseAfterReload?.phase_id === "D01" &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostApiPhaseAfterReload?.locked === true &&
+          hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+            ?.cohostApiPhaseAfterReload?.deadline ===
+            hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
+              ?.expectedDeadline,
       },
     ),
     lane(

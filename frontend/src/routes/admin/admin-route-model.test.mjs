@@ -557,7 +557,7 @@ test("admin route data exposes local ops artifacts as a native audit row", async
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
-    laneCount: 83,
+    laneCount: 84,
     roleCount: 7,
     releaseReady: false,
     productionReady: false,
@@ -1058,7 +1058,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "56 hardening lanes passed");
+  assert.equal(hardening.status, "57 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1080,6 +1080,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
@@ -1125,7 +1126,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 83,
+    laneCount: 84,
     releaseReady: false,
     productionReady: false,
   });
@@ -1176,7 +1177,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 83,
+    laneCount: 84,
     releaseReady: false,
     productionReady: false,
   });
@@ -1237,7 +1238,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 56);
+  assert.equal(data.audit.checks.length, 57);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1257,6 +1258,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["concurrent-player-vote-resolve-race", "passed"],
       ["concurrent-player-action-advance-race", "passed"],
       ["concurrent-cohost-deadline-resolve-race", "passed"],
+      ["concurrent-cohost-deadline-resolve-race-reload", "passed"],
       ["concurrent-replacement-private-post-race", "passed"],
       ["concurrent-replacement-vote-race", "passed"],
       ["concurrent-replacement-action-race", "passed"],
@@ -1333,7 +1335,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "63 demo scenarios available locally");
+  assert.equal(seed.status, "64 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -1352,6 +1354,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
@@ -1406,7 +1409,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: 63,
+    scenarioCount: 64,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -1425,7 +1428,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, 63);
+  assert.equal(data.audit.scenarios.length, 64);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     [
@@ -1442,6 +1445,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["concurrent-player-vote-resolve-race", "available_locally"],
       ["concurrent-player-action-advance-race", "available_locally"],
       ["concurrent-cohost-deadline-resolve-race", "available_locally"],
+      ["concurrent-cohost-deadline-resolve-race-reload", "available_locally"],
       ["concurrent-replacement-private-post-race", "available_locally"],
       ["concurrent-replacement-vote-race", "available_locally"],
       ["concurrent-replacement-action-race", "available_locally"],
@@ -1819,6 +1823,7 @@ function proofRunFixture() {
     "concurrent-player-vote-resolve-race",
     "concurrent-player-action-advance-race",
     "concurrent-cohost-deadline-resolve-race",
+    "concurrent-cohost-deadline-resolve-race-reload",
     "concurrent-replacement-private-post-race",
     "concurrent-replacement-vote-race",
     "concurrent-replacement-action-race",
@@ -1897,7 +1902,7 @@ function localOpsArtifactsFixture() {
       roleCount: 7,
     },
     proofRun: {
-      laneCount: 83,
+      laneCount: 84,
     },
     checks: [
       { id: "source-artifacts-checksummed", status: "passed" },
@@ -1952,6 +1957,11 @@ function seedFixtureSummaryFixture() {
       seedScenario(
         "concurrent-cohost-deadline-resolve-race",
         "Concurrent cohost deadline/resolve race",
+        "cohost",
+      ),
+      seedScenario(
+        "concurrent-cohost-deadline-resolve-race-reload",
+        "Concurrent cohost deadline/resolve reload",
         "cohost",
       ),
       seedScenario(

@@ -299,6 +299,8 @@ assert.equal(session.verification.actionLoop.advanceDay.commandStatus.state, "ac
 assert.equal(session.verification.actionLoop.d02Phase.phaseId, "D02");
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;
+const cohostDeadlineResolveRace =
+  session.verification.multiplayerHardening.concurrentCohostDeadlineResolveRace;
 const replacementPrivatePostRace =
   session.verification.multiplayerHardening.concurrentReplacementPrivatePostRace;
 const replacementVoteRace =
@@ -1505,6 +1507,125 @@ assert.equal(
     (row) => row.target === concurrentVoteRace.targetSlot && row.count === 2,
   ),
   true,
+);
+assert.equal(cohostDeadlineResolveRace.status, "passed");
+assert.equal(cohostDeadlineResolveRace.hostEntry.capabilityKinds.includes("HostOf"), true);
+assert.equal(
+  cohostDeadlineResolveRace.cohostEntry.capabilityKinds.includes("CohostOf"),
+  true,
+);
+assert.equal(cohostDeadlineResolveRace.resolve.state, "ack");
+assert.equal(cohostDeadlineResolveRace.setupHostPhase.id, "D01");
+assert.equal(cohostDeadlineResolveRace.setupHostPhase.locked, false);
+assert.equal(cohostDeadlineResolveRace.setupCohostPhase.id, "D01");
+assert.equal(cohostDeadlineResolveRace.setupCohostPhase.locked, false);
+assert.equal(
+  cohostDeadlineResolveRace.setupHostPhaseActions.includes("resolve_phase"),
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.setupHostDeadlineActions.includes("extend_deadline"),
+  true,
+);
+assert.equal(cohostDeadlineResolveRace.setupCohostPhaseActions.length, 0);
+assert.equal(
+  cohostDeadlineResolveRace.setupCohostDeadlineActions.includes("extend_deadline"),
+  true,
+);
+if (cohostDeadlineResolveRace.deadline.state === "ack") {
+  assert.equal(cohostDeadlineResolveRace.deadline.serverEnvelope.body.kind, "Ack");
+  assert.equal(
+    cohostDeadlineResolveRace.deadlineSeq < cohostDeadlineResolveRace.resolveSeq,
+    true,
+  );
+  assert.equal(
+    cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline,
+    cohostDeadlineResolveRace.deadlineAt,
+  );
+} else {
+  assert.equal(cohostDeadlineResolveRace.deadline.state, "reject");
+  assert.equal(cohostDeadlineResolveRace.deadline.error, "PhaseLocked");
+  assert.equal(cohostDeadlineResolveRace.deadline.serverEnvelope.body.kind, "Reject");
+  assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline, null);
+}
+assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.status, "passed");
+assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.hostRouteResponseStatus, 200);
+assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.cohostRouteResponseStatus, 200);
+assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseAfterReload.id, "D01");
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseAfterReload.locked,
+  true,
+);
+assert.equal(cohostDeadlineResolveRace.roleReloadAfterRace.cohostPhaseAfterReload.id, "D01");
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostPhaseAfterReload.locked,
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseAfterReload.deadline,
+  cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostPhaseAfterReload.deadline,
+  cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseActionsAfterReload.includes(
+    "unlock_thread",
+  ),
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseActionsAfterReload.includes(
+    "advance_phase",
+  ),
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostPhaseActionsAfterReload.includes(
+    "resolve_phase",
+  ),
+  false,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostPhaseActionsAfterReload.length,
+  0,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostDeadlineActionsAfterReload.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostDeadlineActionsAfterReload.includes(
+    "extend_deadline",
+  ),
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostApiPhaseAfterReload.phase_id,
+  "D01",
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostApiPhaseAfterReload.locked,
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.hostApiPhaseAfterReload.deadline,
+  cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostApiPhaseAfterReload.phase_id,
+  "D01",
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostApiPhaseAfterReload.locked,
+  true,
+);
+assert.equal(
+  cohostDeadlineResolveRace.roleReloadAfterRace.cohostApiPhaseAfterReload.deadline,
+  cohostDeadlineResolveRace.roleReloadAfterRace.expectedDeadline,
 );
 assert.equal(replacementPrivatePostRace.status, "passed");
 assert.equal(

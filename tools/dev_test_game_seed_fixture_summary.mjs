@@ -353,6 +353,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "A cohost role URL races delegated ExtendDeadline against host ResolvePhase, accepting only deadline-before-resolution ACK ordering or PhaseLocked convergence.",
     }),
     scenario({
+      id: "concurrent-cohost-deadline-resolve-race-reload",
+      title: "Concurrent cohost deadline/resolve reload",
+      role: "cohost",
+      provenBy: ["concurrent-cohost-deadline-resolve-race-reload"].filter(hasLane),
+      note: "After the cohost deadline and host resolve race settles, host and cohost role URLs reload to locked D01 truth with authority-specific controls and matching API deadline state.",
+    }),
+    scenario({
       id: "concurrent-replacement-private-post-race",
       title: "Concurrent replacement private-post race",
       role: "player",
@@ -711,6 +718,7 @@ function demoScenarios({ roles, laneIds }) {
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
         "concurrent-cohost-deadline-resolve-race",
+        "concurrent-cohost-deadline-resolve-race-reload",
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
@@ -758,7 +766,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-cohost-deadline",
         "stale-cohost-deadline-reload",
       ].filter(hasLane),
-      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, local vote/action and host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, public and stale completed-game player reloads, stale host resolve/advance/deadline/completed-game reloads, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection, and stale cohost deadline recovery plus reload.",
+      note: "Seeded roles exercise stale replacement invite recovery, stale host invite retry recovery, duplicate replacement and post command retry, reconnect recovery, local vote/action and host resolve/advance/deadline-advance/lifecycle/complete-game/mixed-advance races, cohost deadline/resolve race reloads, public and stale completed-game player reloads, stale host resolve/advance/deadline/completed-game reloads, stale host phase/resolve/advance/publish/lifecycle/modkill/prompt/complete-game/deadline control rejection, and stale cohost deadline recovery plus reload.",
     }),
     scenario({
       id: "local-ops-readiness",

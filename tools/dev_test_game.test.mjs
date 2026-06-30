@@ -2909,6 +2909,28 @@ test("session card and markdown include role credential URLs and tokens", () => 
         cohostStateAfterRace: {
           phase: { phase_id: "D01", locked: true, deadline: 1781928000 },
         },
+        roleReloadAfterRace: {
+          status: "passed",
+          expectedDeadline: 1781928000,
+          hostRouteResponseStatus: 200,
+          cohostRouteResponseStatus: 200,
+          hostPhaseAfterReload: { id: "D01", locked: true, deadline: 1781928000 },
+          cohostPhaseAfterReload: { id: "D01", locked: true, deadline: 1781928000 },
+          hostPhaseActionsAfterReload: ["unlock_thread", "advance_phase"],
+          cohostPhaseActionsAfterReload: [],
+          hostDeadlineActionsAfterReload: ["extend_deadline"],
+          cohostDeadlineActionsAfterReload: ["extend_deadline"],
+          hostApiPhaseAfterReload: {
+            phase_id: "D01",
+            locked: true,
+            deadline: 1781928000,
+          },
+          cohostApiPhaseAfterReload: {
+            phase_id: "D01",
+            locked: true,
+            deadline: 1781928000,
+          },
+        },
       },
       concurrentReplacementPrivatePostRace: {
         status: "passed",
@@ -5596,6 +5618,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
@@ -5714,7 +5737,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 91);
+  assert.equal(opsArtifacts.proofRun.laneCount, 92);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5815,6 +5838,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-player-vote-resolve-race",
       "concurrent-player-action-advance-race",
       "concurrent-cohost-deadline-resolve-race",
+      "concurrent-cohost-deadline-resolve-race-reload",
       "concurrent-replacement-private-post-race",
       "concurrent-replacement-vote-race",
       "concurrent-replacement-action-race",
@@ -6346,6 +6370,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
         "concurrent-cohost-deadline-resolve-race",
+        "concurrent-cohost-deadline-resolve-race-reload",
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
@@ -6487,6 +6512,7 @@ function seedAdminProofFixture() {
         "concurrent-player-vote-resolve-race",
         "concurrent-player-action-advance-race",
         "concurrent-cohost-deadline-resolve-race",
+        "concurrent-cohost-deadline-resolve-race-reload",
         "concurrent-replacement-private-post-race",
         "concurrent-replacement-vote-race",
         "concurrent-replacement-action-race",
