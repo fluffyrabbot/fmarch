@@ -105,6 +105,7 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       auditId: "local-hardening",
       requiredChecks,
+      requiredCheckStatuses: hardeningExpectedCheckStatuses(proofRun),
     }),
   buildEvidence: ({ source: proofRun, adminRoleSurface }) => ({
     version: 1,
@@ -118,6 +119,7 @@ await runAdminAuditProof({
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
+      highlightedLaneEvidence: hardeningHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface,
   }),
@@ -146,5 +148,79 @@ export function assertHardeningAdminProof(evidence) {
       throw new Error(`hardening admin proof missing visible check: ${checkId}`);
     }
   }
+  for (const [checkId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.highlightedLaneEvidence ?? {},
+  )) {
+    if (
+      expectedStatus !== "" &&
+      !evidence.adminRoleSurface?.visibleCheckStatuses?.[checkId]?.includes(
+        expectedStatus,
+      )
+    ) {
+      throw new Error(
+        `hardening admin proof missing visible status for ${checkId}: ${expectedStatus}`,
+      );
+    }
+  }
   return evidence;
+}
+
+function hardeningExpectedCheckStatuses(proofRun) {
+  return hardeningHighlightedLaneEvidence(proofRun);
+}
+
+function hardeningHighlightedLaneEvidence(proofRun) {
+  const lanes = new Map((proofRun.lanes ?? []).map((lane) => [lane.id, lane]));
+  return Object.fromEntries(
+    [
+      "concurrent-action-race",
+      "concurrent-action-race-reload",
+      "reconnect-recovery",
+      "stale-same-action-recovery",
+      "stale-dead-action-conflict",
+      "stale-action-conflict",
+      "stale-action-conflict-message",
+      "stale-host-control",
+      "concurrent-host-resolve-race",
+      "concurrent-host-resolve-race-reload",
+      "stale-host-resolve",
+      "stale-host-resolve-reload",
+    ].map((id) => [id, hardeningLaneStatus(lanes.get(id))]),
+  );
+}
+
+function hardeningLaneStatus(lane) {
+  const status = String(lane?.status ?? "unknown");
+  const evidence =
+    lane?.evidence !== null && typeof lane?.evidence === "object"
+      ? lane.evidence
+      : {};
+  switch (lane?.id) {
+    case "concurrent-action-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} action, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-action-race-reload":
+      return `${status}: target ${String(evidence.targetSlot ?? "unknown")}, alive ${String(evidence.apiTargetAlive ?? "unknown")}`;
+    case "reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
+    case "stale-same-action-recovery":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
+    case "stale-dead-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
+    case "stale-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
+    case "stale-action-conflict-message":
+      return `${status}: ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
+    case "stale-host-control":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, current ${String(evidence.phaseId ?? "unknown")}`;
+    case "concurrent-host-resolve-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} resolve, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-host-resolve-race-reload":
+      return `${status}: locked ${String(evidence.apiLocked ?? "unknown")}, routes ${String(evidence.liveRouteStatus ?? "unknown")}/${String(evidence.concurrentRouteStatus ?? "unknown")}`;
+    case "stale-host-resolve":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
+    case "stale-host-resolve-reload":
+      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
+    default:
+      return status;
+  }
 }

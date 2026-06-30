@@ -2115,7 +2115,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
         const lane = laneById.get(id);
         return Object.freeze({
           id,
-          status: String(lane.status),
+          status: hardeningLaneStatus(lane),
         });
       }),
     ),
@@ -2129,6 +2129,42 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
       productionReady: proofRun.productionReady === true,
     }),
   });
+}
+
+function hardeningLaneStatus(lane) {
+  const status = String(lane?.status ?? "unknown");
+  const evidence =
+    lane?.evidence !== null && typeof lane?.evidence === "object"
+      ? lane.evidence
+      : {};
+  switch (lane?.id) {
+    case "concurrent-action-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} action, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-action-race-reload":
+      return `${status}: target ${String(evidence.targetSlot ?? "unknown")}, alive ${String(evidence.apiTargetAlive ?? "unknown")}`;
+    case "reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
+    case "stale-same-action-recovery":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
+    case "stale-dead-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
+    case "stale-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
+    case "stale-action-conflict-message":
+      return `${status}: ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
+    case "stale-host-control":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, current ${String(evidence.phaseId ?? "unknown")}`;
+    case "concurrent-host-resolve-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} resolve, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-host-resolve-race-reload":
+      return `${status}: locked ${String(evidence.apiLocked ?? "unknown")}, routes ${String(evidence.liveRouteStatus ?? "unknown")}/${String(evidence.concurrentRouteStatus ?? "unknown")}`;
+    case "stale-host-resolve":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
+    case "stale-host-resolve-reload":
+      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
+    default:
+      return status;
+  }
 }
 
 export function appendLocalBackupRestoreAudit(audit, backupRestoreProof, { game }) {
