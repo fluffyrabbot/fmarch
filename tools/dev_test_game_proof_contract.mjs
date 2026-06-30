@@ -97,6 +97,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-advance-race",
   "concurrent-host-advance-race-reload",
   "concurrent-host-deadline-advance-race",
+  "concurrent-host-deadline-advance-race-reload",
   "concurrent-host-mixed-advance-race",
   "stale-host-resolve",
   "stale-host-resolve-reload",
@@ -5938,6 +5939,88 @@ export function buildDevTestGameProofRun(session, options = {}) {
             false &&
           hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.deadline ===
             null,
+      },
+    ),
+    lane(
+      "concurrent-host-deadline-advance-race-reload",
+      "Concurrent host deadline advance race reloads open host projections",
+      {
+        game: hardening.concurrentHostDeadlineAdvanceRace?.game ?? null,
+        liveRouteStatus:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.liveRouteStatus ?? null,
+        concurrentRouteStatus:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentRouteStatus ?? null,
+        livePhase:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseAfterReload ?? null,
+        concurrentPhase:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseAfterReload ?? null,
+        apiPhase:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.apiPhaseAfterReload?.phase_id ?? null,
+        apiDeadline:
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.apiPhaseAfterReload?.deadline ?? null,
+        passed:
+          hardening.concurrentHostDeadlineAdvanceRace?.status === "passed" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.status === "passed" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.liveRouteStatus === 200 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentRouteStatus === 200 &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseAfterReload?.id === "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseAfterReload?.locked === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseAfterReload?.deadline === null &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseAfterReload?.id === "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseAfterReload?.locked === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseAfterReload?.deadline === null &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseActionsAfterReload?.includes("resolve_phase") === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseActionsAfterReload?.includes("lock_thread") === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseActionsAfterReload?.includes("advance_phase") === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseActionsAfterReload?.includes("unlock_thread") === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.livePhaseActionsAfterReload?.includes("advance_phase_by_deadline") ===
+            false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseActionsAfterReload?.includes("resolve_phase") ===
+            true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseActionsAfterReload?.includes("lock_thread") === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseActionsAfterReload?.includes("advance_phase") ===
+            false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseActionsAfterReload?.includes("unlock_thread") ===
+            false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentPhaseActionsAfterReload?.includes(
+              "advance_phase_by_deadline",
+            ) === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.liveDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.concurrentDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            true &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.apiPhaseAfterReload?.phase_id === "N01" &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.apiPhaseAfterReload?.locked === false &&
+          hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
+            ?.apiPhaseAfterReload?.deadline === null,
       },
     ),
     lane(

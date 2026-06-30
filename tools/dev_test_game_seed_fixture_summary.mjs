@@ -524,6 +524,15 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D01 advance_phase_by_deadline concurrently with distinct command ids, prove one deadline evidence ACK plus one InvalidTarget recovery, and converge to the next open phase.",
     }),
     scenario({
+      id: "concurrent-host-deadline-advance-race-reload",
+      title: "Concurrent host deadline advance reload",
+      role: "host",
+      provenBy: ["concurrent-host-deadline-advance-race-reload"].filter(
+        hasLane,
+      ),
+      note: "After two host role pages race D01 advance_phase_by_deadline, both host role URLs reload to open N01 with current resolve/lock controls, no carried deadline, and matching API phase truth.",
+    }),
+    scenario({
       id: "concurrent-host-lifecycle-race",
       title: "Concurrent host lifecycle race",
       role: "host",
@@ -798,6 +807,7 @@ function demoScenarios({ roles, laneIds }) {
         "concurrent-host-advance-race",
         "concurrent-host-advance-race-reload",
         "concurrent-host-deadline-advance-race",
+        "concurrent-host-deadline-advance-race-reload",
         "concurrent-host-lifecycle-race",
         "concurrent-host-complete-race",
         "stale-host-prompt-reload",
