@@ -721,6 +721,15 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     action.unproven !== null && typeof action.unproven === "object"
       ? action.unproven
       : null;
+  const unprovenRoleUrl =
+    typeof unproven?.roleUrl === "string" && unproven.roleUrl.trim() !== ""
+      ? unproven.roleUrl
+      : "";
+  const unprovenProofGraphNodeId =
+    typeof unproven?.proofGraphNodeId === "string" &&
+    unproven.proofGraphNodeId.trim() !== ""
+      ? unproven.proofGraphNodeId
+      : "";
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -903,6 +912,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     href: "target/dev-test-game/next-action.json",
     inspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
     checks: Object.freeze(checks),
+    relatedLinks:
+      unprovenRoleUrl === ""
+        ? Object.freeze([])
+        : Object.freeze([
+            Object.freeze({
+              id: unprovenProofGraphNodeId || String(unproven.id),
+              label: String(unproven.id ?? "Selected role surface"),
+              href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
+              status: String(unproven.status ?? actionStatus),
+              command,
+            }),
+          ]),
     artifactSummary: Object.freeze({
       command,
       reason,
@@ -927,6 +948,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
+      selectedRoleUrl: unprovenRoleUrl,
+      selectedRoleHref:
+        unprovenRoleUrl === ""
+          ? ""
+          : seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
+      selectedProofGraphNodeId: unprovenProofGraphNodeId,
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -1048,6 +1075,8 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         command: String(candidate.command ?? ""),
         buildSlice: String(candidate.buildSlice ?? ""),
         proofTarget: String(candidate.proofTarget ?? ""),
+        roleUrl: String(candidate.roleUrl ?? ""),
+        proofGraphNodeId: String(candidate.proofGraphNodeId ?? ""),
       }),
     );
   return Object.freeze({

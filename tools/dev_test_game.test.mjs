@@ -594,6 +594,9 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -629,6 +632,9 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
         proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:

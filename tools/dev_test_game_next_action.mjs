@@ -128,6 +128,8 @@ export function buildDevTestGameNextAction(
               requiredEvidence: selectedUnproven.item.requiredEvidence,
               buildSlice: selectedUnproven.buildSlice,
               proofTarget: selectedUnproven.proofTarget,
+              roleUrl: selectedUnproven.roleUrl,
+              proofGraphNodeId: selectedUnproven.proofGraphNodeId,
             },
           }
         : {
@@ -272,6 +274,17 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action release-readiness recovery is missing an unproven id");
   }
+  if (evidence.nextAction.reason === "release-readiness-unproven") {
+    if (
+      typeof evidence.nextAction.unproven?.roleUrl !== "string" ||
+      !evidence.nextAction.unproven.roleUrl.includes("?game=<seeded-game>")
+    ) {
+      throw new Error("next-action release-readiness recovery is missing a seeded role URL");
+    }
+    if (typeof evidence.nextAction.unproven?.proofGraphNodeId !== "string") {
+      throw new Error("next-action release-readiness recovery is missing a graph node id");
+    }
+  }
   if (
     evidence.nextAction.reason === "harness-stability-drift" &&
     typeof evidence.nextAction.stability?.source !== "string"
@@ -397,6 +410,8 @@ function rankedBuildableReleaseReadinessItems(readiness) {
             command: buildable.command,
             buildSlice: buildable.buildSlice,
             proofTarget: buildable.proofTarget,
+            roleUrl: buildable.roleUrl,
+            proofGraphNodeId: buildable.proofGraphNodeId,
             proofBoundary: buildable.proofBoundary,
           };
     })
@@ -419,6 +434,8 @@ function buildReleaseReadinessTrace(candidates) {
       command: candidate.command,
       buildSlice: candidate.buildSlice,
       proofTarget: candidate.proofTarget,
+      roleUrl: candidate.roleUrl,
+      proofGraphNodeId: candidate.proofGraphNodeId,
       proofBoundary: candidate.proofBoundary,
       requiredEvidence: candidate.item.requiredEvidence,
     })),
@@ -803,7 +820,9 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
   if (nextAction.reason === "release-readiness-unproven") {
     if (
       nextAction.unproven?.id !== selected.id ||
-      nextAction.command !== selected.command
+      nextAction.command !== selected.command ||
+      nextAction.unproven?.roleUrl !== selected.roleUrl ||
+      nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId
     ) {
       throw new Error("next-action release-readiness selection does not match action");
     }
@@ -1168,6 +1187,9 @@ const localBuildableReleaseReadinessItems = new Map([
       buildSlice:
         "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
     },

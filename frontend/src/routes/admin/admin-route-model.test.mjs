@@ -1166,6 +1166,15 @@ test("admin route data exposes local next action as a native audit row", async (
       ...hostStaleControlCheckRows(),
     ],
   );
+  assert.deepEqual(nextAction.relatedLinks, [
+    {
+      id: "admin-proof:hosted-concurrent-race-matrix",
+      label: "hosted-concurrent-race-matrix",
+      href: "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+      status: "unproven",
+      command: LOCAL_RACE_COMMAND,
+    },
+  ]);
   assert.deepEqual(nextAction.artifactSummary, {
     command: LOCAL_RACE_COMMAND,
     reason: "release-readiness-unproven",
@@ -1190,6 +1199,11 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedBuildSlice:
       "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
     selectedProofTarget: HOSTED_MATRIX_PROOF_TARGET,
+    selectedRoleUrl:
+      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    selectedRoleHref:
+      "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+    selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -1220,6 +1234,9 @@ test("admin route data exposes local next action as a native audit row", async (
           buildSlice:
             "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
           proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+          roleUrl:
+            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
         },
       ],
     },
@@ -2730,6 +2747,9 @@ function nextActionFixture({
           buildSlice:
             "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
           proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+          roleUrl:
+            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
         }
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
@@ -3182,6 +3202,8 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         command,
         buildSlice: unproven.buildSlice,
         proofTarget: unproven.proofTarget,
+        roleUrl: unproven.roleUrl,
+        proofGraphNodeId: unproven.proofGraphNodeId,
       },
     ],
   };

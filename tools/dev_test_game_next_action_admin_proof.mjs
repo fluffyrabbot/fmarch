@@ -40,6 +40,7 @@ await runAdminAuditProof({
       game: source.proofRun.session.game,
       auditId: "local-next-action",
       requiredChecks: requiredChecksForNextAction(source.nextAction),
+      requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -59,6 +60,9 @@ await runAdminAuditProof({
       actionStatus: source.nextAction.nextAction.status,
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
+      unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
+      unprovenProofGraphNodeId:
+        source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
       stabilityStatus: source.nextAction.stabilityTrace.status,
       selectionTrace: {
         strategy: source.nextAction.selectionTrace.strategy,
@@ -326,6 +330,13 @@ export function assertNextActionAdminProof(evidence) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
     }
   }
+  const relatedLinkId = evidence.generatedFrom?.unprovenProofGraphNodeId;
+  if (
+    typeof relatedLinkId === "string" &&
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(relatedLinkId)
+  ) {
+    throw new Error("next-action admin proof missing selected role URL handoff");
+  }
   return evidence;
 }
 
@@ -375,6 +386,13 @@ function requiredChecksForNextAction(nextAction) {
     checks.push(`host-stale-control-${laneId}`);
   }
   return checks;
+}
+
+function requiredRelatedLinksForNextAction(nextAction) {
+  const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
+  return typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
+    ? [proofGraphNodeId]
+    : [];
 }
 
 function requiredChecksForEvidence(evidence) {
