@@ -220,6 +220,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF:
+      "target/dev-test-game/proof-freshness-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF:
+      "target/dev-test-game/next-action-admin-proof.json",
   });
   assert.deepEqual(devTestGameLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
@@ -709,6 +713,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       opsArtifacts: devTestGameOpsArtifactsFixture(),
       raceCoverage: devTestGameRaceCoverageFixture(),
       releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeProofFreshnessAdminCheck: false,
         includeNextActionAdminCheck: false,
         unproven: [
           {
@@ -722,6 +727,82 @@ test("dev test-game next-action derives one local recovery command from the mani
   );
   assertDevTestGameNextAction(missingNextActionAdminDependencyAction);
   assert.deepEqual(missingNextActionAdminDependencyAction.nextAction, {
+    command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+    reason: "release-readiness-local-check-missing",
+    status: "blocked",
+    localCheck: {
+      id: "local-proof-freshness-admin-surface",
+      status: "missing",
+      requiredEvidence:
+        "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+      buildSlice:
+        "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+      proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+    },
+  });
+  assert.deepEqual(
+    missingNextActionAdminDependencyAction.localReadinessDependencyTrace,
+    {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 2,
+      selectedCheckId: "local-proof-freshness-admin-surface",
+      candidates: [
+        {
+          rank: 1,
+          id: "local-proof-freshness-admin-surface",
+          status: "missing",
+          priority: 1,
+          selected: true,
+          command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+          buildSlice:
+            "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+          proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+          roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+          proofBoundary:
+            "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
+          requiredEvidence:
+            "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+        },
+        {
+          rank: 2,
+          id: "local-next-action-admin-surface",
+          status: "missing",
+          priority: 2,
+          selected: false,
+          command: "npm run test:dev-test-game-next-action-admin-proof",
+          buildSlice:
+            "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
+          proofTarget: "target/dev-test-game/next-action-admin-proof.json",
+          roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          proofBoundary:
+            "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+          requiredEvidence:
+            "Passed next-action admin surface check in the generated release-readiness checklist",
+        },
+      ],
+    },
+  );
+  const missingOnlyNextActionAdminDependencyAction = buildDevTestGameNextAction(
+    freshManifest,
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeNextActionAdminCheck: false,
+        unproven: [
+          {
+            id: "hosted-concurrent-race-matrix",
+            status: "unproven",
+            requiredEvidence: "Hosted concurrent matrix evidence",
+          },
+        ],
+      }),
+    },
+  );
+  assertDevTestGameNextAction(missingOnlyNextActionAdminDependencyAction);
+  assert.deepEqual(missingOnlyNextActionAdminDependencyAction.nextAction, {
     command: "npm run test:dev-test-game-next-action-admin-proof",
     reason: "release-readiness-local-check-missing",
     status: "blocked",
@@ -737,7 +818,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     },
   });
   assert.deepEqual(
-    missingNextActionAdminDependencyAction.localReadinessDependencyTrace,
+    missingOnlyNextActionAdminDependencyAction.localReadinessDependencyTrace,
     {
       strategy: "local-readiness-dependency-before-hosted-work",
       candidateCount: 1,
@@ -747,7 +828,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-next-action-admin-surface",
           status: "missing",
-          priority: 1,
+          priority: 2,
           selected: true,
           command: "npm run test:dev-test-game-next-action-admin-proof",
           buildSlice:
@@ -7123,6 +7204,33 @@ test("session card and markdown include role credential URLs and tokens", () => 
       .roleHandoffCount,
     10,
   );
+  const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshnessAdminProofPath:
+      "target/dev-test-game/proof-freshness-admin-proof.json",
+    proofFreshnessAdminProof: proofFreshnessAdminProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(proofFreshnessAdminReadiness);
+  const proofFreshnessAdminCheck =
+    proofFreshnessAdminReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-proof-freshness-admin-surface",
+    );
+  assert.equal(proofFreshnessAdminCheck.status, "passed");
+  assert.equal(proofFreshnessAdminCheck.dependencyGated, true);
+  assert.equal(
+    proofFreshnessAdminCheck.recovery.command,
+    "npm run test:dev-test-game-proof-freshness-admin-proof",
+  );
+  assert.equal(proofFreshnessAdminCheck.artifactCount, 3);
+  assert.equal(
+    proofFreshnessAdminCheck.adminRoleSurface.detailRoleUrl,
+    "/admin/audit/local-proof-freshness?game=<seeded-game>",
+  );
+  assert.equal(
+    proofFreshnessAdminReadiness.localDevelopmentSpine.evidence
+      .proofFreshnessAdminProof.nextActionStatus,
+    "ready",
+  );
   const nextActionAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     nextActionAdminProofPath: "target/dev-test-game/next-action-admin-proof.json",
@@ -7299,6 +7407,7 @@ function identityAdapterProofFixture(game) {
 function devTestGameReleaseReadinessChecklistFixture({
   unproven,
   includeProofGraphHandoffCheck = true,
+  includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
 }) {
   return {
@@ -7367,6 +7476,39 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleHandoffCount: 10,
                 roleHandoffIds: ["admin-proof:release"],
                 destinationAuditIds: ["local-release-readiness"],
+              },
+            ]
+          : []),
+        ...(includeProofFreshnessAdminCheck
+          ? [
+              {
+                id: "local-proof-freshness-admin-surface",
+                label: "Proof freshness admin surface",
+                status: "passed",
+                dependencyGated: true,
+                evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
+                proofBoundary:
+                  "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts.",
+                recovery: {
+                  command:
+                    "npm run test:dev-test-game-proof-freshness-admin-proof",
+                  buildSlice:
+                    "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+                  proofTarget:
+                    "target/dev-test-game/proof-freshness-admin-proof.json",
+                  roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+                  proofBoundary:
+                    "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+                },
+                artifactCount: 3,
+                artifactIds: ["proof-run", "release-readiness", "next-action"],
+                maxAgeHours: 24,
+                nextActionCommand:
+                  "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+                nextActionStatus: "ready",
+                nextActionReason: "release-readiness-unproven",
               },
             ]
           : []),
@@ -8312,6 +8454,47 @@ function proofGraphAdminProofFixture() {
         auditId: handoff.auditId,
         detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
       })),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function proofFreshnessAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-freshness-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-proof-freshness-admin-surface",
+    proofBoundary: "Local proof-freshness admin proof only.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      nextAction: "target/dev-test-game/next-action.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      artifactIds: ["proof-run", "release-readiness", "next-action"],
+      maxAgeHours: 24,
+      nextActionCommand:
+        "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+      nextActionStatus: "ready",
+      nextActionReason: "release-readiness-unproven",
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-proof-freshness",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [
+        "proof-run",
+        "release-readiness",
+        "next-action",
+        "next-action-handoff",
+      ],
+      visibleRelatedLinks: ["local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

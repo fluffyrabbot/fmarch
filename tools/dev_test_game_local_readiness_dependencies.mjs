@@ -5,10 +5,14 @@ import {
 import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
+  proofFreshnessAdminProofCommand,
+  proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
+export const localProofFreshnessAdminSurfaceCheckId =
+  "local-proof-freshness-admin-surface";
 export const localNextActionAdminSurfaceCheckId =
   "local-next-action-admin-surface";
 
@@ -28,9 +32,23 @@ export const localReadinessDependencies = Object.freeze([
       "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
   }),
   Object.freeze({
+    id: localProofFreshnessAdminSurfaceCheckId,
+    label: "Proof freshness admin surface",
+    priority: 1,
+    command: `npm run ${proofFreshnessAdminProofCommand}`,
+    buildSlice:
+      "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+    proofTarget: proofFreshnessAdminProofPath,
+    roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+    proofBoundary:
+      "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
     id: localNextActionAdminSurfaceCheckId,
     label: "Next-action admin surface",
-    priority: 1,
+    priority: 2,
     command: `npm run ${nextActionAdminProofCommand}`,
     buildSlice:
       "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
@@ -142,6 +160,35 @@ export function buildProofGraphAdminRoleHandoffsReadinessCheck(
     roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
     destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
     adminRoleSurface: proofGraphAdminProofEvidence,
+  };
+}
+
+export function buildProofFreshnessAdminSurfaceReadinessCheck(
+  proofFreshnessAdminProofEvidence,
+) {
+  const dependency = getLocalReadinessDependency(
+    localProofFreshnessAdminSurfaceCheckId,
+  );
+  if (dependency === undefined) {
+    throw new Error(
+      "proof-freshness admin surface readiness dependency is missing a recovery contract",
+    );
+  }
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "passed",
+    dependencyGated: true,
+    evidence: proofFreshnessAdminProofEvidence.path,
+    proofBoundary: proofFreshnessAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    artifactCount: proofFreshnessAdminProofEvidence.artifactIds.length,
+    artifactIds: proofFreshnessAdminProofEvidence.artifactIds,
+    maxAgeHours: proofFreshnessAdminProofEvidence.maxAgeHours,
+    nextActionCommand: proofFreshnessAdminProofEvidence.nextActionCommand,
+    nextActionStatus: proofFreshnessAdminProofEvidence.nextActionStatus,
+    nextActionReason: proofFreshnessAdminProofEvidence.nextActionReason,
+    adminRoleSurface: proofFreshnessAdminProofEvidence,
   };
 }
 

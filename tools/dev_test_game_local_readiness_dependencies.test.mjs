@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   assertLocalReadinessDependencyChecks,
   buildNextActionAdminSurfaceReadinessCheck,
+  buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   getLocalReadinessDependency,
   localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
   rankedMissingLocalReadinessDependencies,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -111,6 +113,51 @@ test("next-action admin proof builds the matching local readiness check", () => 
   );
 });
 
+test("proof-freshness admin proof builds the matching local readiness check", () => {
+  const proofFreshnessAdminProofEvidence = {
+    path: "target/dev-test-game/proof-freshness-admin-proof.json",
+    proofBoundary: "Local proof-freshness admin proof boundary.",
+    artifactIds: ["proof-run", "release-readiness", "next-action"],
+    maxAgeHours: 24,
+    nextActionCommand: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+    nextActionStatus: "ready",
+    nextActionReason: "release-readiness-unproven",
+    detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+  };
+
+  assert.deepEqual(
+    buildProofFreshnessAdminSurfaceReadinessCheck(
+      proofFreshnessAdminProofEvidence,
+    ),
+    {
+      id: "local-proof-freshness-admin-surface",
+      label: "Proof freshness admin surface",
+      status: "passed",
+      dependencyGated: true,
+      evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
+      proofBoundary: "Local proof-freshness admin proof boundary.",
+      recovery: {
+        command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+        buildSlice:
+          "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+        proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+        proofBoundary:
+          "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+      },
+      artifactCount: 3,
+      artifactIds: ["proof-run", "release-readiness", "next-action"],
+      maxAgeHours: 24,
+      nextActionCommand: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+      nextActionStatus: "ready",
+      nextActionReason: "release-readiness-unproven",
+      adminRoleSurface: proofFreshnessAdminProofEvidence,
+    },
+  );
+});
+
 test("dependency-gated checks must match the recovery registry", () => {
   const check = buildProofGraphAdminRoleHandoffsReadinessCheck({
     path: "target/dev-test-game/proof-graph-admin-proof.json",
@@ -179,10 +226,25 @@ test("missing local readiness dependencies rank before hosted readiness work", (
         "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
     },
     {
-      id: "local-next-action-admin-surface",
+      id: "local-proof-freshness-admin-surface",
       status: "missing",
       index: 1,
       priority: 1,
+      command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+      buildSlice:
+        "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
+      proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
+      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      proofBoundary:
+        "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
+      requiredEvidence:
+        "Passed proof-freshness admin surface check in the generated release-readiness checklist",
+    },
+    {
+      id: "local-next-action-admin-surface",
+      status: "missing",
+      index: 2,
+      priority: 2,
       command: "npm run test:dev-test-game-next-action-admin-proof",
       buildSlice:
         "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
@@ -201,6 +263,10 @@ test("missing local readiness dependencies rank before hosted readiness work", (
         checks: [
           {
             id: "local-proof-graph-admin-role-handoffs",
+            status: "passed",
+          },
+          {
+            id: localProofFreshnessAdminSurfaceCheckId,
             status: "passed",
           },
           {

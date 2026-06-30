@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   assertLocalReadinessDependencyChecks,
   buildNextActionAdminSurfaceReadinessCheck,
+  buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -75,6 +76,10 @@ const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
 const defaultProofGraphAdminProofPath = path.join(
   artifactDir,
   "proof-graph-admin-proof.json",
+);
+const defaultProofFreshnessAdminProofPath = path.join(
+  artifactDir,
+  "proof-freshness-admin-proof.json",
 );
 const defaultNextActionAdminProofPath = path.join(
   artifactDir,
@@ -268,6 +273,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           "target/dev-test-game/proof-graph-admin-proof.json",
         artifact: options.proofGraphAdminProofArtifact,
       })
+    : undefined;
+  const proofFreshnessAdminProofEvidence = options.proofFreshnessAdminProof
+    ? validateDevTestGameProofFreshnessAdminProof(
+        options.proofFreshnessAdminProof,
+        {
+          path:
+            options.proofFreshnessAdminProofPath ??
+            "target/dev-test-game/proof-freshness-admin-proof.json",
+          artifact: options.proofFreshnessAdminProofArtifact,
+        },
+      )
     : undefined;
   const nextActionAdminProofEvidence = options.nextActionAdminProof
     ? validateDevTestGameNextActionAdminProof(options.nextActionAdminProof, {
@@ -587,6 +603,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
     );
   }
+  if (proofFreshnessAdminProofEvidence !== undefined) {
+    localChecks.push(
+      buildProofFreshnessAdminSurfaceReadinessCheck(
+        proofFreshnessAdminProofEvidence,
+      ),
+    );
+  }
   if (nextActionAdminProofEvidence !== undefined) {
     localChecks.push(
       buildNextActionAdminSurfaceReadinessCheck(nextActionAdminProofEvidence),
@@ -790,6 +813,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             proofGraphAdminProof: proofGraphAdminProofEvidence.path,
           }),
+      ...(proofFreshnessAdminProofEvidence === undefined
+        ? {}
+        : {
+            proofFreshnessAdminProof: proofFreshnessAdminProofEvidence.path,
+          }),
+      ...(nextActionAdminProofEvidence === undefined
+        ? {}
+        : {
+            nextActionAdminProof: nextActionAdminProofEvidence.path,
+          }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
         laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -815,6 +848,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         spineManifestEvidence === undefined &&
         adminSpineProofEvidence === undefined &&
         proofGraphAdminProofEvidence === undefined &&
+        proofFreshnessAdminProofEvidence === undefined &&
         nextActionAdminProofEvidence === undefined)
         ? {}
         : {
@@ -870,6 +904,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(nextActionAdminProofEvidence === undefined
                 ? {}
                 : { nextActionAdminProof: nextActionAdminProofEvidence }),
+              ...(proofFreshnessAdminProofEvidence === undefined
+                ? {}
+                : { proofFreshnessAdminProof: proofFreshnessAdminProofEvidence }),
               staleConflictMessageMilestone: {
                 status: staleConflictMessageMilestone.status,
                 laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -969,6 +1006,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         spineManifestEvidence,
         raceCoverageEvidence,
         proofGraphAdminProofEvidence,
+        proofFreshnessAdminProofEvidence,
+        nextActionAdminProofEvidence,
       }),
       unproven,
     },
@@ -985,6 +1024,8 @@ function releaseReadinessReason({
   spineManifestEvidence,
   raceCoverageEvidence,
   proofGraphAdminProofEvidence,
+  proofFreshnessAdminProofEvidence,
+  nextActionAdminProofEvidence,
 }) {
   const passed = [
     "the local development-spine proof",
@@ -997,6 +1038,12 @@ function releaseReadinessReason({
     ...(proofGraphAdminProofEvidence === undefined
       ? []
       : ["proof graph admin role handoffs"]),
+    ...(proofFreshnessAdminProofEvidence === undefined
+      ? []
+      : ["proof freshness admin surface"]),
+    ...(nextActionAdminProofEvidence === undefined
+      ? []
+      : ["next-action admin surface"]),
   ];
   const missing = [
     identityAdapterEvidence === undefined
@@ -2352,6 +2399,72 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameProofFreshnessAdminProof(proof, options = {}) {
+  if (proof?.version !== 1) {
+    throw new Error(`proof freshness admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-proof-freshness-admin-proof") {
+    throw new Error(`unexpected proof freshness admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`proof freshness admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-proof-freshness-admin-surface") {
+    throw new Error(`proof freshness admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "proof freshness admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "proof freshness admin proof did not prove admin overview click-through",
+    );
+  }
+  if (
+    typeof proof.generatedFrom?.nextActionCommand !== "string" ||
+    proof.generatedFrom.nextActionCommand.trim() === "" ||
+    typeof proof.generatedFrom?.nextActionStatus !== "string" ||
+    typeof proof.generatedFrom?.nextActionReason !== "string" ||
+    !proof.adminRoleSurface?.visibleRelatedLinks?.includes("local-next-action")
+  ) {
+    throw new Error("proof freshness admin proof did not prove next-action handoff");
+  }
+  if (!proof.adminRoleSurface?.visibleChecks?.includes("next-action-handoff")) {
+    throw new Error("proof freshness admin proof missing next-action handoff check");
+  }
+  const artifactIds = Array.isArray(proof.generatedFrom?.artifactIds)
+    ? proof.generatedFrom.artifactIds.map((id) => String(id))
+    : [];
+  if (artifactIds.length === 0) {
+    throw new Error("proof freshness admin proof is missing artifact ids");
+  }
+  for (const id of artifactIds) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(id)) {
+      throw new Error(`proof freshness admin proof missing visible artifact: ${id}`);
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/proof-freshness-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    artifactIds,
+    maxAgeHours: Number(proof.generatedFrom.maxAgeHours ?? 0),
+    nextActionCommand: proof.generatedFrom.nextActionCommand,
+    nextActionStatus: proof.generatedFrom.nextActionStatus,
+    nextActionReason: proof.generatedFrom.nextActionReason,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
   if (proof?.version !== 1) {
     throw new Error(`next-action admin proof version drifted: ${proof?.version}`);
@@ -2880,6 +2993,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     raceCoverageAdminProofOptions,
     hostedConcurrentRaceMatrixAdminProofOptions,
     proofGraphAdminProofOptions,
+    proofFreshnessAdminProofOptions,
     nextActionAdminProofOptions,
   ] = await Promise.all([
     readOptionalCoreLoopAdminProof(),
@@ -2900,6 +3014,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalRaceCoverageAdminProof(),
     readOptionalHostedConcurrentRaceMatrixAdminProof(),
     readOptionalProofGraphAdminProof(),
+    readOptionalProofFreshnessAdminProof(),
     readOptionalNextActionAdminProof(),
   ]);
   const checklist = buildDevTestGameReleaseReadiness(proofRun, {
@@ -2922,6 +3037,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(raceCoverageAdminProofOptions ?? {}),
     ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
     ...(proofGraphAdminProofOptions ?? {}),
+    ...(proofFreshnessAdminProofOptions ?? {}),
     ...(nextActionAdminProofOptions ?? {}),
   });
   assertDevTestGameReleaseReadiness(checklist);
@@ -3230,6 +3346,24 @@ async function readOptionalProofGraphAdminProof() {
     proofGraphAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     proofGraphAdminProofPath: path.relative(repoRoot, proofPath),
     proofGraphAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalProofFreshnessAdminProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultProofFreshnessAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    proofFreshnessAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    proofFreshnessAdminProofPath: path.relative(repoRoot, proofPath),
+    proofFreshnessAdminProofArtifact: artifact,
   };
 }
 
