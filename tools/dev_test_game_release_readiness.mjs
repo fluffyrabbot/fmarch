@@ -4068,6 +4068,9 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
       "actionPlayer:endgame:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
+      "actionPlayer:reload:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
     )
   ) {
@@ -4108,6 +4111,11 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
   ) {
     throw new Error("core-loop admin proof missing completed player command state");
   }
+  assertCoreLoopCompletedPlayerReloadProof({
+    proof: completedGameEndgameSurface.completedPlayerReloadProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+  });
   assertCoreLoopStaleCompletedGameVoteRecoveryProof({
     proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
     expectedGame,
@@ -4154,6 +4162,63 @@ function assertCoreLoopHostCompleteGameProof({
     proof.completeProof?.projection?.slots?.[0]?.alignment_revealed !== true
   ) {
     throw new Error("core-loop admin proof missing completed host projection");
+  }
+}
+
+function assertCoreLoopCompletedPlayerReloadProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyActionVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.resyncFromSeq !== 921 ||
+    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throw new Error("core-loop admin proof missing completed player reload shell");
+  }
+  for (const [label, snapshot] of [
+    ["initial", proof.initialSnapshot],
+    ["reloaded", proof.reloadedSnapshot],
+  ]) {
+    if (
+      snapshot?.checkpoint?.phaseId !== "N05" ||
+      snapshot.checkpoint.phaseState !== "open" ||
+      snapshot.checkpoint.actorSlot !== "slot-7" ||
+      snapshot.checkpoint.actionState !== "disabled:game complete" ||
+      snapshot.checkpoint.receiptState !== "idle" ||
+      snapshot.commandState?.actorSlot !== "slot-7" ||
+      snapshot.commandState?.phase?.phaseId !== "N05" ||
+      snapshot.commandState?.gameCompleted !== true ||
+      snapshot.commandState?.actions?.length !== 0 ||
+      snapshot.commandState?.voteTargets?.length !== 0 ||
+      !String(snapshot.commandState?.boundary ?? "").includes(
+        "completed action-player role URL reloaded",
+      ) ||
+      snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+      snapshot.coldLoadEndpoints?.commandStateEndpoint !==
+        `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7` ||
+      snapshot.coldLoadEndpoints?.notificationsEndpoint !==
+        `/games/${expectedGame}/notifications?principal_user_id=player_mira` ||
+      snapshot.enabledMutatingButtons?.length !== 0 ||
+      !snapshot.disabledMutatingButtons?.some(
+        (button) => button.action === "submit_post" && button.disabled === true,
+      )
+    ) {
+      throw new Error(
+        `core-loop admin proof missing ${label} completed player reload closure`,
+      );
+    }
   }
 }
 

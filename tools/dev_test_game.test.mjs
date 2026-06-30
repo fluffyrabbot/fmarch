@@ -11615,13 +11615,47 @@ function completedGameEndgameSurfaceFixture() {
     { phaseId: "D04", status: "NoLynch" },
     { phaseId: "D05", status: "NoLynch" },
   ];
+  const completedReloadSnapshot = {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      actorSlot: "slot-7",
+      actionState: "disabled:game complete",
+      receiptState: "idle",
+      targetSlots: "",
+    },
+    commandState: {
+      actorSlot: "slot-7",
+      phase: {
+        phaseId: "N05",
+        locked: false,
+      },
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary:
+        "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
+    },
+    notifications: [],
+    dayVoteOutcomes: dayFiveOutcomes,
+    coldLoadEndpoints: {
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+    },
+    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
+    enabledMutatingButtons: [],
+    disabledMutatingButtons: [
+      { action: "submit_post", disabled: true, text: "Post" },
+    ],
+  };
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> actionPlayer:endgame:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11691,6 +11725,22 @@ function completedGameEndgameSurfaceFixture() {
       notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
+    completedPlayerReloadProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      resyncFromSeq: 921,
+      initialResyncSnapshotCommandState: completedReloadSnapshot.commandState,
+      reloadedResyncSnapshotCommandState: completedReloadSnapshot.commandState,
+      initialSnapshot: completedReloadSnapshot,
+      reloadedSnapshot: completedReloadSnapshot,
+      rawInviteTokensVisible: false,
+      targetOnlyActionVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
     staleCompletedVoteRecoveryProof: {
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
