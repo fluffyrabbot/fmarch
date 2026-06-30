@@ -561,6 +561,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
   );
+  const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
+  const stability =
+    action.stability !== null && typeof action.stability === "object"
+      ? action.stability
+      : null;
   const checks = [
     Object.freeze({
       id: "next-command",
@@ -584,6 +589,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
           Object.freeze({
             id: String(unproven.id),
             status: String(unproven.status ?? "unknown"),
+          }),
+        ]),
+    ...(stability === null
+      ? []
+      : [
+          Object.freeze({
+            id: "proof-stability-drift",
+            status: `${Number(stability.retryClickCount ?? 0)} retries, ${Number(
+              stability.domFallbackCount ?? 0,
+            )} DOM fallbacks, ${Number(
+              stability.forceFallbackCount ?? 0,
+            )} force fallbacks`,
           }),
         ]),
     Object.freeze({
@@ -657,10 +674,47 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
+      stabilitySource: String(stability?.source ?? ""),
+      stabilityBuildSlice: String(stability?.buildSlice ?? ""),
+      stabilityProofTarget: String(stability?.proofTarget ?? ""),
+      stabilityTrace,
       releaseReadinessTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+function normalizeNextActionStabilityTrace(stabilityTrace) {
+  if (
+    stabilityTrace === null ||
+    typeof stabilityTrace !== "object" ||
+    stabilityTrace.strategy !== "proof-stability-before-readiness"
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      selected: false,
+      hostConfirmClicks: 0,
+      retryClickCount: 0,
+      domFallbackCount: 0,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 0,
+      eventCount: 0,
+    });
+  }
+  return Object.freeze({
+    strategy: stabilityTrace.strategy,
+    status: String(stabilityTrace.status ?? "unknown"),
+    selected: stabilityTrace.selected === true,
+    hostConfirmClicks: Number(stabilityTrace.hostConfirmClicks ?? 0),
+    retryClickCount: Number(stabilityTrace.retryClickCount ?? 0),
+    domFallbackCount: Number(stabilityTrace.domFallbackCount ?? 0),
+    forceFallbackCount: Number(stabilityTrace.forceFallbackCount ?? 0),
+    failureCount: Number(stabilityTrace.failureCount ?? 0),
+    maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
+    eventCount: Number(stabilityTrace.eventCount ?? 0),
   });
 }
 

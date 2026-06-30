@@ -8,11 +8,15 @@ import {
 } from "./dev_test_game_spine_manifest.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
+import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
 export const devTestGameReleaseReadinessPath =
   "target/dev-test-game/release-readiness-checklist.json";
+export const devTestGameOpsArtifactsPath = "target/dev-test-game/ops-artifacts.json";
+export const devTestGameLiveProofCommand =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -23,6 +27,8 @@ export function buildDevTestGameNextAction(
     spineManifestSource = spineManifestPath,
     releaseReadinessChecklist = null,
     releaseReadinessChecklistSource = devTestGameReleaseReadinessPath,
+    opsArtifacts = null,
+    opsArtifactsSource = devTestGameOpsArtifactsPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -30,9 +36,13 @@ export function buildDevTestGameNextAction(
     releaseReadinessChecklist === null
       ? null
       : assertDevTestGameReleaseReadiness(releaseReadinessChecklist);
+  const ops =
+    opsArtifacts === null ? null : assertDevTestGameOpsArtifacts(opsArtifacts);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
+  const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
+  const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness);
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const selectedUnproven = releaseReadinessCandidates[0];
@@ -50,6 +60,25 @@ export function buildDevTestGameNextAction(
             refreshSource: artifact.refreshSource,
           },
         }
+      : stabilityDrift.status === "drifted"
+        ? {
+            command: devTestGameLiveProofCommand,
+            reason: "harness-stability-drift",
+            status: "blocked",
+            stability: {
+              source: opsArtifactsSource,
+              hostConfirmClicks: stabilityDrift.hostConfirmClicks,
+              retryClickCount: stabilityDrift.retryClickCount,
+              domFallbackCount: stabilityDrift.domFallbackCount,
+              forceFallbackCount: stabilityDrift.forceFallbackCount,
+              failureCount: stabilityDrift.failureCount,
+              maxAttempts: stabilityDrift.maxAttempts,
+              eventCount: stabilityDrift.events.length,
+              buildSlice:
+                "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
+              proofTarget: "target/dev-test-game/session.json",
+            },
+          }
       : selectedUnproven !== undefined
         ? {
             command: selectedUnproven.command,
@@ -86,12 +115,25 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, otherwise it chooses a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
       artifactFreshnessStatus: manifest.artifactFreshness.status,
       artifactFreshnessSummary: { ...manifest.artifactFreshness.summary },
+      ...(ops === null
+        ? {}
+        : {
+            opsArtifacts: opsArtifactsSource,
+            proofStabilityStatus: stabilityDrift.status,
+            proofStabilitySummary: {
+              hostConfirmClicks: stabilityDrift.hostConfirmClicks,
+              retryClickCount: stabilityDrift.retryClickCount,
+              domFallbackCount: stabilityDrift.domFallbackCount,
+              forceFallbackCount: stabilityDrift.forceFallbackCount,
+              failureCount: stabilityDrift.failureCount,
+            },
+          }),
       ...(readiness === null
         ? {}
         : {
@@ -102,6 +144,7 @@ export function buildDevTestGameNextAction(
     },
     nextAction,
     selectionTrace,
+    stabilityTrace,
     releaseReadinessTrace,
   };
   assertDevTestGameNextAction(evidence);
@@ -134,6 +177,7 @@ export function assertDevTestGameNextAction(evidence) {
     ![
       "all-artifacts-fresh",
       "artifact-not-fresh",
+      "harness-stability-drift",
       "release-readiness-unproven",
     ].includes(evidence.nextAction.reason)
   ) {
@@ -151,7 +195,14 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action release-readiness recovery is missing an unproven id");
   }
+  if (
+    evidence.nextAction.reason === "harness-stability-drift" &&
+    typeof evidence.nextAction.stability?.source !== "string"
+  ) {
+    throw new Error("next-action harness-stability recovery is missing stability evidence");
+  }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
+  assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   return evidence;
 }
@@ -170,16 +221,24 @@ export async function writeDevTestGameNextAction({
   const releaseReadinessChecklist = JSON.parse(
     await readFile(absoluteReleaseReadinessPath, "utf8"),
   );
+  const absoluteOpsArtifactsPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS ?? devTestGameOpsArtifactsPath,
+  );
+  const opsArtifacts = JSON.parse(await readFile(absoluteOpsArtifactsPath, "utf8"));
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
     absoluteReleaseReadinessPath,
   );
+  const opsArtifactsSource = path.relative(repoRoot, absoluteOpsArtifactsPath);
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     spineManifestSource,
     releaseReadinessChecklist,
     releaseReadinessChecklistSource,
+    opsArtifacts,
+    opsArtifactsSource,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -274,6 +333,48 @@ function buildReleaseReadinessTrace(candidates) {
   };
 }
 
+function proofStabilityDriftFromOpsArtifacts(ops) {
+  const hostConfirmClicks = ops?.proofStability?.hostConfirmClicks ?? {};
+  const retryClickCount = numberOrZero(hostConfirmClicks.retryClickCount);
+  const domFallbackCount = numberOrZero(hostConfirmClicks.domFallbackCount);
+  const forceFallbackCount = numberOrZero(hostConfirmClicks.forceFallbackCount);
+  const failureCount = numberOrZero(hostConfirmClicks.failureCount);
+  const events = Array.isArray(hostConfirmClicks.events) ? hostConfirmClicks.events : [];
+  return {
+    status:
+      retryClickCount + domFallbackCount + forceFallbackCount + failureCount > 0
+        ? "drifted"
+        : "clean",
+    hostConfirmClicks: numberOrZero(hostConfirmClicks.total),
+    retryClickCount,
+    domFallbackCount,
+    forceFallbackCount,
+    failureCount,
+    maxAttempts: numberOrZero(hostConfirmClicks.maxAttempts),
+    events: events.map((event) => ({
+      actionId: String(event.actionId ?? "unknown"),
+      roleLabel: String(event.roleLabel ?? "unknown"),
+      method: String(event.method ?? "unknown"),
+      attempts: numberOrZero(event.attempts),
+    })),
+  };
+}
+
+function buildProofStabilityTrace(stabilityDrift) {
+  return {
+    strategy: "proof-stability-before-readiness",
+    status: stabilityDrift.status,
+    hostConfirmClicks: stabilityDrift.hostConfirmClicks,
+    retryClickCount: stabilityDrift.retryClickCount,
+    domFallbackCount: stabilityDrift.domFallbackCount,
+    forceFallbackCount: stabilityDrift.forceFallbackCount,
+    failureCount: stabilityDrift.failureCount,
+    maxAttempts: stabilityDrift.maxAttempts,
+    eventCount: stabilityDrift.events.length,
+    selected: stabilityDrift.status === "drifted",
+  };
+}
+
 function assertSelectionTrace(selectionTrace, nextAction) {
   if (
     selectionTrace?.strategy !== "development-spine-priority" ||
@@ -354,8 +455,34 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
   }
 }
 
+function assertProofStabilityTrace(stabilityTrace, nextAction) {
+  if (
+    stabilityTrace?.strategy !== "proof-stability-before-readiness" ||
+    !["clean", "drifted"].includes(stabilityTrace.status) ||
+    typeof stabilityTrace.selected !== "boolean"
+  ) {
+    throw new Error("next-action stability trace is missing or malformed");
+  }
+  if (
+    nextAction.reason === "harness-stability-drift" &&
+    (stabilityTrace.status !== "drifted" || stabilityTrace.selected !== true)
+  ) {
+    throw new Error("next-action stability trace does not match selected drift");
+  }
+  if (
+    nextAction.reason !== "harness-stability-drift" &&
+    stabilityTrace.selected === true
+  ) {
+    throw new Error("next-action stability trace selected without drift action");
+  }
+}
+
 function artifactAgeSeconds(artifact) {
   return typeof artifact.ageSeconds === "number" ? artifact.ageSeconds : 0;
+}
+
+function numberOrZero(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function developmentSpineArtifactPriority(artifact) {
@@ -418,8 +545,7 @@ const localBuildableReleaseReadinessItems = new Map([
     "exhaustive-race-coverage",
     {
       priority: 0,
-      command:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      command: devTestGameLiveProofCommand,
       buildSlice:
         "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
       proofTarget: "target/dev-test-game/proof-run.json",

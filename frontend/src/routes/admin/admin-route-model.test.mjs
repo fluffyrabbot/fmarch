@@ -1050,6 +1050,21 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedBuildSlice:
       "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
     selectedProofTarget: "target/dev-test-game/proof-run.json",
+    stabilitySource: "",
+    stabilityBuildSlice: "",
+    stabilityProofTarget: "",
+    stabilityTrace: {
+      strategy: "proof-stability-before-readiness",
+      status: "clean",
+      selected: false,
+      hostConfirmClicks: 55,
+      retryClickCount: 0,
+      domFallbackCount: 0,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 1,
+      eventCount: 0,
+    },
     releaseReadinessTrace: {
       strategy: "local-dev-release-readiness-priority",
       candidateCount: 1,
@@ -1104,6 +1119,62 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["selection-trace", "1 candidates"],
       ["selection-trace-core-loop", "selected:stale"],
     ],
+  );
+});
+
+test("admin local next action detail data carries harness stability drift rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-next-action",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "harness-stability-drift",
+      command: LOCAL_RACE_COMMAND,
+      unproven: undefined,
+      releaseReadinessTrace: releaseReadinessTraceFixture({ unproven: undefined }),
+      stability: {
+        source: "target/dev-test-game/ops-artifacts.json",
+        hostConfirmClicks: 55,
+        retryClickCount: 1,
+        domFallbackCount: 1,
+        forceFallbackCount: 0,
+        failureCount: 0,
+        maxAttempts: 3,
+        eventCount: 2,
+        buildSlice:
+          "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
+        proofTarget: "target/dev-test-game/session.json",
+      },
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.audit.id, "local-next-action");
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["next-command", "available"],
+      ["harness-stability-drift", "blocked"],
+      ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
+      ["selection-trace", "0 candidates"],
+    ],
+  );
+  assert.deepEqual(data.audit.artifactSummary.stabilityTrace, {
+    strategy: "proof-stability-before-readiness",
+    status: "drifted",
+    selected: true,
+    hostConfirmClicks: 55,
+    retryClickCount: 1,
+    domFallbackCount: 1,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: 3,
+    eventCount: 2,
+  });
+  assert.equal(
+    data.audit.artifactSummary.stabilityBuildSlice,
+    "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
   );
 });
 
@@ -2452,6 +2523,8 @@ function nextActionFixture({
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
   releaseReadinessTrace = releaseReadinessTraceFixture({ unproven, command }),
+  stability,
+  stabilityTrace = stabilityTraceFixture({ stability }),
 } = {}) {
   return {
     version: 1,
@@ -2479,6 +2552,15 @@ function nextActionFixture({
         unprovenCount: 7,
         buildableUnprovenCount: unproven === undefined ? 0 : 1,
       },
+      opsArtifacts: "target/dev-test-game/ops-artifacts.json",
+      proofStabilityStatus: stability === undefined ? "clean" : "drifted",
+      proofStabilitySummary: {
+        hostConfirmClicks: Number(stability?.hostConfirmClicks ?? 55),
+        retryClickCount: Number(stability?.retryClickCount ?? 0),
+        domFallbackCount: Number(stability?.domFallbackCount ?? 0),
+        forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
+        failureCount: Number(stability?.failureCount ?? 0),
+      },
     },
     nextAction: {
       command,
@@ -2486,8 +2568,10 @@ function nextActionFixture({
       status: actionStatus,
       ...(artifact === undefined ? {} : { artifact }),
       ...(unproven === undefined ? {} : { unproven }),
+      ...(stability === undefined ? {} : { stability }),
     },
     selectionTrace,
+    stabilityTrace,
     releaseReadinessTrace,
   };
 }
@@ -2704,6 +2788,21 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         proofTarget: unproven.proofTarget,
       },
     ],
+  };
+}
+
+function stabilityTraceFixture({ stability }) {
+  return {
+    strategy: "proof-stability-before-readiness",
+    status: stability === undefined ? "clean" : "drifted",
+    hostConfirmClicks: Number(stability?.hostConfirmClicks ?? 55),
+    retryClickCount: Number(stability?.retryClickCount ?? 0),
+    domFallbackCount: Number(stability?.domFallbackCount ?? 0),
+    forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
+    failureCount: Number(stability?.failureCount ?? 0),
+    maxAttempts: Number(stability?.maxAttempts ?? 1),
+    eventCount: Number(stability?.eventCount ?? 0),
+    selected: stability !== undefined,
   };
 }
 

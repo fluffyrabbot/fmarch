@@ -51,6 +51,7 @@ import {
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
+  devTestGameLiveProofCommand,
 } from "./dev_test_game_next_action.mjs";
 import {
   assertDevTestGameProofGraph,
@@ -299,7 +300,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
     proofArtifact: nextActionPath,
-    dependsOn: ["target/dev-test-game/spine-manifest.json"],
+    dependsOn: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/ops-artifacts.json",
+      "target/dev-test-game/release-readiness-checklist.json",
+    ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
     script: nextActionAdminProofCommand,
@@ -525,6 +530,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   const freshAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
       unproven: [
         {
@@ -543,8 +549,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assertDevTestGameNextAction(freshAction);
   assert.deepEqual(freshAction.nextAction, {
-    command:
-      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    command: devTestGameLiveProofCommand,
     reason: "release-readiness-unproven",
     status: "ready",
     unproven: {
@@ -563,6 +568,18 @@ test("dev test-game next-action derives one local recovery command from the mani
     selectedArtifactId: null,
     candidates: [],
   });
+  assert.deepEqual(freshAction.stabilityTrace, {
+    strategy: "proof-stability-before-readiness",
+    status: "clean",
+    hostConfirmClicks: 55,
+    retryClickCount: 0,
+    domFallbackCount: 0,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: 1,
+    eventCount: 0,
+    selected: false,
+  });
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
     candidateCount: 1,
@@ -574,8 +591,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         status: "unproven",
         priority: 0,
         selected: true,
-        command:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        command: devTestGameLiveProofCommand,
         buildSlice:
           "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
         proofTarget: "target/dev-test-game/proof-run.json",
@@ -586,6 +602,113 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
     ],
   });
+});
+
+test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {
+  const freshManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+
+  const action = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture({
+      proofStability: {
+        status: "passed",
+        hostConfirmClicks: {
+          total: 55,
+          firstClickCount: 53,
+          retryClickCount: 1,
+          domFallbackCount: 1,
+          forceFallbackCount: 0,
+          failureCount: 0,
+          maxAttempts: 3,
+          byAction: { resolve_phase: 2 },
+          byRole: { host: 2 },
+          events: [
+            {
+              actionId: "resolve_phase",
+              roleLabel: "host",
+              method: "playwright-retry",
+              attempts: 2,
+            },
+            {
+              actionId: "extend_deadline",
+              roleLabel: "cohost",
+              method: "dom-fallback",
+              attempts: 3,
+            },
+          ],
+        },
+      },
+    }),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [
+        {
+          id: "exhaustive-race-coverage",
+          status: "unproven",
+          requiredEvidence: "Broader concurrent command race matrix",
+        },
+      ],
+    }),
+  });
+
+  assertDevTestGameNextAction(action);
+  assert.deepEqual(action.nextAction, {
+    command: devTestGameLiveProofCommand,
+    reason: "harness-stability-drift",
+    status: "blocked",
+    stability: {
+      source: "target/dev-test-game/ops-artifacts.json",
+      hostConfirmClicks: 55,
+      retryClickCount: 1,
+      domFallbackCount: 1,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 3,
+      eventCount: 2,
+      buildSlice:
+        "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
+      proofTarget: "target/dev-test-game/session.json",
+    },
+  });
+  assert.deepEqual(action.stabilityTrace, {
+    strategy: "proof-stability-before-readiness",
+    status: "drifted",
+    hostConfirmClicks: 55,
+    retryClickCount: 1,
+    domFallbackCount: 1,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: 3,
+    eventCount: 2,
+    selected: true,
+  });
+  assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
 });
 
 test("dev test-game next-action prioritizes development-spine recovery over manifest order", () => {
@@ -636,8 +759,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
 
   assertDevTestGameNextAction(staleAction);
   assert.deepEqual(staleAction.nextAction, {
-    command:
-      "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    command: devTestGameLiveProofCommand,
     reason: "artifact-not-fresh",
     status: "blocked",
     artifact: {
@@ -664,7 +786,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         "stale",
         0,
         true,
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        devTestGameLiveProofCommand,
       ],
       [2, "release", "missing", 15, false, "npm run test:dev-test-game-release-admin-proof"],
       [3, "next-action", "missing", 10000, false, "npm run test:dev-test-game-admin-spine"],
@@ -765,7 +887,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "freshness-dashboard",
         "target/dev-test-game/proof-freshness-admin-proof.json",
         "/admin/audit/local-proof-freshness?game=<seeded-game>",
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        devTestGameLiveProofCommand,
       ],
       [
         "next-action",
@@ -6613,6 +6735,86 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function devTestGameOpsArtifactsFixture({
+  proofStability = {
+    status: "passed",
+    hostConfirmClicks: {
+      total: 55,
+      firstClickCount: 55,
+      retryClickCount: 0,
+      domFallbackCount: 0,
+      forceFallbackCount: 0,
+      failureCount: 0,
+      maxAttempts: 1,
+      byAction: { resolve_phase: 20, extend_deadline: 35 },
+      byRole: { host: 30, cohost: 25 },
+      events: [],
+    },
+  },
+} = {}) {
+  return {
+    version: 1,
+    proof: "dev-test-game-ops-artifacts",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-ops-artifacts",
+    proofBoundary: "Local artifact bundle.",
+    generatedFrom: {
+      sessionJson: "target/dev-test-game/session.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      readinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
+    },
+    run: {
+      name: "midsummer",
+      game: "midsummer",
+      verificationStatus: "passed",
+      seedCommandCount: 22,
+      roleCount: 6,
+    },
+    roles: {},
+    proofRun: {
+      status: "passed",
+      laneCount: 104,
+      lanes: [],
+      nonClaims: [],
+    },
+    proofStability,
+    readiness: {
+      status: "not_ready",
+      releaseReady: false,
+      productionReady: false,
+      localChecks: [],
+      unproven: [],
+    },
+    artifacts: {
+      session: { path: "target/dev-test-game/session.json" },
+      proofRun: { path: "target/dev-test-game/proof-run.json" },
+      readiness: { path: "target/dev-test-game/release-readiness-checklist.json" },
+    },
+    checks: [
+      { id: "source-artifacts-checksummed", status: "passed" },
+      { id: "role-entrypoints-redacted", status: "passed" },
+      { id: "proof-lanes-summarized", status: "passed" },
+      {
+        id: "proof-stability-summarized",
+        status: "passed",
+        hostConfirmClicks: proofStability.hostConfirmClicks.total,
+        retryClickCount: proofStability.hostConfirmClicks.retryClickCount,
+        domFallbackCount: proofStability.hostConfirmClicks.domFallbackCount,
+        forceFallbackCount: proofStability.hostConfirmClicks.forceFallbackCount,
+      },
+      {
+        id: "release-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
   };
 }
 

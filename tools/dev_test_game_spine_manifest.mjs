@@ -121,7 +121,11 @@ export function buildDevTestGameSpineManifest({
       nextAction: {
         script: nextActionCommand,
         proofArtifact: nextActionPath,
-        dependsOn: [spineManifestPath],
+        dependsOn: [
+          spineManifestPath,
+          "target/dev-test-game/ops-artifacts.json",
+          "target/dev-test-game/release-readiness-checklist.json",
+        ],
       },
       nextActionAdminProof: {
         script: nextActionAdminProofCommand,
@@ -155,9 +159,13 @@ export function buildDevTestGameSpineManifest({
         label: "Next action receipt",
         command: nextActionCommand,
         path: nextActionPath,
-        dependsOn: [spineManifestPath],
+        dependsOn: [
+          spineManifestPath,
+          "target/dev-test-game/ops-artifacts.json",
+          "target/dev-test-game/release-readiness-checklist.json",
+        ],
         boundary:
-          "Terminal local receipt that chooses one upstream freshness or recovery command from the manifest.",
+          "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, and release-readiness checklist.",
       },
       {
         id: "next-action-admin-proof",
@@ -443,7 +451,9 @@ function assertTerminalArtifacts(terminalArtifacts) {
     nextAction?.command !== nextActionCommand ||
     nextAction.path !== nextActionPath ||
     !Array.isArray(nextAction.dependsOn) ||
-    !nextAction.dependsOn.includes(spineManifestPath)
+    !nextAction.dependsOn.includes(spineManifestPath) ||
+    !nextAction.dependsOn.includes("target/dev-test-game/ops-artifacts.json") ||
+    !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json")
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }

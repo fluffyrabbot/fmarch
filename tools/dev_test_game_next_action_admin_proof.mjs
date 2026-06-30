@@ -59,6 +59,7 @@ await runAdminAuditProof({
       actionStatus: source.nextAction.nextAction.status,
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
+      stabilityStatus: source.nextAction.stabilityTrace.status,
       selectionTrace: {
         strategy: source.nextAction.selectionTrace.strategy,
         candidateCount: source.nextAction.selectionTrace.candidateCount,
@@ -75,6 +76,15 @@ await runAdminAuditProof({
         candidateIds: source.nextAction.releaseReadinessTrace.candidates.map(
           (candidate) => candidate.id,
         ),
+      },
+      stabilityTrace: {
+        strategy: source.nextAction.stabilityTrace.strategy,
+        status: source.nextAction.stabilityTrace.status,
+        selected: source.nextAction.stabilityTrace.selected,
+        retryClickCount: source.nextAction.stabilityTrace.retryClickCount,
+        domFallbackCount: source.nextAction.stabilityTrace.domFallbackCount,
+        forceFallbackCount: source.nextAction.stabilityTrace.forceFallbackCount,
+        failureCount: source.nextAction.stabilityTrace.failureCount,
       },
     },
     adminRoleSurface,
@@ -114,6 +124,14 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof is missing release-readiness trace evidence");
   }
+  if (
+    evidence.generatedFrom?.stabilityTrace?.strategy !==
+      "proof-stability-before-readiness" ||
+    !["clean", "drifted"].includes(evidence.generatedFrom.stabilityTrace.status) ||
+    typeof evidence.generatedFrom.stabilityTrace.selected !== "boolean"
+  ) {
+    throw new Error("next-action admin proof is missing stability trace evidence");
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -132,6 +150,9 @@ function requiredChecksForNextAction(nextAction) {
       nextAction.nextAction.unproven.id,
       "release-readiness-selection-trace",
     );
+  }
+  if (nextAction.nextAction.stability?.source !== undefined) {
+    checks.push("proof-stability-drift");
   }
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
@@ -152,6 +173,9 @@ function requiredChecksForEvidence(evidence) {
       : []),
     ...(typeof evidence.generatedFrom?.unprovenId === "string"
       ? [evidence.generatedFrom.unprovenId, "release-readiness-selection-trace"]
+      : []),
+    ...(evidence.generatedFrom?.stabilityStatus === "drifted"
+      ? ["proof-stability-drift"]
       : []),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
       ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)
