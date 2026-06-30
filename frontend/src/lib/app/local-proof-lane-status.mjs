@@ -24,6 +24,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-host-resolve",
   "stale-host-resolve-reload",
   "stale-host-resolve-reconnect-recovery",
+  "stale-host-advance",
   "stale-host-advance-reconnect-recovery",
   "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline-reconnect-recovery",
@@ -102,6 +103,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
     case "stale-host-resolve-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
+    case "stale-host-advance":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-advance-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
     case "stale-host-deadline-reconnect-recovery":

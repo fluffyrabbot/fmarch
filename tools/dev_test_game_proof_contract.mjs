@@ -7011,6 +7011,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
     ),
     lane("stale-host-advance", "Stale host advance rejects after live unlock", {
       rejectError: hardening.staleHostAdvance?.reject?.error ?? null,
+      roleUrl: hardening.staleHostAdvance?.setup?.roleUrl ?? null,
+      staleClickActionId:
+        hardening.staleHostAdvance?.staleClickBrowserProof?.clickedActionId ??
+        null,
+      staleClickReceipt:
+        hardening.staleHostAdvance?.staleClickBrowserProof?.receiptStatusText ??
+        null,
+      staleClickRefreshKeys:
+        hardening.staleHostAdvance?.staleClickBrowserProof?.dispatchRefreshKeys ??
+        null,
       stalePhase: hardening.staleHostAdvance?.setup?.stalePhase?.id ?? null,
       liveUnlockSeqs:
         hardening.staleHostAdvance?.liveUnlock?.commandStatus?.streamSeqs ?? null,
@@ -7019,6 +7029,33 @@ export function buildDevTestGameProofRun(session, options = {}) {
       phaseActions: hardening.staleHostAdvance?.phaseActionsAfterReject ?? null,
       passed:
         hardening.staleHostAdvance?.status === "passed" &&
+        typeof hardening.staleHostAdvance?.setup?.roleUrl === "string" &&
+        hardening.staleHostAdvance?.setup?.roleUrl.includes(
+          `/g/${session?.game ?? ""}/host`,
+        ) === true &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.roleUrl ===
+          hardening.staleHostAdvance?.setup?.roleUrl &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.clickedActionId ===
+          "advance_phase" &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.receiptStatusText?.includes(
+          "Reject InvalidTarget",
+        ) === true &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseAfterReject?.id ===
+          "D02" &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseAfterReject
+          ?.locked === false &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
+          "resolve_phase",
+        ) === true &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
+          "lock_thread",
+        ) === true &&
+        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
+          "advance_phase",
+        ) === false &&
         hardening.staleHostAdvance?.setup?.stalePhase?.id === "D02" &&
         hardening.staleHostAdvance?.setup?.stalePhase?.locked === true &&
         hardening.staleHostAdvance?.setup?.phaseActions?.includes(

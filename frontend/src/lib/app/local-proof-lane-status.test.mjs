@@ -134,6 +134,18 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
+      id: "stale-host-advance",
+      status: "passed",
+      evidence: {
+        rejectError: "InvalidTarget",
+        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+        locked: false,
+      },
+    }),
+    "passed: Reject InvalidTarget, role URL true, locked false",
+  );
+  assert.equal(
+    hardeningLaneStatus({
       id: "stale-host-deadline-reconnect-recovery",
       status: "passed",
       evidence: {
@@ -207,6 +219,15 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
+        id: "stale-host-advance",
+        status: "passed",
+        evidence: {
+          rejectError: "InvalidTarget",
+          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+          locked: false,
+        },
+      },
+      {
         id: "stale-host-advance-reconnect-recovery",
         status: "passed",
         evidence: {
@@ -266,6 +287,10 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
       "stale-host-resolve-reconnect-recovery"
     ],
     "passed: reconnecting -> recovered, locked true",
+  );
+  assert.equal(
+    hardeningHighlightedLaneEvidence(proofRun)["stale-host-advance"],
+    "passed: Reject InvalidTarget, role URL true, locked false",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)[

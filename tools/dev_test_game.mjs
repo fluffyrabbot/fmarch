@@ -1342,6 +1342,7 @@ async function freezeStaleHostAdvancePage({ staleHostAdvancePage, game, frontend
   const stalePhase = await staleHostAdvancePage.evaluate(
     () => window.__fmarchHostProjection?.phase,
   );
+  const roleUrl = staleHostAdvancePage.url();
   const phaseActions = await visibleHostControlActions(staleHostAdvancePage, "phase");
   const deadlineActions = await visibleHostControlActions(staleHostAdvancePage, "deadline");
   const closedStatus = await staleHostAdvancePage.evaluate(() =>
@@ -1366,6 +1367,7 @@ async function freezeStaleHostAdvancePage({ staleHostAdvancePage, game, frontend
     );
   }
   return {
+    roleUrl,
     stalePhase,
     phaseActions,
     deadlineActions,
@@ -12245,6 +12247,18 @@ async function submitStaleHostAdvanceRecovery({
     () => window.__fmarchHostCommandDispatchBridgePlan,
   );
   const hostStateAfterReject = await fetchHostConsoleState({ apiBaseUrl, game });
+  const staleClickBrowserProof = {
+    roleUrl: staleHostAdvanceSetup.roleUrl,
+    clickedActionId: actionId,
+    triggerTestId: `critical-host-action-${actionId}`,
+    receiptStatusText: activityStatusText,
+    activityRow,
+    dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
+    phaseAfterReject,
+    phaseActionsAfterReject,
+    deadlineActionsAfterReject,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
   const reloadResponse = await staleHostAdvancePage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
@@ -12299,6 +12313,8 @@ async function submitStaleHostAdvanceRecovery({
     "deadline",
   );
   if (
+    typeof staleHostAdvanceSetup.roleUrl !== "string" ||
+    !staleHostAdvanceSetup.roleUrl.includes(`/g/${game}/host`) ||
     restoreAfterStaleHostResolve?.commandStatus?.state !== "ack" ||
     !Array.isArray(restoreAfterStaleHostResolve?.commandStatus?.streamSeqs) ||
     restoreAfterStaleHostResolve.commandStatus.streamSeqs.length === 0 ||
@@ -12320,6 +12336,15 @@ async function submitStaleHostAdvanceRecovery({
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== actionId ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.roleUrl !== staleHostAdvanceSetup.roleUrl ||
+    staleClickBrowserProof.clickedActionId !== actionId ||
+    staleClickBrowserProof.receiptStatusText !== activityStatusText ||
+    staleClickBrowserProof.dispatchRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.phaseAfterReject?.id !== "D02" ||
+    staleClickBrowserProof.phaseAfterReject?.locked !== false ||
+    !staleClickBrowserProof.phaseActionsAfterReject.includes("resolve_phase") ||
+    !staleClickBrowserProof.phaseActionsAfterReject.includes("lock_thread") ||
+    staleClickBrowserProof.phaseActionsAfterReject.includes("advance_phase") ||
     hostStateAfterReject.phase?.phase_id !== "D02" ||
     hostStateAfterReject.phase?.locked !== false ||
     staleHostAdvanceReloadAfterReject.routeResponseStatus !== 200 ||
@@ -12365,6 +12390,7 @@ async function submitStaleHostAdvanceRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
+        staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleHostAdvanceReloadAfterReject,
         reconnectAfterReject,
@@ -12386,6 +12412,7 @@ async function submitStaleHostAdvanceRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
+    staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleHostAdvanceReloadAfterReject,
     reconnectAfterReject,
