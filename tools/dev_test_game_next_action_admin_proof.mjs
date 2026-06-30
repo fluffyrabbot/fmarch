@@ -17,6 +17,10 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
+  assertAdminAuditRelatedHandoff,
+  requiredRelatedDestinationsForHandoff,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
+import {
   hostedMatrixHandoffSummary,
   selectedNextActionProofGraphNodeStatus,
   selectedNextActionProofGraphNodeSummary,
@@ -75,10 +79,12 @@ await runAdminAuditProof({
         source.proofGraph,
       ),
       requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
-      requiredRelatedDestinations: requiredRelatedDestinationsForNextAction({
-        nextAction: source.nextAction,
-        hostedMatrix: source.hostedMatrix,
-      }),
+      requiredRelatedDestinations: requiredRelatedDestinationsForHandoff(
+        hostedMatrixHandoffSummary({
+          nextAction: source.nextAction,
+          hostedMatrix: source.hostedMatrix,
+        }),
+      ),
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -393,31 +399,11 @@ export function assertNextActionAdminProof(evidence) {
     throw new Error("next-action admin proof missing selected graph node row");
   }
   const relatedHandoff = evidence.generatedFrom?.relatedHandoff;
-  if (relatedHandoff !== null && relatedHandoff !== undefined) {
-    const destination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (item) =>
-          item.linkId === relatedHandoff.linkId &&
-          item.auditId === relatedHandoff.auditId,
-      ) ?? null;
-    if (destination === null) {
-      throw new Error("next-action admin proof did not follow selected handoff");
-    }
-    for (const checkId of relatedHandoff.requiredCheckIds ?? []) {
-      if (!destination.visibleChecks?.includes(checkId)) {
-        throw new Error(
-          `next-action handoff destination missing visible check: ${checkId}`,
-        );
-      }
-    }
-    for (const unprovenId of relatedHandoff.requiredUnprovenIds ?? []) {
-      if (!destination.visibleUnproven?.includes(unprovenId)) {
-        throw new Error(
-          `next-action handoff destination missing unproven row: ${unprovenId}`,
-        );
-      }
-    }
-  }
+  assertAdminAuditRelatedHandoff({
+    adminRoleSurface: evidence.adminRoleSurface,
+    handoff: relatedHandoff,
+    proofName: "next-action admin proof",
+  });
   return evidence;
 }
 
@@ -487,22 +473,6 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
     : {
         "selected-proof-graph-node": selectedNodeStatus,
       };
-}
-
-function requiredRelatedDestinationsForNextAction({ nextAction, hostedMatrix }) {
-  const summary = hostedMatrixHandoffSummary({ nextAction, hostedMatrix });
-  return summary === null
-    ? []
-    : [
-        {
-          linkId: summary.linkId,
-          auditId: summary.auditId,
-          requiredChecks: summary.requiredCheckIds,
-          requiredCheckStatuses: summary.requiredCheckStatuses,
-          requiredUnproven: summary.requiredUnprovenIds,
-          requiredRelatedLinks: summary.requiredRelatedLinkIds,
-        },
-      ];
 }
 
 function requiredChecksForEvidence(evidence) {

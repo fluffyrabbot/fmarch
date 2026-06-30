@@ -27,8 +27,18 @@ export function selectedNextActionProofGraphNodeStatus({
 }
 
 export function hostedMatrixHandoffSummary({ nextAction, hostedMatrix }) {
-  const linkId = nextAction?.nextAction?.unproven?.proofGraphNodeId;
-  const roleUrl = nextAction?.nextAction?.unproven?.roleUrl;
+  return hostedMatrixHandoffSummaryForRoleLink({
+    linkId: nextAction?.nextAction?.unproven?.proofGraphNodeId,
+    roleUrl: nextAction?.nextAction?.unproven?.roleUrl,
+    hostedMatrix,
+  });
+}
+
+export function hostedMatrixHandoffSummaryForRoleLink({
+  linkId,
+  roleUrl,
+  hostedMatrix,
+}) {
   if (
     linkId !== "admin-proof:hosted-concurrent-race-matrix" ||
     typeof roleUrl !== "string" ||

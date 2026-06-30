@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   hostedMatrixHandoffSummary,
+  hostedMatrixHandoffSummaryForRoleLink,
   selectedNextActionProofGraphNodeStatus,
   selectedNextActionProofGraphNodeSummary,
 } from "./local-proof-handoff-status.mjs";
@@ -43,30 +44,41 @@ test("selected next-action graph node summary fails closed for missing graph nod
 });
 
 test("hosted matrix handoff summary derives destination proof assertions", () => {
+  const expected = {
+    linkId: "admin-proof:hosted-concurrent-race-matrix",
+    auditId: "local-hosted-concurrent-race-matrix",
+    requiredCheckIds: [
+      "hosted-like-api-frontend-target",
+      "real-hosted-deployment",
+      "player-vote-change",
+      "player-night-action",
+    ],
+    requiredCheckStatuses: {
+      "real-hosted-deployment": "unproven",
+    },
+    requiredUnprovenIds: [
+      "hosted-concurrent-race-matrix",
+      "remaining-gap-1",
+      "remaining-gap-2",
+    ],
+    requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
+  };
+
   assert.deepEqual(
     hostedMatrixHandoffSummary({
       nextAction: nextActionFixture(),
       hostedMatrix: hostedMatrixFixture(),
     }),
-    {
+    expected,
+  );
+  assert.deepEqual(
+    hostedMatrixHandoffSummaryForRoleLink({
       linkId: "admin-proof:hosted-concurrent-race-matrix",
-      auditId: "local-hosted-concurrent-race-matrix",
-      requiredCheckIds: [
-        "hosted-like-api-frontend-target",
-        "real-hosted-deployment",
-        "player-vote-change",
-        "player-night-action",
-      ],
-      requiredCheckStatuses: {
-        "real-hosted-deployment": "unproven",
-      },
-      requiredUnprovenIds: [
-        "hosted-concurrent-race-matrix",
-        "remaining-gap-1",
-        "remaining-gap-2",
-      ],
-      requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
-    },
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      hostedMatrix: hostedMatrixFixture(),
+    }),
+    expected,
   );
 });
 

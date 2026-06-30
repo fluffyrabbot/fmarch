@@ -3,12 +3,21 @@ import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence,
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  assertAdminAuditRelatedHandoff,
+  requiredRelatedDestinationsForHandoff,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
+import { hostedMatrixHandoffSummaryForRoleLink } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -24,9 +33,15 @@ const adminSpineProofPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
     "target/dev-test-game/admin-spine-proof.json",
 );
+const hostedMatrixPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX ??
+    devTestGameHostedConcurrentRaceMatrixPath,
+);
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
+const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
 const hostedMatrixProofNodeId = "admin-proof:hosted-concurrent-race-matrix";
 
@@ -37,6 +52,7 @@ await runAdminAuditProof({
   envOverrides: {
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
   },
   loadSource: async () => {
     const adminSpineProof = await readJson(adminSpineProofPath);
@@ -48,6 +64,9 @@ await runAdminAuditProof({
       adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
         path: adminSpineProofRelativePath,
       }),
+      hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+        await readJson(hostedMatrixPath),
+      ),
     };
   },
   prove: async ({ browser, frontendBaseUrl, source }) =>
@@ -60,6 +79,12 @@ await runAdminAuditProof({
       requiredRelatedLinks: source.proofGraph.nodes
         .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
         .map((node) => node.id),
+      requiredRelatedDestinations: requiredRelatedDestinationsForHandoff(
+        hostedMatrixProofGraphHandoff({
+          proofGraph: source.proofGraph,
+          hostedMatrix: source.hostedMatrix,
+        }),
+      ),
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -74,11 +99,16 @@ await runAdminAuditProof({
       proofGraph: proofGraphRelativePath,
       proofRun: proofRunRelativePath,
       adminSpineProof: adminSpineProofRelativePath,
+      hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
       game: source.proofRun.session.game,
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
       edgeCount: source.proofGraph.edges.length,
       adminProofSurfaceIds: source.adminSpineProof.proofIds,
       requiredHostedMatrixProofNodeId: hostedMatrixProofNodeId,
+      relatedHandoff: hostedMatrixProofGraphHandoff({
+        proofGraph: source.proofGraph,
+        hostedMatrix: source.hostedMatrix,
+      }),
     },
     adminRoleSurface,
   }),
@@ -123,5 +153,21 @@ export function assertProofGraphAdminProof(evidence) {
   ) {
     throw new Error("proof graph admin proof missing hosted matrix related link");
   }
+  assertAdminAuditRelatedHandoff({
+    adminRoleSurface: evidence.adminRoleSurface,
+    handoff: evidence.generatedFrom?.relatedHandoff,
+    proofName: "proof graph admin proof",
+  });
   return evidence;
+}
+
+function hostedMatrixProofGraphHandoff({ proofGraph, hostedMatrix }) {
+  const node =
+    proofGraph.nodes.find((candidate) => candidate?.id === hostedMatrixProofNodeId) ??
+    null;
+  return hostedMatrixHandoffSummaryForRoleLink({
+    linkId: node?.id,
+    roleUrl: node?.roleUrl,
+    hostedMatrix,
+  });
 }
