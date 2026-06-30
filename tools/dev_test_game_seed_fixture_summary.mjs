@@ -508,6 +508,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "After a stale host ResolvePhase rejects PhaseLocked, the host role URL reloads to locked D02 truth with current unlock/advance controls and API phase state matching the console.",
     }),
     scenario({
+      id: "stale-host-resolve-reconnect-recovery",
+      title: "Stale host resolve reconnect",
+      role: "host",
+      provenBy: ["stale-host-resolve-reconnect-recovery"].filter(hasLane),
+      note: "After stale host ResolvePhase recovery reloads to locked D02 truth, the same host role URL drops its live projection, reconnects, and recovers locked D02 with current unlock/advance controls.",
+    }),
+    scenario({
       id: "concurrent-host-advance-race",
       title: "Concurrent host advance race",
       role: "host",
@@ -892,6 +899,7 @@ function demoScenarios({ roles, laneIds }) {
         "concurrent-host-mixed-advance-race-reload",
         "stale-host-resolve",
         "stale-host-resolve-reload",
+        "stale-host-resolve-reconnect-recovery",
         "stale-host-advance",
         "stale-host-advance-reload",
         "stale-host-deadline",

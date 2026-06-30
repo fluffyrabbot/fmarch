@@ -49,6 +49,7 @@ const requiredScenarios = [
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
   "stale-host-resolve-reload",
+  "stale-host-resolve-reconnect-recovery",
   "concurrent-host-advance-race",
   "concurrent-host-advance-race-reload",
   "stale-host-advance-reload",

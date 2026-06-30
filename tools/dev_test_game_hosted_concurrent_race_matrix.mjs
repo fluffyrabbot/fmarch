@@ -32,6 +32,7 @@ const reconnectLaneIds = Object.freeze([
   "replacement-stale-private-post-reconnect",
   "stale-action-reconnect-recovery",
   "stale-host-complete-reconnect-recovery",
+  "stale-host-resolve-reconnect-recovery",
 ]);
 
 const staleConflictLaneIds = Object.freeze([

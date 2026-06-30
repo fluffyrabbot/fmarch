@@ -23,6 +23,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "concurrent-host-resolve-race-reload",
   "stale-host-resolve",
   "stale-host-resolve-reload",
+  "stale-host-resolve-reconnect-recovery",
 ]);
 
 export function coreLoopHighlightedLaneEvidence(proofRun) {
@@ -96,6 +97,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-resolve-reload":
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
+    case "stale-host-resolve-reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
     default:
       return status;
   }

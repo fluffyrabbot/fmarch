@@ -111,6 +111,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-mixed-advance-race-reload",
   "stale-host-resolve",
   "stale-host-resolve-reload",
+  "stale-host-resolve-reconnect-recovery",
   "stale-host-advance",
   "stale-host-advance-reload",
   "stale-host-deadline",
@@ -6876,6 +6877,56 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.apiPhaseAfterReload?.phase_id === "D02" &&
           hardening.staleHostResolve?.staleHostResolveReloadAfterReject
             ?.apiPhaseAfterReload?.locked === true,
+      },
+    ),
+    lane(
+      "stale-host-resolve-reconnect-recovery",
+      "Stale host resolve recovery reconnects locked phase console",
+      {
+        game: session.game ?? null,
+        reconnectingState:
+          hardening.staleHostResolve?.reconnectAfterReject?.reconnectingStatus
+            ?.state ?? null,
+        recoveryState:
+          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state ?? null,
+        recoveredPhase:
+          hardening.staleHostResolve?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.id ?? null,
+        recoveredLocked:
+          hardening.staleHostResolve?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.locked ?? null,
+        phaseActions:
+          hardening.staleHostResolve?.phaseActionsAfterReconnect ?? null,
+        passed:
+          hardening.staleHostResolve?.status === "passed" &&
+          hardening.staleHostResolve?.reject?.error === "PhaseLocked" &&
+          hardening.staleHostResolve?.reconnectAfterReject?.status === "passed" &&
+          hardening.staleHostResolve?.reconnectAfterReject?.reconnectingStatus
+            ?.state === "reconnecting" &&
+          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state === "recovered" &&
+          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.attempt === 1 &&
+          hardening.staleHostResolve?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.id === "D02" &&
+          hardening.staleHostResolve?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.locked === true &&
+          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
+            "unlock_thread",
+          ) === true &&
+          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
+            "advance_phase",
+          ) === true &&
+          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
+            "resolve_phase",
+          ) === false &&
+          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
+            "lock_thread",
+          ) === false &&
+          hardening.staleHostResolve?.deadlineActionsAfterReconnect?.includes(
+            "extend_deadline",
+          ) === true,
       },
     ),
     lane("stale-host-advance", "Stale host advance rejects after live unlock", {
