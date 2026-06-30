@@ -4061,6 +4061,8 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
     typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
     !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "host:N05:complete_game:ack:921",
     ) ||
@@ -4072,6 +4074,9 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:reload:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "normalPlayer:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
@@ -4122,6 +4127,23 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     proof: completedGameEndgameSurface.completedPlayerReloadProof,
     expectedGame,
     sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    expectedBoundaryText: "completed action-player role URL reloaded",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertCoreLoopCompletedPlayerReloadProof({
+    proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+    expectedSlot: "slot-4",
+    expectedBoundaryText: "completed normal-player role URL reloaded",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
   });
   assertCoreLoopStaleCompletedGameVoteRecoveryProof({
     proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
@@ -4219,8 +4241,11 @@ function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
 
 function assertCoreLoopCompletedPlayerReloadProof({
   proof,
-  expectedGame,
   sourceRoleUrl,
+  expectedSlot,
+  expectedBoundaryText,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
 }) {
   if (
     proof?.status !== "passed" ||
@@ -4246,22 +4271,22 @@ function assertCoreLoopCompletedPlayerReloadProof({
     if (
       snapshot?.checkpoint?.phaseId !== "N05" ||
       snapshot.checkpoint.phaseState !== "open" ||
-      snapshot.checkpoint.actorSlot !== "slot-7" ||
+      snapshot.checkpoint.actorSlot !== expectedSlot ||
       snapshot.checkpoint.actionState !== "disabled:game complete" ||
       snapshot.checkpoint.receiptState !== "idle" ||
-      snapshot.commandState?.actorSlot !== "slot-7" ||
+      snapshot.commandState?.actorSlot !== expectedSlot ||
       snapshot.commandState?.phase?.phaseId !== "N05" ||
       snapshot.commandState?.gameCompleted !== true ||
       snapshot.commandState?.actions?.length !== 0 ||
       snapshot.commandState?.voteTargets?.length !== 0 ||
       !String(snapshot.commandState?.boundary ?? "").includes(
-        "completed action-player role URL reloaded",
+        expectedBoundaryText,
       ) ||
       snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
       snapshot.coldLoadEndpoints?.commandStateEndpoint !==
-        `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7` ||
+        expectedCommandStateEndpoint ||
       snapshot.coldLoadEndpoints?.notificationsEndpoint !==
-        `/games/${expectedGame}/notifications?principal_user_id=player_mira` ||
+        expectedNotificationsEndpoint ||
       snapshot.enabledMutatingButtons?.length !== 0 ||
       !snapshot.disabledMutatingButtons?.some(
         (button) => button.action === "submit_post" && button.disabled === true,

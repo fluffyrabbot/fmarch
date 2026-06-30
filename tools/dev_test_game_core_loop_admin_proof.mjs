@@ -261,6 +261,7 @@ await runAdminAuditProof({
       frontendBaseUrl,
       hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
       actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+      normalPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
     });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
@@ -1701,6 +1702,7 @@ async function proveCompletedGameEndgameSurface({
   frontendBaseUrl,
   hostRoleUrl,
   actionPlayerRoleUrl,
+  normalPlayerRoleUrl,
 }) {
   const hostCompleteProof = await proveHostCompleteGameFromNightFive({
     browser,
@@ -1738,6 +1740,21 @@ async function proveCompletedGameEndgameSurface({
     browser,
     frontendBaseUrl,
     roleUrl: actionPlayerRoleUrl,
+    cookieValue: "fixture-player",
+    commandState: seededCompletedActionPlayerCommandState({
+      boundary:
+        "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
+    }),
+  });
+  const completedNormalPlayerReloadProof = await proveCompletedPlayerRoleReload({
+    browser,
+    frontendBaseUrl,
+    roleUrl: normalPlayerRoleUrl,
+    cookieValue: "fixture-normal",
+    commandState: seededCompletedNormalPlayerCommandState({
+      boundary:
+        "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
+    }),
   });
   const staleCompletedVoteRecoveryProof =
     await proveStaleCompletedGameVoteRecovery({
@@ -1749,13 +1766,15 @@ async function proveCompletedGameEndgameSurface({
     status: "passed",
     sourceHostRoleUrl: String(hostRoleUrl),
     sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
+    sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof,
     completedHostReloadProof,
     actionPlayerCompletedProof,
     completedPlayerReloadProof,
+    completedNormalPlayerReloadProof,
     staleCompletedVoteRecoveryProof,
     releaseReady: false,
     productionReady: false,
@@ -2657,15 +2676,14 @@ async function proveCompletedPlayerRoleReload({
   browser,
   frontendBaseUrl,
   roleUrl,
+  cookieValue,
+  commandState,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
   try {
     await installPostDayThreePlayerBrowserRoutes(page, {
-      commandState: seededCompletedActionPlayerCommandState({
-        boundary:
-          "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
-      }),
+      commandState,
       notifications: [],
       threadBody: "The game is complete.",
       threadSeq: 921,
@@ -2679,7 +2697,7 @@ async function proveCompletedPlayerRoleReload({
     await page.context().addCookies([
       {
         name: "fmarch_fixture_session",
-        value: "fixture-player",
+        value: cookieValue,
         url: frontendBaseUrl,
         httpOnly: true,
         sameSite: "Lax",
@@ -8755,6 +8773,27 @@ function seededCompletedActionPlayerCommandState({ boundary }) {
   };
 }
 
+function seededCompletedNormalPlayerCommandState({ boundary }) {
+  return {
+    game: "seeded-completed-normal-player",
+    actorSlot: "slot-4",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "vanilla_townie",
+    gameCompleted: true,
+    phase: {
+      phaseId: "N05",
+      phaseKind: "Night",
+      phaseNumber: 5,
+      locked: false,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -11386,6 +11425,8 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
     typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
     !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "host:N05:complete_game:ack:921",
     ) ||
@@ -11397,6 +11438,9 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:reload:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "normalPlayer:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
@@ -11456,6 +11500,23 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     proof: completedGameEndgameSurface.completedPlayerReloadProof,
     expectedGame,
     sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    expectedBoundaryText: "completed action-player role URL reloaded",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertCompletedPlayerReloadProof({
+    proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+    expectedSlot: "slot-4",
+    expectedBoundaryText: "completed normal-player role URL reloaded",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
   });
   assertStaleCompletedGameVoteRecoveryProof({
     proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
@@ -11563,8 +11624,11 @@ function assertCompletedHostReloadProof({ proof, sourceRoleUrl }) {
 
 function assertCompletedPlayerReloadProof({
   proof,
-  expectedGame,
   sourceRoleUrl,
+  expectedSlot,
+  expectedBoundaryText,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
 }) {
   if (
     proof?.status !== "passed" ||
@@ -11594,22 +11658,22 @@ function assertCompletedPlayerReloadProof({
     if (
       snapshot?.checkpoint?.phaseId !== "N05" ||
       snapshot.checkpoint.phaseState !== "open" ||
-      snapshot.checkpoint.actorSlot !== "slot-7" ||
+      snapshot.checkpoint.actorSlot !== expectedSlot ||
       snapshot.checkpoint.actionState !== "disabled:game complete" ||
       snapshot.checkpoint.receiptState !== "idle" ||
-      snapshot.commandState?.actorSlot !== "slot-7" ||
+      snapshot.commandState?.actorSlot !== expectedSlot ||
       snapshot.commandState?.phase?.phaseId !== "N05" ||
       snapshot.commandState?.gameCompleted !== true ||
       snapshot.commandState?.actions?.length !== 0 ||
       snapshot.commandState?.voteTargets?.length !== 0 ||
       !String(snapshot.commandState?.boundary ?? "").includes(
-        "completed action-player role URL reloaded",
+        expectedBoundaryText,
       ) ||
       snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
       snapshot.coldLoadEndpoints?.commandStateEndpoint !==
-        `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7` ||
+        expectedCommandStateEndpoint ||
       snapshot.coldLoadEndpoints?.notificationsEndpoint !==
-        `/games/${expectedGame}/notifications?principal_user_id=player_mira` ||
+        expectedNotificationsEndpoint ||
       snapshot.enabledMutatingButtons?.length !== 0 ||
       !snapshot.disabledMutatingButtons?.some(
         (button) => button.action === "submit_post" && button.disabled === true,

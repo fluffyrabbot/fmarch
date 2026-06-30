@@ -11681,13 +11681,48 @@ function completedGameEndgameSurfaceFixture() {
       { action: "submit_post", disabled: true, text: "Post" },
     ],
   };
+  const completedNormalReloadSnapshot = {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      actorSlot: "slot-4",
+      actionState: "disabled:game complete",
+      receiptState: "idle",
+      targetSlots: "",
+    },
+    commandState: {
+      actorSlot: "slot-4",
+      phase: {
+        phaseId: "N05",
+        locked: false,
+      },
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary:
+        "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
+    },
+    notifications: [],
+    dayVoteOutcomes: dayFiveOutcomes,
+    coldLoadEndpoints: {
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_rowan`,
+    },
+    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
+    enabledMutatingButtons: [],
+    disabledMutatingButtons: [
+      { action: "submit_post", disabled: true, text: "Post" },
+    ],
+  };
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11783,6 +11818,22 @@ function completedGameEndgameSurfaceFixture() {
       reloadedResyncSnapshotCommandState: completedReloadSnapshot.commandState,
       initialSnapshot: completedReloadSnapshot,
       reloadedSnapshot: completedReloadSnapshot,
+      rawInviteTokensVisible: false,
+      targetOnlyActionVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    completedNormalPlayerReloadProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/player-rowan`,
+      visitedRolePath: `/g/${game}/player-rowan`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      resyncFromSeq: 921,
+      initialResyncSnapshotCommandState: completedNormalReloadSnapshot.commandState,
+      reloadedResyncSnapshotCommandState: completedNormalReloadSnapshot.commandState,
+      initialSnapshot: completedNormalReloadSnapshot,
+      reloadedSnapshot: completedNormalReloadSnapshot,
       rawInviteTokensVisible: false,
       targetOnlyActionVisible: false,
       releaseReady: false,
