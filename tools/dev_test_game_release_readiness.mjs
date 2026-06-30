@@ -199,6 +199,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
       })
     : undefined;
+  const playerConcurrentActionReloadMilestone = options.raceCoverage
+    ? buildPlayerConcurrentActionReloadMilestone(options.raceCoverage, {
+        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+      })
+    : undefined;
   const raceCoverageAdminProofEvidence = options.raceCoverageAdminProof
     ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
         path:
@@ -459,6 +464,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredCellCount: hostConcurrentRaceReloadMilestone.requiredCellCount,
       coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
     });
+    localChecks.push({
+      id: "local-player-concurrent-action-reload-milestone",
+      label: "Player concurrent action reload coverage",
+      status: "passed",
+      evidence: raceCoverageEvidence.path,
+      proofBoundary:
+        "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
+      cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
+      requiredCellCount: playerConcurrentActionReloadMilestone.requiredCellCount,
+      coveredCellCount: playerConcurrentActionReloadMilestone.coveredCellCount,
+    });
   }
   const unproven = [
     ...(identityAdapterEvidence === undefined
@@ -626,6 +642,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
               gapCount: hostConcurrentRaceReloadMilestone.gapCount,
             },
+            playerConcurrentActionReloadMilestone: {
+              status: playerConcurrentActionReloadMilestone.status,
+              cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
+              requiredCellCount:
+                playerConcurrentActionReloadMilestone.requiredCellCount,
+              coveredCellCount:
+                playerConcurrentActionReloadMilestone.coveredCellCount,
+              gapCount: playerConcurrentActionReloadMilestone.gapCount,
+            },
           }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
@@ -671,6 +696,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       coveredCellCount:
                         hostConcurrentRaceReloadMilestone.coveredCellCount,
                       gapCount: hostConcurrentRaceReloadMilestone.gapCount,
+                    },
+                  }),
+              ...(playerConcurrentActionReloadMilestone === undefined
+                ? {}
+                : {
+                    playerConcurrentActionReloadMilestone: {
+                      status: playerConcurrentActionReloadMilestone.status,
+                      cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
+                      requiredCellCount:
+                        playerConcurrentActionReloadMilestone.requiredCellCount,
+                      coveredCellCount:
+                        playerConcurrentActionReloadMilestone.coveredCellCount,
+                      gapCount: playerConcurrentActionReloadMilestone.gapCount,
                     },
                   }),
               staleConflictMessageMilestone: {
@@ -895,6 +933,42 @@ function buildHostConcurrentRaceReloadMilestone(raceCoverage, { sourcePath }) {
   };
 }
 
+function buildPlayerConcurrentActionReloadMilestone(raceCoverage, { sourcePath }) {
+  assertDevTestGameRaceCoverage(raceCoverage);
+  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
+  const cellIds = [...playerConcurrentActionReloadCellIds];
+  const coveredCellCount = cellIds.filter((cellId) => {
+    const cell = cells.get(cellId);
+    return (
+      cell?.status === "passed" &&
+      typeof cell.reloadLaneId === "string" &&
+      cell.reloadStatus === "passed"
+    );
+  }).length;
+  const gapCount = cellIds.length - coveredCellCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `player concurrent action reload milestone missing covered cells from ${sourcePath}: ${cellIds
+        .filter((cellId) => {
+          const cell = cells.get(cellId);
+          return (
+            cell?.status !== "passed" ||
+            typeof cell.reloadLaneId !== "string" ||
+            cell.reloadStatus !== "passed"
+          );
+        })
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    cellIds,
+    requiredCellCount: cellIds.length,
+    coveredCellCount,
+    gapCount,
+  };
+}
+
 const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
@@ -926,6 +1000,14 @@ const hostConcurrentRaceReloadCellIds = Object.freeze([
   "host-mixed-advance",
   "host-votecount-publication",
   "host-complete-game",
+]);
+
+const playerConcurrentActionReloadCellIds = Object.freeze([
+  "player-vote-change",
+  "player-night-action",
+  "player-vote-vs-host-resolve",
+  "player-action-vs-host-advance",
+  "player-vs-completed-game",
 ]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {

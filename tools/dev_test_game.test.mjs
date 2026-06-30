@@ -644,6 +644,15 @@ test("dev test-game next-action derives one local recovery command from the mani
     gapCount: 0,
     cells: hostConcurrentRaceReloadCellsFixture(),
   });
+  assert.deepEqual(freshAction.playerConcurrentActionReloadTrace, {
+    strategy: "player-concurrent-action-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 5,
+    coveredCellCount: 5,
+    gapCount: 0,
+    cells: playerConcurrentActionReloadCellsFixture(),
+  });
   assert.deepEqual(freshAction.staleConflictMessageTrace, {
     strategy: "stale-conflict-message-before-readiness",
     status: "covered",
@@ -791,6 +800,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
   });
   assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
   assert.equal(action.hostConcurrentRaceReloadTrace.status, "covered");
+  assert.equal(action.playerConcurrentActionReloadTrace.status, "covered");
   assert.equal(action.staleConflictMessageTrace.status, "covered");
   assert.equal(action.hostStaleControlTrace.status, "covered");
 });
@@ -6297,11 +6307,27 @@ test("session card and markdown include role credential URLs and tokens", () => 
       gapCount: 0,
     },
   );
+  assert.deepEqual(
+    raceCoverageReadiness.generatedFrom.playerConcurrentActionReloadMilestone,
+    {
+      status: "passed",
+      cellIds: playerConcurrentActionReloadCellIdsFixture(),
+      requiredCellCount: 5,
+      coveredCellCount: 5,
+      gapCount: 0,
+    },
+  );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-host-concurrent-race-reload-milestone",
     ).coveredCellCount,
     7,
+  );
+  assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-player-concurrent-action-reload-milestone",
+    ).coveredCellCount,
+    5,
   );
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
@@ -7061,6 +7087,56 @@ function hostConcurrentRaceReloadCellsFixture() {
       id: "host-complete-game",
       raceLaneId: "concurrent-host-complete-race",
       reloadLaneId: "concurrent-host-complete-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
+}
+
+function playerConcurrentActionReloadCellIdsFixture() {
+  return [
+    "player-vote-change",
+    "player-night-action",
+    "player-vote-vs-host-resolve",
+    "player-action-vs-host-advance",
+    "player-vs-completed-game",
+  ];
+}
+
+function playerConcurrentActionReloadCellsFixture() {
+  return [
+    {
+      id: "player-vote-change",
+      raceLaneId: "concurrent-vote-race",
+      reloadLaneId: "concurrent-vote-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-night-action",
+      raceLaneId: "concurrent-action-race",
+      reloadLaneId: "concurrent-action-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-vote-vs-host-resolve",
+      raceLaneId: "concurrent-player-vote-resolve-race",
+      reloadLaneId: "concurrent-player-vote-resolve-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-action-vs-host-advance",
+      raceLaneId: "concurrent-player-action-advance-race",
+      reloadLaneId: "concurrent-player-action-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-vs-completed-game",
+      raceLaneId: "concurrent-player-complete-race",
+      reloadLaneId: "public-player-complete-reload",
       reloadStatus: "passed",
       covered: true,
     },

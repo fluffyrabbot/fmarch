@@ -59,6 +59,12 @@ export function buildDevTestGameNextAction(
   const hostConcurrentRaceReloadTrace = buildHostConcurrentRaceReloadTrace(races, {
     source: raceCoverageSource,
   });
+  const playerConcurrentActionReloadTrace = buildPlayerConcurrentActionReloadTrace(
+    races,
+    {
+      source: raceCoverageSource,
+    },
+  );
   const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
@@ -131,7 +137,7 @@ export function buildDevTestGameNextAction(
     generatedAt,
     scope: "local-dev-test-game-next-action",
     proofBoundary:
-      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, race coverage, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, records replacement-race reload milestone coverage, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local next-action receipt derived from the generated dev-test-game spine manifest, ops artifacts, race coverage, and release-readiness checklist. It chooses the highest-priority local artifact recovery command while the development-spine is stale, records replacement, host, and player race-reload milestone coverage, then blocks on saved harness-stability drift from the latest proof run before choosing a local-dev buildable slice from the current unproven release-readiness checklist; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -173,6 +179,14 @@ export function buildDevTestGameNextAction(
               coveredCellCount: hostConcurrentRaceReloadTrace.coveredCellCount,
               gapCount: hostConcurrentRaceReloadTrace.gapCount,
             },
+            playerConcurrentActionReloadSummary: {
+              status: playerConcurrentActionReloadTrace.status,
+              requiredCellCount:
+                playerConcurrentActionReloadTrace.requiredCellCount,
+              coveredCellCount:
+                playerConcurrentActionReloadTrace.coveredCellCount,
+              gapCount: playerConcurrentActionReloadTrace.gapCount,
+            },
           }),
     },
     nextAction,
@@ -181,6 +195,7 @@ export function buildDevTestGameNextAction(
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     hostConcurrentRaceReloadTrace,
+    playerConcurrentActionReloadTrace,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -243,6 +258,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
   assertHostConcurrentRaceReloadTrace(evidence.hostConcurrentRaceReloadTrace);
+  assertPlayerConcurrentActionReloadTrace(evidence.playerConcurrentActionReloadTrace);
   assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
   assertHostStaleControlTrace(evidence.hostStaleControlTrace);
   return evidence;
@@ -479,6 +495,38 @@ function buildHostConcurrentRaceReloadTrace(
   const gapCount = cells.length - coveredCellCount;
   return {
     strategy: "host-concurrent-race-reload-before-readiness",
+    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
+    source: raceCoverage === null ? "" : source,
+    requiredCellCount: cells.length,
+    coveredCellCount,
+    gapCount,
+    cells,
+  };
+}
+
+function buildPlayerConcurrentActionReloadTrace(
+  raceCoverage,
+  { source = devTestGameRaceCoveragePath } = {},
+) {
+  const cells = playerConcurrentActionReloadCellIds.map((id) => {
+    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
+    const reloadLaneId =
+      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
+    const reloadStatus = String(cell?.reloadStatus ?? "missing");
+    const covered =
+      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
+    return {
+      id,
+      raceLaneId: String(cell?.raceLaneId ?? ""),
+      reloadLaneId,
+      reloadStatus,
+      covered,
+    };
+  });
+  const coveredCellCount = cells.filter((cell) => cell.covered).length;
+  const gapCount = cells.length - coveredCellCount;
+  return {
+    strategy: "player-concurrent-action-reload-before-readiness",
     status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
     source: raceCoverage === null ? "" : source,
     requiredCellCount: cells.length,
@@ -734,6 +782,47 @@ function assertHostConcurrentRaceReloadTrace(trace) {
   }
 }
 
+function assertPlayerConcurrentActionReloadTrace(trace) {
+  if (
+    trace?.strategy !== "player-concurrent-action-reload-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(trace.status) ||
+    !Number.isInteger(trace.requiredCellCount) ||
+    !Number.isInteger(trace.coveredCellCount) ||
+    !Number.isInteger(trace.gapCount) ||
+    !Array.isArray(trace.cells)
+  ) {
+    throw new Error(
+      "next-action player concurrent action reload trace is missing or malformed",
+    );
+  }
+  if (
+    trace.requiredCellCount !== playerConcurrentActionReloadCellIds.length ||
+    trace.cells.length !== playerConcurrentActionReloadCellIds.length ||
+    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
+  ) {
+    throw new Error("next-action player concurrent action reload trace count drifted");
+  }
+  for (const id of playerConcurrentActionReloadCellIds) {
+    const cell = trace.cells.find((candidate) => candidate.id === id);
+    if (cell === undefined) {
+      throw new Error(
+        `next-action player concurrent action reload trace missing cell: ${id}`,
+      );
+    }
+    if (cell.covered === true && cell.reloadStatus !== "passed") {
+      throw new Error(
+        `next-action player concurrent action reload trace covered without reload: ${id}`,
+      );
+    }
+  }
+  if (trace.status === "covered" && trace.gapCount !== 0) {
+    throw new Error("next-action player concurrent action reload trace covered with gaps");
+  }
+  if (trace.status === "gapped" && trace.gapCount === 0) {
+    throw new Error("next-action player concurrent action reload trace gapped without gaps");
+  }
+}
+
 function assertStaleConflictMessageTrace(trace) {
   if (
     trace?.strategy !== "stale-conflict-message-before-readiness" ||
@@ -888,6 +977,14 @@ const hostConcurrentRaceReloadCellIds = Object.freeze([
   "host-mixed-advance",
   "host-votecount-publication",
   "host-complete-game",
+]);
+
+const playerConcurrentActionReloadCellIds = Object.freeze([
+  "player-vote-change",
+  "player-night-action",
+  "player-vote-vs-host-resolve",
+  "player-action-vs-host-advance",
+  "player-vs-completed-game",
 ]);
 
 const staleConflictMessageLaneIds = Object.freeze([

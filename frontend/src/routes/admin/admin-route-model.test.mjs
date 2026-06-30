@@ -1029,6 +1029,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
+      ...playerConcurrentActionReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1095,6 +1096,7 @@ test("admin route data exposes local next action as a native audit row", async (
     },
     replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
     hostConcurrentRaceReloadTrace: hostConcurrentRaceReloadTraceFixture(),
+    playerConcurrentActionReloadTrace: playerConcurrentActionReloadTraceFixture(),
     staleConflictMessageTrace: staleConflictMessageTraceFixture(),
     hostStaleControlTrace: hostStaleControlTraceFixture(),
     releaseReady: false,
@@ -1137,6 +1139,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
+      ...playerConcurrentActionReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1187,6 +1190,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
+      ...playerConcurrentActionReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -2593,6 +2597,7 @@ function nextActionFixture({
   stabilityTrace = stabilityTraceFixture({ stability }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
+  playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
 } = {}) {
@@ -2635,6 +2640,12 @@ function nextActionFixture({
         coveredCellCount: hostConcurrentRaceReloadTrace.coveredCellCount,
         gapCount: hostConcurrentRaceReloadTrace.gapCount,
       },
+      playerConcurrentActionReloadSummary: {
+        status: playerConcurrentActionReloadTrace.status,
+        requiredCellCount: playerConcurrentActionReloadTrace.requiredCellCount,
+        coveredCellCount: playerConcurrentActionReloadTrace.coveredCellCount,
+        gapCount: playerConcurrentActionReloadTrace.gapCount,
+      },
       opsArtifacts: "target/dev-test-game/ops-artifacts.json",
       proofStabilityStatus: stability === undefined ? "clean" : "drifted",
       proofStabilitySummary: {
@@ -2658,6 +2669,7 @@ function nextActionFixture({
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     hostConcurrentRaceReloadTrace,
+    playerConcurrentActionReloadTrace,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -2997,6 +3009,68 @@ function hostConcurrentRaceReloadCellsFixture() {
       id: "host-complete-game",
       raceLaneId: "concurrent-host-complete-race",
       reloadLaneId: "concurrent-host-complete-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
+}
+
+function playerConcurrentActionReloadTraceFixture() {
+  return {
+    strategy: "player-concurrent-action-reload-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/race-coverage.json",
+    requiredCellCount: 5,
+    coveredCellCount: 5,
+    gapCount: 0,
+    cells: playerConcurrentActionReloadCellsFixture(),
+  };
+}
+
+function playerConcurrentActionReloadCheckRows() {
+  return [
+    ["player-concurrent-action-reload-milestone", "5/5 covered"],
+    ...playerConcurrentActionReloadCellsFixture().map((cell) => [
+      `player-concurrent-action-reload-${cell.id}`,
+      `covered:${cell.reloadStatus}`,
+    ]),
+  ];
+}
+
+function playerConcurrentActionReloadCellsFixture() {
+  return [
+    {
+      id: "player-vote-change",
+      raceLaneId: "concurrent-vote-race",
+      reloadLaneId: "concurrent-vote-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-night-action",
+      raceLaneId: "concurrent-action-race",
+      reloadLaneId: "concurrent-action-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-vote-vs-host-resolve",
+      raceLaneId: "concurrent-player-vote-resolve-race",
+      reloadLaneId: "concurrent-player-vote-resolve-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-action-vs-host-advance",
+      raceLaneId: "concurrent-player-action-advance-race",
+      reloadLaneId: "concurrent-player-action-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "player-vs-completed-game",
+      raceLaneId: "concurrent-player-complete-race",
+      reloadLaneId: "public-player-complete-reload",
       reloadStatus: "passed",
       covered: true,
     },

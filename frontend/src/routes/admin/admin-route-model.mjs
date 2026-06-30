@@ -568,6 +568,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     normalizeNextActionHostConcurrentRaceReloadTrace(
       nextAction.hostConcurrentRaceReloadTrace,
     );
+  const playerConcurrentActionReloadTrace =
+    normalizeNextActionPlayerConcurrentActionReloadTrace(
+      nextAction.playerConcurrentActionReloadTrace,
+    );
   const staleConflictMessageTrace = normalizeNextActionStaleConflictMessageTrace(
     nextAction.staleConflictMessageTrace,
   );
@@ -665,6 +669,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       }),
     ),
     Object.freeze({
+      id: "player-concurrent-action-reload-milestone",
+      status: `${playerConcurrentActionReloadTrace.coveredCellCount}/${playerConcurrentActionReloadTrace.requiredCellCount} ${playerConcurrentActionReloadTrace.status}`,
+    }),
+    ...playerConcurrentActionReloadTrace.cells.map((cell) =>
+      Object.freeze({
+        id: `player-concurrent-action-reload-${cell.id}`,
+        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
+      }),
+    ),
+    Object.freeze({
       id: "stale-conflict-message-milestone",
       status: `${staleConflictMessageTrace.coveredLaneCount}/${staleConflictMessageTrace.requiredLaneCount} ${staleConflictMessageTrace.status}`,
     }),
@@ -734,6 +748,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       releaseReadinessTrace,
       replacementRaceReloadTrace,
       hostConcurrentRaceReloadTrace,
+      playerConcurrentActionReloadTrace,
       staleConflictMessageTrace,
       hostStaleControlTrace,
       releaseReady: nextAction.releaseReady === true,
@@ -939,6 +954,53 @@ function normalizeNextActionHostConcurrentRaceReloadTrace(hostConcurrentRaceRelo
     ),
     coveredCellCount: Number(hostConcurrentRaceReloadTrace.coveredCellCount ?? 0),
     gapCount: Number(hostConcurrentRaceReloadTrace.gapCount ?? 0),
+    cells: Object.freeze(cells),
+  });
+}
+
+function normalizeNextActionPlayerConcurrentActionReloadTrace(
+  playerConcurrentActionReloadTrace,
+) {
+  if (
+    playerConcurrentActionReloadTrace === null ||
+    typeof playerConcurrentActionReloadTrace !== "object" ||
+    playerConcurrentActionReloadTrace.strategy !==
+      "player-concurrent-action-reload-before-readiness" ||
+    !Array.isArray(playerConcurrentActionReloadTrace.cells)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      source: "",
+      requiredCellCount: 0,
+      coveredCellCount: 0,
+      gapCount: 0,
+      cells: Object.freeze([]),
+    });
+  }
+  const cells = playerConcurrentActionReloadTrace.cells
+    .filter((cell) => cell !== null && typeof cell === "object")
+    .map((cell) =>
+      Object.freeze({
+        id: String(cell.id ?? "unknown"),
+        raceLaneId: String(cell.raceLaneId ?? ""),
+        reloadLaneId:
+          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
+        reloadStatus: String(cell.reloadStatus ?? "unknown"),
+        covered: cell.covered === true,
+      }),
+    );
+  return Object.freeze({
+    strategy: playerConcurrentActionReloadTrace.strategy,
+    status: String(playerConcurrentActionReloadTrace.status ?? "unknown"),
+    source: String(playerConcurrentActionReloadTrace.source ?? ""),
+    requiredCellCount: Number(
+      playerConcurrentActionReloadTrace.requiredCellCount ?? cells.length,
+    ),
+    coveredCellCount: Number(
+      playerConcurrentActionReloadTrace.coveredCellCount ?? 0,
+    ),
+    gapCount: Number(playerConcurrentActionReloadTrace.gapCount ?? 0),
     cells: Object.freeze(cells),
   });
 }

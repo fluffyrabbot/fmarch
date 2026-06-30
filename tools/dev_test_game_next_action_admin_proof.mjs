@@ -110,6 +110,18 @@ await runAdminAuditProof({
           (cell) => cell.id,
         ),
       },
+      playerConcurrentActionReloadTrace: {
+        strategy: source.nextAction.playerConcurrentActionReloadTrace.strategy,
+        status: source.nextAction.playerConcurrentActionReloadTrace.status,
+        requiredCellCount:
+          source.nextAction.playerConcurrentActionReloadTrace.requiredCellCount,
+        coveredCellCount:
+          source.nextAction.playerConcurrentActionReloadTrace.coveredCellCount,
+        gapCount: source.nextAction.playerConcurrentActionReloadTrace.gapCount,
+        cellIds: source.nextAction.playerConcurrentActionReloadTrace.cells.map(
+          (cell) => cell.id,
+        ),
+      },
       staleConflictMessageTrace: {
         strategy: source.nextAction.staleConflictMessageTrace.strategy,
         status: source.nextAction.staleConflictMessageTrace.status,
@@ -203,6 +215,21 @@ export function assertNextActionAdminProof(evidence) {
     );
   }
   if (
+    evidence.generatedFrom?.playerConcurrentActionReloadTrace?.strategy !==
+      "player-concurrent-action-reload-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(
+      evidence.generatedFrom.playerConcurrentActionReloadTrace.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.playerConcurrentActionReloadTrace.requiredCellCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.playerConcurrentActionReloadTrace.cellIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing player concurrent action reload trace evidence",
+    );
+  }
+  if (
     evidence.generatedFrom?.staleConflictMessageTrace?.strategy !==
       "stale-conflict-message-before-readiness" ||
     !["covered", "gapped", "unavailable"].includes(
@@ -268,6 +295,10 @@ function requiredChecksForNextAction(nextAction) {
   for (const cell of nextAction.hostConcurrentRaceReloadTrace.cells) {
     checks.push(`host-concurrent-race-reload-${cell.id}`);
   }
+  checks.push("player-concurrent-action-reload-milestone");
+  for (const cell of nextAction.playerConcurrentActionReloadTrace.cells) {
+    checks.push(`player-concurrent-action-reload-${cell.id}`);
+  }
   checks.push("stale-conflict-message-milestone");
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
@@ -311,6 +342,12 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.hostConcurrentRaceReloadTrace?.cellIds)
       ? evidence.generatedFrom.hostConcurrentRaceReloadTrace.cellIds.map(
           (id) => `host-concurrent-race-reload-${id}`,
+        )
+      : []),
+    "player-concurrent-action-reload-milestone",
+    ...(Array.isArray(evidence.generatedFrom?.playerConcurrentActionReloadTrace?.cellIds)
+      ? evidence.generatedFrom.playerConcurrentActionReloadTrace.cellIds.map(
+          (id) => `player-concurrent-action-reload-${id}`,
         )
       : []),
     "stale-conflict-message-milestone",
