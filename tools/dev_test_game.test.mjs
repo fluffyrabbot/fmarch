@@ -11715,14 +11715,51 @@ function completedGameEndgameSurfaceFixture() {
       { action: "submit_post", disabled: true, text: "Post" },
     ],
   };
+  const completedDeadReloadSnapshot = {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      actorSlot: "slot-2",
+      actionState: "disabled:game complete",
+      receiptState: "idle",
+      targetSlots: "",
+    },
+    commandState: {
+      actorSlot: "slot-2",
+      actorAlive: false,
+      actorStatus: "dead",
+      phase: {
+        phaseId: "N05",
+        locked: false,
+      },
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary:
+        "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
+    },
+    notifications: [],
+    dayVoteOutcomes: dayFiveOutcomes,
+    coldLoadEndpoints: {
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_ilya`,
+    },
+    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
+    enabledMutatingButtons: [],
+    disabledMutatingButtons: [
+      { action: "submit_post", disabled: true, text: "Post" },
+    ],
+  };
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
     sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
+    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11834,6 +11871,68 @@ function completedGameEndgameSurfaceFixture() {
       reloadedResyncSnapshotCommandState: completedNormalReloadSnapshot.commandState,
       initialSnapshot: completedNormalReloadSnapshot,
       reloadedSnapshot: completedNormalReloadSnapshot,
+      rawInviteTokensVisible: false,
+      targetOnlyActionVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    completedDeadPlayerReloadProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      resyncFromSeq: 921,
+      initialResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      reloadedResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      initialSnapshot: completedDeadReloadSnapshot,
+      reloadedSnapshot: completedDeadReloadSnapshot,
+      rawInviteTokensVisible: false,
+      targetOnlyActionVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    completedDeadPlayerStaleVoteRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      commandEndpoint: "/commands",
+      commandKind: "SubmitVote",
+      command: {
+        game,
+        actor_slot: "slot-2",
+        target: "NoLynch",
+      },
+      commandResponse: {
+        ok: false,
+        status: 409,
+        body: {
+          v: 1,
+          id: "completed-dead-player-stale-vote",
+          body: {
+            kind: "Reject",
+            body: {
+              error: "GameAlreadyCompleted",
+              retryable: false,
+              message: "Reject GameAlreadyCompleted: game already completed",
+            },
+          },
+        },
+      },
+      setupResyncFromSeq: 921,
+      setupResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      recoveryResyncFromSeq: 921,
+      recoveryResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      recoverySnapshot: {
+        ...completedDeadReloadSnapshot,
+        commandState: {
+          ...completedDeadReloadSnapshot.commandState,
+          boundary:
+            "Seeded browser completed dead-player stale vote rejected into durable endgame controls.",
+        },
+      },
       rawInviteTokensVisible: false,
       targetOnlyActionVisible: false,
       releaseReady: false,

@@ -262,6 +262,9 @@ await runAdminAuditProof({
       hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
       actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
       normalPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+      deadPlayerRoleUrl: targetResolutionReceiptRoleUrl(
+        spineRows.roleUrlHrefs["d02-n02-target"],
+      ),
     });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
@@ -1703,6 +1706,7 @@ async function proveCompletedGameEndgameSurface({
   hostRoleUrl,
   actionPlayerRoleUrl,
   normalPlayerRoleUrl,
+  deadPlayerRoleUrl,
 }) {
   const hostCompleteProof = await proveHostCompleteGameFromNightFive({
     browser,
@@ -1756,6 +1760,22 @@ async function proveCompletedGameEndgameSurface({
         "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
     }),
   });
+  const completedDeadPlayerReloadProof = await proveCompletedPlayerRoleReload({
+    browser,
+    frontendBaseUrl,
+    roleUrl: deadPlayerRoleUrl,
+    cookieValue: "fixture-target",
+    commandState: seededCompletedDeadPlayerCommandState({
+      boundary:
+        "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
+    }),
+  });
+  const completedDeadPlayerStaleVoteRecoveryProof =
+    await proveCompletedDeadPlayerStaleVoteRecovery({
+      browser,
+      frontendBaseUrl,
+      roleUrl: deadPlayerRoleUrl,
+    });
   const staleCompletedVoteRecoveryProof =
     await proveStaleCompletedGameVoteRecovery({
       browser,
@@ -1767,14 +1787,17 @@ async function proveCompletedGameEndgameSurface({
     sourceHostRoleUrl: String(hostRoleUrl),
     sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
+    sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof,
     completedHostReloadProof,
     actionPlayerCompletedProof,
     completedPlayerReloadProof,
     completedNormalPlayerReloadProof,
+    completedDeadPlayerReloadProof,
+    completedDeadPlayerStaleVoteRecoveryProof,
     staleCompletedVoteRecoveryProof,
     releaseReady: false,
     productionReady: false,
@@ -2763,6 +2786,183 @@ async function proveCompletedPlayerRoleReload({
         reloadedResyncSnapshot?.commandState ?? null,
       initialSnapshot,
       reloadedSnapshot,
+      rawInviteTokensVisible: false,
+      targetOnlyActionVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveCompletedDeadPlayerStaleVoteRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const expectedGame = gameFromRoleUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await page.route("**/commands", async (route) => {
+      const commandEnvelope = route.request().postDataJSON();
+      const command = commandEnvelope?.body?.body?.command;
+      commandRequests.push(command);
+      if (command?.SubmitVote !== undefined) {
+        await fulfillJson(
+          route,
+          {
+            v: 1,
+            id: commandEnvelope.id,
+            body: {
+              kind: "Reject",
+              body: {
+                error: "GameAlreadyCompleted",
+                retryable: false,
+                message: "Reject GameAlreadyCompleted: game already completed",
+              },
+            },
+          },
+          409,
+        );
+        return;
+      }
+
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id:
+            commandEnvelope?.id ??
+            "completed-dead-player-stale-vote-recovery-reject",
+          body: {
+            kind: "Reject",
+            body: {
+              error: "WrongCompletedDeadPlayerProofCommand",
+              retryable: false,
+              message:
+                "completed dead-player stale proof only accepts SubmitVote",
+            },
+          },
+        },
+        409,
+      );
+    });
+    await installPostDayThreePlayerBrowserRoutes(page, {
+      commandState: seededCompletedDeadPlayerCommandState({
+        boundary:
+          "Seeded browser completed dead-player stale vote rejected into durable endgame controls.",
+      }),
+      notifications: [],
+      threadBody: "The game is complete.",
+      threadSeq: 921,
+      dayVoteOutcomesRows: [
+        ...dayTwoVoteOutcomeRows(),
+        dayThreeVoteOutcomeRow(),
+        dayFourNoLynchOutcomeRow(),
+        dayFiveNoLynchOutcomeRow(),
+      ],
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-target",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2",
+      null,
+      { timeout: 15000 },
+    );
+    const commandResponse = await page.evaluate(async (game) => {
+      const response = await fetch("/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          v: 1,
+          id: "completed-dead-player-stale-vote",
+          body: {
+            kind: "IssueCommand",
+            body: {
+              command: {
+                SubmitVote: {
+                  game,
+                  actor_slot: "slot-2",
+                  target: "NoLynch",
+                },
+              },
+            },
+          },
+        }),
+      });
+      return {
+        ok: response.ok,
+        status: response.status,
+        body: await response.json(),
+      };
+    }, expectedGame);
+    const recoveryResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable after reject");
+      }
+      return window.__fmarchTriggerPlayerResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const recoverySnapshot = await collectCompletedPlayerReloadSnapshot(page);
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error(
+        "completed dead-player stale vote proof leaked an invite URL token",
+      );
+    }
+    if (bodyText.includes("factional_kill")) {
+      throw new Error(
+        "completed dead-player stale vote proof leaked target-only action controls",
+      );
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      commandEndpoint: "/commands",
+      commandKind: "SubmitVote",
+      command: commandRequests.at(-1)?.SubmitVote ?? null,
+      commandResponse,
+      setupResyncFromSeq: 921,
+      setupResyncSnapshotCommandState:
+        setupResyncSnapshot?.commandState ?? null,
+      recoveryResyncFromSeq: 921,
+      recoveryResyncSnapshotCommandState:
+        recoveryResyncSnapshot?.commandState ?? null,
+      recoverySnapshot,
       rawInviteTokensVisible: false,
       targetOnlyActionVisible: false,
       releaseReady: false,
@@ -8794,6 +8994,27 @@ function seededCompletedNormalPlayerCommandState({ boundary }) {
   };
 }
 
+function seededCompletedDeadPlayerCommandState({ boundary }) {
+  return {
+    game: "seeded-completed-dead-player",
+    actorSlot: "slot-2",
+    actorAlive: false,
+    actorStatus: "dead",
+    roleKey: null,
+    gameCompleted: true,
+    phase: {
+      phaseId: "N05",
+      phaseKind: "Night",
+      phaseNumber: 5,
+      locked: false,
+    },
+    actions: [],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
@@ -11427,6 +11648,8 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
     typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
     !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
+    typeof completedGameEndgameSurface.sourceDeadPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceDeadPlayerRoleUrl.includes("/g/") ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "host:N05:complete_game:ack:921",
     ) ||
@@ -11441,6 +11664,12 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "normalPlayer:reload:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "deadPlayer:reload:complete",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
+      "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
       "stale:D05:submit_vote:reject:GameAlreadyCompleted",
@@ -11517,6 +11746,23 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
     expectedNotificationsEndpoint:
       `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+  });
+  assertCompletedPlayerReloadProof({
+    proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+    expectedSlot: "slot-2",
+    expectedBoundaryText: "completed dead-player role URL reloaded",
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_ilya`,
+  });
+  assertCompletedDeadPlayerStaleVoteRecoveryProof({
+    proof:
+      completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
+    expectedGame,
+    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
   });
   assertStaleCompletedGameVoteRecoveryProof({
     proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
@@ -11685,6 +11931,70 @@ function assertCompletedPlayerReloadProof({
         )}`,
       );
     }
+  }
+}
+
+function assertCompletedDeadPlayerStaleVoteRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  const snapshot = proof?.recoverySnapshot;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyActionVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.commandEndpoint !== "/commands" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-2" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandResponse?.ok !== false ||
+    proof.commandResponse?.status !== 409 ||
+    proof.commandResponse?.body?.body?.kind !== "Reject" ||
+    proof.commandResponse?.body?.body?.body?.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.setupResyncFromSeq !== 921 ||
+    proof.setupResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
+    proof.setupResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.recoveryResyncFromSeq !== 921 ||
+    proof.recoveryResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
+    proof.recoveryResyncSnapshotCommandState?.gameCompleted !== true ||
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.actorSlot !== "slot-2" ||
+    snapshot.checkpoint.actionState !== "disabled:game complete" ||
+    snapshot.checkpoint.receiptState !== "idle" ||
+    snapshot.commandState?.actorSlot !== "slot-2" ||
+    snapshot.commandState?.actorAlive !== false ||
+    snapshot.commandState?.actorStatus !== "dead" ||
+    snapshot.commandState?.phase?.phaseId !== "N05" ||
+    snapshot.commandState?.gameCompleted !== true ||
+    snapshot.commandState?.actions?.length !== 0 ||
+    snapshot.commandState?.voteTargets?.length !== 0 ||
+    !String(snapshot.commandState?.boundary ?? "").includes(
+      "completed dead-player stale vote rejected",
+    ) ||
+    snapshot.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2` ||
+    snapshot.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
+    snapshot.enabledMutatingButtons?.length !== 0
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed dead-player stale vote recovery: ${JSON.stringify(
+        proof,
+      )}`,
+    );
   }
 }
 
