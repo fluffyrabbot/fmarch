@@ -4615,6 +4615,18 @@ test("session card and markdown include role credential URLs and tokens", () => 
           dispatchKind: "resolve_phase",
         },
         apiPhaseAfterRace: { phase_id: "D02", locked: true },
+        roleReloadAfterRace: {
+          status: "passed",
+          liveRouteStatus: 200,
+          concurrentRouteStatus: 200,
+          livePhaseAfterReload: { id: "D02", locked: true },
+          concurrentPhaseAfterReload: { id: "D02", locked: true },
+          livePhaseActionsAfterReload: ["unlock_thread", "advance_phase"],
+          concurrentPhaseActionsAfterReload: ["unlock_thread", "advance_phase"],
+          liveDeadlineActionsAfterReload: ["extend_deadline"],
+          concurrentDeadlineActionsAfterReload: ["extend_deadline"],
+          apiPhaseAfterReload: { phase_id: "D02", locked: true },
+        },
         restoreAfterRace: {
           commandStatus: {
             state: "ack",
@@ -5744,6 +5756,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-action-conflict-message",
       "stale-host-control",
       "concurrent-host-resolve-race",
+      "concurrent-host-resolve-race-reload",
       "concurrent-host-advance-race",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-mixed-advance-race",
@@ -5826,7 +5839,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 96);
+  assert.equal(opsArtifacts.proofRun.laneCount, 97);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -5943,6 +5956,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "replacement-stale-private-post-after-complete",
       "replacement-stale-private-post-after-complete-reload",
       "concurrent-host-resolve-race",
+      "concurrent-host-resolve-race-reload",
       "stale-host-resolve-reload",
       "concurrent-host-advance-race",
       "stale-host-advance-reload",
@@ -6498,6 +6512,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict-message",
         "stale-host-control",
         "concurrent-host-resolve-race",
+        "concurrent-host-resolve-race-reload",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
@@ -6624,6 +6639,7 @@ function seedAdminProofFixture() {
         "replacement-stale-private-post-after-complete",
         "replacement-stale-private-post-after-complete-reload",
         "concurrent-host-resolve-race",
+        "concurrent-host-resolve-race-reload",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",

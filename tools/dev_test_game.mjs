@@ -9936,6 +9936,13 @@ async function submitConcurrentHostResolveRace({
     );
   }
 
+  const roleReloadAfterRace = await verifyConcurrentHostResolveRaceReload({
+    hostPage,
+    concurrentHostResolvePage,
+    game,
+    apiBaseUrl,
+  });
+
   const restoreAfterRace = await confirmHostAction(hostPage, "unlock_thread");
   await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
   const hostStateAfterRestore = await fetchHostConsoleState({ apiBaseUrl, game });
@@ -9977,10 +9984,91 @@ async function submitConcurrentHostResolveRace({
     liveActivityRow,
     concurrentActivityRow,
     apiPhaseAfterRace: hostStateAfterRace.phase,
+    roleReloadAfterRace,
     restoreAfterRace,
     apiPhaseAfterRestore: hostStateAfterRestore.phase,
     proof:
-      "Two seeded host role pages submitted D02 resolve_phase concurrently with distinct command ids; one ACKed, one rejected with PhaseLocked stale-state recovery, both browser projections and the API converged to locked D02, then the live host restored D02 unlocked for the remaining hardening lanes.",
+      "Two seeded host role pages submitted D02 resolve_phase concurrently with distinct command ids; one ACKed, one rejected with PhaseLocked stale-state recovery, both browser projections and the API converged to locked D02, both host role URLs reloaded to the same locked controls, then the live host restored D02 unlocked for the remaining hardening lanes.",
+  };
+}
+
+async function verifyConcurrentHostResolveRaceReload({
+  hostPage,
+  concurrentHostResolvePage,
+  game,
+  apiBaseUrl,
+}) {
+  const [liveReload, concurrentReload] = await Promise.all([
+    gotoHostConsole(hostPage, game),
+    gotoHostConsole(concurrentHostResolvePage, game),
+  ]);
+  await Promise.all([
+    waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: true }),
+    waitForHostProjectionPhase(concurrentHostResolvePage, {
+      phaseId: "D02",
+      locked: true,
+    }),
+  ]);
+  const [
+    livePhaseAfterReload,
+    concurrentPhaseAfterReload,
+    livePhaseActionsAfterReload,
+    concurrentPhaseActionsAfterReload,
+    liveDeadlineActionsAfterReload,
+    concurrentDeadlineActionsAfterReload,
+  ] = await Promise.all([
+    hostPage.evaluate(() => window.__fmarchHostProjection?.phase),
+    concurrentHostResolvePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    visibleHostControlActions(hostPage, "phase"),
+    visibleHostControlActions(concurrentHostResolvePage, "phase"),
+    visibleHostControlActions(hostPage, "deadline"),
+    visibleHostControlActions(concurrentHostResolvePage, "deadline"),
+  ]);
+  const hostStateAfterReload = await fetchHostConsoleState({ apiBaseUrl, game });
+  const requiredLockedPhaseActions = (actions) =>
+    actions.includes("unlock_thread") &&
+    actions.includes("advance_phase") &&
+    !actions.includes("resolve_phase") &&
+    !actions.includes("lock_thread");
+  if (
+    liveReload.status !== 200 ||
+    concurrentReload.status !== 200 ||
+    livePhaseAfterReload?.id !== "D02" ||
+    livePhaseAfterReload?.locked !== true ||
+    concurrentPhaseAfterReload?.id !== "D02" ||
+    concurrentPhaseAfterReload?.locked !== true ||
+    requiredLockedPhaseActions(livePhaseActionsAfterReload) !== true ||
+    requiredLockedPhaseActions(concurrentPhaseActionsAfterReload) !== true ||
+    !liveDeadlineActionsAfterReload.includes("extend_deadline") ||
+    !concurrentDeadlineActionsAfterReload.includes("extend_deadline") ||
+    hostStateAfterReload.phase?.phase_id !== "D02" ||
+    hostStateAfterReload.phase?.locked !== true
+  ) {
+    throw new Error(
+      `concurrent host resolve reload drifted: ${JSON.stringify({
+        liveReload,
+        concurrentReload,
+        livePhaseAfterReload,
+        concurrentPhaseAfterReload,
+        livePhaseActionsAfterReload,
+        concurrentPhaseActionsAfterReload,
+        liveDeadlineActionsAfterReload,
+        concurrentDeadlineActionsAfterReload,
+        apiPhase: hostStateAfterReload.phase,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    liveRouteStatus: liveReload.status,
+    concurrentRouteStatus: concurrentReload.status,
+    livePhaseAfterReload,
+    concurrentPhaseAfterReload,
+    livePhaseActionsAfterReload,
+    concurrentPhaseActionsAfterReload,
+    liveDeadlineActionsAfterReload,
+    concurrentDeadlineActionsAfterReload,
+    apiPhaseAfterReload: hostStateAfterReload.phase,
   };
 }
 

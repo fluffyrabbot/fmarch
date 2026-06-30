@@ -468,6 +468,13 @@ function demoScenarios({ roles, laneIds }) {
       note: "Two host role pages submit D02 resolve_phase concurrently with distinct command ids, prove one ACK plus one PhaseLocked recovery, and restore the phase unlocked for follow-on controls.",
     }),
     scenario({
+      id: "concurrent-host-resolve-race-reload",
+      title: "Concurrent host resolve reload",
+      role: "host",
+      provenBy: ["concurrent-host-resolve-race-reload"].filter(hasLane),
+      note: "After two host role pages race D02 resolve_phase, both host role URLs reload to locked D02 with only unlock/advance phase controls and matching API phase truth.",
+    }),
+    scenario({
       id: "stale-host-resolve-reload",
       title: "Stale host resolve reload",
       role: "host",
@@ -780,6 +787,7 @@ function demoScenarios({ roles, laneIds }) {
         "stale-action-conflict-message",
         "stale-host-control",
         "concurrent-host-resolve-race",
+        "concurrent-host-resolve-race-reload",
         "concurrent-host-advance-race",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-lifecycle-race",
