@@ -50,6 +50,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
     raceCoverageSource = devTestGameRaceCoveragePath,
     proofRunSource = devTestGameProofRunPath,
     sessionSource = devTestGameSessionPath,
+    hostedTarget = hostedMatrixTargetFromEnv(),
   } = {},
 ) {
   const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
@@ -92,6 +93,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   const reconnectLanes = proofLanesById(laneById, reconnectLaneIds);
   const staleConflictLanes = proofLanesById(laneById, staleConflictLaneIds);
   const roleSurfaces = roleSurfacesFromSession(sessionArtifact);
+  const externalHostedEvidence = buildExternalHostedEvidence(hostedTarget, promoted);
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION,
     proof: "dev-test-game-hosted-concurrent-race-matrix",
@@ -144,6 +146,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       reconnectLaneCount: reconnectLanes.length,
       staleConflictLaneCount: staleConflictLanes.length,
       roleSurfaceCount: roleSurfaces.length,
+      hostedEvidenceStatus: externalHostedEvidence.status,
     },
     evidenceProgress: [
       {
@@ -182,11 +185,21 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       },
       {
         id: "real-hosted-deployment",
-        status: "unproven",
+        status: externalHostedEvidence.status === "passed" ? "passed" : "unproven",
+        ...(externalHostedEvidence.status === "passed"
+          ? {
+              evidence: [
+                externalHostedEvidence.frontendBaseUrl,
+                externalHostedEvidence.apiBaseUrl,
+                externalHostedEvidence.evidencePath,
+              ],
+            }
+          : {}),
         requiredEvidence:
           "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reconnect/stale-client evidence.",
       },
     ],
+    externalHostedEvidence,
     cells,
     reconnectLanes,
     staleConflictLanes,
@@ -203,9 +216,13 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       },
     },
     remainingGaps: [
-      "hosted API/frontend deployment proof with external health checks",
-      "multi-node concurrent command race execution against hosted storage",
-      "hosted reload/reconnect and stale-client conflict evidence",
+      ...(externalHostedEvidence.status === "passed"
+        ? []
+        : [
+            "hosted API/frontend deployment proof with external health checks",
+            "multi-node concurrent command race execution against hosted storage",
+            "hosted reload/reconnect and stale-client conflict evidence",
+          ]),
       "beta/release/operator readiness and human rollback path",
     ],
     nextBuildSlice: {
@@ -246,10 +263,14 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     evidence.summary.passedCellCount !== promoted.cellCount ||
     evidence.summary.reloadCoveredCellCount !== promoted.reloadCoveredCellCount ||
     evidence.summary.reconnectLaneCount !== reconnectLaneIds.length ||
-    evidence.summary.staleConflictLaneCount !== staleConflictLaneIds.length
+    evidence.summary.staleConflictLaneCount !== staleConflictLaneIds.length ||
+    !["not_configured", "configured_unproven", "passed"].includes(
+      evidence.summary.hostedEvidenceStatus,
+    )
   ) {
     throw new Error("hosted concurrent race matrix summary drifted");
   }
+  assertExternalHostedEvidence(evidence.externalHostedEvidence, promoted);
   if (
     evidence.hostedLikeTarget?.status !== "passed" ||
     typeof evidence.hostedLikeTarget.frontendBaseUrl !== "string" ||
@@ -300,6 +321,167 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     throw new Error("hosted concurrent race matrix next slice drifted");
   }
   return evidence;
+}
+
+export function hostedMatrixTargetFromEnv(env = process.env) {
+  const frontendBaseUrl = optionalEnv(env.FMARCH_HOSTED_MATRIX_FRONTEND_URL);
+  const apiBaseUrl = optionalEnv(env.FMARCH_HOSTED_MATRIX_API_URL);
+  const evidencePath = optionalEnv(env.FMARCH_HOSTED_MATRIX_EVIDENCE_PATH);
+  return {
+    frontendBaseUrl,
+    apiBaseUrl,
+    evidencePath,
+    evidence: undefined,
+  };
+}
+
+export async function readHostedMatrixTargetFromEnv(env = process.env) {
+  const target = hostedMatrixTargetFromEnv(env);
+  if (target.evidencePath === null) {
+    return target;
+  }
+  const absoluteEvidencePath = path.resolve(repoRoot, target.evidencePath);
+  return {
+    ...target,
+    evidencePath: path.relative(repoRoot, absoluteEvidencePath),
+    evidence: await readJson(absoluteEvidencePath),
+  };
+}
+
+function buildExternalHostedEvidence(hostedTarget, promoted) {
+  const frontendBaseUrl = hostedTarget?.frontendBaseUrl ?? null;
+  const apiBaseUrl = hostedTarget?.apiBaseUrl ?? null;
+  const evidencePath = hostedTarget?.evidencePath ?? null;
+  const source = hostedTarget?.evidence;
+  if (frontendBaseUrl === null && apiBaseUrl === null && evidencePath === null) {
+    return {
+      status: "not_configured",
+      frontendBaseUrl: null,
+      apiBaseUrl: null,
+      evidencePath: null,
+      requiredEnv: [
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+      ],
+      proofBoundary:
+        "No external hosted matrix target was configured for this local artifact run.",
+    };
+  }
+  if (frontendBaseUrl === null || apiBaseUrl === null) {
+    throw new Error(
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL and FMARCH_HOSTED_MATRIX_API_URL must be provided together",
+    );
+  }
+  if (source === undefined) {
+    return {
+      status: "configured_unproven",
+      frontendBaseUrl,
+      apiBaseUrl,
+      evidencePath,
+      requiredEvidence:
+        "Set FMARCH_HOSTED_MATRIX_EVIDENCE_PATH to a passed hosted matrix evidence JSON generated against the configured API/frontend target.",
+      proofBoundary:
+        "External hosted target URLs were configured, but no hosted matrix evidence artifact was provided.",
+    };
+  }
+  validateExternalHostedEvidenceSource(source, {
+    frontendBaseUrl,
+    apiBaseUrl,
+    promoted,
+  });
+  return {
+    status: "passed",
+    frontendBaseUrl,
+    apiBaseUrl,
+    evidencePath,
+    proof: source.proof,
+    generatedAt: source.generatedAt,
+    groupIds: [...source.groupIds],
+    cellIds: [...source.cellIds],
+    commandRaceCount: source.commandRaceCount,
+    reloadRecoveryCount: source.reloadRecoveryCount,
+    reconnectRecovery: source.reconnectRecovery,
+    staleConflictMessages: source.staleConflictMessages,
+    rawRoleCredentialsRedacted: source.rawRoleCredentialsRedacted,
+    proofBoundary:
+      "External hosted matrix evidence was supplied and matched the configured API/frontend target. This still does not by itself prove beta readiness, release readiness, production operations, or human rollback readiness.",
+  };
+}
+
+function assertExternalHostedEvidence(evidence, promoted) {
+  if (
+    evidence === null ||
+    typeof evidence !== "object" ||
+    !["not_configured", "configured_unproven", "passed"].includes(evidence.status)
+  ) {
+    throw new Error("external hosted matrix evidence status drifted");
+  }
+  if (evidence.status !== "passed") {
+    return;
+  }
+  validateExternalHostedEvidenceSource(
+    {
+      proof: evidence.proof,
+      status: evidence.status,
+      frontendBaseUrl: evidence.frontendBaseUrl,
+      apiBaseUrl: evidence.apiBaseUrl,
+      groupIds: evidence.groupIds,
+      cellIds: evidence.cellIds,
+      commandRaceCount: evidence.commandRaceCount,
+      reloadRecoveryCount: evidence.reloadRecoveryCount,
+      reconnectRecovery: evidence.reconnectRecovery,
+      staleConflictMessages: evidence.staleConflictMessages,
+      rawRoleCredentialsRedacted: evidence.rawRoleCredentialsRedacted,
+    },
+    {
+      frontendBaseUrl: evidence.frontendBaseUrl,
+      apiBaseUrl: evidence.apiBaseUrl,
+      promoted,
+    },
+  );
+}
+
+function validateExternalHostedEvidenceSource(
+  source,
+  { frontendBaseUrl, apiBaseUrl, promoted },
+) {
+  if (
+    source?.proof !== "fmarch-hosted-concurrent-race-matrix-evidence" ||
+    source.status !== "passed" ||
+    source.frontendBaseUrl !== frontendBaseUrl ||
+    source.apiBaseUrl !== apiBaseUrl ||
+    !Array.isArray(source.groupIds) ||
+    source.groupIds.length === 0 ||
+    !Array.isArray(source.cellIds) ||
+    source.cellIds.length === 0 ||
+    !Number.isInteger(source.commandRaceCount) ||
+    source.commandRaceCount < source.cellIds.length ||
+    !Number.isInteger(source.reloadRecoveryCount) ||
+    source.reloadRecoveryCount < source.cellIds.length ||
+    source.reconnectRecovery !== true ||
+    source.staleConflictMessages !== true ||
+    source.rawRoleCredentialsRedacted !== true
+  ) {
+    throw new Error("external hosted matrix evidence artifact drifted");
+  }
+  const promotedGroupIds = new Set(promotedGroupIdsFrom(promoted));
+  for (const groupId of source.groupIds) {
+    if (!promotedGroupIds.has(groupId)) {
+      throw new Error(`external hosted matrix evidence unknown group: ${groupId}`);
+    }
+  }
+}
+
+function promotedGroupIdsFrom(promoted) {
+  if (Array.isArray(promoted?.groupIds)) {
+    return promoted.groupIds;
+  }
+  return (promoted?.groups ?? []).map((group) => group.id);
+}
+
+function optionalEnv(value) {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 function hostedMatrixCell(cell, laneById) {
@@ -381,10 +563,12 @@ async function main() {
     readJson(raceCoveragePath),
     readJson(proofRunPath),
   ]);
+  const hostedTarget = await readHostedMatrixTargetFromEnv();
   const evidence = buildDevTestGameHostedConcurrentRaceMatrixEvidence(readiness, {
     raceCoverage,
     proofRun,
     session,
+    hostedTarget,
   });
   await mkdir(path.dirname(hostedMatrixJsonPath), { recursive: true });
   await writeFile(hostedMatrixJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);

@@ -6403,6 +6403,12 @@ test("session card and markdown include role credential URLs and tokens", () => 
       proofRun,
       session: card,
       generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedTarget: {
+        frontendBaseUrl: null,
+        apiBaseUrl: null,
+        evidencePath: null,
+        evidence: undefined,
+      },
     });
   assertDevTestGameHostedConcurrentRaceMatrixEvidence(hostedMatrix);
   assert.equal(hostedMatrix.status, "passed");
@@ -6415,6 +6421,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
   assert.equal(hostedMatrix.summary.reconnectLaneCount, 4);
   assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
+  assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
+  assert.equal(hostedMatrix.externalHostedEvidence.status, "not_configured");
   assert(
     hostedMatrix.hostedLikeTarget.roleSurfaces.every(
       (surface) =>
@@ -6446,6 +6454,59 @@ test("session card and markdown include role credential URLs and tokens", () => 
       ["real-hosted-deployment", "unproven"],
     ],
   );
+  const hostedMatrixWithExternalTarget =
+    buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
+      raceCoverage,
+      proofRun,
+      session: card,
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedTarget: {
+        frontendBaseUrl: "https://fmarch.example.test",
+        apiBaseUrl: "https://api.fmarch.example.test",
+        evidencePath: "target/dev-test-game/hosted-matrix-external.json",
+        evidence: {
+          proof: "fmarch-hosted-concurrent-race-matrix-evidence",
+          status: "passed",
+          generatedAt: "2026-06-26T00:00:00.000Z",
+          frontendBaseUrl: "https://fmarch.example.test",
+          apiBaseUrl: "https://api.fmarch.example.test",
+          groupIds: ["replacement-race-reload"],
+          cellIds: ["replacement-private-post"],
+          commandRaceCount: 1,
+          reloadRecoveryCount: 1,
+          reconnectRecovery: true,
+          staleConflictMessages: true,
+          rawRoleCredentialsRedacted: true,
+        },
+      },
+    });
+  assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+    hostedMatrixWithExternalTarget,
+  );
+  assert.equal(
+    hostedMatrixWithExternalTarget.summary.hostedEvidenceStatus,
+    "passed",
+  );
+  assert.equal(hostedMatrixWithExternalTarget.externalHostedEvidence.status, "passed");
+  assert.deepEqual(
+    hostedMatrixWithExternalTarget.evidenceProgress.find(
+      (item) => item.id === "real-hosted-deployment",
+    ),
+    {
+      id: "real-hosted-deployment",
+      status: "passed",
+      evidence: [
+        "https://fmarch.example.test",
+        "https://api.fmarch.example.test",
+        "target/dev-test-game/hosted-matrix-external.json",
+      ],
+      requiredEvidence:
+        "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reconnect/stale-client evidence.",
+    },
+  );
+  assert.deepEqual(hostedMatrixWithExternalTarget.remainingGaps, [
+    "beta/release/operator readiness and human rollback path",
+  ]);
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
     proofRun,
