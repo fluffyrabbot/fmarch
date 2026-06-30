@@ -80,6 +80,12 @@ import {
   devTestGameHostedMatrixExternalEvidenceCommand,
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
+import {
+  assertDevTestGameHostedMatrixRawEvidence,
+  buildDevTestGameHostedMatrixRawEvidence,
+  devTestGameHostedMatrixRawEvidenceCommand,
+  devTestGameHostedMatrixRawEvidencePath,
+} from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -6513,18 +6519,44 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.deepEqual(hostedMatrixWithExternalTarget.remainingGaps, [
     "beta/release/operator readiness and human rollback path",
   ]);
+  const rawEvidence = buildDevTestGameHostedMatrixRawEvidence({
+    matrix: hostedMatrix,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    frontendBaseUrl: hostedMatrix.hostedLikeTarget.frontendBaseUrl,
+    apiBaseUrl: hostedMatrix.hostedLikeTarget.apiBaseUrl,
+  });
+  assertDevTestGameHostedMatrixRawEvidence(rawEvidence, {
+    frontendBaseUrl: hostedMatrix.hostedLikeTarget.frontendBaseUrl,
+    apiBaseUrl: hostedMatrix.hostedLikeTarget.apiBaseUrl,
+  });
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceCommand,
+    "test:dev-test-game-hosted-matrix-raw-evidence",
+  );
+  assert.equal(
+    devTestGameHostedMatrixRawEvidencePath,
+    "target/dev-test-game/hosted-matrix-raw.json",
+  );
+  assert.deepEqual(
+    rawEvidence.observations.map((observation) => observation.cellId),
+    [
+      "replacement-private-post",
+      "replacement-vote",
+      "replacement-action",
+    ],
+  );
   const externalEvidence =
     buildDevTestGameHostedMatrixExternalEvidence({
       matrix: hostedMatrix,
-      rawEvidence: rawHostedMatrixEvidenceFixture(),
+      rawEvidence,
       generatedAt: "2026-06-26T00:00:00.000Z",
-      frontendBaseUrl: "https://fmarch.example.test",
-      apiBaseUrl: "https://api.fmarch.example.test",
+      frontendBaseUrl: hostedMatrix.hostedLikeTarget.frontendBaseUrl,
+      apiBaseUrl: hostedMatrix.hostedLikeTarget.apiBaseUrl,
       rawEvidenceSource: "target/dev-test-game/hosted-matrix-raw.json",
     });
   assertDevTestGameHostedMatrixExternalEvidence(externalEvidence, {
-    frontendBaseUrl: "https://fmarch.example.test",
-    apiBaseUrl: "https://api.fmarch.example.test",
+    frontendBaseUrl: hostedMatrix.hostedLikeTarget.frontendBaseUrl,
+    apiBaseUrl: hostedMatrix.hostedLikeTarget.apiBaseUrl,
   });
   assert.equal(externalEvidence.proof, "fmarch-hosted-concurrent-race-matrix-evidence");
   assert.deepEqual(externalEvidence.groupIds, ["replacement-race-reload"]);
@@ -6548,8 +6580,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
       session: card,
       generatedAt: "2026-06-26T00:00:00.000Z",
       hostedTarget: {
-        frontendBaseUrl: "https://fmarch.example.test",
-        apiBaseUrl: "https://api.fmarch.example.test",
+        frontendBaseUrl: hostedMatrix.hostedLikeTarget.frontendBaseUrl,
+        apiBaseUrl: hostedMatrix.hostedLikeTarget.apiBaseUrl,
         evidencePath: devTestGameHostedMatrixExternalEvidencePath,
         evidence: externalEvidence,
       },
@@ -7120,49 +7152,6 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
-  };
-}
-
-function rawHostedMatrixEvidenceFixture() {
-  return {
-    proof: "fmarch-hosted-concurrent-race-matrix-raw",
-    status: "passed",
-    generatedAt: "2026-06-26T00:00:00.000Z",
-    frontendBaseUrl: "https://fmarch.example.test",
-    apiBaseUrl: "https://api.fmarch.example.test",
-    groupId: "replacement-race-reload",
-    commandRaceCount: 3,
-    reloadRecoveryCount: 3,
-    reconnectRecovery: true,
-    staleConflictMessages: true,
-    rawRoleCredentialsRedacted: true,
-    observations: [
-      rawHostedMatrixObservation(
-        "replacement-private-post",
-        "concurrent-replacement-private-post-race",
-        "concurrent-replacement-private-post-race-reload",
-      ),
-      rawHostedMatrixObservation(
-        "replacement-vote",
-        "concurrent-replacement-vote-race",
-        "concurrent-replacement-vote-race-reload",
-      ),
-      rawHostedMatrixObservation(
-        "replacement-action",
-        "concurrent-replacement-action-race",
-        "concurrent-replacement-action-race-reload",
-      ),
-    ],
-  };
-}
-
-function rawHostedMatrixObservation(cellId, raceLaneId, reloadLaneId) {
-  return {
-    id: `${cellId}-external-observation`,
-    status: "passed",
-    cellId,
-    raceLaneId,
-    reloadLaneId,
   };
 }
 
