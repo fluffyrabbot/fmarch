@@ -1718,6 +1718,12 @@ async function proveCompletedGameEndgameSurface({
     frontendBaseUrl,
     roleUrl: hostRoleUrl,
   });
+  const completedHostStaleAdvanceRecoveryProof =
+    await proveCompletedHostStaleAdvanceRecovery({
+      browser,
+      frontendBaseUrl,
+      roleUrl: hostRoleUrl,
+    });
   const actionPlayerCompletedProof = await provePostDayThreePlayerSurface({
     browser,
     frontendBaseUrl,
@@ -1793,9 +1799,10 @@ async function proveCompletedGameEndgameSurface({
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_advance_phase:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof,
     completedHostReloadProof,
+    completedHostStaleAdvanceRecoveryProof,
     actionPlayerCompletedProof,
     ...completedPlayerReloadProofs,
     completedDeadPlayerStaleVoteRecoveryProof,
@@ -2585,6 +2592,117 @@ async function proveCompletedHostRoleReload({
       reloadedResyncSnapshotHost: reloadedResyncSnapshot?.host ?? null,
       initialSnapshot,
       reloadedSnapshot,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveCompletedHostStaleAdvanceRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const expectedGame = gameFromRoleUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installCompletedHostStaleAdvanceRecoveryBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerHostResync !== "function") {
+        throw new Error("host resync hook is unavailable");
+      }
+      return window.__fmarchTriggerHostResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.completed === true &&
+        window.__fmarchHostProjection?.phase?.id === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const commandResponse = await page.evaluate(async (game) => {
+      const response = await fetch("/commands", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          v: 1,
+          id: "completed-host-stale-advance",
+          body: {
+            kind: "IssueCommand",
+            body: {
+              command: {
+                AdvancePhase: {
+                  game,
+                },
+              },
+            },
+          },
+        }),
+      });
+      return {
+        ok: response.ok,
+        status: response.status,
+        body: await response.json(),
+      };
+    }, expectedGame);
+    const recoveryResyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerHostResync !== "function") {
+        throw new Error("host resync hook is unavailable after reject");
+      }
+      return window.__fmarchTriggerHostResync(921);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchHostProjection?.completed === true &&
+        window.__fmarchHostProjection?.phase?.id === "N05",
+      null,
+      { timeout: 15000 },
+    );
+    const recoverySnapshot = await collectCompletedHostReloadSnapshot(page);
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error(
+        "completed host stale advance proof leaked an invite URL token",
+      );
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      commandEndpoint: "/commands",
+      commandKind: "AdvancePhase",
+      command: commandRequests.at(-1)?.AdvancePhase ?? null,
+      commandResponse,
+      setupResyncFromSeq: 921,
+      setupResyncSnapshotHost: setupResyncSnapshot?.host ?? null,
+      recoveryResyncFromSeq: 921,
+      recoveryResyncSnapshotHost: recoveryResyncSnapshot?.host ?? null,
+      recoverySnapshot,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -7167,6 +7285,81 @@ async function installCompletedHostRoleReloadBrowserRoutes(page) {
   });
 }
 
+async function installCompletedHostStaleAdvanceRecoveryBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.AdvancePhase !== undefined) {
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "GameAlreadyCompleted",
+              retryable: false,
+              message: "Reject GameAlreadyCompleted: game already completed",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "completed-host-stale-advance-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongCompletedHostStaleAdvanceProofCommand",
+            retryable: false,
+            message:
+              "completed-host stale advance proof only accepts AdvancePhase",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      hostCompletedConsoleState({
+        completed: true,
+        phaseId: "N05",
+        locked: false,
+        seq: 921,
+        boundary:
+          "Seeded browser completed host stale AdvancePhase rejected into completed host controls.",
+      }),
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+      dayFiveNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
 async function installStaleCompletedGameVoteRecoveryBrowserRoutes(
   page,
   { commandRequests },
@@ -11679,6 +11872,9 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       "host:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_advance_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:endgame:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
@@ -11754,6 +11950,13 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     }),
   );
   assertCompletedStaleRejectCases([
+    {
+      assertProof: assertCompletedHostStaleAdvanceRecoveryProof,
+      proof:
+        completedGameEndgameSurface.completedHostStaleAdvanceRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+    },
     {
       assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
       proof:
@@ -11914,6 +12117,62 @@ function assertCompletedPlayerReloadCases(cases) {
 function assertCompletedStaleRejectCases(cases) {
   for (const { assertProof, ...scenario } of cases) {
     assertProof(scenario);
+  }
+}
+
+function assertCompletedHostStaleAdvanceRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  const snapshot = proof?.recoverySnapshot;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.commandEndpoint !== "/commands" ||
+    proof.commandKind !== "AdvancePhase" ||
+    proof.command?.game !== expectedGame ||
+    proof.commandResponse?.ok !== false ||
+    proof.commandResponse?.status !== 409 ||
+    proof.commandResponse?.body?.body?.kind !== "Reject" ||
+    proof.commandResponse?.body?.body?.body?.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.setupResyncFromSeq !== 921 ||
+    proof.setupResyncSnapshotHost?.completed !== true ||
+    proof.setupResyncSnapshotHost?.phase?.id !== "N05" ||
+    proof.recoveryResyncFromSeq !== 921 ||
+    proof.recoveryResyncSnapshotHost?.completed !== true ||
+    proof.recoveryResyncSnapshotHost?.phase?.id !== "N05" ||
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.deadlineAffordance !== "none" ||
+    !String(snapshot.checkpoint.actionState ?? "").startsWith("disabled:") ||
+    snapshot.projection?.completed !== true ||
+    snapshot.projection?.phase?.id !== "N05" ||
+    snapshot.projection?.phase?.state !== "open" ||
+    snapshot.projection?.slots?.[0]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[0]?.alignment_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.alignment_revealed !== true ||
+    snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+    snapshot.hostPrompts?.length !== 0 ||
+    snapshot.actionTiles?.length !== 0 ||
+    snapshot.triggerButtons?.length !== 0
+  ) {
+    throw new Error(
+      `core-loop admin proof missing completed host stale advance recovery: ${JSON.stringify(
+        proof,
+      )}`,
+    );
   }
 }
 

@@ -4072,6 +4072,9 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
       "host:reload:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
+      "host:stale_advance_phase:reject:GameAlreadyCompleted",
+    ) ||
+    !String(completedGameEndgameSurface.transition ?? "").includes(
       "actionPlayer:endgame:complete",
     ) ||
     !String(completedGameEndgameSurface.transition ?? "").includes(
@@ -4138,6 +4141,13 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     }),
   );
   assertCoreLoopCompletedStaleRejectCases([
+    {
+      assertProof: assertCoreLoopCompletedHostStaleAdvanceRecoveryProof,
+      proof:
+        completedGameEndgameSurface.completedHostStaleAdvanceRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+    },
     {
       assertProof: assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
       proof:
@@ -4288,6 +4298,60 @@ function assertCoreLoopCompletedPlayerReloadCases(cases) {
 function assertCoreLoopCompletedStaleRejectCases(cases) {
   for (const { assertProof, ...scenario } of cases) {
     assertProof(scenario);
+  }
+}
+
+function assertCoreLoopCompletedHostStaleAdvanceRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  const snapshot = proof?.recoverySnapshot;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.commandEndpoint !== "/commands" ||
+    proof.commandKind !== "AdvancePhase" ||
+    proof.command?.game !== expectedGame ||
+    proof.commandResponse?.ok !== false ||
+    proof.commandResponse?.status !== 409 ||
+    proof.commandResponse?.body?.body?.kind !== "Reject" ||
+    proof.commandResponse?.body?.body?.body?.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.setupResyncFromSeq !== 921 ||
+    proof.setupResyncSnapshotHost?.completed !== true ||
+    proof.setupResyncSnapshotHost?.phase?.id !== "N05" ||
+    proof.recoveryResyncFromSeq !== 921 ||
+    proof.recoveryResyncSnapshotHost?.completed !== true ||
+    proof.recoveryResyncSnapshotHost?.phase?.id !== "N05" ||
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.deadlineAffordance !== "none" ||
+    !String(snapshot.checkpoint.actionState ?? "").startsWith("disabled:") ||
+    snapshot.projection?.completed !== true ||
+    snapshot.projection?.phase?.id !== "N05" ||
+    snapshot.projection?.phase?.state !== "open" ||
+    snapshot.projection?.slots?.[0]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[0]?.alignment_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.alignment_revealed !== true ||
+    snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+    snapshot.hostPrompts?.length !== 0 ||
+    snapshot.actionTiles?.length !== 0 ||
+    snapshot.triggerButtons?.length !== 0
+  ) {
+    throw new Error(
+      "core-loop admin proof missing completed host stale advance recovery",
+    );
   }
 }
 

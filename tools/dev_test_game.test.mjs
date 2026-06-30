@@ -11681,7 +11681,7 @@ function completedGameEndgameSurfaceFixture() {
     sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_advance_phase:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11739,6 +11739,42 @@ function completedGameEndgameSurfaceFixture() {
       reloadedResyncSnapshotHost: completedHostReloadSnapshot.projection,
       initialSnapshot: completedHostReloadSnapshot,
       reloadedSnapshot: completedHostReloadSnapshot,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    completedHostStaleAdvanceRecoveryProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      commandEndpoint: "/commands",
+      commandKind: "AdvancePhase",
+      command: {
+        game,
+      },
+      commandResponse: {
+        ok: false,
+        status: 409,
+        body: {
+          v: 1,
+          id: "completed-host-stale-advance",
+          body: {
+            kind: "Reject",
+            body: {
+              error: "GameAlreadyCompleted",
+              retryable: false,
+              message: "Reject GameAlreadyCompleted: game already completed",
+            },
+          },
+        },
+      },
+      setupResyncFromSeq: 921,
+      setupResyncSnapshotHost: completedHostReloadSnapshot.projection,
+      recoveryResyncFromSeq: 921,
+      recoveryResyncSnapshotHost: completedHostReloadSnapshot.projection,
+      recoverySnapshot: completedHostReloadSnapshot,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
