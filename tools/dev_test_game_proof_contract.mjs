@@ -7376,6 +7376,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
     ),
     lane("stale-cohost-deadline", "Stale cohost deadline control rejects without drift", {
       rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
+      roleUrl: hardening.staleCohostDeadline?.setup?.roleUrl ?? null,
+      staleClickActionId:
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.clickedActionId ??
+        null,
+      staleClickReceipt:
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.receiptStatusText ??
+        null,
+      staleClickRefreshKeys:
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys ??
+        null,
       stalePhase: hardening.staleCohostDeadline?.setup?.stalePhase?.id ?? null,
       phaseId: hardening.staleCohostDeadline?.phaseAfterReject?.id ?? null,
       activitySource: hardening.staleCohostDeadline?.activityRow?.source ?? null,
@@ -7383,6 +7393,31 @@ export function buildDevTestGameProofRun(session, options = {}) {
       apiDeadline: hardening.staleCohostDeadline?.apiPhaseAfterReject?.deadline ?? null,
       passed:
         hardening.staleCohostDeadline?.status === "passed" &&
+        typeof hardening.staleCohostDeadline?.setup?.roleUrl === "string" &&
+        hardening.staleCohostDeadline?.setup?.roleUrl.includes(
+          `/g/${session?.game ?? ""}/host`,
+        ) === true &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.roleUrl ===
+          hardening.staleCohostDeadline?.setup?.roleUrl &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.clickedActionId ===
+          "extend_deadline" &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseAfterReject?.id ===
+          "D02" &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseAfterReject
+          ?.locked === false &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.deadlineActionsAfterReject?.includes(
+          "extend_deadline",
+        ) === true &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject
+          ?.length === 0 &&
+        hardening.staleCohostDeadline?.staleClickBrowserProof?.apiPhaseAfterReject
+          ?.deadline === null &&
         hardening.staleCohostDeadline?.setup?.stalePhase?.id === "D01" &&
         hardening.staleCohostDeadline?.setup?.stalePhase?.locked === false &&
         hardening.staleCohostDeadline?.setup?.deadlineActions?.includes(

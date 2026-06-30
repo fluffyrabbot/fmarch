@@ -1204,6 +1204,7 @@ async function freezeStaleCohostDeadlinePage({ staleCohostPage, game, frontendBa
       window.__fmarchHostProjection?.phase?.locked === false,
   );
   const stalePhase = await staleCohostPage.evaluate(() => window.__fmarchHostProjection?.phase);
+  const roleUrl = staleCohostPage.url();
   const deadlineActions = await visibleHostControlActions(staleCohostPage, "deadline");
   const phaseActions = await visibleHostControlActions(staleCohostPage, "phase");
   const closedStatus = await staleCohostPage.evaluate(() =>
@@ -1226,6 +1227,7 @@ async function freezeStaleCohostDeadlinePage({ staleCohostPage, game, frontendBa
     );
   }
   return {
+    roleUrl,
     stalePhase,
     deadlineActions,
     phaseActions,
@@ -12706,6 +12708,18 @@ async function submitStaleCohostDeadlineRecovery({
     game,
     principalUserId: "cohost_c",
   });
+  const staleClickBrowserProof = {
+    roleUrl: staleCohostDeadlineSetup.roleUrl,
+    clickedActionId: "extend_deadline",
+    triggerTestId: "critical-host-action-extend_deadline",
+    receiptStatusText: activityStatusText,
+    activityRow,
+    dispatchRefreshKeys: dispatchPlan?.projectionRefreshKeys ?? null,
+    phaseAfterReject,
+    deadlineActionsAfterReject,
+    phaseActionsAfterReject,
+    apiPhaseAfterReject: hostStateAfterReject.phase,
+  };
   const reloadResponse = await staleCohostPage.goto(`${frontendBaseUrl}/g/${game}/host`, {
     waitUntil: "networkidle",
   });
@@ -12769,6 +12783,8 @@ async function submitStaleCohostDeadlineRecovery({
     principalUserId: "cohost_c",
   });
   if (
+    typeof staleCohostDeadlineSetup.roleUrl !== "string" ||
+    !staleCohostDeadlineSetup.roleUrl.includes(`/g/${game}/host`) ||
     reject?.state !== "reject" ||
     reject?.error !== "PhaseLocked" ||
     !reject?.message?.includes("stale phase state") ||
@@ -12781,6 +12797,15 @@ async function submitStaleCohostDeadlineRecovery({
     activityRow.actionId !== "extend_deadline" ||
     activityRow.dispatchKind !== "extend_deadline" ||
     dispatchPlan?.projectionRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.roleUrl !== staleCohostDeadlineSetup.roleUrl ||
+    staleClickBrowserProof.clickedActionId !== "extend_deadline" ||
+    staleClickBrowserProof.receiptStatusText !== activityStatusText ||
+    staleClickBrowserProof.dispatchRefreshKeys?.includes("host") !== true ||
+    staleClickBrowserProof.phaseAfterReject?.id !== "D02" ||
+    staleClickBrowserProof.phaseAfterReject?.locked !== false ||
+    !staleClickBrowserProof.deadlineActionsAfterReject.includes("extend_deadline") ||
+    staleClickBrowserProof.phaseActionsAfterReject.length !== 0 ||
+    staleClickBrowserProof.apiPhaseAfterReject?.deadline !== null ||
     hostStateAfterReject.phase?.phase_id !== "D02" ||
     hostStateAfterReject.phase?.locked !== false ||
     hostStateAfterReject.phase?.deadline !== null ||
@@ -12820,6 +12845,7 @@ async function submitStaleCohostDeadlineRecovery({
         activityStatusText,
         activityRow,
         dispatchPlan,
+        staleClickBrowserProof,
         apiPhase: hostStateAfterReject.phase,
         staleCohostDeadlineReloadAfterReject,
         reconnectAfterReject,
@@ -12841,6 +12867,7 @@ async function submitStaleCohostDeadlineRecovery({
     activityStatusText,
     activityRow,
     dispatchPlan,
+    staleClickBrowserProof,
     apiPhaseAfterReject: hostStateAfterReject.phase,
     staleCohostDeadlineReloadAfterReject,
     reconnectAfterReject,

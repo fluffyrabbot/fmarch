@@ -181,6 +181,18 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
     }),
     "passed: reconnecting -> recovered, deadline null, phase controls 0",
   );
+  assert.equal(
+    hardeningLaneStatus({
+      id: "stale-cohost-deadline",
+      status: "passed",
+      evidence: {
+        rejectError: "PhaseLocked",
+        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+        phaseActions: [],
+      },
+    }),
+    "passed: Reject PhaseLocked, role URL true, phase controls 0",
+  );
   assert.equal(hardeningLaneStatus({ id: "unhighlighted", status: "passed" }), "passed");
 });
 
@@ -267,6 +279,15 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
+        id: "stale-cohost-deadline",
+        status: "passed",
+        evidence: {
+          rejectError: "PhaseLocked",
+          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+          phaseActions: [],
+        },
+      },
+      {
         id: "stale-cohost-deadline-reconnect-recovery",
         status: "passed",
         evidence: {
@@ -328,6 +349,10 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
       "stale-host-deadline-reconnect-recovery"
     ],
     "passed: reconnecting -> recovered, deadline null",
+  );
+  assert.equal(
+    hardeningHighlightedLaneEvidence(proofRun)["stale-cohost-deadline"],
+    "passed: Reject PhaseLocked, role URL true, phase controls 0",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)[

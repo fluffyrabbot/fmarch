@@ -5600,6 +5600,45 @@ assert.equal(
   session.verification.multiplayerHardening.staleCohostDeadline.status,
   "passed",
 );
+assert.match(
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.roleUrl,
+  new RegExp(`/g/${session.game}/host`),
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .roleUrl,
+  session.verification.multiplayerHardening.staleCohostDeadline.setup.roleUrl,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .clickedActionId,
+  "extend_deadline",
+);
+assert.match(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .receiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .dispatchRefreshKeys.includes("host"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .deadlineActionsAfterReject.includes("extend_deadline"),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .phaseActionsAfterReject.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleCohostDeadline.staleClickBrowserProof
+    .apiPhaseAfterReject.deadline,
+  null,
+);
 assert.equal(
   session.verification.multiplayerHardening.staleCohostDeadline.setup.stalePhase.id,
   "D01",
