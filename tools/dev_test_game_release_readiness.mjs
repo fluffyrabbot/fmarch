@@ -1924,6 +1924,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopDayFourSurvivorRoleSurface(
     proof.dayFourSurvivorRoleSurface,
   );
+  assertCoreLoopNightFourActionSubmissionSurface(
+    proof.nightFourActionSubmissionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1961,6 +1964,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     postDayThreeResolutionSurface: proof.postDayThreeResolutionSurface,
     nightThreeEmptyResolutionSurface: proof.nightThreeEmptyResolutionSurface,
     dayFourSurvivorRoleSurface: proof.dayFourSurvivorRoleSurface,
+    nightFourActionSubmissionSurface: proof.nightFourActionSubmissionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3345,6 +3349,222 @@ function assertCoreLoopDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
     expectedVoteButtonCount: 2,
     expectedVoteTargetCount: 2,
   });
+}
+
+function assertCoreLoopNightFourActionSubmissionSurface(
+  nightFourActionSubmissionSurface,
+) {
+  const expectedGame = gameFromRoleUrl(
+    nightFourActionSubmissionSurface?.sourceHostRoleUrl,
+  );
+  if (
+    nightFourActionSubmissionSurface?.status !== "passed" ||
+    nightFourActionSubmissionSurface.clickedThroughFromRoleUrl !== true ||
+    nightFourActionSubmissionSurface.releaseReady !== false ||
+    nightFourActionSubmissionSurface.productionReady !== false ||
+    typeof nightFourActionSubmissionSurface.sourceHostRoleUrl !== "string" ||
+    !nightFourActionSubmissionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "player:D04:no_lynch:ack:912",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "host:D04:resolve_phase:ack:913",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "host:advance_phase:ack:914",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "player:N04:submit_action:slot-5:ack:915",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing Night 4 action submission");
+  }
+  assertCoreLoopDayFourNoLynchVoteProof({
+    proof: nightFourActionSubmissionSurface.dayFourVoteProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+  });
+  assertCoreLoopDayFourNoLynchHostTransitionProof({
+    proof: nightFourActionSubmissionSurface.hostTransitionProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceHostRoleUrl,
+  });
+  assertCoreLoopNightFourPlayerActionSubmissionProof({
+    proof: nightFourActionSubmissionSurface.nightFourActionProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+  });
+}
+
+function assertCoreLoopDayFourNoLynchVoteProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes("Ack: stream seqs 912") ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "ack" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "D04" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.currentVote?.kind !== "no_lynch" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "Day 4 no-lynch vote ACK",
+    ) ||
+    proof.projectionVotecount?.[0]?.target !== "No lynch" ||
+    proof.projectionVotecount?.[0]?.count !== 1 ||
+    proof.projectionVotecount?.[0]?.needed !== 1 ||
+    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D03" ||
+    proof.setupResyncFromSeq !== 911 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D04" ||
+    proof.currentVote?.hasVote !== "true" ||
+    !String(proof.currentVote?.text ?? "").includes("No lynch") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 912") ||
+    proof.receiptRefreshKeys !== "votecount,commandState"
+  ) {
+    throw new Error("core-loop admin proof missing Day 4 no-lynch vote ACK");
+  }
+}
+
+function assertCoreLoopDayFourNoLynchHostTransitionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 912 ||
+    proof.setupSnapshotHost?.phase?.id !== "D04" ||
+    proof.setupSnapshotHost?.phase?.state !== "open"
+  ) {
+    throw new Error("core-loop admin proof missing Day 4 no-lynch host transition");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 913,
+    expectedPhaseId: "D04",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 914,
+    expectedPhaseId: "N04",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.resolveProof?.votecountProjection?.[0]?.target !== "No lynch" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.status !==
+      "NoLynch"
+  ) {
+    throw new Error("core-loop admin proof missing Day 4 no-lynch host projections");
+  }
+}
+
+function assertCoreLoopNightFourPlayerActionSubmissionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  const clickProof = proof?.clickProof;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.setupResyncFromSeq !== 914 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "N04" ||
+    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !== "slot-5" ||
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "submit_action:factional_kill" ||
+    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.command.actor_slot !== "slot-7" ||
+    clickProof.command.action_id !== "factional_kill" ||
+    clickProof.command.template_id !== "factional_kill" ||
+    clickProof.command.targets?.[0] !== "slot-5" ||
+    clickProof.command.grant_id !== "grant-factional-kill-n04" ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 915") ||
+    clickProof.bridgePlan?.role !== "player" ||
+    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(clickProof.bridgePlan.projectionRefreshKeys, [
+      "notifications",
+      "investigationResults",
+      "commandState",
+    ]) ||
+    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
+    clickProof.projectionCommandState?.phase?.phaseId !== "N04" ||
+    clickProof.projectionCommandState?.actions?.length !== 0 ||
+    !String(clickProof.projectionCommandState?.boundary ?? "").includes(
+      "Night 4 action ACK",
+    ) ||
+    !String(clickProof.checkpointReceiptState ?? "").includes(
+      "Ack: stream seqs 915",
+    ) ||
+    clickProof.checkpointActionStateAfterAck !==
+      "disabled:no legal action available" ||
+    clickProof.receiptCount !== 1 ||
+    !String(clickProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 915")
+  ) {
+    throw new Error("core-loop admin proof missing Night 4 player action ACK");
+  }
 }
 
 function assertCoreLoopPostDayThreePlayerSurfaceProof({

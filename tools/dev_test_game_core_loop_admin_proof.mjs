@@ -222,6 +222,13 @@ await runAdminAuditProof({
       frontendBaseUrl,
       roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
     });
+    const nightFourActionSubmissionSurface =
+      await proveNightFourActionSubmissionSurface({
+        browser,
+        frontendBaseUrl,
+        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+      });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
@@ -247,6 +254,7 @@ await runAdminAuditProof({
       postDayThreeResolutionSurface,
       nightThreeEmptyResolutionSurface,
       dayFourSurvivorRoleSurface,
+      nightFourActionSubmissionSurface,
       privateChannelRoleSurface,
     };
   },
@@ -258,7 +266,7 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-core-loop-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4 and Night 4 action submission against the survivor, official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
@@ -286,6 +294,8 @@ await runAdminAuditProof({
     nightThreeEmptyResolutionSurface:
       surfaces.nightThreeEmptyResolutionSurface,
     dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
+    nightFourActionSubmissionSurface:
+      surfaces.nightFourActionSubmissionSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
@@ -1384,6 +1394,330 @@ async function proveDayFourSurvivorRoleSurface({
     releaseReady: false,
     productionReady: false,
   };
+}
+
+async function proveNightFourActionSubmissionSurface({
+  browser,
+  frontendBaseUrl,
+  hostRoleUrl,
+  actionPlayerRoleUrl,
+}) {
+  const dayFourVoteProof = await proveDayFourNoLynchVoteSubmission({
+    browser,
+    frontendBaseUrl,
+    roleUrl: actionPlayerRoleUrl,
+  });
+  const hostTransitionProof = await proveDayFourNoLynchHostTransition({
+    browser,
+    frontendBaseUrl,
+    roleUrl: hostRoleUrl,
+  });
+  const nightFourActionProof = await proveNightFourPlayerActionSubmission({
+    browser,
+    frontendBaseUrl,
+    roleUrl: actionPlayerRoleUrl,
+  });
+  return {
+    status: "passed",
+    sourceHostRoleUrl: String(hostRoleUrl),
+    sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> player:N04:submit_action:slot-5:ack:915",
+    dayFourVoteProof,
+    hostTransitionProof,
+    nightFourActionProof,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+async function proveDayFourNoLynchVoteSubmission({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installDayFourNoLynchVoteSubmissionBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(911);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D04" &&
+        document.querySelector(
+          '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+        ) !== null,
+      null,
+      { timeout: 15000 },
+    );
+    const voteButton = page.locator(
+      '[data-testid="player-composer"] button[data-action="submit_vote:no_lynch"]',
+    );
+    await voteButton.waitFor({ state: "visible", timeout: 15000 });
+    await voteButton.click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.message?.includes(
+          "Ack: stream seqs 912",
+        ) &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitVote",
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D04" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "no_lynch" &&
+        window.__fmarchPlayerProjection?.votecount?.[0]?.target === "No lynch",
+      null,
+      { timeout: 15000 },
+    );
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const currentVote = page.getByTestId("player-current-vote");
+    await currentVote.waitFor({ state: "visible", timeout: 15000 });
+    const currentVoteHasVote = await currentVote.getAttribute("data-has-vote");
+    const currentVoteText = await currentVote.innerText();
+    const voteReceipt = page.getByTestId(
+      "player-command-receipt-submit_vote:no_lynch",
+    );
+    await voteReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const receiptRefreshKeys = await voteReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptCount = Number.parseInt(
+      await page.getByTestId("player-command-receipt-count").innerText(),
+      10,
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("Day 4 no-lynch vote proof leaked an invite URL token");
+    }
+    if (bodyText.includes("factional_kill")) {
+      throw new Error("Day 4 no-lynch vote proof rendered target-only night receipt");
+    }
+    const command = commandRequests.at(-1)?.SubmitVote ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_vote:no_lynch",
+      commandKind: command === null ? null : "SubmitVote",
+      command,
+      commandStatus,
+      bridgePlan,
+      receipts,
+      projectionCommandState: projection?.commandState ?? null,
+      projectionVotecount: projection?.votecount ?? null,
+      projectionDayVoteOutcomes: projection?.dayVoteOutcomes ?? null,
+      setupResyncFromSeq: 911,
+      setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
+      currentVote: {
+        hasVote: currentVoteHasVote,
+        text: currentVoteText,
+      },
+      receiptCount,
+      receiptStatusText,
+      receiptRefreshKeys,
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveDayFourNoLynchHostTransition({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installDayFourNoLynchHostTransitionBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerHostResync !== "function") {
+        throw new Error("host resync hook is unavailable");
+      }
+      return window.__fmarchTriggerHostResync(912);
+    });
+    await page.waitForFunction(
+      () => {
+        const checkpoint = document.querySelector(
+          '[data-testid="host-lifecycle-control-checkpoint"]',
+        );
+        return (
+          checkpoint?.getAttribute("data-phase-id") === "D04" &&
+          checkpoint?.getAttribute("data-phase-state") === "open" &&
+          checkpoint?.getAttribute("data-deadline-affordance") ===
+            "resolve_phase,lock_thread"
+        );
+      },
+      null,
+      { timeout: 15000 },
+    );
+    const resolveProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 913,
+      expectedPhaseId: "D04",
+      expectedPhaseState: "locked",
+      expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    });
+    const advanceProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 914,
+      expectedPhaseId: "N04",
+      expectedPhaseState: "open",
+      expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    });
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("Day 4 no-lynch host transition proof leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 912,
+      setupSnapshotHost: setupSnapshot?.host ?? null,
+      resolveProof,
+      advanceProof,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveNightFourPlayerActionSubmission({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installNightFourActionSubmissionBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const setupSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(914);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N04" &&
+        document.querySelector(
+          '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+        ) !== null,
+      null,
+      { timeout: 15000 },
+    );
+    const clickProof = await provePlayerActionSubmissionClick({
+      page,
+      commandRequests,
+    });
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 914,
+      setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
+      clickProof,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
 }
 
 async function proveNightThreeEmptyHostTransition({
@@ -4159,6 +4493,98 @@ async function installDayThreeVoteSubmissionBrowserRoutes(
   });
 }
 
+async function installDayFourNoLynchVoteSubmissionBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let voteSubmitted = false;
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitVote !== undefined) {
+      voteSubmitted = true;
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [912],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "day-four-no-lynch-vote-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongDayFourNoLynchVoteProofCommand",
+            retryable: false,
+            message: "Day 4 no-lynch vote proof only accepts SubmitVote",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 911,
+          stream_seq: 911,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Day 4 has opened.",
+          occurred_at: 1782360000,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, voteSubmitted ? dayFourNoLynchVotecountRows() : []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      seededDayFourActionPlayerCommandState({
+        boundary: voteSubmitted
+          ? "Seeded browser Day 4 no-lynch vote ACK refreshed current vote and votecount projection."
+          : "Seeded browser Day 4 no-lynch vote proof opened with live vote controls.",
+        currentVote: voteSubmitted
+          ? { kind: "no_lynch", slotId: null, label: "No lynch" }
+          : null,
+      }),
+    );
+  });
+}
+
 async function installDayThreeHostVoteResolutionBrowserRoutes(
   page,
   { commandRequests },
@@ -4226,6 +4652,195 @@ async function installDayThreeHostVoteResolutionBrowserRoutes(
   });
   await page.route("**/games/*/host-prompts?**", async (route) => {
     await fulfillJson(route, []);
+  });
+}
+
+async function installDayFourNoLynchHostTransitionBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let phaseState = "open-d04";
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.ResolvePhase !== undefined) {
+      phaseState = "locked-d04";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [913],
+          },
+        },
+      });
+      return;
+    }
+    if (command?.AdvancePhase !== undefined) {
+      phaseState = "open-n04";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [914],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "day-four-no-lynch-host-transition-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongDayFourNoLynchHostTransitionProofCommand",
+            retryable: false,
+            message:
+              "Day 4 no-lynch host transition proof only accepts ResolvePhase or AdvancePhase",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    const hostState =
+      phaseState === "open-n04"
+        ? {
+            phaseId: "N04",
+            locked: false,
+            seq: 914,
+            boundary:
+              "Seeded browser AdvancePhase ACK advanced the host projection from Day 4 no-lynch to Night 4.",
+          }
+        : {
+            phaseId: "D04",
+            locked: phaseState === "locked-d04",
+            seq: phaseState === "locked-d04" ? 913 : 912,
+            boundary:
+              phaseState === "locked-d04"
+                ? "Seeded browser ResolvePhase ACK locked Day 4 after the projected no-lynch vote."
+                : "Seeded browser host opened Day 4 with a projected no-lynch vote.",
+          };
+    await fulfillJson(route, hostPhaseTransitionConsoleState(hostState));
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, dayFourNoLynchVotecountRows());
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(
+      route,
+      phaseState === "open-n04" || phaseState === "locked-d04"
+        ? [
+            ...dayTwoVoteOutcomeRows(),
+            dayThreeVoteOutcomeRow(),
+            dayFourNoLynchOutcomeRow(),
+          ]
+        : [...dayTwoVoteOutcomeRows(), dayThreeVoteOutcomeRow()],
+    );
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+async function installNightFourActionSubmissionBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  let actionSubmitted = false;
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitAction?.action_id === "factional_kill") {
+      actionSubmitted = true;
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [915],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "night-four-action-submission-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongNightFourActionSubmissionProofCommand",
+            retryable: false,
+            message:
+              "Night 4 action submission proof only accepts factional_kill SubmitAction",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 914,
+          stream_seq: 914,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Night 4 has opened.",
+          occurred_at: 1782446400,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      ...dayTwoVoteOutcomeRows(),
+      dayThreeVoteOutcomeRow(),
+      dayFourNoLynchOutcomeRow(),
+    ]);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      seededNightFourActionPlayerCommandState({
+        boundary: actionSubmitted
+          ? "Seeded browser Night 4 action ACK refreshed action state after targeting slot-5."
+          : "Seeded browser Night 4 action proof opened with slot-5 target controls.",
+        actionSubmitted,
+      }),
+    );
   });
 }
 
@@ -5285,7 +5900,7 @@ function seededNightThreeActionPlayerCommandState({ boundary }) {
   };
 }
 
-function seededDayFourActionPlayerCommandState({ boundary }) {
+function seededDayFourActionPlayerCommandState({ boundary, currentVote = null }) {
   return {
     game: "seeded-day-four-action-player",
     actorSlot: "slot-7",
@@ -5302,7 +5917,7 @@ function seededDayFourActionPlayerCommandState({ boundary }) {
     },
     actions: [],
     voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
-    currentVote: null,
+    currentVote,
     boundary,
   };
 }
@@ -5327,6 +5942,46 @@ function seededDayFourSurvivorCommandState({ boundary }) {
       { kind: "slot", slotId: "slot-7", label: "Slot 7" },
       { kind: "no_lynch", slotId: null, label: "No lynch" },
     ],
+    currentVote: null,
+    boundary,
+  };
+}
+
+function seededNightFourActionPlayerCommandState({
+  boundary,
+  actionSubmitted = false,
+}) {
+  return {
+    game: "seeded-night-four-action-player",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "N04",
+      phaseKind: "Night",
+      phaseNumber: 4,
+      locked: false,
+    },
+    actions: actionSubmitted
+      ? []
+      : [
+          {
+            action: "submit_action:factional_kill",
+            commandKind: "submit_action",
+            actionId: "factional_kill",
+            templateId: "factional_kill",
+            ability: "Kill",
+            window: "Night",
+            label: "Submit factional kill",
+            detail: "factional_kill -> slot-5",
+            targets: ["slot-5"],
+            targetOptions: ["slot-5"],
+            grantId: "grant-factional-kill-n04",
+          },
+        ],
+    voteTargets: [],
     currentVote: null,
     boundary,
   };
@@ -5483,6 +6138,29 @@ function dayThreeVoteOutcomeRow() {
   };
 }
 
+function dayFourNoLynchVotecountRows() {
+  return [
+    {
+      target: "No lynch",
+      count: 1,
+      needed: 1,
+    },
+  ];
+}
+
+function dayFourNoLynchOutcomeRow() {
+  return {
+    phase_id: "D04",
+    source_seq: 913,
+    event_index: 0,
+    status: "NoLynch",
+    winner_slot: null,
+    tallies: { no_lynch: 1 },
+    majority: 1,
+    reason: null,
+  };
+}
+
 function rolePathFromUrl(roleUrl) {
   if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
     throw new Error("core-loop role proof missing source role URL");
@@ -5612,6 +6290,9 @@ export function assertCoreLoopAdminProof(evidence) {
     evidence.nightThreeEmptyResolutionSurface,
   );
   assertDayFourSurvivorRoleSurface(evidence.dayFourSurvivorRoleSurface);
+  assertNightFourActionSubmissionSurface(
+    evidence.nightFourActionSubmissionSurface,
+  );
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
@@ -7105,6 +7786,236 @@ function assertDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
     expectedVoteButtonCount: 2,
     expectedVoteTargetCount: 2,
   });
+}
+
+function assertNightFourActionSubmissionSurface(nightFourActionSubmissionSurface) {
+  const expectedGame = gameFromRoleUrl(
+    nightFourActionSubmissionSurface?.sourceHostRoleUrl,
+  );
+  if (
+    nightFourActionSubmissionSurface?.status !== "passed" ||
+    nightFourActionSubmissionSurface.clickedThroughFromRoleUrl !== true ||
+    nightFourActionSubmissionSurface.releaseReady !== false ||
+    nightFourActionSubmissionSurface.productionReady !== false ||
+    typeof nightFourActionSubmissionSurface.sourceHostRoleUrl !== "string" ||
+    !nightFourActionSubmissionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "player:D04:no_lynch:ack:912",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "host:D04:resolve_phase:ack:913",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "host:advance_phase:ack:914",
+    ) ||
+    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      "player:N04:submit_action:slot-5:ack:915",
+    )
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Night 4 action submission surface: ${JSON.stringify(
+        nightFourActionSubmissionSurface,
+      )}`,
+    );
+  }
+  assertDayFourNoLynchVoteProof({
+    proof: nightFourActionSubmissionSurface.dayFourVoteProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+  });
+  assertDayFourNoLynchHostTransitionProof({
+    proof: nightFourActionSubmissionSurface.hostTransitionProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceHostRoleUrl,
+  });
+  assertNightFourPlayerActionSubmissionProof({
+    proof: nightFourActionSubmissionSurface.nightFourActionProof,
+    expectedGame,
+    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+  });
+}
+
+function assertDayFourNoLynchVoteProof({ proof, expectedGame, sourceRoleUrl }) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes("Ack: stream seqs 912") ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "ack" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "D04" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.currentVote?.kind !== "no_lynch" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "Day 4 no-lynch vote ACK",
+    ) ||
+    proof.projectionVotecount?.[0]?.target !== "No lynch" ||
+    proof.projectionVotecount?.[0]?.count !== 1 ||
+    proof.projectionVotecount?.[0]?.needed !== 1 ||
+    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D03" ||
+    proof.setupResyncFromSeq !== 911 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D04" ||
+    proof.currentVote?.hasVote !== "true" ||
+    !String(proof.currentVote?.text ?? "").includes("No lynch") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 912") ||
+    proof.receiptRefreshKeys !== "votecount,commandState"
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 4 no-lynch vote ACK: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+}
+
+function assertDayFourNoLynchHostTransitionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 912 ||
+    proof.setupSnapshotHost?.phase?.id !== "D04" ||
+    proof.setupSnapshotHost?.phase?.state !== "open"
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 4 no-lynch host transition: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 913,
+    expectedPhaseId: "D04",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 914,
+    expectedPhaseId: "N04",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.resolveProof?.votecountProjection?.[0]?.target !== "No lynch" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.status !==
+      "NoLynch"
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Day 4 no-lynch host projections: ${JSON.stringify(
+        proof.resolveProof,
+      )}`,
+    );
+  }
+}
+
+function assertNightFourPlayerActionSubmissionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  const clickProof = proof?.clickProof;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.setupResyncFromSeq !== 914 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "N04" ||
+    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !== "slot-5" ||
+    clickProof?.status !== "passed" ||
+    clickProof.clickedAction !== "submit_action:factional_kill" ||
+    clickProof.commandKind !== "SubmitAction" ||
+    clickProof.command?.game !== expectedGame ||
+    clickProof.command.actor_slot !== "slot-7" ||
+    clickProof.command.action_id !== "factional_kill" ||
+    clickProof.command.template_id !== "factional_kill" ||
+    clickProof.command.targets?.[0] !== "slot-5" ||
+    clickProof.command.grant_id !== "grant-factional-kill-n04" ||
+    clickProof.commandStatus?.state !== "ack" ||
+    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 915") ||
+    clickProof.bridgePlan?.role !== "player" ||
+    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
+    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
+    clickProof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(clickProof.bridgePlan.projectionRefreshKeys, [
+      "notifications",
+      "investigationResults",
+      "commandState",
+    ]) ||
+    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
+    clickProof.projectionCommandState?.phase?.phaseId !== "N04" ||
+    clickProof.projectionCommandState?.actions?.length !== 0 ||
+    !String(clickProof.projectionCommandState?.boundary ?? "").includes(
+      "Night 4 action ACK",
+    ) ||
+    !String(clickProof.checkpointReceiptState ?? "").includes(
+      "Ack: stream seqs 915",
+    ) ||
+    clickProof.checkpointActionStateAfterAck !==
+      "disabled:no legal action available" ||
+    clickProof.receiptCount !== 1 ||
+    !String(clickProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 915")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing Night 4 player action ACK: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
 }
 
 function assertPostDayThreePlayerSurfaceProof({

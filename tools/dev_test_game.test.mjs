@@ -9301,6 +9301,7 @@ function coreLoopAdminProofFixture() {
     postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
     nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
     dayFourSurvivorRoleSurface: dayFourSurvivorRoleSurfaceFixture(),
+    nightFourActionSubmissionSurface: nightFourActionSubmissionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10946,6 +10947,192 @@ function dayFourSurvivorRoleSurfaceFixture() {
         { kind: "no_lynch", slotId: null, label: "No lynch" },
       ],
     }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function nightFourActionSubmissionSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> player:N04:submit_action:slot-5:ack:915",
+    dayFourVoteProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_vote:no_lynch",
+      commandKind: "SubmitVote",
+      command: {
+        game,
+        actor_slot: "slot-7",
+        target: "NoLynch",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 912",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitVote",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: ["votecount", "commandState"],
+      },
+      receipts: [{ state: "ack" }],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "D04",
+          locked: false,
+        },
+        currentVote: {
+          kind: "no_lynch",
+        },
+        boundary: "Seeded browser Day 4 no-lynch vote ACK refreshed current vote and votecount projection.",
+      },
+      projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
+      projectionDayVoteOutcomes: [
+        { phaseId: "D02" },
+        { phaseId: "D03" },
+      ],
+      setupResyncFromSeq: 911,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: "D04",
+        },
+      },
+      currentVote: {
+        hasVote: "true",
+        text: "Current vote: No lynch",
+      },
+      receiptCount: 1,
+      receiptStatusText: "Ack: stream seqs 912",
+      receiptRefreshKeys: "votecount,commandState",
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    hostTransitionProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 912,
+      setupSnapshotHost: {
+        phase: {
+          id: "D04",
+          state: "open",
+        },
+      },
+      resolveProof: {
+        ...hostPhaseTransitionActionFixture({
+          actionId: "resolve_phase",
+          commandKind: "ResolvePhase",
+          streamSeq: 913,
+          phaseId: "D04",
+          phaseState: "locked",
+          deadlineAffordance: "unlock_thread,advance_phase",
+          projectionRefreshKeys: [
+            "host",
+            "votecount",
+            "dayVoteOutcomes",
+            "hostPrompts",
+          ],
+          command: {
+            game,
+            seed: 918273,
+          },
+        }),
+        votecountProjection: [{ target: "No lynch", count: 1, needed: 1 }],
+        dayVoteOutcomesProjection: [
+          { phaseId: "D02" },
+          { phaseId: "D03" },
+          { phaseId: "D04", status: "NoLynch" },
+        ],
+      },
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: "advance_phase",
+        commandKind: "AdvancePhase",
+        streamSeq: 914,
+        phaseId: "N04",
+        phaseState: "open",
+        deadlineAffordance: "resolve_phase,lock_thread",
+        projectionRefreshKeys: [],
+        command: {
+          game,
+        },
+      }),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    nightFourActionProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 914,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: "N04",
+        },
+        actions: [{ targets: ["slot-5"] }],
+      },
+      clickProof: {
+        status: "passed",
+        clickedAction: "submit_action:factional_kill",
+        commandKind: "SubmitAction",
+        command: {
+          game,
+          action_id: "factional_kill",
+          actor_slot: "slot-7",
+          template_id: "factional_kill",
+          targets: ["slot-5"],
+          grant_id: "grant-factional-kill-n04",
+        },
+        commandStatus: {
+          state: "ack",
+          message: "Ack: stream seqs 915",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitAction",
+          commandEndpoint: "/commands",
+          finalState: "ack",
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        receipts: [{ state: "ack" }],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N04",
+          },
+          actions: [],
+          boundary:
+            "Seeded browser Night 4 action ACK refreshed action state after targeting slot-5.",
+        },
+        checkpointReceiptState: "ack:Ack: stream seqs 915",
+        checkpointActionStateAfterAck: "disabled:no legal action available",
+        receiptCount: 1,
+        receiptStatusText: "Ack: stream seqs 915",
+      },
+      releaseReady: false,
+      productionReady: false,
+    },
     releaseReady: false,
     productionReady: false,
   };
