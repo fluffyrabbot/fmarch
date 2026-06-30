@@ -1307,6 +1307,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "concurrent-host-deadline-advance-race",
     "concurrent-host-deadline-advance-race-reload",
     "concurrent-host-lifecycle-race",
+    "concurrent-host-lifecycle-race-reload",
     "concurrent-host-mixed-advance-race",
     "concurrent-host-mixed-advance-race-reload",
     "stale-host-resolve",

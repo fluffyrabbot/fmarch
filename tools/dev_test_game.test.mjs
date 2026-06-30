@@ -4202,6 +4202,30 @@ test("session card and markdown include role credential URLs and tokens", () => 
           error: "SlotNotAlive",
         },
         apiSlotAfterRace: { alive: false, status: "dead" },
+        roleReloadAfterRace: {
+          status: "passed",
+          deadRouteStatus: 200,
+          modkillRouteStatus: 200,
+          playerRouteStatus: 200,
+          deadPhaseAfterReload: { id: "D02", locked: false },
+          modkillPhaseAfterReload: { id: "D02", locked: false },
+          deadReplacementAfterReload: { lifecycleLabel: "Dead" },
+          modkillReplacementAfterReload: { lifecycleLabel: "Dead" },
+          deadLifecycleActionsAfterReload: [],
+          modkillLifecycleActionsAfterReload: [],
+          affectedPlayerCommandStateAfterReload: {
+            actorAlive: false,
+            actorStatus: "dead",
+            actions: [],
+          },
+          disabledControlsAfterReload: {
+            vote: { disabled: true },
+            withdraw: { disabled: true },
+            post: { disabled: true },
+          },
+          actionControlCountAfterReload: 0,
+          apiSlotAfterReload: { alive: false, status: "dead" },
+        },
       },
       concurrentActionRace: {
         status: "passed",
@@ -5797,6 +5821,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "host-modkill-control",
       "stale-host-modkill",
       "concurrent-host-lifecycle-race",
+      "concurrent-host-lifecycle-race-reload",
       "stale-host-prompt",
       "stale-host-prompt-reload",
       "stale-host-complete",
@@ -5898,7 +5923,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 100);
+  assert.equal(opsArtifacts.proofRun.laneCount, 101);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -6025,6 +6050,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-host-deadline-advance-race",
       "concurrent-host-deadline-advance-race-reload",
       "concurrent-host-lifecycle-race",
+      "concurrent-host-lifecycle-race-reload",
       "concurrent-host-complete-race",
       "stale-host-prompt-reload",
       "stale-host-complete-reload",
@@ -6580,6 +6606,7 @@ function hardeningAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-deadline-advance-race-reload",
         "concurrent-host-lifecycle-race",
+        "concurrent-host-lifecycle-race-reload",
         "concurrent-host-complete-race",
         "stale-host-prompt-reload",
         "stale-host-complete-reload",
@@ -6710,6 +6737,7 @@ function seedAdminProofFixture() {
         "concurrent-host-deadline-advance-race",
         "concurrent-host-deadline-advance-race-reload",
         "concurrent-host-lifecycle-race",
+        "concurrent-host-lifecycle-race-reload",
         "concurrent-host-complete-race",
         "stale-host-prompt-reload",
         "stale-host-complete-reload",

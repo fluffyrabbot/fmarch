@@ -3198,6 +3198,101 @@ assert.equal(
     .status,
   session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
 );
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.playerRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadPhaseAfterReload.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillPhaseAfterReload.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillPhaseAfterReload.locked,
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadReplacementAfterReload.lifecycleLabel,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningLabel,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillReplacementAfterReload.lifecycleLabel,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningLabel,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadLifecycleActionsAfterReload.includes("mark_dead"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.deadLifecycleActionsAfterReload.includes("modkill_slot"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillLifecycleActionsAfterReload.includes("mark_dead"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.modkillLifecycleActionsAfterReload.includes("modkill_slot"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.affectedPlayerCommandStateAfterReload.actorStatus,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.affectedPlayerCommandStateAfterReload.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.disabledControlsAfterReload.post.disabled,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.actionControlCountAfterReload,
+  0,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace
+    .roleReloadAfterRace.apiSlotAfterReload.status,
+  session.verification.multiplayerHardening.concurrentHostLifecycleRace.winningStatus,
+);
 assert.equal(session.verification.multiplayerHardening.staleHostPrompt.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.staleHostPrompt.reject.error,

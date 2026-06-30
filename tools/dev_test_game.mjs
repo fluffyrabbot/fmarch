@@ -9697,6 +9697,16 @@ async function submitConcurrentHostLifecycleRace({
     );
   }
 
+  const roleReloadAfterRace = await verifyConcurrentHostLifecycleRaceReload({
+    deadRacePage,
+    modkillRacePage,
+    affectedPlayerPage,
+    game,
+    apiBaseUrl,
+    winningLabel,
+    winningStatus,
+  });
+
   return {
     status: "passed",
     actionId: "mixed_slot_lifecycle",
@@ -9726,8 +9736,144 @@ async function submitConcurrentHostLifecycleRace({
     actionControlCount,
     directPost,
     apiSlotAfterRace,
+    roleReloadAfterRace,
     proof:
-      "Two seeded host role pages submitted Mark dead and Modkill slot concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget lifecycle recovery, both host projections plus the API converged to one terminal Slot 7 status, and the affected player role URL disabled commands with SlotNotAlive recovery.",
+      "Two seeded host role pages submitted Mark dead and Modkill slot concurrently with distinct command ids; one ACKed, one rejected with InvalidTarget lifecycle recovery, both host projections plus the API converged to one terminal Slot 7 status, the affected player role URL disabled commands with SlotNotAlive recovery, and all role URLs reloaded to the same terminal slot truth.",
+  };
+}
+
+async function verifyConcurrentHostLifecycleRaceReload({
+  deadRacePage,
+  modkillRacePage,
+  affectedPlayerPage,
+  game,
+  apiBaseUrl,
+  winningLabel,
+  winningStatus,
+}) {
+  const [deadReload, modkillReload, playerReload] = await Promise.all([
+    gotoHostConsole(deadRacePage, game),
+    gotoHostConsole(modkillRacePage, game),
+    gotoPlayerBoard(affectedPlayerPage, game),
+  ]);
+  await Promise.all([
+    waitForHostProjectionPhase(deadRacePage, { phaseId: "D02", locked: false }),
+    waitForHostProjectionPhase(modkillRacePage, {
+      phaseId: "D02",
+      locked: false,
+    }),
+    deadRacePage.waitForFunction(
+      (expectedLabel) =>
+        window.__fmarchHostProjection?.replacement?.lifecycleLabel === expectedLabel,
+      winningLabel,
+    ),
+    modkillRacePage.waitForFunction(
+      (expectedLabel) =>
+        window.__fmarchHostProjection?.replacement?.lifecycleLabel === expectedLabel,
+      winningLabel,
+    ),
+    affectedPlayerPage.waitForFunction(
+      (expectedStatus) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
+        window.__fmarchPlayerProjection?.commandState?.actorStatus === expectedStatus &&
+        (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      winningStatus,
+    ),
+  ]);
+  const [
+    deadPhaseAfterReload,
+    modkillPhaseAfterReload,
+    deadReplacementAfterReload,
+    modkillReplacementAfterReload,
+    deadLifecycleActionsAfterReload,
+    modkillLifecycleActionsAfterReload,
+    affectedPlayerCommandStateAfterReload,
+    voteControlAfterReload,
+    withdrawControlAfterReload,
+    postControlAfterReload,
+    actionControlCountAfterReload,
+  ] = await Promise.all([
+    deadRacePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    modkillRacePage.evaluate(() => window.__fmarchHostProjection?.phase),
+    deadRacePage.evaluate(() => window.__fmarchHostProjection?.replacement),
+    modkillRacePage.evaluate(() => window.__fmarchHostProjection?.replacement),
+    visibleHostControlActions(deadRacePage, "slot-lifecycle"),
+    visibleHostControlActions(modkillRacePage, "slot-lifecycle"),
+    affectedPlayerPage.evaluate(() => window.__fmarchPlayerProjection?.commandState),
+    playerCommandControlState(affectedPlayerPage, "submit_vote"),
+    playerCommandControlState(affectedPlayerPage, "withdraw_vote"),
+    playerCommandControlState(affectedPlayerPage, "submit_post"),
+    affectedPlayerPage.locator('[data-action^="submit_action"]').count(),
+  ]);
+  const apiSlotAfterReload = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const disabledControlsAfterReload = {
+    vote: voteControlAfterReload,
+    withdraw: withdrawControlAfterReload,
+    post: postControlAfterReload,
+  };
+  if (
+    deadReload.status !== 200 ||
+    modkillReload.status !== 200 ||
+    playerReload.status !== 200 ||
+    deadPhaseAfterReload?.id !== "D02" ||
+    deadPhaseAfterReload?.locked !== false ||
+    modkillPhaseAfterReload?.id !== "D02" ||
+    modkillPhaseAfterReload?.locked !== false ||
+    deadReplacementAfterReload?.lifecycleLabel !== winningLabel ||
+    modkillReplacementAfterReload?.lifecycleLabel !== winningLabel ||
+    deadLifecycleActionsAfterReload.includes("mark_dead") ||
+    deadLifecycleActionsAfterReload.includes("modkill_slot") ||
+    modkillLifecycleActionsAfterReload.includes("mark_dead") ||
+    modkillLifecycleActionsAfterReload.includes("modkill_slot") ||
+    affectedPlayerCommandStateAfterReload?.actorAlive !== false ||
+    affectedPlayerCommandStateAfterReload?.actorStatus !== winningStatus ||
+    (affectedPlayerCommandStateAfterReload?.actions ?? []).length !== 0 ||
+    !Object.values(disabledControlsAfterReload).every(
+      (control) => control.disabled === true,
+    ) ||
+    actionControlCountAfterReload !== 0 ||
+    apiSlotAfterReload?.alive !== false ||
+    apiSlotAfterReload?.status !== winningStatus
+  ) {
+    throw new Error(
+      `concurrent host lifecycle reload drifted: ${JSON.stringify({
+        winningStatus,
+        deadReload,
+        modkillReload,
+        playerReload,
+        deadPhaseAfterReload,
+        modkillPhaseAfterReload,
+        deadReplacementAfterReload,
+        modkillReplacementAfterReload,
+        deadLifecycleActionsAfterReload,
+        modkillLifecycleActionsAfterReload,
+        affectedPlayerCommandStateAfterReload,
+        disabledControlsAfterReload,
+        actionControlCountAfterReload,
+        apiSlotAfterReload,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    deadRouteStatus: deadReload.status,
+    modkillRouteStatus: modkillReload.status,
+    playerRouteStatus: playerReload.status,
+    deadPhaseAfterReload,
+    modkillPhaseAfterReload,
+    deadReplacementAfterReload,
+    modkillReplacementAfterReload,
+    deadLifecycleActionsAfterReload,
+    modkillLifecycleActionsAfterReload,
+    affectedPlayerCommandStateAfterReload,
+    disabledControlsAfterReload,
+    actionControlCountAfterReload,
+    apiSlotAfterReload,
   };
 }
 

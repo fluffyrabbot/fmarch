@@ -78,6 +78,7 @@ const requiredLaneIds = Object.freeze([
   "host-modkill-control",
   "stale-host-modkill",
   "concurrent-host-lifecycle-race",
+  "concurrent-host-lifecycle-race-reload",
   "stale-host-prompt",
   "stale-host-prompt-reload",
   "stale-host-complete",
@@ -4618,6 +4619,88 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "SlotNotAlive" &&
           hardening.concurrentHostLifecycleRace?.apiSlotAfterRace?.alive === false &&
           hardening.concurrentHostLifecycleRace?.apiSlotAfterRace?.status ===
+            hardening.concurrentHostLifecycleRace?.winningStatus,
+      },
+    ),
+    lane(
+      "concurrent-host-lifecycle-race-reload",
+      "Concurrent host lifecycle race reloads terminal slot projections",
+      {
+        game: hardening.concurrentHostLifecycleRace?.game ?? null,
+        winningStatus: hardening.concurrentHostLifecycleRace?.winningStatus ?? null,
+        deadRouteStatus:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadRouteStatus ?? null,
+        modkillRouteStatus:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillRouteStatus ?? null,
+        playerRouteStatus:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.playerRouteStatus ?? null,
+        deadLifecycleLabel:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadReplacementAfterReload?.lifecycleLabel ?? null,
+        modkillLifecycleLabel:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillReplacementAfterReload?.lifecycleLabel ?? null,
+        playerStatus:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.affectedPlayerCommandStateAfterReload?.actorStatus ?? null,
+        apiStatus:
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.apiSlotAfterReload?.status ?? null,
+        passed:
+          hardening.concurrentHostLifecycleRace?.status === "passed" &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadRouteStatus === 200 &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillRouteStatus === 200 &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.playerRouteStatus === 200 &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadPhaseAfterReload?.id === "D02" &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadPhaseAfterReload?.locked === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillPhaseAfterReload?.id === "D02" &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillPhaseAfterReload?.locked === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadReplacementAfterReload?.lifecycleLabel ===
+            hardening.concurrentHostLifecycleRace?.winningLabel &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillReplacementAfterReload?.lifecycleLabel ===
+            hardening.concurrentHostLifecycleRace?.winningLabel &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadLifecycleActionsAfterReload?.includes("mark_dead") === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.deadLifecycleActionsAfterReload?.includes("modkill_slot") === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillLifecycleActionsAfterReload?.includes("mark_dead") === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.modkillLifecycleActionsAfterReload?.includes("modkill_slot") ===
+            false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.affectedPlayerCommandStateAfterReload?.actorAlive === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.affectedPlayerCommandStateAfterReload?.actorStatus ===
+            hardening.concurrentHostLifecycleRace?.winningStatus &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.affectedPlayerCommandStateAfterReload?.actions?.length === 0 &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.disabledControlsAfterReload?.vote?.disabled === true &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.disabledControlsAfterReload?.withdraw?.disabled === true &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.disabledControlsAfterReload?.post?.disabled === true &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.actionControlCountAfterReload === 0 &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.apiSlotAfterReload?.alive === false &&
+          hardening.concurrentHostLifecycleRace?.roleReloadAfterRace
+            ?.apiSlotAfterReload?.status ===
             hardening.concurrentHostLifecycleRace?.winningStatus,
       },
     ),
