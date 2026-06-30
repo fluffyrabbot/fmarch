@@ -73,6 +73,7 @@ const raceCells = Object.freeze([
     actorPair: "replacement vs outgoing player",
     commandFamily: "night action",
     raceLaneId: "concurrent-replacement-action-race",
+    reloadLaneId: "concurrent-replacement-action-race-reload",
     roleSurfaces: ["player", "replacementPlayer", "host"],
   }),
   raceCell({

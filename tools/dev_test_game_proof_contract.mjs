@@ -61,6 +61,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-replacement-vote-race",
   "concurrent-replacement-vote-race-reload",
   "concurrent-replacement-action-race",
+  "concurrent-replacement-action-race-reload",
   "replacement-incoming-action",
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
@@ -3188,6 +3189,96 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.actorSlot === "slot_4" &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState
             ?.actorStatus === "alive",
+      },
+    ),
+    lane(
+      "concurrent-replacement-action-race-reload",
+      "Concurrent replacement action race reloads current action authority",
+      {
+        game: hardening.concurrentReplacementActionRace?.game ?? null,
+        commandStateStatus:
+          hardening.concurrentReplacementActionRace?.commandStateAfterRace
+            ?.status ?? null,
+        commandStateError:
+          hardening.concurrentReplacementActionRace?.commandStateAfterRace?.error ??
+          null,
+        staleRetryError:
+          hardening.concurrentReplacementActionRace?.staleRetry?.error ?? null,
+        apiOccupant:
+          hardening.concurrentReplacementActionRace?.apiSlotAfterRace
+            ?.occupant_user_id ?? null,
+        currentCommandStateStatus:
+          hardening.concurrentReplacementActionRace?.apiCurrentCommandStateStatus
+            ?.status ?? null,
+        currentActionCount:
+          hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+            ?.actions?.length ?? null,
+        currentRoleActionCount:
+          hardening.concurrentReplacementActionRace?.currentRoleCommandState
+            ?.actions?.length ?? null,
+        enabledCurrentActionControls:
+          hardening.concurrentReplacementActionRace?.currentRoleButtons?.filter(
+            (button) =>
+              button.action === "submit_action:factional_kill" &&
+              button.disabled === false,
+          ).length ?? null,
+        passed:
+          hardening.concurrentReplacementActionRace?.status === "passed" &&
+          hardening.concurrentReplacementActionRace?.commandStateAfterRace?.status ===
+            403 &&
+          hardening.concurrentReplacementActionRace?.commandStateAfterRace?.error ===
+            "NotYourSlot" &&
+          hardening.concurrentReplacementActionRace?.staleRetry?.state ===
+            "reject" &&
+          hardening.concurrentReplacementActionRace?.staleRetry?.error ===
+            "NotYourSlot" &&
+          hardening.concurrentReplacementActionRace?.apiSlotAfterRace
+            ?.occupant_user_id === "player-rowan" &&
+          hardening.concurrentReplacementActionRace?.apiCurrentCommandStateStatus
+            ?.status === 200 &&
+          hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+            ?.actor_slot === "slot_4" &&
+          hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+            ?.actor_status === "alive" &&
+          hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+            ?.phase?.phase_id === "N01" &&
+          hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+            ?.phase?.locked === false &&
+          hardening.concurrentReplacementActionRace?.currentRoleCommandState
+            ?.actorSlot === "slot_4" &&
+          hardening.concurrentReplacementActionRace?.currentRoleCommandState
+            ?.actorStatus === "alive" &&
+          hardening.concurrentReplacementActionRace?.currentRoleCommandState?.phase
+            ?.phaseId === "N01" &&
+          hardening.concurrentReplacementActionRace?.currentRoleCommandState?.phase
+            ?.locked === false &&
+          ((hardening.concurrentReplacementActionRace?.action?.state === "ack" &&
+            hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+              ?.actions?.length === 0 &&
+            hardening.concurrentReplacementActionRace?.currentRoleCommandState
+              ?.actions?.length === 0 &&
+            hardening.concurrentReplacementActionRace?.currentRoleButtons?.some(
+              (button) =>
+                button.action === "submit_action:factional_kill" &&
+                button.disabled === false,
+            ) === false) ||
+            (hardening.concurrentReplacementActionRace?.action?.state ===
+              "reject" &&
+              hardening.concurrentReplacementActionRace?.action?.error ===
+                "NotYourSlot" &&
+              hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
+                ?.actions?.some(
+                  (candidate) => candidate.template_id === "factional_kill",
+                ) === true &&
+              hardening.concurrentReplacementActionRace?.currentRoleCommandState
+                ?.actions?.some(
+                  (candidate) => candidate.templateId === "factional_kill",
+                ) === true &&
+              hardening.concurrentReplacementActionRace?.currentRoleButtons?.some(
+                (button) =>
+                  button.action === "submit_action:factional_kill" &&
+                  button.disabled === false,
+              ) === true)),
       },
     ),
     lane("replacement-incoming-action", "Incoming replacement action resolves", {

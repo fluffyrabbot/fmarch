@@ -3348,6 +3348,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         hostPhaseAfterRace: { id: "N01", locked: false },
         apiSlotAfterRace: { occupant_user_id: "player-rowan" },
+        apiCurrentCommandStateStatus: { status: 200 },
         currentCommandStateAfterRace: {
           actor_slot: "slot_4",
           actor_status: "alive",
@@ -6037,6 +6038,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-vote-race",
       "concurrent-replacement-vote-race-reload",
       "concurrent-replacement-action-race",
+      "concurrent-replacement-action-race-reload",
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
@@ -6101,8 +6103,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(raceCoverage.productionReady, false);
   assert.equal(raceCoverage.summary.cellCount, 16);
   assert.equal(raceCoverage.summary.provenCellCount, 16);
-  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 15);
-  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 15);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 16);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 16);
   assert.equal(raceCoverage.summary.reloadGapCount, 0);
   assert.deepEqual(
     raceCoverage.cells
@@ -6222,7 +6224,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 106);
+  assert.equal(opsArtifacts.proofRun.laneCount, 107);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -6343,6 +6345,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-replacement-vote-race",
       "concurrent-replacement-vote-race-reload",
       "concurrent-replacement-action-race",
+      "concurrent-replacement-action-race-reload",
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
@@ -6787,7 +6790,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 106,
+      laneCount: 107,
       lanes: [],
       nonClaims: [],
     },
@@ -6967,6 +6970,7 @@ function hardeningAdminProofFixture() {
         "concurrent-replacement-vote-race",
         "concurrent-replacement-vote-race-reload",
         "concurrent-replacement-action-race",
+        "concurrent-replacement-action-race-reload",
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
@@ -7125,6 +7129,7 @@ function seedAdminProofFixture() {
         "concurrent-replacement-vote-race",
         "concurrent-replacement-vote-race-reload",
         "concurrent-replacement-action-race",
+        "concurrent-replacement-action-race-reload",
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
@@ -7265,7 +7270,7 @@ function raceCoverageAdminProofFixture() {
         "player-vs-completed-game",
       ],
       cellCount: 16,
-      reloadCoveredCellCount: 14,
+      reloadCoveredCellCount: 15,
     },
     adminRoleSurface: {
       status: "passed",
