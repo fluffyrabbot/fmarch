@@ -9285,6 +9285,7 @@ function coreLoopAdminProofFixture() {
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
+    hostPhaseTransitionSurface: hostPhaseTransitionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -9523,6 +9524,129 @@ function playerActionRoleSurfaceFixture() {
     },
     releaseReady: false,
     productionReady: false,
+  };
+}
+
+function hostPhaseTransitionSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceHostRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    sourcePlayerRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    visitedHostRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
+    surfaceTestId: "host-console-surface",
+    clickedThroughFromRoleUrl: true,
+    transition: "resolve_phase:ack:801 -> advance_phase:ack:802 -> player:N02",
+    resolveProof: hostPhaseTransitionActionFixture({
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 801,
+      phaseId: "D02",
+      phaseState: "locked",
+      deadlineAffordance: "unlock_thread,advance_phase",
+      projectionRefreshKeys: [
+        "host",
+        "votecount",
+        "dayVoteOutcomes",
+        "hostPrompts",
+      ],
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        seed: 918273,
+      },
+    }),
+    advanceProof: hostPhaseTransitionActionFixture({
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 802,
+      phaseId: "N02",
+      phaseState: "open",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      projectionRefreshKeys: [],
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+      },
+    }),
+    playerObservationProof: {
+      status: "passed",
+      sourceRoleUrl:
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+      visitedRolePath: "/g/00000000-0000-0000-0000-000000000002",
+      surfaceTestId: "player-surface",
+      resyncFromSeq: 802,
+      resyncKeys: [
+        "thread",
+        "votecount",
+        "dayVoteOutcomes",
+        "notifications",
+        "investigationResults",
+        "commandState",
+      ],
+      resyncSnapshotCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+      },
+      projectionCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+        boundary: "Seeded browser player resync observed host AdvancePhase into Night 2.",
+      },
+      checkpointPhaseId: "N02",
+      checkpointPhaseState: "open",
+      checkpointActionState: "enabled:submit_action:factional_kill",
+      checkpointTargetSlots: "slot-2",
+      releaseReady: false,
+      productionReady: false,
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function hostPhaseTransitionActionFixture({
+  actionId,
+  commandKind,
+  streamSeq,
+  phaseId,
+  phaseState,
+  deadlineAffordance,
+  projectionRefreshKeys,
+  command,
+}) {
+  return {
+    status: "passed",
+    clickedAction: actionId,
+    commandKind,
+    command,
+    commandStatus: {
+      state: "ack",
+      message: `Ack: stream seqs ${streamSeq}`,
+    },
+    commandOutcome: {
+      state: "ack",
+      message: `Ack: stream seqs ${streamSeq}`,
+    },
+    bridgePlan: {
+      role: "moderator",
+      commandKind,
+      commandEndpoint: "/commands",
+      finalState: "ack",
+      projectionRefreshKeys,
+    },
+    projection: {
+      phase: {
+        id: phaseId,
+        state: phaseState,
+        locked: phaseState === "locked",
+      },
+    },
+    checkpointPhaseId: phaseId,
+    checkpointPhaseState: phaseState,
+    checkpointDeadlineAffordance: deadlineAffordance,
+    activityStatusText: `Ack: stream seqs ${streamSeq}`,
   };
 }
 

@@ -1892,6 +1892,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   }
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
+  assertCoreLoopHostPhaseTransitionSurface(proof.hostPhaseTransitionSurface);
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1917,6 +1918,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     hostRoleSurface: proof.hostRoleSurface,
     playerRoleSurface: proof.playerRoleSurface,
+    hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -2167,6 +2169,124 @@ function assertCoreLoopPlayerActionInvalidRecoveryProof({
   }
 }
 
+function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
+  const expectedGame = gameFromRoleUrl(
+    hostPhaseTransitionSurface?.sourceHostRoleUrl,
+  );
+  const resolveProof = hostPhaseTransitionSurface?.resolveProof;
+  const advanceProof = hostPhaseTransitionSurface?.advanceProof;
+  const playerObservationProof =
+    hostPhaseTransitionSurface?.playerObservationProof;
+  if (
+    hostPhaseTransitionSurface?.status !== "passed" ||
+    hostPhaseTransitionSurface.clickedThroughFromRoleUrl !== true ||
+    hostPhaseTransitionSurface.releaseReady !== false ||
+    hostPhaseTransitionSurface.productionReady !== false ||
+    typeof hostPhaseTransitionSurface.sourceHostRoleUrl !== "string" ||
+    !hostPhaseTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !hostPhaseTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof hostPhaseTransitionSurface.sourcePlayerRoleUrl !== "string" ||
+    !hostPhaseTransitionSurface.sourcePlayerRoleUrl.includes("/g/") ||
+    typeof hostPhaseTransitionSurface.visitedHostRolePath !== "string" ||
+    !hostPhaseTransitionSurface.visitedHostRolePath.endsWith("/host") ||
+    hostPhaseTransitionSurface.surfaceTestId !== "host-console-surface" ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "resolve_phase:ack:801",
+    ) ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:802",
+    ) ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes("player:N02")
+  ) {
+    throw new Error("core-loop admin proof missing host phase transition surface");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 801,
+    expectedPhaseId: "D02",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 802,
+    expectedPhaseId: "N02",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  if (
+    playerObservationProof?.status !== "passed" ||
+    playerObservationProof.releaseReady !== false ||
+    playerObservationProof.productionReady !== false ||
+    playerObservationProof.sourceRoleUrl !==
+      hostPhaseTransitionSurface.sourcePlayerRoleUrl ||
+    !playerObservationProof.visitedRolePath?.includes("/g/") ||
+    playerObservationProof.surfaceTestId !== "player-surface" ||
+    playerObservationProof.resyncFromSeq !== 802 ||
+    !playerObservationProof.resyncKeys?.includes("commandState") ||
+    playerObservationProof.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    playerObservationProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(playerObservationProof.projectionCommandState?.boundary ?? "").includes(
+      "AdvancePhase",
+    ) ||
+    playerObservationProof.checkpointPhaseId !== "N02" ||
+    playerObservationProof.checkpointPhaseState !== "open" ||
+    playerObservationProof.checkpointActionState !==
+      "enabled:submit_action:factional_kill" ||
+    playerObservationProof.checkpointTargetSlots !== "slot-2"
+  ) {
+    throw new Error("core-loop admin proof missing player phase transition observation");
+  }
+}
+
+function assertCoreLoopHostPhaseTransitionActionProof({
+  proof,
+  expectedGame,
+  actionId,
+  commandKind,
+  streamSeq,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedDeadlineAffordance,
+  expectedRefreshKeys,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== actionId ||
+    proof.commandKind !== commandKind ||
+    proof.command?.game !== expectedGame ||
+    (commandKind === "ResolvePhase" && proof.command.seed !== 918273) ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
+    proof.commandOutcome?.state !== "ack" ||
+    !proof.commandOutcome?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
+    proof.bridgePlan?.role !== "moderator" ||
+    proof.bridgePlan.commandKind !== commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, expectedRefreshKeys) ||
+    proof.projection?.phase?.id !== expectedPhaseId ||
+    proof.projection?.phase?.state !== expectedPhaseState ||
+    proof.projection?.phase?.locked !== (expectedPhaseState === "locked") ||
+    proof.checkpointPhaseId !== expectedPhaseId ||
+    proof.checkpointPhaseState !== expectedPhaseState ||
+    proof.checkpointDeadlineAffordance !== expectedDeadlineAffordance ||
+    !String(proof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${streamSeq}`)
+  ) {
+    throw new Error(`core-loop admin proof missing host ${actionId} transition ACK`);
+  }
+}
+
 function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
@@ -2240,6 +2360,16 @@ function gameFromRoleUrl(roleUrl) {
   } catch {
     return "";
   }
+}
+
+function sameStringArray(actual, expected) {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) {
+    return false;
+  }
+  return (
+    actual.length === expected.length &&
+    actual.every((item, index) => item === expected[index])
+  );
 }
 
 function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {

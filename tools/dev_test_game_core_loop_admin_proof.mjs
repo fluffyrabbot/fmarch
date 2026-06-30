@@ -112,6 +112,12 @@ await runAdminAuditProof({
       frontendBaseUrl,
       roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
     });
+    const hostPhaseTransitionSurface = await proveHostPhaseTransitionSurface({
+      browser,
+      frontendBaseUrl,
+      hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+      playerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+    });
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
@@ -123,6 +129,7 @@ await runAdminAuditProof({
       adminRoleSurface,
       hostRoleSurface,
       playerRoleSurface,
+      hostPhaseTransitionSurface,
       privateChannelRoleSurface,
     };
   },
@@ -145,6 +152,7 @@ await runAdminAuditProof({
     adminRoleSurface: surfaces.adminRoleSurface,
     hostRoleSurface: surfaces.hostRoleSurface,
     playerRoleSurface: surfaces.playerRoleSurface,
+    hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
     privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
@@ -501,6 +509,349 @@ async function installHostLifecycleStaleRejectBrowserRoutes(
   await page.route("**/games/*/host-console-state?**", async (route) => {
     await fulfillJson(route, hostOpenConsoleState({
       boundary: "Seeded browser PhaseLocked recovery kept current phase controls.",
+    }));
+  });
+}
+
+async function proveHostPhaseTransitionSurface({
+  browser,
+  frontendBaseUrl,
+  hostRoleUrl,
+  playerRoleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedHostRolePath = rolePathFromUrl(hostRoleUrl);
+  const commandRequests = [];
+  try {
+    await installHostPhaseTransitionBrowserRoutes(page, { commandRequests });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-host",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedHostRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const resolveProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 801,
+      expectedPhaseId: "D02",
+      expectedPhaseState: "locked",
+      expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    });
+    const advanceProof = await proveHostPhaseActionClick({
+      page,
+      commandRequests,
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 802,
+      expectedPhaseId: "N02",
+      expectedPhaseState: "open",
+      expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    });
+    const playerObservationProof = await provePlayerPhaseTransitionObservation({
+      browser,
+      frontendBaseUrl,
+      roleUrl: playerRoleUrl,
+    });
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("host phase transition proof leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceHostRoleUrl: String(hostRoleUrl),
+      sourcePlayerRoleUrl: String(playerRoleUrl),
+      visitedHostRolePath,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      transition: "resolve_phase:ack:801 -> advance_phase:ack:802 -> player:N02",
+      resolveProof,
+      advanceProof,
+      playerObservationProof,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function proveHostPhaseActionClick({
+  page,
+  commandRequests,
+  actionId,
+  commandKind,
+  streamSeq,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedDeadlineAffordance,
+}) {
+  const actionTile = page.getByTestId(`critical-host-action-${actionId}`);
+  await actionTile.waitFor({ state: "visible", timeout: 15000 });
+  await actionTile.getByTestId("critical-host-action-trigger").click();
+  await actionTile.getByTestId("critical-host-action-confirm").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await actionTile.getByTestId("critical-host-action-confirm").click();
+  await page.waitForFunction(
+    ({ actionId: expectedActionId, commandKind: expectedCommandKind, streamSeq: expectedSeq }) =>
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack" &&
+      window.__fmarchHostCommandStatuses?.[expectedActionId]?.message?.includes(
+        `Ack: stream seqs ${expectedSeq}`,
+      ) &&
+      window.__fmarchHostCommandDispatchBridgePlan?.commandKind ===
+        expectedCommandKind,
+    { actionId, commandKind, streamSeq },
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    ({
+      phaseId,
+      phaseState,
+      deadlineAffordance,
+    }) => {
+      const checkpoint = document.querySelector(
+        '[data-testid="host-lifecycle-control-checkpoint"]',
+      );
+      return (
+        checkpoint?.getAttribute("data-phase-id") === phaseId &&
+        checkpoint?.getAttribute("data-phase-state") === phaseState &&
+        checkpoint?.getAttribute("data-deadline-affordance") ===
+          deadlineAffordance
+      );
+    },
+    {
+      phaseId: expectedPhaseId,
+      phaseState: expectedPhaseState,
+      deadlineAffordance: expectedDeadlineAffordance,
+    },
+    { timeout: 15000 },
+  );
+  const commandStatuses = await page.evaluate(
+    () => window.__fmarchHostCommandStatuses,
+  );
+  const commandOutcomes = await page.evaluate(
+    () => window.__fmarchHostCommandOutcomes,
+  );
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchHostCommandDispatchBridgePlan,
+  );
+  const projection = await page.evaluate(() => window.__fmarchHostProjection);
+  const checkpoint = page.getByTestId("host-lifecycle-control-checkpoint");
+  const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+  const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
+  const checkpointDeadlineAffordance = await checkpoint.getAttribute(
+    "data-deadline-affordance",
+  );
+  const activityStatusText = await page
+    .getByTestId(`host-command-activity-status-${actionId}`)
+    .innerText();
+  const command = commandRequests.at(-1)?.[commandKind] ?? null;
+  return {
+    status: "passed",
+    clickedAction: actionId,
+    commandKind: command === null ? null : commandKind,
+    command,
+    commandStatus: commandStatuses?.[actionId] ?? null,
+    commandOutcome: commandOutcomes?.at?.(-1) ?? null,
+    bridgePlan,
+    projection,
+    checkpointPhaseId,
+    checkpointPhaseState,
+    checkpointDeadlineAffordance,
+    activityStatusText,
+  };
+}
+
+async function installHostPhaseTransitionBrowserRoutes(page, { commandRequests }) {
+  let hostPhaseState = "open";
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.ResolvePhase !== undefined) {
+      hostPhaseState = "resolved";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [801],
+          },
+        },
+      });
+      return;
+    }
+    if (command?.AdvancePhase !== undefined) {
+      hostPhaseState = "advanced";
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [802],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "host-phase-transition-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongHostPhaseTransitionProofCommand",
+            retryable: false,
+            message: "host phase transition proof only accepts phase controls",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/host-console-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      hostPhaseTransitionConsoleState({
+        phaseId: hostPhaseState === "advanced" ? "N02" : "D02",
+        locked: hostPhaseState === "resolved",
+        boundary:
+          hostPhaseState === "advanced"
+            ? "Seeded browser AdvancePhase ACK advanced the host projection to Night 2."
+            : "Seeded browser ResolvePhase ACK locked Day 2 for host advancement.",
+      }),
+    );
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/host-prompts?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+}
+
+async function provePlayerPhaseTransitionObservation({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  try {
+    await installPlayerPhaseTransitionObservationRoutes(page);
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const resyncSnapshot = await page.evaluate(async () => {
+      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+        throw new Error("player resync hook is unavailable");
+      }
+      return window.__fmarchTriggerPlayerResync(802);
+    });
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N02" &&
+        document
+          .querySelector('[data-testid="player-action-submission-checkpoint"]')
+          ?.getAttribute("data-phase-id") === "N02",
+      null,
+      { timeout: 15000 },
+    );
+    const resyncKeys = await page.evaluate(() => window.__fmarchPlayerResyncKeys);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+    const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
+    const checkpointActionState = await checkpoint.getAttribute("data-action-state");
+    const checkpointTargetSlots = await checkpoint.getAttribute("data-target-slots");
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("player phase transition observation leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      resyncFromSeq: 802,
+      resyncKeys,
+      resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
+      projectionCommandState: projection?.commandState ?? null,
+      checkpointPhaseId,
+      checkpointPhaseState,
+      checkpointActionState,
+      checkpointTargetSlots,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function installPlayerPhaseTransitionObservationRoutes(page) {
+  await page.route("**/games/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, seededActionOpenCommandState({
+      boundary: "Seeded browser player resync observed host AdvancePhase into Night 2.",
     }));
   });
 }
@@ -1180,6 +1531,34 @@ function hostOpenConsoleState({ boundary }) {
   };
 }
 
+function hostPhaseTransitionConsoleState({ phaseId, locked, boundary }) {
+  return {
+    completed: false,
+    phase: {
+      phase_id: phaseId,
+      locked,
+      deadline: null,
+    },
+    slots: [
+      {
+        slot_id: "slot-7",
+        occupant_user_id: "player-mira",
+        alive: true,
+        status: "alive",
+        status_tags: ["alive"],
+        role_key: "mafia_goon",
+      },
+    ],
+    thread_posts: [
+      {
+        seq: locked ? 801 : 802,
+        author_slot: "host",
+        body: boundary,
+      },
+    ],
+  };
+}
+
 function rolePathFromUrl(roleUrl) {
   if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
     throw new Error("core-loop role proof missing source role URL");
@@ -1271,6 +1650,7 @@ export function assertCoreLoopAdminProof(evidence) {
   }
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
+  assertHostPhaseTransitionSurface(evidence.hostPhaseTransitionSurface);
   assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
@@ -1549,6 +1929,136 @@ function assertPlayerActionInvalidRecoveryProof({
   }
 }
 
+function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
+  const expectedGame = gameFromRoleUrl(
+    hostPhaseTransitionSurface?.sourceHostRoleUrl,
+  );
+  const resolveProof = hostPhaseTransitionSurface?.resolveProof;
+  const advanceProof = hostPhaseTransitionSurface?.advanceProof;
+  const playerObservationProof =
+    hostPhaseTransitionSurface?.playerObservationProof;
+  if (
+    hostPhaseTransitionSurface?.status !== "passed" ||
+    hostPhaseTransitionSurface.clickedThroughFromRoleUrl !== true ||
+    hostPhaseTransitionSurface.releaseReady !== false ||
+    hostPhaseTransitionSurface.productionReady !== false ||
+    typeof hostPhaseTransitionSurface.sourceHostRoleUrl !== "string" ||
+    !hostPhaseTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !hostPhaseTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof hostPhaseTransitionSurface.sourcePlayerRoleUrl !== "string" ||
+    !hostPhaseTransitionSurface.sourcePlayerRoleUrl.includes("/g/") ||
+    typeof hostPhaseTransitionSurface.visitedHostRolePath !== "string" ||
+    !hostPhaseTransitionSurface.visitedHostRolePath.endsWith("/host") ||
+    hostPhaseTransitionSurface.surfaceTestId !== "host-console-surface" ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "resolve_phase:ack:801",
+    ) ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes(
+      "advance_phase:ack:802",
+    ) ||
+    !String(hostPhaseTransitionSurface.transition ?? "").includes("player:N02")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host phase transition surface: ${JSON.stringify(
+        hostPhaseTransitionSurface,
+      )}`,
+    );
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 801,
+    expectedPhaseId: "D02",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertHostPhaseTransitionActionProof({
+    proof: advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 802,
+    expectedPhaseId: "N02",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  if (
+    playerObservationProof?.status !== "passed" ||
+    playerObservationProof.releaseReady !== false ||
+    playerObservationProof.productionReady !== false ||
+    playerObservationProof.sourceRoleUrl !==
+      hostPhaseTransitionSurface.sourcePlayerRoleUrl ||
+    !playerObservationProof.visitedRolePath?.includes("/g/") ||
+    playerObservationProof.surfaceTestId !== "player-surface" ||
+    playerObservationProof.resyncFromSeq !== 802 ||
+    !playerObservationProof.resyncKeys?.includes("commandState") ||
+    playerObservationProof.resyncSnapshotCommandState?.phase?.phaseId !== "N02" ||
+    playerObservationProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(playerObservationProof.projectionCommandState?.boundary ?? "").includes(
+      "AdvancePhase",
+    ) ||
+    playerObservationProof.checkpointPhaseId !== "N02" ||
+    playerObservationProof.checkpointPhaseState !== "open" ||
+    playerObservationProof.checkpointActionState !==
+      "enabled:submit_action:factional_kill" ||
+    playerObservationProof.checkpointTargetSlots !== "slot-2"
+  ) {
+    throw new Error(
+      `core-loop admin proof missing player phase transition observation: ${JSON.stringify(
+        playerObservationProof,
+      )}`,
+    );
+  }
+}
+
+function assertHostPhaseTransitionActionProof({
+  proof,
+  expectedGame,
+  actionId,
+  commandKind,
+  streamSeq,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedDeadlineAffordance,
+  expectedRefreshKeys,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== actionId ||
+    proof.commandKind !== commandKind ||
+    proof.command?.game !== expectedGame ||
+    (commandKind === "ResolvePhase" && proof.command.seed !== 918273) ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
+    proof.commandOutcome?.state !== "ack" ||
+    !proof.commandOutcome?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
+    proof.bridgePlan?.role !== "moderator" ||
+    proof.bridgePlan.commandKind !== commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, expectedRefreshKeys) ||
+    proof.projection?.phase?.id !== expectedPhaseId ||
+    proof.projection?.phase?.state !== expectedPhaseState ||
+    proof.projection?.phase?.locked !== (expectedPhaseState === "locked") ||
+    proof.checkpointPhaseId !== expectedPhaseId ||
+    proof.checkpointPhaseState !== expectedPhaseState ||
+    proof.checkpointDeadlineAffordance !== expectedDeadlineAffordance ||
+    !String(proof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${streamSeq}`)
+  ) {
+    throw new Error(
+      `core-loop admin proof missing host ${actionId} transition ACK: ${JSON.stringify(
+        proof,
+      )}`,
+    );
+  }
+}
+
 function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
@@ -1639,4 +2149,14 @@ function assertVisibleRows(message, visibleRows, requiredRows) {
       throw new Error(`${message}: ${rowId}`);
     }
   }
+}
+
+function sameStringArray(actual, expected) {
+  if (!Array.isArray(actual) || !Array.isArray(expected)) {
+    return false;
+  }
+  return (
+    actual.length === expected.length &&
+    actual.every((item, index) => item === expected[index])
+  );
 }
