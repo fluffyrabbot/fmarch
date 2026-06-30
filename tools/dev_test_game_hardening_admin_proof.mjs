@@ -94,6 +94,7 @@ const requiredChecks = [
   "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline",
   "stale-cohost-deadline-reload",
+  "stale-cohost-deadline-reconnect-recovery",
 ];
 
 await runAdminAuditProof({

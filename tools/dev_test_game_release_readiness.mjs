@@ -420,6 +420,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         "stale-host-deadline-reconnect-recovery",
         "stale-cohost-deadline",
         "stale-cohost-deadline-reload",
+        "stale-cohost-deadline-reconnect-recovery",
       ],
       ...(hardeningAdminProofEvidence === undefined
         ? {}
@@ -1597,6 +1598,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
     "stale-host-deadline-reconnect-recovery",
     "stale-cohost-deadline",
     "stale-cohost-deadline-reload",
+    "stale-cohost-deadline-reconnect-recovery",
   ];
   if (proof?.version !== 1) {
     throw new Error(`hardening admin proof version drifted: ${proof?.version}`);
@@ -1852,6 +1854,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "stale-host-resolve-reconnect-recovery",
     "stale-host-advance-reconnect-recovery",
     "stale-host-deadline-reconnect-recovery",
+    "stale-cohost-deadline-reconnect-recovery",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
     "stale-action-reconnect-recovery",
@@ -1979,6 +1982,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     "stale-host-resolve-reconnect-recovery",
     "stale-host-advance-reconnect-recovery",
     "stale-host-deadline-reconnect-recovery",
+    "stale-cohost-deadline-reconnect-recovery",
     "stale-same-action-recovery",
     "stale-action-conflict-message",
     "stale-action-reconnect-recovery",

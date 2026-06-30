@@ -89,6 +89,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
       "stale-host-resolve-reconnect-recovery",
       "stale-host-advance-reconnect-recovery",
       "stale-host-deadline-reconnect-recovery",
+      "stale-cohost-deadline-reconnect-recovery",
     ],
   );
   assert.deepEqual(
@@ -159,6 +160,7 @@ function hostedMatrixFixture() {
       { id: "stale-host-resolve-reconnect-recovery" },
       { id: "stale-host-advance-reconnect-recovery" },
       { id: "stale-host-deadline-reconnect-recovery" },
+      { id: "stale-cohost-deadline-reconnect-recovery" },
     ],
     staleConflictLanes: [
       { id: "replacement-stale-conflict-message" },

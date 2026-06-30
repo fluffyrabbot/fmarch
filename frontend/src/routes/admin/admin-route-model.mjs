@@ -2213,6 +2213,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     "stale-host-deadline-reconnect-recovery",
     "stale-cohost-deadline",
     "stale-cohost-deadline-reload",
+    "stale-cohost-deadline-reconnect-recovery",
   ];
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));

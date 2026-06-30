@@ -6311,6 +6311,19 @@ test("session card and markdown include role credential URLs and tokens", () => 
           phaseActionsAfterReload: [],
           apiPhaseAfterReload: { phase_id: "D02", locked: false, deadline: null },
         },
+        reconnectAfterReject: {
+          status: "passed",
+          game,
+          reconnectingStatus: { state: "reconnecting" },
+          reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+          recoveredStatus: { state: "recovered" },
+          recoveredHostProjection: {
+            phase: { id: "D02", locked: false },
+          },
+        },
+        deadlineActionsAfterReconnect: ["extend_deadline"],
+        phaseActionsAfterReconnect: [],
+        apiPhaseAfterReconnect: { phase_id: "D02", locked: false, deadline: null },
       },
     },
   };
@@ -6533,6 +6546,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-deadline-reconnect-recovery",
       "stale-cohost-deadline",
       "stale-cohost-deadline-reload",
+      "stale-cohost-deadline-reconnect-recovery",
     ],
   );
   const raceCoverage = buildDevTestGameRaceCoverage(proofRun, {
@@ -6726,7 +6740,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   );
   assert.equal(hostedMatrix.summary.cellCount, 16);
   assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
-  assert.equal(hostedMatrix.summary.reconnectLaneCount, 9);
+  assert.equal(hostedMatrix.summary.reconnectLaneCount, 10);
   assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
   assert.equal(hostedMatrix.summary.realHostedDeploymentStatus, "unproven");
@@ -6919,7 +6933,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 112);
+  assert.equal(opsArtifacts.proofRun.laneCount, 113);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -7060,6 +7074,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "stale-host-deadline-reload",
       "stale-host-deadline-reconnect-recovery",
       "stale-cohost-deadline-reload",
+      "stale-cohost-deadline-reconnect-recovery",
       "concurrent-host-deadline-advance-race",
       "concurrent-host-deadline-advance-race-reload",
       "concurrent-host-lifecycle-race",
@@ -7757,7 +7772,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 112,
+      laneCount: 113,
     },
     summary: {
       cellCount: cells.length,
@@ -8023,7 +8038,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 112,
+      laneCount: 113,
       lanes: [],
       nonClaims: [],
     },
@@ -8266,6 +8281,7 @@ function hardeningAdminProofFixture() {
         "stale-host-deadline-reconnect-recovery",
         "stale-cohost-deadline",
         "stale-cohost-deadline-reload",
+        "stale-cohost-deadline-reconnect-recovery",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -8384,6 +8400,7 @@ function seedAdminProofFixture() {
         "concurrent-host-advance-race-reload",
         "stale-host-advance-reconnect-recovery",
         "stale-host-deadline-reconnect-recovery",
+        "stale-cohost-deadline-reconnect-recovery",
         "concurrent-host-deadline-advance-race",
         "concurrent-host-deadline-advance-race-reload",
         "concurrent-host-lifecycle-race",
@@ -8770,6 +8787,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "stale-host-resolve-reconnect-recovery",
         "stale-host-advance-reconnect-recovery",
         "stale-host-deadline-reconnect-recovery",
+        "stale-cohost-deadline-reconnect-recovery",
       ],
       staleConflictLaneIds: [
         "replacement-stale-conflict-message",
@@ -8817,6 +8835,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "stale-host-resolve-reconnect-recovery",
         "stale-host-advance-reconnect-recovery",
         "stale-host-deadline-reconnect-recovery",
+        "stale-cohost-deadline-reconnect-recovery",
       ],
       visibleStaleConflictLanes: [
         "replacement-stale-conflict-message",

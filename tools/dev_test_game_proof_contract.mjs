@@ -120,6 +120,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline",
   "stale-cohost-deadline-reload",
+  "stale-cohost-deadline-reconnect-recovery",
 ]);
 
 export function buildDevTestGameProofRun(session, options = {}) {
@@ -7301,6 +7302,52 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
           ?.apiPhaseAfterReload?.deadline === null,
     }),
+    lane(
+      "stale-cohost-deadline-reconnect-recovery",
+      "Stale cohost deadline recovery reconnects delegated console",
+      {
+        game: session.game ?? null,
+        reconnectingState:
+          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectingStatus
+            ?.state ?? null,
+        recoveryState:
+          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state ?? null,
+        recoveredPhase:
+          hardening.staleCohostDeadline?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.id ?? null,
+        recoveredLocked:
+          hardening.staleCohostDeadline?.reconnectAfterReject?.recoveredHostProjection
+            ?.phase?.locked ?? null,
+        deadlineActions:
+          hardening.staleCohostDeadline?.deadlineActionsAfterReconnect ?? null,
+        phaseActions:
+          hardening.staleCohostDeadline?.phaseActionsAfterReconnect ?? null,
+        apiDeadline:
+          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.deadline ?? null,
+        passed:
+          hardening.staleCohostDeadline?.status === "passed" &&
+          hardening.staleCohostDeadline?.reject?.error === "PhaseLocked" &&
+          hardening.staleCohostDeadline?.reconnectAfterReject?.status === "passed" &&
+          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectingStatus
+            ?.state === "reconnecting" &&
+          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.state === "recovered" &&
+          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
+            ?.attempt === 1 &&
+          hardening.staleCohostDeadline?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.id === "D02" &&
+          hardening.staleCohostDeadline?.reconnectAfterReject
+            ?.recoveredHostProjection?.phase?.locked === false &&
+          hardening.staleCohostDeadline?.deadlineActionsAfterReconnect?.includes(
+            "extend_deadline",
+          ) === true &&
+          hardening.staleCohostDeadline?.phaseActionsAfterReconnect?.length === 0 &&
+          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.phase_id === "D02" &&
+          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.locked === false &&
+          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.deadline === null,
+      },
+    ),
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";
   return {
