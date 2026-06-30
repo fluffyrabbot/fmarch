@@ -280,6 +280,11 @@ async function provePlayerActionSubmissionCheckpoint({
       page,
       commandRequests,
     });
+    const invalidRecoveryProof = await provePlayerActionInvalidRecovery({
+      browser,
+      frontendBaseUrl,
+      roleUrl,
+    });
     return {
       status: "passed",
       sourceRoleUrl: String(roleUrl),
@@ -302,6 +307,7 @@ async function provePlayerActionSubmissionCheckpoint({
         statusText,
       },
       playerActionSubmissionClickProof: clickProof,
+      playerActionInvalidRecoveryProof: invalidRecoveryProof,
       releaseReady: false,
       productionReady: false,
     };
@@ -377,6 +383,153 @@ async function installPlayerActionSubmissionBrowserRoutes(page, { commandRequest
   });
 }
 
+async function provePlayerActionInvalidRecovery({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  try {
+    await installPlayerActionInvalidRecoveryBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const invalidButton = page.locator(
+      '[data-testid="player-action-commands"] button[data-action="submit_invalid_action:factional_kill"]',
+    );
+    await invalidButton.waitFor({ state: "visible", timeout: 15000 });
+    await invalidButton.click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "InvalidTarget" &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitAction",
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      () =>
+        document
+          .querySelector('[data-testid="player-action-submission-checkpoint"]')
+          ?.getAttribute("data-receipt-state") === "reject:InvalidTarget",
+      null,
+      { timeout: 15000 },
+    );
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const receiptState = await checkpoint.getAttribute("data-receipt-state");
+    const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
+    const targetSlotsAfterReject = await checkpoint.getAttribute("data-target-slots");
+    const receiptCountText = await page
+      .getByTestId("player-command-receipt-count")
+      .innerText();
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("player invalid action proof leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.SubmitAction ?? null;
+    return {
+      status: "passed",
+      clickedAction: "submit_invalid_action:factional_kill",
+      commandKind: command === null ? null : "SubmitAction",
+      command,
+      commandStatus,
+      bridgePlan,
+      receipts,
+      projectionCommandState: projection?.commandState ?? null,
+      checkpointReceiptState: receiptState,
+      checkpointActionStateAfterReject: actionStateAfterReject,
+      checkpointTargetSlotsAfterReject: targetSlotsAfterReject,
+      receiptCount: Number.parseInt(receiptCountText, 10),
+      receiptStatusText,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function installPlayerActionInvalidRecoveryBrowserRoutes(
+  page,
+  { commandRequests },
+) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitAction?.action_id === "invalid_self_factional_kill") {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "InvalidTarget",
+              retryable: false,
+              message: "invalid target",
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        v: 1,
+        id: commandEnvelope?.id ?? "player-invalid-action-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPlayerInvalidActionProofCommand",
+            retryable: false,
+            message: "invalid action proof only accepts invalid self action",
+          },
+        },
+      }),
+    });
+  });
+  await page.route("**/games/*/notifications?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/investigation-results?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, seededActionOpenCommandState({
+      boundary: "Seeded browser InvalidTarget recovery kept legal action controls.",
+    }));
+  });
+}
+
 async function provePlayerActionSubmissionClick({ page, commandRequests }) {
   const actionButton = page.locator(
     '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
@@ -435,6 +588,41 @@ async function fulfillJson(route, payload, status = 200) {
     contentType: "application/json",
     body: JSON.stringify(payload),
   });
+}
+
+function seededActionOpenCommandState({ boundary }) {
+  return {
+    game: "seeded-action-open",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "N02",
+      phaseKind: "Night",
+      phaseNumber: 2,
+      locked: false,
+    },
+    actions: [
+      {
+        action: "submit_action:factional_kill",
+        commandKind: "submit_action",
+        actionId: "factional_kill",
+        templateId: "factional_kill",
+        ability: "Kill",
+        window: "Night",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot-2",
+        targets: ["slot-2"],
+        targetOptions: ["slot-2", "slot-3"],
+        grantId: "grant-factional-kill",
+      },
+    ],
+    voteTargets: [],
+    currentVote: null,
+    boundary,
+  };
 }
 
 function rolePathFromUrl(roleUrl) {
@@ -562,6 +750,7 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
 function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
   const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
+  const invalidRecoveryProof = playerRoleSurface?.playerActionInvalidRecoveryProof;
   if (
     playerRoleSurface?.status !== "passed" ||
     playerRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -621,6 +810,10 @@ function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
     clickProof,
     expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
   });
+  assertPlayerActionInvalidRecoveryProof({
+    invalidRecoveryProof,
+    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
+  });
 }
 
 function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
@@ -653,6 +846,50 @@ function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
     throw new Error(
       `core-loop admin proof missing player action click ACK: ${JSON.stringify(
         clickProof,
+      )}`,
+    );
+  }
+}
+
+function assertPlayerActionInvalidRecoveryProof({
+  invalidRecoveryProof,
+  expectedGame,
+}) {
+  if (
+    invalidRecoveryProof?.status !== "passed" ||
+    invalidRecoveryProof.clickedAction !== "submit_invalid_action:factional_kill" ||
+    invalidRecoveryProof.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.command?.game !== expectedGame ||
+    invalidRecoveryProof.command.action_id !== "invalid_self_factional_kill" ||
+    invalidRecoveryProof.command.actor_slot !== "slot-7" ||
+    invalidRecoveryProof.command.template_id !== "factional_kill" ||
+    invalidRecoveryProof.command.targets?.[0] !== "slot-7" ||
+    invalidRecoveryProof.commandStatus?.state !== "reject" ||
+    invalidRecoveryProof.commandStatus.error !== "InvalidTarget" ||
+    !invalidRecoveryProof.commandStatus?.message?.includes(
+      "Reject InvalidTarget: invalid target",
+    ) ||
+    invalidRecoveryProof.bridgePlan?.role !== "player" ||
+    invalidRecoveryProof.bridgePlan.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.bridgePlan.commandEndpoint !== "/commands" ||
+    invalidRecoveryProof.bridgePlan.finalState !== "reject" ||
+    !invalidRecoveryProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    invalidRecoveryProof.receipts?.at?.(-1)?.state !== "reject" ||
+    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    invalidRecoveryProof.projectionCommandState?.actions?.[0]?.templateId !==
+      "factional_kill" ||
+    invalidRecoveryProof.checkpointReceiptState !== "reject:InvalidTarget" ||
+    invalidRecoveryProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    invalidRecoveryProof.receiptCount !== 1 ||
+    !String(invalidRecoveryProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject invalidtarget: invalid target")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing player invalid-action recovery: ${JSON.stringify(
+        invalidRecoveryProof,
       )}`,
     );
   }

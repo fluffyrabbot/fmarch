@@ -9397,6 +9397,58 @@ function playerActionRoleSurfaceFixture() {
       receiptCount: 1,
       receiptStatusText: "Ack: stream seqs 501",
     },
+    playerActionInvalidRecoveryProof: {
+      status: "passed",
+      clickedAction: "submit_invalid_action:factional_kill",
+      commandKind: "SubmitAction",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        action_id: "invalid_self_factional_kill",
+        actor_slot: "slot-7",
+        template_id: "factional_kill",
+        targets: ["slot-7"],
+        grant_id: "grant-factional-kill",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "InvalidTarget",
+        message: "Reject InvalidTarget: invalid target",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitAction",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: [
+          "notifications",
+          "investigationResults",
+          "commandState",
+        ],
+      },
+      receipts: [
+        {
+          actionId: "submit_invalid_action:factional_kill",
+          state: "reject",
+          message: "Reject InvalidTarget: invalid target",
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        phase: {
+          phaseId: "N02",
+        },
+        actions: [
+          {
+            templateId: "factional_kill",
+          },
+        ],
+      },
+      checkpointReceiptState: "reject:InvalidTarget",
+      checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+      checkpointTargetSlotsAfterReject: "slot-2",
+      receiptCount: 1,
+      receiptStatusText: "Reject InvalidTarget: invalid target",
+    },
     releaseReady: false,
     productionReady: false,
   };

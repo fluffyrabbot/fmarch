@@ -1962,6 +1962,7 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
 function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
   const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
   const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
+  const invalidRecoveryProof = playerRoleSurface?.playerActionInvalidRecoveryProof;
   if (
     playerRoleSurface?.status !== "passed" ||
     playerRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -2005,6 +2006,10 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
     clickProof,
     expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
   });
+  assertCoreLoopPlayerActionInvalidRecoveryProof({
+    invalidRecoveryProof,
+    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
+  });
 }
 
 function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
@@ -2035,6 +2040,46 @@ function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
       .includes("ack: stream seqs 501")
   ) {
     throw new Error("core-loop admin proof missing player action click ACK");
+  }
+}
+
+function assertCoreLoopPlayerActionInvalidRecoveryProof({
+  invalidRecoveryProof,
+  expectedGame,
+}) {
+  if (
+    invalidRecoveryProof?.status !== "passed" ||
+    invalidRecoveryProof.clickedAction !== "submit_invalid_action:factional_kill" ||
+    invalidRecoveryProof.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.command?.game !== expectedGame ||
+    invalidRecoveryProof.command.action_id !== "invalid_self_factional_kill" ||
+    invalidRecoveryProof.command.actor_slot !== "slot-7" ||
+    invalidRecoveryProof.command.template_id !== "factional_kill" ||
+    invalidRecoveryProof.command.targets?.[0] !== "slot-7" ||
+    invalidRecoveryProof.commandStatus?.state !== "reject" ||
+    invalidRecoveryProof.commandStatus.error !== "InvalidTarget" ||
+    !invalidRecoveryProof.commandStatus?.message?.includes(
+      "Reject InvalidTarget: invalid target",
+    ) ||
+    invalidRecoveryProof.bridgePlan?.role !== "player" ||
+    invalidRecoveryProof.bridgePlan.commandKind !== "SubmitAction" ||
+    invalidRecoveryProof.bridgePlan.commandEndpoint !== "/commands" ||
+    invalidRecoveryProof.bridgePlan.finalState !== "reject" ||
+    !invalidRecoveryProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    invalidRecoveryProof.receipts?.at?.(-1)?.state !== "reject" ||
+    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    invalidRecoveryProof.projectionCommandState?.actions?.[0]?.templateId !==
+      "factional_kill" ||
+    invalidRecoveryProof.checkpointReceiptState !== "reject:InvalidTarget" ||
+    invalidRecoveryProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    invalidRecoveryProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    invalidRecoveryProof.receiptCount !== 1 ||
+    !String(invalidRecoveryProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject invalidtarget: invalid target")
+  ) {
+    throw new Error("core-loop admin proof missing player invalid-action recovery");
   }
 }
 
