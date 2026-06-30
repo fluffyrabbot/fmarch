@@ -1892,6 +1892,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   }
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
+  assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
     visibleRows: proof.adminRoleSurface?.visibleSpineCheckpoints,
@@ -1916,6 +1917,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     hostRoleSurface: proof.hostRoleSurface,
     playerRoleSurface: proof.playerRoleSurface,
+    privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -2162,6 +2164,73 @@ function assertCoreLoopPlayerActionInvalidRecoveryProof({
       .includes("reject invalidtarget: invalid target")
   ) {
     throw new Error("core-loop admin proof missing player invalid-action recovery");
+  }
+}
+
+function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
+  const submitPostProof = privateChannelRoleSurface?.submitPostProof;
+  const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
+  if (
+    privateChannelRoleSurface?.status !== "passed" ||
+    privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
+    privateChannelRoleSurface.releaseReady !== false ||
+    privateChannelRoleSurface.productionReady !== false ||
+    privateChannelRoleSurface.rawInviteTokensVisible !== false ||
+    typeof privateChannelRoleSurface.sourceRoleUrl !== "string" ||
+    !privateChannelRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof privateChannelRoleSurface.visitedRolePath !== "string" ||
+    !privateChannelRoleSurface.visitedRolePath.includes("/c/role-pm") ||
+    !privateChannelRoleSurface.visitedRolePath.includes("private=notification-1") ||
+    privateChannelRoleSurface.surfaceTestId !== "player-surface" ||
+    privateChannelRoleSurface.channelRailTestId !== "player-channel-role-pm" ||
+    privateChannelRoleSurface.channelId !== "role-pm" ||
+    privateChannelRoleSurface.channelAriaCurrent !== "page" ||
+    privateChannelRoleSurface.commandPanelChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextCapabilityLabel !==
+      "ChannelMember(role-pm)" ||
+    privateChannelRoleSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
+    !String(privateChannelRoleSurface.privateQueueBoundary?.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-1" ||
+    privateChannelRoleSurface.expandedPrivateItem?.detailTestId !==
+      "player-private-detail-notification-1" ||
+    !String(privateChannelRoleSurface.expandedPrivateItem?.detailText ?? "").includes(
+      "Phase",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing private channel role URL surface");
+  }
+  if (
+    submitPostProof?.status !== "passed" ||
+    submitPostProof.clickedAction !== "submit_post" ||
+    submitPostProof.commandKind !== "SubmitPost" ||
+    submitPostProof.command?.game !== expectedGame ||
+    submitPostProof.command.channel_id !== "role-pm" ||
+    submitPostProof.command.actor_slot !== "slot-7" ||
+    submitPostProof.command.body !== submitPostProof.privatePostBody ||
+    submitPostProof.commandStatus?.state !== "ack" ||
+    !submitPostProof.commandStatus?.message?.includes("Ack: stream seqs 701") ||
+    submitPostProof.bridgePlan?.role !== "player" ||
+    submitPostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    submitPostProof.bridgePlan.commandEndpoint !== "/commands" ||
+    submitPostProof.bridgePlan.finalState !== "ack" ||
+    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("thread") ||
+    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    submitPostProof.receipts?.at?.(-1)?.state !== "ack" ||
+    submitPostProof.projectionThread?.posts?.at?.(-1)?.body !==
+      submitPostProof.privatePostBody ||
+    submitPostProof.receiptCount !== 1 ||
+    !String(submitPostProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 701") ||
+    submitPostProof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes"
+  ) {
+    throw new Error("core-loop admin proof missing private channel SubmitPost ACK");
   }
 }
 

@@ -112,7 +112,19 @@ await runAdminAuditProof({
       frontendBaseUrl,
       roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
     });
-    return { adminRoleSurface, hostRoleSurface, playerRoleSurface };
+    const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
+      browser,
+      frontendBaseUrl,
+      roleUrl: privateChannelRoleUrlFromPlayerRoleUrl(
+        spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+      ),
+    });
+    return {
+      adminRoleSurface,
+      hostRoleSurface,
+      playerRoleSurface,
+      privateChannelRoleSurface,
+    };
   },
   buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
     version: 1,
@@ -133,6 +145,7 @@ await runAdminAuditProof({
     adminRoleSurface: surfaces.adminRoleSurface,
     hostRoleSurface: surfaces.hostRoleSurface,
     playerRoleSurface: surfaces.playerRoleSurface,
+    privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
 });
@@ -857,6 +870,218 @@ async function provePlayerActionSubmissionClick({ page, commandRequests }) {
   };
 }
 
+async function provePrivateChannelRoleSurface({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  const privatePostBody = "Private role proof post";
+  try {
+    await installPrivateChannelBrowserRoutes(page, {
+      commandRequests,
+      privatePostBody,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const privateChannel = page.getByTestId("player-channel-role-pm");
+    await privateChannel.waitFor({ state: "visible", timeout: 15000 });
+    const channelAriaCurrent = await privateChannel.getAttribute("aria-current");
+    const commandPanel = page.getByTestId("player-primary-action-zone");
+    await commandPanel.waitFor({ state: "visible", timeout: 15000 });
+    const commandPanelChannelId = await commandPanel.getAttribute("data-channel-id");
+    const channelContext = page.getByTestId("player-command-channel-context");
+    await channelContext.waitFor({ state: "visible", timeout: 15000 });
+    const channelContextChannelId = await channelContext.getAttribute(
+      "data-channel-id",
+    );
+    const channelContextCapabilityLabel = await channelContext.getAttribute(
+      "data-capability-label",
+    );
+    const boundary = page.getByTestId("player-private-boundary");
+    await boundary.waitFor({ state: "visible", timeout: 15000 });
+    const privateQueue = page.locator('[data-component="player-private-queue"]');
+    const privateBoundaryStatus = await privateQueue.getAttribute(
+      "data-boundary-status",
+    );
+    const privateBoundaryText = await boundary.innerText();
+    const privateCount = Number.parseInt(
+      await page.getByTestId("player-private-count").innerText(),
+      10,
+    );
+    const expandedPrivateDetail = page.getByTestId(
+      "player-private-detail-notification-1",
+    );
+    await expandedPrivateDetail.waitFor({ state: "visible", timeout: 15000 });
+    const expandedPrivateDetailText = await expandedPrivateDetail.innerText();
+    await page.locator('[data-testid="player-composer"] textarea').fill(
+      privatePostBody,
+    );
+    await page
+      .locator('[data-testid="player-composer"] button[data-action="submit_post"]')
+      .click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitPost",
+      null,
+      { timeout: 15000 },
+    );
+    await page.getByText(privatePostBody).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const receiptCountText = await page
+      .getByTestId("player-command-receipt-count")
+      .innerText();
+    const receiptStatusText = await page
+      .getByTestId("player-command-status")
+      .innerText();
+    const submitPostReceipt = page.getByTestId("player-command-receipt-submit_post");
+    await submitPostReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const receiptRefreshKeys = await submitPostReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("private channel role proof leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.SubmitPost ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      channelRailTestId: "player-channel-role-pm",
+      clickedThroughFromRoleUrl: true,
+      channelId: "role-pm",
+      channelAriaCurrent,
+      commandPanelChannelId,
+      channelContextChannelId,
+      channelContextCapabilityLabel,
+      privateQueueBoundary: {
+        status: privateBoundaryStatus,
+        count: privateCount,
+        text: privateBoundaryText,
+      },
+      expandedPrivateItem: {
+        id: "notification-1",
+        detailTestId: "player-private-detail-notification-1",
+        detailText: expandedPrivateDetailText,
+      },
+      submitPostProof: {
+        status: "passed",
+        clickedAction: "submit_post",
+        commandKind: command === null ? null : "SubmitPost",
+        command,
+        commandStatus,
+        bridgePlan,
+        receipts,
+        projectionThread: projection?.thread ?? null,
+        privatePostBody,
+        receiptCount: Number.parseInt(receiptCountText, 10),
+        receiptStatusText,
+        receiptRefreshKeys,
+      },
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function installPrivateChannelBrowserRoutes(
+  page,
+  { commandRequests, privatePostBody },
+) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitPost !== undefined) {
+      await fulfillJson(route, {
+        v: 1,
+        id: commandEnvelope.id,
+        body: {
+          kind: "Ack",
+          body: {
+            stream_seqs: [701],
+          },
+        },
+      });
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "private-channel-role-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPrivateChannelProofCommand",
+            retryable: false,
+            message: "private channel proof only accepts SubmitPost",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 701,
+          stream_seq: 701,
+          author_slot: "slot-7",
+          author_user: "player_mira",
+          body: privatePostBody,
+          occurred_at: 1781928000,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(route, seededActionOpenCommandState({
+      boundary: "Seeded browser private post ACK refreshed role-pm state.",
+    }));
+  });
+}
+
 async function fulfillJson(route, payload, status = 200) {
   await route.fulfill({
     status,
@@ -963,6 +1188,17 @@ function rolePathFromUrl(roleUrl) {
   return `${parsed.pathname}${parsed.search}`;
 }
 
+function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("private channel proof missing source player role URL");
+  }
+  const parsed = new URL(roleUrl);
+  const basePath = parsed.pathname.replace(/\/$/u, "");
+  parsed.pathname = `${basePath}/c/role-pm`;
+  parsed.search = "?private=notification-1";
+  return parsed.toString();
+}
+
 export function assertCoreLoopAdminProof(evidence) {
   if (
     evidence?.version !== 1 ||
@@ -1035,6 +1271,7 @@ export function assertCoreLoopAdminProof(evidence) {
   }
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
+  assertPrivateChannelRoleSurface(evidence.privateChannelRoleSurface);
   return evidence;
 }
 
@@ -1307,6 +1544,81 @@ function assertPlayerActionInvalidRecoveryProof({
     throw new Error(
       `core-loop admin proof missing player invalid-action recovery: ${JSON.stringify(
         invalidRecoveryProof,
+      )}`,
+    );
+  }
+}
+
+function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
+  const submitPostProof = privateChannelRoleSurface?.submitPostProof;
+  const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
+  if (
+    privateChannelRoleSurface?.status !== "passed" ||
+    privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
+    privateChannelRoleSurface.releaseReady !== false ||
+    privateChannelRoleSurface.productionReady !== false ||
+    privateChannelRoleSurface.rawInviteTokensVisible !== false ||
+    typeof privateChannelRoleSurface.sourceRoleUrl !== "string" ||
+    !privateChannelRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof privateChannelRoleSurface.visitedRolePath !== "string" ||
+    !privateChannelRoleSurface.visitedRolePath.includes("/c/role-pm") ||
+    !privateChannelRoleSurface.visitedRolePath.includes("private=notification-1") ||
+    privateChannelRoleSurface.surfaceTestId !== "player-surface" ||
+    privateChannelRoleSurface.channelRailTestId !== "player-channel-role-pm" ||
+    privateChannelRoleSurface.channelId !== "role-pm" ||
+    privateChannelRoleSurface.channelAriaCurrent !== "page" ||
+    privateChannelRoleSurface.commandPanelChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextCapabilityLabel !==
+      "ChannelMember(role-pm)" ||
+    privateChannelRoleSurface.privateQueueBoundary?.status !==
+      "principal-scoped-private-projections" ||
+    privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
+    !String(privateChannelRoleSurface.privateQueueBoundary?.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-1" ||
+    privateChannelRoleSurface.expandedPrivateItem?.detailTestId !==
+      "player-private-detail-notification-1" ||
+    !String(privateChannelRoleSurface.expandedPrivateItem?.detailText ?? "").includes(
+      "Phase",
+    )
+  ) {
+    throw new Error(
+      `core-loop admin proof missing private channel role URL surface: ${JSON.stringify(
+        privateChannelRoleSurface,
+      )}`,
+    );
+  }
+  if (
+    submitPostProof?.status !== "passed" ||
+    submitPostProof.clickedAction !== "submit_post" ||
+    submitPostProof.commandKind !== "SubmitPost" ||
+    submitPostProof.command?.game !== expectedGame ||
+    submitPostProof.command.channel_id !== "role-pm" ||
+    submitPostProof.command.actor_slot !== "slot-7" ||
+    submitPostProof.command.body !== submitPostProof.privatePostBody ||
+    submitPostProof.commandStatus?.state !== "ack" ||
+    !submitPostProof.commandStatus?.message?.includes("Ack: stream seqs 701") ||
+    submitPostProof.bridgePlan?.role !== "player" ||
+    submitPostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    submitPostProof.bridgePlan.commandEndpoint !== "/commands" ||
+    submitPostProof.bridgePlan.finalState !== "ack" ||
+    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("thread") ||
+    !submitPostProof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    submitPostProof.receipts?.at?.(-1)?.state !== "ack" ||
+    submitPostProof.projectionThread?.posts?.at?.(-1)?.body !==
+      submitPostProof.privatePostBody ||
+    submitPostProof.receiptCount !== 1 ||
+    !String(submitPostProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 701") ||
+    submitPostProof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes"
+  ) {
+    throw new Error(
+      `core-loop admin proof missing private channel SubmitPost ACK: ${JSON.stringify(
+        submitPostProof,
       )}`,
     );
   }

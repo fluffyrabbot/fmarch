@@ -9285,6 +9285,7 @@ function coreLoopAdminProofFixture() {
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
+    privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
 
@@ -9520,6 +9521,85 @@ function playerActionRoleSurfaceFixture() {
       receiptCount: 1,
       receiptStatusText: "Reject InvalidTarget: invalid target",
     },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function privateChannelRoleSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+    visitedRolePath:
+      "/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+    surfaceTestId: "player-surface",
+    channelRailTestId: "player-channel-role-pm",
+    clickedThroughFromRoleUrl: true,
+    channelId: "role-pm",
+    channelAriaCurrent: "page",
+    commandPanelChannelId: "role-pm",
+    channelContextChannelId: "role-pm",
+    channelContextCapabilityLabel: "ChannelMember(role-pm)",
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 2,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    expandedPrivateItem: {
+      id: "notification-1",
+      detailTestId: "player-private-detail-notification-1",
+      detailText: "Phase N02",
+    },
+    submitPostProof: {
+      status: "passed",
+      clickedAction: "submit_post",
+      commandKind: "SubmitPost",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        channel_id: "role-pm",
+        actor_slot: "slot-7",
+        body: "Private role proof post",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 701",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitPost",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [
+          "thread",
+          "votecount",
+          "commandState",
+          "dayVoteOutcomes",
+        ],
+      },
+      receipts: [
+        {
+          actionId: "submit_post",
+          state: "ack",
+          message: "Ack: stream seqs 701",
+          current: true,
+        },
+      ],
+      projectionThread: {
+        posts: [
+          {
+            seq: 701,
+            body: "Private role proof post",
+          },
+        ],
+      },
+      privatePostBody: "Private role proof post",
+      receiptCount: 1,
+      receiptStatusText: "Ack: stream seqs 701",
+      receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
+    },
+    rawInviteTokensVisible: false,
     releaseReady: false,
     productionReady: false,
   };
