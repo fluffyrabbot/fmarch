@@ -157,6 +157,18 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
         evidence: externalEvidencePath,
       },
       {
+        id: "synthetic-demo-boundary-carried",
+        status:
+          passedLane.hostedEvidence?.mode === "synthetic-demo" &&
+          passedLane.hostedEvidence?.realHostedEvidenceStatus === "unproven" &&
+          externalEvidence.sourceMode === "synthetic-demo"
+            ? "passed"
+            : "blocked",
+        hostedEvidenceMode: passedLane.hostedEvidence?.mode,
+        realHostedEvidenceStatus:
+          passedLane.hostedEvidence?.realHostedEvidenceStatus,
+      },
+      {
         id: "release-claim-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -182,11 +194,17 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
       status: passedLane.status,
       preflightStatus: passedLane.preflightStatus,
       blockedCheckIds: [...passedLane.blockedCheckIds],
+      hostedEvidenceMode: passedLane.hostedEvidence?.mode,
+      realHostedEvidenceStatus:
+        passedLane.hostedEvidence?.realHostedEvidenceStatus,
       nextProofTarget: passedLane.nextProofTarget,
     },
     externalEvidence: {
       proof: externalEvidence.proof,
       status: externalEvidence.status,
+      sourceMode: externalEvidence.sourceMode,
+      rawEvidenceSyntheticExternalTarget:
+        externalEvidence.generatedFrom.rawEvidenceSyntheticExternalTarget,
       groupIds: [...externalEvidence.groupIds],
       cellIds: [...externalEvidence.cellIds],
       commandRaceCount: externalEvidence.commandRaceCount,
@@ -218,6 +236,7 @@ export function assertDevTestGameHostedEvidenceLaneDemoProof(proof) {
     "synthetic-raw-evidence-written",
     "passed-lane-recorded",
     "external-evidence-written",
+    "synthetic-demo-boundary-carried",
     "release-claim-boundary-carried",
   ]) {
     if (checks.get(id)?.status !== "passed" && id !== "blocked-lane-recorded") {
@@ -234,6 +253,8 @@ export function assertDevTestGameHostedEvidenceLaneDemoProof(proof) {
     proof.blockedLane.blockedCheckIds.length === 0 ||
     proof.passedLane?.status !== "passed" ||
     proof.passedLane?.preflightStatus !== "passed" ||
+    proof.passedLane?.hostedEvidenceMode !== "synthetic-demo" ||
+    proof.passedLane?.realHostedEvidenceStatus !== "unproven" ||
     !Array.isArray(proof.passedLane.blockedCheckIds) ||
     proof.passedLane.blockedCheckIds.length !== 0 ||
     proof.handoff?.blockedRoleUrl !==
@@ -245,6 +266,8 @@ export function assertDevTestGameHostedEvidenceLaneDemoProof(proof) {
   }
   if (
     proof.externalEvidence?.status !== "passed" ||
+    proof.externalEvidence?.sourceMode !== "synthetic-demo" ||
+    proof.externalEvidence?.rawEvidenceSyntheticExternalTarget !== true ||
     proof.externalEvidence?.rawRoleCredentialsRedacted !== true ||
     proof.generatedFrom?.rawEvidence === undefined ||
     proof.generatedFrom?.externalEvidence === undefined

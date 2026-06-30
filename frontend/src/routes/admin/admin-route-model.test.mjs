@@ -1062,6 +1062,8 @@ test("admin route data exposes local hosted matrix as a native audit row", async
       ["reconnect-recovery", "passed"],
       ["stale-client-conflict-messages", "passed"],
       ["raw-role-credential-redaction", "passed"],
+      ["local-demo-hosted-evidence", "not_applicable"],
+      ["real-hosted-evidence-required", "unproven"],
       ["real-hosted-deployment", "unproven"],
       ["player-vote-change", "passed"],
       ["host-resolve", "passed"],
@@ -1116,6 +1118,9 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     staleConflictLaneCount: 4,
     roleSurfaceCount: 2,
     hostedEvidenceStatus: "not_configured",
+    hostedEvidenceMode: "not_configured",
+    localDemoHostedEvidenceStatus: "not_applicable",
+    realHostedEvidenceStatus: "unproven",
     realHostedDeploymentStatus: "unproven",
     externalHostedEvidenceStatus: "not_configured",
     nextCommand: "test:dev-test-game-hosted-concurrent-race-matrix",
@@ -1144,6 +1149,8 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       ["reconnect-recovery", "passed"],
       ["stale-client-conflict-messages", "passed"],
       ["raw-role-credential-redaction", "passed"],
+      ["local-demo-hosted-evidence", "not_applicable"],
+      ["real-hosted-evidence-required", "unproven"],
       ["real-hosted-deployment", "unproven"],
       ["player-vote-change", "passed"],
       ["host-resolve", "passed"],
@@ -1397,6 +1404,8 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedBuildSlice:
       "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
     selectedProofTarget: HOSTED_MATRIX_PROOF_TARGET,
+    selectedHostedEvidenceMode: "",
+    selectedRealHostedEvidenceStatus: "",
     selectedRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     selectedRoleHref:
@@ -3959,6 +3968,9 @@ function hostedConcurrentRaceMatrixFixture() {
       staleConflictLaneCount: 4,
       roleSurfaceCount: 2,
       hostedEvidenceStatus: "not_configured",
+      hostedEvidenceMode: "not_configured",
+      localDemoHostedEvidenceStatus: "not_applicable",
+      realHostedEvidenceStatus: "unproven",
       realHostedDeploymentStatus: "unproven",
     },
     evidenceProgress: [
@@ -3968,6 +3980,8 @@ function hostedConcurrentRaceMatrixFixture() {
       { id: "reconnect-recovery", status: "passed" },
       { id: "stale-client-conflict-messages", status: "passed" },
       { id: "raw-role-credential-redaction", status: "passed" },
+      { id: "local-demo-hosted-evidence", status: "not_applicable" },
+      { id: "real-hosted-evidence-required", status: "unproven" },
       { id: "real-hosted-deployment", status: "unproven" },
     ],
     externalHostedEvidence: {

@@ -35,6 +35,8 @@ const requiredProgressChecks = [
   "reconnect-recovery",
   "stale-client-conflict-messages",
   "raw-role-credential-redaction",
+  "local-demo-hosted-evidence",
+  "real-hosted-evidence-required",
   "real-hosted-deployment",
 ];
 const requiredRelatedLinks = ["local-race-coverage", "local-next-action"];
@@ -69,6 +71,10 @@ await runAdminAuditProof({
         (lane) => lane.id,
       ),
       requiredCheckStatuses: {
+        "local-demo-hosted-evidence":
+          source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
+        "real-hosted-evidence-required":
+          source.hostedMatrix.summary.realHostedEvidenceStatus,
         "real-hosted-deployment":
           source.hostedMatrix.summary.realHostedDeploymentStatus,
       },
@@ -102,6 +108,11 @@ await runAdminAuditProof({
       relatedAuditIds: requiredRelatedLinks,
       requestedEvidenceId: source.hostedMatrix.requestedEvidence.id,
       hostedEvidenceStatus: source.hostedMatrix.summary.hostedEvidenceStatus,
+      hostedEvidenceMode: source.hostedMatrix.summary.hostedEvidenceMode,
+      localDemoHostedEvidenceStatus:
+        source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
+      realHostedEvidenceStatus:
+        source.hostedMatrix.summary.realHostedEvidenceStatus,
       realHostedDeploymentStatus:
         source.hostedMatrix.summary.realHostedDeploymentStatus,
     },

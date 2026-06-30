@@ -106,8 +106,14 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   const externalHostedEvidence = buildExternalHostedEvidence(hostedTarget, promoted);
   const realHostedDeploymentPassed =
     externalHostedEvidence.status === "passed" &&
+    externalHostedEvidence.syntheticExternalTarget !== true &&
     isExternallyHostedUrl(externalHostedEvidence.frontendBaseUrl) &&
     isExternallyHostedUrl(externalHostedEvidence.apiBaseUrl);
+  const localDemoHostedEvidenceStatus =
+    externalHostedEvidence.syntheticExternalTarget === true
+      ? "passed"
+      : "not_applicable";
+  const realHostedEvidenceStatus = realHostedDeploymentPassed ? "passed" : "unproven";
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION,
     proof: "dev-test-game-hosted-concurrent-race-matrix",
@@ -161,6 +167,9 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       staleConflictLaneCount: staleConflictLanes.length,
       roleSurfaceCount: roleSurfaces.length,
       hostedEvidenceStatus: externalHostedEvidence.status,
+      hostedEvidenceMode: externalHostedEvidence.hostedEvidenceMode,
+      localDemoHostedEvidenceStatus,
+      realHostedEvidenceStatus,
       realHostedDeploymentStatus: realHostedDeploymentPassed ? "passed" : "unproven",
     },
     evidenceProgress: [
@@ -197,6 +206,29 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
         id: "raw-role-credential-redaction",
         status: "passed",
         evidence: ["roleSurfaces.directUrl", "lane.evidence redaction"],
+      },
+      {
+        id: "local-demo-hosted-evidence",
+        status: localDemoHostedEvidenceStatus,
+        ...(externalHostedEvidence.syntheticExternalTarget === true
+          ? { evidence: [externalHostedEvidence.evidencePath] }
+          : {}),
+      },
+      {
+        id: "real-hosted-evidence-required",
+        status: realHostedEvidenceStatus,
+        ...(realHostedEvidenceStatus === "passed"
+          ? {
+              evidence: [
+                externalHostedEvidence.frontendBaseUrl,
+                externalHostedEvidence.apiBaseUrl,
+                externalHostedEvidence.evidencePath,
+              ],
+            }
+          : {
+              requiredEvidence:
+                "Raw hosted matrix evidence from a real externally reachable hosted target.",
+            }),
       },
       {
         id: "real-hosted-deployment",
@@ -282,6 +314,17 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     !["not_configured", "configured_unproven", "passed"].includes(
       evidence.summary.hostedEvidenceStatus,
     ) ||
+    ![
+      "not_configured",
+      "configured_unproven",
+      "synthetic-demo",
+      "real-hosted",
+      "local-or-loopback",
+    ].includes(evidence.summary.hostedEvidenceMode) ||
+    !["passed", "not_applicable"].includes(
+      evidence.summary.localDemoHostedEvidenceStatus,
+    ) ||
+    !["passed", "unproven"].includes(evidence.summary.realHostedEvidenceStatus) ||
     !["passed", "unproven"].includes(
       evidence.summary.realHostedDeploymentStatus,
     )
@@ -376,6 +419,8 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
   if (frontendBaseUrl === null && apiBaseUrl === null && evidencePath === null) {
     return {
       status: "not_configured",
+      hostedEvidenceMode: "not_configured",
+      syntheticExternalTarget: false,
       frontendBaseUrl: null,
       apiBaseUrl: null,
       evidencePath: null,
@@ -396,6 +441,8 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
   if (source === undefined) {
     return {
       status: "configured_unproven",
+      hostedEvidenceMode: "configured_unproven",
+      syntheticExternalTarget: false,
       frontendBaseUrl,
       apiBaseUrl,
       evidencePath,
@@ -410,17 +457,27 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
     apiBaseUrl,
     promoted,
   });
+  const syntheticExternalTarget =
+    source.generatedFrom?.rawEvidenceSyntheticExternalTarget === true ||
+    source.sourceMode === "synthetic-demo";
+  const targetKind =
+    isExternallyHostedUrl(frontendBaseUrl) && isExternallyHostedUrl(apiBaseUrl)
+      ? "external"
+      : "local_or_loopback";
   return {
     status: "passed",
+    hostedEvidenceMode: syntheticExternalTarget
+      ? "synthetic-demo"
+      : targetKind === "external"
+        ? "real-hosted"
+        : "local-or-loopback",
+    syntheticExternalTarget,
     frontendBaseUrl,
     apiBaseUrl,
     evidencePath,
     proof: source.proof,
     generatedAt: source.generatedAt,
-    targetKind:
-      isExternallyHostedUrl(frontendBaseUrl) && isExternallyHostedUrl(apiBaseUrl)
-        ? "external"
-        : "local_or_loopback",
+    targetKind,
     groupIds: [...source.groupIds],
     cellIds: [...source.cellIds],
     commandRaceCount: source.commandRaceCount,

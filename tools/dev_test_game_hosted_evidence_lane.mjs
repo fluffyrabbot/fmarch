@@ -58,6 +58,7 @@ export async function runDevTestGameHostedEvidenceLane({
   const lane = buildPassedHostedEvidenceLane({
     preflight,
     externalEvidencePath,
+    externalEvidence,
     generatedAt,
   });
   await writeJson(devTestGameHostedEvidenceLanePath, lane);
@@ -94,6 +95,10 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
     if (
       evidence.preflightStatus !== "passed" ||
       checks.get("external-hosted-evidence-written")?.status !== "passed" ||
+      !["synthetic-demo", "real-hosted"].includes(evidence.hostedEvidence?.mode) ||
+      !["passed", "unproven"].includes(
+        evidence.hostedEvidence?.realHostedEvidenceStatus,
+      ) ||
       evidence.nextCommand !==
         `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}` ||
       !isNonEmptyString(evidence.nextProofTarget)
@@ -120,6 +125,14 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
       .filter((check) => check.status === "blocked")
       .map((check) => check.id),
     target: { ...preflight.target },
+    hostedEvidence: {
+      status: "blocked",
+      mode: "blocked",
+      syntheticExternalTarget: false,
+      realHostedEvidenceStatus: "unproven",
+      requiredEvidence:
+        "Passed hosted target preflight and normalized hosted matrix evidence.",
+    },
     checks: [
       {
         id: "hosted-target-preflight",
@@ -141,8 +154,16 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
 function buildPassedHostedEvidenceLane({
   preflight,
   externalEvidencePath,
+  externalEvidence,
   generatedAt,
 }) {
+  const syntheticExternalTarget =
+    preflight.target?.rawEvidenceSyntheticExternalTarget === true ||
+    externalEvidence.generatedFrom?.rawEvidenceSyntheticExternalTarget === true;
+  const hostedEvidenceMode = syntheticExternalTarget
+    ? "synthetic-demo"
+    : "real-hosted";
+  const realHostedEvidenceStatus = syntheticExternalTarget ? "unproven" : "passed";
   return assertDevTestGameHostedEvidenceLane({
     version: DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_VERSION,
     proof: "dev-test-game-hosted-evidence-lane",
@@ -156,6 +177,20 @@ function buildPassedHostedEvidenceLane({
     preflightStatus: preflight.status,
     blockedCheckIds: [],
     target: { ...preflight.target },
+    hostedEvidence: {
+      status: "passed",
+      mode: hostedEvidenceMode,
+      syntheticExternalTarget,
+      externalEvidencePath,
+      externalEvidenceSourceMode: externalEvidence.sourceMode,
+      realHostedEvidenceStatus,
+      ...(syntheticExternalTarget
+        ? {
+            requiredEvidence:
+              "Replace the synthetic hosted evidence lane demo with raw evidence from a real externally reachable hosted target.",
+          }
+        : { evidence: externalEvidencePath }),
+    },
     checks: [
       {
         id: "hosted-target-preflight",
@@ -165,6 +200,21 @@ function buildPassedHostedEvidenceLane({
         id: "external-hosted-evidence-written",
         status: "passed",
         evidence: externalEvidencePath,
+      },
+      {
+        id: "local-demo-pass-path",
+        status: syntheticExternalTarget ? "passed" : "not_applicable",
+        ...(syntheticExternalTarget ? { evidence: externalEvidencePath } : {}),
+      },
+      {
+        id: "real-hosted-evidence-required",
+        status: realHostedEvidenceStatus,
+        ...(syntheticExternalTarget
+          ? {
+              requiredEvidence:
+                "Raw hosted matrix evidence from a real externally reachable hosted target.",
+            }
+          : { evidence: externalEvidencePath }),
       },
       {
         id: "release-claim-boundary-carried",

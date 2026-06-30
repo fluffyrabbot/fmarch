@@ -178,6 +178,15 @@ export function buildDevTestGameNextAction(
               proofTarget: selectedUnproven.proofTarget,
               roleUrl: selectedUnproven.roleUrl,
               proofGraphNodeId: selectedUnproven.proofGraphNodeId,
+              ...(selectedUnproven.hostedEvidenceMode === undefined
+                ? {}
+                : { hostedEvidenceMode: selectedUnproven.hostedEvidenceMode }),
+              ...(selectedUnproven.realHostedEvidenceStatus === undefined
+                ? {}
+                : {
+                    realHostedEvidenceStatus:
+                      selectedUnproven.realHostedEvidenceStatus,
+                  }),
             },
           }
         : {
@@ -512,6 +521,8 @@ function rankedBuildableReleaseReadinessItems(
             roleUrl: buildable.roleUrl,
             proofGraphNodeId: buildable.proofGraphNodeId,
             proofBoundary: buildable.proofBoundary,
+            hostedEvidenceMode: buildable.hostedEvidenceMode,
+            realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
           };
     })
     .filter((candidate) => candidate !== null)
@@ -570,6 +581,12 @@ function buildReleaseReadinessTrace(candidates) {
       proofGraphNodeId: candidate.proofGraphNodeId,
       proofBoundary: candidate.proofBoundary,
       requiredEvidence: candidate.item.requiredEvidence,
+      ...(candidate.hostedEvidenceMode === undefined
+        ? {}
+        : { hostedEvidenceMode: candidate.hostedEvidenceMode }),
+      ...(candidate.realHostedEvidenceStatus === undefined
+        ? {}
+        : { realHostedEvidenceStatus: candidate.realHostedEvidenceStatus }),
     })),
   };
 }
@@ -1367,17 +1384,25 @@ const terminalArtifactPaths = new Set([
 
 function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   if (hostedTargetPreflight?.status === "passed") {
+    const syntheticExternalTarget =
+      hostedTargetPreflight.target?.rawEvidenceSyntheticExternalTarget === true;
     return {
       priority: 0,
       command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
       buildSlice:
-        "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
+        syntheticExternalTarget
+          ? "Run the one-command hosted evidence lane to refresh the local demo pass path; real externally hosted evidence remains required."
+          : "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
       proofTarget: devTestGameHostedMatrixExternalEvidencePath,
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       proofBoundary:
-        "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
+        syntheticExternalTarget
+          ? "Local demo hosted evidence handoff after passed synthetic target preflight. This command refreshes the blocked-to-passed local pass path, but does not satisfy real hosted deployment evidence."
+          : "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
+      hostedEvidenceMode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
+      realHostedEvidenceStatus: syntheticExternalTarget ? "unproven" : "passed",
     };
   }
   return localBuildableReleaseReadinessItems.get("hosted-deployment");

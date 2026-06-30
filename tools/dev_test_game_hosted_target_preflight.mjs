@@ -108,6 +108,8 @@ export async function buildDevTestGameHostedTargetPreflight({
       groupId,
       rawEvidencePath,
       rawEvidenceStatus: rawEvidence.status,
+      rawEvidenceSyntheticExternalTarget:
+        rawEvidence.syntheticExternalTarget === true,
     },
     checks,
     nextCommand:
@@ -180,6 +182,7 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
     const metadata = await stat(resolved);
     return {
       status: "passed",
+      syntheticExternalTarget: source.generatedFrom?.syntheticExternalTarget === true,
       evidence: {
         path: path.relative(repoRoot, resolved),
         mtime: metadata.mtime.toISOString(),

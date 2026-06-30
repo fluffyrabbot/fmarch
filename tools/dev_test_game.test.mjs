@@ -7100,6 +7100,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(hostedMatrix.summary.reconnectLaneCount, 10);
   assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
+  assert.equal(hostedMatrix.summary.hostedEvidenceMode, "not_configured");
+  assert.equal(
+    hostedMatrix.summary.localDemoHostedEvidenceStatus,
+    "not_applicable",
+  );
+  assert.equal(hostedMatrix.summary.realHostedEvidenceStatus, "unproven");
   assert.equal(hostedMatrix.summary.realHostedDeploymentStatus, "unproven");
   assert.equal(hostedMatrix.externalHostedEvidence.status, "not_configured");
   assert(
@@ -7130,6 +7136,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       ["reconnect-recovery", "passed"],
       ["stale-client-conflict-messages", "passed"],
       ["raw-role-credential-redaction", "passed"],
+      ["local-demo-hosted-evidence", "not_applicable"],
+      ["real-hosted-evidence-required", "unproven"],
       ["real-hosted-deployment", "unproven"],
     ],
   );
@@ -7166,7 +7174,33 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedMatrixWithExternalTarget.summary.hostedEvidenceStatus,
     "passed",
   );
+  assert.equal(
+    hostedMatrixWithExternalTarget.summary.hostedEvidenceMode,
+    "real-hosted",
+  );
+  assert.equal(
+    hostedMatrixWithExternalTarget.summary.localDemoHostedEvidenceStatus,
+    "not_applicable",
+  );
+  assert.equal(
+    hostedMatrixWithExternalTarget.summary.realHostedEvidenceStatus,
+    "passed",
+  );
   assert.equal(hostedMatrixWithExternalTarget.externalHostedEvidence.status, "passed");
+  assert.deepEqual(
+    hostedMatrixWithExternalTarget.evidenceProgress.find(
+      (item) => item.id === "real-hosted-evidence-required",
+    ),
+    {
+      id: "real-hosted-evidence-required",
+      status: "passed",
+      evidence: [
+        "https://fmarch.example.test",
+        "https://api.fmarch.example.test",
+        "target/dev-test-game/hosted-matrix-external.json",
+      ],
+    },
+  );
   assert.deepEqual(
     hostedMatrixWithExternalTarget.evidenceProgress.find(
       (item) => item.id === "real-hosted-deployment",
@@ -7278,6 +7312,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(passedLane.status, "passed");
   assert.equal(passedLane.preflightStatus, "passed");
   assert.deepEqual(passedLane.blockedCheckIds, []);
+  assert.equal(passedLane.hostedEvidence.mode, "real-hosted");
+  assert.equal(passedLane.hostedEvidence.realHostedEvidenceStatus, "passed");
   assert.equal(
     passedLane.nextCommand,
     `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
@@ -7288,6 +7324,8 @@ test("session card and markdown include role credential URLs and tokens", async 
     [
       ["hosted-target-preflight", "passed"],
       ["external-hosted-evidence-written", "passed"],
+      ["local-demo-pass-path", "not_applicable"],
+      ["real-hosted-evidence-required", "passed"],
       ["release-claim-boundary-carried", "passed"],
     ],
   );
@@ -7312,6 +7350,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedConcurrentRaceMatrixGeneratedAt: hostedMatrix.generatedAt,
     rawEvidence: devTestGameHostedMatrixRawEvidencePath,
     rawEvidenceGeneratedAt: laneRawEvidence.generatedAt,
+    rawEvidenceSyntheticExternalTarget: false,
   });
   const laneFreshManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -7390,6 +7429,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(demoProof.target.syntheticExternalTarget, true);
   assert.equal(demoProof.blockedLane.status, "blocked");
   assert.equal(demoProof.passedLane.status, "passed");
+  assert.equal(demoProof.passedLane.hostedEvidenceMode, "synthetic-demo");
+  assert.equal(demoProof.passedLane.realHostedEvidenceStatus, "unproven");
   assert.equal(
     demoProof.handoff.blockedRoleUrl,
     "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
@@ -7402,6 +7443,8 @@ test("session card and markdown include role credential URLs and tokens", async 
     demoProof.externalEvidence.rawRoleCredentialsRedacted,
     true,
   );
+  assert.equal(demoProof.externalEvidence.sourceMode, "synthetic-demo");
+  assert.equal(demoProof.externalEvidence.rawEvidenceSyntheticExternalTarget, true);
   const hostedMatrixWithProducedExternalEvidence =
     buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {
       raceCoverage,
@@ -7422,6 +7465,18 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     hostedMatrixWithProducedExternalEvidence.summary.hostedEvidenceStatus,
     "passed",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.summary.hostedEvidenceMode,
+    "local-or-loopback",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.summary.localDemoHostedEvidenceStatus,
+    "not_applicable",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.summary.realHostedEvidenceStatus,
+    "unproven",
   );
   assert.equal(
     hostedMatrixWithProducedExternalEvidence.summary.realHostedDeploymentStatus,
@@ -9617,11 +9672,16 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "reconnect-recovery",
         "stale-client-conflict-messages",
         "raw-role-credential-redaction",
+        "local-demo-hosted-evidence",
+        "real-hosted-evidence-required",
         "real-hosted-deployment",
       ],
       relatedAuditIds: ["local-race-coverage", "local-next-action"],
       requestedEvidenceId: "hosted-concurrent-race-matrix",
       hostedEvidenceStatus: "not_configured",
+      hostedEvidenceMode: "not_configured",
+      localDemoHostedEvidenceStatus: "not_applicable",
+      realHostedEvidenceStatus: "unproven",
       realHostedDeploymentStatus: "unproven",
     },
     adminRoleSurface: {
@@ -9639,6 +9699,8 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "reconnect-recovery",
         "stale-client-conflict-messages",
         "raw-role-credential-redaction",
+        "local-demo-hosted-evidence",
+        "real-hosted-evidence-required",
         "real-hosted-deployment",
         "replacement-private-post",
         "replacement-vote",
@@ -10001,6 +10063,12 @@ function hostedEvidenceLaneDemoProofFixture() {
         evidence: "target/dev-test-game/hosted-matrix-demo-external.json",
       },
       {
+        id: "synthetic-demo-boundary-carried",
+        status: "passed",
+        hostedEvidenceMode: "synthetic-demo",
+        realHostedEvidenceStatus: "unproven",
+      },
+      {
         id: "release-claim-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -10026,11 +10094,15 @@ function hostedEvidenceLaneDemoProofFixture() {
       status: "passed",
       preflightStatus: "passed",
       blockedCheckIds: [],
+      hostedEvidenceMode: "synthetic-demo",
+      realHostedEvidenceStatus: "unproven",
       nextProofTarget: "target/dev-test-game/hosted-matrix-demo-external.json",
     },
     externalEvidence: {
       proof: "fmarch-hosted-concurrent-race-matrix-evidence",
       status: "passed",
+      sourceMode: "synthetic-demo",
+      rawEvidenceSyntheticExternalTarget: true,
       groupIds: ["replacement-race-reload"],
       cellIds: [
         "replacement-private-post",

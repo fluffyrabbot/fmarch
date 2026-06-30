@@ -966,6 +966,16 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       hostedEvidenceStatus: String(
         hostedConcurrentRaceMatrix.summary?.hostedEvidenceStatus ?? "unknown",
       ),
+      hostedEvidenceMode: String(
+        hostedConcurrentRaceMatrix.summary?.hostedEvidenceMode ?? "unknown",
+      ),
+      localDemoHostedEvidenceStatus: String(
+        hostedConcurrentRaceMatrix.summary?.localDemoHostedEvidenceStatus ??
+          "unknown",
+      ),
+      realHostedEvidenceStatus: String(
+        hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+      ),
       realHostedDeploymentStatus: String(
         hostedConcurrentRaceMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
       ),
@@ -1421,6 +1431,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
+      selectedHostedEvidenceMode: String(unproven?.hostedEvidenceMode ?? ""),
+      selectedRealHostedEvidenceStatus: String(
+        unproven?.realHostedEvidenceStatus ?? "",
+      ),
       selectedRoleUrl: unprovenRoleUrl,
       selectedRoleHref:
         unprovenRoleUrl === ""

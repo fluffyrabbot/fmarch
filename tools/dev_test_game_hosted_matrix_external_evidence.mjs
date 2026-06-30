@@ -37,6 +37,8 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
     apiBaseUrl,
     groupId,
   });
+  const rawEvidenceSyntheticExternalTarget =
+    source.generatedFrom?.syntheticExternalTarget === true;
   const cellIds = promotedGroupCells[groupId];
   if (cellIds === undefined) {
     throw new Error(`unsupported hosted matrix external group: ${groupId}`);
@@ -61,11 +63,15 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
     reconnectRecovery: true,
     staleConflictMessages: true,
     rawRoleCredentialsRedacted: true,
+    sourceMode: rawEvidenceSyntheticExternalTarget
+      ? "synthetic-demo"
+      : "raw-hosted-target",
     generatedFrom: {
       hostedConcurrentRaceMatrix: devTestGameHostedConcurrentRaceMatrixPath,
       hostedConcurrentRaceMatrixGeneratedAt: sourceMatrix.generatedAt,
       rawEvidence: rawEvidenceSource,
       rawEvidenceGeneratedAt: source.generatedAt ?? null,
+      rawEvidenceSyntheticExternalTarget,
     },
     observations: source.observations.map((observation) => ({
       id: observation.id,
@@ -111,6 +117,8 @@ export function assertDevTestGameHostedMatrixExternalEvidence(
     evidence.reconnectRecovery !== true ||
     evidence.staleConflictMessages !== true ||
     evidence.rawRoleCredentialsRedacted !== true ||
+    !["synthetic-demo", "raw-hosted-target"].includes(evidence.sourceMode) ||
+    typeof evidence.generatedFrom?.rawEvidenceSyntheticExternalTarget !== "boolean" ||
     !Array.isArray(evidence.observations) ||
     evidence.observations.length < cellIds.length
   ) {
