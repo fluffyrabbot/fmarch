@@ -41,6 +41,52 @@ assert.equal(
   proofRun.lanes.every((lane) => lane.status === "passed"),
   true,
 );
+assert.equal(proofRun.coreLoopSpine.status, "passed");
+assert.deepEqual(proofRun.coreLoopSpine.sourceLaneIds, [
+  "core-loop",
+  "action-loop",
+  "invalid-action-recovery",
+  "resolution-receipts",
+]);
+assert.deepEqual(
+  proofRun.coreLoopSpine.cycles.map((cycle) => cycle.id),
+  ["d01-n01-d02", "d02-n02"],
+);
+const proofRunSpineFirstCycle = proofRun.coreLoopSpine.cycles[0];
+const proofRunSpineSecondCycle = proofRun.coreLoopSpine.cycles[1];
+assert.equal(proofRunSpineFirstCycle.game, session.game);
+assert.match(proofRunSpineFirstCycle.roleUrls.host, new RegExp(`/g/${session.game}/host`));
+assert.equal(proofRunSpineFirstCycle.checkpoints[0].id, "d01-resolved-locked");
+assert.equal(proofRunSpineFirstCycle.checkpoints[0].phase, "D01");
+assert.equal(proofRunSpineFirstCycle.checkpoints[0].locked, true);
+assert.equal(proofRunSpineFirstCycle.checkpoints[0].submitActionControls, 0);
+assert.equal(proofRunSpineFirstCycle.checkpoints[1].phase, "N01");
+assert.equal(proofRunSpineFirstCycle.checkpoints[1].actionTemplate, "factional_kill");
+assert.equal(proofRunSpineFirstCycle.checkpoints[1].normalPlayerDirectReject, "InvalidTarget");
+assert.equal(proofRunSpineFirstCycle.checkpoints[2].receiptStatus, "factional_kill");
+assert.equal(proofRunSpineFirstCycle.checkpoints[2].targetAlive, false);
+assert.equal(proofRunSpineFirstCycle.checkpoints[3].phase, "D02");
+assert.equal(proofRunSpineFirstCycle.checkpoints[3].actionVoteControls > 0, true);
+assert.match(
+  proofRunSpineSecondCycle.roleUrls.host,
+  new RegExp(`/g/${proofRunSpineSecondCycle.game}/host`),
+);
+assert.equal(proofRunSpineSecondCycle.checkpoints[0].phase, "D02");
+assert.equal(proofRunSpineSecondCycle.checkpoints[0].voteTarget, "slot-2");
+assert.equal(proofRunSpineSecondCycle.checkpoints[1].voteState, "ack");
+assert.equal(proofRunSpineSecondCycle.checkpoints[1].projectedCount, 3);
+assert.equal(proofRunSpineSecondCycle.checkpoints[2].outcomeStatus, "Lynch");
+assert.equal(proofRunSpineSecondCycle.checkpoints[2].receiptStatus, "day_vote");
+assert.equal(proofRunSpineSecondCycle.checkpoints[3].phase, "N02");
+assert.equal(proofRunSpineSecondCycle.checkpoints[3].actionTemplate, "factional_kill");
+assert.equal(proofRunSpineSecondCycle.checkpoints[3].normalPlayerFactionalKillVisible, false);
+assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
+assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
+assert.equal(
+  proofRun.coreLoopSpine.recoveryHooks.normalPlayerDirectActionReject,
+  "InvalidTarget",
+);
+assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleActionConflictReject, "PhaseLocked");
 assert.deepEqual(session.verification.roles, [
   "host",
   "player",

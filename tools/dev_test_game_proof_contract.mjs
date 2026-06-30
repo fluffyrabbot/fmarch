@@ -7812,6 +7812,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     ),
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";
+  const coreLoopSpine = buildCoreLoopSpineSummary({ session, verification });
   return {
     version: DEV_TEST_GAME_PROOF_VERSION,
     proof: "dev-test-game-proof-run",
@@ -7834,6 +7835,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       verificationStatus: verification.status ?? null,
       roles: verification.roles ?? [],
     },
+    coreLoopSpine,
     lanes,
     nonClaims: [
       "production account identity",
@@ -7864,12 +7866,297 @@ export function assertDevTestGameProofRun(proof) {
   if (proof.productionReady !== false || proof.releaseReady !== false) {
     throw new Error("dev-test-game proof must not claim production or release readiness");
   }
+  assertCoreLoopSpineSummary(proof.coreLoopSpine);
   for (const laneId of requiredLaneIds) {
     if (!proof.lanes?.some((laneItem) => laneItem.id === laneId && laneItem.status === "passed")) {
       throw new Error(`dev-test-game proof missing passed lane: ${laneId}`);
     }
   }
   return proof;
+}
+
+function buildCoreLoopSpineSummary({ session, verification }) {
+  const actionLoop = verification.actionLoop ?? {};
+  const dayNight = actionLoop.dayNightTransition ?? {};
+  const nightResolution = actionLoop.nightResolutionTransition ?? {};
+  const d02VoteNight = actionLoop.d02VoteNightTransition ?? {};
+  const cycles = [
+    {
+      id: "d01-n01-d02",
+      game: session?.game ?? null,
+      roleUrls: {
+        host: dayNight.hostRoleUrl ?? null,
+        actionPlayer: dayNight.actionRoleUrl ?? null,
+        normalPlayer: dayNight.normalPlayerRoleUrl ?? null,
+        target: nightResolution.targetRoleUrl ?? null,
+      },
+      checkpoints: [
+        {
+          id: "d01-resolved-locked",
+          phase: dayNight.dayLockedActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked: dayNight.dayLockedActionSurface?.commandState?.phase?.locked ?? null,
+          resolveState: dayNight.resolveDayState ?? null,
+          submitActionControls: countButtonsWithPrefix(
+            dayNight.dayLockedActionSurface?.buttons,
+            "submit_action",
+          ),
+          submitVoteControls: countButtonsWithPrefix(
+            dayNight.dayLockedActionSurface?.buttons,
+            "submit_vote",
+          ),
+        },
+        {
+          id: "n01-action-open",
+          phase:
+            dayNight.nightActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked:
+            dayNight.nightActionSurface?.commandState?.phase?.locked ?? null,
+          advanceState: dayNight.advanceNightState ?? null,
+          actionTemplate: firstActionTemplate(
+            dayNight.nightActionSurface?.commandState?.actions,
+          ),
+          actionButtonVisible: hasEnabledButton(
+            dayNight.nightActionSurface?.buttons,
+            "submit_action:factional_kill",
+          ),
+          normalPlayerActionCount:
+            dayNight.normalPlayerNightSurface?.commandActions?.length ?? null,
+          normalPlayerDirectReject:
+            dayNight.normalPlayerNightSurface?.directRejectError ?? null,
+        },
+        {
+          id: "n01-resolved-target-killed",
+          resolveState: nightResolution.resolveNightState ?? null,
+          targetSlot: nightResolution.legalActionTarget ?? null,
+          targetAlive: nightResolution.resolvedTargetSlot?.alive ?? null,
+          targetStatus: nightResolution.resolvedTargetSlot?.status ?? null,
+          receiptStatus:
+            nightResolution.targetReceiptSurface?.targetNotice?.status ?? null,
+          receiptEffect:
+            nightResolution.targetReceiptSurface?.targetNotice?.effect ?? null,
+        },
+        {
+          id: "d02-day-controls-return",
+          phase:
+            nightResolution.d02ActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked:
+            nightResolution.d02ActionSurface?.commandState?.phase?.locked ?? null,
+          advanceState: nightResolution.advanceDayState ?? null,
+          actionSubmitControls: countButtonsWithPrefix(
+            nightResolution.d02ActionSurface?.buttons,
+            "submit_action",
+          ),
+          actionVoteControls: countButtonsWithPrefix(
+            nightResolution.d02ActionSurface?.buttons,
+            "submit_vote",
+          ),
+          normalVoteControls: countButtonsWithPrefix(
+            nightResolution.d02NormalPlayerSurface?.buttons,
+            "submit_vote",
+          ),
+        },
+      ],
+    },
+    {
+      id: "d02-n02",
+      game: d02VoteNight.game ?? null,
+      roleUrls: {
+        host: d02VoteNight.hostRoleUrl ?? null,
+        actionPlayer: d02VoteNight.actionRoleUrl ?? null,
+        normalPlayer: d02VoteNight.playerRoleUrl ?? null,
+        target: d02VoteNight.targetRoleUrl ?? null,
+      },
+      checkpoints: [
+        {
+          id: "d02-vote-open",
+          phase: d02VoteNight.hostBeforeVote?.phase?.id ?? null,
+          locked: d02VoteNight.hostBeforeVote?.phase?.locked ?? null,
+          voteTarget: d02VoteNight.voteTarget?.slotId ?? null,
+          actionPlayerCurrentVote:
+            d02VoteNight.actionBeforeVote?.commandState?.currentVote ?? null,
+          actionPlayerVoteControls: countButtonsWithPrefix(
+            d02VoteNight.actionBeforeVote?.buttons,
+            "submit_vote",
+          ),
+        },
+        {
+          id: "d02-deciding-vote-submitted",
+          voteState: d02VoteNight.finalVote?.state ?? null,
+          actorSlot:
+            d02VoteNight.finalVote?.requestEnvelope?.body?.body?.command
+              ?.SubmitVote?.actor_slot ?? null,
+          targetSlot:
+            d02VoteNight.finalVote?.requestEnvelope?.body?.body?.command
+              ?.SubmitVote?.target?.Slot ?? null,
+          projectedCount: d02VoteNight.apiVoteRow?.count ?? null,
+        },
+        {
+          id: "d02-resolved-target-killed",
+          resolveState: d02VoteNight.resolveD02?.commandStatus?.state ?? null,
+          phase: d02VoteNight.hostAfterResolve?.phase?.id ?? null,
+          locked: d02VoteNight.hostAfterResolve?.phase?.locked ?? null,
+          outcomeStatus: d02VoteNight.dayVoteOutcome?.status ?? null,
+          winnerSlot: d02VoteNight.dayVoteOutcome?.winnerSlot ?? null,
+          targetAlive: d02VoteNight.hostSlotAfterResolve?.alive ?? null,
+          receiptStatus:
+            d02VoteNight.targetReceiptSurface?.targetNotice?.status ?? null,
+        },
+        {
+          id: "n02-action-open",
+          advanceState: d02VoteNight.advanceN02?.commandStatus?.state ?? null,
+          phase:
+            d02VoteNight.n02ActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked:
+            d02VoteNight.n02ActionSurface?.commandState?.phase?.locked ?? null,
+          actionTemplate: firstActionTemplate(
+            d02VoteNight.n02ActionSurface?.commandState?.actions,
+          ),
+          actionButtonVisible: hasEnabledButton(
+            d02VoteNight.n02ActionSurface?.buttons,
+            "submit_action:factional_kill",
+          ),
+          normalPlayerFactionalKillVisible:
+            d02VoteNight.n02NormalPlayerSurface?.factionalKillVisible ?? null,
+        },
+      ],
+    },
+  ];
+  const recoveryHooks = {
+    staleLockedVoteReject: verification.coreLoop?.rejectedVote?.error ?? null,
+    invalidActionReject: actionLoop.invalidAction?.error ?? null,
+    normalPlayerDirectActionReject:
+      dayNight.normalPlayerNightSurface?.directRejectError ?? null,
+    staleActionConflictReject: actionLoop.staleActionConflict?.reject?.error ?? null,
+  };
+  const passed =
+    cycles[0]?.game === session?.game &&
+    cycles[0]?.roleUrls?.host?.includes(`/g/${session?.game ?? ""}/host`) === true &&
+    cycles[0]?.roleUrls?.actionPlayer?.includes(`/g/${session?.game ?? ""}`) === true &&
+    cycles[0]?.checkpoints?.[0]?.phase === "D01" &&
+    cycles[0]?.checkpoints?.[0]?.locked === true &&
+    cycles[0]?.checkpoints?.[0]?.resolveState === "ack" &&
+    cycles[0]?.checkpoints?.[0]?.submitActionControls === 0 &&
+    cycles[0]?.checkpoints?.[0]?.submitVoteControls === 0 &&
+    cycles[0]?.checkpoints?.[1]?.phase === "N01" &&
+    cycles[0]?.checkpoints?.[1]?.locked === false &&
+    cycles[0]?.checkpoints?.[1]?.advanceState === "ack" &&
+    cycles[0]?.checkpoints?.[1]?.actionTemplate === "factional_kill" &&
+    cycles[0]?.checkpoints?.[1]?.actionButtonVisible === true &&
+    cycles[0]?.checkpoints?.[1]?.normalPlayerActionCount === 0 &&
+    cycles[0]?.checkpoints?.[1]?.normalPlayerDirectReject === "InvalidTarget" &&
+    cycles[0]?.checkpoints?.[2]?.resolveState === "ack" &&
+    cycles[0]?.checkpoints?.[2]?.targetAlive === false &&
+    cycles[0]?.checkpoints?.[2]?.targetStatus === "dead" &&
+    cycles[0]?.checkpoints?.[2]?.receiptStatus === "factional_kill" &&
+    cycles[0]?.checkpoints?.[2]?.receiptEffect === "player_killed" &&
+    cycles[0]?.checkpoints?.[3]?.phase === "D02" &&
+    cycles[0]?.checkpoints?.[3]?.locked === false &&
+    cycles[0]?.checkpoints?.[3]?.advanceState === "ack" &&
+    cycles[0]?.checkpoints?.[3]?.actionSubmitControls === 0 &&
+    cycles[0]?.checkpoints?.[3]?.actionVoteControls > 0 &&
+    cycles[0]?.checkpoints?.[3]?.normalVoteControls > 0 &&
+    typeof cycles[1]?.game === "string" &&
+    cycles[1]?.game.length > 0 &&
+    cycles[1]?.roleUrls?.host?.includes(`/g/${cycles[1]?.game}/host`) === true &&
+    cycles[1]?.roleUrls?.actionPlayer?.includes(`/g/${cycles[1]?.game}`) === true &&
+    cycles[1]?.roleUrls?.normalPlayer?.includes(`/g/${cycles[1]?.game}`) === true &&
+    cycles[1]?.roleUrls?.target?.includes(`/g/${cycles[1]?.game}`) === true &&
+    cycles[1]?.checkpoints?.[0]?.phase === "D02" &&
+    cycles[1]?.checkpoints?.[0]?.locked === false &&
+    cycles[1]?.checkpoints?.[0]?.voteTarget === "slot-2" &&
+    cycles[1]?.checkpoints?.[0]?.actionPlayerCurrentVote === null &&
+    cycles[1]?.checkpoints?.[0]?.actionPlayerVoteControls > 0 &&
+    cycles[1]?.checkpoints?.[1]?.voteState === "ack" &&
+    cycles[1]?.checkpoints?.[1]?.actorSlot === "slot_4" &&
+    cycles[1]?.checkpoints?.[1]?.targetSlot === "slot-2" &&
+    cycles[1]?.checkpoints?.[1]?.projectedCount === 3 &&
+    cycles[1]?.checkpoints?.[2]?.resolveState === "ack" &&
+    cycles[1]?.checkpoints?.[2]?.phase === "D02" &&
+    cycles[1]?.checkpoints?.[2]?.locked === true &&
+    cycles[1]?.checkpoints?.[2]?.outcomeStatus === "Lynch" &&
+    cycles[1]?.checkpoints?.[2]?.winnerSlot === "slot-2" &&
+    cycles[1]?.checkpoints?.[2]?.targetAlive === false &&
+    cycles[1]?.checkpoints?.[2]?.receiptStatus === "day_vote" &&
+    cycles[1]?.checkpoints?.[3]?.advanceState === "ack" &&
+    cycles[1]?.checkpoints?.[3]?.phase === "N02" &&
+    cycles[1]?.checkpoints?.[3]?.locked === false &&
+    cycles[1]?.checkpoints?.[3]?.actionTemplate === "factional_kill" &&
+    cycles[1]?.checkpoints?.[3]?.actionButtonVisible === true &&
+    cycles[1]?.checkpoints?.[3]?.normalPlayerFactionalKillVisible === false &&
+    recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
+    recoveryHooks.invalidActionReject === "InvalidTarget" &&
+    recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
+    recoveryHooks.staleActionConflictReject === "PhaseLocked";
+  return {
+    status: passed ? "passed" : "failed",
+    proof:
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, and N02 action return.",
+    sourceLaneIds: [
+      "core-loop",
+      "action-loop",
+      "invalid-action-recovery",
+      "resolution-receipts",
+    ],
+    cycles,
+    recoveryHooks,
+  };
+}
+
+function assertCoreLoopSpineSummary(summary) {
+  if (summary?.status !== "passed") {
+    throw new Error(`core loop spine summary failed: ${JSON.stringify(summary)}`);
+  }
+  if (summary.proof !== undefined && typeof summary.proof !== "string") {
+    throw new Error("core loop spine summary proof must be text");
+  }
+  if (!Array.isArray(summary.sourceLaneIds) || !summary.sourceLaneIds.includes("action-loop")) {
+    throw new Error("core loop spine summary must cite the action-loop source lane");
+  }
+  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 2) {
+    throw new Error("core loop spine summary must expose exactly two cycles");
+  }
+  for (const cycle of summary.cycles) {
+    if (
+      typeof cycle.id !== "string" ||
+      typeof cycle.game !== "string" ||
+      cycle.game.length === 0 ||
+      cycle.roleUrls === null ||
+      typeof cycle.roleUrls !== "object" ||
+      !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
+      !Array.isArray(cycle.checkpoints) ||
+      cycle.checkpoints.length !== 4
+    ) {
+      throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
+    }
+  }
+  if (
+    summary.recoveryHooks?.staleLockedVoteReject !== "PhaseLocked" ||
+    summary.recoveryHooks?.invalidActionReject !== "InvalidTarget" ||
+    summary.recoveryHooks?.normalPlayerDirectActionReject !== "InvalidTarget" ||
+    summary.recoveryHooks?.staleActionConflictReject !== "PhaseLocked"
+  ) {
+    throw new Error(
+      `core loop spine recovery hooks drifted: ${JSON.stringify(summary.recoveryHooks)}`,
+    );
+  }
+}
+
+function countButtonsWithPrefix(buttons, prefix) {
+  return (buttons ?? []).filter((button) =>
+    String(button.action ?? "").startsWith(prefix),
+  ).length;
+}
+
+function hasEnabledButton(buttons, actionId) {
+  return (
+    (buttons ?? []).some(
+      (button) => button.action === actionId && button.disabled === false,
+    ) === true
+  );
+}
+
+function firstActionTemplate(actions) {
+  return actions?.find((action) => action.templateId !== undefined)?.templateId ?? null;
 }
 
 function lane(id, label, evidence) {

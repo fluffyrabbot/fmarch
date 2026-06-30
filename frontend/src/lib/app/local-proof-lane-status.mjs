@@ -40,6 +40,19 @@ export function coreLoopHighlightedLaneEvidence(proofRun) {
   });
 }
 
+export function coreLoopSpineStatus(proofRun) {
+  const spine = proofRun?.coreLoopSpine;
+  const status = String(spine?.status ?? "unknown");
+  const firstCycle = spine?.cycles?.find((cycle) => cycle.id === "d01-n01-d02");
+  const secondCycle = spine?.cycles?.find((cycle) => cycle.id === "d02-n02");
+  const firstStart = checkpointById(firstCycle, "d01-resolved-locked");
+  const firstNight = checkpointById(firstCycle, "n01-action-open");
+  const firstDay = checkpointById(firstCycle, "d02-day-controls-return");
+  const secondVote = checkpointById(secondCycle, "d02-deciding-vote-submitted");
+  const secondNight = checkpointById(secondCycle, "n02-action-open");
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, next ${String(secondNight?.phase ?? "unknown")}`;
+}
+
 export function hardeningHighlightedLaneEvidence(proofRun) {
   return highlightedLaneEvidence({
     proofRun,
@@ -135,4 +148,8 @@ function laneEvidence(lane) {
   return lane?.evidence !== null && typeof lane?.evidence === "object"
     ? lane.evidence
     : {};
+}
+
+function checkpointById(cycle, id) {
+  return cycle?.checkpoints?.find((checkpoint) => checkpoint.id === id) ?? null;
 }

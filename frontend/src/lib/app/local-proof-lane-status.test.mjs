@@ -5,6 +5,7 @@ import {
   HARDENING_HIGHLIGHTED_LANE_IDS,
   coreLoopHighlightedLaneEvidence,
   coreLoopLaneStatus,
+  coreLoopSpineStatus,
   hardeningHighlightedLaneEvidence,
   hardeningLaneStatus,
 } from "./local-proof-lane-status.mjs";
@@ -49,6 +50,38 @@ test("core loop lane status formats seeded recovery evidence", () => {
     "passed: role URL true, night N01, receipt factional_kill, D02 Lynch, next N02",
   );
   assert.equal(coreLoopLaneStatus({ id: "unhighlighted", status: "passed" }), "passed");
+});
+
+test("core loop spine status formats compact two-cycle evidence", () => {
+  assert.equal(
+    coreLoopSpineStatus({
+      coreLoopSpine: {
+        status: "passed",
+        cycles: [
+          {
+            id: "d01-n01-d02",
+            checkpoints: [
+              { id: "d01-resolved-locked", phase: "D01" },
+              { id: "n01-action-open", phase: "N01" },
+              { id: "d02-day-controls-return", phase: "D02" },
+            ],
+          },
+          {
+            id: "d02-n02",
+            checkpoints: [
+              { id: "d02-deciding-vote-submitted", voteState: "ack" },
+              { id: "n02-action-open", phase: "N02" },
+            ],
+          },
+        ],
+      },
+    }),
+    "passed: D01 -> N01 -> D02, vote ack, next N02",
+  );
+  assert.equal(
+    coreLoopSpineStatus({}),
+    "unknown: unknown -> unknown -> unknown, vote unknown, next unknown",
+  );
 });
 
 test("hardening lane status formats stale and concurrent conflict evidence", () => {
