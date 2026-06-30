@@ -68,6 +68,15 @@ export function buildDevTestGameNextAction(
   const cohostDeadlineRaceReloadTrace = buildCohostDeadlineRaceReloadTrace(races, {
     source: raceCoverageSource,
   });
+  const raceCoveragePromotedMilestones = buildRaceCoveragePromotedMilestones(
+    races,
+    {
+      replacementRaceReloadTrace,
+      hostConcurrentRaceReloadTrace,
+      playerConcurrentActionReloadTrace,
+      cohostDeadlineRaceReloadTrace,
+    },
+  );
   const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
@@ -196,6 +205,7 @@ export function buildDevTestGameNextAction(
               coveredCellCount: cohostDeadlineRaceReloadTrace.coveredCellCount,
               gapCount: cohostDeadlineRaceReloadTrace.gapCount,
             },
+            raceCoveragePromotedMilestones,
           }),
     },
     nextAction,
@@ -206,6 +216,7 @@ export function buildDevTestGameNextAction(
     hostConcurrentRaceReloadTrace,
     playerConcurrentActionReloadTrace,
     cohostDeadlineRaceReloadTrace,
+    raceCoveragePromotedMilestones,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -270,6 +281,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertHostConcurrentRaceReloadTrace(evidence.hostConcurrentRaceReloadTrace);
   assertPlayerConcurrentActionReloadTrace(evidence.playerConcurrentActionReloadTrace);
   assertCohostDeadlineRaceReloadTrace(evidence.cohostDeadlineRaceReloadTrace);
+  assertRaceCoveragePromotedMilestones(evidence.raceCoveragePromotedMilestones);
   assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
   assertHostStaleControlTrace(evidence.hostStaleControlTrace);
   return evidence;
@@ -576,6 +588,76 @@ function buildCohostDeadlineRaceReloadTrace(
     coveredCellCount,
     gapCount,
     cells,
+  };
+}
+
+function buildRaceCoveragePromotedMilestones(
+  raceCoverage,
+  {
+    replacementRaceReloadTrace,
+    hostConcurrentRaceReloadTrace,
+    playerConcurrentActionReloadTrace,
+    cohostDeadlineRaceReloadTrace,
+  },
+) {
+  const groups = [
+    buildRaceCoveragePromotedMilestoneGroup(
+      "replacement-race-reload",
+      "Replacement race reload",
+      replacementRaceReloadTrace,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "host-concurrent-race-reload",
+      "Host concurrent race reload",
+      hostConcurrentRaceReloadTrace,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "player-concurrent-action-reload",
+      "Player concurrent action reload",
+      playerConcurrentActionReloadTrace,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "cohost-deadline-race-reload",
+      "Cohost deadline race reload",
+      cohostDeadlineRaceReloadTrace,
+    ),
+  ];
+  const requiredCellCount = groups.reduce(
+    (total, group) => total + group.requiredCellCount,
+    0,
+  );
+  const coveredCellCount = groups.reduce(
+    (total, group) => total + group.coveredCellCount,
+    0,
+  );
+  const passedGroupCount = groups.filter((group) => group.status === "covered").length;
+  const gapCount = requiredCellCount - coveredCellCount;
+  return {
+    status:
+      raceCoverage === null ? "unavailable" : gapCount === 0 ? "passed" : "gapped",
+    cellCount: Number(raceCoverage?.summary?.cellCount ?? 0),
+    provenCellCount: Number(raceCoverage?.summary?.provenCellCount ?? 0),
+    reloadCoveredCellCount: Number(
+      raceCoverage?.summary?.reloadCoveredCellCount ?? 0,
+    ),
+    groupCount: groups.length,
+    passedGroupCount,
+    requiredCellCount,
+    coveredCellCount,
+    gapCount,
+    groups,
+  };
+}
+
+function buildRaceCoveragePromotedMilestoneGroup(id, label, trace) {
+  return {
+    id,
+    label,
+    status: trace.status,
+    cellIds: trace.cells.map((cell) => cell.id),
+    requiredCellCount: trace.requiredCellCount,
+    coveredCellCount: trace.coveredCellCount,
+    gapCount: trace.gapCount,
   };
 }
 
@@ -903,6 +985,51 @@ function assertCohostDeadlineRaceReloadTrace(trace) {
   }
 }
 
+function assertRaceCoveragePromotedMilestones(summary) {
+  if (
+    !["passed", "gapped", "unavailable"].includes(summary?.status) ||
+    !Number.isInteger(summary.cellCount) ||
+    !Number.isInteger(summary.provenCellCount) ||
+    !Number.isInteger(summary.reloadCoveredCellCount) ||
+    !Number.isInteger(summary.groupCount) ||
+    !Number.isInteger(summary.passedGroupCount) ||
+    !Number.isInteger(summary.requiredCellCount) ||
+    !Number.isInteger(summary.coveredCellCount) ||
+    !Number.isInteger(summary.gapCount) ||
+    !Array.isArray(summary.groups)
+  ) {
+    throw new Error("next-action race coverage promoted milestone summary is malformed");
+  }
+  if (
+    summary.groupCount !== raceCoveragePromotedMilestoneGroupIds.length ||
+    summary.groups.length !== raceCoveragePromotedMilestoneGroupIds.length ||
+    summary.coveredCellCount + summary.gapCount !== summary.requiredCellCount
+  ) {
+    throw new Error("next-action race coverage promoted milestone summary count drifted");
+  }
+  for (const id of raceCoveragePromotedMilestoneGroupIds) {
+    const group = summary.groups.find((candidate) => candidate.id === id);
+    if (group === undefined) {
+      throw new Error(`next-action race coverage promoted milestone missing group: ${id}`);
+    }
+    if (
+      !["covered", "gapped", "unavailable"].includes(group.status) ||
+      !Array.isArray(group.cellIds) ||
+      !Number.isInteger(group.requiredCellCount) ||
+      !Number.isInteger(group.coveredCellCount) ||
+      !Number.isInteger(group.gapCount)
+    ) {
+      throw new Error(`next-action race coverage promoted milestone malformed group: ${id}`);
+    }
+  }
+  if (summary.status === "passed" && summary.gapCount !== 0) {
+    throw new Error("next-action race coverage promoted milestone passed with gaps");
+  }
+  if (summary.status === "gapped" && summary.gapCount === 0) {
+    throw new Error("next-action race coverage promoted milestone gapped without gaps");
+  }
+}
+
 function assertStaleConflictMessageTrace(trace) {
   if (
     trace?.strategy !== "stale-conflict-message-before-readiness" ||
@@ -1069,6 +1196,13 @@ const playerConcurrentActionReloadCellIds = Object.freeze([
 
 const cohostDeadlineRaceReloadCellIds = Object.freeze([
   "cohost-deadline-vs-host-resolve",
+]);
+
+const raceCoveragePromotedMilestoneGroupIds = Object.freeze([
+  "replacement-race-reload",
+  "host-concurrent-race-reload",
+  "player-concurrent-action-reload",
+  "cohost-deadline-race-reload",
 ]);
 
 const staleConflictMessageLaneIds = Object.freeze([

@@ -662,6 +662,10 @@ test("dev test-game next-action derives one local recovery command from the mani
     gapCount: 0,
     cells: cohostDeadlineRaceReloadCellsFixture(),
   });
+  assert.deepEqual(
+    freshAction.raceCoveragePromotedMilestones,
+    raceCoveragePromotedMilestonesFixture({ groupStatus: "covered" }),
+  );
   assert.deepEqual(freshAction.staleConflictMessageTrace, {
     strategy: "stale-conflict-message-before-readiness",
     status: "covered",
@@ -6337,6 +6341,10 @@ test("session card and markdown include role credential URLs and tokens", () => 
       gapCount: 0,
     },
   );
+  assert.deepEqual(
+    raceCoverageReadiness.generatedFrom.raceCoveragePromotedMilestones,
+    raceCoveragePromotedMilestonesFixture({ groupStatus: "passed" }),
+  );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-host-concurrent-race-reload-milestone",
@@ -6354,6 +6362,12 @@ test("session card and markdown include role credential URLs and tokens", () => 
       (item) => item.id === "local-cohost-deadline-race-reload-milestone",
     ).coveredCellCount,
     1,
+  );
+  assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-race-coverage-promoted-milestones",
+    ).passedGroupCount,
+    4,
   );
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
@@ -7065,6 +7079,14 @@ function hostConcurrentRaceReloadCellIdsFixture() {
   ];
 }
 
+function replacementRaceReloadCellIdsFixture() {
+  return [
+    "replacement-private-post",
+    "replacement-vote",
+    "replacement-action",
+  ];
+}
+
 function hostConcurrentRaceReloadCellsFixture() {
   return [
     {
@@ -7183,6 +7205,58 @@ function cohostDeadlineRaceReloadCellsFixture() {
       covered: true,
     },
   ];
+}
+
+function raceCoveragePromotedMilestonesFixture({ groupStatus }) {
+  return {
+    status: "passed",
+    cellCount: 16,
+    provenCellCount: 16,
+    reloadCoveredCellCount: 16,
+    groupCount: 4,
+    passedGroupCount: 4,
+    requiredCellCount: 16,
+    coveredCellCount: 16,
+    gapCount: 0,
+    groups: [
+      {
+        id: "replacement-race-reload",
+        label: "Replacement race reload",
+        status: groupStatus,
+        cellIds: replacementRaceReloadCellIdsFixture(),
+        requiredCellCount: 3,
+        coveredCellCount: 3,
+        gapCount: 0,
+      },
+      {
+        id: "host-concurrent-race-reload",
+        label: "Host concurrent race reload",
+        status: groupStatus,
+        cellIds: hostConcurrentRaceReloadCellIdsFixture(),
+        requiredCellCount: 7,
+        coveredCellCount: 7,
+        gapCount: 0,
+      },
+      {
+        id: "player-concurrent-action-reload",
+        label: "Player concurrent action reload",
+        status: groupStatus,
+        cellIds: playerConcurrentActionReloadCellIdsFixture(),
+        requiredCellCount: 5,
+        coveredCellCount: 5,
+        gapCount: 0,
+      },
+      {
+        id: "cohost-deadline-race-reload",
+        label: "Cohost deadline race reload",
+        status: groupStatus,
+        cellIds: cohostDeadlineRaceReloadCellIdsFixture(),
+        requiredCellCount: 1,
+        coveredCellCount: 1,
+        gapCount: 0,
+      },
+    ],
+  };
 }
 
 function raceCoverageCell(id, raceLaneId, reloadLaneId) {

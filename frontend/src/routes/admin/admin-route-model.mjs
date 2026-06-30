@@ -576,6 +576,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
     normalizeNextActionCohostDeadlineRaceReloadTrace(
       nextAction.cohostDeadlineRaceReloadTrace,
     );
+  const raceCoveragePromotedMilestones =
+    normalizeNextActionRaceCoveragePromotedMilestones(
+      nextAction.raceCoveragePromotedMilestones,
+    );
   const staleConflictMessageTrace = normalizeNextActionStaleConflictMessageTrace(
     nextAction.staleConflictMessageTrace,
   );
@@ -652,6 +656,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
             }),
           ),
         ]),
+    Object.freeze({
+      id: "race-coverage-promoted-milestones",
+      status: `${raceCoveragePromotedMilestones.passedGroupCount}/${raceCoveragePromotedMilestones.groupCount} groups, ${raceCoveragePromotedMilestones.coveredCellCount}/${raceCoveragePromotedMilestones.requiredCellCount} cells, ${raceCoveragePromotedMilestones.reloadCoveredCellCount}/${raceCoveragePromotedMilestones.cellCount} reloads`,
+    }),
     Object.freeze({
       id: "replacement-race-reload-milestone",
       status: `${replacementRaceReloadTrace.coveredCellCount}/${replacementRaceReloadTrace.requiredCellCount} ${replacementRaceReloadTrace.status}`,
@@ -764,6 +772,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       hostConcurrentRaceReloadTrace,
       playerConcurrentActionReloadTrace,
       cohostDeadlineRaceReloadTrace,
+      raceCoveragePromotedMilestones,
       staleConflictMessageTrace,
       hostStaleControlTrace,
       releaseReady: nextAction.releaseReady === true,
@@ -1062,6 +1071,56 @@ function normalizeNextActionCohostDeadlineRaceReloadTrace(
     coveredCellCount: Number(cohostDeadlineRaceReloadTrace.coveredCellCount ?? 0),
     gapCount: Number(cohostDeadlineRaceReloadTrace.gapCount ?? 0),
     cells: Object.freeze(cells),
+  });
+}
+
+function normalizeNextActionRaceCoveragePromotedMilestones(promotedMilestones) {
+  if (
+    promotedMilestones === null ||
+    typeof promotedMilestones !== "object" ||
+    !Array.isArray(promotedMilestones.groups)
+  ) {
+    return Object.freeze({
+      status: "unknown",
+      cellCount: 0,
+      provenCellCount: 0,
+      reloadCoveredCellCount: 0,
+      groupCount: 0,
+      passedGroupCount: 0,
+      requiredCellCount: 0,
+      coveredCellCount: 0,
+      gapCount: 0,
+      groups: Object.freeze([]),
+    });
+  }
+  const groups = promotedMilestones.groups
+    .filter((group) => group !== null && typeof group === "object")
+    .map((group) =>
+      Object.freeze({
+        id: String(group.id ?? "unknown"),
+        label: String(group.label ?? "Unknown"),
+        status: String(group.status ?? "unknown"),
+        cellIds: Object.freeze(
+          Array.isArray(group.cellIds)
+            ? group.cellIds.map((cellId) => String(cellId))
+            : [],
+        ),
+        requiredCellCount: Number(group.requiredCellCount ?? 0),
+        coveredCellCount: Number(group.coveredCellCount ?? 0),
+        gapCount: Number(group.gapCount ?? 0),
+      }),
+    );
+  return Object.freeze({
+    status: String(promotedMilestones.status ?? "unknown"),
+    cellCount: Number(promotedMilestones.cellCount ?? 0),
+    provenCellCount: Number(promotedMilestones.provenCellCount ?? 0),
+    reloadCoveredCellCount: Number(promotedMilestones.reloadCoveredCellCount ?? 0),
+    groupCount: Number(promotedMilestones.groupCount ?? groups.length),
+    passedGroupCount: Number(promotedMilestones.passedGroupCount ?? 0),
+    requiredCellCount: Number(promotedMilestones.requiredCellCount ?? 0),
+    coveredCellCount: Number(promotedMilestones.coveredCellCount ?? 0),
+    gapCount: Number(promotedMilestones.gapCount ?? 0),
+    groups: Object.freeze(groups),
   });
 }
 

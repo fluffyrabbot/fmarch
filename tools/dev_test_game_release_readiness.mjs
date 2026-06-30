@@ -194,6 +194,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.raceCoverageArtifact,
       })
     : undefined;
+  const replacementRaceReloadMilestone = options.raceCoverage
+    ? buildReplacementRaceReloadMilestone(options.raceCoverage, {
+        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+      })
+    : undefined;
   const hostConcurrentRaceReloadMilestone = options.raceCoverage
     ? buildHostConcurrentRaceReloadMilestone(options.raceCoverage, {
         sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
@@ -209,6 +214,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
       })
     : undefined;
+  const raceCoveragePromotedMilestones =
+    raceCoverageEvidence === undefined
+      ? undefined
+      : buildRaceCoveragePromotedMilestones(raceCoverageEvidence, {
+          replacementRaceReloadMilestone,
+          hostConcurrentRaceReloadMilestone,
+          playerConcurrentActionReloadMilestone,
+          cohostDeadlineRaceReloadMilestone,
+        });
   const raceCoverageAdminProofEvidence = options.raceCoverageAdminProof
     ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
         path:
@@ -491,6 +505,22 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredCellCount: cohostDeadlineRaceReloadMilestone.requiredCellCount,
       coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
     });
+    localChecks.push({
+      id: "local-race-coverage-promoted-milestones",
+      label: "Promoted local race milestone aggregate",
+      status: "passed",
+      evidence: raceCoverageEvidence.path,
+      proofBoundary:
+        "Local race-coverage aggregate showing all promoted replacement, host, player, and cohost race-reload milestone groups are covered before the remaining exhaustive-race-coverage gap is treated as hosted or broader matrix work.",
+      cellCount: raceCoveragePromotedMilestones.cellCount,
+      provenCellCount: raceCoveragePromotedMilestones.provenCellCount,
+      reloadCoveredCellCount: raceCoveragePromotedMilestones.reloadCoveredCellCount,
+      groupCount: raceCoveragePromotedMilestones.groupCount,
+      passedGroupCount: raceCoveragePromotedMilestones.passedGroupCount,
+      requiredCellCount: raceCoveragePromotedMilestones.requiredCellCount,
+      coveredCellCount: raceCoveragePromotedMilestones.coveredCellCount,
+      groups: raceCoveragePromotedMilestones.groups,
+    });
   }
   const unproven = [
     ...(identityAdapterEvidence === undefined
@@ -674,6 +704,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
               gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
             },
+            raceCoveragePromotedMilestones,
           }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
@@ -747,6 +778,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
                     },
                   }),
+              ...(raceCoveragePromotedMilestones === undefined
+                ? {}
+                : { raceCoveragePromotedMilestones }),
               staleConflictMessageMilestone: {
                 status: staleConflictMessageMilestone.status,
                 laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -933,6 +967,42 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
   };
 }
 
+function buildReplacementRaceReloadMilestone(raceCoverage, { sourcePath }) {
+  assertDevTestGameRaceCoverage(raceCoverage);
+  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
+  const cellIds = [...replacementRaceReloadCellIds];
+  const coveredCellCount = cellIds.filter((cellId) => {
+    const cell = cells.get(cellId);
+    return (
+      cell?.status === "passed" &&
+      typeof cell.reloadLaneId === "string" &&
+      cell.reloadStatus === "passed"
+    );
+  }).length;
+  const gapCount = cellIds.length - coveredCellCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `replacement race-reload milestone missing covered cells from ${sourcePath}: ${cellIds
+        .filter((cellId) => {
+          const cell = cells.get(cellId);
+          return (
+            cell?.status !== "passed" ||
+            typeof cell.reloadLaneId !== "string" ||
+            cell.reloadStatus !== "passed"
+          );
+        })
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    cellIds,
+    requiredCellCount: cellIds.length,
+    coveredCellCount,
+    gapCount,
+  };
+}
+
 function buildHostConcurrentRaceReloadMilestone(raceCoverage, { sourcePath }) {
   assertDevTestGameRaceCoverage(raceCoverage);
   const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
@@ -1041,6 +1111,76 @@ function buildCohostDeadlineRaceReloadMilestone(raceCoverage, { sourcePath }) {
   };
 }
 
+function buildRaceCoveragePromotedMilestones(
+  raceCoverageEvidence,
+  {
+    replacementRaceReloadMilestone,
+    hostConcurrentRaceReloadMilestone,
+    playerConcurrentActionReloadMilestone,
+    cohostDeadlineRaceReloadMilestone,
+  },
+) {
+  const groups = [
+    buildRaceCoveragePromotedMilestoneGroup(
+      "replacement-race-reload",
+      "Replacement race reload",
+      replacementRaceReloadMilestone,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "host-concurrent-race-reload",
+      "Host concurrent race reload",
+      hostConcurrentRaceReloadMilestone,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "player-concurrent-action-reload",
+      "Player concurrent action reload",
+      playerConcurrentActionReloadMilestone,
+    ),
+    buildRaceCoveragePromotedMilestoneGroup(
+      "cohost-deadline-race-reload",
+      "Cohost deadline race reload",
+      cohostDeadlineRaceReloadMilestone,
+    ),
+  ];
+  const requiredCellCount = groups.reduce(
+    (total, group) => total + group.requiredCellCount,
+    0,
+  );
+  const coveredCellCount = groups.reduce(
+    (total, group) => total + group.coveredCellCount,
+    0,
+  );
+  const passedGroupCount = groups.filter((group) => group.status === "passed").length;
+  const gapCount = requiredCellCount - coveredCellCount;
+  if (passedGroupCount !== groups.length || gapCount !== 0) {
+    throw new Error("promoted race milestone aggregate has gaps");
+  }
+  return {
+    status: "passed",
+    cellCount: raceCoverageEvidence.cellCount,
+    provenCellCount: raceCoverageEvidence.provenCellCount,
+    reloadCoveredCellCount: raceCoverageEvidence.reloadCoveredCellCount,
+    groupCount: groups.length,
+    passedGroupCount,
+    requiredCellCount,
+    coveredCellCount,
+    gapCount,
+    groups,
+  };
+}
+
+function buildRaceCoveragePromotedMilestoneGroup(id, label, milestone) {
+  return {
+    id,
+    label,
+    status: milestone.status,
+    cellIds: [...milestone.cellIds],
+    requiredCellCount: milestone.requiredCellCount,
+    coveredCellCount: milestone.coveredCellCount,
+    gapCount: milestone.gapCount,
+  };
+}
+
 const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
@@ -1062,6 +1202,12 @@ const hostStaleControlLaneIds = Object.freeze([
   "stale-host-advance-reload",
   "stale-host-deadline",
   "stale-host-deadline-reload",
+]);
+
+const replacementRaceReloadCellIds = Object.freeze([
+  "replacement-private-post",
+  "replacement-vote",
+  "replacement-action",
 ]);
 
 const hostConcurrentRaceReloadCellIds = Object.freeze([

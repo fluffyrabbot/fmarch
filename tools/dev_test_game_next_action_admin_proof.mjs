@@ -134,6 +134,25 @@ await runAdminAuditProof({
           (cell) => cell.id,
         ),
       },
+      raceCoveragePromotedMilestones: {
+        status: source.nextAction.raceCoveragePromotedMilestones.status,
+        cellCount: source.nextAction.raceCoveragePromotedMilestones.cellCount,
+        provenCellCount:
+          source.nextAction.raceCoveragePromotedMilestones.provenCellCount,
+        reloadCoveredCellCount:
+          source.nextAction.raceCoveragePromotedMilestones.reloadCoveredCellCount,
+        groupCount: source.nextAction.raceCoveragePromotedMilestones.groupCount,
+        passedGroupCount:
+          source.nextAction.raceCoveragePromotedMilestones.passedGroupCount,
+        requiredCellCount:
+          source.nextAction.raceCoveragePromotedMilestones.requiredCellCount,
+        coveredCellCount:
+          source.nextAction.raceCoveragePromotedMilestones.coveredCellCount,
+        gapCount: source.nextAction.raceCoveragePromotedMilestones.gapCount,
+        groupIds: source.nextAction.raceCoveragePromotedMilestones.groups.map(
+          (group) => group.id,
+        ),
+      },
       staleConflictMessageTrace: {
         strategy: source.nextAction.staleConflictMessageTrace.strategy,
         status: source.nextAction.staleConflictMessageTrace.status,
@@ -257,6 +276,22 @@ export function assertNextActionAdminProof(evidence) {
     );
   }
   if (
+    !["passed", "gapped", "unavailable"].includes(
+      evidence.generatedFrom?.raceCoveragePromotedMilestones?.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.raceCoveragePromotedMilestones.cellCount,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.raceCoveragePromotedMilestones.groupCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.raceCoveragePromotedMilestones.groupIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing race coverage promoted milestone evidence",
+    );
+  }
+  if (
     evidence.generatedFrom?.staleConflictMessageTrace?.strategy !==
       "stale-conflict-message-before-readiness" ||
     !["covered", "gapped", "unavailable"].includes(
@@ -330,6 +365,7 @@ function requiredChecksForNextAction(nextAction) {
   for (const cell of nextAction.cohostDeadlineRaceReloadTrace.cells) {
     checks.push(`cohost-deadline-race-reload-${cell.id}`);
   }
+  checks.push("race-coverage-promoted-milestones");
   checks.push("stale-conflict-message-milestone");
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
@@ -387,6 +423,7 @@ function requiredChecksForEvidence(evidence) {
           (id) => `cohost-deadline-race-reload-${id}`,
         )
       : []),
+    "race-coverage-promoted-milestones",
     "stale-conflict-message-milestone",
     ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
       ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(

@@ -1024,6 +1024,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-exhaustive-race-coverage", "selected:unproven"],
+      ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
@@ -1099,6 +1100,7 @@ test("admin route data exposes local next action as a native audit row", async (
     hostConcurrentRaceReloadTrace: hostConcurrentRaceReloadTraceFixture(),
     playerConcurrentActionReloadTrace: playerConcurrentActionReloadTraceFixture(),
     cohostDeadlineRaceReloadTrace: cohostDeadlineRaceReloadTraceFixture(),
+    raceCoveragePromotedMilestones: raceCoveragePromotedMilestonesFixture(),
     staleConflictMessageTrace: staleConflictMessageTraceFixture(),
     hostStaleControlTrace: hostStaleControlTraceFixture(),
     releaseReady: false,
@@ -1136,6 +1138,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["core-loop", "stale"],
       ["selection-trace", "1 candidates"],
       ["selection-trace-core-loop", "selected:stale"],
+      ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
@@ -1188,6 +1191,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["harness-stability-drift", "blocked"],
       ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
       ["selection-trace", "0 candidates"],
+      ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
@@ -2603,6 +2607,7 @@ function nextActionFixture({
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
   cohostDeadlineRaceReloadTrace = cohostDeadlineRaceReloadTraceFixture(),
+  raceCoveragePromotedMilestones = raceCoveragePromotedMilestonesFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
 } = {}) {
@@ -2657,6 +2662,7 @@ function nextActionFixture({
         coveredCellCount: cohostDeadlineRaceReloadTrace.coveredCellCount,
         gapCount: cohostDeadlineRaceReloadTrace.gapCount,
       },
+      raceCoveragePromotedMilestones,
       opsArtifacts: "target/dev-test-game/ops-artifacts.json",
       proofStabilityStatus: stability === undefined ? "clean" : "drifted",
       proofStabilitySummary: {
@@ -2682,6 +2688,7 @@ function nextActionFixture({
     hostConcurrentRaceReloadTrace,
     playerConcurrentActionReloadTrace,
     cohostDeadlineRaceReloadTrace,
+    raceCoveragePromotedMilestones,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -3121,6 +3128,62 @@ function cohostDeadlineRaceReloadCellsFixture() {
       covered: true,
     },
   ];
+}
+
+function raceCoveragePromotedMilestonesFixture() {
+  return {
+    status: "passed",
+    cellCount: 16,
+    provenCellCount: 16,
+    reloadCoveredCellCount: 16,
+    groupCount: 4,
+    passedGroupCount: 4,
+    requiredCellCount: 16,
+    coveredCellCount: 16,
+    gapCount: 0,
+    groups: [
+      {
+        id: "replacement-race-reload",
+        label: "Replacement race reload",
+        status: "covered",
+        cellIds: [
+          "replacement-private-post",
+          "replacement-vote",
+          "replacement-action",
+        ],
+        requiredCellCount: 3,
+        coveredCellCount: 3,
+        gapCount: 0,
+      },
+      {
+        id: "host-concurrent-race-reload",
+        label: "Host concurrent race reload",
+        status: "covered",
+        cellIds: hostConcurrentRaceReloadCellsFixture().map((cell) => cell.id),
+        requiredCellCount: 7,
+        coveredCellCount: 7,
+        gapCount: 0,
+      },
+      {
+        id: "player-concurrent-action-reload",
+        label: "Player concurrent action reload",
+        status: "covered",
+        cellIds: playerConcurrentActionReloadCellsFixture().map((cell) => cell.id),
+        requiredCellCount: 5,
+        coveredCellCount: 5,
+        gapCount: 0,
+      },
+      {
+        id: "cohost-deadline-race-reload",
+        label: "Cohost deadline race reload",
+        status: "covered",
+        cellIds: cohostDeadlineRaceReloadCellsFixture().map((cell) => cell.id),
+        requiredCellCount: 1,
+        coveredCellCount: 1,
+        gapCount: 0,
+      },
+    ],
+  };
 }
 
 function staleConflictMessageTraceFixture() {
