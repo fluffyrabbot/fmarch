@@ -1,4 +1,5 @@
 import path from "node:path";
+import { coreLoopHighlightedLaneEvidence } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -58,7 +59,7 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       auditId: "local-core-loop",
       requiredChecks,
-      requiredCheckStatuses: coreLoopExpectedCheckStatuses(proofRun),
+      requiredCheckStatuses: coreLoopHighlightedLaneEvidence(proofRun),
     }),
   buildEvidence: ({ source: proofRun, adminRoleSurface }) => ({
     version: 1,
@@ -116,49 +117,4 @@ export function assertCoreLoopAdminProof(evidence) {
     }
   }
   return evidence;
-}
-
-function coreLoopExpectedCheckStatuses(proofRun) {
-  return coreLoopHighlightedLaneEvidence(proofRun);
-}
-
-function coreLoopHighlightedLaneEvidence(proofRun) {
-  const lanes = new Map((proofRun.lanes ?? []).map((lane) => [lane.id, lane]));
-  return Object.fromEntries(
-    [
-      "core-loop",
-      "action-loop",
-      "host-deadline-advance",
-      "invalid-action-recovery",
-      "resolution-receipts",
-      "player-action-boundary",
-      "private-channel",
-    ].map((id) => [id, coreLoopLaneStatus(lanes.get(id))]),
-  );
-}
-
-function coreLoopLaneStatus(lane) {
-  const status = String(lane?.status ?? "unknown");
-  const evidence =
-    lane?.evidence !== null && typeof lane?.evidence === "object"
-      ? lane.evidence
-      : {};
-  switch (lane?.id) {
-    case "core-loop":
-      return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote reject, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
-    case "action-loop":
-      return `${status}: legal action ${String(evidence.legalActionState ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
-    case "host-deadline-advance":
-      return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
-    case "invalid-action-recovery":
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
-    case "player-action-boundary":
-      return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
-    case "private-channel":
-      return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
-    case "resolution-receipts":
-      return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
-    default:
-      return status;
-  }
 }

@@ -1,0 +1,111 @@
+export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
+  "core-loop",
+  "action-loop",
+  "host-deadline-advance",
+  "invalid-action-recovery",
+  "resolution-receipts",
+  "player-action-boundary",
+  "private-channel",
+]);
+
+export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
+  "concurrent-action-race",
+  "concurrent-action-race-reload",
+  "reconnect-recovery",
+  "stale-same-action-recovery",
+  "stale-dead-action-conflict",
+  "stale-action-conflict",
+  "stale-action-conflict-message",
+  "stale-host-control",
+  "concurrent-host-resolve-race",
+  "concurrent-host-resolve-race-reload",
+  "stale-host-resolve",
+  "stale-host-resolve-reload",
+]);
+
+export function coreLoopHighlightedLaneEvidence(proofRun) {
+  return highlightedLaneEvidence({
+    proofRun,
+    laneIds: CORE_LOOP_HIGHLIGHTED_LANE_IDS,
+    formatter: coreLoopLaneStatus,
+  });
+}
+
+export function hardeningHighlightedLaneEvidence(proofRun) {
+  return highlightedLaneEvidence({
+    proofRun,
+    laneIds: HARDENING_HIGHLIGHTED_LANE_IDS,
+    formatter: hardeningLaneStatus,
+  });
+}
+
+export function coreLoopLaneStatus(lane) {
+  const status = laneStatus(lane);
+  const evidence = laneEvidence(lane);
+  switch (lane?.id) {
+    case "core-loop":
+      return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote reject, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
+    case "action-loop":
+      return `${status}: legal action ${String(evidence.legalActionState ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
+    case "host-deadline-advance":
+      return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
+    case "invalid-action-recovery":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
+    case "player-action-boundary":
+      return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
+    case "private-channel":
+      return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
+    case "resolution-receipts":
+      return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
+    default:
+      return status;
+  }
+}
+
+export function hardeningLaneStatus(lane) {
+  const status = laneStatus(lane);
+  const evidence = laneEvidence(lane);
+  switch (lane?.id) {
+    case "concurrent-action-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} action, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-action-race-reload":
+      return `${status}: target ${String(evidence.targetSlot ?? "unknown")}, alive ${String(evidence.apiTargetAlive ?? "unknown")}`;
+    case "reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
+    case "stale-same-action-recovery":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
+    case "stale-dead-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
+    case "stale-action-conflict":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
+    case "stale-action-conflict-message":
+      return `${status}: ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
+    case "stale-host-control":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, current ${String(evidence.phaseId ?? "unknown")}`;
+    case "concurrent-host-resolve-race":
+      return `${status}: ${String(evidence.ackState ?? "unknown")} resolve, reject ${String(evidence.rejectError ?? "unknown")}`;
+    case "concurrent-host-resolve-race-reload":
+      return `${status}: locked ${String(evidence.apiLocked ?? "unknown")}, routes ${String(evidence.liveRouteStatus ?? "unknown")}/${String(evidence.concurrentRouteStatus ?? "unknown")}`;
+    case "stale-host-resolve":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
+    case "stale-host-resolve-reload":
+      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
+    default:
+      return status;
+  }
+}
+
+function highlightedLaneEvidence({ proofRun, laneIds, formatter }) {
+  const lanes = new Map((proofRun?.lanes ?? []).map((lane) => [lane.id, lane]));
+  return Object.fromEntries(laneIds.map((id) => [id, formatter(lanes.get(id))]));
+}
+
+function laneStatus(lane) {
+  return String(lane?.status ?? "unknown");
+}
+
+function laneEvidence(lane) {
+  return lane?.evidence !== null && typeof lane?.evidence === "object"
+    ? lane.evidence
+    : {};
+}
