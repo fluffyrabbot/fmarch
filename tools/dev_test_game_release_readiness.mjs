@@ -2246,6 +2246,10 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
   ) {
     throw new Error("core-loop admin proof missing player phase transition observation");
   }
+  assertCoreLoopPlayerStaleVoteAfterTransitionProof({
+    staleProof: playerObservationProof.staleVoteRecoveryProof,
+    expectedGame,
+  });
   assertCoreLoopPlayerStaleActionAfterTransitionProof({
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
@@ -2292,6 +2296,54 @@ function assertCoreLoopHostPhaseTransitionActionProof({
   }
 }
 
+function assertCoreLoopPlayerStaleVoteAfterTransitionProof({
+  staleProof,
+  expectedGame,
+}) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.clickedAction !== "submit_vote" ||
+    staleProof.commandKind !== "SubmitVote" ||
+    staleProof.setupResyncFromSeq !== 801 ||
+    staleProof.setupSnapshotCommandState?.phase?.phaseId !== "D02" ||
+    staleProof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !== "slot-2" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.command.actor_slot !== "slot-7" ||
+    staleProof.command.target?.Slot !== "slot-2" ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "PhaseLocked" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale vote state, refresh and use current vote controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "player" ||
+    staleProof.bridgePlan.commandKind !== "SubmitVote" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("votecount") ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    staleProof.receipts?.at?.(-1)?.state !== "reject" ||
+    staleProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(staleProof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    staleProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    staleProof.receiptCount !== 1 ||
+    !String(staleProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("stale vote state")
+  ) {
+    throw new Error(
+      "core-loop admin proof missing stale player vote recovery after transition",
+    );
+  }
+}
+
 function assertCoreLoopPlayerStaleActionAfterTransitionProof({
   staleProof,
   expectedGame,
@@ -2326,7 +2378,7 @@ function assertCoreLoopPlayerStaleActionAfterTransitionProof({
       "enabled:submit_action:factional_kill" ||
     staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
     !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
-    staleProof.receiptCount !== 1 ||
+    staleProof.receiptCount !== 2 ||
     !String(staleProof.receiptStatusText ?? "")
       .toLowerCase()
       .includes("reject phaselocked: phase locked")

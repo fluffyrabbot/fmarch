@@ -778,6 +778,10 @@ async function provePlayerPhaseTransitionObservation({
       state: "visible",
       timeout: 15000,
     });
+    const staleVoteRecoveryProof = await provePlayerStaleVoteAfterTransition({
+      page,
+      commandRequests,
+    });
     const staleActionRecoveryProof = await provePlayerStaleActionAfterTransition({
       page,
       commandRequests,
@@ -816,6 +820,7 @@ async function provePlayerPhaseTransitionObservation({
       surfaceTestId: "player-surface",
       resyncFromSeq: 802,
       resyncKeys,
+      staleVoteRecoveryProof,
       staleActionRecoveryProof,
       resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
       projectionCommandState: projection?.commandState ?? null,
@@ -830,6 +835,49 @@ async function provePlayerPhaseTransitionObservation({
   } finally {
     await page.close();
   }
+}
+
+async function provePlayerStaleVoteAfterTransition({ page, commandRequests }) {
+  const setupSnapshot = await page.evaluate(async () => {
+    if (typeof window.__fmarchTriggerPlayerResync !== "function") {
+      throw new Error("player resync hook is unavailable");
+    }
+    return window.__fmarchTriggerPlayerResync(801);
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      document.querySelector(
+        '[data-testid="player-composer"] button[data-action="submit_vote"]',
+      ) !== null,
+    null,
+    { timeout: 15000 },
+  );
+  const voteButton = page.locator(
+    '[data-testid="player-composer"] button[data-action="submit_vote"]',
+  );
+  await voteButton.waitFor({ state: "visible", timeout: 15000 });
+  await voteButton.click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked" &&
+      window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind === "SubmitVote",
+    null,
+    { timeout: 15000 },
+  );
+  const proof = await collectPlayerStaleCommandProof({
+    page,
+    commandRequests,
+    clickedAction: "submit_vote",
+    commandKind: "SubmitVote",
+    commandSelector: "SubmitVote",
+  });
+  return {
+    ...proof,
+    setupResyncFromSeq: 801,
+    setupSnapshotCommandState: setupSnapshot?.commandState ?? null,
+  };
 }
 
 async function provePlayerStaleActionAfterTransition({ page, commandRequests }) {
@@ -859,6 +907,22 @@ async function provePlayerStaleActionAfterTransition({ page, commandRequests }) 
     null,
     { timeout: 15000 },
   );
+  return collectPlayerStaleCommandProof({
+    page,
+    commandRequests,
+    clickedAction: "submit_action:factional_kill",
+    commandKind: "SubmitAction",
+    commandSelector: "SubmitAction",
+  });
+}
+
+async function collectPlayerStaleCommandProof({
+  page,
+  commandRequests,
+  clickedAction,
+  commandKind,
+  commandSelector,
+}) {
   const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
   const bridgePlan = await page.evaluate(
     () => window.__fmarchPlayerCommandDispatchBridgePlan,
@@ -877,11 +941,11 @@ async function provePlayerStaleActionAfterTransition({ page, commandRequests }) 
     .getByTestId("player-command-receipt-count")
     .innerText();
   const receiptStatusText = await page.getByTestId("player-command-status").innerText();
-  const command = commandRequests.at(-1)?.SubmitAction ?? null;
+  const command = commandRequests.at(-1)?.[commandSelector] ?? null;
   return {
     status: "passed",
-    clickedAction: "submit_action:factional_kill",
-    commandKind: command === null ? null : "SubmitAction",
+    clickedAction,
+    commandKind: command === null ? null : commandKind,
     command,
     commandStatus,
     bridgePlan,
@@ -901,11 +965,33 @@ async function installPlayerPhaseTransitionObservationRoutes(
   page,
   { commandRequests },
 ) {
+  let playerCommandStateMode = "day-vote";
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
+    if (command?.SubmitVote !== undefined) {
+      playerCommandStateMode = "night-action";
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "PhaseLocked",
+              retryable: false,
+              message: "phase locked",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
     if (command?.SubmitAction?.action_id === "factional_kill") {
+      playerCommandStateMode = "night-action";
       await fulfillJson(
         route,
         {
@@ -932,13 +1018,13 @@ async function installPlayerPhaseTransitionObservationRoutes(
         id: commandEnvelope?.id ?? "player-stale-action-transition-reject",
         body: {
           kind: "Reject",
-          body: {
-            error: "WrongPlayerStaleActionProofCommand",
-            retryable: false,
-            message: "player stale action proof only accepts factional kill",
+            body: {
+              error: "WrongPlayerStaleActionProofCommand",
+              retryable: false,
+              message: "player stale command proof only accepts stale vote or factional kill",
+            },
           },
         },
-      },
       409,
     );
   });
@@ -967,10 +1053,18 @@ async function installPlayerPhaseTransitionObservationRoutes(
     await fulfillJson(route, []);
   });
   await page.route("**/games/*/player-command-state?**", async (route) => {
-    await fulfillJson(route, seededActionOpenCommandState({
-      boundary:
-        "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
-    }));
+    await fulfillJson(
+      route,
+      playerCommandStateMode === "day-vote"
+        ? seededDayVoteOpenCommandState({
+            boundary:
+              "Seeded browser stale Day 2 vote view before host AdvancePhase recovery.",
+          })
+        : seededActionOpenCommandState({
+            boundary:
+              "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+          }),
+    );
   });
 }
 
@@ -1594,6 +1688,31 @@ function seededActionOpenCommandState({ boundary }) {
   };
 }
 
+function seededDayVoteOpenCommandState({ boundary }) {
+  return {
+    game: "seeded-day-vote-open",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: {
+      phaseId: "D02",
+      phaseKind: "Day",
+      phaseNumber: 2,
+      locked: false,
+      deadline: 1781928000,
+    },
+    actions: [],
+    voteTargets: [
+      { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+      { kind: "no_lynch", slotId: null, label: "No lynch" },
+    ],
+    currentVote: null,
+    boundary,
+  };
+}
+
 function hostLockedConsoleState() {
   return {
     completed: false,
@@ -2132,6 +2251,10 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
       )}`,
     );
   }
+  assertPlayerStaleVoteAfterTransitionProof({
+    staleProof: playerObservationProof.staleVoteRecoveryProof,
+    expectedGame,
+  });
   assertPlayerStaleActionAfterTransitionProof({
     staleProof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
@@ -2182,6 +2305,53 @@ function assertHostPhaseTransitionActionProof({
   }
 }
 
+function assertPlayerStaleVoteAfterTransitionProof({ staleProof, expectedGame }) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.clickedAction !== "submit_vote" ||
+    staleProof.commandKind !== "SubmitVote" ||
+    staleProof.setupResyncFromSeq !== 801 ||
+    staleProof.setupSnapshotCommandState?.phase?.phaseId !== "D02" ||
+    staleProof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !== "slot-2" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.command.actor_slot !== "slot-7" ||
+    staleProof.command.target?.Slot !== "slot-2" ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "PhaseLocked" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale vote state, refresh and use current vote controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "player" ||
+    staleProof.bridgePlan.commandKind !== "SubmitVote" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("votecount") ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    staleProof.receipts?.at?.(-1)?.state !== "reject" ||
+    staleProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(staleProof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    staleProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    staleProof.receiptCount !== 1 ||
+    !String(staleProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("stale vote state")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing stale player vote recovery after transition: ${JSON.stringify(
+        staleProof,
+      )}`,
+    );
+  }
+}
+
 function assertPlayerStaleActionAfterTransitionProof({ staleProof, expectedGame }) {
   if (
     staleProof?.status !== "passed" ||
@@ -2213,7 +2383,7 @@ function assertPlayerStaleActionAfterTransitionProof({ staleProof, expectedGame 
       "enabled:submit_action:factional_kill" ||
     staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
     !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
-    staleProof.receiptCount !== 1 ||
+    staleProof.receiptCount !== 2 ||
     !String(staleProof.receiptStatusText ?? "")
       .toLowerCase()
       .includes("reject phaselocked: phase locked")

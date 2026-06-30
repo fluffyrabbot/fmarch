@@ -9583,6 +9583,68 @@ function hostPhaseTransitionSurfaceFixture() {
         "investigationResults",
         "commandState",
       ],
+      staleVoteRecoveryProof: {
+        status: "passed",
+        clickedAction: "submit_vote",
+        commandKind: "SubmitVote",
+        setupResyncFromSeq: 801,
+        setupSnapshotCommandState: {
+          phase: {
+            phaseId: "D02",
+          },
+          voteTargets: [
+            { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+            { kind: "no_lynch", slotId: null, label: "No lynch" },
+          ],
+        },
+        command: {
+          game: "00000000-0000-0000-0000-000000000002",
+          actor_slot: "slot-7",
+          target: { Slot: "slot-2" },
+        },
+        commandStatus: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitVote",
+          commandEndpoint: "/commands",
+          finalState: "reject",
+          projectionRefreshKeys: [
+            "votecount",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+        },
+        receipts: [
+          {
+            actionId: "submit_vote",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            current: true,
+          },
+        ],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N02",
+          },
+          boundary:
+            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+        },
+        checkpointReceiptState: "reject:PhaseLocked",
+        checkpointPhaseIdAfterReject: "N02",
+        checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+        checkpointTargetSlotsAfterReject: "slot-2",
+        recoveryText:
+          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+        receiptCount: 1,
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+      },
       staleActionRecoveryProof: {
         status: "passed",
         clickedAction: "submit_action:factional_kill",
@@ -9614,6 +9676,13 @@ function hostPhaseTransitionSurfaceFixture() {
         },
         receipts: [
           {
+            actionId: "submit_vote",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+            current: false,
+          },
+          {
             actionId: "submit_action:factional_kill",
             state: "reject",
             message:
@@ -9634,7 +9703,7 @@ function hostPhaseTransitionSurfaceFixture() {
         checkpointTargetSlotsAfterReject: "slot-2",
         recoveryText:
           "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
-        receiptCount: 1,
+        receiptCount: 2,
         receiptStatusText:
           "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
       },

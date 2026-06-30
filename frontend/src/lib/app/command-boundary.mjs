@@ -187,6 +187,13 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   ) {
     return `${base}; stale action state, refresh and use current action controls`;
   }
+  if (
+    reject.error === "PhaseLocked" &&
+    (requestEnvelope?.body?.body?.command?.SubmitVote !== undefined ||
+      requestEnvelope?.body?.body?.command?.WithdrawVote !== undefined)
+  ) {
+    return `${base}; stale vote state, refresh and use current vote controls`;
+  }
   if (reject.error === "PhaseLocked") {
     return `${base}; stale projection, refresh and use current controls`;
   }

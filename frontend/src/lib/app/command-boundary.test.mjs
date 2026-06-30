@@ -266,7 +266,7 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
   assert.equal(reject.state, "reject");
   assert.equal(
     reject.message,
-    "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+    "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
   );
 
   const staleActionReject = await sendCommand({
