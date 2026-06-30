@@ -81,6 +81,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const staleConflictMessageMilestone = buildStaleConflictMessageMilestone(proof, {
     sourcePath,
   });
+  const hostStaleControlMilestone = buildHostStaleControlMilestone(proof, {
+    sourcePath,
+  });
   const coreLoopAdminProofEvidence = options.coreLoopAdminProof
     ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
         path:
@@ -336,6 +339,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...staleConflictMessageMilestone.laneIds],
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+    },
+    {
+      id: "local-host-stale-control-milestone",
+      label: "Host stale-control recovery",
+      status: "passed",
+      evidence: sourcePath,
+      proofBoundary:
+        "Local seeded-game proof that stale host publish, lifecycle, modkill, prompt, complete, resolve, advance, and deadline controls reject drift and recover through current host role surfaces.",
+      laneIds: [...hostStaleControlMilestone.laneIds],
+      requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
+      coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -597,6 +611,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
         gapCount: staleConflictMessageMilestone.gapCount,
       },
+      hostStaleControlMilestone: {
+        status: hostStaleControlMilestone.status,
+        laneIds: [...hostStaleControlMilestone.laneIds],
+        requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
+        coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
+        gapCount: hostStaleControlMilestone.gapCount,
+      },
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -622,6 +643,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
                 coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
                 gapCount: staleConflictMessageMilestone.gapCount,
+              },
+              hostStaleControlMilestone: {
+                status: hostStaleControlMilestone.status,
+                laneIds: [...hostStaleControlMilestone.laneIds],
+                requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
+                coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
+                gapCount: hostStaleControlMilestone.gapCount,
               },
               ...(backupRestoreEvidence === undefined
                 ? {}
@@ -772,10 +800,50 @@ function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
   };
 }
 
+function buildHostStaleControlMilestone(proof, { sourcePath }) {
+  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
+  const laneIds = [...hostStaleControlLaneIds];
+  const coveredLaneCount = laneIds.filter(
+    (laneId) => lanes.get(laneId)?.status === "passed",
+  ).length;
+  const gapCount = laneIds.length - coveredLaneCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `host stale-control milestone missing passed lanes from ${sourcePath}: ${laneIds
+        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    laneIds,
+    requiredLaneCount: laneIds.length,
+    coveredLaneCount,
+    gapCount,
+  };
+}
+
 const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
   "stale-dead-action-conflict",
+]);
+
+const hostStaleControlLaneIds = Object.freeze([
+  "stale-host-publish",
+  "stale-host-lifecycle",
+  "stale-host-modkill",
+  "stale-host-prompt",
+  "stale-host-prompt-reload",
+  "stale-host-complete",
+  "stale-host-complete-reload",
+  "stale-host-control",
+  "stale-host-resolve",
+  "stale-host-resolve-reload",
+  "stale-host-advance",
+  "stale-host-advance-reload",
+  "stale-host-deadline",
+  "stale-host-deadline-reload",
 ]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {

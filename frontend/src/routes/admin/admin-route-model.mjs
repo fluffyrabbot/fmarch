@@ -567,6 +567,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
   const staleConflictMessageTrace = normalizeNextActionStaleConflictMessageTrace(
     nextAction.staleConflictMessageTrace,
   );
+  const hostStaleControlTrace = normalizeNextActionHostStaleControlTrace(
+    nextAction.hostStaleControlTrace,
+  );
   const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
   const stability =
     action.stability !== null && typeof action.stability === "object"
@@ -657,6 +660,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
         status: staleConflictMessageTrace.status,
       }),
     ),
+    Object.freeze({
+      id: "host-stale-control-milestone",
+      status: `${hostStaleControlTrace.coveredLaneCount}/${hostStaleControlTrace.requiredLaneCount} ${hostStaleControlTrace.status}`,
+    }),
+    ...hostStaleControlTrace.laneIds.map((laneId) =>
+      Object.freeze({
+        id: `host-stale-control-${laneId}`,
+        status: hostStaleControlTrace.status,
+      }),
+    ),
   ];
   const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
   const releaseReadinessSummary =
@@ -707,6 +720,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       releaseReadinessTrace,
       replacementRaceReloadTrace,
       staleConflictMessageTrace,
+      hostStaleControlTrace,
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
@@ -897,6 +911,36 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
     gapCount: Number(staleConflictMessageTrace.gapCount ?? 0),
     laneIds: Object.freeze(
       staleConflictMessageTrace.laneIds.map((laneId) => String(laneId)),
+    ),
+  });
+}
+
+function normalizeNextActionHostStaleControlTrace(hostStaleControlTrace) {
+  if (
+    hostStaleControlTrace === null ||
+    typeof hostStaleControlTrace !== "object" ||
+    hostStaleControlTrace.strategy !== "host-stale-control-before-readiness" ||
+    !Array.isArray(hostStaleControlTrace.laneIds)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      source: "",
+      requiredLaneCount: 0,
+      coveredLaneCount: 0,
+      gapCount: 0,
+      laneIds: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    strategy: hostStaleControlTrace.strategy,
+    status: String(hostStaleControlTrace.status ?? "unknown"),
+    source: String(hostStaleControlTrace.source ?? ""),
+    requiredLaneCount: Number(hostStaleControlTrace.requiredLaneCount ?? 0),
+    coveredLaneCount: Number(hostStaleControlTrace.coveredLaneCount ?? 0),
+    gapCount: Number(hostStaleControlTrace.gapCount ?? 0),
+    laneIds: Object.freeze(
+      hostStaleControlTrace.laneIds.map((laneId) => String(laneId)),
     ),
   });
 }

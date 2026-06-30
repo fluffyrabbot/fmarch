@@ -57,6 +57,7 @@ export function buildDevTestGameNextAction(
     source: raceCoverageSource,
   });
   const staleConflictMessageTrace = buildStaleConflictMessageTrace(readiness);
+  const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
   const nextAction =
     artifact !== undefined
@@ -171,6 +172,7 @@ export function buildDevTestGameNextAction(
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     staleConflictMessageTrace,
+    hostStaleControlTrace,
   };
   assertDevTestGameNextAction(evidence);
   return evidence;
@@ -231,6 +233,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
   assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
+  assertHostStaleControlTrace(evidence.hostStaleControlTrace);
   return evidence;
 }
 
@@ -478,6 +481,42 @@ function buildStaleConflictMessageTrace(readiness) {
   };
 }
 
+function buildHostStaleControlTrace(readiness) {
+  const milestone =
+    readiness?.generatedFrom?.hostStaleControlMilestone ??
+    readiness?.localDevelopmentSpine?.evidence?.hostStaleControlMilestone ??
+    null;
+  const check = readiness?.localDevelopmentSpine?.checks?.find?.(
+    (candidate) => candidate.id === "local-host-stale-control-milestone",
+  );
+  const laneIds = Array.isArray(milestone?.laneIds)
+    ? milestone.laneIds.map((laneId) => String(laneId))
+    : hostStaleControlLaneIds.map((laneId) => String(laneId));
+  const requiredLaneCount = Number(
+    milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
+  );
+  const coveredLaneCount = Number(
+    milestone?.coveredLaneCount ?? check?.coveredLaneCount ?? 0,
+  );
+  const gapCount = Number(
+    milestone?.gapCount ?? Math.max(requiredLaneCount - coveredLaneCount, 0),
+  );
+  return {
+    strategy: "host-stale-control-before-readiness",
+    status:
+      readiness === null
+        ? "unavailable"
+        : check?.status === "passed" && gapCount === 0
+          ? "covered"
+          : "gapped",
+    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
+    requiredLaneCount,
+    coveredLaneCount,
+    gapCount,
+    laneIds,
+  };
+}
+
 function assertSelectionTrace(selectionTrace, nextAction) {
   if (
     selectionTrace?.strategy !== "development-spine-priority" ||
@@ -646,6 +685,37 @@ function assertStaleConflictMessageTrace(trace) {
   }
 }
 
+function assertHostStaleControlTrace(trace) {
+  if (
+    trace?.strategy !== "host-stale-control-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(trace.status) ||
+    !Number.isInteger(trace.requiredLaneCount) ||
+    !Number.isInteger(trace.coveredLaneCount) ||
+    !Number.isInteger(trace.gapCount) ||
+    !Array.isArray(trace.laneIds)
+  ) {
+    throw new Error("next-action host stale-control trace is missing or malformed");
+  }
+  if (
+    trace.requiredLaneCount !== hostStaleControlLaneIds.length ||
+    trace.laneIds.length !== hostStaleControlLaneIds.length ||
+    trace.coveredLaneCount + trace.gapCount !== trace.requiredLaneCount
+  ) {
+    throw new Error("next-action host stale-control trace count drifted");
+  }
+  for (const laneId of hostStaleControlLaneIds) {
+    if (!trace.laneIds.includes(laneId)) {
+      throw new Error(`next-action host stale-control trace missing lane: ${laneId}`);
+    }
+  }
+  if (trace.status === "covered" && trace.gapCount !== 0) {
+    throw new Error("next-action host stale-control trace covered with gaps");
+  }
+  if (trace.status === "gapped" && trace.gapCount === 0) {
+    throw new Error("next-action host stale-control trace gapped without gaps");
+  }
+}
+
 function artifactAgeSeconds(artifact) {
   return typeof artifact.ageSeconds === "number" ? artifact.ageSeconds : 0;
 }
@@ -734,6 +804,23 @@ const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
   "stale-dead-action-conflict",
+]);
+
+const hostStaleControlLaneIds = Object.freeze([
+  "stale-host-publish",
+  "stale-host-lifecycle",
+  "stale-host-modkill",
+  "stale-host-prompt",
+  "stale-host-prompt-reload",
+  "stale-host-complete",
+  "stale-host-complete-reload",
+  "stale-host-control",
+  "stale-host-resolve",
+  "stale-host-resolve-reload",
+  "stale-host-advance",
+  "stale-host-advance-reload",
+  "stale-host-deadline",
+  "stale-host-deadline-reload",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

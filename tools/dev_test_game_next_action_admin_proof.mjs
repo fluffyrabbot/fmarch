@@ -106,6 +106,14 @@ await runAdminAuditProof({
         gapCount: source.nextAction.staleConflictMessageTrace.gapCount,
         laneIds: source.nextAction.staleConflictMessageTrace.laneIds,
       },
+      hostStaleControlTrace: {
+        strategy: source.nextAction.hostStaleControlTrace.strategy,
+        status: source.nextAction.hostStaleControlTrace.status,
+        requiredLaneCount: source.nextAction.hostStaleControlTrace.requiredLaneCount,
+        coveredLaneCount: source.nextAction.hostStaleControlTrace.coveredLaneCount,
+        gapCount: source.nextAction.hostStaleControlTrace.gapCount,
+        laneIds: source.nextAction.hostStaleControlTrace.laneIds,
+      },
     },
     adminRoleSurface,
   }),
@@ -182,6 +190,21 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing stale conflict-message trace evidence",
     );
   }
+  if (
+    evidence.generatedFrom?.hostStaleControlTrace?.strategy !==
+      "host-stale-control-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(
+      evidence.generatedFrom.hostStaleControlTrace.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.hostStaleControlTrace.requiredLaneCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.hostStaleControlTrace.laneIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing host stale-control trace evidence",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -218,6 +241,10 @@ function requiredChecksForNextAction(nextAction) {
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
   }
+  checks.push("host-stale-control-milestone");
+  for (const laneId of nextAction.hostStaleControlTrace.laneIds) {
+    checks.push(`host-stale-control-${laneId}`);
+  }
   return checks;
 }
 
@@ -253,6 +280,12 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
       ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(
           (id) => `stale-conflict-message-${id}`,
+        )
+      : []),
+    "host-stale-control-milestone",
+    ...(Array.isArray(evidence.generatedFrom?.hostStaleControlTrace?.laneIds)
+      ? evidence.generatedFrom.hostStaleControlTrace.laneIds.map(
+          (id) => `host-stale-control-${id}`,
         )
       : []),
   ];

@@ -648,6 +648,30 @@ test("dev test-game next-action derives one local recovery command from the mani
       "stale-dead-action-conflict",
     ],
   });
+  assert.deepEqual(freshAction.hostStaleControlTrace, {
+    strategy: "host-stale-control-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: 14,
+    coveredLaneCount: 14,
+    gapCount: 0,
+    laneIds: [
+      "stale-host-publish",
+      "stale-host-lifecycle",
+      "stale-host-modkill",
+      "stale-host-prompt",
+      "stale-host-prompt-reload",
+      "stale-host-complete",
+      "stale-host-complete-reload",
+      "stale-host-control",
+      "stale-host-resolve",
+      "stale-host-resolve-reload",
+      "stale-host-advance",
+      "stale-host-advance-reload",
+      "stale-host-deadline",
+      "stale-host-deadline-reload",
+    ],
+  });
 });
 
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {
@@ -756,6 +780,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
   });
   assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
   assert.equal(action.staleConflictMessageTrace.status, "covered");
+  assert.equal(action.hostStaleControlTrace.status, "covered");
 });
 
 test("dev test-game next-action prioritizes development-spine recovery over manifest order", () => {
@@ -6775,6 +6800,7 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
+      hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -6793,6 +6819,15 @@ function devTestGameReleaseReadinessChecklistFixture({ unproven }) {
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
           requiredLaneCount: 3,
           coveredLaneCount: 3,
+        },
+        {
+          id: "local-host-stale-control-milestone",
+          label: "Host stale-control recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: hostStaleControlMilestoneFixture().laneIds,
+          requiredLaneCount: 14,
+          coveredLaneCount: 14,
         },
       ],
     },
@@ -6816,6 +6851,31 @@ function staleConflictMessageMilestoneFixture() {
     ],
     requiredLaneCount: 3,
     coveredLaneCount: 3,
+    gapCount: 0,
+  };
+}
+
+function hostStaleControlMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [
+      "stale-host-publish",
+      "stale-host-lifecycle",
+      "stale-host-modkill",
+      "stale-host-prompt",
+      "stale-host-prompt-reload",
+      "stale-host-complete",
+      "stale-host-complete-reload",
+      "stale-host-control",
+      "stale-host-resolve",
+      "stale-host-resolve-reload",
+      "stale-host-advance",
+      "stale-host-advance-reload",
+      "stale-host-deadline",
+      "stale-host-deadline-reload",
+    ],
+    requiredLaneCount: 14,
+    coveredLaneCount: 14,
     gapCount: 0,
   };
 }

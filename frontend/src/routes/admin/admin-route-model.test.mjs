@@ -1032,6 +1032,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
       ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...hostStaleControlCheckRows(),
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
@@ -1093,6 +1094,7 @@ test("admin route data exposes local next action as a native audit row", async (
     },
     replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
     staleConflictMessageTrace: staleConflictMessageTraceFixture(),
+    hostStaleControlTrace: hostStaleControlTraceFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -1136,6 +1138,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
       ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...hostStaleControlCheckRows(),
     ],
   );
 });
@@ -1184,6 +1187,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
       ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...hostStaleControlCheckRows(),
     ],
   );
   assert.deepEqual(data.audit.artifactSummary.stabilityTrace, {
@@ -1724,7 +1728,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === "local-release-readiness");
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "4 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "5 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -1737,6 +1741,7 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-core-loop-proof",
       "local-hardening-proof",
       "local-stale-conflict-message-milestone",
+      "local-host-stale-control-milestone",
     ],
   );
   assert.deepEqual(
@@ -1745,7 +1750,7 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 4,
+    localCheckCount: 5,
     unprovenCount: 2,
     releaseReady: false,
     productionReady: false,
@@ -1763,7 +1768,7 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, "local-release-readiness");
-  assert.equal(data.audit.checks.length, 4);
+  assert.equal(data.audit.checks.length, 5);
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
@@ -2584,6 +2589,7 @@ function nextActionFixture({
   stabilityTrace = stabilityTraceFixture({ stability }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
+  hostStaleControlTrace = hostStaleControlTraceFixture(),
 } = {}) {
   return {
     version: 1,
@@ -2641,6 +2647,7 @@ function nextActionFixture({
     releaseReadinessTrace,
     replacementRaceReloadTrace,
     staleConflictMessageTrace,
+    hostStaleControlTrace,
   };
 }
 
@@ -2924,6 +2931,47 @@ function staleConflictMessageTraceFixture() {
   };
 }
 
+function hostStaleControlTraceFixture() {
+  return {
+    strategy: "host-stale-control-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: 14,
+    coveredLaneCount: 14,
+    gapCount: 0,
+    laneIds: hostStaleControlLaneIds(),
+  };
+}
+
+function hostStaleControlCheckRows() {
+  return [
+    ["host-stale-control-milestone", "14/14 covered"],
+    ...hostStaleControlLaneIds().map((laneId) => [
+      `host-stale-control-${laneId}`,
+      "covered",
+    ]),
+  ];
+}
+
+function hostStaleControlLaneIds() {
+  return [
+    "stale-host-publish",
+    "stale-host-lifecycle",
+    "stale-host-modkill",
+    "stale-host-prompt",
+    "stale-host-prompt-reload",
+    "stale-host-complete",
+    "stale-host-complete-reload",
+    "stale-host-control",
+    "stale-host-resolve",
+    "stale-host-resolve-reload",
+    "stale-host-advance",
+    "stale-host-advance-reload",
+    "stale-host-deadline",
+    "stale-host-deadline-reload",
+  ];
+}
+
 function adminSpineProofFixture() {
   return {
     version: 1,
@@ -3019,6 +3067,7 @@ function releaseReadinessChecklistFixture() {
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
+      hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -3049,6 +3098,15 @@ function releaseReadinessChecklistFixture() {
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
           requiredLaneCount: 3,
           coveredLaneCount: 3,
+        },
+        {
+          id: "local-host-stale-control-milestone",
+          label: "Host stale-control recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: hostStaleControlMilestoneFixture().laneIds,
+          requiredLaneCount: 14,
+          coveredLaneCount: 14,
         },
       ],
     },
@@ -3083,6 +3141,16 @@ function staleConflictMessageMilestoneFixture() {
     ],
     requiredLaneCount: 3,
     coveredLaneCount: 3,
+    gapCount: 0,
+  };
+}
+
+function hostStaleControlMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: hostStaleControlLaneIds(),
+    requiredLaneCount: 14,
+    coveredLaneCount: 14,
     gapCount: 0,
   };
 }
