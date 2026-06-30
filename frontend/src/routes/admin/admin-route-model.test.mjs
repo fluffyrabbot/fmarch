@@ -772,7 +772,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
 
   const graph = data.audit.find((item) => item.id === "local-proof-graph");
   assert.equal(graph.label, "Local proof graph");
-  assert.equal(graph.status, "4 proof nodes, 4 edges");
+  assert.equal(graph.status, "5 proof nodes, 5 edges");
   assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
   assert.equal(graph.inspectHref, "/admin/audit/local-proof-graph?game=midsummer");
   assert.deepEqual(
@@ -782,6 +782,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "passed"],
       ["proof-freshness", "passed"],
       ["next-action", "recorded"],
+      ["admin-proof:hosted-concurrent-race-matrix", "passed"],
     ],
   );
   assert.deepEqual(
@@ -791,13 +792,17 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [
+        "admin-proof:hosted-concurrent-race-matrix",
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+      ],
     ],
   );
   assert.deepEqual(graph.artifactSummary, {
-    nodeCount: 4,
-    edgeCount: 4,
-    roleUrlCount: 4,
-    recoveryTargetCount: 4,
+    nodeCount: 5,
+    edgeCount: 5,
+    roleUrlCount: 5,
+    recoveryTargetCount: 5,
     releaseReady: false,
     productionReady: false,
   });
@@ -821,6 +826,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "passed"],
       ["proof-freshness", "passed"],
       ["next-action", "recorded"],
+      ["admin-proof:hosted-concurrent-race-matrix", "passed"],
     ],
   );
   assert.deepEqual(
@@ -830,6 +836,10 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [
+        "admin-proof:hosted-concurrent-race-matrix",
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+      ],
     ],
   );
 });
@@ -2832,10 +2842,10 @@ function proofGraphFixture() {
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
     },
     summary: {
-      nodeCount: 4,
-      edgeCount: 4,
-      roleUrlCount: 4,
-      recoveryTargetCount: 4,
+      nodeCount: 5,
+      edgeCount: 5,
+      roleUrlCount: 5,
+      recoveryTargetCount: 5,
     },
     nodes: [
       proofGraphNode({
@@ -2870,12 +2880,28 @@ function proofGraphFixture() {
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
         recoveryCommand: "test:dev-test-game-next-action",
       }),
+      proofGraphNode({
+        id: "admin-proof:hosted-concurrent-race-matrix",
+        label: "Hosted concurrent race matrix admin proof",
+        status: "passed",
+        artifact:
+          "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        recoveryCommand:
+          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      }),
     ],
     edges: [
       { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
       { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
       { from: "spine-manifest", to: "next-action", relationship: "records" },
       { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
+      {
+        from: "admin-spine",
+        to: "admin-proof:hosted-concurrent-race-matrix",
+        relationship: "aggregates",
+      },
     ],
   };
 }

@@ -675,7 +675,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
       ),
     ),
     relatedLinks: Object.freeze(
-      roleNodes.slice(0, 8).map((node) =>
+      roleNodes.map((node) =>
         Object.freeze({
           id: String(node.id),
           label: String(node.label ?? node.id),

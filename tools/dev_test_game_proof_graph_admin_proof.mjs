@@ -28,6 +28,7 @@ const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
+const hostedMatrixProofNodeId = "admin-proof:hosted-concurrent-race-matrix";
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-proof-graph-admin-proof",
@@ -58,7 +59,6 @@ await runAdminAuditProof({
       requiredChecks: source.proofGraph.nodes.map((node) => node.id),
       requiredRelatedLinks: source.proofGraph.nodes
         .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
-        .slice(0, 8)
         .map((node) => node.id),
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -78,6 +78,7 @@ await runAdminAuditProof({
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
       edgeCount: source.proofGraph.edges.length,
       adminProofSurfaceIds: source.adminSpineProof.proofIds,
+      requiredHostedMatrixProofNodeId: hostedMatrixProofNodeId,
     },
     adminRoleSurface,
   }),
@@ -114,6 +115,13 @@ export function assertProofGraphAdminProof(evidence) {
   }
   if (!Array.isArray(evidence.adminRoleSurface?.visibleRelatedLinks)) {
     throw new Error("proof graph admin proof did not prove related links");
+  }
+  if (
+    !evidence.adminRoleSurface.visibleRelatedLinks.includes(
+      evidence.generatedFrom?.requiredHostedMatrixProofNodeId,
+    )
+  ) {
+    throw new Error("proof graph admin proof missing hosted matrix related link");
   }
   return evidence;
 }
