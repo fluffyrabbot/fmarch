@@ -2706,6 +2706,92 @@ async function verifySeededActionLoop({
     resolvedTargetSlot: targetState,
     legalAction,
   });
+  const d02ActionSurface = {
+    roleUrl: actionPage.url(),
+    commandState: await actionPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    ),
+    buttons: await playerCommandButtons(actionPage),
+  };
+  const d02NormalPlayerSurface = {
+    roleUrl: playerPage.url(),
+    commandState: await playerPage.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    ),
+    buttons: await playerCommandButtons(playerPage),
+  };
+  const nightResolutionTransition = {
+    status: "passed",
+    hostRoleUrl: hostPage.url(),
+    actionRoleUrl: d02ActionSurface.roleUrl,
+    targetRoleUrl: targetPage.url(),
+    normalPlayerRoleUrl: d02NormalPlayerSurface.roleUrl,
+    legalActionState: legalAction.state,
+    legalActionTemplateId: submittedCommand.template_id,
+    legalActionTarget: targetSlot,
+    resolveNightState: resolveNight.commandStatus?.state ?? null,
+    resolvedTargetSlot: targetState,
+    targetReceiptSurface: {
+      roleUrl: targetPage.url(),
+      targetSlot: resolutionReceipts.targetSlot,
+      targetNotice: resolutionReceipts.targetNotice,
+      targetPrivateQueueItem: resolutionReceipts.targetPrivateQueueItem,
+      targetCommandState: resolutionReceipts.targetCommandState,
+    },
+    advanceDayState: advanceDay.commandStatus?.state ?? null,
+    d02ActionSurface,
+    d02NormalPlayerSurface,
+  };
+  if (
+    !nightResolutionTransition.hostRoleUrl.includes(`/g/${game}/host`) ||
+    !nightResolutionTransition.actionRoleUrl.includes(`/g/${game}`) ||
+    !nightResolutionTransition.targetRoleUrl.includes(`/g/${game}`) ||
+    !nightResolutionTransition.normalPlayerRoleUrl.includes(`/g/${game}`) ||
+    nightResolutionTransition.legalActionState !== "ack" ||
+    nightResolutionTransition.legalActionTemplateId !== "factional_kill" ||
+    nightResolutionTransition.legalActionTarget !== targetSlot ||
+    nightResolutionTransition.resolveNightState !== "ack" ||
+    nightResolutionTransition.resolvedTargetSlot?.alive !== false ||
+    nightResolutionTransition.resolvedTargetSlot?.status !== "dead" ||
+    nightResolutionTransition.targetReceiptSurface.targetNotice?.audience_slot !==
+      targetSlot ||
+    nightResolutionTransition.targetReceiptSurface.targetNotice?.effect !==
+      "player_killed" ||
+    nightResolutionTransition.targetReceiptSurface.targetNotice?.status !==
+      "factional_kill" ||
+    nightResolutionTransition.targetReceiptSurface.targetPrivateQueueItem?.effect !==
+      "player_killed" ||
+    nightResolutionTransition.targetReceiptSurface.targetCommandState?.actorSlot !==
+      targetSlot ||
+    nightResolutionTransition.targetReceiptSurface.targetCommandState?.actorAlive !==
+      false ||
+    nightResolutionTransition.targetReceiptSurface.targetCommandState?.phase?.phaseId !==
+      "D02" ||
+    nightResolutionTransition.targetReceiptSurface.targetCommandState?.actions?.length !==
+      0 ||
+    nightResolutionTransition.advanceDayState !== "ack" ||
+    d02ActionSurface.commandState?.phase?.phaseId !== "D02" ||
+    d02ActionSurface.commandState?.phase?.locked !== false ||
+    d02ActionSurface.commandState?.actions?.length !== 0 ||
+    d02ActionSurface.buttons.some((button) =>
+      String(button.action ?? "").startsWith("submit_action"),
+    ) ||
+    !d02ActionSurface.buttons.some((button) =>
+      String(button.action ?? "").startsWith("submit_vote"),
+    ) ||
+    d02NormalPlayerSurface.commandState?.phase?.phaseId !== "D02" ||
+    d02NormalPlayerSurface.commandState?.phase?.locked !== false ||
+    d02NormalPlayerSurface.commandState?.actions?.length !== 0 ||
+    !d02NormalPlayerSurface.buttons.some((button) =>
+      String(button.action ?? "").startsWith("submit_vote"),
+    )
+  ) {
+    throw new Error(
+      `night resolution transition role surface drifted: ${JSON.stringify({
+        nightResolutionTransition,
+      })}`,
+    );
+  }
   const deadPlayerRecovery = await verifySeededDeadPlayerRecovery({
     targetPage,
     game,
@@ -2723,6 +2809,7 @@ async function verifySeededActionLoop({
     resolveDay,
     advanceNight,
     dayNightTransition,
+    nightResolutionTransition,
     n01Phase,
     invalidAction,
     invalidActionRecovery,
@@ -2744,7 +2831,7 @@ async function verifySeededActionLoop({
     staleActionConflict,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while the target role URL received the private kill receipt, day vote controls returned for living role URLs, and a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh.",
   };
 }
 

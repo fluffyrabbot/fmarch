@@ -288,6 +288,135 @@ assert.equal(
     .directRejectError,
   "InvalidTarget",
 );
+assert.equal(session.verification.actionLoop.nightResolutionTransition.status, "passed");
+assert.match(
+  session.verification.actionLoop.nightResolutionTransition.hostRoleUrl,
+  new RegExp(`/g/${session.game}/host`),
+);
+assert.match(
+  session.verification.actionLoop.nightResolutionTransition.actionRoleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.match(
+  session.verification.actionLoop.nightResolutionTransition.targetRoleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.match(
+  session.verification.actionLoop.nightResolutionTransition.normalPlayerRoleUrl,
+  new RegExp(`/g/${session.game}`),
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.legalActionState,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.legalActionTemplateId,
+  "factional_kill",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.resolveNightState,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.resolvedTargetSlot.alive,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.resolvedTargetSlot.status,
+  "dead",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetNotice.audience_slot,
+  session.verification.actionLoop.nightResolutionTransition.legalActionTarget,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetNotice.effect,
+  "player_killed",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetNotice.status,
+  "factional_kill",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetPrivateQueueItem.effect,
+  "player_killed",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetCommandState.actorSlot,
+  session.verification.actionLoop.nightResolutionTransition.legalActionTarget,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetCommandState.actorAlive,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetCommandState.phase.phaseId,
+  "D02",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.targetReceiptSurface
+    .targetCommandState.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.advanceDayState,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02ActionSurface.commandState
+    .phase.phaseId,
+  "D02",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02ActionSurface.commandState
+    .phase.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02ActionSurface.commandState
+    .actions.length,
+  0,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02ActionSurface.buttons.some(
+    (button) => String(button.action ?? "").startsWith("submit_action"),
+  ),
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02ActionSurface.buttons.some(
+    (button) => String(button.action ?? "").startsWith("submit_vote"),
+  ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02NormalPlayerSurface
+    .commandState.phase.phaseId,
+  "D02",
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02NormalPlayerSurface
+    .commandState.phase.locked,
+  false,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02NormalPlayerSurface
+    .commandState.actions.length,
+  0,
+);
+assert.equal(
+  session.verification.actionLoop.nightResolutionTransition.d02NormalPlayerSurface.buttons.some(
+    (button) => String(button.action ?? "").startsWith("submit_vote"),
+  ),
+  true,
+);
 assert.equal(session.verification.actionLoop.deadlineAdvance.status, "passed");
 assert.equal(
   session.verification.actionLoop.deadlineAdvance.advance.commandStatus.requestEnvelope.body.body

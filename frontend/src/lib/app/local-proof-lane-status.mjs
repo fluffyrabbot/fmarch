@@ -55,7 +55,7 @@ export function coreLoopLaneStatus(lane) {
     case "core-loop":
       return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote receipt, unchanged ${String(evidence.staleVoteVotecountUnchanged ?? "unknown")}, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
     case "action-loop":
-      return `${status}: role URL ${typeof evidence.actionRoleUrl === "string"}, night ${String(evidence.nightPhase ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
+      return `${status}: role URL ${typeof evidence.actionRoleUrl === "string"}, night ${String(evidence.nightPhase ?? "unknown")}, receipt ${String(evidence.targetReceiptStatus ?? "unknown")}, advanced ${String(evidence.advancedPhase ?? "unknown")}`;
     case "host-deadline-advance":
       return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
     case "invalid-action-recovery":

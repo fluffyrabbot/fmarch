@@ -41,10 +41,11 @@ test("core loop lane status formats seeded recovery evidence", () => {
       evidence: {
         actionRoleUrl: "http://127.0.0.1:5173/g/game-id",
         nightPhase: "N01",
+        targetReceiptStatus: "factional_kill",
         advancedPhase: "D02",
       },
     }),
-    "passed: role URL true, night N01, advanced D02",
+    "passed: role URL true, night N01, receipt factional_kill, advanced D02",
   );
   assert.equal(coreLoopLaneStatus({ id: "unhighlighted", status: "passed" }), "passed");
 });

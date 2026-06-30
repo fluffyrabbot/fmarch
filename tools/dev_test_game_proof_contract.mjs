@@ -405,6 +405,29 @@ export function buildDevTestGameProofRun(session, options = {}) {
       normalPlayerActionCount:
         verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
           ?.commandActions?.length ?? null,
+      nightResolutionRoleUrl:
+        verification.actionLoop?.nightResolutionTransition?.actionRoleUrl ?? null,
+      targetResolutionRoleUrl:
+        verification.actionLoop?.nightResolutionTransition?.targetRoleUrl ?? null,
+      submittedActionTemplate:
+        verification.actionLoop?.nightResolutionTransition?.legalActionTemplateId ?? null,
+      targetReceiptStatus:
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetNotice?.status ?? null,
+      targetReceiptEffect:
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetNotice?.effect ?? null,
+      targetCommandAlive:
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetCommandState?.actorAlive ?? null,
+      d02ActionButtons:
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface?.buttons?.map(
+          (button) => button.action,
+        ) ?? null,
+      d02NormalPlayerButtons:
+        verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface?.buttons?.map(
+          (button) => button.action,
+        ) ?? null,
       invalidActionError: verification.actionLoop?.invalidAction?.error ?? null,
       legalActionState: verification.actionLoop?.legalAction?.state ?? null,
       resolvedTargetAlive: verification.actionLoop?.resolvedTargetSlot?.alive ?? null,
@@ -458,6 +481,77 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.factionalKillVisible === false &&
         verification.actionLoop?.dayNightTransition?.normalPlayerNightSurface
           ?.directRejectError === "InvalidTarget" &&
+        verification.actionLoop?.nightResolutionTransition?.status === "passed" &&
+        typeof verification.actionLoop?.nightResolutionTransition?.hostRoleUrl ===
+          "string" &&
+        verification.actionLoop?.nightResolutionTransition?.hostRoleUrl.includes(
+          `/g/${session?.game ?? ""}/host`,
+        ) === true &&
+        typeof verification.actionLoop?.nightResolutionTransition?.actionRoleUrl ===
+          "string" &&
+        verification.actionLoop?.nightResolutionTransition?.actionRoleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        typeof verification.actionLoop?.nightResolutionTransition?.targetRoleUrl ===
+          "string" &&
+        verification.actionLoop?.nightResolutionTransition?.targetRoleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        typeof verification.actionLoop?.nightResolutionTransition?.normalPlayerRoleUrl ===
+          "string" &&
+        verification.actionLoop?.nightResolutionTransition?.normalPlayerRoleUrl.includes(
+          `/g/${session?.game ?? ""}`,
+        ) === true &&
+        verification.actionLoop?.nightResolutionTransition?.legalActionState ===
+          "ack" &&
+        verification.actionLoop?.nightResolutionTransition?.legalActionTemplateId ===
+          "factional_kill" &&
+        verification.actionLoop?.nightResolutionTransition?.resolveNightState ===
+          "ack" &&
+        verification.actionLoop?.nightResolutionTransition?.resolvedTargetSlot?.alive ===
+          false &&
+        verification.actionLoop?.nightResolutionTransition?.resolvedTargetSlot?.status ===
+          "dead" &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetNotice?.audience_slot ===
+          verification.actionLoop?.nightResolutionTransition?.legalActionTarget &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetNotice?.effect === "player_killed" &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetNotice?.status === "factional_kill" &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetPrivateQueueItem?.effect === "player_killed" &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetCommandState?.actorSlot ===
+          verification.actionLoop?.nightResolutionTransition?.legalActionTarget &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetCommandState?.actorAlive === false &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetCommandState?.phase?.phaseId === "D02" &&
+        verification.actionLoop?.nightResolutionTransition?.targetReceiptSurface
+          ?.targetCommandState?.actions?.length === 0 &&
+        verification.actionLoop?.nightResolutionTransition?.advanceDayState === "ack" &&
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface
+          ?.commandState?.phase?.phaseId === "D02" &&
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface
+          ?.commandState?.phase?.locked === false &&
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface
+          ?.commandState?.actions?.length === 0 &&
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface?.buttons?.some(
+          (button) => String(button.action ?? "").startsWith("submit_action"),
+        ) === false &&
+        verification.actionLoop?.nightResolutionTransition?.d02ActionSurface?.buttons?.some(
+          (button) => String(button.action ?? "").startsWith("submit_vote"),
+        ) === true &&
+        verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface
+          ?.commandState?.phase?.phaseId === "D02" &&
+        verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface
+          ?.commandState?.phase?.locked === false &&
+        verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface
+          ?.commandState?.actions?.length === 0 &&
+        verification.actionLoop?.nightResolutionTransition?.d02NormalPlayerSurface?.buttons?.some(
+          (button) => String(button.action ?? "").startsWith("submit_vote"),
+        ) === true &&
         verification.actionLoop?.invalidAction?.error === "InvalidTarget" &&
         verification.actionLoop?.legalAction?.state === "ack" &&
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
