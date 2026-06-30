@@ -22,6 +22,7 @@ import {
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
+  assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
@@ -52,6 +53,8 @@ export function buildDevTestGameNextAction(
     opsArtifactsSource = devTestGameOpsArtifactsPath,
     raceCoverage = null,
     raceCoverageSource = devTestGameRaceCoveragePath,
+    hostedTargetPreflight = null,
+    hostedTargetPreflightSource = devTestGameHostedTargetPreflightPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -63,12 +66,18 @@ export function buildDevTestGameNextAction(
     opsArtifacts === null ? null : assertDevTestGameOpsArtifacts(opsArtifacts);
   const races =
     raceCoverage === null ? null : assertDevTestGameRaceCoverage(raceCoverage);
+  const hostedPreflight =
+    hostedTargetPreflight === null
+      ? null
+      : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
   const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
-  const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness);
+  const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
+    hostedTargetPreflight: hostedPreflight,
+  });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
     rankedMissingLocalReadinessDependencies(readiness);
@@ -248,6 +257,17 @@ export function buildDevTestGameNextAction(
             },
             raceCoveragePromotedMilestones,
           }),
+      ...(hostedPreflight === null
+        ? {}
+        : {
+            hostedTargetPreflight: hostedTargetPreflightSource,
+            hostedTargetPreflightStatus: hostedPreflight.status,
+            hostedTargetPreflightNextCommand: hostedPreflight.nextCommand,
+            hostedTargetPreflightNextProofTarget: hostedPreflight.nextProofTarget,
+            hostedTargetPreflightBlockedCheckCount: hostedPreflight.checks.filter(
+              (check) => check.status === "blocked",
+            ).length,
+          }),
     },
     nextAction,
     selectionTrace,
@@ -383,6 +403,12 @@ export async function writeDevTestGameNextAction({
     process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE ?? devTestGameRaceCoveragePath,
   );
   const raceCoverage = JSON.parse(await readFile(absoluteRaceCoveragePath, "utf8"));
+  const absoluteHostedTargetPreflightPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
+      devTestGameHostedTargetPreflightPath,
+  );
+  const hostedTargetPreflight = await readOptionalJson(absoluteHostedTargetPreflightPath);
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
@@ -390,6 +416,10 @@ export async function writeDevTestGameNextAction({
   );
   const opsArtifactsSource = path.relative(repoRoot, absoluteOpsArtifactsPath);
   const raceCoverageSource = path.relative(repoRoot, absoluteRaceCoveragePath);
+  const hostedTargetPreflightSource = path.relative(
+    repoRoot,
+    absoluteHostedTargetPreflightPath,
+  );
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     spineManifestSource,
@@ -399,6 +429,8 @@ export async function writeDevTestGameNextAction({
     opsArtifactsSource,
     raceCoverage,
     raceCoverageSource,
+    hostedTargetPreflight,
+    hostedTargetPreflightSource,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -449,13 +481,19 @@ function buildSelectionTrace(candidates) {
   };
 }
 
-function rankedBuildableReleaseReadinessItems(readiness) {
+function rankedBuildableReleaseReadinessItems(
+  readiness,
+  { hostedTargetPreflight = null } = {},
+) {
   if (readiness === null) {
     return [];
   }
   return (readiness.releaseReadiness?.unproven ?? [])
     .map((item, index) => {
-      const buildable = localBuildableReleaseReadinessItems.get(item.id);
+      const buildable =
+        item.id === "hosted-deployment"
+          ? hostedDeploymentBuildable({ hostedTargetPreflight })
+          : localBuildableReleaseReadinessItems.get(item.id);
       return buildable === undefined
         ? null
         : {
@@ -472,6 +510,17 @@ function rankedBuildableReleaseReadinessItems(readiness) {
     })
     .filter((candidate) => candidate !== null)
     .sort((left, right) => left.priority - right.priority || left.index - right.index);
+}
+
+async function readOptionalJson(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function buildLocalReadinessDependencyTrace(candidates) {
@@ -1305,6 +1354,24 @@ const terminalArtifactPaths = new Set([
   "target/dev-test-game/proof-graph.json",
   "target/dev-test-game/proof-graph-admin-proof.json",
 ]);
+
+function hostedDeploymentBuildable({ hostedTargetPreflight }) {
+  if (hostedTargetPreflight?.status === "passed") {
+    return {
+      priority: 0,
+      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+      buildSlice:
+        "Attach externally reachable hosted frontend/API evidence to the hosted matrix lane now that the hosted target preflight passed.",
+      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofBoundary:
+        "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
+    };
+  }
+  return localBuildableReleaseReadinessItems.get("hosted-deployment");
+}
 
 const localBuildableReleaseReadinessItems = new Map([
   [

@@ -978,6 +978,101 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
 });
 
+test("dev test-game next-action advances hosted deployment after target preflight passes", () => {
+  const freshManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+        },
+      ],
+    },
+  });
+  const readiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: [
+      {
+        id: "hosted-deployment",
+        status: "unproven",
+        requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
+      },
+    ],
+  });
+
+  const blockedPreflightAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: readiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+  });
+  assertDevTestGameNextAction(blockedPreflightAction);
+  assert.equal(
+    blockedPreflightAction.nextAction.command,
+    "npm run test:dev-test-game-hosted-target-preflight",
+  );
+  assert.equal(
+    blockedPreflightAction.nextAction.unproven.roleUrl,
+    "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+  );
+  assert.equal(
+    blockedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
+    "blocked",
+  );
+
+  const passedPreflightAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: readiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "passed" }),
+  });
+  assertDevTestGameNextAction(passedPreflightAction);
+  assert.equal(
+    passedPreflightAction.nextAction.command,
+    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+  );
+  assert.equal(
+    passedPreflightAction.nextAction.unproven.proofTarget,
+    devTestGameHostedMatrixExternalEvidencePath,
+  );
+  assert.equal(
+    passedPreflightAction.nextAction.unproven.roleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  );
+  assert.equal(
+    passedPreflightAction.nextAction.unproven.proofGraphNodeId,
+    "admin-proof:hosted-concurrent-race-matrix",
+  );
+  assert.equal(
+    passedPreflightAction.releaseReadinessTrace.candidates[0].command,
+    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+  );
+  assert.equal(
+    passedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
+    "passed",
+  );
+  assert.equal(
+    passedPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
+    devTestGameHostedMatrixExternalEvidencePath,
+  );
+});
+
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {
   const freshManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -9286,6 +9381,63 @@ function hostedTargetPreflightAdminProofFixture() {
       releaseReady: false,
       productionReady: false,
     },
+  };
+}
+
+function hostedTargetPreflightFixture({ status }) {
+  const passed = status === "passed";
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-target-preflight",
+    status,
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "hosted-target-preflight",
+    proofBoundary: "Hosted target preflight fixture without release claims.",
+    target: {
+      frontendBaseUrl: passed ? "https://fmarch.example.test" : null,
+      apiBaseUrl: passed ? "https://api.fmarch.example.test" : null,
+      groupId: "replacement-race-reload",
+      rawEvidencePath: passed
+        ? "target/dev-test-game/hosted-matrix-raw-evidence.json"
+        : null,
+      rawEvidenceStatus: passed ? "passed" : "blocked",
+    },
+    checks: [
+      {
+        id: "hosted-frontend-url-configured",
+        status: passed ? "passed" : "blocked",
+      },
+      {
+        id: "hosted-api-url-configured",
+        status: passed ? "passed" : "blocked",
+      },
+      {
+        id: "hosted-targets-external",
+        status: passed ? "passed" : "blocked",
+      },
+      {
+        id: "raw-evidence-path-configured",
+        status: passed ? "passed" : "blocked",
+      },
+      {
+        id: "raw-evidence-readable",
+        status: passed ? "passed" : "blocked",
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    nextCommand: passed
+      ? `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`
+      : `npm run ${devTestGameHostedTargetPreflightCommand}`,
+    nextProofTarget: passed
+      ? devTestGameHostedMatrixExternalEvidencePath
+      : devTestGameHostedTargetPreflightPath,
   };
 }
 
