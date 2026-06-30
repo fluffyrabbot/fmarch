@@ -6434,6 +6434,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(hostedMatrix.summary.reconnectLaneCount, 4);
   assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
+  assert.equal(hostedMatrix.summary.realHostedDeploymentStatus, "unproven");
   assert.equal(hostedMatrix.externalHostedEvidence.status, "not_configured");
   assert(
     hostedMatrix.hostedLikeTarget.roleSurfaces.every(
@@ -6589,6 +6590,20 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(
     hostedMatrixWithProducedExternalEvidence.externalHostedEvidence.status,
     "passed",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.summary.hostedEvidenceStatus,
+    "passed",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.summary.realHostedDeploymentStatus,
+    "unproven",
+  );
+  assert.equal(
+    hostedMatrixWithProducedExternalEvidence.evidenceProgress.find(
+      (item) => item.id === "real-hosted-deployment",
+    ).status,
+    "unproven",
   );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,

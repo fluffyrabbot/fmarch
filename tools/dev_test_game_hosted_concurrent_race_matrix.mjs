@@ -94,6 +94,10 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   const staleConflictLanes = proofLanesById(laneById, staleConflictLaneIds);
   const roleSurfaces = roleSurfacesFromSession(sessionArtifact);
   const externalHostedEvidence = buildExternalHostedEvidence(hostedTarget, promoted);
+  const realHostedDeploymentPassed =
+    externalHostedEvidence.status === "passed" &&
+    isExternallyHostedUrl(externalHostedEvidence.frontendBaseUrl) &&
+    isExternallyHostedUrl(externalHostedEvidence.apiBaseUrl);
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION,
     proof: "dev-test-game-hosted-concurrent-race-matrix",
@@ -147,6 +151,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       staleConflictLaneCount: staleConflictLanes.length,
       roleSurfaceCount: roleSurfaces.length,
       hostedEvidenceStatus: externalHostedEvidence.status,
+      realHostedDeploymentStatus: realHostedDeploymentPassed ? "passed" : "unproven",
     },
     evidenceProgress: [
       {
@@ -185,8 +190,8 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       },
       {
         id: "real-hosted-deployment",
-        status: externalHostedEvidence.status === "passed" ? "passed" : "unproven",
-        ...(externalHostedEvidence.status === "passed"
+        status: realHostedDeploymentPassed ? "passed" : "unproven",
+        ...(realHostedDeploymentPassed
           ? {
               evidence: [
                 externalHostedEvidence.frontendBaseUrl,
@@ -216,7 +221,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       },
     },
     remainingGaps: [
-      ...(externalHostedEvidence.status === "passed"
+      ...(realHostedDeploymentPassed
         ? []
         : [
             "hosted API/frontend deployment proof with external health checks",
@@ -266,6 +271,9 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     evidence.summary.staleConflictLaneCount !== staleConflictLaneIds.length ||
     !["not_configured", "configured_unproven", "passed"].includes(
       evidence.summary.hostedEvidenceStatus,
+    ) ||
+    !["passed", "unproven"].includes(
+      evidence.summary.realHostedDeploymentStatus,
     )
   ) {
     throw new Error("hosted concurrent race matrix summary drifted");
@@ -397,6 +405,10 @@ function buildExternalHostedEvidence(hostedTarget, promoted) {
     evidencePath,
     proof: source.proof,
     generatedAt: source.generatedAt,
+    targetKind:
+      isExternallyHostedUrl(frontendBaseUrl) && isExternallyHostedUrl(apiBaseUrl)
+        ? "external"
+        : "local_or_loopback",
     groupIds: [...source.groupIds],
     cellIds: [...source.cellIds],
     commandRaceCount: source.commandRaceCount,
@@ -482,6 +494,22 @@ function promotedGroupIdsFrom(promoted) {
 
 function optionalEnv(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function isExternallyHostedUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  return (
+    hostname !== "localhost" &&
+    hostname !== "127.0.0.1" &&
+    hostname !== "::1" &&
+    !hostname.endsWith(".localhost")
+  );
 }
 
 function hostedMatrixCell(cell, laneById) {
