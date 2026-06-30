@@ -1933,6 +1933,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopPostNightFourTransitionSurface(
     proof.postNightFourTransitionSurface,
   );
+  assertCoreLoopDayFiveNoLynchResolutionSurface(
+    proof.dayFiveNoLynchResolutionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1973,6 +1976,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     nightFourActionSubmissionSurface: proof.nightFourActionSubmissionSurface,
     nightFourResolutionReceiptSurface: proof.nightFourResolutionReceiptSurface,
     postNightFourTransitionSurface: proof.postNightFourTransitionSurface,
+    dayFiveNoLynchResolutionSurface: proof.dayFiveNoLynchResolutionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3793,6 +3797,252 @@ function assertCoreLoopStaleNightFourActionRecoveryProof({
       .includes("reject phaselocked")
   ) {
     throw new Error("core-loop admin proof missing stale Night 4 action recovery");
+  }
+}
+
+function assertCoreLoopDayFiveNoLynchResolutionSurface(
+  dayFiveNoLynchResolutionSurface,
+) {
+  const expectedGame = gameFromRoleUrl(
+    dayFiveNoLynchResolutionSurface?.sourceHostRoleUrl,
+  );
+  if (
+    dayFiveNoLynchResolutionSurface?.status !== "passed" ||
+    dayFiveNoLynchResolutionSurface.clickedThroughFromRoleUrl !== true ||
+    dayFiveNoLynchResolutionSurface.releaseReady !== false ||
+    dayFiveNoLynchResolutionSurface.productionReady !== false ||
+    typeof dayFiveNoLynchResolutionSurface.sourceHostRoleUrl !== "string" ||
+    !dayFiveNoLynchResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof dayFiveNoLynchResolutionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !dayFiveNoLynchResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(dayFiveNoLynchResolutionSurface.transition ?? "").includes(
+      "player:D05:no_lynch:ack:918",
+    ) ||
+    !String(dayFiveNoLynchResolutionSurface.transition ?? "").includes(
+      "host:D05:resolve_phase:ack:919",
+    ) ||
+    !String(dayFiveNoLynchResolutionSurface.transition ?? "").includes(
+      "host:advance_phase:ack:920",
+    ) ||
+    !String(dayFiveNoLynchResolutionSurface.transition ?? "").includes(
+      "actionPlayer:N05:no_action",
+    ) ||
+    !String(dayFiveNoLynchResolutionSurface.transition ?? "").includes(
+      "stale:D05:submit_vote:reject:PhaseLocked",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing Day 5 no-lynch resolution");
+  }
+  assertCoreLoopDayFiveNoLynchVoteProof({
+    proof: dayFiveNoLynchResolutionSurface.dayFiveVoteProof,
+    expectedGame,
+    sourceRoleUrl: dayFiveNoLynchResolutionSurface.sourceActionPlayerRoleUrl,
+  });
+  assertCoreLoopDayFiveNoLynchHostTransitionProof({
+    proof: dayFiveNoLynchResolutionSurface.hostTransitionProof,
+    expectedGame,
+    sourceRoleUrl: dayFiveNoLynchResolutionSurface.sourceHostRoleUrl,
+  });
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: dayFiveNoLynchResolutionSurface.actionPlayerNightFiveProof,
+    sourceRoleUrl: dayFiveNoLynchResolutionSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "open Night 5 with no legal action",
+    expectedResyncFromSeq: 920,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    expectedLastVoteOutcomePhaseId: "D05",
+  });
+  assertCoreLoopStaleDayFiveVoteRecoveryProof({
+    proof: dayFiveNoLynchResolutionSurface.staleDayFiveVoteRecoveryProof,
+    expectedGame,
+    sourceRoleUrl: dayFiveNoLynchResolutionSurface.sourceActionPlayerRoleUrl,
+  });
+}
+
+function assertCoreLoopDayFiveNoLynchVoteProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "ack" ||
+    !proof.commandStatus?.message?.includes("Ack: stream seqs 918") ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "ack" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "D05" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.currentVote?.kind !== "no_lynch" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "Day 5 no-lynch vote ACK",
+    ) ||
+    proof.projectionVotecount?.[0]?.target !== "No lynch" ||
+    proof.projectionVotecount?.[0]?.count !== 1 ||
+    proof.projectionVotecount?.[0]?.needed !== 1 ||
+    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D04" ||
+    proof.setupResyncFromSeq !== 917 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
+    proof.currentVote?.hasVote !== "true" ||
+    !String(proof.currentVote?.text ?? "").includes("No lynch") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("ack: stream seqs 918") ||
+    proof.receiptRefreshKeys !== "votecount,commandState"
+  ) {
+    throw new Error("core-loop admin proof missing Day 5 no-lynch vote ACK");
+  }
+}
+
+function assertCoreLoopDayFiveNoLynchHostTransitionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 918 ||
+    proof.setupSnapshotHost?.phase?.id !== "D05" ||
+    proof.setupSnapshotHost?.phase?.state !== "open"
+  ) {
+    throw new Error("core-loop admin proof missing Day 5 no-lynch host transition");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 919,
+    expectedPhaseId: "D05",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 920,
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.resolveProof?.votecountProjection?.[0]?.target !== "No lynch" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D05" ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.status !==
+      "NoLynch"
+  ) {
+    throw new Error("core-loop admin proof missing Day 5 no-lynch host projections");
+  }
+}
+
+function assertCoreLoopStaleDayFiveVoteRecoveryProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== "submit_vote:no_lynch" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.setupResyncFromSeq !== 918 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
+    proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "PhaseLocked" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "stale vote state, refresh and use current vote controls",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ]) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N05" ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "stale D05 vote refreshed into current Night 5 controls",
+    ) ||
+    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    proof.checkpointPhaseIdAfterReject !== "N05" ||
+    proof.checkpointActionStateAfterReject !==
+      "disabled:no legal action available" ||
+    proof.checkpointTargetSlotsAfterReject !== "" ||
+    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    !String(proof.recoveryText ?? "").includes("refresh") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked")
+  ) {
+    throw new Error("core-loop admin proof missing stale Day 5 vote recovery");
   }
 }
 
