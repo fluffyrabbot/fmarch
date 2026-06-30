@@ -94,6 +94,16 @@ import {
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  assertDevTestGameHostedEvidenceLaneDemoProof,
+  devTestGameHostedEvidenceLaneDemoBlockedPath,
+  devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
+  devTestGameHostedEvidenceLaneDemoPassedPath,
+  devTestGameHostedEvidenceLaneDemoProofCommand,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+  runDevTestGameHostedEvidenceLaneDemoProof,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   assertDevTestGameHostedMatrixRawEvidence,
   buildDevTestGameHostedMatrixRawEvidence,
   devTestGameHostedMatrixRawEvidenceCommand,
@@ -393,6 +403,13 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
+  assert.deepEqual(manifest.commands.hostedEvidenceLaneDemoProof, {
+    script: devTestGameHostedEvidenceLaneDemoProofCommand,
+    proofArtifact: devTestGameHostedEvidenceLaneDemoProofPath,
+    dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
+    demoOnly: true,
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  });
   assert.deepEqual(manifest.commands.releaseRunbook, {
     script: devTestGameReleaseRunbookCommand,
     proofArtifact: devTestGameReleaseRunbookPath,
@@ -513,6 +530,13 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(devTestGameHostedOpsSignalsPath));
   assert(manifest.artifacts.includes(devTestGameHostedTargetPreflightPath));
   assert(manifest.artifacts.includes(devTestGameHostedEvidenceLanePath));
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoProofPath));
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoRawEvidencePath));
+  assert(
+    manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoExternalEvidencePath),
+  );
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoBlockedPath));
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoPassedPath));
   assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
@@ -7219,6 +7243,41 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     passedLaneNextAction.nextAction.unproven.proofGraphNodeId,
     "admin-proof:hosted-concurrent-race-matrix",
+  );
+  const demoProof = await runDevTestGameHostedEvidenceLaneDemoProof({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertDevTestGameHostedEvidenceLaneDemoProof(demoProof);
+  assert.equal(
+    devTestGameHostedEvidenceLaneDemoProofCommand,
+    "test:dev-test-game-hosted-evidence-lane-demo-proof",
+  );
+  assert.equal(
+    devTestGameHostedEvidenceLaneDemoProofPath,
+    "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+  );
+  assert.equal(
+    demoProof.generatedFrom.rawEvidence,
+    devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+  );
+  assert.equal(
+    demoProof.generatedFrom.externalEvidence,
+    devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
+  );
+  assert.equal(demoProof.target.syntheticExternalTarget, true);
+  assert.equal(demoProof.blockedLane.status, "blocked");
+  assert.equal(demoProof.passedLane.status, "passed");
+  assert.equal(
+    demoProof.handoff.blockedRoleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    demoProof.handoff.passedRoleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  );
+  assert.equal(
+    demoProof.externalEvidence.rawRoleCredentialsRedacted,
+    true,
   );
   const hostedMatrixWithProducedExternalEvidence =
     buildDevTestGameHostedConcurrentRaceMatrixEvidence(raceCoverageReadiness, {

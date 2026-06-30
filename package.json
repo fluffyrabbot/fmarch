@@ -36,6 +36,7 @@
     "test:dev-test-game-hosted-matrix-raw-evidence": "node tools/dev_test_game_hosted_matrix_raw_evidence.mjs",
     "test:dev-test-game-hosted-matrix-external-evidence": "node tools/dev_test_game_hosted_matrix_external_evidence.mjs",
     "test:dev-test-game-hosted-evidence-lane": "node tools/dev_test_game_hosted_evidence_lane.mjs",
+    "test:dev-test-game-hosted-evidence-lane-demo-proof": "node tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
     "test:dev-test-game-hosted-evidence-lane-admin-proof": "node tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
     "test:dev-test-game-hosted-target-preflight": "node tools/dev_test_game_hosted_target_preflight.mjs",
     "test:dev-test-game-hosted-target-preflight-admin-proof": "node tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",

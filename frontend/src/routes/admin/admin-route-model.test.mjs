@@ -693,7 +693,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
   const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
   assert.equal(manifest.label, "Local spine manifest");
-  assert.equal(manifest.status, "10 manifest checks passed");
+  assert.equal(manifest.status, "11 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
   assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
   assert.deepEqual(
@@ -707,6 +707,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "hosted-concurrent-race-matrix-recorded",
       "hosted-target-preflight-recorded",
       "hosted-evidence-lane-recorded",
+      "hosted-evidence-lane-demo-proof-recorded",
       "terminal-artifacts-recorded",
       "release-boundary-carried",
       "proof-freshness-handoff",
@@ -731,8 +732,8 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     },
   ]);
   assert.deepEqual(manifest.artifactSummary, {
-    commandCount: 12,
-    artifactCount: 11,
+    commandCount: 13,
+    artifactCount: 16,
     terminalArtifactCount: 4,
     adminSpineStepCount: 8,
     artifactFreshnessStatus: "blocked",
@@ -759,7 +760,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
   assert.equal(data.audit.id, "local-spine-manifest");
-  assert.equal(data.audit.checks.length, 12);
+  assert.equal(data.audit.checks.length, 13);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -771,6 +772,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["hosted-concurrent-race-matrix-recorded", "passed"],
       ["hosted-target-preflight-recorded", "passed"],
       ["hosted-evidence-lane-recorded", "passed"],
+      ["hosted-evidence-lane-demo-proof-recorded", "passed"],
       ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
       ["proof-freshness-handoff", "blocked"],
@@ -3324,6 +3326,13 @@ function spineManifestFixture() {
         proofArtifact: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      hostedEvidenceLaneDemoProof: {
+        script: "test:dev-test-game-hosted-evidence-lane-demo-proof",
+        proofArtifact:
+          "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+        demoOnly: true,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
       nextAction: {
         script: "test:dev-test-game-next-action",
         proofArtifact: "target/dev-test-game/next-action.json",
@@ -3411,6 +3420,11 @@ function spineManifestFixture() {
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
       HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
       HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+      "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      "target/dev-test-game/hosted-matrix-demo-raw.json",
+      "target/dev-test-game/hosted-matrix-demo-external.json",
+      "target/dev-test-game/hosted-evidence-lane-demo-blocked.json",
+      "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",
       "target/dev-test-game/proof-graph.json",
@@ -3425,6 +3439,7 @@ function spineManifestFixture() {
       { id: "hosted-concurrent-race-matrix-recorded", status: "passed" },
       { id: "hosted-target-preflight-recorded", status: "passed" },
       { id: "hosted-evidence-lane-recorded", status: "passed" },
+      { id: "hosted-evidence-lane-demo-proof-recorded", status: "passed" },
       { id: "terminal-artifacts-recorded", status: "passed" },
       {
         id: "release-boundary-carried",

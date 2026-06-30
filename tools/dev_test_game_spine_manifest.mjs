@@ -29,6 +29,14 @@ import {
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceLaneDemoBlockedPath,
+  devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
+  devTestGameHostedEvidenceLaneDemoPassedPath,
+  devTestGameHostedEvidenceLaneDemoProofCommand,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
@@ -176,6 +184,13 @@ export function buildDevTestGameSpineManifest({
         ],
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      hostedEvidenceLaneDemoProof: {
+        script: devTestGameHostedEvidenceLaneDemoProofCommand,
+        proofArtifact: devTestGameHostedEvidenceLaneDemoProofPath,
+        dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
+        demoOnly: true,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -283,6 +298,11 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
+      devTestGameHostedEvidenceLaneDemoProofPath,
+      devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+      devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
+      devTestGameHostedEvidenceLaneDemoBlockedPath,
+      devTestGameHostedEvidenceLaneDemoPassedPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameReleaseRunbookPath,
       devTestGameProofGraphPath,
@@ -363,6 +383,15 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedEvidenceLaneCommand,
           devTestGameHostedEvidenceLanePath,
         ],
+      },
+      {
+        id: "hosted-evidence-lane-demo-proof-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedEvidenceLaneDemoProofCommand,
+          devTestGameHostedEvidenceLaneDemoProofPath,
+        ],
+        demoOnly: true,
       },
       {
         id: "release-runbook-recorded",
@@ -528,6 +557,25 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest hosted evidence lane artifact drifted: ${manifest.commands.hostedEvidenceLane.proofArtifact}`,
     );
   }
+  if (
+    manifest.commands?.hostedEvidenceLaneDemoProof?.script !==
+    devTestGameHostedEvidenceLaneDemoProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane demo command drifted: ${manifest.commands?.hostedEvidenceLaneDemoProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneDemoProof.proofArtifact !==
+    devTestGameHostedEvidenceLaneDemoProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane demo artifact drifted: ${manifest.commands.hostedEvidenceLaneDemoProof.proofArtifact}`,
+    );
+  }
+  if (manifest.commands.hostedEvidenceLaneDemoProof.demoOnly !== true) {
+    throw new Error("spine manifest hosted evidence lane demo must stay demo-only");
+  }
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
       `spine manifest release runbook command drifted: ${manifest.commands?.releaseRunbook?.script}`,
@@ -596,6 +644,11 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameHostedTargetPreflightPath,
     devTestGameHostedEvidenceLanePath,
+    devTestGameHostedEvidenceLaneDemoProofPath,
+    devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+    devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
+    devTestGameHostedEvidenceLaneDemoBlockedPath,
+    devTestGameHostedEvidenceLaneDemoPassedPath,
     devTestGameHostedOpsSignalsPath,
     devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
@@ -628,6 +681,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-concurrent-race-matrix-recorded",
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
+    "hosted-evidence-lane-demo-proof-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
