@@ -43,6 +43,7 @@ export async function buildAdminRouteData({
   hostedOpsSignals = null,
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
+  hostedEvidenceLaneDemoProof = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -203,7 +204,7 @@ export async function buildAdminRouteData({
               { game },
             ),
             hostedEvidenceLane,
-            { game },
+            { game, hostedEvidenceLaneDemoProof },
           ),
           hostedOpsSignals,
           { game },
@@ -271,6 +272,7 @@ export async function buildAdminAuditDetailData({
   hostedOpsSignals = null,
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
+  hostedEvidenceLaneDemoProof = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -297,6 +299,7 @@ export async function buildAdminAuditDetailData({
     hostedOpsSignals,
     hostedTargetPreflight,
     hostedEvidenceLane,
+    hostedEvidenceLaneDemoProof,
     nextAction,
     proofFreshness,
   });
@@ -535,15 +538,25 @@ export function normalizeLocalHostedTargetPreflightAudit(
   });
 }
 
-export function appendLocalHostedEvidenceLaneAudit(audit, hostedEvidenceLane, { game }) {
-  const row = normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game });
+export function appendLocalHostedEvidenceLaneAudit(
+  audit,
+  hostedEvidenceLane,
+  { game, hostedEvidenceLaneDemoProof = null },
+) {
+  const row = normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, {
+    game,
+    hostedEvidenceLaneDemoProof,
+  });
   if (row === null) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
-export function normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game }) {
+export function normalizeLocalHostedEvidenceLaneAudit(
+  hostedEvidenceLane,
+  { game, hostedEvidenceLaneDemoProof = null },
+) {
   if (
     hostedEvidenceLane === null ||
     typeof hostedEvidenceLane !== "object" ||
@@ -565,6 +578,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game
     ? hostedEvidenceLane.blockedCheckIds.map((id) => String(id))
     : blockedChecks.map((check) => String(check.id));
   const blockedCheckIdSet = new Set(blockedCheckIds);
+  const demoProofSummary =
+    normalizeLocalHostedEvidenceLaneDemoProofSummary(hostedEvidenceLaneDemoProof);
   return Object.freeze({
     id: "local-hosted-evidence-lane",
     label: "Hosted evidence lane",
@@ -630,6 +645,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game
     artifactSummary: Object.freeze({
       preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
       blockedCheckCount: blockedCheckIds.length,
+      ...(demoProofSummary === null ? {} : demoProofSummary),
       frontendBaseUrl: String(hostedEvidenceLane.target?.frontendBaseUrl ?? ""),
       apiBaseUrl: String(hostedEvidenceLane.target?.apiBaseUrl ?? ""),
       groupId: String(hostedEvidenceLane.target?.groupId ?? ""),
@@ -642,6 +658,34 @@ export function normalizeLocalHostedEvidenceLaneAudit(hostedEvidenceLane, { game
       releaseReady: hostedEvidenceLane.releaseReady === true,
       productionReady: hostedEvidenceLane.productionReady === true,
     }),
+  });
+}
+
+function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
+  if (
+    proof === null ||
+    typeof proof !== "object" ||
+    proof.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-evidence-lane-demo-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !== "local-dev-test-game-hosted-evidence-lane-demo-proof" ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.target?.syntheticExternalTarget !== true ||
+    proof.blockedLane?.status !== "blocked" ||
+    proof.passedLane?.status !== "passed"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    demoProofStatus: String(proof.status),
+    demoProofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+    demoOnly: true,
+    syntheticExternalTarget: true,
+    demoBlockedLaneStatus: String(proof.blockedLane.status),
+    demoPassedLaneStatus: String(proof.passedLane.status),
+    demoExternalEvidencePath: String(proof.generatedFrom?.externalEvidence ?? ""),
+    demoPassedRoleUrl: String(proof.handoff?.passedRoleUrl ?? ""),
   });
 }
 

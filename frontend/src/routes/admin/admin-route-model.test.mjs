@@ -19,6 +19,8 @@ const HOSTED_TARGET_PREFLIGHT_PROOF_TARGET =
   "target/dev-test-game/hosted-target-preflight.json";
 const HOSTED_EVIDENCE_LANE_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane.json";
+const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
+  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
 test("admin route data exposes setup, audit, and escalation work surfaces", async () => {
   const data = await buildAdminRouteData({
@@ -651,6 +653,7 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: localHostedEvidenceLaneFixture(),
+    hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
   });
 
   const lane = data.audit.find((item) => item.id === "local-hosted-evidence-lane");
@@ -682,6 +685,15 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.nextProofTarget, HOSTED_EVIDENCE_LANE_PROOF_TARGET);
   assert.equal(lane.artifactSummary.preflightStatus, "blocked");
   assert.equal(lane.artifactSummary.blockedCheckCount, 5);
+  assert.equal(lane.artifactSummary.demoProofStatus, "passed");
+  assert.equal(
+    lane.artifactSummary.demoProofTarget,
+    HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET,
+  );
+  assert.equal(lane.artifactSummary.demoOnly, true);
+  assert.equal(lane.artifactSummary.syntheticExternalTarget, true);
+  assert.equal(lane.artifactSummary.demoBlockedLaneStatus, "blocked");
+  assert.equal(lane.artifactSummary.demoPassedLaneStatus, "passed");
 });
 
 test("admin route data exposes local spine manifest as a native audit row", async () => {
@@ -1191,7 +1203,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
   const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
   assert.equal(freshness.label, "Local proof freshness");
-  assert.equal(freshness.status, "22 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.status, "23 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
@@ -1222,6 +1234,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "proof-graph-admin",
       "hosted-evidence-lane",
       "hosted-evidence-lane-admin",
+      "hosted-evidence-lane-demo",
       "next-action-handoff",
     ],
   );
@@ -1235,8 +1248,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     },
   ]);
   assert.deepEqual(freshness.artifactSummary, {
-    artifactCount: 22,
-    freshCount: 22,
+    artifactCount: 23,
+    freshCount: 23,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
@@ -1359,8 +1372,8 @@ test("admin route data exposes local next action as a native audit row", async (
     actionStatus: "ready",
     sourceManifest: "target/dev-test-game/spine-manifest.json",
     artifactFreshnessStatus: "passed",
-    artifactCount: 22,
-    freshCount: 22,
+    artifactCount: 23,
+    freshCount: 23,
     staleCount: 0,
     missingCount: 0,
     selectionTrace: {
@@ -2017,6 +2030,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: localHostedEvidenceLaneFixture(),
+    hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
   });
 
   assert.equal(data.status, "available");
@@ -2040,6 +2054,12 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ["raw-evidence-path-configured", "blocked"],
       ["raw-evidence-readable", "blocked"],
     ],
+  );
+  assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
+  assert.equal(data.audit.artifactSummary.demoOnly, true);
+  assert.equal(
+    data.audit.artifactSummary.demoPassedRoleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   );
 });
 
@@ -3033,6 +3053,41 @@ function localHostedEvidenceLaneFixture() {
   };
 }
 
+function localHostedEvidenceLaneDemoProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-lane-demo-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-evidence-lane-demo-proof",
+    target: {
+      frontendBaseUrl: "https://fmarch-demo.example.test",
+      apiBaseUrl: "https://api.fmarch-demo.example.test",
+      groupId: "replacement-race-reload",
+      syntheticExternalTarget: true,
+    },
+    generatedFrom: {
+      externalEvidence: "target/dev-test-game/hosted-matrix-demo-external.json",
+    },
+    handoff: {
+      blockedRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      passedRoleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    },
+    blockedLane: {
+      status: "blocked",
+      preflightStatus: "blocked",
+      blockedCheckIds: ["hosted-frontend-url-configured"],
+    },
+    passedLane: {
+      status: "passed",
+      preflightStatus: "passed",
+      blockedCheckIds: [],
+    },
+  };
+}
+
 function seedFixtureSummaryFixture() {
   return {
     version: 1,
@@ -3476,6 +3531,7 @@ function proofFreshnessFixture({
     freshnessArtifact("proof-graph-admin", "fresh"),
     freshnessArtifact("hosted-evidence-lane", "fresh"),
     freshnessArtifact("hosted-evidence-lane-admin", "fresh"),
+    freshnessArtifact("hosted-evidence-lane-demo", "fresh"),
   ],
 } = {}) {
   const summary = {
@@ -3567,8 +3623,8 @@ function nextActionFixture({
       manifestGeneratedAt: "2026-06-26T00:00:00.000Z",
       artifactFreshnessStatus: "passed",
       artifactFreshnessSummary: {
-        artifactCount: 22,
-        freshCount: 22,
+        artifactCount: 23,
+        freshCount: 23,
         staleCount: 0,
         missingCount: 0,
       },

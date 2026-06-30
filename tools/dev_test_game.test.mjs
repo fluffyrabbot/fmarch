@@ -7519,6 +7519,44 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
     "blocked",
   );
+  const hostedEvidenceLaneDemoReadiness = buildDevTestGameReleaseReadiness(
+    proofRun,
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceLaneDemoProofPath:
+        "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      hostedEvidenceLaneDemoProof: hostedEvidenceLaneDemoProofFixture(),
+    },
+  );
+  assertDevTestGameReleaseReadiness(hostedEvidenceLaneDemoReadiness);
+  const hostedEvidenceLaneDemoCheck =
+    hostedEvidenceLaneDemoReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-evidence-lane-demo-proof",
+    );
+  assert.equal(hostedEvidenceLaneDemoCheck.status, "passed");
+  assert.equal(hostedEvidenceLaneDemoCheck.demoOnly, true);
+  assert.equal(hostedEvidenceLaneDemoCheck.syntheticExternalTarget, true);
+  assert.equal(hostedEvidenceLaneDemoCheck.blockedLaneStatus, "blocked");
+  assert.equal(hostedEvidenceLaneDemoCheck.passedLaneStatus, "passed");
+  assert.equal(
+    hostedEvidenceLaneDemoCheck.passedRoleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  );
+  assert.equal(
+    hostedEvidenceLaneDemoCheck.recovery.roleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    hostedEvidenceLaneDemoReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-deployment",
+    ),
+    true,
+  );
+  assert.equal(
+    hostedEvidenceLaneDemoReadiness.localDevelopmentSpine.evidence
+      .hostedEvidenceLaneDemoProof.demoOnly,
+    true,
+  );
   const seedFixture = buildDevTestGameSeedFixtureSummary({
     session: card,
     proofRun,
@@ -9749,6 +9787,100 @@ function hostedEvidenceLaneAdminProofFixture() {
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
+    },
+  };
+}
+
+function hostedEvidenceLaneDemoProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-lane-demo-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-hosted-evidence-lane-demo-proof",
+    proofBoundary:
+      "Local demo proof for the hosted evidence lane pass path without hosted deployment claims.",
+    target: {
+      frontendBaseUrl: "https://fmarch-demo.example.test",
+      apiBaseUrl: "https://api.fmarch-demo.example.test",
+      groupId: "replacement-race-reload",
+      syntheticExternalTarget: true,
+    },
+    generatedFrom: {
+      hostedConcurrentRaceMatrix:
+        "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      hostedConcurrentRaceMatrixGeneratedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceLane: "target/dev-test-game/hosted-evidence-lane.json",
+      blockedLane: "target/dev-test-game/hosted-evidence-lane-demo-blocked.json",
+      passedLane: "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
+      rawEvidence: "target/dev-test-game/hosted-matrix-demo-raw.json",
+      externalEvidence: "target/dev-test-game/hosted-matrix-demo-external.json",
+    },
+    checks: [
+      {
+        id: "blocked-lane-recorded",
+        status: "blocked",
+        evidence: "target/dev-test-game/hosted-evidence-lane-demo-blocked.json",
+      },
+      {
+        id: "synthetic-raw-evidence-written",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-matrix-demo-raw.json",
+      },
+      {
+        id: "passed-lane-recorded",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
+      },
+      {
+        id: "external-evidence-written",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-matrix-demo-external.json",
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    handoff: {
+      blockedRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      passedRoleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      blockedNextCommand: "npm run test:dev-test-game-hosted-evidence-lane",
+      passedNextCommand:
+        "npm run test:dev-test-game-hosted-matrix-external-evidence",
+      passedNextProofTarget: "target/dev-test-game/hosted-matrix-demo-external.json",
+    },
+    blockedLane: {
+      status: "blocked",
+      preflightStatus: "blocked",
+      blockedCheckIds: ["hosted-frontend-url-configured"],
+      nextProofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+    },
+    passedLane: {
+      status: "passed",
+      preflightStatus: "passed",
+      blockedCheckIds: [],
+      nextProofTarget: "target/dev-test-game/hosted-matrix-demo-external.json",
+    },
+    externalEvidence: {
+      proof: "fmarch-hosted-concurrent-race-matrix-evidence",
+      status: "passed",
+      groupIds: ["replacement-race-reload"],
+      cellIds: [
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+      ],
+      commandRaceCount: 3,
+      reloadRecoveryCount: 3,
+      reconnectRecovery: true,
+      staleConflictMessages: true,
+      rawRoleCredentialsRedacted: true,
     },
   };
 }

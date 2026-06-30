@@ -35,6 +35,8 @@ const DEFAULT_HOSTED_EVIDENCE_LANE =
   "target/dev-test-game/hosted-evidence-lane.json";
 const DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF =
   "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
+const DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF =
+  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 const DEFAULT_RELEASE_RUNBOOK = "target/dev-test-game/release-runbook.json";
 const DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF =
   "target/dev-test-game/release-runbook-admin-proof.json";
@@ -216,6 +218,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF,
   }),
   Object.freeze({
+    id: "hosted-evidence-lane-demo",
+    label: "Hosted evidence lane demo proof",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF",
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF,
+  }),
+  Object.freeze({
     id: "release-runbook",
     label: "Release runbook",
     env: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK",
@@ -254,6 +262,15 @@ export async function readLocalHostedEvidenceLane({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE,
     fallback: DEFAULT_HOSTED_EVIDENCE_LANE,
+  });
+}
+
+export async function readLocalHostedEvidenceLaneDemoProof({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF,
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF,
   });
 }
 

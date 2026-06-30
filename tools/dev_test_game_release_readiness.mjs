@@ -10,6 +10,11 @@ import {
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
+import {
+  assertDevTestGameHostedEvidenceLaneDemoProof,
+  devTestGameHostedEvidenceLaneDemoProofCommand,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 
@@ -85,6 +90,10 @@ const defaultHostedConcurrentRaceMatrixPath = path.join(
 const defaultHostedEvidenceLaneAdminProofPath = path.join(
   artifactDir,
   "hosted-evidence-lane-admin-proof.json",
+);
+const defaultHostedEvidenceLaneDemoProofPath = path.join(
+  artifactDir,
+  "hosted-evidence-lane-demo-proof.json",
 );
 const defaultProofGraphAdminProofPath = path.join(
   artifactDir,
@@ -326,6 +335,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         )
       : undefined;
+  const hostedEvidenceLaneDemoProofEvidence = options.hostedEvidenceLaneDemoProof
+    ? validateDevTestGameHostedEvidenceLaneDemoProof(
+        options.hostedEvidenceLaneDemoProof,
+        {
+          path:
+            options.hostedEvidenceLaneDemoProofPath ??
+            devTestGameHostedEvidenceLaneDemoProofPath,
+          artifact: options.hostedEvidenceLaneDemoProofArtifact,
+        },
+      )
+    : undefined;
   const proofGraphAdminProofEvidence = options.proofGraphAdminProof
     ? validateDevTestGameProofGraphAdminProof(options.proofGraphAdminProof, {
         path:
@@ -729,6 +749,34 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
     });
   }
+  if (hostedEvidenceLaneDemoProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-lane-demo-proof",
+      label: "Local hosted evidence lane demo proof",
+      status: "passed",
+      evidence: hostedEvidenceLaneDemoProofEvidence.path,
+      proofBoundary: hostedEvidenceLaneDemoProofEvidence.proofBoundary,
+      demoOnly: true,
+      syntheticExternalTarget:
+        hostedEvidenceLaneDemoProofEvidence.syntheticExternalTarget,
+      blockedLaneStatus: hostedEvidenceLaneDemoProofEvidence.blockedLaneStatus,
+      passedLaneStatus: hostedEvidenceLaneDemoProofEvidence.passedLaneStatus,
+      passedRoleUrl: hostedEvidenceLaneDemoProofEvidence.passedRoleUrl,
+      externalEvidencePath:
+        hostedEvidenceLaneDemoProofEvidence.externalEvidencePath,
+      recovery: {
+        command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+        buildSlice:
+          "Refresh the local hosted evidence lane demo proof before relying on the blocked-to-passed handoff packet.",
+        proofTarget: hostedEvidenceLaneDemoProofEvidence.path,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        proofBoundary:
+          hostedEvidenceLaneDemoProofEvidence.proofBoundary,
+        requiredEvidence:
+          "Passed local hosted evidence lane demo proof with synthetic external target warning",
+      },
+    });
+  }
   if (proofGraphAdminProofEvidence !== undefined) {
     localChecks.push(
       buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
@@ -996,6 +1044,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         adminSpineProofEvidence === undefined &&
         proofGraphAdminProofEvidence === undefined &&
         proofFreshnessAdminProofEvidence === undefined &&
+        hostedEvidenceLaneAdminProofEvidence === undefined &&
+        hostedEvidenceLaneDemoProofEvidence === undefined &&
         nextActionAdminProofEvidence === undefined)
         ? {}
         : {
@@ -1152,6 +1202,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedEvidenceLaneAdminProof:
                       hostedEvidenceLaneAdminProofEvidence,
+                  }),
+              ...(hostedEvidenceLaneDemoProofEvidence === undefined
+                ? {}
+                : {
+                    hostedEvidenceLaneDemoProof:
+                      hostedEvidenceLaneDemoProofEvidence,
                   }),
               ...(hostedConcurrentRaceMatrixEvidence === undefined
                 ? {}
@@ -2287,6 +2343,40 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostedEvidenceLaneDemoProof(proof, options = {}) {
+  const validated = assertDevTestGameHostedEvidenceLaneDemoProof(proof);
+  if (validated.releaseReady !== false || validated.productionReady !== false) {
+    throw new Error("hosted evidence lane demo proof must not claim readiness");
+  }
+  if (validated.target?.syntheticExternalTarget !== true) {
+    throw new Error("hosted evidence lane demo proof must stay synthetic");
+  }
+  if (
+    validated.blockedLane?.status !== "blocked" ||
+    validated.passedLane?.status !== "passed"
+  ) {
+    throw new Error("hosted evidence lane demo proof must carry blocked and passed lanes");
+  }
+  return {
+    status: "passed",
+    path: options.path ?? devTestGameHostedEvidenceLaneDemoProofPath,
+    proofBoundary: validated.proofBoundary,
+    demoOnly: true,
+    syntheticExternalTarget: true,
+    frontendBaseUrl: String(validated.target.frontendBaseUrl ?? ""),
+    apiBaseUrl: String(validated.target.apiBaseUrl ?? ""),
+    groupId: String(validated.target.groupId ?? ""),
+    blockedLaneStatus: validated.blockedLane.status,
+    passedLaneStatus: validated.passedLane.status,
+    blockedRoleUrl: validated.handoff.blockedRoleUrl,
+    passedRoleUrl: validated.handoff.passedRoleUrl,
+    passedNextCommand: validated.handoff.passedNextCommand,
+    externalEvidencePath: validated.generatedFrom.externalEvidence,
+    externalCellIds: [...validated.externalEvidence.cellIds],
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -3673,6 +3763,18 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (hasHostedMatrixCheck && hasHostedMatrixUnproven) {
     throw new Error("dev-test-game hosted matrix cannot be both passed and unproven");
   }
+  const hostedDemoCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-hosted-evidence-lane-demo-proof",
+  );
+  if (
+    hostedDemoCheck !== undefined &&
+    (hostedDemoCheck.demoOnly !== true ||
+      hostedDemoCheck.syntheticExternalTarget !== true ||
+      hostedDemoCheck.blockedLaneStatus !== "blocked" ||
+      hostedDemoCheck.passedLaneStatus !== "passed")
+  ) {
+    throw new Error("dev-test-game hosted evidence lane demo check is malformed");
+  }
   const hasReleaseRunbookCheck = checklist.localDevelopmentSpine?.checks?.some(
     (check) =>
       check.id === "local-human-release-runbook-rehearsal" &&
@@ -3774,6 +3876,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     raceCoverageAdminProofOptions,
     hostedConcurrentRaceMatrixAdminProofOptions,
     hostedEvidenceLaneAdminProofOptions,
+    hostedEvidenceLaneDemoProofOptions,
     proofGraphAdminProofOptions,
     proofFreshnessAdminProofOptions,
     nextActionAdminProofOptions,
@@ -3801,6 +3904,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalRaceCoverageAdminProof(),
     readOptionalHostedConcurrentRaceMatrixAdminProof(),
     readOptionalHostedEvidenceLaneAdminProof(),
+    readOptionalHostedEvidenceLaneDemoProof(),
     readOptionalProofGraphAdminProof(),
     readOptionalProofFreshnessAdminProof(),
     readOptionalNextActionAdminProof(),
@@ -3830,6 +3934,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(raceCoverageAdminProofOptions ?? {}),
     ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
     ...(hostedEvidenceLaneAdminProofOptions ?? {}),
+    ...(hostedEvidenceLaneDemoProofOptions ?? {}),
     ...(proofGraphAdminProofOptions ?? {}),
     ...(proofFreshnessAdminProofOptions ?? {}),
     ...(nextActionAdminProofOptions ?? {}),
@@ -4261,6 +4366,24 @@ async function readOptionalHostedEvidenceLaneAdminProof() {
     hostedEvidenceLaneAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     hostedEvidenceLaneAdminProofPath: path.relative(repoRoot, proofPath),
     hostedEvidenceLaneAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedEvidenceLaneDemoProof() {
+  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedEvidenceLaneDemoProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hostedEvidenceLaneDemoProof: JSON.parse(await readFile(proofPath, "utf8")),
+    hostedEvidenceLaneDemoProofPath: path.relative(repoRoot, proofPath),
+    hostedEvidenceLaneDemoProofArtifact: artifact,
   };
 }
 
