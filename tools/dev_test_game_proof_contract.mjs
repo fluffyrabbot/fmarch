@@ -84,6 +84,7 @@ const requiredLaneIds = Object.freeze([
   "stale-host-complete",
   "stale-host-complete-reload",
   "concurrent-host-complete-race",
+  "concurrent-host-complete-race-reload",
   "concurrent-player-complete-race",
   "public-player-complete-reload",
   "stale-player-complete",
@@ -5018,6 +5019,75 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
+    lane(
+      "concurrent-host-complete-race-reload",
+      "Concurrent complete-game race reloads revealed host consoles",
+      {
+        game: hardening.concurrentHostCompleteRace?.game ?? null,
+        firstRouteStatus:
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstRouteStatus ?? null,
+        secondRouteStatus:
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondRouteStatus ?? null,
+        apiCompleted:
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.apiStateAfterReload?.completed ?? null,
+        firstRevealedSlots:
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstSlotsAfterReload?.filter(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ).length ?? null,
+        secondRevealedSlots:
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondSlotsAfterReload?.filter(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ).length ?? null,
+        passed:
+          hardening.concurrentHostCompleteRace?.status === "passed" &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstRouteStatus === 200 &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondRouteStatus === 200 &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstSlotsAfterReload?.length === 1 &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondSlotsAfterReload?.length === 1 &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstSlotsAfterReload?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondSlotsAfterReload?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstRevealTextAfterReload?.includes("All 1 slots revealed") ===
+            true &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondRevealTextAfterReload?.includes("All 1 slots revealed") ===
+            true &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.firstRoleActionsAfterReload?.includes("complete_game") === false &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.secondRoleActionsAfterReload?.includes("complete_game") === false &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.apiStateAfterReload?.completed === true &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.apiStateAfterReload?.slots?.length === 1 &&
+          hardening.concurrentHostCompleteRace?.roleReloadAfterRace
+            ?.apiStateAfterReload?.slots?.every(
+              (slot) =>
+                slot.role_revealed === true && slot.alignment_revealed === true,
+            ) === true,
+      },
+    ),
     lane("concurrent-player-complete-race", "Concurrent player command and completion converge", {
       postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
       postError: hardening.concurrentPlayerCompleteRace?.post?.error ?? null,

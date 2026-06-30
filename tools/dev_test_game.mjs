@@ -5152,6 +5152,14 @@ async function submitConcurrentHostCompleteRace({
     );
   }
 
+  const roleReloadAfterRace = await verifyConcurrentHostCompleteRaceReload({
+    firstCompletePage,
+    secondCompletePage,
+    completeGame,
+    apiBaseUrl,
+    actionId,
+  });
+
   return {
     setup,
     firstConfirmationMessage,
@@ -5175,6 +5183,102 @@ async function submitConcurrentHostCompleteRace({
     firstDispatchPlan,
     secondDispatchPlan,
     apiStateAfterRace,
+    roleReloadAfterRace,
+  };
+}
+
+async function verifyConcurrentHostCompleteRaceReload({
+  firstCompletePage,
+  secondCompletePage,
+  completeGame,
+  apiBaseUrl,
+  actionId,
+}) {
+  const [firstReload, secondReload] = await Promise.all([
+    gotoHostConsole(firstCompletePage, completeGame),
+    gotoHostConsole(secondCompletePage, completeGame),
+  ]);
+  await Promise.all([
+    firstCompletePage.waitForFunction(
+      () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+    ),
+    secondCompletePage.waitForFunction(
+      () =>
+        (window.__fmarchHostProjection?.slots ?? []).length === 1 &&
+        window.__fmarchHostProjection.slots.every(
+          (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
+        ),
+    ),
+  ]);
+  const [
+    firstSlotsAfterReload,
+    secondSlotsAfterReload,
+    firstRevealTextAfterReload,
+    secondRevealTextAfterReload,
+    firstRoleActionsAfterReload,
+    secondRoleActionsAfterReload,
+  ] = await Promise.all([
+    firstCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    secondCompletePage.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    firstCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    secondCompletePage.getByTestId("host-console-endgame-reveal").innerText(),
+    visibleHostControlActions(firstCompletePage, "roles"),
+    visibleHostControlActions(secondCompletePage, "roles"),
+  ]);
+  const apiStateAfterReload = await fetchHostConsoleState({
+    apiBaseUrl,
+    game: completeGame,
+  });
+  if (
+    firstReload.status !== 200 ||
+    secondReload.status !== 200 ||
+    firstSlotsAfterReload.length !== 1 ||
+    secondSlotsAfterReload.length !== 1 ||
+    firstSlotsAfterReload.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    secondSlotsAfterReload.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    ) ||
+    !firstRevealTextAfterReload.includes("All 1 slots revealed") ||
+    !secondRevealTextAfterReload.includes("All 1 slots revealed") ||
+    firstRoleActionsAfterReload.includes(actionId) ||
+    secondRoleActionsAfterReload.includes(actionId) ||
+    apiStateAfterReload.completed !== true ||
+    apiStateAfterReload.slots?.length !== 1 ||
+    apiStateAfterReload.slots.some(
+      (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
+    )
+  ) {
+    throw new Error(
+      `concurrent host complete reload drifted: ${JSON.stringify({
+        firstReload,
+        secondReload,
+        firstSlotsAfterReload,
+        secondSlotsAfterReload,
+        firstRevealTextAfterReload,
+        secondRevealTextAfterReload,
+        firstRoleActionsAfterReload,
+        secondRoleActionsAfterReload,
+        apiStateAfterReload,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    firstRouteStatus: firstReload.status,
+    secondRouteStatus: secondReload.status,
+    firstSlotsAfterReload,
+    secondSlotsAfterReload,
+    firstRevealTextAfterReload,
+    secondRevealTextAfterReload,
+    firstRoleActionsAfterReload,
+    secondRoleActionsAfterReload,
+    apiStateAfterReload,
   };
 }
 

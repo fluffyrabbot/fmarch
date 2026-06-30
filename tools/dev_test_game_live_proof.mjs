@@ -3480,6 +3480,86 @@ assert.equal(
     .slots[0].alignment_revealed,
   true,
 );
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondRouteStatus,
+  200,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstSlotsAfterReload.length,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondSlotsAfterReload.length,
+  1,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstSlotsAfterReload[0].role_revealed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstSlotsAfterReload[0].alignment_revealed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondSlotsAfterReload[0].role_revealed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondSlotsAfterReload[0].alignment_revealed,
+  true,
+);
+assert.match(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstRevealTextAfterReload,
+  /All 1 slots revealed/,
+);
+assert.match(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondRevealTextAfterReload,
+  /All 1 slots revealed/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.firstRoleActionsAfterReload.includes("complete_game"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.secondRoleActionsAfterReload.includes("complete_game"),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.apiStateAfterReload.completed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.apiStateAfterReload.slots[0].role_revealed,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.concurrentHostCompleteRace
+    .roleReloadAfterRace.apiStateAfterReload.slots[0].alignment_revealed,
+  true,
+);
 assert.equal(concurrentPlayerCompleteRace.status, "passed");
 assert.equal(
   concurrentPlayerCompleteRace.publicReloadAfterRace.status,
