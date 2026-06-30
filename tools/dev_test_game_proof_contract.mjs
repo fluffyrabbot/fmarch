@@ -72,6 +72,8 @@ const requiredLaneIds = Object.freeze([
   "concurrent-vote-race-reload",
   "stale-host-publish-after-change",
   "host-votecount-publication",
+  "concurrent-host-publish-race",
+  "concurrent-host-publish-race-reload",
   "stale-host-publish",
   "host-lifecycle-control",
   "stale-host-lifecycle",
@@ -4263,6 +4265,100 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "Ack: stream seqs",
         ) === true,
     }),
+    lane("concurrent-host-publish-race", "Concurrent host publishes converge", {
+      game: hardening.concurrentHostPublishRace?.game ?? null,
+      targetSlot: hardening.concurrentHostPublishRace?.targetSlot ?? null,
+      targetCount: hardening.concurrentHostPublishRace?.targetCount ?? null,
+      ackRaceRole: hardening.concurrentHostPublishRace?.ackRaceRole ?? null,
+      rejectRaceRole: hardening.concurrentHostPublishRace?.rejectRaceRole ?? null,
+      ackState: hardening.concurrentHostPublishRace?.ack?.state ?? null,
+      rejectError: hardening.concurrentHostPublishRace?.reject?.error ?? null,
+      apiOfficialPostCount:
+        hardening.concurrentHostPublishRace?.apiOfficialPostCount ?? null,
+      playerOfficialPostCount:
+        hardening.concurrentHostPublishRace?.playerOfficialPostCount ?? null,
+      passed:
+        hardening.concurrentHostPublishRace?.status === "passed" &&
+        typeof hardening.concurrentHostPublishRace?.game === "string" &&
+        hardening.concurrentHostPublishRace?.targetSlot === "slot_5" &&
+        hardening.concurrentHostPublishRace?.targetCount === 3 &&
+        hardening.concurrentHostPublishRace?.expectedBody ===
+          "Official votecount for D01\n- slot_5: 3" &&
+        hardening.concurrentHostPublishRace?.ack?.state === "ack" &&
+        hardening.concurrentHostPublishRace?.ack?.serverEnvelope?.body?.kind ===
+          "Ack" &&
+        Array.isArray(hardening.concurrentHostPublishRace?.ack?.streamSeqs) &&
+        hardening.concurrentHostPublishRace?.reject?.state === "reject" &&
+        hardening.concurrentHostPublishRace?.reject?.error === "InvalidTarget" &&
+        hardening.concurrentHostPublishRace?.reject?.serverEnvelope?.body?.kind ===
+          "Reject" &&
+        Array.isArray(hardening.concurrentHostPublishRace?.reject?.streamSeqs) ===
+          false &&
+        hardening.concurrentHostPublishRace?.reject?.message?.includes(
+          "official votecount is already published",
+        ) === true &&
+        hardening.concurrentHostPublishRace?.ackRaceRole !==
+          hardening.concurrentHostPublishRace?.rejectRaceRole &&
+        hardening.concurrentHostPublishRace?.commandGames?.length === 2 &&
+        hardening.concurrentHostPublishRace?.commandGames?.every(
+          (commandGame) => commandGame === hardening.concurrentHostPublishRace?.game,
+        ) === true &&
+        hardening.concurrentHostPublishRace?.apiOfficialPostCount === 1 &&
+        hardening.concurrentHostPublishRace?.playerOfficialPostCount === 1,
+    }),
+    lane(
+      "concurrent-host-publish-race-reload",
+      "Concurrent host publish race reloads official count truth",
+      {
+        firstHostRouteStatus:
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.firstHostRouteStatus ?? null,
+        secondHostRouteStatus:
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.secondHostRouteStatus ?? null,
+        playerRouteStatus:
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace?.playerRouteStatus ??
+          null,
+        apiOfficialPostCount:
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.apiOfficialPostCount ?? null,
+        playerOfficialPostCount:
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.playerOfficialPostCount ?? null,
+        passed:
+          hardening.concurrentHostPublishRace?.status === "passed" &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace?.status ===
+            "passed" &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.firstHostRouteStatus === 200 &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.secondHostRouteStatus === 200 &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.playerRouteStatus === 200 &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.firstHostProjection?.some(
+              (row) => row.target === "slot_5" && row.count === 3,
+            ) === true &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.secondHostProjection?.some(
+              (row) => row.target === "slot_5" && row.count === 3,
+            ) === true &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.playerProjection?.some(
+              (row) => row.target === "slot_5" && row.count === 3,
+            ) === true &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.apiProjection?.phaseId === "D01" &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.apiProjection?.target === "slot_5" &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.apiProjection?.count === 3 &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.apiOfficialPostCount === 1 &&
+          hardening.concurrentHostPublishRace?.roleReloadAfterRace
+            ?.playerOfficialPostCount === 1,
+      },
+    ),
     lane("stale-host-publish", "Stale host publish rejects duplicate official count", {
       rejectError: hardening.staleHostPublish?.reject?.error ?? null,
       stalePhase: hardening.staleHostPublish?.setup?.stalePhase?.id ?? null,

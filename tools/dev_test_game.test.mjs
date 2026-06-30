@@ -3890,6 +3890,50 @@ test("session card and markdown include role credential URLs and tokens", () => 
         },
         activityStatusText: "Ack: stream seqs 47",
       },
+      concurrentHostPublishRace: {
+        status: "passed",
+        game: "publish-race-game",
+        seed: { game: "publish-race-game", commands: 22 },
+        firstHostRoute: { status: 200, url: "/g/publish-race-game/host" },
+        secondHostRoute: { status: 200, url: "/g/publish-race-game/host" },
+        playerRoute: { status: 200, url: "/g/publish-race-game" },
+        targetSlot: "slot_5",
+        targetCount: 3,
+        expectedRows: [{ phaseId: "D01", target: "slot_5", count: 3 }],
+        expectedBody: "Official votecount for D01\n- slot_5: 3",
+        firstOutcome: { state: "ack" },
+        secondOutcome: { state: "reject", error: "InvalidTarget" },
+        ackRaceRole: "first",
+        rejectRaceRole: "second",
+        ack: {
+          state: "ack",
+          streamSeqs: [61],
+          serverEnvelope: { body: { kind: "Ack" } },
+        },
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          message:
+            "Reject InvalidTarget: invalid target; official votecount is already published, refresh the thread before retrying",
+          serverEnvelope: { body: { kind: "Reject" } },
+        },
+        commandGames: ["publish-race-game", "publish-race-game"],
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
+        roleReloadAfterRace: {
+          status: "passed",
+          firstHostRouteStatus: 200,
+          secondHostRouteStatus: 200,
+          playerRouteStatus: 200,
+          firstHostProjection: [{ target: "slot_5", count: 3 }],
+          secondHostProjection: [{ target: "slot_5", count: 3 }],
+          playerProjection: [{ target: "slot_5", count: 3 }],
+          apiProjection: { phaseId: "D01", target: "slot_5", count: 3 },
+          apiOfficialPostCount: 1,
+          playerOfficialPostCount: 1,
+        },
+        outcomeSummary: "first ACK, second rejected duplicate official count",
+      },
       staleHostPublish: {
         status: "passed",
         actionId: "publish_votecount",
@@ -5770,6 +5814,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "Concurrent player complete race: post rejected GameAlreadyCompleted after completion",
     ),
   );
+  assert(markdown.includes("Concurrent host publish race: Reject InvalidTarget"));
   assert(markdown.includes("Stale action conflict: Reject PhaseLocked"));
   assert(markdown.includes("Stale control: Reject PhaseLocked"));
   assert(markdown.includes("Stale host resolve: Reject PhaseLocked"));
@@ -5852,6 +5897,8 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "concurrent-vote-race-reload",
       "stale-host-publish-after-change",
       "host-votecount-publication",
+      "concurrent-host-publish-race",
+      "concurrent-host-publish-race-reload",
       "stale-host-publish",
       "host-lifecycle-control",
       "stale-host-lifecycle",
@@ -5899,10 +5946,10 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(raceCoverage.status, "passed");
   assert.equal(raceCoverage.releaseReady, false);
   assert.equal(raceCoverage.productionReady, false);
-  assert.equal(raceCoverage.summary.cellCount, 15);
-  assert.equal(raceCoverage.summary.provenCellCount, 15);
-  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 12);
-  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 12);
+  assert.equal(raceCoverage.summary.cellCount, 16);
+  assert.equal(raceCoverage.summary.provenCellCount, 16);
+  assert.equal(raceCoverage.summary.reloadRequiredCellCount, 13);
+  assert.equal(raceCoverage.summary.reloadCoveredCellCount, 13);
   assert.equal(raceCoverage.summary.reloadGapCount, 0);
   assert.deepEqual(
     raceCoverage.cells
@@ -5914,6 +5961,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       "host-deadline-advance",
       "host-lifecycle",
       "host-mixed-advance",
+      "host-votecount-publication",
       "host-complete-game",
     ],
   );
@@ -5979,7 +6027,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-race-coverage-inventory",
     ).cellCount,
-    15,
+    16,
   );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
@@ -6021,7 +6069,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 102);
+  assert.equal(opsArtifacts.proofRun.laneCount, 104);
   assert.equal(
     opsArtifacts.roles.host.loginUrlRedacted,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=REDACTED`,
@@ -6682,6 +6730,8 @@ function hardeningAdminProofFixture() {
         "concurrent-vote-race",
         "concurrent-vote-race-reload",
         "stale-host-publish-after-change",
+        "concurrent-host-publish-race",
+        "concurrent-host-publish-race-reload",
         "stale-host-publish",
         "stale-host-lifecycle",
         "stale-host-modkill",
@@ -6964,8 +7014,8 @@ function raceCoverageAdminProofFixture() {
         "host-complete-game",
         "player-vs-completed-game",
       ],
-      cellCount: 15,
-      reloadCoveredCellCount: 12,
+      cellCount: 16,
+      reloadCoveredCellCount: 13,
     },
     adminRoleSurface: {
       status: "passed",

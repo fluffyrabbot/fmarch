@@ -114,6 +114,14 @@ const raceCells = Object.freeze([
     roleSurfaces: ["host"],
   }),
   raceCell({
+    id: "host-votecount-publication",
+    actorPair: "host vs host",
+    commandFamily: "official votecount publication",
+    raceLaneId: "concurrent-host-publish-race",
+    reloadLaneId: "concurrent-host-publish-race-reload",
+    roleSurfaces: ["host", "player"],
+  }),
+  raceCell({
     id: "host-complete-game",
     actorPair: "host vs host",
     commandFamily: "complete game",

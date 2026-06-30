@@ -325,6 +325,8 @@ const concurrentPlayerCompleteRace =
   session.verification.multiplayerHardening.concurrentPlayerCompleteRace;
 const stalePlayerComplete =
   session.verification.multiplayerHardening.stalePlayerComplete;
+const concurrentHostPublishRace =
+  session.verification.multiplayerHardening.concurrentHostPublishRace;
 assert.equal(session.verification.multiplayerHardening.hostVotecountPublication.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.hostVotecountPublication.publish.commandStatus
@@ -362,6 +364,52 @@ assert.match(
   session.verification.multiplayerHardening.hostVotecountPublication.activityStatusText,
   /Ack: stream seqs/,
 );
+assert.equal(concurrentHostPublishRace.status, "passed");
+assert.equal(concurrentHostPublishRace.targetSlot, "slot_5");
+assert.equal(concurrentHostPublishRace.targetCount, 3);
+assert.equal(concurrentHostPublishRace.expectedBody, "Official votecount for D01\n- slot_5: 3");
+assert.equal(concurrentHostPublishRace.ack.state, "ack");
+assert.equal(concurrentHostPublishRace.ack.serverEnvelope.body.kind, "Ack");
+assert.equal(Array.isArray(concurrentHostPublishRace.ack.streamSeqs), true);
+assert.equal(concurrentHostPublishRace.reject.state, "reject");
+assert.equal(concurrentHostPublishRace.reject.error, "InvalidTarget");
+assert.equal(concurrentHostPublishRace.reject.serverEnvelope.body.kind, "Reject");
+assert.match(concurrentHostPublishRace.reject.message, /official votecount is already published/);
+assert.equal(Array.isArray(concurrentHostPublishRace.reject.streamSeqs), false);
+assert.notEqual(concurrentHostPublishRace.ackRaceRole, concurrentHostPublishRace.rejectRaceRole);
+assert.deepEqual(concurrentHostPublishRace.commandGames, [
+  concurrentHostPublishRace.game,
+  concurrentHostPublishRace.game,
+]);
+assert.equal(concurrentHostPublishRace.apiOfficialPostCount, 1);
+assert.equal(concurrentHostPublishRace.playerOfficialPostCount, 1);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.status, "passed");
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.firstHostRouteStatus, 200);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.secondHostRouteStatus, 200);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.playerRouteStatus, 200);
+assert.equal(
+  concurrentHostPublishRace.roleReloadAfterRace.firstHostProjection.some(
+    (row) => row.target === "slot_5" && row.count === 3,
+  ),
+  true,
+);
+assert.equal(
+  concurrentHostPublishRace.roleReloadAfterRace.secondHostProjection.some(
+    (row) => row.target === "slot_5" && row.count === 3,
+  ),
+  true,
+);
+assert.equal(
+  concurrentHostPublishRace.roleReloadAfterRace.playerProjection.some(
+    (row) => row.target === "slot_5" && row.count === 3,
+  ),
+  true,
+);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.apiProjection.phaseId, "D01");
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.apiProjection.target, "slot_5");
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.apiProjection.count, 3);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.apiOfficialPostCount, 1);
+assert.equal(concurrentHostPublishRace.roleReloadAfterRace.playerOfficialPostCount, 1);
 assert.equal(session.verification.multiplayerHardening.staleHostPublish.status, "passed");
 assert.equal(
   session.verification.multiplayerHardening.staleHostPublish.setup.stalePhase.id,
