@@ -11615,6 +11615,38 @@ function completedGameEndgameSurfaceFixture() {
     { phaseId: "D04", status: "NoLynch" },
     { phaseId: "D05", status: "NoLynch" },
   ];
+  const completedHostReloadSnapshot = {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      slotId: "slot-7",
+      actionState: "disabled:no lifecycle command available",
+      deadlineAffordance: "none",
+    },
+    projection: {
+      completed: true,
+      phase: {
+        id: "N05",
+        state: "open",
+        locked: false,
+      },
+      slots: [
+        {
+          role_revealed: true,
+          alignment_revealed: true,
+        },
+        {
+          role_revealed: true,
+          alignment_revealed: true,
+        },
+      ],
+    },
+    votecount: [],
+    dayVoteOutcomes: dayFiveOutcomes,
+    hostPrompts: [],
+    actionTiles: [],
+    triggerButtons: [],
+  };
   const completedReloadSnapshot = {
     checkpoint: {
       phaseId: "N05",
@@ -11655,7 +11687,7 @@ function completedGameEndgameSurfaceFixture() {
     sourceActionPlayerRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N05:complete_game:ack:921 -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
+      "host:N05:complete_game:ack:921 -> host:reload:complete -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> stale:D05:submit_vote:reject:GameAlreadyCompleted",
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11698,6 +11730,21 @@ function completedGameEndgameSurfaceFixture() {
           ],
         },
       },
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    completedHostReloadProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      resyncFromSeq: 921,
+      initialResyncSnapshotHost: completedHostReloadSnapshot.projection,
+      reloadedResyncSnapshotHost: completedHostReloadSnapshot.projection,
+      initialSnapshot: completedHostReloadSnapshot,
+      reloadedSnapshot: completedHostReloadSnapshot,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
