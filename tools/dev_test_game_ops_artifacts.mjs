@@ -154,6 +154,9 @@ export function buildDevTestGameOpsArtifacts({
         status: "passed",
         hostConfirmClicks:
           session.verification?.proofStability?.hostConfirmClicks?.total ?? 0,
+        concurrentClickCount:
+          session.verification?.proofStability?.hostConfirmClicks?.concurrentClickCount ??
+          0,
         retryClickCount:
           session.verification?.proofStability?.hostConfirmClicks?.retryClickCount ?? 0,
         domFallbackCount:

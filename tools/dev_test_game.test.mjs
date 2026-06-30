@@ -712,6 +712,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
         hostConfirmClicks: {
           total: 55,
           firstClickCount: 53,
+          concurrentClickCount: 0,
           retryClickCount: 1,
           domFallbackCount: 1,
           forceFallbackCount: 0,
@@ -1113,6 +1114,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       hostConfirmClicks: {
         total: 4,
         firstClickCount: 3,
+        concurrentClickCount: 0,
         retryClickCount: 1,
         domFallbackCount: 0,
         forceFallbackCount: 0,
@@ -5967,7 +5969,11 @@ test("session card and markdown include role credential URLs and tokens", () => 
   assert(markdown.includes(`returnTo=%2Fg%2F${game}`));
   assert(markdown.includes("Credential token: dev-test-card-player"));
   assert(markdown.includes("## Proof Stability Audit"));
-  assert(markdown.includes("Host confirms: 4 total; 1 retried; 0 DOM fallbacks; 0 force fallbacks"));
+  assert(
+    markdown.includes(
+      "Host confirms: 4 total; 0 concurrent browser clicks; 1 retried; 0 DOM fallbacks; 0 force fallbacks",
+    ),
+  );
   assert(markdown.includes("resolve_phase host: playwright-retry after 2 attempts"));
   assert(markdown.includes("## Cohost Console Proof"));
   assert(markdown.includes("Extend deadline: Ack: stream seqs 41"));
@@ -6303,6 +6309,7 @@ test("session card and markdown include role credential URLs and tokens", () => 
       (check) =>
         check.id === "proof-stability-summarized" &&
         check.hostConfirmClicks === 4 &&
+        check.concurrentClickCount === 0 &&
         check.retryClickCount === 1,
     ),
     true,
@@ -6989,6 +6996,7 @@ function devTestGameOpsArtifactsFixture({
     hostConfirmClicks: {
       total: 55,
       firstClickCount: 55,
+      concurrentClickCount: 0,
       retryClickCount: 0,
       domFallbackCount: 0,
       forceFallbackCount: 0,
@@ -7049,6 +7057,7 @@ function devTestGameOpsArtifactsFixture({
         id: "proof-stability-summarized",
         status: "passed",
         hostConfirmClicks: proofStability.hostConfirmClicks.total,
+        concurrentClickCount: proofStability.hostConfirmClicks.concurrentClickCount ?? 0,
         retryClickCount: proofStability.hostConfirmClicks.retryClickCount,
         domFallbackCount: proofStability.hostConfirmClicks.domFallbackCount,
         forceFallbackCount: proofStability.hostConfirmClicks.forceFallbackCount,
