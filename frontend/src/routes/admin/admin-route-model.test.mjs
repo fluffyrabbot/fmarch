@@ -1028,6 +1028,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ...hostConcurrentRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1093,6 +1094,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
     },
     replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
+    hostConcurrentRaceReloadTrace: hostConcurrentRaceReloadTraceFixture(),
     staleConflictMessageTrace: staleConflictMessageTraceFixture(),
     hostStaleControlTrace: hostStaleControlTraceFixture(),
     releaseReady: false,
@@ -1134,6 +1136,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ...hostConcurrentRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1183,6 +1186,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
       ["replacement-race-reload-replacement-vote", "covered:passed"],
       ["replacement-race-reload-replacement-action", "covered:passed"],
+      ...hostConcurrentRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -2588,6 +2592,7 @@ function nextActionFixture({
   stability,
   stabilityTrace = stabilityTraceFixture({ stability }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
+  hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
 } = {}) {
@@ -2624,6 +2629,12 @@ function nextActionFixture({
         coveredCellCount: replacementRaceReloadTrace.coveredCellCount,
         gapCount: replacementRaceReloadTrace.gapCount,
       },
+      hostConcurrentRaceReloadSummary: {
+        status: hostConcurrentRaceReloadTrace.status,
+        requiredCellCount: hostConcurrentRaceReloadTrace.requiredCellCount,
+        coveredCellCount: hostConcurrentRaceReloadTrace.coveredCellCount,
+        gapCount: hostConcurrentRaceReloadTrace.gapCount,
+      },
       opsArtifacts: "target/dev-test-game/ops-artifacts.json",
       proofStabilityStatus: stability === undefined ? "clean" : "drifted",
       proofStabilitySummary: {
@@ -2646,6 +2657,7 @@ function nextActionFixture({
     stabilityTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
+    hostConcurrentRaceReloadTrace,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -2913,6 +2925,82 @@ function replacementRaceReloadTraceFixture() {
       },
     ],
   };
+}
+
+function hostConcurrentRaceReloadTraceFixture() {
+  return {
+    strategy: "host-concurrent-race-reload-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/race-coverage.json",
+    requiredCellCount: 7,
+    coveredCellCount: 7,
+    gapCount: 0,
+    cells: hostConcurrentRaceReloadCellsFixture(),
+  };
+}
+
+function hostConcurrentRaceReloadCheckRows() {
+  return [
+    ["host-concurrent-race-reload-milestone", "7/7 covered"],
+    ...hostConcurrentRaceReloadCellsFixture().map((cell) => [
+      `host-concurrent-race-reload-${cell.id}`,
+      `covered:${cell.reloadStatus}`,
+    ]),
+  ];
+}
+
+function hostConcurrentRaceReloadCellsFixture() {
+  return [
+    {
+      id: "host-resolve",
+      raceLaneId: "concurrent-host-resolve-race",
+      reloadLaneId: "concurrent-host-resolve-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-advance",
+      raceLaneId: "concurrent-host-advance-race",
+      reloadLaneId: "concurrent-host-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-deadline-advance",
+      raceLaneId: "concurrent-host-deadline-advance-race",
+      reloadLaneId: "concurrent-host-deadline-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-lifecycle",
+      raceLaneId: "concurrent-host-lifecycle-race",
+      reloadLaneId: "concurrent-host-lifecycle-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-mixed-advance",
+      raceLaneId: "concurrent-host-mixed-advance-race",
+      reloadLaneId: "concurrent-host-mixed-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-votecount-publication",
+      raceLaneId: "concurrent-host-publish-race",
+      reloadLaneId: "concurrent-host-publish-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-complete-game",
+      raceLaneId: "concurrent-host-complete-race",
+      reloadLaneId: "concurrent-host-complete-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
 }
 
 function staleConflictMessageTraceFixture() {

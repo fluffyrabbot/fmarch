@@ -635,6 +635,15 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
     ],
   });
+  assert.deepEqual(freshAction.hostConcurrentRaceReloadTrace, {
+    strategy: "host-concurrent-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 7,
+    coveredCellCount: 7,
+    gapCount: 0,
+    cells: hostConcurrentRaceReloadCellsFixture(),
+  });
   assert.deepEqual(freshAction.staleConflictMessageTrace, {
     strategy: "stale-conflict-message-before-readiness",
     status: "covered",
@@ -737,6 +746,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
         },
       },
     }),
+    raceCoverage: devTestGameRaceCoverageFixture(),
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
       unproven: [
         {
@@ -780,6 +790,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
     selected: true,
   });
   assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
+  assert.equal(action.hostConcurrentRaceReloadTrace.status, "covered");
   assert.equal(action.staleConflictMessageTrace.status, "covered");
   assert.equal(action.hostStaleControlTrace.status, "covered");
 });
@@ -6276,6 +6287,22 @@ test("session card and markdown include role credential URLs and tokens", () => 
     raceCoverageReadiness.generatedFrom.raceCoverageAdminProof,
     "target/dev-test-game/race-coverage-admin-proof.json",
   );
+  assert.deepEqual(
+    raceCoverageReadiness.generatedFrom.hostConcurrentRaceReloadMilestone,
+    {
+      status: "passed",
+      cellIds: hostConcurrentRaceReloadCellIdsFixture(),
+      requiredCellCount: 7,
+      coveredCellCount: 7,
+      gapCount: 0,
+    },
+  );
+  assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-host-concurrent-race-reload-milestone",
+    ).coveredCellCount,
+    7,
+  );
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
       (item) =>
@@ -6972,6 +6999,72 @@ function devTestGameRaceCoverageFixture() {
     unprovenCells: [],
     reloadGaps: [],
   };
+}
+
+function hostConcurrentRaceReloadCellIdsFixture() {
+  return [
+    "host-resolve",
+    "host-advance",
+    "host-deadline-advance",
+    "host-lifecycle",
+    "host-mixed-advance",
+    "host-votecount-publication",
+    "host-complete-game",
+  ];
+}
+
+function hostConcurrentRaceReloadCellsFixture() {
+  return [
+    {
+      id: "host-resolve",
+      raceLaneId: "concurrent-host-resolve-race",
+      reloadLaneId: "concurrent-host-resolve-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-advance",
+      raceLaneId: "concurrent-host-advance-race",
+      reloadLaneId: "concurrent-host-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-deadline-advance",
+      raceLaneId: "concurrent-host-deadline-advance-race",
+      reloadLaneId: "concurrent-host-deadline-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-lifecycle",
+      raceLaneId: "concurrent-host-lifecycle-race",
+      reloadLaneId: "concurrent-host-lifecycle-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-mixed-advance",
+      raceLaneId: "concurrent-host-mixed-advance-race",
+      reloadLaneId: "concurrent-host-mixed-advance-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-votecount-publication",
+      raceLaneId: "concurrent-host-publish-race",
+      reloadLaneId: "concurrent-host-publish-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+    {
+      id: "host-complete-game",
+      raceLaneId: "concurrent-host-complete-race",
+      reloadLaneId: "concurrent-host-complete-race-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
 }
 
 function raceCoverageCell(id, raceLaneId, reloadLaneId) {

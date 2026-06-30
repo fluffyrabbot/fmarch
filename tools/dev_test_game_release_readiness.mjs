@@ -194,6 +194,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.raceCoverageArtifact,
       })
     : undefined;
+  const hostConcurrentRaceReloadMilestone = options.raceCoverage
+    ? buildHostConcurrentRaceReloadMilestone(options.raceCoverage, {
+        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+      })
+    : undefined;
   const raceCoverageAdminProofEvidence = options.raceCoverageAdminProof
     ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
         path:
@@ -443,6 +448,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : { adminRoleSurface: raceCoverageAdminProofEvidence }),
     });
+    localChecks.push({
+      id: "local-host-concurrent-race-reload-milestone",
+      label: "Host concurrent race reload coverage",
+      status: "passed",
+      evidence: raceCoverageEvidence.path,
+      proofBoundary:
+        "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
+      cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
+      requiredCellCount: hostConcurrentRaceReloadMilestone.requiredCellCount,
+      coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
+    });
   }
   const unproven = [
     ...(identityAdapterEvidence === undefined
@@ -603,6 +619,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             ...(raceCoverageAdminProofEvidence === undefined
               ? {}
               : { raceCoverageAdminProof: raceCoverageAdminProofEvidence.path }),
+            hostConcurrentRaceReloadMilestone: {
+              status: hostConcurrentRaceReloadMilestone.status,
+              cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
+              requiredCellCount: hostConcurrentRaceReloadMilestone.requiredCellCount,
+              coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
+              gapCount: hostConcurrentRaceReloadMilestone.gapCount,
+            },
           }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
@@ -637,6 +660,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(hardeningAdminProofEvidence === undefined
                 ? {}
                 : { hardening: { adminRoleSurface: hardeningAdminProofEvidence } }),
+              ...(hostConcurrentRaceReloadMilestone === undefined
+                ? {}
+                : {
+                    hostConcurrentRaceReloadMilestone: {
+                      status: hostConcurrentRaceReloadMilestone.status,
+                      cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
+                      requiredCellCount:
+                        hostConcurrentRaceReloadMilestone.requiredCellCount,
+                      coveredCellCount:
+                        hostConcurrentRaceReloadMilestone.coveredCellCount,
+                      gapCount: hostConcurrentRaceReloadMilestone.gapCount,
+                    },
+                  }),
               staleConflictMessageMilestone: {
                 status: staleConflictMessageMilestone.status,
                 laneIds: [...staleConflictMessageMilestone.laneIds],
@@ -823,6 +859,42 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
   };
 }
 
+function buildHostConcurrentRaceReloadMilestone(raceCoverage, { sourcePath }) {
+  assertDevTestGameRaceCoverage(raceCoverage);
+  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
+  const cellIds = [...hostConcurrentRaceReloadCellIds];
+  const coveredCellCount = cellIds.filter((cellId) => {
+    const cell = cells.get(cellId);
+    return (
+      cell?.status === "passed" &&
+      typeof cell.reloadLaneId === "string" &&
+      cell.reloadStatus === "passed"
+    );
+  }).length;
+  const gapCount = cellIds.length - coveredCellCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `host concurrent race-reload milestone missing covered cells from ${sourcePath}: ${cellIds
+        .filter((cellId) => {
+          const cell = cells.get(cellId);
+          return (
+            cell?.status !== "passed" ||
+            typeof cell.reloadLaneId !== "string" ||
+            cell.reloadStatus !== "passed"
+          );
+        })
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    cellIds,
+    requiredCellCount: cellIds.length,
+    coveredCellCount,
+    gapCount,
+  };
+}
+
 const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
@@ -844,6 +916,16 @@ const hostStaleControlLaneIds = Object.freeze([
   "stale-host-advance-reload",
   "stale-host-deadline",
   "stale-host-deadline-reload",
+]);
+
+const hostConcurrentRaceReloadCellIds = Object.freeze([
+  "host-resolve",
+  "host-advance",
+  "host-deadline-advance",
+  "host-lifecycle",
+  "host-mixed-advance",
+  "host-votecount-publication",
+  "host-complete-game",
 ]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
@@ -2420,11 +2502,14 @@ async function readOptionalAdminSpineAdminProof() {
 
 async function readOptionalRaceCoverage() {
   const override = process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultRaceCoveragePath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultRaceCoveragePath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     raceCoverage: JSON.parse(await readFile(proofPath, "utf8")),
@@ -2435,17 +2520,35 @@ async function readOptionalRaceCoverage() {
 
 async function readOptionalRaceCoverageAdminProof() {
   const override = process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF;
-  if (override === undefined || override.trim() === "") {
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultRaceCoverageAdminProofPath,
+  );
+  if (proofPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const proofPath = resolveArtifactPath(override, defaultRaceCoverageAdminProofPath);
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
     raceCoverageAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     raceCoverageAdminProofPath: path.relative(repoRoot, proofPath),
     raceCoverageAdminProofArtifact: artifact,
   };
+}
+
+async function resolveOptionalDefaultArtifactPath(value, fallback) {
+  if (value !== undefined && value.trim() !== "") {
+    return resolveArtifactPath(value, fallback);
+  }
+  try {
+    await stat(fallback);
+    return fallback;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 function resolveArtifactPath(value, fallback) {

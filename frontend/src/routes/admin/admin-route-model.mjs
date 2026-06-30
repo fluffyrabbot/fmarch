@@ -564,6 +564,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
   const replacementRaceReloadTrace = normalizeNextActionReplacementRaceReloadTrace(
     nextAction.replacementRaceReloadTrace,
   );
+  const hostConcurrentRaceReloadTrace =
+    normalizeNextActionHostConcurrentRaceReloadTrace(
+      nextAction.hostConcurrentRaceReloadTrace,
+    );
   const staleConflictMessageTrace = normalizeNextActionStaleConflictMessageTrace(
     nextAction.staleConflictMessageTrace,
   );
@@ -651,6 +655,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       }),
     ),
     Object.freeze({
+      id: "host-concurrent-race-reload-milestone",
+      status: `${hostConcurrentRaceReloadTrace.coveredCellCount}/${hostConcurrentRaceReloadTrace.requiredCellCount} ${hostConcurrentRaceReloadTrace.status}`,
+    }),
+    ...hostConcurrentRaceReloadTrace.cells.map((cell) =>
+      Object.freeze({
+        id: `host-concurrent-race-reload-${cell.id}`,
+        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
+      }),
+    ),
+    Object.freeze({
       id: "stale-conflict-message-milestone",
       status: `${staleConflictMessageTrace.coveredLaneCount}/${staleConflictMessageTrace.requiredLaneCount} ${staleConflictMessageTrace.status}`,
     }),
@@ -719,6 +733,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game }) {
       stabilityTrace,
       releaseReadinessTrace,
       replacementRaceReloadTrace,
+      hostConcurrentRaceReloadTrace,
       staleConflictMessageTrace,
       hostStaleControlTrace,
       releaseReady: nextAction.releaseReady === true,
@@ -881,6 +896,49 @@ function normalizeNextActionReplacementRaceReloadTrace(replacementRaceReloadTrac
     ),
     coveredCellCount: Number(replacementRaceReloadTrace.coveredCellCount ?? 0),
     gapCount: Number(replacementRaceReloadTrace.gapCount ?? 0),
+    cells: Object.freeze(cells),
+  });
+}
+
+function normalizeNextActionHostConcurrentRaceReloadTrace(hostConcurrentRaceReloadTrace) {
+  if (
+    hostConcurrentRaceReloadTrace === null ||
+    typeof hostConcurrentRaceReloadTrace !== "object" ||
+    hostConcurrentRaceReloadTrace.strategy !==
+      "host-concurrent-race-reload-before-readiness" ||
+    !Array.isArray(hostConcurrentRaceReloadTrace.cells)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unknown",
+      source: "",
+      requiredCellCount: 0,
+      coveredCellCount: 0,
+      gapCount: 0,
+      cells: Object.freeze([]),
+    });
+  }
+  const cells = hostConcurrentRaceReloadTrace.cells
+    .filter((cell) => cell !== null && typeof cell === "object")
+    .map((cell) =>
+      Object.freeze({
+        id: String(cell.id ?? "unknown"),
+        raceLaneId: String(cell.raceLaneId ?? ""),
+        reloadLaneId:
+          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
+        reloadStatus: String(cell.reloadStatus ?? "unknown"),
+        covered: cell.covered === true,
+      }),
+    );
+  return Object.freeze({
+    strategy: hostConcurrentRaceReloadTrace.strategy,
+    status: String(hostConcurrentRaceReloadTrace.status ?? "unknown"),
+    source: String(hostConcurrentRaceReloadTrace.source ?? ""),
+    requiredCellCount: Number(
+      hostConcurrentRaceReloadTrace.requiredCellCount ?? cells.length,
+    ),
+    coveredCellCount: Number(hostConcurrentRaceReloadTrace.coveredCellCount ?? 0),
+    gapCount: Number(hostConcurrentRaceReloadTrace.gapCount ?? 0),
     cells: Object.freeze(cells),
   });
 }
