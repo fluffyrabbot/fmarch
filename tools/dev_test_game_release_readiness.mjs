@@ -1890,6 +1890,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       throw new Error(`core-loop admin proof missing browser role URL: ${rowId}`);
     }
   }
+  assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
     visibleRows: proof.adminRoleSurface?.visibleSpineCheckpoints,
@@ -1912,8 +1913,48 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleSpineCheckpoints: proof.adminRoleSurface.visibleSpineCheckpoints,
     visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
+    hostRoleSurface: proof.hostRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
+  const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
+  if (
+    hostRoleSurface?.status !== "passed" ||
+    hostRoleSurface.clickedThroughFromRoleUrl !== true ||
+    hostRoleSurface.releaseReady !== false ||
+    hostRoleSurface.productionReady !== false ||
+    typeof hostRoleSurface.sourceRoleUrl !== "string" ||
+    !hostRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof hostRoleSurface.visitedRolePath !== "string" ||
+    !hostRoleSurface.visitedRolePath.endsWith("/host") ||
+    hostRoleSurface.surfaceTestId !== "host-console-surface" ||
+    hostRoleSurface.checkpointTestId !== "host-lifecycle-control-checkpoint" ||
+    checkpoint?.proofCheckId !== "host-lifecycle-control" ||
+    checkpoint.phaseId !== "D01" ||
+    checkpoint.phaseState !== "open" ||
+    checkpoint.slotId !== "slot-7" ||
+    checkpoint.actionState !== "enabled:mark_dead,modkill_slot" ||
+    !checkpoint.deadlineAffordance?.includes("resolve_phase") ||
+    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
+    !checkpoint.statusText?.includes(
+      "Host lifecycle controls are reachable from this role URL",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing host lifecycle role checkpoint");
+  }
+  for (const rowId of [
+    "phase",
+    "slot",
+    "actionState",
+    "deadlineAffordance",
+    "recovery",
+  ]) {
+    if (!checkpoint.visibleRows?.includes(rowId)) {
+      throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
+    }
+  }
 }
 
 function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {

@@ -162,6 +162,23 @@ test("host console route data is allowed for HostOf scoped to the current game",
     targetLabel: "Slot 7 / player-mira",
     submitLabel: "Issue player invite",
   });
+  assert.equal(
+    data.hostLifecycleControlCheckpoint.root.testId,
+    "host-lifecycle-control-checkpoint",
+  );
+  assert.equal(
+    data.hostLifecycleControlCheckpoint.root.data.proofCheckId,
+    "host-lifecycle-control",
+  );
+  assert.equal(
+    data.hostLifecycleControlCheckpoint.root.data.actionState,
+    "enabled:mark_dead,modkill_slot",
+  );
+  assert.equal(
+    data.hostLifecycleControlCheckpoint.root.data.deadlineAffordance,
+    "resolve_phase,lock_thread",
+  );
+  assert.equal(data.hostLifecycleControlCheckpoint.status.state, "ack");
 });
 
 test("host invite targets derive from projected slot occupancy", () => {
@@ -317,6 +334,11 @@ test("host console route data is allowed for CohostOf scoped to the current game
     capabilityLabel: "CohostOf(midsummer)",
     commandEndpoint: "/commands",
   });
+  assert.equal(
+    data.hostLifecycleControlCheckpoint.root.data.actionState,
+    "disabled:requires HostOf capability",
+  );
+  assert.equal(data.hostLifecycleControlCheckpoint.status.state, "pending");
 });
 
 test("host console access rejects missing and wrong-game capabilities", () => {

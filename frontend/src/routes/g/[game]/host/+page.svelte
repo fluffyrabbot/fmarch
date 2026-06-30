@@ -9,10 +9,14 @@
   } from "$lib/app/app-route-state-model.mjs";
   import HostCommandActivity from "$lib/components/host-action/HostCommandActivity.svelte";
   import HostControlSurface from "$lib/components/host-action/HostControlSurface.svelte";
+  import HostLifecycleControlCheckpoint from "$lib/components/host-action/HostLifecycleControlCheckpoint.svelte";
   import HostOperationsStrip from "$lib/components/host-action/HostOperationsStrip.svelte";
   import HostPhaseSummary from "$lib/components/host-action/HostPhaseSummary.svelte";
   import HostVotecountPanel from "$lib/components/host-action/HostVotecountPanel.svelte";
   import HostWorkQueueStrip from "$lib/components/host-action/HostWorkQueueStrip.svelte";
+  import {
+    buildHostLifecycleControlCheckpoint,
+  } from "$lib/components/host-action/host-lifecycle-control-checkpoint.mjs";
   import {
     connectLiveProjection,
     LIVE_PROJECTION_CONNECTING_STATUS,
@@ -76,6 +80,12 @@
   });
   $: inviteTargets = buildHostInviteTargets({
     replacement: projection.replacement,
+  });
+  $: hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
+    phase: projection.phase ?? data.phase,
+    replacement: projection.replacement ?? data.replacement,
+    actionGroups: moderatorActionGroups,
+    commandContext: data.commandContext,
   });
   const resyncKeys = hostProjectionResyncKeys();
   const projectionStore = createProjectionStore({
@@ -254,6 +264,10 @@
       votecountBoundary={data.votecountBoundary}
       {votecount}
       {hostPrompts}
+    />
+
+    <HostLifecycleControlCheckpoint
+      checkpoint={hostLifecycleControlCheckpoint}
     />
 
     {#each [

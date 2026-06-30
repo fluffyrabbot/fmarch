@@ -2,6 +2,9 @@ import {
   buildHostConsoleActionGroups,
   buildHostConsoleCriticalActions,
 } from "../../../../lib/components/host-action/host-console-critical-action.mjs";
+import {
+  buildHostLifecycleControlCheckpoint,
+} from "../../../../lib/components/host-action/host-lifecycle-control-checkpoint.mjs";
 import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
@@ -65,6 +68,23 @@ export async function buildHostConsoleRouteData({
   const moderatorControls = buildModeratorControls({
     capabilityKind: access.capability?.kind,
     pendingPromptCount,
+  });
+  const moderatorActionGroups = buildHostConsoleActionGroups({
+    actions: criticalActions,
+    pendingPromptCount,
+    votecountCount: coldLoad.votecount.length,
+    capabilityKind: access.capability?.kind,
+  });
+  const hostLifecycleControlCheckpoint = buildHostLifecycleControlCheckpoint({
+    phase: HOST_FIXTURE_PHASE,
+    replacement,
+    actionGroups: moderatorActionGroups,
+    commandContext: {
+      gameId,
+      principalUserId: commandPrincipalUserId,
+      capabilityLabel: access.capabilityLabel ?? "HostOf(game)",
+      commandEndpoint: "/commands",
+    },
   });
 
   return Object.freeze({
@@ -140,12 +160,8 @@ export async function buildHostConsoleRouteData({
       command: "/day-vote-outcomes",
     }),
     criticalActions,
-    moderatorActionGroups: buildHostConsoleActionGroups({
-      actions: criticalActions,
-      pendingPromptCount,
-      votecountCount: coldLoad.votecount.length,
-      capabilityKind: access.capability?.kind,
-    }),
+    moderatorActionGroups,
+    hostLifecycleControlCheckpoint,
     moderatorControls,
     workQueues: Object.freeze([
       Object.freeze({

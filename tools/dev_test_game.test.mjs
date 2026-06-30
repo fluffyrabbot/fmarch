@@ -9283,6 +9283,39 @@ function coreLoopAdminProofFixture() {
       releaseReady: false,
       productionReady: false,
     },
+    hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
+  };
+}
+
+function hostLifecycleRoleSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    visitedRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
+    surfaceTestId: "host-console-surface",
+    checkpointTestId: "host-lifecycle-control-checkpoint",
+    clickedThroughFromRoleUrl: true,
+    hostLifecycleControlCheckpoint: {
+      proofCheckId: "host-lifecycle-control",
+      phaseId: "D01",
+      phaseState: "open",
+      slotId: "slot-7",
+      actionState: "enabled:mark_dead,modkill_slot",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      visibleRows: [
+        "phase",
+        "slot",
+        "actionState",
+        "deadlineAffordance",
+        "recovery",
+      ],
+      recoveryText:
+        "Stale recovery\nReject PhaseLocked: refresh host projection and use current lifecycle controls.",
+      statusText: "Host lifecycle controls are reachable from this role URL",
+    },
+    releaseReady: false,
+    productionReady: false,
   };
 }
 
