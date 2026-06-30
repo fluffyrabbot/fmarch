@@ -1918,6 +1918,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopPostDayThreeResolutionSurface(
     proof.postDayThreeResolutionSurface,
   );
+  assertCoreLoopNightThreeEmptyResolutionSurface(
+    proof.nightThreeEmptyResolutionSurface,
+  );
   assertCoreLoopPrivateChannelRoleSurface(proof.privateChannelRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
@@ -1953,6 +1956,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     hostNightActionTransitionSurface: proof.hostNightActionTransitionSurface,
     dayThreeVoteResolutionSurface: proof.dayThreeVoteResolutionSurface,
     postDayThreeResolutionSurface: proof.postDayThreeResolutionSurface,
+    nightThreeEmptyResolutionSurface: proof.nightThreeEmptyResolutionSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3220,6 +3224,88 @@ function assertCoreLoopPostDayThreeResolutionSurface(postDayThreeResolutionSurfa
   });
 }
 
+function assertCoreLoopNightThreeEmptyResolutionSurface(
+  nightThreeEmptyResolutionSurface,
+) {
+  const expectedGame = gameFromRoleUrl(
+    nightThreeEmptyResolutionSurface?.sourceHostRoleUrl,
+  );
+  if (
+    nightThreeEmptyResolutionSurface?.status !== "passed" ||
+    nightThreeEmptyResolutionSurface.clickedThroughFromRoleUrl !== true ||
+    nightThreeEmptyResolutionSurface.releaseReady !== false ||
+    nightThreeEmptyResolutionSurface.productionReady !== false ||
+    typeof nightThreeEmptyResolutionSurface.sourceHostRoleUrl !== "string" ||
+    !nightThreeEmptyResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
+      "actionPlayer:N03:no_action",
+    ) ||
+    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
+      "resolve_phase:ack:910",
+    ) ||
+    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
+      "advance_phase:ack:911",
+    ) ||
+    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
+      "actionPlayer:D04:no_lynch_vote",
+    )
+  ) {
+    throw new Error("core-loop admin proof missing empty Night 3 resolution");
+  }
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: nightThreeEmptyResolutionSurface.actionPlayerNoActionProof,
+    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N03",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "opened N03 with no legal night action",
+    expectedResyncFromSeq: 909,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+  });
+  assertCoreLoopNightThreeEmptyHostTransitionProof({
+    proof: nightThreeEmptyResolutionSurface.hostTransitionProof,
+    expectedGame,
+    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceHostRoleUrl,
+  });
+  assertCoreLoopPostDayThreePlayerSurfaceProof({
+    proof: nightThreeEmptyResolutionSurface.actionPlayerDayFourProof,
+    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "D04",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:no legal action available",
+    expectedStatusText: "no legal action available",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "open D04 no-lynch voting",
+    expectedResyncFromSeq: 911,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    expectedVoteButtonCount: 1,
+    expectedVoteTargetCount: 1,
+  });
+}
+
 function assertCoreLoopPostDayThreePlayerSurfaceProof({
   proof,
   sourceRoleUrl,
@@ -3238,6 +3324,8 @@ function assertCoreLoopPostDayThreePlayerSurfaceProof({
   expectedResyncFromSeq,
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
+  expectedVoteButtonCount = 0,
+  expectedVoteTargetCount = 0,
 }) {
   if (
     proof?.status !== "passed" ||
@@ -3265,7 +3353,7 @@ function assertCoreLoopPostDayThreePlayerSurfaceProof({
     !String(proof.privateQueueBoundary.text ?? "").includes(
       "principal-scoped endpoints",
     ) ||
-    proof.voteButtonCount !== 0 ||
+    proof.voteButtonCount !== expectedVoteButtonCount ||
     proof.projectionCommandState?.actorSlot !== expectedSlot ||
     proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
     proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
@@ -3273,7 +3361,7 @@ function assertCoreLoopPostDayThreePlayerSurfaceProof({
     proof.projectionCommandState?.phase?.locked !==
       (expectedPhaseState === "locked") ||
     proof.projectionCommandState?.actions?.length !== 0 ||
-    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== expectedVoteTargetCount ||
     !String(proof.projectionCommandState?.boundary ?? "").includes(
       expectedBoundaryText,
     ) ||
@@ -3339,6 +3427,51 @@ function assertCoreLoopPostDayThreeHostAdvanceProof({
     commandKind: "AdvancePhase",
     streamSeq: 909,
     expectedPhaseId: "N03",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "resolve_phase,lock_thread",
+    expectedRefreshKeys: [],
+  });
+}
+
+function assertCoreLoopNightThreeEmptyHostTransitionProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 909 ||
+    proof.setupSnapshotHost?.phase?.id !== "N03" ||
+    proof.setupSnapshotHost?.phase?.state !== "open"
+  ) {
+    throw new Error("core-loop admin proof missing empty Night 3 host transition");
+  }
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 910,
+    expectedPhaseId: "N03",
+    expectedPhaseState: "locked",
+    expectedDeadlineAffordance: "unlock_thread,advance_phase",
+    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  });
+  assertCoreLoopHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+    streamSeq: 911,
+    expectedPhaseId: "D04",
     expectedPhaseState: "open",
     expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],

@@ -9299,6 +9299,7 @@ function coreLoopAdminProofFixture() {
     hostNightActionTransitionSurface: hostNightActionTransitionSurfaceFixture(),
     dayThreeVoteResolutionSurface: dayThreeVoteResolutionSurfaceFixture(),
     postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
+    nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
 }
@@ -10805,6 +10806,112 @@ function postDayThreeResolutionSurfaceFixture() {
   };
 }
 
+function nightThreeEmptyResolutionSurfaceFixture() {
+  const game = "00000000-0000-0000-0000-000000000002";
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "actionPlayer:N03:no_action -> host:resolve_phase:ack:910 -> host:advance_phase:ack:911 -> actionPlayer:D04:no_lynch_vote",
+    actionPlayerNoActionProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "N03",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:no legal action available",
+      statusText: "Player action unavailable: no legal action available",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
+      resyncFromSeq: 909,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+    }),
+    hostTransitionProof: {
+      status: "passed",
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
+      surfaceTestId: "host-console-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 909,
+      setupSnapshotHost: {
+        phase: {
+          id: "N03",
+          state: "open",
+        },
+      },
+      resolveProof: hostPhaseTransitionActionFixture({
+        actionId: "resolve_phase",
+        commandKind: "ResolvePhase",
+        streamSeq: 910,
+        phaseId: "N03",
+        phaseState: "locked",
+        deadlineAffordance: "unlock_thread,advance_phase",
+        projectionRefreshKeys: [
+          "host",
+          "votecount",
+          "dayVoteOutcomes",
+          "hostPrompts",
+        ],
+        command: {
+          game,
+          seed: 918273,
+        },
+      }),
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: "advance_phase",
+        commandKind: "AdvancePhase",
+        streamSeq: 911,
+        phaseId: "D04",
+        phaseState: "open",
+        deadlineAffordance: "resolve_phase,lock_thread",
+        projectionRefreshKeys: [],
+        command: {
+          game,
+        },
+      }),
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    actionPlayerDayFourProof: postDayThreePlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      phaseId: "D04",
+      phaseState: "open",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:no legal action available",
+      statusText: "Player action unavailable: no legal action available",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
+      resyncFromSeq: 911,
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
+      voteButtonCount: 1,
+      voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 function postDayThreePlayerSurfaceFixture({
   sourceRoleUrl,
   visitedRolePath,
@@ -10823,6 +10930,8 @@ function postDayThreePlayerSurfaceFixture({
   resyncFromSeq,
   commandStateEndpoint,
   notificationsEndpoint,
+  voteButtonCount = 0,
+  voteTargets = [],
 }) {
   const proof = {
     status: "passed",
@@ -10846,7 +10955,7 @@ function postDayThreePlayerSurfaceFixture({
       text:
         "Notifications and investigation results are loaded from principal-scoped endpoints only.",
     },
-    voteButtonCount: 0,
+    voteButtonCount,
     projectionCommandState: {
       actorSlot: slot,
       actorAlive,
@@ -10856,7 +10965,7 @@ function postDayThreePlayerSurfaceFixture({
         locked: phaseState === "locked",
       },
       actions: [],
-      voteTargets: [],
+      voteTargets,
       boundary,
     },
     projectionNotifications: privateReceipt
