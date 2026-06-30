@@ -4063,6 +4063,76 @@ assert.equal(
   true,
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.rejectReceiptStatusText,
+  /Reject PhaseLocked/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseAfterReload.id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseAfterReload.locked,
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseActionsAfterReload.includes(
+      "unlock_thread",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseActionsAfterReload.includes(
+      "advance_phase",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseActionsAfterReload.includes(
+      "resolve_phase",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.phaseActionsAfterReload.includes(
+      "lock_thread",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.deadlineActionsAfterReload.includes(
+      "extend_deadline",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.apiPhaseAfterReload.phase_id,
+  "D02",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostResolve
+    .staleHostResolveReloadAfterReject.apiPhaseAfterReload.locked,
+  true,
+);
+assert.equal(
   session.verification.multiplayerHardening.staleHostResolve.restoreAfterReject.commandStatus
     .state,
   "ack",
