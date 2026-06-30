@@ -122,6 +122,18 @@ await runAdminAuditProof({
           (cell) => cell.id,
         ),
       },
+      cohostDeadlineRaceReloadTrace: {
+        strategy: source.nextAction.cohostDeadlineRaceReloadTrace.strategy,
+        status: source.nextAction.cohostDeadlineRaceReloadTrace.status,
+        requiredCellCount:
+          source.nextAction.cohostDeadlineRaceReloadTrace.requiredCellCount,
+        coveredCellCount:
+          source.nextAction.cohostDeadlineRaceReloadTrace.coveredCellCount,
+        gapCount: source.nextAction.cohostDeadlineRaceReloadTrace.gapCount,
+        cellIds: source.nextAction.cohostDeadlineRaceReloadTrace.cells.map(
+          (cell) => cell.id,
+        ),
+      },
       staleConflictMessageTrace: {
         strategy: source.nextAction.staleConflictMessageTrace.strategy,
         status: source.nextAction.staleConflictMessageTrace.status,
@@ -230,6 +242,21 @@ export function assertNextActionAdminProof(evidence) {
     );
   }
   if (
+    evidence.generatedFrom?.cohostDeadlineRaceReloadTrace?.strategy !==
+      "cohost-deadline-race-reload-before-readiness" ||
+    !["covered", "gapped", "unavailable"].includes(
+      evidence.generatedFrom.cohostDeadlineRaceReloadTrace.status,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.cohostDeadlineRaceReloadTrace.requiredCellCount,
+    ) ||
+    !Array.isArray(evidence.generatedFrom.cohostDeadlineRaceReloadTrace.cellIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing cohost deadline race reload trace evidence",
+    );
+  }
+  if (
     evidence.generatedFrom?.staleConflictMessageTrace?.strategy !==
       "stale-conflict-message-before-readiness" ||
     !["covered", "gapped", "unavailable"].includes(
@@ -299,6 +326,10 @@ function requiredChecksForNextAction(nextAction) {
   for (const cell of nextAction.playerConcurrentActionReloadTrace.cells) {
     checks.push(`player-concurrent-action-reload-${cell.id}`);
   }
+  checks.push("cohost-deadline-race-reload-milestone");
+  for (const cell of nextAction.cohostDeadlineRaceReloadTrace.cells) {
+    checks.push(`cohost-deadline-race-reload-${cell.id}`);
+  }
   checks.push("stale-conflict-message-milestone");
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
@@ -348,6 +379,12 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.playerConcurrentActionReloadTrace?.cellIds)
       ? evidence.generatedFrom.playerConcurrentActionReloadTrace.cellIds.map(
           (id) => `player-concurrent-action-reload-${id}`,
+        )
+      : []),
+    "cohost-deadline-race-reload-milestone",
+    ...(Array.isArray(evidence.generatedFrom?.cohostDeadlineRaceReloadTrace?.cellIds)
+      ? evidence.generatedFrom.cohostDeadlineRaceReloadTrace.cellIds.map(
+          (id) => `cohost-deadline-race-reload-${id}`,
         )
       : []),
     "stale-conflict-message-milestone",

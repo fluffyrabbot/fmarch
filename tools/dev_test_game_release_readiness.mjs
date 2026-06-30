@@ -204,6 +204,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
       })
     : undefined;
+  const cohostDeadlineRaceReloadMilestone = options.raceCoverage
+    ? buildCohostDeadlineRaceReloadMilestone(options.raceCoverage, {
+        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+      })
+    : undefined;
   const raceCoverageAdminProofEvidence = options.raceCoverageAdminProof
     ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
         path:
@@ -475,6 +480,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredCellCount: playerConcurrentActionReloadMilestone.requiredCellCount,
       coveredCellCount: playerConcurrentActionReloadMilestone.coveredCellCount,
     });
+    localChecks.push({
+      id: "local-cohost-deadline-race-reload-milestone",
+      label: "Cohost deadline race reload coverage",
+      status: "passed",
+      evidence: raceCoverageEvidence.path,
+      proofBoundary:
+        "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
+      cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
+      requiredCellCount: cohostDeadlineRaceReloadMilestone.requiredCellCount,
+      coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
+    });
   }
   const unproven = [
     ...(identityAdapterEvidence === undefined
@@ -539,7 +555,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredEvidence:
         raceCoverageEvidence === undefined
           ? "Machine-readable local race coverage inventory tied to the saved dev-test-game proof-run"
-          : "Hosted and broader concurrent command race matrix beyond the inventoried local vote, action, replacement, host phase, lifecycle, and complete-game lanes",
+          : "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
     },
     ...(opsArtifactsEvidence === undefined
       ? [
@@ -651,6 +667,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 playerConcurrentActionReloadMilestone.coveredCellCount,
               gapCount: playerConcurrentActionReloadMilestone.gapCount,
             },
+            cohostDeadlineRaceReloadMilestone: {
+              status: cohostDeadlineRaceReloadMilestone.status,
+              cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
+              requiredCellCount: cohostDeadlineRaceReloadMilestone.requiredCellCount,
+              coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
+              gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
+            },
           }),
       staleConflictMessageMilestone: {
         status: staleConflictMessageMilestone.status,
@@ -709,6 +732,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       coveredCellCount:
                         playerConcurrentActionReloadMilestone.coveredCellCount,
                       gapCount: playerConcurrentActionReloadMilestone.gapCount,
+                    },
+                  }),
+              ...(cohostDeadlineRaceReloadMilestone === undefined
+                ? {}
+                : {
+                    cohostDeadlineRaceReloadMilestone: {
+                      status: cohostDeadlineRaceReloadMilestone.status,
+                      cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
+                      requiredCellCount:
+                        cohostDeadlineRaceReloadMilestone.requiredCellCount,
+                      coveredCellCount:
+                        cohostDeadlineRaceReloadMilestone.coveredCellCount,
+                      gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
                     },
                   }),
               staleConflictMessageMilestone: {
@@ -969,6 +1005,42 @@ function buildPlayerConcurrentActionReloadMilestone(raceCoverage, { sourcePath }
   };
 }
 
+function buildCohostDeadlineRaceReloadMilestone(raceCoverage, { sourcePath }) {
+  assertDevTestGameRaceCoverage(raceCoverage);
+  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
+  const cellIds = [...cohostDeadlineRaceReloadCellIds];
+  const coveredCellCount = cellIds.filter((cellId) => {
+    const cell = cells.get(cellId);
+    return (
+      cell?.status === "passed" &&
+      typeof cell.reloadLaneId === "string" &&
+      cell.reloadStatus === "passed"
+    );
+  }).length;
+  const gapCount = cellIds.length - coveredCellCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `cohost deadline race reload milestone missing covered cells from ${sourcePath}: ${cellIds
+        .filter((cellId) => {
+          const cell = cells.get(cellId);
+          return (
+            cell?.status !== "passed" ||
+            typeof cell.reloadLaneId !== "string" ||
+            cell.reloadStatus !== "passed"
+          );
+        })
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    cellIds,
+    requiredCellCount: cellIds.length,
+    coveredCellCount,
+    gapCount,
+  };
+}
+
 const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
@@ -1008,6 +1080,10 @@ const playerConcurrentActionReloadCellIds = Object.freeze([
   "player-vote-vs-host-resolve",
   "player-action-vs-host-advance",
   "player-vs-completed-game",
+]);
+
+const cohostDeadlineRaceReloadCellIds = Object.freeze([
+  "cohost-deadline-vs-host-resolve",
 ]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {

@@ -1030,6 +1030,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
+      ...cohostDeadlineRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1097,6 +1098,7 @@ test("admin route data exposes local next action as a native audit row", async (
     replacementRaceReloadTrace: replacementRaceReloadTraceFixture(),
     hostConcurrentRaceReloadTrace: hostConcurrentRaceReloadTraceFixture(),
     playerConcurrentActionReloadTrace: playerConcurrentActionReloadTraceFixture(),
+    cohostDeadlineRaceReloadTrace: cohostDeadlineRaceReloadTraceFixture(),
     staleConflictMessageTrace: staleConflictMessageTraceFixture(),
     hostStaleControlTrace: hostStaleControlTraceFixture(),
     releaseReady: false,
@@ -1140,6 +1142,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
+      ...cohostDeadlineRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -1191,6 +1194,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["replacement-race-reload-replacement-action", "covered:passed"],
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
+      ...cohostDeadlineRaceReloadCheckRows(),
       ["stale-conflict-message-milestone", "3/3 covered"],
       ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
       ["stale-conflict-message-stale-action-conflict-message", "covered"],
@@ -2585,7 +2589,7 @@ function nextActionFixture({
           id: "exhaustive-race-coverage",
           status: "unproven",
           requiredEvidence:
-            "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
+            "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
           buildSlice:
             "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
           proofTarget: "target/dev-test-game/proof-run.json",
@@ -2598,6 +2602,7 @@ function nextActionFixture({
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
+  cohostDeadlineRaceReloadTrace = cohostDeadlineRaceReloadTraceFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
 } = {}) {
@@ -2646,6 +2651,12 @@ function nextActionFixture({
         coveredCellCount: playerConcurrentActionReloadTrace.coveredCellCount,
         gapCount: playerConcurrentActionReloadTrace.gapCount,
       },
+      cohostDeadlineRaceReloadSummary: {
+        status: cohostDeadlineRaceReloadTrace.status,
+        requiredCellCount: cohostDeadlineRaceReloadTrace.requiredCellCount,
+        coveredCellCount: cohostDeadlineRaceReloadTrace.coveredCellCount,
+        gapCount: cohostDeadlineRaceReloadTrace.gapCount,
+      },
       opsArtifacts: "target/dev-test-game/ops-artifacts.json",
       proofStabilityStatus: stability === undefined ? "clean" : "drifted",
       proofStabilitySummary: {
@@ -2670,6 +2681,7 @@ function nextActionFixture({
     replacementRaceReloadTrace,
     hostConcurrentRaceReloadTrace,
     playerConcurrentActionReloadTrace,
+    cohostDeadlineRaceReloadTrace,
     staleConflictMessageTrace,
     hostStaleControlTrace,
   };
@@ -3071,6 +3083,40 @@ function playerConcurrentActionReloadCellsFixture() {
       id: "player-vs-completed-game",
       raceLaneId: "concurrent-player-complete-race",
       reloadLaneId: "public-player-complete-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
+}
+
+function cohostDeadlineRaceReloadTraceFixture() {
+  return {
+    strategy: "cohost-deadline-race-reload-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/race-coverage.json",
+    requiredCellCount: 1,
+    coveredCellCount: 1,
+    gapCount: 0,
+    cells: cohostDeadlineRaceReloadCellsFixture(),
+  };
+}
+
+function cohostDeadlineRaceReloadCheckRows() {
+  return [
+    ["cohost-deadline-race-reload-milestone", "1/1 covered"],
+    ...cohostDeadlineRaceReloadCellsFixture().map((cell) => [
+      `cohost-deadline-race-reload-${cell.id}`,
+      `covered:${cell.reloadStatus}`,
+    ]),
+  ];
+}
+
+function cohostDeadlineRaceReloadCellsFixture() {
+  return [
+    {
+      id: "cohost-deadline-vs-host-resolve",
+      raceLaneId: "concurrent-cohost-deadline-resolve-race",
+      reloadLaneId: "concurrent-cohost-deadline-resolve-race-reload",
       reloadStatus: "passed",
       covered: true,
     },

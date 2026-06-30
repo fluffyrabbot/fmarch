@@ -544,7 +544,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           id: "exhaustive-race-coverage",
           status: "unproven",
           requiredEvidence:
-            "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
+            "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
         },
       ],
     }),
@@ -558,7 +558,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       id: "exhaustive-race-coverage",
       status: "unproven",
       requiredEvidence:
-        "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
+        "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
       buildSlice:
         "Add the next concurrent command race lane to the seeded dev-test-game live proof.",
       proofTarget: "target/dev-test-game/proof-run.json",
@@ -600,7 +600,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         proofBoundary:
           "Local seeded-game browser/API proof only. This can expand race-matrix evidence without claiming hosted operations, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
-          "Broader concurrent command race matrix beyond the promoted local vote, action, host phase, lifecycle, and complete-game lanes",
+          "Hosted and broader concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones",
       },
     ],
   });
@@ -652,6 +652,15 @@ test("dev test-game next-action derives one local recovery command from the mani
     coveredCellCount: 5,
     gapCount: 0,
     cells: playerConcurrentActionReloadCellsFixture(),
+  });
+  assert.deepEqual(freshAction.cohostDeadlineRaceReloadTrace, {
+    strategy: "cohost-deadline-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 1,
+    coveredCellCount: 1,
+    gapCount: 0,
+    cells: cohostDeadlineRaceReloadCellsFixture(),
   });
   assert.deepEqual(freshAction.staleConflictMessageTrace, {
     strategy: "stale-conflict-message-before-readiness",
@@ -801,6 +810,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
   assert.equal(action.releaseReadinessTrace.selectedUnprovenId, "exhaustive-race-coverage");
   assert.equal(action.hostConcurrentRaceReloadTrace.status, "covered");
   assert.equal(action.playerConcurrentActionReloadTrace.status, "covered");
+  assert.equal(action.cohostDeadlineRaceReloadTrace.status, "covered");
   assert.equal(action.staleConflictMessageTrace.status, "covered");
   assert.equal(action.hostStaleControlTrace.status, "covered");
 });
@@ -6317,6 +6327,16 @@ test("session card and markdown include role credential URLs and tokens", () => 
       gapCount: 0,
     },
   );
+  assert.deepEqual(
+    raceCoverageReadiness.generatedFrom.cohostDeadlineRaceReloadMilestone,
+    {
+      status: "passed",
+      cellIds: cohostDeadlineRaceReloadCellIdsFixture(),
+      requiredCellCount: 1,
+      coveredCellCount: 1,
+      gapCount: 0,
+    },
+  );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-host-concurrent-race-reload-milestone",
@@ -6328,6 +6348,12 @@ test("session card and markdown include role credential URLs and tokens", () => 
       (item) => item.id === "local-player-concurrent-action-reload-milestone",
     ).coveredCellCount,
     5,
+  );
+  assert.equal(
+    raceCoverageReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-cohost-deadline-race-reload-milestone",
+    ).coveredCellCount,
+    1,
   );
   assert(
     raceCoverageReadiness.releaseReadiness.unproven.some(
@@ -7137,6 +7163,22 @@ function playerConcurrentActionReloadCellsFixture() {
       id: "player-vs-completed-game",
       raceLaneId: "concurrent-player-complete-race",
       reloadLaneId: "public-player-complete-reload",
+      reloadStatus: "passed",
+      covered: true,
+    },
+  ];
+}
+
+function cohostDeadlineRaceReloadCellIdsFixture() {
+  return ["cohost-deadline-vs-host-resolve"];
+}
+
+function cohostDeadlineRaceReloadCellsFixture() {
+  return [
+    {
+      id: "cohost-deadline-vs-host-resolve",
+      raceLaneId: "concurrent-cohost-deadline-resolve-race",
+      reloadLaneId: "concurrent-cohost-deadline-resolve-race-reload",
       reloadStatus: "passed",
       covered: true,
     },
