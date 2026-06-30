@@ -4131,50 +4131,27 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
   ) {
     throw new Error("core-loop admin proof missing completed player command state");
   }
-  assertCoreLoopCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    expectedBoundaryText: "completed action-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-  });
-  assertCoreLoopCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
-    expectedSlot: "slot-4",
-    expectedBoundaryText: "completed normal-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
-  });
-  assertCoreLoopCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-    expectedSlot: "slot-2",
-    expectedBoundaryText: "completed dead-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya`,
-  });
-  assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof({
-    proof:
-      completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-  });
-  assertCoreLoopStaleCompletedGameVoteRecoveryProof({
-    proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-  });
+  assertCoreLoopCompletedPlayerReloadCases(
+    coreLoopCompletedPlayerReloadAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame,
+    }),
+  );
+  assertCoreLoopCompletedStaleRejectCases([
+    {
+      assertProof: assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
+      proof:
+        completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+    },
+    {
+      assertProof: assertCoreLoopStaleCompletedGameVoteRecoveryProof,
+      proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    },
+  ]);
 }
 
 function assertCoreLoopHostCompleteGameProof({
@@ -4261,6 +4238,56 @@ function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
         `core-loop admin proof missing ${label} completed host reload closure`,
       );
     }
+  }
+}
+
+function coreLoopCompletedPlayerReloadAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+}) {
+  return [
+    {
+      proof: completedGameEndgameSurface.completedPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      expectedSlot: "slot-7",
+      expectedBoundaryText: "completed action-player role URL reloaded",
+      principalUserId: "player_mira",
+    },
+    {
+      proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+      expectedSlot: "slot-4",
+      expectedBoundaryText: "completed normal-player role URL reloaded",
+      principalUserId: "player_rowan",
+    },
+    {
+      proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      expectedSlot: "slot-2",
+      expectedBoundaryText: "completed dead-player role URL reloaded",
+      principalUserId: "player_ilya",
+    },
+  ];
+}
+
+function assertCoreLoopCompletedPlayerReloadCases(cases) {
+  for (const scenario of cases) {
+    assertCoreLoopCompletedPlayerReloadProof({
+      ...scenario,
+      expectedCommandStateEndpoint:
+        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+      expectedNotificationsEndpoint:
+        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+    });
+  }
+}
+
+function assertCoreLoopCompletedStaleRejectCases(cases) {
+  for (const { assertProof, ...scenario } of cases) {
+    assertProof(scenario);
   }
 }
 
@@ -7171,11 +7198,11 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "release-runbook",
     "race-coverage",
     "hosted-target-preflight",
-    "hosted-evidence-lane",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
     "spine-manifest",
     "recovery",
+    "spine-manifest-handoff",
   ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine admin proof version drifted: ${proof?.version}`);

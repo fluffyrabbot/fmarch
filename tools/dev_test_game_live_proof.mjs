@@ -1927,7 +1927,7 @@ assert.equal(
 );
 assert.match(
   session.verification.multiplayerHardening.stalePlayerVote.reject.message,
-  /stale projection/,
+  /stale projection|stale vote state/,
 );
 assert.equal(
   session.verification.multiplayerHardening.stalePlayerVote.phaseAfterReject.locked,

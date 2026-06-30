@@ -1740,35 +1740,38 @@ async function proveCompletedGameEndgameSurface({
       dayFiveNoLynchOutcomeRow(),
     ],
   });
-  const completedPlayerReloadProof = await proveCompletedPlayerRoleReload({
+  const completedPlayerReloadProofs = await proveCompletedPlayerRoleReloadCases({
     browser,
     frontendBaseUrl,
-    roleUrl: actionPlayerRoleUrl,
-    cookieValue: "fixture-player",
-    commandState: seededCompletedActionPlayerCommandState({
-      boundary:
-        "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
-    }),
-  });
-  const completedNormalPlayerReloadProof = await proveCompletedPlayerRoleReload({
-    browser,
-    frontendBaseUrl,
-    roleUrl: normalPlayerRoleUrl,
-    cookieValue: "fixture-normal",
-    commandState: seededCompletedNormalPlayerCommandState({
-      boundary:
-        "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
-    }),
-  });
-  const completedDeadPlayerReloadProof = await proveCompletedPlayerRoleReload({
-    browser,
-    frontendBaseUrl,
-    roleUrl: deadPlayerRoleUrl,
-    cookieValue: "fixture-target",
-    commandState: seededCompletedDeadPlayerCommandState({
-      boundary:
-        "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
-    }),
+    cases: [
+      {
+        proofField: "completedPlayerReloadProof",
+        roleUrl: actionPlayerRoleUrl,
+        cookieValue: "fixture-player",
+        commandState: seededCompletedActionPlayerCommandState({
+          boundary:
+            "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
+        }),
+      },
+      {
+        proofField: "completedNormalPlayerReloadProof",
+        roleUrl: normalPlayerRoleUrl,
+        cookieValue: "fixture-normal",
+        commandState: seededCompletedNormalPlayerCommandState({
+          boundary:
+            "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
+        }),
+      },
+      {
+        proofField: "completedDeadPlayerReloadProof",
+        roleUrl: deadPlayerRoleUrl,
+        cookieValue: "fixture-target",
+        commandState: seededCompletedDeadPlayerCommandState({
+          boundary:
+            "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
+        }),
+      },
+    ],
   });
   const completedDeadPlayerStaleVoteRecoveryProof =
     await proveCompletedDeadPlayerStaleVoteRecovery({
@@ -1794,9 +1797,7 @@ async function proveCompletedGameEndgameSurface({
     hostCompleteProof,
     completedHostReloadProof,
     actionPlayerCompletedProof,
-    completedPlayerReloadProof,
-    completedNormalPlayerReloadProof,
-    completedDeadPlayerReloadProof,
+    ...completedPlayerReloadProofs,
     completedDeadPlayerStaleVoteRecoveryProof,
     staleCompletedVoteRecoveryProof,
     releaseReady: false,
@@ -2693,6 +2694,27 @@ async function proveStaleCompletedGameVoteRecovery({
   } finally {
     await page.close();
   }
+}
+
+async function proveCompletedPlayerRoleReloadCases({
+  browser,
+  frontendBaseUrl,
+  cases,
+}) {
+  const proofEntries = [];
+  for (const scenario of cases) {
+    proofEntries.push([
+      scenario.proofField,
+      await proveCompletedPlayerRoleReload({
+        browser,
+        frontendBaseUrl,
+        roleUrl: scenario.roleUrl,
+        cookieValue: scenario.cookieValue,
+        commandState: scenario.commandState,
+      }),
+    ]);
+  }
+  return Object.fromEntries(proofEntries);
 }
 
 async function proveCompletedPlayerRoleReload({
@@ -11725,50 +11747,27 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       )}`,
     );
   }
-  assertCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    expectedBoundaryText: "completed action-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-  });
-  assertCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
-    expectedSlot: "slot-4",
-    expectedBoundaryText: "completed normal-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
-  });
-  assertCompletedPlayerReloadProof({
-    proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-    expectedSlot: "slot-2",
-    expectedBoundaryText: "completed dead-player role URL reloaded",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya`,
-  });
-  assertCompletedDeadPlayerStaleVoteRecoveryProof({
-    proof:
-      completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-  });
-  assertStaleCompletedGameVoteRecoveryProof({
-    proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-  });
+  assertCompletedPlayerReloadCases(
+    completedPlayerReloadAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame,
+    }),
+  );
+  assertCompletedStaleRejectCases([
+    {
+      assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
+      proof:
+        completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+    },
+    {
+      assertProof: assertStaleCompletedGameVoteRecoveryProof,
+      proof: completedGameEndgameSurface.staleCompletedVoteRecoveryProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    },
+  ]);
 }
 
 function assertHostCompleteGameProof({ proof, expectedGame, sourceRoleUrl }) {
@@ -11865,6 +11864,56 @@ function assertCompletedHostReloadProof({ proof, sourceRoleUrl }) {
         )}`,
       );
     }
+  }
+}
+
+function completedPlayerReloadAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+}) {
+  return [
+    {
+      proof: completedGameEndgameSurface.completedPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      expectedSlot: "slot-7",
+      expectedBoundaryText: "completed action-player role URL reloaded",
+      principalUserId: "player_mira",
+    },
+    {
+      proof: completedGameEndgameSurface.completedNormalPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+      expectedSlot: "slot-4",
+      expectedBoundaryText: "completed normal-player role URL reloaded",
+      principalUserId: "player_rowan",
+    },
+    {
+      proof: completedGameEndgameSurface.completedDeadPlayerReloadProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      expectedSlot: "slot-2",
+      expectedBoundaryText: "completed dead-player role URL reloaded",
+      principalUserId: "player_ilya",
+    },
+  ];
+}
+
+function assertCompletedPlayerReloadCases(cases) {
+  for (const scenario of cases) {
+    assertCompletedPlayerReloadProof({
+      ...scenario,
+      expectedCommandStateEndpoint:
+        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+      expectedNotificationsEndpoint:
+        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+    });
+  }
+}
+
+function assertCompletedStaleRejectCases(cases) {
+  for (const { assertProof, ...scenario } of cases) {
+    assertProof(scenario);
   }
 }
 

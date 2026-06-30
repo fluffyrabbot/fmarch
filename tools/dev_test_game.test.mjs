@@ -11647,110 +11647,32 @@ function completedGameEndgameSurfaceFixture() {
     actionTiles: [],
     triggerButtons: [],
   };
-  const completedReloadSnapshot = {
-    checkpoint: {
-      phaseId: "N05",
-      phaseState: "open",
-      actorSlot: "slot-7",
-      actionState: "disabled:game complete",
-      receiptState: "idle",
-      targetSlots: "",
-    },
-    commandState: {
-      actorSlot: "slot-7",
-      phase: {
-        phaseId: "N05",
-        locked: false,
-      },
-      gameCompleted: true,
-      actions: [],
-      voteTargets: [],
-      boundary:
-        "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
-    },
-    notifications: [],
+  const completedReloadSnapshot = completedPlayerReloadSnapshotFixture({
+    game,
     dayVoteOutcomes: dayFiveOutcomes,
-    coldLoadEndpoints: {
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
-    },
-    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
-    enabledMutatingButtons: [],
-    disabledMutatingButtons: [
-      { action: "submit_post", disabled: true, text: "Post" },
-    ],
-  };
-  const completedNormalReloadSnapshot = {
-    checkpoint: {
-      phaseId: "N05",
-      phaseState: "open",
-      actorSlot: "slot-4",
-      actionState: "disabled:game complete",
-      receiptState: "idle",
-      targetSlots: "",
-    },
-    commandState: {
-      actorSlot: "slot-4",
-      phase: {
-        phaseId: "N05",
-        locked: false,
-      },
-      gameCompleted: true,
-      actions: [],
-      voteTargets: [],
-      boundary:
-        "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
-    },
-    notifications: [],
+    slot: "slot-7",
+    principalUserId: "player_mira",
+    boundary:
+      "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
+  });
+  const completedNormalReloadSnapshot = completedPlayerReloadSnapshotFixture({
+    game,
     dayVoteOutcomes: dayFiveOutcomes,
-    coldLoadEndpoints: {
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_rowan`,
-    },
-    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
-    enabledMutatingButtons: [],
-    disabledMutatingButtons: [
-      { action: "submit_post", disabled: true, text: "Post" },
-    ],
-  };
-  const completedDeadReloadSnapshot = {
-    checkpoint: {
-      phaseId: "N05",
-      phaseState: "open",
-      actorSlot: "slot-2",
-      actionState: "disabled:game complete",
-      receiptState: "idle",
-      targetSlots: "",
-    },
-    commandState: {
-      actorSlot: "slot-2",
-      actorAlive: false,
-      actorStatus: "dead",
-      phase: {
-        phaseId: "N05",
-        locked: false,
-      },
-      gameCompleted: true,
-      actions: [],
-      voteTargets: [],
-      boundary:
-        "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
-    },
-    notifications: [],
+    slot: "slot-4",
+    principalUserId: "player_rowan",
+    boundary:
+      "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
+  });
+  const completedDeadReloadSnapshot = completedPlayerReloadSnapshotFixture({
+    game,
     dayVoteOutcomes: dayFiveOutcomes,
-    coldLoadEndpoints: {
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_ilya`,
-    },
-    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
-    enabledMutatingButtons: [],
-    disabledMutatingButtons: [
-      { action: "submit_post", disabled: true, text: "Post" },
-    ],
-  };
+    slot: "slot-2",
+    principalUserId: "player_ilya",
+    actorAlive: false,
+    actorStatus: "dead",
+    boundary:
+      "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
+  });
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
@@ -11844,54 +11766,21 @@ function completedGameEndgameSurfaceFixture() {
       notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
-    completedPlayerReloadProof: {
-      status: "passed",
+    completedPlayerReloadProof: completedPlayerReloadProofFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      surfaceTestId: "player-surface",
-      clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotCommandState: completedReloadSnapshot.commandState,
-      reloadedResyncSnapshotCommandState: completedReloadSnapshot.commandState,
-      initialSnapshot: completedReloadSnapshot,
-      reloadedSnapshot: completedReloadSnapshot,
-      rawInviteTokensVisible: false,
-      targetOnlyActionVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
-    completedNormalPlayerReloadProof: {
-      status: "passed",
+      snapshot: completedReloadSnapshot,
+    }),
+    completedNormalPlayerReloadProof: completedPlayerReloadProofFixture({
       sourceRoleUrl: `${baseRoleUrl}/player-rowan`,
       visitedRolePath: `/g/${game}/player-rowan`,
-      surfaceTestId: "player-surface",
-      clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotCommandState: completedNormalReloadSnapshot.commandState,
-      reloadedResyncSnapshotCommandState: completedNormalReloadSnapshot.commandState,
-      initialSnapshot: completedNormalReloadSnapshot,
-      reloadedSnapshot: completedNormalReloadSnapshot,
-      rawInviteTokensVisible: false,
-      targetOnlyActionVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
-    completedDeadPlayerReloadProof: {
-      status: "passed",
+      snapshot: completedNormalReloadSnapshot,
+    }),
+    completedDeadPlayerReloadProof: completedPlayerReloadProofFixture({
       sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
       visitedRolePath: `/g/${game}?private=notification-1`,
-      surfaceTestId: "player-surface",
-      clickedThroughFromRoleUrl: true,
-      resyncFromSeq: 921,
-      initialResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
-      reloadedResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
-      initialSnapshot: completedDeadReloadSnapshot,
-      reloadedSnapshot: completedDeadReloadSnapshot,
-      rawInviteTokensVisible: false,
-      targetOnlyActionVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+      snapshot: completedDeadReloadSnapshot,
+    }),
     completedDeadPlayerStaleVoteRecoveryProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
@@ -11992,6 +11881,81 @@ function completedGameEndgameSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function completedPlayerReloadSnapshotFixture({
+  game,
+  dayVoteOutcomes,
+  slot,
+  principalUserId,
+  boundary,
+  actorAlive,
+  actorStatus,
+}) {
+  const commandState = {
+    actorSlot: slot,
+    phase: {
+      phaseId: "N05",
+      locked: false,
+    },
+    gameCompleted: true,
+    actions: [],
+    voteTargets: [],
+    boundary,
+  };
+  if (actorAlive !== undefined) {
+    commandState.actorAlive = actorAlive;
+  }
+  if (actorStatus !== undefined) {
+    commandState.actorStatus = actorStatus;
+  }
+  return {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      actorSlot: slot,
+      actionState: "disabled:game complete",
+      receiptState: "idle",
+      targetSlots: "",
+    },
+    commandState,
+    notifications: [],
+    dayVoteOutcomes,
+    coldLoadEndpoints: {
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`,
+      notificationsEndpoint:
+        `/games/${game}/notifications?principal_user_id=${principalUserId}`,
+    },
+    buttons: [{ action: "submit_post", disabled: true, text: "Post" }],
+    enabledMutatingButtons: [],
+    disabledMutatingButtons: [
+      { action: "submit_post", disabled: true, text: "Post" },
+    ],
+  };
+}
+
+function completedPlayerReloadProofFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  snapshot,
+}) {
+  return {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    resyncFromSeq: 921,
+    initialResyncSnapshotCommandState: snapshot.commandState,
+    reloadedResyncSnapshotCommandState: snapshot.commandState,
+    initialSnapshot: snapshot,
+    reloadedSnapshot: snapshot,
+    rawInviteTokensVisible: false,
+    targetOnlyActionVisible: false,
     releaseReady: false,
     productionReady: false,
   };
@@ -13928,11 +13892,11 @@ function adminSpineAdminProofFixture() {
         "release-runbook",
         "race-coverage",
         "hosted-target-preflight",
-        "hosted-evidence-lane",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
         "spine-manifest",
         "recovery",
+        "spine-manifest-handoff",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,

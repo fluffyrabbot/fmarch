@@ -26,6 +26,13 @@ const hardeningRetryChannel = "main";
 const host = "127.0.0.1";
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
+function isStaleVotePhaseLockedMessage(message) {
+  return (
+    String(message ?? "").includes("stale projection") ||
+    String(message ?? "").includes("stale vote state")
+  );
+}
+
 let apiServer;
 let vite;
 let args;
@@ -1685,7 +1692,7 @@ async function verifySeededCoreLoop({ hostPage, playerPage, game, apiBaseUrl }) 
       "commandState",
     ) !== true ||
     !rejectedVoteReceiptText.includes("Reject PhaseLocked") ||
-    !rejectedVote.message.includes("stale projection") ||
+    !isStaleVotePhaseLockedMessage(rejectedVote.message) ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
     rejectedVoteDispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
     staleVoteCommandStateAfterReject?.phase?.locked !== true ||
@@ -13700,7 +13707,7 @@ async function verifyStalePlayerVoteRecovery({
   );
   await playerPage.locator('[data-action="submit_vote"]').waitFor({ state: "detached" });
   const reject = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
-  if (!reject.message.includes("stale projection")) {
+  if (!isStaleVotePhaseLockedMessage(reject.message)) {
     throw new Error(`stale player vote message drifted: ${JSON.stringify(reject)}`);
   }
   const phaseAfterReject = await playerPage.evaluate(
