@@ -2448,6 +2448,8 @@ function assertCoreLoopPlayerStaleActionAfterTransitionProof({
 
 function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
+  const stalePostProof =
+    privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
   if (
     privateChannelRoleSurface?.status !== "passed" ||
@@ -2510,6 +2512,57 @@ function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
       "thread,votecount,commandState,dayVoteOutcomes"
   ) {
     throw new Error("core-loop admin proof missing private channel SubmitPost ACK");
+  }
+  if (
+    stalePostProof?.status !== "passed" ||
+    stalePostProof.sourceRoleUrl !== privateChannelRoleSurface.sourceRoleUrl ||
+    stalePostProof.visitedRolePath !== privateChannelRoleSurface.visitedRolePath ||
+    stalePostProof.clickedAction !== "submit_post" ||
+    stalePostProof.commandKind !== "SubmitPost" ||
+    stalePostProof.command?.game !== expectedGame ||
+    stalePostProof.command.channel_id !== "role-pm" ||
+    stalePostProof.command.actor_slot !== "slot-7" ||
+    stalePostProof.command.body !== stalePostProof.stalePrivatePostBody ||
+    stalePostProof.commandStatus?.state !== "reject" ||
+    stalePostProof.commandStatus.error !== "PhaseLocked" ||
+    !String(stalePostProof.commandStatus.message ?? "").includes(
+      "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+    ) ||
+    stalePostProof.bridgePlan?.role !== "player" ||
+    stalePostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    stalePostProof.bridgePlan.commandEndpoint !== "/commands" ||
+    stalePostProof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(stalePostProof.bridgePlan.projectionRefreshKeys, [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ]) ||
+    stalePostProof.receipts?.at?.(-1)?.state !== "reject" ||
+    stalePostProof.projectionCommandState?.phase?.phaseId !== "D02" ||
+    stalePostProof.projectionCommandState?.phase?.locked !== true ||
+    !String(stalePostProof.projectionCommandState?.boundary ?? "").includes(
+      "private post PhaseLocked recovery",
+    ) ||
+    stalePostProof.projectionThread?.posts?.at?.(-1)?.body !==
+      "Current role-pm thread after stale private post reject" ||
+    stalePostProof.projectionThread?.posts?.some?.(
+      (post) => post?.body === stalePostProof.stalePrivatePostBody,
+    ) === true ||
+    !String(stalePostProof.currentThreadText ?? "").includes(
+      "Current role-pm thread after stale private post reject",
+    ) ||
+    stalePostProof.checkpointPhaseId !== "D02" ||
+    stalePostProof.checkpointActionState !== "disabled:phase locked" ||
+    stalePostProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    !String(stalePostProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked") ||
+    stalePostProof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes" ||
+    stalePostProof.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("core-loop admin proof missing private channel stale post recovery");
   }
 }
 

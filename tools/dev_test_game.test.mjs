@@ -9901,6 +9901,73 @@ function privateChannelRoleSurfaceFixture() {
       receiptStatusText: "Ack: stream seqs 701",
       receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
     },
+    stalePostAfterPhaseTransitionProof: {
+      status: "passed",
+      sourceRoleUrl:
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+      visitedRolePath:
+        "/g/00000000-0000-0000-0000-000000000002/c/role-pm?private=notification-1",
+      clickedAction: "submit_post",
+      commandKind: "SubmitPost",
+      command: {
+        game: "00000000-0000-0000-0000-000000000002",
+        channel_id: "role-pm",
+        actor_slot: "slot-7",
+        body: "Stale private phase proof post",
+      },
+      commandStatus: {
+        state: "reject",
+        error: "PhaseLocked",
+        message:
+          "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitPost",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: [
+          "thread",
+          "votecount",
+          "commandState",
+          "dayVoteOutcomes",
+        ],
+      },
+      receipts: [
+        {
+          actionId: "submit_post",
+          state: "reject",
+          message:
+            "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+          current: true,
+        },
+      ],
+      projectionCommandState: {
+        phase: {
+          phaseId: "D02",
+          locked: true,
+        },
+        boundary:
+          "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+      },
+      projectionThread: {
+        posts: [
+          {
+            seq: 802,
+            body: "Current role-pm thread after stale private post reject",
+          },
+        ],
+      },
+      stalePrivatePostBody: "Stale private phase proof post",
+      currentThreadText: "Current role-pm thread after stale private post reject",
+      checkpointPhaseId: "D02",
+      checkpointActionState: "disabled:phase locked",
+      checkpointReceiptState: "reject:PhaseLocked",
+      receiptStatusText:
+        "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+      receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
+      rawInviteTokensVisible: false,
+    },
     rawInviteTokensVisible: false,
     releaseReady: false,
     productionReady: false,

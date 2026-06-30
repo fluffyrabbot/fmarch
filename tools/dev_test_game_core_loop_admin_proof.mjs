@@ -1742,6 +1742,12 @@ async function provePrivateChannelRoleSurface({
       throw new Error("private channel role proof leaked an invite URL token");
     }
     const command = commandRequests.at(-1)?.SubmitPost ?? null;
+    const stalePostAfterPhaseTransitionProof =
+      await provePrivateChannelStalePostAfterPhaseTransition({
+        browser,
+        frontendBaseUrl,
+        roleUrl,
+      });
     return {
       status: "passed",
       sourceRoleUrl: String(roleUrl),
@@ -1778,9 +1784,111 @@ async function provePrivateChannelRoleSurface({
         receiptStatusText,
         receiptRefreshKeys,
       },
+      stalePostAfterPhaseTransitionProof,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function provePrivateChannelStalePostAfterPhaseTransition({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
+  const stalePrivatePostBody = "Stale private phase proof post";
+  try {
+    await installPrivateChannelStalePostBrowserRoutes(page, {
+      commandRequests,
+    });
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, {
+      waitUntil: "networkidle",
+    });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await page
+      .locator('[data-testid="player-composer"] textarea')
+      .fill(stalePrivatePostBody);
+    await page
+      .locator('[data-testid="player-composer"] button[data-action="submit_post"]')
+      .click();
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "reject" &&
+        window.__fmarchPlayerCommandStatus?.error === "PhaseLocked" &&
+        window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+          "SubmitPost",
+      null,
+      { timeout: 15000 },
+    );
+    await page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+      null,
+      { timeout: 15000 },
+    );
+    const stalePostReceipt = page.getByTestId("player-command-receipt-submit_post");
+    await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
+    const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+    const bridgePlan = await page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+    const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    const checkpointPhaseId = await checkpoint.getAttribute("data-phase-id");
+    const checkpointActionState = await checkpoint.getAttribute("data-action-state");
+    const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
+    const receiptRefreshKeys = await stalePostReceipt.getAttribute(
+      "data-command-refresh-keys",
+    );
+    const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+    const currentThreadText = await page.getByText(
+      "Current role-pm thread after stale private post reject",
+    ).innerText();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("stale private channel proof leaked an invite URL token");
+    }
+    const command = commandRequests.at(-1)?.SubmitPost ?? null;
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      clickedAction: "submit_post",
+      commandKind: command === null ? null : "SubmitPost",
+      command,
+      commandStatus,
+      bridgePlan,
+      receipts,
+      projectionCommandState: projection?.commandState ?? null,
+      projectionThread: projection?.thread ?? null,
+      stalePrivatePostBody,
+      currentThreadText,
+      checkpointPhaseId,
+      checkpointActionState,
+      checkpointReceiptState,
+      receiptStatusText,
+      receiptRefreshKeys,
+      rawInviteTokensVisible: false,
     };
   } finally {
     await page.close();
@@ -1854,6 +1962,92 @@ async function installPrivateChannelBrowserRoutes(
   });
 }
 
+async function installPrivateChannelStalePostBrowserRoutes(page, { commandRequests }) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitPost !== undefined) {
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "PhaseLocked",
+              retryable: false,
+              message: "phase locked",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "private-channel-stale-post-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPrivateChannelProofCommand",
+            retryable: false,
+            message: "stale private channel proof only accepts SubmitPost",
+          },
+        },
+      },
+      409,
+    );
+  });
+  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+    await fulfillJson(route, {
+      next_before_seq: null,
+      posts: [
+        {
+          source_seq: 802,
+          stream_seq: 802,
+          author_slot: "host",
+          author_user: "host_h",
+          body: "Current role-pm thread after stale private post reject",
+          occurred_at: 1782014400,
+        },
+      ],
+    });
+  });
+  await page.route("**/games/*/votecount?**", async (route) => {
+    await fulfillJson(route, []);
+  });
+  await page.route("**/games/*/day-vote-outcomes?**", async (route) => {
+    await fulfillJson(route, [
+      {
+        phase_id: "D02",
+        source_seq: 802,
+        event_index: 0,
+        status: "pending",
+        winner_slot: null,
+        tallies: {},
+        majority: 4,
+        reason: "stale-private-post-phase-transition",
+      },
+    ]);
+  });
+  await page.route("**/games/*/player-command-state?**", async (route) => {
+    await fulfillJson(
+      route,
+      seededDayVoteOpenCommandState({
+        locked: true,
+        boundary:
+          "Seeded browser private post PhaseLocked recovery refreshed role-pm into locked Day 2.",
+      }),
+    );
+  });
+}
+
 async function fulfillJson(route, payload, status = 200) {
   await route.fulfill({
     status,
@@ -1897,7 +2091,7 @@ function seededActionOpenCommandState({ boundary }) {
   };
 }
 
-function seededDayVoteOpenCommandState({ boundary }) {
+function seededDayVoteOpenCommandState({ boundary, locked = false }) {
   return {
     game: "seeded-day-vote-open",
     actorSlot: "slot-7",
@@ -1909,7 +2103,7 @@ function seededDayVoteOpenCommandState({ boundary }) {
       phaseId: "D02",
       phaseKind: "Day",
       phaseNumber: 2,
-      locked: false,
+      locked,
       deadline: 1781928000,
     },
     actions: [],
@@ -2663,6 +2857,8 @@ function assertPlayerStaleActionAfterTransitionProof({ staleProof, expectedGame 
 
 function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
+  const stalePostProof =
+    privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
   if (
     privateChannelRoleSurface?.status !== "passed" ||
@@ -2731,6 +2927,61 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
     throw new Error(
       `core-loop admin proof missing private channel SubmitPost ACK: ${JSON.stringify(
         submitPostProof,
+      )}`,
+    );
+  }
+  if (
+    stalePostProof?.status !== "passed" ||
+    stalePostProof.sourceRoleUrl !== privateChannelRoleSurface.sourceRoleUrl ||
+    stalePostProof.visitedRolePath !== privateChannelRoleSurface.visitedRolePath ||
+    stalePostProof.clickedAction !== "submit_post" ||
+    stalePostProof.commandKind !== "SubmitPost" ||
+    stalePostProof.command?.game !== expectedGame ||
+    stalePostProof.command.channel_id !== "role-pm" ||
+    stalePostProof.command.actor_slot !== "slot-7" ||
+    stalePostProof.command.body !== stalePostProof.stalePrivatePostBody ||
+    stalePostProof.commandStatus?.state !== "reject" ||
+    stalePostProof.commandStatus.error !== "PhaseLocked" ||
+    !String(stalePostProof.commandStatus.message ?? "").includes(
+      "Reject PhaseLocked: phase locked; stale projection, refresh and use current controls",
+    ) ||
+    stalePostProof.bridgePlan?.role !== "player" ||
+    stalePostProof.bridgePlan.commandKind !== "SubmitPost" ||
+    stalePostProof.bridgePlan.commandEndpoint !== "/commands" ||
+    stalePostProof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(stalePostProof.bridgePlan.projectionRefreshKeys, [
+      "thread",
+      "votecount",
+      "commandState",
+      "dayVoteOutcomes",
+    ]) ||
+    stalePostProof.receipts?.at?.(-1)?.state !== "reject" ||
+    stalePostProof.projectionCommandState?.phase?.phaseId !== "D02" ||
+    stalePostProof.projectionCommandState?.phase?.locked !== true ||
+    !String(stalePostProof.projectionCommandState?.boundary ?? "").includes(
+      "private post PhaseLocked recovery",
+    ) ||
+    stalePostProof.projectionThread?.posts?.at?.(-1)?.body !==
+      "Current role-pm thread after stale private post reject" ||
+    stalePostProof.projectionThread?.posts?.some?.(
+      (post) => post?.body === stalePostProof.stalePrivatePostBody,
+    ) === true ||
+    !String(stalePostProof.currentThreadText ?? "").includes(
+      "Current role-pm thread after stale private post reject",
+    ) ||
+    stalePostProof.checkpointPhaseId !== "D02" ||
+    stalePostProof.checkpointActionState !== "disabled:phase locked" ||
+    stalePostProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    !String(stalePostProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked") ||
+    stalePostProof.receiptRefreshKeys !==
+      "thread,votecount,commandState,dayVoteOutcomes" ||
+    stalePostProof.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      `core-loop admin proof missing private channel stale post recovery: ${JSON.stringify(
+        stalePostProof,
       )}`,
     );
   }
