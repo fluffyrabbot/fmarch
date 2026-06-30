@@ -1,5 +1,8 @@
 import path from "node:path";
-import { coreLoopHighlightedLaneEvidence } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
+import {
+  coreLoopHighlightedLaneEvidence,
+  coreLoopSpineStatus,
+} from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -17,6 +20,7 @@ const proofRunPath = path.resolve(
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
 const requiredChecks = [
+  "core-loop-spine",
   "core-loop",
   "day-vote-resolution",
   "day-vote-no-lynch",
@@ -59,7 +63,10 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       auditId: "local-core-loop",
       requiredChecks,
-      requiredCheckStatuses: coreLoopHighlightedLaneEvidence(proofRun),
+      requiredCheckStatuses: {
+        "core-loop-spine": coreLoopSpineStatus(proofRun),
+        ...coreLoopHighlightedLaneEvidence(proofRun),
+      },
     }),
   buildEvidence: ({ source: proofRun, adminRoleSurface }) => ({
     version: 1,
@@ -73,6 +80,7 @@ await runAdminAuditProof({
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
+      coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface,
@@ -101,6 +109,13 @@ export function assertCoreLoopAdminProof(evidence) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`core-loop admin proof missing visible check: ${checkId}`);
     }
+  }
+  if (
+    !evidence.adminRoleSurface?.visibleCheckStatuses?.["core-loop-spine"]?.includes(
+      evidence.generatedFrom?.coreLoopSpineStatus,
+    )
+  ) {
+    throw new Error("core-loop admin proof missing visible core-loop spine status");
   }
   for (const [checkId, expectedStatus] of Object.entries(
     evidence.generatedFrom?.highlightedLaneEvidence ?? {},

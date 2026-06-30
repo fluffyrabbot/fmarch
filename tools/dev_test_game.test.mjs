@@ -1836,6 +1836,24 @@ test("session card and markdown include role credential URLs and tokens", async 
         text: "",
       },
       rejectedVote: { error: "PhaseLocked", message: "Reject PhaseLocked: phase locked" },
+      staleVoteBrowserProof: {
+        roleUrl: `/g/${game}/player-goon-a`,
+        receipt: {
+          actionId: "submit_vote",
+          state: "reject",
+          commandTrace: { projectionRefreshKeys: ["votecount", "commandState"] },
+        },
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale vote state, refresh and use current controls",
+        commandStateBeforeClose: {
+          currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+        },
+        commandStateAfterReject: {
+          currentVote: { kind: "slot", slotId: "slot-2", label: "Slot 2" },
+        },
+        voteControlAfterReject: { exists: false, disabled: true },
+        votecountUnchanged: true,
+      },
       unlock: { commandStatus: { state: "ack" } },
     },
     dayVoteResolution: {
@@ -2006,6 +2024,161 @@ test("session card and markdown include role credential URLs and tokens", async 
       proof: "host resolved N01 and action player advanced to D02",
       invalidAction: { error: "InvalidTarget", message: "Reject InvalidTarget: invalid target" },
       legalAction: { state: "ack", message: "Ack: stream seqs 42" },
+      dayNightTransition: {
+        status: "passed",
+        hostRoleUrl: `/g/${game}/host`,
+        actionRoleUrl: `/g/${game}/player-goon-a`,
+        normalPlayerRoleUrl: `/g/${game}/player-villager-a`,
+        resolveDayState: "ack",
+        advanceNightState: "ack",
+        dayLockedActionSurface: {
+          commandState: {
+            actorSlot: "slot_4",
+            phase: { phaseId: "D01", locked: true },
+            actions: [],
+          },
+          buttons: [],
+        },
+        nightActionSurface: {
+          commandState: {
+            actorSlot: "slot_4",
+            phase: { phaseId: "N01", locked: false },
+            actions: [{ templateId: "factional_kill" }],
+          },
+          buttons: [
+            { action: "submit_action:factional_kill", disabled: false },
+            { action: "submit_invalid_action:factional_kill", disabled: false },
+          ],
+        },
+        normalPlayerNightSurface: {
+          phase: { phaseId: "N01", locked: false },
+          commandActions: [],
+          factionalKillVisible: false,
+          directRejectError: "InvalidTarget",
+        },
+      },
+      nightResolutionTransition: {
+        status: "passed",
+        hostRoleUrl: `/g/${game}/host`,
+        actionRoleUrl: `/g/${game}/player-goon-a`,
+        targetRoleUrl: `/g/${game}/player-target-a`,
+        normalPlayerRoleUrl: `/g/${game}/player-villager-a`,
+        legalActionState: "ack",
+        legalActionTemplateId: "factional_kill",
+        legalActionTarget: "slot-2",
+        resolveNightState: "ack",
+        resolvedTargetSlot: {
+          slot_id: "slot-2",
+          alive: false,
+          status: "dead",
+        },
+        targetReceiptSurface: {
+          targetNotice: {
+            audience_slot: "slot-2",
+            effect: "player_killed",
+            status: "factional_kill",
+          },
+          targetPrivateQueueItem: { effect: "player_killed" },
+          targetCommandState: {
+            actorSlot: "slot-2",
+            actorAlive: false,
+            actorStatus: "dead",
+            phase: { phaseId: "D02", locked: false },
+            actions: [],
+          },
+        },
+        advanceDayState: "ack",
+        d02ActionSurface: {
+          commandState: {
+            actorSlot: "slot_4",
+            phase: { phaseId: "D02", locked: false },
+            actions: [],
+          },
+          buttons: [{ action: "submit_vote:slot-2", disabled: false }],
+        },
+        d02NormalPlayerSurface: {
+          commandState: {
+            actorSlot: "slot-7",
+            phase: { phaseId: "D02", locked: false },
+            actions: [],
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+        },
+      },
+      d02VoteNightTransition: {
+        status: "passed",
+        game: `${game}-d02-vote`,
+        hostRoleUrl: `/g/${game}-d02-vote/host`,
+        actionRoleUrl: `/g/${game}-d02-vote/player-goon-a`,
+        playerRoleUrl: `/g/${game}-d02-vote/player-villager-a`,
+        targetRoleUrl: `/g/${game}-d02-vote/player-target-a`,
+        hostBeforeVote: { phase: { id: "D02", locked: false } },
+        actionBeforeVote: {
+          commandState: {
+            actorSlot: "slot_4",
+            currentVote: null,
+          },
+          buttons: [{ action: "submit_vote:slot-2", disabled: false }],
+        },
+        voteTarget: { slotId: "slot-2" },
+        finalVote: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot_4",
+                    target: { Slot: "slot-2" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        apiVoteRow: { phaseId: "D02", target: "slot-2", count: 3 },
+        resolveD02: { commandStatus: { state: "ack" } },
+        hostAfterResolve: { phase: { id: "D02", locked: true } },
+        dayVoteOutcome: {
+          phaseId: "D02",
+          status: "Lynch",
+          winnerSlot: "slot-2",
+          tallies: { "slot-2": 3 },
+        },
+        hostSlotAfterResolve: { alive: false, status: "dead" },
+        targetReceiptSurface: {
+          targetNotice: {
+            audience_slot: "slot-2",
+            effect: "player_killed",
+            status: "day_vote",
+          },
+          targetCommandState: {
+            actorAlive: false,
+            actorStatus: "dead",
+          },
+        },
+        advanceN02: { commandStatus: { state: "ack" } },
+        n02HostSurface: { phase: { id: "N02", locked: false } },
+        n02ActionSurface: {
+          commandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            phase: { phaseId: "N02", locked: false },
+            actions: [{ templateId: "factional_kill" }],
+          },
+          buttons: [{ action: "submit_action:factional_kill", disabled: false }],
+        },
+        n02NormalPlayerSurface: {
+          commandState: {
+            actorSlot: "slot-7",
+            phase: { phaseId: "N02", locked: false },
+          },
+          factionalKillVisible: false,
+        },
+      },
+      staleActionConflict: {
+        reject: { error: "PhaseLocked" },
+      },
       deadlineAdvance: {
         status: "passed",
         phaseBeforeAdvance: {
@@ -5907,10 +6080,20 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         actionId: "resolve_phase",
         setup: {
+          roleUrl: `/g/${game}/host`,
           stalePhase: { id: "D02", locked: false },
           phaseActions: ["resolve_phase", "lock_thread"],
           deadlineActions: ["extend_deadline"],
           closedStatus: { state: "closed" },
+        },
+        staleClickBrowserProof: {
+          roleUrl: `/g/${game}/host`,
+          clickedActionId: "resolve_phase",
+          receiptStatusText:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          dispatchRefreshKeys: ["host"],
+          phaseAfterReject: { id: "D02", locked: true },
+          phaseActionsAfterReject: ["unlock_thread", "advance_phase"],
         },
         liveResolve: {
           commandStatus: {
@@ -5988,10 +6171,20 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         actionId: "advance_phase",
         setup: {
+          roleUrl: `/g/${game}/host`,
           stalePhase: { id: "D02", locked: true },
           phaseActions: ["unlock_thread", "advance_phase"],
           deadlineActions: ["extend_deadline"],
           closedStatus: { state: "closed" },
+        },
+        staleClickBrowserProof: {
+          roleUrl: `/g/${game}/host`,
+          clickedActionId: "advance_phase",
+          receiptStatusText:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          dispatchRefreshKeys: ["host"],
+          phaseAfterReject: { id: "D02", locked: false },
+          phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
         },
         liveUnlock: {
           commandStatus: {
@@ -6564,10 +6757,22 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         actionId: "extend_deadline",
         setup: {
+          roleUrl: `/g/${game}/host`,
           stalePhase: { id: "D01", locked: false },
           deadlineActions: ["extend_deadline"],
           phaseActions: ["resolve_phase", "lock_thread"],
           closedStatus: { state: "closed" },
+        },
+        staleClickBrowserProof: {
+          roleUrl: `/g/${game}/host`,
+          clickedActionId: "extend_deadline",
+          receiptStatusText:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          dispatchRefreshKeys: ["host"],
+          phaseAfterReject: { id: "D02", locked: false },
+          deadlineActionsAfterReject: ["extend_deadline"],
+          phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
+          apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
         },
         reject: {
           state: "reject",
@@ -6625,10 +6830,22 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         actionId: "extend_deadline",
         setup: {
+          roleUrl: `/g/${game}/host?cohost=cohost_c`,
           stalePhase: { id: "D01", locked: false },
           deadlineActions: ["extend_deadline"],
           phaseActions: [],
           closedStatus: { state: "closed" },
+        },
+        staleClickBrowserProof: {
+          roleUrl: `/g/${game}/host?cohost=cohost_c`,
+          clickedActionId: "extend_deadline",
+          receiptStatusText:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          dispatchRefreshKeys: ["host"],
+          phaseAfterReject: { id: "D02", locked: false },
+          deadlineActionsAfterReject: ["extend_deadline"],
+          phaseActionsAfterReject: [],
+          apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
         },
         reject: {
           state: "reject",
@@ -8907,6 +9124,7 @@ function coreLoopAdminProofFixture() {
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
+      coreLoopSpineStatus: "passed: D01 -> N01 -> D02, vote ack, next N02",
     },
     adminRoleSurface: {
       status: "passed",
@@ -8916,6 +9134,7 @@ function coreLoopAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        "core-loop-spine",
         "core-loop",
         "day-vote-resolution",
         "day-vote-no-lynch",
@@ -8943,6 +9162,9 @@ function coreLoopAdminProofFixture() {
         "replacement-stale-private-receipts",
         "replacement-incoming-player",
       ],
+      visibleCheckStatuses: {
+        "core-loop-spine": "passed: D01 -> N01 -> D02, vote ack, next N02",
+      },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

@@ -1805,6 +1805,7 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
 
 export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   const requiredChecks = [
+    "core-loop-spine",
     "core-loop",
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -1856,6 +1857,14 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`core-loop admin proof missing visible check: ${checkId}`);
     }
+  }
+  if (
+    typeof proof.generatedFrom?.coreLoopSpineStatus !== "string" ||
+    !proof.adminRoleSurface?.visibleCheckStatuses?.["core-loop-spine"]?.includes(
+      proof.generatedFrom.coreLoopSpineStatus,
+    )
+  ) {
+    throw new Error("core-loop admin proof missing visible core-loop spine status");
   }
   return {
     status: "passed",

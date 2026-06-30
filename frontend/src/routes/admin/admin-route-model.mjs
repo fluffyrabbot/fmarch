@@ -7,6 +7,7 @@ import {
 } from "../../lib/app/cold-load.mjs";
 import {
   coreLoopLaneStatus,
+  coreLoopSpineStatus,
   hardeningLaneStatus,
 } from "../../lib/app/local-proof-lane-status.mjs";
 import {
@@ -2627,13 +2628,19 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
       audit: "local-core-loop",
     }),
     checks: Object.freeze(
-      requiredLaneIds.map((id) => {
-        const lane = laneById.get(id);
-        return Object.freeze({
-          id,
-          status: coreLoopLaneStatus(lane),
-        });
-      }),
+      [
+        Object.freeze({
+          id: "core-loop-spine",
+          status: coreLoopSpineStatus(proofRun),
+        }),
+        ...requiredLaneIds.map((id) => {
+          const lane = laneById.get(id);
+          return Object.freeze({
+            id,
+            status: coreLoopLaneStatus(lane),
+          });
+        }),
+      ],
     ),
     artifactSummary: Object.freeze({
       game: String(proofRun.session?.game ?? ""),

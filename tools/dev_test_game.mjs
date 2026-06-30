@@ -652,9 +652,13 @@ export function markdownSessionCard(card) {
         "",
         `Legal action: ${card.verification.actionLoop.legalAction.message}`,
         "",
-        `D02 vote/night: ${card.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.status} -> ${card.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState.phase.phaseId}`,
-        "",
       );
+      if (card.verification.actionLoop.d02VoteNightTransition !== undefined) {
+        lines.push(
+          `D02 vote/night: ${card.verification.actionLoop.d02VoteNightTransition.dayVoteOutcome.status} -> ${card.verification.actionLoop.d02VoteNightTransition.n02ActionSurface.commandState.phase.phaseId}`,
+          "",
+        );
+      }
     }
     if (card.verification.invalidActionRecovery !== undefined) {
       lines.push(

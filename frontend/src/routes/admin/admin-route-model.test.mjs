@@ -1808,6 +1808,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
     [
+      "core-loop-spine",
       "core-loop",
       "day-vote-resolution",
       "day-vote-no-lynch",
@@ -1855,14 +1856,15 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
-  assert.equal(data.audit.checks.length, 25);
+  assert.equal(data.audit.checks.length, 26);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
-      ["core-loop", "passed: PhaseLocked vote reject, lock ack/unlock ack"],
+      ["core-loop-spine", "passed: D01 -> N01 -> D02, vote ack, next N02"],
+      ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["day-vote-resolution", "passed"],
       ["day-vote-no-lynch", "passed"],
-      ["action-loop", "passed: legal action ack, advanced D02"],
+      ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
       ["host-deadline-advance", "passed: D01 deadline -> N01"],
       ["stale-deadline-advance", "passed"],
       ["invalid-action-recovery", "passed: Reject InvalidTarget, legal action visible true"],
@@ -1978,7 +1980,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["concurrent-host-lifecycle-race-reload", "passed"],
       ["concurrent-host-mixed-advance-race", "passed"],
       ["concurrent-host-mixed-advance-race-reload", "passed"],
-      ["stale-host-resolve", "passed: Reject PhaseLocked, locked true"],
+      ["stale-host-resolve", "passed: Reject PhaseLocked, role URL false, locked true"],
       [
         "stale-host-resolve-reload",
         "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
@@ -1987,19 +1989,19 @@ test("admin local hardening detail data carries lane rows", async () => {
         "stale-host-resolve-reconnect-recovery",
         "passed: reconnecting -> recovered, locked true",
       ],
-      ["stale-host-advance", "passed"],
+      ["stale-host-advance", "passed: Reject unknown, role URL false, locked unknown"],
       ["stale-host-advance-reload", "passed"],
       [
         "stale-host-advance-reconnect-recovery",
         "passed: reconnecting -> recovered, locked false",
       ],
-      ["stale-host-deadline", "passed"],
+      ["stale-host-deadline", "passed: Reject unknown, role URL false, deadline unknown"],
       ["stale-host-deadline-reload", "passed"],
       [
         "stale-host-deadline-reconnect-recovery",
         "passed: reconnecting -> recovered, deadline null",
       ],
-      ["stale-cohost-deadline", "passed"],
+      ["stale-cohost-deadline", "passed: Reject unknown, role URL false, phase controls unknown"],
       ["stale-cohost-deadline-reload", "passed"],
       [
         "stale-cohost-deadline-reconnect-recovery",
@@ -2989,6 +2991,55 @@ function proofRunFixture() {
       game: "game-a",
       verificationStatus: "passed",
       roles: ["host", "player", "actionPlayer", "deniedPlayer", "cohost", "replacementPlayer"],
+    },
+    coreLoopSpine: {
+      status: "passed",
+      sourceLaneIds: [
+        "core-loop",
+        "action-loop",
+        "invalid-action-recovery",
+        "resolution-receipts",
+      ],
+      cycles: [
+        {
+          id: "d01-n01-d02",
+          game: "game-a",
+          roleUrls: {
+            host: "http://127.0.0.1:5173/g/game-a/host",
+            actionPlayer: "http://127.0.0.1:5173/g/game-a",
+            normalPlayer: "http://127.0.0.1:5173/g/game-a",
+            target: "http://127.0.0.1:5173/g/game-a",
+          },
+          checkpoints: [
+            { id: "d01-resolved-locked", phase: "D01", locked: true },
+            { id: "n01-action-open", phase: "N01", actionTemplate: "factional_kill" },
+            { id: "n01-resolved-target-killed", receiptStatus: "factional_kill" },
+            { id: "d02-day-controls-return", phase: "D02", actionVoteControls: 2 },
+          ],
+        },
+        {
+          id: "d02-n02",
+          game: "game-b",
+          roleUrls: {
+            host: "http://127.0.0.1:5173/g/game-b/host",
+            actionPlayer: "http://127.0.0.1:5173/g/game-b",
+            normalPlayer: "http://127.0.0.1:5173/g/game-b",
+            target: "http://127.0.0.1:5173/g/game-b",
+          },
+          checkpoints: [
+            { id: "d02-vote-open", phase: "D02", voteTarget: "slot-2" },
+            { id: "d02-deciding-vote-submitted", voteState: "ack", projectedCount: 3 },
+            { id: "d02-resolved-target-killed", outcomeStatus: "Lynch" },
+            { id: "n02-action-open", phase: "N02", actionTemplate: "factional_kill" },
+          ],
+        },
+      ],
+      recoveryHooks: {
+        staleLockedVoteReject: "PhaseLocked",
+        invalidActionReject: "InvalidTarget",
+        normalPlayerDirectActionReject: "InvalidTarget",
+        staleActionConflictReject: "PhaseLocked",
+      },
     },
     lanes,
   };
