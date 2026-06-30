@@ -11,6 +11,81 @@ export function privateReceiptScenario(id) {
 export function privateReceiptScenarios() {
   return [
     {
+      id: "n01-target-receipt",
+      slotField: "targetSlot",
+      expectedSlot: "slot-2",
+      principalUserId: "player_ilya",
+      phaseId: "N01",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "actor is not alive",
+      privateReceipt: true,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N01",
+      boundaryText: "target role received factional_kill private receipt",
+      resyncFromSeq: 901,
+      assertProjectionPhase: false,
+      assertResyncSnapshotPhase: false,
+      assertResyncNotificationStatus: false,
+    },
+    {
+      id: "n01-normal-privacy",
+      slotField: "normalSlot",
+      expectedSlot: "slot-4",
+      principalUserId: "player_rowan",
+      phaseId: "N01",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "phase locked",
+      privateReceipt: false,
+      privateReceiptStatus: "factional_kill",
+      privateReceiptPhaseId: "N01",
+      boundaryText: "normal role received no target-only private receipt",
+      resyncFromSeq: 901,
+      assertResyncSnapshotPhase: false,
+    },
+    {
+      id: "d02-target-receipt",
+      slotField: "targetSlot",
+      expectedSlot: "slot-2",
+      principalUserId: "player_ilya",
+      phaseId: "D02",
+      phaseState: "locked",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "actor is not alive",
+      privateReceipt: true,
+      privateReceiptStatus: "day_vote",
+      privateReceiptPhaseId: "D02",
+      boundaryText: "target role received day_vote private receipt",
+      resyncFromSeq: 902,
+      assertResyncSnapshotPhase: false,
+      assertResyncNotificationEffect: false,
+    },
+    {
+      id: "d02-normal-privacy",
+      slotField: "normalSlot",
+      expectedSlot: "slot-4",
+      principalUserId: "player_rowan",
+      phaseId: "D02",
+      phaseState: "locked",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "phase locked",
+      privateReceipt: false,
+      privateReceiptStatus: "day_vote",
+      privateReceiptPhaseId: "D02",
+      boundaryText: "normal role received no target-only private receipt",
+      resyncFromSeq: 902,
+      assertResyncSnapshotPhase: false,
+    },
+    {
       id: "n02-target-receipt",
       slotField: "targetSlot",
       expectedSlot: "slot-3",
@@ -147,7 +222,21 @@ export function privateReceiptAssertionArgs({
     expectedResyncFromSeq: scenario.resyncFromSeq,
     expectedPrivateReceiptStatus: scenario.privateReceiptStatus,
     expectedPrivateReceiptPhaseId: scenario.privateReceiptPhaseId,
+    expectedResyncNotificationEffect:
+      scenario.assertResyncNotificationEffect === false ? null : "player_killed",
+    expectedResyncNotificationStatus:
+      scenario.assertResyncNotificationStatus === false
+        ? null
+        : scenario.privateReceiptStatus,
     expectedPrivateQueueBoundaryStatus: privateQueueBoundaryStatus,
+    expectedProjectionPhaseId:
+      scenario.assertProjectionPhase === false ? null : scenario.phaseId,
+    expectedProjectionLocked:
+      scenario.assertProjectionPhase === false
+        ? null
+        : scenario.phaseState === "locked",
+    expectedResyncSnapshotPhaseId:
+      scenario.assertResyncSnapshotPhase === false ? null : scenario.phaseId,
     expectedCommandStateEndpoint:
       `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
     expectedNotificationsEndpoint:

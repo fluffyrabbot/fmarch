@@ -9929,247 +9929,166 @@ function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
 
 function assertTargetResolutionReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
-  if (
-    targetSurface?.status !== "passed" ||
-    targetSurface.clickedThroughFromRoleUrl !== true ||
-    targetSurface.releaseReady !== false ||
-    targetSurface.productionReady !== false ||
-    targetSurface.rawInviteTokensVisible !== false ||
-    targetSurface.targetSlot !== "slot-2" ||
-    targetSurface.principalUserId !== "player_ilya" ||
-    typeof targetSurface.sourceRoleUrl !== "string" ||
-    !targetSurface.sourceRoleUrl.includes("/g/") ||
-    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof targetSurface.visitedRolePath !== "string" ||
-    !targetSurface.visitedRolePath.includes("/g/") ||
-    !targetSurface.visitedRolePath.includes("private=notification-1") ||
-    targetSurface.surfaceTestId !== "player-surface" ||
-    targetSurface.checkpoint?.phaseId !== "N01" ||
-    targetSurface.checkpoint.phaseState !== "locked" ||
-    targetSurface.checkpoint.actorSlot !== "slot-2" ||
-    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
-    targetSurface.checkpoint.receiptState !== "idle" ||
-    !String(targetSurface.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes("player action unavailable: actor is not alive") ||
-    targetSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    targetSurface.privateQueueBoundary.count !== 1 ||
-    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    targetSurface.privateNotice?.id !== "notification-1" ||
-    targetSurface.privateNotice.kind !== "notification" ||
-    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
-    !String(targetSurface.privateNotice.text ?? "").includes("factional_kill") ||
-    targetSurface.privateNotice.detailText !== "Phase N01" ||
-    targetSurface.projectionCommandState?.actorSlot !== "slot-2" ||
-    targetSurface.projectionCommandState?.actorAlive !== false ||
-    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
-    targetSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
-      "target role received factional_kill private receipt",
-    ) ||
-    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
-    targetSurface.projectionNotifications?.[0]?.status !== "factional_kill" ||
-    targetSurface.resyncFromSeq !== 901 ||
-    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    targetSurface.resyncSnapshotNotifications?.[0]?.effect !== "player_killed" ||
-    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
-    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`
-  ) {
-    throw new Error(
-      `core-loop admin proof missing target resolution receipt surface: ${JSON.stringify(
-        targetSurface,
-      )}`,
-    );
-  }
+  assertPrivateReceiptRoleSurface({
+    proof: targetSurface,
+    ...privateReceiptAssertionArgs({
+      scenario: privateReceiptScenario("n01-target-receipt"),
+      expectedGame,
+      sourceRoleUrl: targetSurface?.sourceRoleUrl,
+    }),
+    errorMessage: "core-loop admin proof missing target resolution receipt surface",
+  });
 }
 
 function assertNormalResolutionPrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
-  if (
-    normalSurface?.status !== "passed" ||
-    normalSurface.clickedThroughFromRoleUrl !== true ||
-    normalSurface.releaseReady !== false ||
-    normalSurface.productionReady !== false ||
-    normalSurface.rawInviteTokensVisible !== false ||
-    normalSurface.normalSlot !== "slot-4" ||
-    normalSurface.principalUserId !== "player_rowan" ||
-    normalSurface.targetReceiptVisible !== false ||
-    typeof normalSurface.sourceRoleUrl !== "string" ||
-    !normalSurface.sourceRoleUrl.includes("/g/") ||
-    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof normalSurface.visitedRolePath !== "string" ||
-    !normalSurface.visitedRolePath.includes("/g/") ||
-    !normalSurface.visitedRolePath.includes("private=notification-1") ||
-    normalSurface.surfaceTestId !== "player-surface" ||
-    normalSurface.checkpoint?.phaseId !== "N01" ||
-    normalSurface.checkpoint.phaseState !== "locked" ||
-    normalSurface.checkpoint.actorSlot !== "slot-4" ||
-    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
-    normalSurface.checkpoint.receiptState !== "idle" ||
-    !String(normalSurface.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes("player action unavailable: phase locked") ||
-    normalSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    normalSurface.privateQueueBoundary.count !== 0 ||
-    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    !String(normalSurface.privateEmptyText ?? "").includes(
-      "No private results visible",
-    ) ||
-    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.projectionCommandState?.actorAlive !== true ||
-    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
-    normalSurface.projectionCommandState?.phase?.phaseId !== "N01" ||
-    normalSurface.projectionCommandState?.phase?.locked !== true ||
-    normalSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
-      "normal role received no target-only private receipt",
-    ) ||
-    normalSurface.projectionNotifications?.length !== 0 ||
-    normalSurface.resyncFromSeq !== 901 ||
-    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
-    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
-    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
-  ) {
-    throw new Error(
-      `core-loop admin proof missing normal resolution privacy surface: ${JSON.stringify(
-        normalSurface,
-      )}`,
-    );
-  }
+  assertPrivateReceiptRoleSurface({
+    proof: normalSurface,
+    ...privateReceiptAssertionArgs({
+      scenario: privateReceiptScenario("n01-normal-privacy"),
+      expectedGame,
+      sourceRoleUrl: normalSurface?.sourceRoleUrl,
+    }),
+    errorMessage: "core-loop admin proof missing normal resolution privacy surface",
+  });
 }
 
 function assertTargetDayVoteReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
-  if (
-    targetSurface?.status !== "passed" ||
-    targetSurface.clickedThroughFromRoleUrl !== true ||
-    targetSurface.releaseReady !== false ||
-    targetSurface.productionReady !== false ||
-    targetSurface.rawInviteTokensVisible !== false ||
-    targetSurface.targetSlot !== "slot-2" ||
-    targetSurface.principalUserId !== "player_ilya" ||
-    typeof targetSurface.sourceRoleUrl !== "string" ||
-    !targetSurface.sourceRoleUrl.includes("/g/") ||
-    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof targetSurface.visitedRolePath !== "string" ||
-    !targetSurface.visitedRolePath.includes("/g/") ||
-    !targetSurface.visitedRolePath.includes("private=notification-1") ||
-    targetSurface.surfaceTestId !== "player-surface" ||
-    targetSurface.checkpoint?.phaseId !== "D02" ||
-    targetSurface.checkpoint.phaseState !== "locked" ||
-    targetSurface.checkpoint.actorSlot !== "slot-2" ||
-    targetSurface.checkpoint.actionState !== "disabled:actor is not alive" ||
-    targetSurface.checkpoint.receiptState !== "idle" ||
-    !String(targetSurface.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes("player action unavailable: actor is not alive") ||
-    targetSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    targetSurface.privateQueueBoundary.count !== 1 ||
-    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    targetSurface.privateNotice?.id !== "notification-1" ||
-    targetSurface.privateNotice.kind !== "notification" ||
-    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
-    !String(targetSurface.privateNotice.text ?? "").includes("day_vote") ||
-    targetSurface.privateNotice.detailText !== "Phase D02" ||
-    targetSurface.projectionCommandState?.actorSlot !== "slot-2" ||
-    targetSurface.projectionCommandState?.actorAlive !== false ||
-    targetSurface.projectionCommandState?.actorStatus !== "dead" ||
-    targetSurface.projectionCommandState?.phase?.phaseId !== "D02" ||
-    targetSurface.projectionCommandState?.phase?.locked !== true ||
-    targetSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
-      "target role received day_vote private receipt",
-    ) ||
-    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
-    targetSurface.projectionNotifications?.[0]?.status !== "day_vote" ||
-    targetSurface.resyncFromSeq !== 902 ||
-    targetSurface.resyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    targetSurface.resyncSnapshotNotifications?.[0]?.status !== "day_vote" ||
-    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
-    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2`
-  ) {
-    throw new Error(
-      `core-loop admin proof missing target day-vote receipt surface: ${JSON.stringify(
-        targetSurface,
-      )}`,
-    );
-  }
+  assertPrivateReceiptRoleSurface({
+    proof: targetSurface,
+    ...privateReceiptAssertionArgs({
+      scenario: privateReceiptScenario("d02-target-receipt"),
+      expectedGame,
+      sourceRoleUrl: targetSurface?.sourceRoleUrl,
+    }),
+    errorMessage: "core-loop admin proof missing target day-vote receipt surface",
+  });
 }
 
 function assertNormalDayVotePrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
+  assertPrivateReceiptRoleSurface({
+    proof: normalSurface,
+    ...privateReceiptAssertionArgs({
+      scenario: privateReceiptScenario("d02-normal-privacy"),
+      expectedGame,
+      sourceRoleUrl: normalSurface?.sourceRoleUrl,
+    }),
+    errorMessage: "core-loop admin proof missing normal day-vote privacy surface",
+  });
+}
+
+function assertPrivateReceiptRoleSurface({
+  proof,
+  sourceRoleUrl,
+  expectedSlot,
+  slotField,
+  expectedPrincipalUserId,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedActorAlive,
+  expectedActorStatus,
+  expectedActionState,
+  expectedStatusText,
+  expectedPrivateCount,
+  expectedPrivateReceipt,
+  expectedBoundaryText,
+  expectedResyncFromSeq,
+  expectedPrivateReceiptStatus,
+  expectedPrivateReceiptPhaseId,
+  expectedResyncNotificationEffect,
+  expectedResyncNotificationStatus,
+  expectedPrivateQueueBoundaryStatus,
+  expectedProjectionPhaseId,
+  expectedProjectionLocked,
+  expectedResyncSnapshotPhaseId,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+  errorMessage,
+}) {
   if (
-    normalSurface?.status !== "passed" ||
-    normalSurface.clickedThroughFromRoleUrl !== true ||
-    normalSurface.releaseReady !== false ||
-    normalSurface.productionReady !== false ||
-    normalSurface.rawInviteTokensVisible !== false ||
-    normalSurface.normalSlot !== "slot-4" ||
-    normalSurface.principalUserId !== "player_rowan" ||
-    normalSurface.targetReceiptVisible !== false ||
-    typeof normalSurface.sourceRoleUrl !== "string" ||
-    !normalSurface.sourceRoleUrl.includes("/g/") ||
-    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof normalSurface.visitedRolePath !== "string" ||
-    !normalSurface.visitedRolePath.includes("/g/") ||
-    !normalSurface.visitedRolePath.includes("private=notification-1") ||
-    normalSurface.surfaceTestId !== "player-surface" ||
-    normalSurface.checkpoint?.phaseId !== "D02" ||
-    normalSurface.checkpoint.phaseState !== "locked" ||
-    normalSurface.checkpoint.actorSlot !== "slot-4" ||
-    normalSurface.checkpoint.actionState !== "disabled:phase locked" ||
-    normalSurface.checkpoint.receiptState !== "idle" ||
-    !String(normalSurface.checkpoint.statusText ?? "")
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof[slotField] !== expectedSlot ||
+    proof.principalUserId !== expectedPrincipalUserId ||
+    (!expectedPrivateReceipt && proof.targetReceiptVisible !== false) ||
+    typeof proof.sourceRoleUrl !== "string" ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    !proof.sourceRoleUrl.includes("/g/") ||
+    !proof.sourceRoleUrl.includes("private=notification-1") ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    !proof.visitedRolePath.includes("private=notification-1") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.checkpoint?.phaseId !== expectedPhaseId ||
+    proof.checkpoint.phaseState !== expectedPhaseState ||
+    proof.checkpoint.actorSlot !== expectedSlot ||
+    proof.checkpoint.actionState !== expectedActionState ||
+    proof.checkpoint.receiptState !== "idle" ||
+    !String(proof.checkpoint.statusText ?? "")
       .toLowerCase()
-      .includes("player action unavailable: phase locked") ||
-    normalSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    normalSurface.privateQueueBoundary.count !== 0 ||
-    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
+      .includes(`player action unavailable: ${expectedStatusText}`) ||
+    proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
+    proof.privateQueueBoundary.count !== expectedPrivateCount ||
+    !String(proof.privateQueueBoundary.text ?? "").includes(
       "principal-scoped endpoints",
     ) ||
-    !String(normalSurface.privateEmptyText ?? "").includes(
-      "No private results visible",
+    proof.projectionCommandState?.actorSlot !== expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
+    (expectedProjectionPhaseId !== null &&
+      proof.projectionCommandState?.phase?.phaseId !== expectedProjectionPhaseId) ||
+    (expectedProjectionLocked !== null &&
+      proof.projectionCommandState?.phase?.locked !== expectedProjectionLocked) ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      expectedBoundaryText,
     ) ||
-    normalSurface.projectionCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.projectionCommandState?.actorAlive !== true ||
-    normalSurface.projectionCommandState?.actorStatus !== "alive" ||
-    normalSurface.projectionCommandState?.phase?.phaseId !== "D02" ||
-    normalSurface.projectionCommandState?.phase?.locked !== true ||
-    normalSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
-      "normal role received no target-only private receipt",
-    ) ||
-    normalSurface.projectionNotifications?.length !== 0 ||
-    normalSurface.resyncFromSeq !== 902 ||
-    normalSurface.resyncSnapshotCommandState?.actorSlot !== "slot-4" ||
-    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
-    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan` ||
-    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`
+    proof.resyncFromSeq !== expectedResyncFromSeq ||
+    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
+    (expectedResyncSnapshotPhaseId !== null &&
+      proof.resyncSnapshotCommandState?.phase?.phaseId !==
+        expectedResyncSnapshotPhaseId) ||
+    proof.coldLoadEndpoints?.notificationsEndpoint !==
+      expectedNotificationsEndpoint ||
+    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
   ) {
-    throw new Error(
-      `core-loop admin proof missing normal day-vote privacy surface: ${JSON.stringify(
-        normalSurface,
-      )}`,
-    );
+    throw new Error(`${errorMessage}: ${JSON.stringify(proof)}`);
+  }
+  if (
+    expectedPrivateReceipt &&
+    (proof.privateNotice?.id !== "notification-1" ||
+      proof.privateNotice.kind !== "notification" ||
+      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
+      !String(proof.privateNotice.text ?? "").includes(
+        expectedPrivateReceiptStatus,
+      ) ||
+      proof.privateNotice.detailText !==
+        `Phase ${expectedPrivateReceiptPhaseId}` ||
+      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
+      proof.projectionNotifications?.[0]?.status !==
+        expectedPrivateReceiptStatus ||
+      (expectedResyncNotificationEffect !== null &&
+        proof.resyncSnapshotNotifications?.[0]?.effect !==
+          expectedResyncNotificationEffect) ||
+      (expectedResyncNotificationStatus !== null &&
+        proof.resyncSnapshotNotifications?.[0]?.status !==
+          expectedResyncNotificationStatus))
+  ) {
+    throw new Error(`${errorMessage}: ${JSON.stringify(proof)}`);
+  }
+  if (
+    !expectedPrivateReceipt &&
+    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
+      proof.projectionNotifications?.length !== 0 ||
+      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.privateNotice !== undefined)
+  ) {
+    throw new Error(`${errorMessage}: ${JSON.stringify(proof)}`);
   }
 }
 
