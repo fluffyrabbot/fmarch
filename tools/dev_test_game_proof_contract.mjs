@@ -7193,6 +7193,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
     ),
     lane("stale-host-deadline", "Stale host deadline control rejects without drift", {
       rejectError: hardening.staleHostDeadline?.reject?.error ?? null,
+      roleUrl: hardening.staleHostDeadline?.setup?.roleUrl ?? null,
+      staleClickActionId:
+        hardening.staleHostDeadline?.staleClickBrowserProof?.clickedActionId ??
+        null,
+      staleClickReceipt:
+        hardening.staleHostDeadline?.staleClickBrowserProof?.receiptStatusText ??
+        null,
+      staleClickRefreshKeys:
+        hardening.staleHostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys ??
+        null,
       stalePhase: hardening.staleHostDeadline?.setup?.stalePhase?.id ?? null,
       phaseId: hardening.staleHostDeadline?.phaseAfterReject?.id ?? null,
       activitySource: hardening.staleHostDeadline?.activityRow?.source ?? null,
@@ -7201,6 +7211,35 @@ export function buildDevTestGameProofRun(session, options = {}) {
       apiDeadline: hardening.staleHostDeadline?.apiPhaseAfterReject?.deadline ?? null,
       passed:
         hardening.staleHostDeadline?.status === "passed" &&
+        typeof hardening.staleHostDeadline?.setup?.roleUrl === "string" &&
+        hardening.staleHostDeadline?.setup?.roleUrl.includes(
+          `/g/${session?.game ?? ""}/host`,
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.roleUrl ===
+          hardening.staleHostDeadline?.setup?.roleUrl &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.clickedActionId ===
+          "extend_deadline" &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.receiptStatusText?.includes(
+          "Reject PhaseLocked",
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
+          "host",
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseAfterReject?.id ===
+          "D02" &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseAfterReject
+          ?.locked === false &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.deadlineActionsAfterReject?.includes(
+          "extend_deadline",
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
+          "resolve_phase",
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
+          "lock_thread",
+        ) === true &&
+        hardening.staleHostDeadline?.staleClickBrowserProof?.apiPhaseAfterReject
+          ?.deadline === null &&
         hardening.staleHostDeadline?.setup?.stalePhase?.id === "D01" &&
         hardening.staleHostDeadline?.setup?.stalePhase?.locked === false &&
         hardening.staleHostDeadline?.setup?.deadlineActions?.includes(

@@ -26,6 +26,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-host-resolve-reconnect-recovery",
   "stale-host-advance",
   "stale-host-advance-reconnect-recovery",
+  "stale-host-deadline",
   "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline-reconnect-recovery",
 ]);
@@ -107,6 +108,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-advance-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
+    case "stale-host-deadline":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
     case "stale-host-deadline-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
     case "stale-cohost-deadline-reconnect-recovery":
