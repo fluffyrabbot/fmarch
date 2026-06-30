@@ -100,6 +100,10 @@ export async function proveAdminAuditDetail({
   requiredSessions = [],
   requiredReconnectLanes = [],
   requiredStaleConflictLanes = [],
+  requiredSpineCycles = [],
+  requiredSpineRoleUrls = [],
+  requiredSpineCheckpoints = [],
+  requiredSpineRecoveryHooks = [],
   requiredUnproven = [],
   requiredRealHostedEvidenceInputs = [],
   requiredRelatedLinks = [],
@@ -185,6 +189,26 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-stale-conflict-lane",
       ids: requiredStaleConflictLanes,
+    });
+    const visibleSpineCycles = await waitForRows({
+      page,
+      prefix: "admin-audit-spine-cycle",
+      ids: requiredSpineCycles,
+    });
+    const visibleSpineRoleUrls = await waitForRows({
+      page,
+      prefix: "admin-audit-spine-role-url",
+      ids: requiredSpineRoleUrls,
+    });
+    const visibleSpineCheckpoints = await waitForRows({
+      page,
+      prefix: "admin-audit-spine-checkpoint",
+      ids: requiredSpineCheckpoints,
+    });
+    const visibleSpineRecoveryHooks = await waitForRows({
+      page,
+      prefix: "admin-audit-spine-recovery",
+      ids: requiredSpineRecoveryHooks,
     });
     const visibleUnproven = await waitForRows({
       page,
@@ -379,6 +403,14 @@ export async function proveAdminAuditDetail({
       ...(visibleStaleConflictLanes.length === 0
         ? {}
         : { visibleStaleConflictLanes }),
+      ...(visibleSpineCycles.length === 0 ? {} : { visibleSpineCycles }),
+      ...(visibleSpineRoleUrls.length === 0 ? {} : { visibleSpineRoleUrls }),
+      ...(visibleSpineCheckpoints.length === 0
+        ? {}
+        : { visibleSpineCheckpoints }),
+      ...(visibleSpineRecoveryHooks.length === 0
+        ? {}
+        : { visibleSpineRecoveryHooks }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
       ...(visibleRealHostedEvidenceInputs.length === 0
         ? {}

@@ -2642,6 +2642,8 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
         }),
       ],
     ),
+    spineCycles: normalizeCoreLoopSpineCycles(proofRun),
+    spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
     artifactSummary: Object.freeze({
       game: String(proofRun.session?.game ?? ""),
       roleCount: Array.isArray(proofRun.session?.roles)
@@ -2652,6 +2654,109 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
       productionReady: proofRun.productionReady === true,
     }),
   });
+}
+
+function normalizeCoreLoopSpineCycles(proofRun) {
+  const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
+    ? proofRun.coreLoopSpine.cycles
+    : [];
+  return Object.freeze(
+    cycles.map((cycle) => {
+      const roleUrls =
+        cycle?.roleUrls !== null && typeof cycle?.roleUrls === "object"
+          ? cycle.roleUrls
+          : {};
+      const checkpoints = Array.isArray(cycle?.checkpoints)
+        ? cycle.checkpoints
+        : [];
+      return Object.freeze({
+        id: String(cycle?.id ?? ""),
+        label: formatSpineLabel(cycle?.id),
+        game: String(cycle?.game ?? ""),
+        status: `${checkpoints.length} checkpoints`,
+        roleUrls: Object.freeze(
+          Object.entries(roleUrls).map(([id, href]) =>
+            Object.freeze({
+              id: String(id),
+              label: formatSpineLabel(id),
+              href: String(href ?? ""),
+            }),
+          ),
+        ),
+        checkpoints: Object.freeze(
+          checkpoints.map((checkpoint) =>
+            Object.freeze({
+              id: String(checkpoint?.id ?? ""),
+              label: formatSpineLabel(checkpoint?.id),
+              status: formatCoreLoopSpineCheckpointStatus(checkpoint),
+            }),
+          ),
+        ),
+      });
+    }),
+  );
+}
+
+function normalizeCoreLoopSpineRecoveryHooks(proofRun) {
+  const recoveryHooks =
+    proofRun?.coreLoopSpine?.recoveryHooks !== null &&
+    typeof proofRun?.coreLoopSpine?.recoveryHooks === "object"
+      ? proofRun.coreLoopSpine.recoveryHooks
+      : {};
+  return Object.freeze(
+    Object.entries(recoveryHooks).map(([id, status]) =>
+      Object.freeze({
+        id: String(id),
+        label: formatSpineLabel(id),
+        status: String(status ?? "unknown"),
+      }),
+    ),
+  );
+}
+
+function formatCoreLoopSpineCheckpointStatus(checkpoint) {
+  const parts = [];
+  pushField(parts, "phase", checkpoint?.phase);
+  if (typeof checkpoint?.locked === "boolean") {
+    parts.push(checkpoint.locked ? "locked" : "open");
+  }
+  pushField(parts, "resolve", checkpoint?.resolveState);
+  pushField(parts, "advance", checkpoint?.advanceState);
+  pushField(parts, "action", checkpoint?.actionTemplate);
+  if (typeof checkpoint?.actionButtonVisible === "boolean") {
+    parts.push(`action button ${checkpoint.actionButtonVisible ? "visible" : "hidden"}`);
+  }
+  pushField(parts, "normal reject", checkpoint?.normalPlayerDirectReject);
+  pushField(parts, "target", checkpoint?.targetSlot);
+  if (typeof checkpoint?.targetAlive === "boolean") {
+    parts.push(`target ${checkpoint.targetAlive ? "alive" : "dead"}`);
+  }
+  pushField(parts, "target status", checkpoint?.targetStatus);
+  pushField(parts, "receipt", checkpoint?.receiptStatus);
+  pushField(parts, "vote target", checkpoint?.voteTarget);
+  pushField(parts, "vote", checkpoint?.voteState);
+  pushField(parts, "outcome", checkpoint?.outcomeStatus);
+  pushField(parts, "winner", checkpoint?.winnerSlot);
+  pushField(parts, "count", checkpoint?.projectedCount);
+  if (typeof checkpoint?.normalPlayerFactionalKillVisible === "boolean") {
+    parts.push(
+      `normal factional kill ${checkpoint.normalPlayerFactionalKillVisible ? "visible" : "hidden"}`,
+    );
+  }
+  return parts.length === 0 ? "recorded" : parts.join(", ");
+}
+
+function pushField(parts, label, value) {
+  if (value !== undefined && value !== null && value !== "") {
+    parts.push(`${label} ${String(value)}`);
+  }
+}
+
+function formatSpineLabel(value) {
+  return String(value ?? "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
 }
 
 export function appendLocalHardeningAudit(audit, proofRun, { game }) {

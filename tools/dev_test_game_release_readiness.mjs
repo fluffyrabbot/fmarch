@@ -1866,6 +1866,26 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   ) {
     throw new Error("core-loop admin proof missing visible core-loop spine status");
   }
+  assertVisibleAdminRows({
+    label: "core-loop admin proof missing visible spine cycle",
+    visibleRows: proof.adminRoleSurface?.visibleSpineCycles,
+    requiredRows: proof.generatedFrom?.coreLoopSpineRows?.cycles,
+  });
+  assertVisibleAdminRows({
+    label: "core-loop admin proof missing visible spine role URL",
+    visibleRows: proof.adminRoleSurface?.visibleSpineRoleUrls,
+    requiredRows: proof.generatedFrom?.coreLoopSpineRows?.roleUrls,
+  });
+  assertVisibleAdminRows({
+    label: "core-loop admin proof missing visible spine checkpoint",
+    visibleRows: proof.adminRoleSurface?.visibleSpineCheckpoints,
+    requiredRows: proof.generatedFrom?.coreLoopSpineRows?.checkpoints,
+  });
+  assertVisibleAdminRows({
+    label: "core-loop admin proof missing visible spine recovery hook",
+    visibleRows: proof.adminRoleSurface?.visibleSpineRecoveryHooks,
+    requiredRows: proof.generatedFrom?.coreLoopSpineRows?.recoveryHooks,
+  });
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/core-loop-admin-proof.json",
@@ -1873,8 +1893,22 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleSpineCycles: proof.adminRoleSurface.visibleSpineCycles,
+    visibleSpineCheckpoints: proof.adminRoleSurface.visibleSpineCheckpoints,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function assertVisibleAdminRows({ label, visibleRows, requiredRows }) {
+  if (!Array.isArray(requiredRows) || requiredRows.length === 0) {
+    throw new Error(`${label}: generated row list missing`);
+  }
+  const visible = Array.isArray(visibleRows) ? visibleRows : [];
+  for (const rowId of requiredRows) {
+    if (!visible.includes(rowId)) {
+      throw new Error(`${label}: ${rowId}`);
+    }
+  }
 }
 
 export function validateDevTestGameHardeningAdminProof(proof, options = {}) {

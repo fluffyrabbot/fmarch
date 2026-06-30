@@ -1856,6 +1856,57 @@ test("admin local core loop detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
   assert.equal(data.audit.id, "local-core-loop");
+  assert.deepEqual(
+    data.audit.spineCycles.map((cycle) => [
+      cycle.id,
+      cycle.game,
+      cycle.roleUrls.map((roleUrl) => [roleUrl.id, roleUrl.href]),
+      cycle.checkpoints.map((checkpoint) => [checkpoint.id, checkpoint.status]),
+    ]),
+    [
+      [
+        "d01-n01-d02",
+        "game-a",
+        [
+          ["host", "http://127.0.0.1:5173/g/game-a/host"],
+          ["actionPlayer", "http://127.0.0.1:5173/g/game-a"],
+          ["normalPlayer", "http://127.0.0.1:5173/g/game-a"],
+          ["target", "http://127.0.0.1:5173/g/game-a"],
+        ],
+        [
+          ["d01-resolved-locked", "phase D01, locked"],
+          ["n01-action-open", "phase N01, action factional_kill"],
+          ["n01-resolved-target-killed", "receipt factional_kill"],
+          ["d02-day-controls-return", "phase D02"],
+        ],
+      ],
+      [
+        "d02-n02",
+        "game-b",
+        [
+          ["host", "http://127.0.0.1:5173/g/game-b/host"],
+          ["actionPlayer", "http://127.0.0.1:5173/g/game-b"],
+          ["normalPlayer", "http://127.0.0.1:5173/g/game-b"],
+          ["target", "http://127.0.0.1:5173/g/game-b"],
+        ],
+        [
+          ["d02-vote-open", "phase D02, vote target slot-2"],
+          ["d02-deciding-vote-submitted", "vote ack, count 3"],
+          ["d02-resolved-target-killed", "outcome Lynch"],
+          ["n02-action-open", "phase N02, action factional_kill"],
+        ],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.spineRecoveryHooks.map((hook) => [hook.id, hook.status]),
+    [
+      ["staleLockedVoteReject", "PhaseLocked"],
+      ["invalidActionReject", "InvalidTarget"],
+      ["normalPlayerDirectActionReject", "InvalidTarget"],
+      ["staleActionConflictReject", "PhaseLocked"],
+    ],
+  );
   assert.equal(data.audit.checks.length, 26);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),

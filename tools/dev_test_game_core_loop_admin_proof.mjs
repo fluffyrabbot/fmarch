@@ -48,6 +48,26 @@ const requiredChecks = [
   "replacement-incoming-player",
 ];
 
+const requiredSpineRows = (proofRun) => {
+  const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
+    ? proofRun.coreLoopSpine.cycles
+    : [];
+  return {
+    cycles: cycles.map((cycle) => String(cycle.id)),
+    roleUrls: cycles.flatMap((cycle) =>
+      Object.keys(cycle.roleUrls ?? {}).map(
+        (roleId) => `${String(cycle.id)}-${String(roleId)}`,
+      ),
+    ),
+    checkpoints: cycles.flatMap((cycle) =>
+      (cycle.checkpoints ?? []).map(
+        (checkpoint) => `${String(cycle.id)}-${String(checkpoint.id)}`,
+      ),
+    ),
+    recoveryHooks: Object.keys(proofRun?.coreLoopSpine?.recoveryHooks ?? {}),
+  };
+};
+
 await runAdminAuditProof({
   smokeName: "dev-test-game-core-loop-admin-proof",
   stage: "core-loop-admin-proof-listen",
@@ -56,8 +76,9 @@ await runAdminAuditProof({
     FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
   },
   loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
-  prove: async ({ browser, frontendBaseUrl, source: proofRun }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
+    const spineRows = requiredSpineRows(proofRun);
+    return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: proofRun.session.game,
@@ -67,7 +88,12 @@ await runAdminAuditProof({
         "core-loop-spine": coreLoopSpineStatus(proofRun),
         ...coreLoopHighlightedLaneEvidence(proofRun),
       },
-    }),
+      requiredSpineCycles: spineRows.cycles,
+      requiredSpineRoleUrls: spineRows.roleUrls,
+      requiredSpineCheckpoints: spineRows.checkpoints,
+      requiredSpineRecoveryHooks: spineRows.recoveryHooks,
+    });
+  },
   buildEvidence: ({ source: proofRun, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-core-loop-admin-proof",
@@ -81,6 +107,7 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
       coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
+      coreLoopSpineRows: requiredSpineRows(proofRun),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface,
@@ -117,6 +144,26 @@ export function assertCoreLoopAdminProof(evidence) {
   ) {
     throw new Error("core-loop admin proof missing visible core-loop spine status");
   }
+  assertVisibleRows(
+    "core-loop admin proof missing visible spine cycle",
+    evidence.adminRoleSurface?.visibleSpineCycles,
+    evidence.generatedFrom?.coreLoopSpineRows?.cycles,
+  );
+  assertVisibleRows(
+    "core-loop admin proof missing visible spine role URL",
+    evidence.adminRoleSurface?.visibleSpineRoleUrls,
+    evidence.generatedFrom?.coreLoopSpineRows?.roleUrls,
+  );
+  assertVisibleRows(
+    "core-loop admin proof missing visible spine checkpoint",
+    evidence.adminRoleSurface?.visibleSpineCheckpoints,
+    evidence.generatedFrom?.coreLoopSpineRows?.checkpoints,
+  );
+  assertVisibleRows(
+    "core-loop admin proof missing visible spine recovery hook",
+    evidence.adminRoleSurface?.visibleSpineRecoveryHooks,
+    evidence.generatedFrom?.coreLoopSpineRows?.recoveryHooks,
+  );
   for (const [checkId, expectedStatus] of Object.entries(
     evidence.generatedFrom?.highlightedLaneEvidence ?? {},
   )) {
@@ -132,4 +179,13 @@ export function assertCoreLoopAdminProof(evidence) {
     }
   }
   return evidence;
+}
+
+function assertVisibleRows(message, visibleRows, requiredRows) {
+  const visible = Array.isArray(visibleRows) ? visibleRows : [];
+  for (const rowId of requiredRows ?? []) {
+    if (!visible.includes(rowId)) {
+      throw new Error(`${message}: ${rowId}`);
+    }
+  }
 }

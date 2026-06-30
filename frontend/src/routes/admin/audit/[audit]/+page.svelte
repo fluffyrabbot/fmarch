@@ -41,6 +41,73 @@
       testId={statusTestId}
       className="admin-surface__audit-status"
     />
+    {#if data.audit.spineCycles?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-spine-cycles"
+      >
+        <h2>Core loop cycles</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.spineCycles as cycle}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-spine-cycle-${cycle.id}`}
+            >
+              <strong>{cycle.label}</strong>
+              <span>{cycle.game}</span>
+              <span>{cycle.status}</span>
+              {#if cycle.roleUrls?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each cycle.roleUrls as roleUrl}
+                    <li>
+                      <a
+                        data-testid={`admin-audit-spine-role-url-${cycle.id}-${roleUrl.id}`}
+                        data-min-touch-target-px="44"
+                        href={roleUrl.href}
+                      >
+                        <strong>{roleUrl.label}</strong>
+                        <span>{roleUrl.href}</span>
+                      </a>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+              {#if cycle.checkpoints?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each cycle.checkpoints as checkpoint}
+                    <li
+                      data-testid={`admin-audit-spine-checkpoint-${cycle.id}-${checkpoint.id}`}
+                    >
+                      <strong>{checkpoint.label}</strong>
+                      <span>{checkpoint.status}</span>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
+    {#if data.audit.spineRecoveryHooks?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-spine-recovery-hooks"
+      >
+        <h2>Recovery hooks</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.spineRecoveryHooks as hook}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-spine-recovery-${hook.id}`}
+            >
+              <strong>{hook.label}</strong>
+              <span>{hook.status}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.entries?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-entries">
         {#each data.audit.entries as entry}
@@ -288,6 +355,31 @@
 
   .admin-audit-detail__entry--stack {
     display: grid;
+  }
+
+  .admin-audit-detail__subentries {
+    display: grid;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .admin-audit-detail__subentries li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    min-block-size: 44px;
+  }
+
+  .admin-audit-detail__subentries a {
+    align-items: center;
+    color: inherit;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    min-block-size: 44px;
+    text-decoration: none;
   }
 
   .admin-audit-detail__entry span {
