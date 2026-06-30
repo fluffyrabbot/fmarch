@@ -16,6 +16,11 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  hostedMatrixHandoffSummary,
+  selectedNextActionProofGraphNodeStatus,
+  selectedNextActionProofGraphNodeSummary,
+} from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
 
 const nextActionPath = path.resolve(
   repoRoot,
@@ -98,11 +103,11 @@ await runAdminAuditProof({
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
         source.nextAction.nextAction.unproven?.proofGraphNodeId ?? null,
-      selectedProofGraphNode: selectedProofGraphNodeSummary({
+      selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
       }),
-      relatedHandoff: relatedHandoffSummary({
+      relatedHandoff: hostedMatrixHandoffSummary({
         nextAction: source.nextAction,
         hostedMatrix: source.hostedMatrix,
       }),
@@ -473,16 +478,19 @@ function requiredRelatedLinksForNextAction(nextAction) {
 }
 
 function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
-  const selectedNode = selectedProofGraphNodeSummary({ nextAction, proofGraph });
-  return selectedNode === null
+  const selectedNodeStatus = selectedNextActionProofGraphNodeStatus({
+    nextAction,
+    proofGraph,
+  });
+  return selectedNodeStatus === ""
     ? {}
     : {
-        "selected-proof-graph-node": `${selectedNode.status}: ${selectedNode.proofCommand}`,
+        "selected-proof-graph-node": selectedNodeStatus,
       };
 }
 
 function requiredRelatedDestinationsForNextAction({ nextAction, hostedMatrix }) {
-  const summary = relatedHandoffSummary({ nextAction, hostedMatrix });
+  const summary = hostedMatrixHandoffSummary({ nextAction, hostedMatrix });
   return summary === null
     ? []
     : [
@@ -495,56 +503,6 @@ function requiredRelatedDestinationsForNextAction({ nextAction, hostedMatrix }) 
           requiredRelatedLinks: summary.requiredRelatedLinkIds,
         },
       ];
-}
-
-function selectedProofGraphNodeSummary({ nextAction, proofGraph }) {
-  const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
-  const node =
-    typeof proofGraphNodeId === "string" && Array.isArray(proofGraph?.nodes)
-      ? proofGraph.nodes.find((candidate) => candidate?.id === proofGraphNodeId)
-      : undefined;
-  if (node === undefined) {
-    return null;
-  }
-  return {
-    id: String(node.id),
-    status: String(node.status ?? "unknown"),
-    proofCommand: String(node.proofCommand ?? node.recoveryCommand ?? ""),
-  };
-}
-
-function relatedHandoffSummary({ nextAction, hostedMatrix }) {
-  const linkId = nextAction.nextAction.unproven?.proofGraphNodeId;
-  const roleUrl = nextAction.nextAction.unproven?.roleUrl;
-  if (
-    linkId !== "admin-proof:hosted-concurrent-race-matrix" ||
-    typeof roleUrl !== "string" ||
-    !roleUrl.includes("/admin/audit/local-hosted-concurrent-race-matrix")
-  ) {
-    return null;
-  }
-  const requiredCheckIds = [
-    ...(hostedMatrix.evidenceProgress ?? []).map((item) => item.id),
-    ...(hostedMatrix.cells ?? []).map((cell) => cell.id),
-  ];
-  const requiredUnprovenIds = [
-    hostedMatrix.requestedEvidence?.id,
-    ...(hostedMatrix.remainingGaps ?? []).map(
-      (_gap, index) => `remaining-gap-${index + 1}`,
-    ),
-  ].filter((id) => typeof id === "string" && id.trim() !== "");
-  return {
-    linkId,
-    auditId: "local-hosted-concurrent-race-matrix",
-    requiredCheckIds,
-    requiredCheckStatuses: {
-      "real-hosted-deployment": String(
-        hostedMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
-      ),
-    },
-    requiredUnprovenIds,
-    requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
-  };
 }
 
 function requiredChecksForEvidence(evidence) {

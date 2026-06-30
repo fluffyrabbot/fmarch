@@ -9,6 +9,10 @@ import {
   coreLoopLaneStatus,
   hardeningLaneStatus,
 } from "../../lib/app/local-proof-lane-status.mjs";
+import {
+  selectedNextActionProofGraphNodeStatus,
+  selectedNextActionProofGraphNodeSummary,
+} from "../../lib/app/local-proof-handoff-status.mjs";
 
 export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "admin-surface",
@@ -734,15 +738,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     unproven.proofGraphNodeId.trim() !== ""
       ? unproven.proofGraphNodeId
       : "";
-  const selectedProofGraphNode = selectedProofGraphNodeForNextAction(
+  const selectedProofGraphNode = selectedNextActionProofGraphNodeSummary({
+    nextAction,
     proofGraph,
-    unprovenProofGraphNodeId,
-  );
-  const selectedProofGraphNodeCommand = String(
-    selectedProofGraphNode?.proofCommand ??
-      selectedProofGraphNode?.recoveryCommand ??
-      "",
-  );
+  });
+  const selectedProofGraphNodeStatus = selectedNextActionProofGraphNodeStatus({
+    nextAction,
+    proofGraph,
+  });
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -807,9 +810,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       : [
           Object.freeze({
             id: "selected-proof-graph-node",
-            status: `${String(
-              selectedProofGraphNode.status ?? "unknown",
-            )}: ${selectedProofGraphNodeCommand}`,
+            status: selectedProofGraphNodeStatus,
           }),
         ]),
     ...(stability === null
@@ -980,7 +981,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedProofGraphNodeStatus: String(
         selectedProofGraphNode?.status ?? "",
       ),
-      selectedProofGraphNodeProofCommand: selectedProofGraphNodeCommand,
+      selectedProofGraphNodeProofCommand: String(
+        selectedProofGraphNode?.proofCommand ?? "",
+      ),
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -1074,23 +1077,6 @@ function normalizeNextActionSelectionTrace(selectionTrace) {
         : null,
     candidates: Object.freeze(candidates),
   });
-}
-
-function selectedProofGraphNodeForNextAction(proofGraph, proofGraphNodeId) {
-  if (
-    proofGraphNodeId === "" ||
-    proofGraph === null ||
-    typeof proofGraph !== "object" ||
-    proofGraph.version !== 1 ||
-    proofGraph.proof !== "dev-test-game-proof-graph" ||
-    proofGraph.status !== "passed" ||
-    proofGraph.scope !== "local-dev-test-game-proof-graph" ||
-    !Array.isArray(proofGraph.nodes)
-  ) {
-    return null;
-  }
-  const node = proofGraph.nodes.find((candidate) => candidate?.id === proofGraphNodeId);
-  return node === undefined ? null : node;
 }
 
 function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
