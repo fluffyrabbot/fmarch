@@ -9583,6 +9583,61 @@ function hostPhaseTransitionSurfaceFixture() {
         "investigationResults",
         "commandState",
       ],
+      staleActionRecoveryProof: {
+        status: "passed",
+        clickedAction: "submit_action:factional_kill",
+        commandKind: "SubmitAction",
+        command: {
+          game: "00000000-0000-0000-0000-000000000002",
+          action_id: "factional_kill",
+          actor_slot: "slot-7",
+          template_id: "factional_kill",
+          targets: ["slot-2"],
+          grant_id: "grant-factional-kill",
+        },
+        commandStatus: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitAction",
+          commandEndpoint: "/commands",
+          finalState: "reject",
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        receipts: [
+          {
+            actionId: "submit_action:factional_kill",
+            state: "reject",
+            message:
+              "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+            current: true,
+          },
+        ],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N02",
+          },
+          boundary:
+            "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
+        },
+        checkpointReceiptState: "reject:PhaseLocked",
+        checkpointPhaseIdAfterReject: "N02",
+        checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+        checkpointTargetSlotsAfterReject: "slot-2",
+        recoveryText:
+          "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+        receiptCount: 1,
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      },
       resyncSnapshotCommandState: {
         phase: {
           phaseId: "N02",
@@ -9592,12 +9647,14 @@ function hostPhaseTransitionSurfaceFixture() {
         phase: {
           phaseId: "N02",
         },
-        boundary: "Seeded browser player resync observed host AdvancePhase into Night 2.",
+        boundary:
+          "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
       },
       checkpointPhaseId: "N02",
       checkpointPhaseState: "open",
       checkpointActionState: "enabled:submit_action:factional_kill",
       checkpointTargetSlots: "slot-2",
+      checkpointReceiptState: "reject:PhaseLocked",
       releaseReady: false,
       productionReady: false,
     },

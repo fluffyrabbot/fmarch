@@ -759,8 +759,9 @@ async function provePlayerPhaseTransitionObservation({
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
+  const commandRequests = [];
   try {
-    await installPlayerPhaseTransitionObservationRoutes(page);
+    await installPlayerPhaseTransitionObservationRoutes(page, { commandRequests });
     await page.context().addCookies([
       {
         name: "fmarch_fixture_session",
@@ -776,6 +777,10 @@ async function provePlayerPhaseTransitionObservation({
     await page.getByTestId("player-surface").waitFor({
       state: "visible",
       timeout: 15000,
+    });
+    const staleActionRecoveryProof = await provePlayerStaleActionAfterTransition({
+      page,
+      commandRequests,
     });
     const resyncSnapshot = await page.evaluate(async () => {
       if (typeof window.__fmarchTriggerPlayerResync !== "function") {
@@ -799,6 +804,7 @@ async function provePlayerPhaseTransitionObservation({
     const checkpointPhaseState = await checkpoint.getAttribute("data-phase-state");
     const checkpointActionState = await checkpoint.getAttribute("data-action-state");
     const checkpointTargetSlots = await checkpoint.getAttribute("data-target-slots");
+    const checkpointReceiptState = await checkpoint.getAttribute("data-receipt-state");
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
       throw new Error("player phase transition observation leaked an invite URL token");
@@ -810,12 +816,14 @@ async function provePlayerPhaseTransitionObservation({
       surfaceTestId: "player-surface",
       resyncFromSeq: 802,
       resyncKeys,
+      staleActionRecoveryProof,
       resyncSnapshotCommandState: resyncSnapshot?.commandState ?? null,
       projectionCommandState: projection?.commandState ?? null,
       checkpointPhaseId,
       checkpointPhaseState,
       checkpointActionState,
       checkpointTargetSlots,
+      checkpointReceiptState,
       releaseReady: false,
       productionReady: false,
     };
@@ -824,7 +832,116 @@ async function provePlayerPhaseTransitionObservation({
   }
 }
 
-async function installPlayerPhaseTransitionObservationRoutes(page) {
+async function provePlayerStaleActionAfterTransition({ page, commandRequests }) {
+  const actionButton = page.locator(
+    '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
+  );
+  await actionButton.waitFor({ state: "visible", timeout: 15000 });
+  await actionButton.click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked" &&
+      window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
+        "SubmitAction",
+    null,
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    () =>
+      document
+        .querySelector('[data-testid="player-action-submission-checkpoint"]')
+        ?.getAttribute("data-receipt-state") === "reject:PhaseLocked" &&
+      document
+        .querySelector('[data-testid="player-action-submission-checkpoint"]')
+        ?.getAttribute("data-action-state") ===
+        "enabled:submit_action:factional_kill",
+    null,
+    { timeout: 15000 },
+  );
+  const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const bridgePlan = await page.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const receipts = await page.evaluate(() => window.__fmarchPlayerCommandReceipts);
+  const projection = await page.evaluate(() => window.__fmarchPlayerProjection);
+  const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+  const receiptState = await checkpoint.getAttribute("data-receipt-state");
+  const phaseIdAfterReject = await checkpoint.getAttribute("data-phase-id");
+  const actionStateAfterReject = await checkpoint.getAttribute("data-action-state");
+  const targetSlotsAfterReject = await checkpoint.getAttribute("data-target-slots");
+  const recoveryText = await page
+    .getByTestId("player-action-submission-recovery")
+    .innerText();
+  const receiptCountText = await page
+    .getByTestId("player-command-receipt-count")
+    .innerText();
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+  const command = commandRequests.at(-1)?.SubmitAction ?? null;
+  return {
+    status: "passed",
+    clickedAction: "submit_action:factional_kill",
+    commandKind: command === null ? null : "SubmitAction",
+    command,
+    commandStatus,
+    bridgePlan,
+    receipts,
+    projectionCommandState: projection?.commandState ?? null,
+    checkpointReceiptState: receiptState,
+    checkpointPhaseIdAfterReject: phaseIdAfterReject,
+    checkpointActionStateAfterReject: actionStateAfterReject,
+    checkpointTargetSlotsAfterReject: targetSlotsAfterReject,
+    recoveryText,
+    receiptCount: Number.parseInt(receiptCountText, 10),
+    receiptStatusText,
+  };
+}
+
+async function installPlayerPhaseTransitionObservationRoutes(
+  page,
+  { commandRequests },
+) {
+  await page.route("**/commands", async (route) => {
+    const commandEnvelope = route.request().postDataJSON();
+    const command = commandEnvelope?.body?.body?.command;
+    commandRequests.push(command);
+    if (command?.SubmitAction?.action_id === "factional_kill") {
+      await fulfillJson(
+        route,
+        {
+          v: 1,
+          id: commandEnvelope.id,
+          body: {
+            kind: "Reject",
+            body: {
+              error: "PhaseLocked",
+              retryable: false,
+              message: "phase locked",
+            },
+          },
+        },
+        409,
+      );
+      return;
+    }
+
+    await fulfillJson(
+      route,
+      {
+        v: 1,
+        id: commandEnvelope?.id ?? "player-stale-action-transition-reject",
+        body: {
+          kind: "Reject",
+          body: {
+            error: "WrongPlayerStaleActionProofCommand",
+            retryable: false,
+            message: "player stale action proof only accepts factional kill",
+          },
+        },
+      },
+      409,
+    );
+  });
   await page.route("**/games/*/thread?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
@@ -851,7 +968,8 @@ async function installPlayerPhaseTransitionObservationRoutes(page) {
   });
   await page.route("**/games/*/player-command-state?**", async (route) => {
     await fulfillJson(route, seededActionOpenCommandState({
-      boundary: "Seeded browser player resync observed host AdvancePhase into Night 2.",
+      boundary:
+        "Seeded browser PhaseLocked recovery and player resync observed host AdvancePhase into Night 2.",
     }));
   });
 }
@@ -2005,7 +2123,8 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     playerObservationProof.checkpointPhaseState !== "open" ||
     playerObservationProof.checkpointActionState !==
       "enabled:submit_action:factional_kill" ||
-    playerObservationProof.checkpointTargetSlots !== "slot-2"
+    playerObservationProof.checkpointTargetSlots !== "slot-2" ||
+    playerObservationProof.checkpointReceiptState !== "reject:PhaseLocked"
   ) {
     throw new Error(
       `core-loop admin proof missing player phase transition observation: ${JSON.stringify(
@@ -2013,6 +2132,10 @@ function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
       )}`,
     );
   }
+  assertPlayerStaleActionAfterTransitionProof({
+    staleProof: playerObservationProof.staleActionRecoveryProof,
+    expectedGame,
+  });
 }
 
 function assertHostPhaseTransitionActionProof({
@@ -2054,6 +2177,50 @@ function assertHostPhaseTransitionActionProof({
     throw new Error(
       `core-loop admin proof missing host ${actionId} transition ACK: ${JSON.stringify(
         proof,
+      )}`,
+    );
+  }
+}
+
+function assertPlayerStaleActionAfterTransitionProof({ staleProof, expectedGame }) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.clickedAction !== "submit_action:factional_kill" ||
+    staleProof.commandKind !== "SubmitAction" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.command.action_id !== "factional_kill" ||
+    staleProof.command.actor_slot !== "slot-7" ||
+    staleProof.command.template_id !== "factional_kill" ||
+    staleProof.command.targets?.[0] !== "slot-2" ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "PhaseLocked" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale action state, refresh and use current action controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "player" ||
+    staleProof.bridgePlan.commandKind !== "SubmitAction" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    staleProof.receipts?.at?.(-1)?.state !== "reject" ||
+    staleProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(staleProof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    staleProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    staleProof.receiptCount !== 1 ||
+    !String(staleProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing stale player action recovery after transition: ${JSON.stringify(
+        staleProof,
       )}`,
     );
   }

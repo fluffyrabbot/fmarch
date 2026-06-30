@@ -2241,10 +2241,15 @@ function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
     playerObservationProof.checkpointPhaseState !== "open" ||
     playerObservationProof.checkpointActionState !==
       "enabled:submit_action:factional_kill" ||
-    playerObservationProof.checkpointTargetSlots !== "slot-2"
+    playerObservationProof.checkpointTargetSlots !== "slot-2" ||
+    playerObservationProof.checkpointReceiptState !== "reject:PhaseLocked"
   ) {
     throw new Error("core-loop admin proof missing player phase transition observation");
   }
+  assertCoreLoopPlayerStaleActionAfterTransitionProof({
+    staleProof: playerObservationProof.staleActionRecoveryProof,
+    expectedGame,
+  });
 }
 
 function assertCoreLoopHostPhaseTransitionActionProof({
@@ -2284,6 +2289,51 @@ function assertCoreLoopHostPhaseTransitionActionProof({
       .includes(`ack: stream seqs ${streamSeq}`)
   ) {
     throw new Error(`core-loop admin proof missing host ${actionId} transition ACK`);
+  }
+}
+
+function assertCoreLoopPlayerStaleActionAfterTransitionProof({
+  staleProof,
+  expectedGame,
+}) {
+  if (
+    staleProof?.status !== "passed" ||
+    staleProof.clickedAction !== "submit_action:factional_kill" ||
+    staleProof.commandKind !== "SubmitAction" ||
+    staleProof.command?.game !== expectedGame ||
+    staleProof.command.action_id !== "factional_kill" ||
+    staleProof.command.actor_slot !== "slot-7" ||
+    staleProof.command.template_id !== "factional_kill" ||
+    staleProof.command.targets?.[0] !== "slot-2" ||
+    staleProof.commandStatus?.state !== "reject" ||
+    staleProof.commandStatus.error !== "PhaseLocked" ||
+    !String(staleProof.commandStatus.message ?? "").includes(
+      "stale action state, refresh and use current action controls",
+    ) ||
+    staleProof.bridgePlan?.role !== "player" ||
+    staleProof.bridgePlan.commandKind !== "SubmitAction" ||
+    staleProof.bridgePlan.commandEndpoint !== "/commands" ||
+    staleProof.bridgePlan.finalState !== "reject" ||
+    !staleProof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    staleProof.receipts?.at?.(-1)?.state !== "reject" ||
+    staleProof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(staleProof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    staleProof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    staleProof.checkpointPhaseIdAfterReject !== "N02" ||
+    staleProof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    staleProof.checkpointTargetSlotsAfterReject !== "slot-2" ||
+    !String(staleProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    staleProof.receiptCount !== 1 ||
+    !String(staleProof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked")
+  ) {
+    throw new Error(
+      "core-loop admin proof missing stale player action recovery after transition",
+    );
   }
 }
 
