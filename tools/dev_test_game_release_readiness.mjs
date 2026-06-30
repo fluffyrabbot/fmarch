@@ -1891,6 +1891,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     }
   }
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
+  assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",
     visibleRows: proof.adminRoleSurface?.visibleSpineCheckpoints,
@@ -1914,6 +1915,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     hostRoleSurface: proof.hostRoleSurface,
+    playerRoleSurface: proof.playerRoleSurface,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -1953,6 +1955,49 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   ]) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
+    }
+  }
+}
+
+function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
+  const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
+  if (
+    playerRoleSurface?.status !== "passed" ||
+    playerRoleSurface.clickedThroughFromRoleUrl !== true ||
+    playerRoleSurface.releaseReady !== false ||
+    playerRoleSurface.productionReady !== false ||
+    typeof playerRoleSurface.sourceRoleUrl !== "string" ||
+    !playerRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof playerRoleSurface.visitedRolePath !== "string" ||
+    !playerRoleSurface.visitedRolePath.includes("/g/") ||
+    playerRoleSurface.surfaceTestId !== "player-surface" ||
+    playerRoleSurface.checkpointTestId !== "player-action-submission-checkpoint" ||
+    checkpoint?.proofCheckId !== "player-action-submission" ||
+    checkpoint.phaseId !== "N02" ||
+    checkpoint.phaseState !== "open" ||
+    checkpoint.actorSlot !== "slot-7" ||
+    checkpoint.actionState !== "enabled:submit_action:factional_kill" ||
+    checkpoint.selectedAction !== "factional_kill" ||
+    checkpoint.targetSlots !== "slot-2" ||
+    checkpoint.receiptState !== "idle" ||
+    !checkpoint.targetText?.includes("factional_kill -> slot-2") ||
+    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
+    !String(checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action submission is reachable from this role url")
+  ) {
+    throw new Error("core-loop admin proof missing player action role checkpoint");
+  }
+  for (const rowId of [
+    "phase",
+    "actor",
+    "actionState",
+    "target",
+    "receipt",
+    "recovery",
+  ]) {
+    if (!checkpoint.visibleRows?.includes(rowId)) {
+      throw new Error(`player action checkpoint missing visible row: ${rowId}`);
     }
   }
 }

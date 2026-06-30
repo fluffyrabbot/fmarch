@@ -13,6 +13,7 @@
   } from "$lib/app/live-transport.mjs";
   import { createProjectionStore } from "$lib/app/projection-store.mjs";
   import PlayerChannelRail from "$lib/components/player-channel-rail/PlayerChannelRail.svelte";
+  import PlayerActionSubmissionCheckpoint from "$lib/components/player-command/PlayerActionSubmissionCheckpoint.svelte";
   import PlayerCommandPanel from "$lib/components/player-command/PlayerCommandPanel.svelte";
   import PlayerCommandReceipt from "$lib/components/player-command/PlayerCommandReceipt.svelte";
   import PlayerPostureStrip from "$lib/components/player-posture/PlayerPostureStrip.svelte";
@@ -26,6 +27,9 @@
     buildPrivateQueueBoundary,
     buildPrivateQueueRouteItems,
   } from "./game-route-model.mjs";
+  import {
+    buildPlayerActionSubmissionCheckpoint,
+  } from "$lib/components/player-command/player-action-submission-checkpoint.mjs";
   import {
     exposePlayerCommandReceipts,
     exposePlayerCommandDispatchBridgePlan,
@@ -97,6 +101,12 @@
     phase,
     composer,
     surfaceHeader,
+  });
+  $: playerActionSubmissionCheckpoint = buildPlayerActionSubmissionCheckpoint({
+    commandState,
+    composer,
+    player,
+    commandStatus,
   });
   $: playerEmptyState = buildRouteStateViewModel({
     surface: "player",
@@ -351,6 +361,10 @@
         data-unstick-below-px={data.layout.commandRail.data.unstickBelowPx}
         data-stability-mode={data.layout.commandRail.data.stabilityMode}
       >
+        <PlayerActionSubmissionCheckpoint
+          checkpoint={playerActionSubmissionCheckpoint}
+        />
+
         <PlayerCommandPanel
           {composer}
           {phase}
@@ -392,6 +406,76 @@
     );
   }
 
+  :global(.player-action-submission-checkpoint) {
+    background: rgba(255, 255, 255, 0.74);
+    border: 1px solid #bdc7c1;
+    border-radius: 8px;
+    display: grid;
+    gap: 12px;
+    min-inline-size: 0;
+    padding: 14px;
+  }
+
+  :global(.player-action-submission-checkpoint header) {
+    align-items: start;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  :global(.player-action-submission-checkpoint header p) {
+    color: #53606f;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.25;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+  }
+
+  :global(.player-action-submission-checkpoint h2) {
+    color: #17212b;
+    font-size: 18px;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  :global(.player-action-submission-checkpoint dl) {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+  }
+
+  :global(.player-action-submission-checkpoint dl > div) {
+    background: #eef4f6;
+    border: 1px solid #9aa7b1;
+    border-radius: 8px;
+    min-inline-size: 0;
+    padding: 10px 12px;
+  }
+
+  :global(.player-action-submission-checkpoint dt) {
+    color: #53606f;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 0 4px;
+    text-transform: uppercase;
+  }
+
+  :global(.player-action-submission-checkpoint dd) {
+    color: #17212b;
+    font-size: 14px;
+    line-height: 1.3;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :global(.player-action-submission-checkpoint__status) {
+    margin: 0;
+  }
+
   @media (min-width: 1280px) {
     .player-surface__layout {
       grid-template-columns: 220px minmax(0, 1fr) 300px;
@@ -407,6 +491,11 @@
       max-block-size: none;
       overflow: visible;
       position: static;
+    }
+
+    :global(.player-action-submission-checkpoint header),
+    :global(.player-action-submission-checkpoint dl) {
+      grid-template-columns: 1fr;
     }
   }
 </style>

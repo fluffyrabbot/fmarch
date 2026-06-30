@@ -85,7 +85,7 @@ export async function buildGameRouteData({
   const playerCommandStateSlot = slotCapability === undefined ? null : playerSlotId;
   const coldLoadFallback = pendingReplacement
     ? pendingReplacementColdLoad(gameId, playerSlotId)
-    : PLAYER_FIXTURE_COLD_LOAD;
+    : playerFixtureColdLoad(gameId);
 
   const coldLoad = await loadPlayerColdData({
     game: gameId,
@@ -552,3 +552,46 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
     Object.freeze({ mode: "tracker", target_slot: "slot-4", result: "No visit" }),
   ]),
 });
+
+const PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD = Object.freeze({
+  ...PLAYER_FIXTURE_COLD_LOAD,
+  commandState: Object.freeze({
+    game: "seeded-action-open",
+    actorSlot: "slot-7",
+    actorAlive: true,
+    actorStatus: "alive",
+    roleKey: "mafia_goon",
+    gameCompleted: false,
+    phase: Object.freeze({
+      phaseId: "N02",
+      phaseKind: "Night",
+      phaseNumber: 2,
+      locked: false,
+    }),
+    actions: Object.freeze([
+      Object.freeze({
+        action: "submit_action:factional_kill",
+        commandKind: "submit_action",
+        actionId: "factional_kill",
+        templateId: "factional_kill",
+        ability: "Kill",
+        window: "Night",
+        label: "Submit factional kill",
+        detail: "factional_kill -> slot-2",
+        targets: Object.freeze(["slot-2"]),
+        targetOptions: Object.freeze(["slot-2", "slot-3"]),
+        grantId: "grant-factional-kill",
+      }),
+    ]),
+    voteTargets: Object.freeze([]),
+    currentVote: null,
+    boundary: "Seeded local action-open player command state.",
+  }),
+});
+
+function playerFixtureColdLoad(gameId) {
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(gameId)) {
+    return PLAYER_ACTION_OPEN_FIXTURE_COLD_LOAD;
+  }
+  return PLAYER_FIXTURE_COLD_LOAD;
+}

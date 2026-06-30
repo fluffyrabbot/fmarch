@@ -107,7 +107,12 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       roleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
     });
-    return { adminRoleSurface, hostRoleSurface };
+    const playerRoleSurface = await provePlayerActionSubmissionCheckpoint({
+      browser,
+      frontendBaseUrl,
+      roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+    });
+    return { adminRoleSurface, hostRoleSurface, playerRoleSurface };
   },
   buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
     version: 1,
@@ -127,6 +132,7 @@ await runAdminAuditProof({
     },
     adminRoleSurface: surfaces.adminRoleSurface,
     hostRoleSurface: surfaces.hostRoleSurface,
+    playerRoleSurface: surfaces.playerRoleSurface,
   }),
   assertEvidence: assertCoreLoopAdminProof,
 });
@@ -211,9 +217,95 @@ async function proveHostLifecycleControlCheckpoint({
   }
 }
 
+async function provePlayerActionSubmissionCheckpoint({
+  browser,
+  frontendBaseUrl,
+  roleUrl,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  try {
+    await page.context().addCookies([
+      {
+        name: "fmarch_fixture_session",
+        value: "fixture-player",
+        url: frontendBaseUrl,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(`${frontendBaseUrl}${visitedRolePath}`, { waitUntil: "networkidle" });
+    await page.getByTestId("player-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const checkpoint = page.getByTestId("player-action-submission-checkpoint");
+    await checkpoint.waitFor({ state: "visible", timeout: 15000 });
+    const proofCheckId = await checkpoint.getAttribute("data-proof-check-id");
+    const phaseId = await checkpoint.getAttribute("data-phase-id");
+    const phaseState = await checkpoint.getAttribute("data-phase-state");
+    const actorSlot = await checkpoint.getAttribute("data-actor-slot");
+    const actionState = await checkpoint.getAttribute("data-action-state");
+    const selectedAction = await checkpoint.getAttribute("data-selected-action");
+    const targetSlots = await checkpoint.getAttribute("data-target-slots");
+    const receiptState = await checkpoint.getAttribute("data-receipt-state");
+    const visibleRows = [];
+    for (const [id, testId] of Object.entries({
+      phase: "player-action-submission-phase",
+      actor: "player-action-submission-actor",
+      actionState: "player-action-submission-action-state",
+      target: "player-action-submission-target",
+      receipt: "player-action-submission-receipt",
+      recovery: "player-action-submission-recovery",
+    })) {
+      await page.getByTestId(testId).waitFor({ state: "visible", timeout: 15000 });
+      visibleRows.push(id);
+    }
+    const targetText = await page
+      .getByTestId("player-action-submission-target")
+      .innerText();
+    const recoveryText = await page
+      .getByTestId("player-action-submission-recovery")
+      .innerText();
+    const statusText = await page
+      .getByTestId("player-action-submission-status")
+      .innerText();
+    const bodyText = await page.locator("body").innerText();
+    if (/invite=(?!REDACTED)/.test(bodyText)) {
+      throw new Error("player action checkpoint leaked an invite URL token");
+    }
+    return {
+      status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
+      surfaceTestId: "player-surface",
+      checkpointTestId: "player-action-submission-checkpoint",
+      clickedThroughFromRoleUrl: true,
+      playerActionSubmissionCheckpoint: {
+        proofCheckId,
+        phaseId,
+        phaseState,
+        actorSlot,
+        actionState,
+        selectedAction,
+        targetSlots,
+        receiptState,
+        visibleRows,
+        targetText,
+        recoveryText,
+        statusText,
+      },
+      releaseReady: false,
+      productionReady: false,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 function rolePathFromUrl(roleUrl) {
   if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
-    throw new Error("core-loop host lifecycle proof missing source role URL");
+    throw new Error("core-loop role proof missing source role URL");
   }
   const parsed = new URL(roleUrl);
   return `${parsed.pathname}${parsed.search}`;
@@ -290,6 +382,7 @@ export function assertCoreLoopAdminProof(evidence) {
     }
   }
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
+  assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   return evidence;
 }
 
@@ -328,6 +421,65 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
   ]) {
     if (!checkpoint.visibleRows?.includes(rowId)) {
       throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
+    }
+  }
+}
+
+function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
+  const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
+  if (
+    playerRoleSurface?.status !== "passed" ||
+    playerRoleSurface.clickedThroughFromRoleUrl !== true ||
+    playerRoleSurface.releaseReady !== false ||
+    playerRoleSurface.productionReady !== false ||
+    typeof playerRoleSurface.sourceRoleUrl !== "string" ||
+    !playerRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof playerRoleSurface.visitedRolePath !== "string" ||
+    !playerRoleSurface.visitedRolePath.includes("/g/") ||
+    playerRoleSurface.surfaceTestId !== "player-surface" ||
+    playerRoleSurface.checkpointTestId !== "player-action-submission-checkpoint" ||
+    checkpoint?.proofCheckId !== "player-action-submission" ||
+    checkpoint.phaseId !== "N02" ||
+    checkpoint.phaseState !== "open" ||
+    checkpoint.actorSlot !== "slot-7" ||
+    checkpoint.actionState !== "enabled:submit_action:factional_kill" ||
+    checkpoint.selectedAction !== "factional_kill" ||
+    checkpoint.targetSlots !== "slot-2" ||
+    checkpoint.receiptState !== "idle" ||
+    !checkpoint.targetText?.includes("factional_kill -> slot-2") ||
+    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
+    !String(checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes("player action submission is reachable from this role url")
+  ) {
+    throw new Error(
+      `core-loop admin proof missing player action role checkpoint: ${JSON.stringify(
+        {
+          surface: {
+            status: playerRoleSurface?.status,
+            sourceRoleUrl: playerRoleSurface?.sourceRoleUrl,
+            visitedRolePath: playerRoleSurface?.visitedRolePath,
+            surfaceTestId: playerRoleSurface?.surfaceTestId,
+            checkpointTestId: playerRoleSurface?.checkpointTestId,
+            clickedThroughFromRoleUrl: playerRoleSurface?.clickedThroughFromRoleUrl,
+            releaseReady: playerRoleSurface?.releaseReady,
+            productionReady: playerRoleSurface?.productionReady,
+          },
+          checkpoint,
+        },
+      )}`,
+    );
+  }
+  for (const rowId of [
+    "phase",
+    "actor",
+    "actionState",
+    "target",
+    "receipt",
+    "recovery",
+  ]) {
+    if (!checkpoint.visibleRows?.includes(rowId)) {
+      throw new Error(`player action checkpoint missing visible row: ${rowId}`);
     }
   }
 }

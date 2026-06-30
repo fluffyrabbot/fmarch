@@ -190,6 +190,43 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.deepEqual(data.layout.regions, ["channels", "thread", "commands"]);
 });
 
+test("player route data exposes action-open state for seeded UUID role URLs", async () => {
+  const game = "806825b7-98ee-447b-b643-980991de9480";
+  const data = await buildGameRouteData({
+    game,
+    principalUserId: "player_mira",
+    capabilities: [
+      { kind: "SlotOccupant", game, slot: "slot-7" },
+      { kind: "ChannelMember", game, channel: "main" },
+    ],
+  });
+
+  assert.equal(data.phase.label, "Night 2");
+  assert.equal(data.commandState.phase.phaseId, "N02");
+  assert.equal(data.commandState.phase.locked, false);
+  assert.equal(data.commandState.actorSlot, "slot-7");
+  assert.deepEqual(data.composer.voteCommands, []);
+  assert.deepEqual(
+    data.composer.actionCommands.map((command) => ({
+      action: command.action,
+      templateId: command.templateId,
+      targets: command.targets,
+    })),
+    [
+      {
+        action: "submit_action:factional_kill",
+        templateId: "factional_kill",
+        targets: ["slot-2"],
+      },
+      {
+        action: "submit_invalid_action:factional_kill",
+        templateId: "factional_kill",
+        targets: ["slot-7"],
+      },
+    ],
+  );
+});
+
 test("player vote commands honor explicitly empty live command-state targets", () => {
   assert.deepEqual(
     buildPlayerVoteCommands(

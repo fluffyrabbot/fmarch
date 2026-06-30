@@ -9284,6 +9284,7 @@ function coreLoopAdminProofFixture() {
       productionReady: false,
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
+    playerRoleSurface: playerActionRoleSurfaceFixture(),
   };
 }
 
@@ -9313,6 +9314,42 @@ function hostLifecycleRoleSurfaceFixture() {
       recoveryText:
         "Stale recovery\nReject PhaseLocked: refresh host projection and use current lifecycle controls.",
       statusText: "Host lifecycle controls are reachable from this role URL",
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function playerActionRoleSurfaceFixture() {
+  return {
+    status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    visitedRolePath: "/g/00000000-0000-0000-0000-000000000002",
+    surfaceTestId: "player-surface",
+    checkpointTestId: "player-action-submission-checkpoint",
+    clickedThroughFromRoleUrl: true,
+    playerActionSubmissionCheckpoint: {
+      proofCheckId: "player-action-submission",
+      phaseId: "N02",
+      phaseState: "open",
+      actorSlot: "slot-7",
+      actionState: "enabled:submit_action:factional_kill",
+      selectedAction: "factional_kill",
+      targetSlots: "slot-2",
+      receiptState: "idle",
+      visibleRows: [
+        "phase",
+        "actor",
+        "actionState",
+        "target",
+        "receipt",
+        "recovery",
+      ],
+      targetText: "Selected target\nfactional_kill -> slot-2",
+      recoveryText:
+        "Stale recovery\nReject PhaseLocked: refresh command state and use current action controls.",
+      statusText: "Player action submission is reachable from this role URL",
     },
     releaseReady: false,
     productionReady: false,
