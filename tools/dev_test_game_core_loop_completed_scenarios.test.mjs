@@ -6,6 +6,7 @@ import {
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
+  completedDeadPlayerStaleVoteCase,
   completedHostStaleCommandCases,
   completedPlayerReloadAssertionCases,
   completedPlayerReloadCases,
@@ -146,7 +147,7 @@ test("completed-game scenario module derives shared assertion cases", () => {
         proof: { id: "dead-stale-vote" },
         sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
         expectedCommandKind: null,
-        commandKind: null,
+        commandKind: "SubmitVote",
       },
       {
         proof: { id: "stale-completed-vote" },
@@ -292,7 +293,7 @@ test("completed-game scenario module derives shared surface assertion sequence",
         proof: "dead-stale-vote",
         sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
         expectedCommandKind: null,
-        commandKind: null,
+        commandKind: "SubmitVote",
       },
       {
         assertProofName: "player-stale",
@@ -337,6 +338,7 @@ test("completed-game transition covers every stale and reload scenario", () => {
   for (const scenario of [
     ...completedHostStaleCommandCases(),
     ...completedPlayerReloadCases(),
+    completedDeadPlayerStaleVoteCase(),
     ...staleCompletedGamePlayerCommandCases(),
   ]) {
     assert.match(transition, new RegExp(escapeRegExp(scenario.transitionToken)));

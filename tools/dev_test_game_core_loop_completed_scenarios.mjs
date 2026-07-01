@@ -248,6 +248,17 @@ export function staleCompletedGamePlayerCommandCases() {
   ];
 }
 
+export function completedDeadPlayerStaleVoteCase() {
+  return {
+    proofField: "completedDeadPlayerStaleVoteRecoveryProof",
+    transitionToken: "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
+    commandKind: "SubmitVote",
+    expectedSlot: "slot-2",
+    principalUserId: "player_ilya",
+    expectedBoundaryText: "completed dead-player stale vote rejected",
+  };
+}
+
 export function completedGameEndgameTransitionTokens() {
   return [
     "host:N05:complete_game:ack:921",
@@ -257,7 +268,7 @@ export function completedGameEndgameTransitionTokens() {
     ),
     "actionPlayer:endgame:complete",
     ...completedPlayerReloadCases().map((scenario) => scenario.transitionToken),
-    "deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted",
+    completedDeadPlayerStaleVoteCase().transitionToken,
     ...staleCompletedGamePlayerCommandCases().map(
       (scenario) => scenario.transitionToken,
     ),
@@ -301,10 +312,12 @@ export function completedGameEndgameStaleRejectAssertionCases({
     })),
     {
       assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
-      proof:
-        completedGameEndgameSurface.completedDeadPlayerStaleVoteRecoveryProof,
+      proof: completedGameEndgameSurface[
+        completedDeadPlayerStaleVoteCase().proofField
+      ],
       expectedGame,
       sourceRoleUrl: sourceDeadPlayerRoleUrl,
+      scenario: completedDeadPlayerStaleVoteCase(),
     },
     ...staleCompletedGamePlayerCommandCases().map((scenario) => ({
       assertProof: assertStaleCompletedGamePlayerCommandRecoveryProof,
@@ -540,6 +553,76 @@ export function assertCompletedPlayerReloadProofCase({
         includeEvidenceInError,
       });
     }
+  }
+}
+
+export function assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  scenario = completedDeadPlayerStaleVoteCase(),
+  includeEvidenceInError = false,
+}) {
+  const snapshot = proof?.recoverySnapshot;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyActionVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.commandEndpoint !== "/commands" ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== scenario.expectedSlot ||
+    proof.command.target !== "NoLynch" ||
+    proof.commandResponse?.ok !== false ||
+    proof.commandResponse?.status !== 409 ||
+    proof.commandResponse?.body?.body?.kind !== "Reject" ||
+    proof.commandResponse?.body?.body?.body?.error !==
+      "GameAlreadyCompleted" ||
+    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.setupResyncFromSeq !== 921 ||
+    proof.setupResyncSnapshotCommandState?.actorSlot !==
+      scenario.expectedSlot ||
+    proof.setupResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.recoveryResyncFromSeq !== 921 ||
+    proof.recoveryResyncSnapshotCommandState?.actorSlot !==
+      scenario.expectedSlot ||
+    proof.recoveryResyncSnapshotCommandState?.gameCompleted !== true ||
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.actorSlot !== scenario.expectedSlot ||
+    snapshot.checkpoint.actionState !== "disabled:game complete" ||
+    snapshot.checkpoint.receiptState !== "idle" ||
+    snapshot.commandState?.actorSlot !== scenario.expectedSlot ||
+    snapshot.commandState?.actorAlive !== false ||
+    snapshot.commandState?.actorStatus !== "dead" ||
+    snapshot.commandState?.phase?.phaseId !== "N05" ||
+    snapshot.commandState?.gameCompleted !== true ||
+    snapshot.commandState?.actions?.length !== 0 ||
+    snapshot.commandState?.voteTargets?.length !== 0 ||
+    !String(snapshot.commandState?.boundary ?? "").includes(
+      scenario.expectedBoundaryText,
+    ) ||
+    snapshot.coldLoadEndpoints?.commandStateEndpoint !==
+      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}` ||
+    snapshot.coldLoadEndpoints?.notificationsEndpoint !==
+      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
+    snapshot.enabledMutatingButtons?.length !== 0
+  ) {
+    throwCompletedScenarioAssertionError({
+      message:
+        "core-loop admin proof missing completed dead-player stale vote recovery",
+      evidence: proof,
+      includeEvidenceInError,
+    });
   }
 }
 

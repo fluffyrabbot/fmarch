@@ -6,8 +6,10 @@ import {
 import {
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
+  assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
+  completedDeadPlayerStaleVoteCase,
   completedGameEndgameTransition,
   completedGameEndgameSurfaceAssertionCases,
   completedHostStaleCommandCases,
@@ -1787,6 +1789,7 @@ async function proveCompletedGameEndgameSurface({
       browser,
       frontendBaseUrl,
       roleUrl: deadPlayerRoleUrl,
+      scenario: completedDeadPlayerStaleVoteCase(),
     });
   const staleCompletedPlayerRecoveryProofs =
     await proveStaleCompletedGamePlayerCommandRecoveryCases({
@@ -3004,6 +3007,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
   browser,
   frontendBaseUrl,
   roleUrl,
+  scenario,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
@@ -3056,8 +3060,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
     });
     await installPostDayThreePlayerBrowserRoutes(page, {
       commandState: seededCompletedDeadPlayerCommandState({
-        boundary:
-          "Seeded browser completed dead-player stale vote rejected into durable endgame controls.",
+        boundary: `Seeded browser ${scenario.expectedBoundaryText} into durable endgame controls.`,
       }),
       notifications: [],
       threadBody: "The game is complete.",
@@ -3092,39 +3095,43 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       return window.__fmarchTriggerPlayerResync(921);
     });
     await page.waitForFunction(
-      () =>
+      (expectedSlot) =>
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2",
-      null,
+        window.__fmarchPlayerProjection?.commandState?.actorSlot ===
+          expectedSlot,
+      scenario.expectedSlot,
       { timeout: 15000 },
     );
-    const commandResponse = await page.evaluate(async (game) => {
-      const response = await fetch("/commands", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          v: 1,
-          id: "completed-dead-player-stale-vote",
-          body: {
-            kind: "IssueCommand",
+    const commandResponse = await page.evaluate(
+      async ({ expectedGame, scenario }) => {
+        const response = await fetch("/commands", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            v: 1,
+            id: "completed-dead-player-stale-vote",
             body: {
-              command: {
-                SubmitVote: {
-                  game,
-                  actor_slot: "slot-2",
-                  target: "NoLynch",
+              kind: "IssueCommand",
+              body: {
+                command: {
+                  SubmitVote: {
+                    game: expectedGame,
+                    actor_slot: scenario.expectedSlot,
+                    target: "NoLynch",
+                  },
                 },
               },
             },
-          },
-        }),
-      });
-      return {
-        ok: response.ok,
-        status: response.status,
-        body: await response.json(),
-      };
-    }, expectedGame);
+          }),
+        });
+        return {
+          ok: response.ok,
+          status: response.status,
+          body: await response.json(),
+        };
+      },
+      { expectedGame, scenario },
+    );
     const recoveryResyncSnapshot = await page.evaluate(async () => {
       if (typeof window.__fmarchTriggerPlayerResync !== "function") {
         throw new Error("player resync hook is unavailable after reject");
@@ -3157,7 +3164,7 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       surfaceTestId: "player-surface",
       clickedThroughFromRoleUrl: true,
       commandEndpoint: "/commands",
-      commandKind: "SubmitVote",
+      commandKind: scenario.commandKind,
       command: commandRequests.at(-1)?.SubmitVote ?? null,
       commandResponse,
       setupResyncFromSeq: 921,
@@ -11836,64 +11843,15 @@ function assertCompletedDeadPlayerStaleVoteRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  scenario,
 }) {
-  const snapshot = proof?.recoverySnapshot;
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.targetOnlyActionVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.commandEndpoint !== "/commands" ||
-    proof.commandKind !== "SubmitVote" ||
-    proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-2" ||
-    proof.command.target !== "NoLynch" ||
-    proof.commandResponse?.ok !== false ||
-    proof.commandResponse?.status !== 409 ||
-    proof.commandResponse?.body?.body?.kind !== "Reject" ||
-    proof.commandResponse?.body?.body?.body?.error !== "GameAlreadyCompleted" ||
-    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
-      "Reject GameAlreadyCompleted: game already completed",
-    ) ||
-    proof.setupResyncFromSeq !== 921 ||
-    proof.setupResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    proof.setupResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.recoveryResyncFromSeq !== 921 ||
-    proof.recoveryResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    proof.recoveryResyncSnapshotCommandState?.gameCompleted !== true ||
-    snapshot?.checkpoint?.phaseId !== "N05" ||
-    snapshot.checkpoint.phaseState !== "open" ||
-    snapshot.checkpoint.actorSlot !== "slot-2" ||
-    snapshot.checkpoint.actionState !== "disabled:game complete" ||
-    snapshot.checkpoint.receiptState !== "idle" ||
-    snapshot.commandState?.actorSlot !== "slot-2" ||
-    snapshot.commandState?.actorAlive !== false ||
-    snapshot.commandState?.actorStatus !== "dead" ||
-    snapshot.commandState?.phase?.phaseId !== "N05" ||
-    snapshot.commandState?.gameCompleted !== true ||
-    snapshot.commandState?.actions?.length !== 0 ||
-    snapshot.commandState?.voteTargets?.length !== 0 ||
-    !String(snapshot.commandState?.boundary ?? "").includes(
-      "completed dead-player stale vote rejected",
-    ) ||
-    snapshot.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2` ||
-    snapshot.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
-    snapshot.enabledMutatingButtons?.length !== 0
-  ) {
-    throw new Error(
-      `core-loop admin proof missing completed dead-player stale vote recovery: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
+  assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+    scenario,
+    includeEvidenceInError: true,
+  });
 }
 
 function assertStaleCompletedGamePlayerCommandRecoveryProof({

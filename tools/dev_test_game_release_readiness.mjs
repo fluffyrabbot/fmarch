@@ -45,6 +45,7 @@ import {
 import {
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
+  assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
   completedGameEndgameSurfaceAssertionCases,
@@ -3981,62 +3982,14 @@ function assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof({
   proof,
   expectedGame,
   sourceRoleUrl,
+  scenario,
 }) {
-  const snapshot = proof?.recoverySnapshot;
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.targetOnlyActionVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.commandEndpoint !== "/commands" ||
-    proof.commandKind !== "SubmitVote" ||
-    proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-2" ||
-    proof.command.target !== "NoLynch" ||
-    proof.commandResponse?.ok !== false ||
-    proof.commandResponse?.status !== 409 ||
-    proof.commandResponse?.body?.body?.kind !== "Reject" ||
-    proof.commandResponse?.body?.body?.body?.error !== "GameAlreadyCompleted" ||
-    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
-      "Reject GameAlreadyCompleted: game already completed",
-    ) ||
-    proof.setupResyncFromSeq !== 921 ||
-    proof.setupResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    proof.setupResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.recoveryResyncFromSeq !== 921 ||
-    proof.recoveryResyncSnapshotCommandState?.actorSlot !== "slot-2" ||
-    proof.recoveryResyncSnapshotCommandState?.gameCompleted !== true ||
-    snapshot?.checkpoint?.phaseId !== "N05" ||
-    snapshot.checkpoint.phaseState !== "open" ||
-    snapshot.checkpoint.actorSlot !== "slot-2" ||
-    snapshot.checkpoint.actionState !== "disabled:game complete" ||
-    snapshot.checkpoint.receiptState !== "idle" ||
-    snapshot.commandState?.actorSlot !== "slot-2" ||
-    snapshot.commandState?.actorAlive !== false ||
-    snapshot.commandState?.actorStatus !== "dead" ||
-    snapshot.commandState?.phase?.phaseId !== "N05" ||
-    snapshot.commandState?.gameCompleted !== true ||
-    snapshot.commandState?.actions?.length !== 0 ||
-    snapshot.commandState?.voteTargets?.length !== 0 ||
-    !String(snapshot.commandState?.boundary ?? "").includes(
-      "completed dead-player stale vote rejected",
-    ) ||
-    snapshot.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_ilya&slot_id=slot-2` ||
-    snapshot.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=player_ilya` ||
-    snapshot.enabledMutatingButtons?.length !== 0
-  ) {
-    throw new Error(
-      "core-loop admin proof missing completed dead-player stale vote recovery",
-    );
-  }
+  assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+    scenario,
+  });
 }
 
 function assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof({
