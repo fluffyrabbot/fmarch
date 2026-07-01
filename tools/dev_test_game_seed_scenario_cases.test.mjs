@@ -49,10 +49,12 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 85);
+  assert.equal(seedDemoScenarioIds.length, 87);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
+    "host-deadline-advance",
+    "stale-deadline-advance",
     "concurrent-vote-race-reload",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
@@ -65,7 +67,12 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "player-vote-recovery",
     "day-vote-resolution",
     "day-vote-no-lynch",
+    "host-deadline-advance",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(6, 9), [
+    "stale-deadline-advance",
     "player-action-denied",
+    "invalid-action-recovery",
   ]);
   assert.equal(
     seedDemoScenarioIds.includes("concurrent-vote-race-reload"),
@@ -93,6 +100,7 @@ test("seed scenario cases expose production fixture metadata", () => {
         [
           "day-vote-resolution",
           "player-action-denied",
+          "stale-deadline-advance",
           "replacement-idempotent-retry",
           "stale-dead-action-conflict",
         ].includes(scenario.id),
@@ -100,6 +108,7 @@ test("seed scenario cases expose production fixture metadata", () => {
       .map((scenario) => [scenario.id, scenario.role, scenario.roleUrlRedacted]),
     [
       ["day-vote-resolution", "actionPlayer", "/redacted/actionPlayer"],
+      ["stale-deadline-advance", "host", "/redacted/host"],
       ["player-action-denied", "player", "/redacted/player"],
       ["replacement-idempotent-retry", "host", "/redacted/host"],
       ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
