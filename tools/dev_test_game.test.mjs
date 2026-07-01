@@ -63,7 +63,7 @@ import {
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   staleConflictMessageLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,

@@ -20,7 +20,7 @@ import {
 import {
   hostedMatrixStaleConflictLaneIds,
   staleConflictMessageLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
@@ -135,6 +135,46 @@ test("player recovery production callers use the shared scenario module", async 
     assert(
       source.includes("./dev_test_game_player_recovery_scenarios.mjs"),
       `${callerPath} should import player recovery definitions through the scenario module`,
+    );
+
+    for (const importBlock of hardeningLaneImportBlocks(source)) {
+      for (const forbiddenImport of forbiddenHardeningImports) {
+        assert(
+          !importBlock.includes(forbiddenImport),
+          `${callerPath} should not import ${forbiddenImport} from hardening lane cases`,
+        );
+      }
+    }
+  }
+});
+
+test("stale conflict production callers use the shared scenario module", async () => {
+  const callerPaths = [
+    "tools/dev_test_game_next_action.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_proof_graph_handoff_cases.mjs",
+    "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+    "tools/dev_test_game.test.mjs",
+    "tools/dev_test_game_proof_graph_handoff_cases.test.mjs",
+    "tools/dev_test_game_proof_graph_handoffs.test.mjs",
+    "tools/dev_test_game_admin_audit_handoff_contract.test.mjs",
+    "frontend/src/routes/admin/admin-route-model.test.mjs",
+  ];
+  const forbiddenHardeningImports = [
+    "hostedMatrixStaleConflictLaneIds",
+    "staleConflictMessageLaneIds",
+  ];
+
+  for (const callerPath of callerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_stale_conflict_scenarios.mjs") ||
+        source.includes(
+          "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs",
+        ),
+      `${callerPath} should import stale conflict definitions through the scenario module`,
     );
 
     for (const importBlock of hardeningLaneImportBlocks(source)) {

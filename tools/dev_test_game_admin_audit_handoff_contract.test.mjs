@@ -11,7 +11,7 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedMatrixStaleConflictLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
   assert.deepEqual(requiredRelatedDestinationsForHandoff(handoffFixture()), [

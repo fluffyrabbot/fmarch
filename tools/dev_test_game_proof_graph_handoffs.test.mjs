@@ -19,7 +19,7 @@ import {
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   hostedMatrixStaleConflictLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({

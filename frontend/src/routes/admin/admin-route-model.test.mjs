@@ -13,7 +13,7 @@ import {
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
   staleConflictMessageLaneIds,
-} from "../../../../tools/dev_test_game_hardening_lane_cases.mjs";
+} from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,

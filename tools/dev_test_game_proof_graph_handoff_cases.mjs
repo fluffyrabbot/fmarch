@@ -1,6 +1,6 @@
 import {
   staleConflictMessageLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
