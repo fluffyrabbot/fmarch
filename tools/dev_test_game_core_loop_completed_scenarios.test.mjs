@@ -20,6 +20,9 @@ import {
   completedGameEndgameProofScenarioCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
+  completedHostReloadProofFixture,
+  completedHostReloadSnapshotFixture,
+  completedHostStaleCommandProofFixtures,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
   completedHostStaleCommandAssertionCases,
@@ -27,7 +30,10 @@ import {
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
+  completedPlayerReloadProofFixtures,
   completedPlayerReloadProofCases,
+  completedPlayerReloadSnapshotsFixture,
+  staleCompletedPlayerCommandProofFixtures,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandAssertionCases,
@@ -178,6 +184,50 @@ test("completed-game scenario module bundles proof runner case families", () => 
       (scenario) => scenario.proofField,
     ),
     ["staleCompletedVoteRecoveryProof", "staleCompletedPostRecoveryProof"],
+  );
+});
+
+test("completed-game scenario module builds reusable proof fixtures", () => {
+  const game = "game-a";
+  const dayVoteOutcomes = [{ phaseId: "D05", status: "NoLynch" }];
+  const hostSnapshot = completedHostReloadSnapshotFixture({ dayVoteOutcomes });
+  const playerSnapshots = completedPlayerReloadSnapshotsFixture({
+    game,
+    dayVoteOutcomes,
+  });
+  const hostStaleProofs = completedHostStaleCommandProofFixtures({
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    game,
+    snapshot: hostSnapshot,
+  });
+  const playerReloadProofs = completedPlayerReloadProofFixtures({
+    roleUrls: {
+      sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a",
+      sourceNormalPlayerRoleUrl: "http://127.0.0.1/g/game-a/player-rowan",
+      sourceDeadPlayerRoleUrl:
+        "http://127.0.0.1/g/game-a?private=notification-1",
+    },
+    snapshots: playerSnapshots,
+  });
+  const stalePlayerProofs = staleCompletedPlayerCommandProofFixtures({
+    sourceRoleUrl: "http://127.0.0.1/g/game-a",
+    visitedRolePath: "/g/game-a",
+    game,
+  });
+
+  assert.equal(
+    hostStaleProofs.completedHostStaleResolveRecoveryProof.commandKind,
+    "ResolvePhase",
+  );
+  assert.equal(
+    playerReloadProofs.completedDeadPlayerReloadProof.initialSnapshot.commandState
+      .actorStatus,
+    "dead",
+  );
+  assert.equal(
+    stalePlayerProofs.staleCompletedPostRecoveryProof.command.body,
+    "Stale completed game proof post",
   );
 });
 
@@ -685,7 +735,11 @@ test("completed-game scenario module asserts host complete-game proof shell", ()
 
 test("completed-game scenario module asserts completed host reload shell", () => {
   assertCompletedHostReloadProofCase({
-    proof: completedHostReloadProofFixture(),
+    proof: completedHostReloadProofFixture({
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+      visitedRolePath: "/g/game-a/host",
+      snapshot: completedHostReloadSnapshotFixture(),
+    }),
     sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
   });
 });
@@ -747,7 +801,11 @@ test("completed-game shared host assertions fail closed", () => {
     () =>
       assertCompletedHostReloadProofCase({
         proof: {
-          ...completedHostReloadProofFixture(),
+          ...completedHostReloadProofFixture({
+            sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+            visitedRolePath: "/g/game-a/host",
+            snapshot: completedHostReloadSnapshotFixture(),
+          }),
           reloadedSnapshot: {
             ...completedHostReloadSnapshotFixture(),
             actionTiles: [{ action: "complete_game" }],
@@ -836,47 +894,6 @@ function hostCompleteGameProofFixture() {
         ],
       },
     },
-  };
-}
-
-function completedHostReloadProofFixture() {
-  return {
-    status: "passed",
-    clickedThroughFromRoleUrl: true,
-    releaseReady: false,
-    productionReady: false,
-    rawInviteTokensVisible: false,
-    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-    visitedRolePath: "/g/game-a/host",
-    surfaceTestId: "host-console-surface",
-    resyncFromSeq: 921,
-    initialResyncSnapshotHost: { completed: true },
-    reloadedResyncSnapshotHost: { completed: true },
-    initialSnapshot: completedHostReloadSnapshotFixture(),
-    reloadedSnapshot: completedHostReloadSnapshotFixture(),
-  };
-}
-
-function completedHostReloadSnapshotFixture() {
-  return {
-    checkpoint: {
-      phaseId: "N05",
-      phaseState: "open",
-      deadlineAffordance: "none",
-      actionState: "disabled:game complete",
-    },
-    projection: {
-      completed: true,
-      phase: { id: "N05", state: "open" },
-      slots: [
-        { role_revealed: true, alignment_revealed: true },
-        { role_revealed: true, alignment_revealed: true },
-      ],
-    },
-    dayVoteOutcomes: [{ phaseId: "D05" }],
-    hostPrompts: [],
-    actionTiles: [],
-    triggerButtons: [],
   };
 }
 
