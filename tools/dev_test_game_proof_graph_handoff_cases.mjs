@@ -10,6 +10,10 @@ import {
   hostedOpsSignalRelatedAuditIds,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  hostedIdentityEvidenceCheckIds,
+  hostedIdentityEvidenceInputIds,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
@@ -37,6 +41,16 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     auditId: "local-identity-adapter",
     requiredCheckIds: Object.freeze(["session-rotation", "invite-revocation"]),
     requiredSessionIds: Object.freeze(["admin", "host", "player"]),
+  }),
+  Object.freeze({
+    linkId: "admin-proof:hosted-identity-evidence",
+    auditId: "local-hosted-identity-evidence",
+    requiredCheckIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
+    requiredUnprovenIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
+    requiredHostedHandoffInputs: Object.freeze([...hostedIdentityEvidenceInputIds]),
+    requiredHostedHandoffBlockedChecks: Object.freeze([
+      ...hostedIdentityEvidenceCheckIds,
+    ]),
   }),
   Object.freeze({
     linkId: "admin-proof:backup",

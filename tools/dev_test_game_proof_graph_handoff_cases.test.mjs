@@ -26,6 +26,7 @@ test("admin proof destination handoff cases share link and audit rows", () => {
     ["admin-proof:core-loop", "local-core-loop"],
     ["admin-proof:hardening", "local-hardening"],
     ["admin-proof:identity", "local-identity-adapter"],
+    ["admin-proof:hosted-identity-evidence", "local-hosted-identity-evidence"],
     ["admin-proof:backup", "local-backup-restore"],
     ["admin-proof:ops", "local-ops-artifacts"],
     ["admin-proof:seed", "local-seed-fixtures"],

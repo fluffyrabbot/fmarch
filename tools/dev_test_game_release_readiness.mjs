@@ -143,6 +143,10 @@ const defaultIdentityAdminProofPath = path.join(
   artifactDir,
   "identity-admin-proof.json",
 );
+const defaultHostedIdentityEvidenceAdminProofPath = path.join(
+  artifactDir,
+  "hosted-identity-evidence-admin-proof.json",
+);
 const defaultSpineManifestPath = path.join(artifactDir, "spine-manifest.json");
 const defaultSpineManifestAdminProofPath = path.join(
   artifactDir,
@@ -308,6 +312,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.identityAdminProofArtifact,
       })
     : undefined;
+  const hostedIdentityEvidenceAdminProofEvidence =
+    options.hostedIdentityEvidenceAdminProof
+      ? validateDevTestGameHostedIdentityEvidenceAdminProof(
+          options.hostedIdentityEvidenceAdminProof,
+          {
+            path:
+              options.hostedIdentityEvidenceAdminProofPath ??
+              "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+            artifact: options.hostedIdentityEvidenceAdminProofArtifact,
+          },
+        )
+      : undefined;
   const spineManifestEvidence = options.spineManifest
     ? validateDevTestGameSpineManifest(options.spineManifest, {
         path: options.spineManifestPath ?? "target/dev-test-game/spine-manifest.json",
@@ -656,6 +672,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...(identityAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: identityAdminProofEvidence }),
+    });
+  }
+  if (hostedIdentityEvidenceAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-identity-evidence-admin-surface",
+      label: "Local hosted identity evidence admin surface",
+      status: "passed",
+      evidence: hostedIdentityEvidenceAdminProofEvidence.path,
+      proofBoundary: hostedIdentityEvidenceAdminProofEvidence.proofBoundary,
+      evidenceStatus: hostedIdentityEvidenceAdminProofEvidence.evidenceStatus,
+      rawEvidenceStatus:
+        hostedIdentityEvidenceAdminProofEvidence.rawEvidenceStatus,
+      blockedCheckCount:
+        hostedIdentityEvidenceAdminProofEvidence.visibleUnproven?.length ?? 0,
+      adminRoleSurface: hostedIdentityEvidenceAdminProofEvidence,
     });
   }
   if (spineManifestEvidence !== undefined) {
@@ -4660,6 +4691,92 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
   };
 }
 
+export function validateDevTestGameHostedIdentityEvidenceAdminProof(
+  proof,
+  options = {},
+) {
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-identity-evidence-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !==
+      "local-dev-test-game-hosted-identity-evidence-admin-surface"
+  ) {
+    throw new Error("hosted identity evidence admin proof shape drifted");
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error("hosted identity evidence admin proof must not claim readiness");
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of proof.generatedFrom?.checkIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.blockedCheckIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing blocked row: ${checkId}`,
+      );
+    }
+  }
+  for (const linkId of proof.generatedFrom?.relatedAuditIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing related link: ${linkId}`,
+      );
+    }
+  }
+  for (const inputId of proof.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
+    rawEvidenceStatus: String(
+      proof.generatedFrom?.rawEvidenceStatus ?? "unknown",
+    ),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameHostedEvidenceLaneDemoProof(proof, options = {}) {
   const validated = assertDevTestGameHostedEvidenceLaneDemoProof(proof);
   if (validated.releaseReady !== false || validated.productionReady !== false) {
@@ -6012,6 +6129,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "core-loop",
     "hardening",
     "identity",
+    "hosted-identity-evidence",
     "backup",
     "ops",
     "seed",
@@ -6428,6 +6546,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     seedFixtureOptions,
     identityAdapterOptions,
     identityAdminProofOptions,
+    hostedIdentityEvidenceAdminProofOptions,
     opsAdminProofOptions,
     hostedOpsSignalsOptions,
     hostedOpsSignalsAdminProofOptions,
@@ -6456,6 +6575,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalSeedFixtureSummary(),
     readOptionalIdentityAdapterProof(),
     readOptionalIdentityAdminProof(),
+    readOptionalHostedIdentityEvidenceAdminProof(),
     readOptionalOpsAdminProof(),
     readOptionalHostedOpsSignals(),
     readOptionalHostedOpsSignalsAdminProof(),
@@ -6486,6 +6606,7 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     ...(seedFixtureOptions ?? {}),
     ...(identityAdapterOptions ?? {}),
     ...(identityAdminProofOptions ?? {}),
+    ...(hostedIdentityEvidenceAdminProofOptions ?? {}),
     ...(opsAdminProofOptions ?? {}),
     ...(hostedOpsSignalsOptions ?? {}),
     ...(hostedOpsSignalsAdminProofOptions ?? {}),
@@ -6701,6 +6822,25 @@ async function readOptionalIdentityAdminProof() {
     identityAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
     identityAdminProofPath: path.relative(repoRoot, proofPath),
     identityAdminProofArtifact: artifact,
+  };
+}
+
+async function readOptionalHostedIdentityEvidenceAdminProof() {
+  const override =
+    process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF;
+  const proofPath = await resolveOptionalDefaultArtifactPath(
+    override,
+    defaultHostedIdentityEvidenceAdminProofPath,
+  );
+  if (proofPath === undefined) {
+    return undefined;
+  }
+  const now = new Date();
+  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  return {
+    hostedIdentityEvidenceAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    hostedIdentityEvidenceAdminProofPath: path.relative(repoRoot, proofPath),
+    hostedIdentityEvidenceAdminProofArtifact: artifact,
   };
 }
 

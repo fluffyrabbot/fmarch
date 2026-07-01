@@ -2,6 +2,9 @@ import { pathToFileURL } from "node:url";
 import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
 import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import { devTestGameHostedEvidenceLanePath } from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
+  devTestGameHostedIdentityEvidencePath,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameHostedTargetPreflightPath } from "./dev_test_game_hosted_target_preflight.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
@@ -44,6 +47,10 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
     "target/dev-test-game/identity-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
+    devTestGameHostedIdentityEvidencePath,
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
+    "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
     "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -79,6 +86,7 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_race_coverage.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
   await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
+  await runNodeScript("tools/dev_test_game_hosted_identity_evidence.mjs");
   await runNodeScript("tools/dev_test_game_hosted_target_preflight.mjs");
   await runNodeScript("tools/dev_test_game_hosted_evidence_lane.mjs");
   await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");

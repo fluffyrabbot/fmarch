@@ -45,6 +45,7 @@ export async function buildAdminRouteData({
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
+  hostedIdentityEvidence = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -154,33 +155,37 @@ export async function buildAdminRouteData({
                     appendLocalProofFreshnessAudit(
                       appendLocalAdminSpineAudit(
                         appendLocalSpineManifestAudit(
-                          appendLocalIdentityAdapterAudit(
-                            appendLocalBackupRestoreAudit(
-                              appendLocalReleaseRunbookAudit(
-                                appendLocalReleaseReadinessAudit(
-                                  appendLocalSeedFixtureAudit(
-                                    appendLocalOpsArtifactsAudit(
-                                      appendLocalHardeningAudit(
-                                        appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
-                                        proofRun,
+                          appendLocalHostedIdentityEvidenceAudit(
+                            appendLocalIdentityAdapterAudit(
+                              appendLocalBackupRestoreAudit(
+                                appendLocalReleaseRunbookAudit(
+                                  appendLocalReleaseReadinessAudit(
+                                    appendLocalSeedFixtureAudit(
+                                      appendLocalOpsArtifactsAudit(
+                                        appendLocalHardeningAudit(
+                                          appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                          proofRun,
+                                          { game },
+                                        ),
+                                        opsArtifacts,
                                         { game },
                                       ),
-                                      opsArtifacts,
+                                      seedFixtureSummary,
                                       { game },
                                     ),
-                                    seedFixtureSummary,
+                                    releaseReadinessChecklist,
                                     { game },
                                   ),
-                                  releaseReadinessChecklist,
+                                  releaseRunbook,
                                   { game },
                                 ),
-                                releaseRunbook,
+                                backupRestoreProof,
                                 { game },
                               ),
-                              backupRestoreProof,
+                              identityAdapterProof,
                               { game },
                             ),
-                            identityAdapterProof,
+                            hostedIdentityEvidence,
                             { game },
                           ),
                           spineManifest,
@@ -274,6 +279,7 @@ export async function buildAdminAuditDetailData({
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
+  hostedIdentityEvidence = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -301,6 +307,7 @@ export async function buildAdminAuditDetailData({
     hostedTargetPreflight,
     hostedEvidenceLane,
     hostedEvidenceLaneDemoProof,
+    hostedIdentityEvidence,
     nextAction,
     proofFreshness,
   });
@@ -536,6 +543,175 @@ export function normalizeLocalHostedTargetPreflightAudit(
       releaseReady: hostedTargetPreflight.releaseReady === true,
       productionReady: hostedTargetPreflight.productionReady === true,
     }),
+  });
+}
+
+export function appendLocalHostedIdentityEvidenceAudit(
+  audit,
+  hostedIdentityEvidence,
+  { game },
+) {
+  const row = normalizeLocalHostedIdentityEvidenceAudit(hostedIdentityEvidence, {
+    game,
+  });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalHostedIdentityEvidenceAudit(
+  hostedIdentityEvidence,
+  { game },
+) {
+  if (
+    hostedIdentityEvidence === null ||
+    typeof hostedIdentityEvidence !== "object" ||
+    hostedIdentityEvidence.version !== 1 ||
+    hostedIdentityEvidence.proof !== "dev-test-game-hosted-identity-evidence" ||
+    !["passed", "blocked"].includes(hostedIdentityEvidence.status) ||
+    hostedIdentityEvidence.scope !== "hosted-identity-evidence-handoff" ||
+    hostedIdentityEvidence.releaseReady !== false ||
+    hostedIdentityEvidence.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(hostedIdentityEvidence.checks)
+    ? hostedIdentityEvidence.checks
+    : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  const blockedCheckIds = Array.isArray(
+    hostedIdentityEvidence.hostedHandoffChecklist?.blockedCheckIds,
+  )
+    ? hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds.map((id) =>
+        String(id),
+      )
+    : checks
+        .filter((check) => check?.status === "blocked")
+        .map((check) => String(check.id));
+  const blockedCheckIdSet = new Set(blockedCheckIds);
+  const hostedHandoffChecklist = normalizeHostedIdentityEvidenceHandoffChecklist({
+    hostedIdentityEvidence,
+    blockedChecks: checks.filter((check) =>
+      blockedCheckIdSet.has(String(check.id)),
+    ),
+  });
+  return Object.freeze({
+    id: "local-hosted-identity-evidence",
+    label: "Hosted identity evidence",
+    status: `${hostedIdentityEvidence.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Hosted identity evidence handoff",
+    boundaryDetail:
+      hostedIdentityEvidence.proofBoundary ??
+      "Hosted identity evidence handoff without hosted identity or release claims.",
+    href: "target/dev-test-game/hosted-identity-evidence.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-hosted-identity-evidence",
+    }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    unproven: Object.freeze(
+      checks
+        .filter((check) => blockedCheckIdSet.has(String(check.id)))
+        .map((check) =>
+          Object.freeze({
+            id: String(check.id),
+            status: "blocked",
+            requiredEvidence: String(check.requiredEvidence ?? ""),
+          }),
+        ),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-identity-adapter",
+        label: "Local identity adapter",
+        href: adminAuditInspectHref({
+          game,
+          audit: "local-identity-adapter",
+        }),
+        status: "prerequisite",
+        command: "test:dev-test-game-identity-admin-proof",
+      }),
+      Object.freeze({
+        id: "local-next-action",
+        label: "Ranked next action",
+        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        status: String(hostedIdentityEvidence.status ?? "unknown"),
+        command: "test:dev-test-game-next-action",
+      }),
+    ]),
+    hostedHandoffChecklist,
+    artifactSummary: Object.freeze({
+      rawEvidencePath: String(
+        hostedIdentityEvidence.target?.rawEvidencePath ?? "",
+      ),
+      rawEvidenceStatus: String(
+        hostedIdentityEvidence.target?.rawEvidenceStatus ?? "unknown",
+      ),
+      blockedCheckCount: blockedCheckIds.length,
+      nextCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
+      nextProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
+      releaseReady: hostedIdentityEvidence.releaseReady === true,
+      productionReady: hostedIdentityEvidence.productionReady === true,
+    }),
+  });
+}
+
+function normalizeHostedIdentityEvidenceHandoffChecklist({
+  hostedIdentityEvidence,
+  blockedChecks,
+}) {
+  const inputIds = Array.isArray(
+    hostedIdentityEvidence.hostedHandoffChecklist?.inputIds,
+  )
+    ? hostedIdentityEvidence.hostedHandoffChecklist.inputIds
+    : [];
+  return Object.freeze({
+    status: String(hostedIdentityEvidence.status ?? "unknown"),
+    preflightStatus: String(
+      hostedIdentityEvidence.hostedHandoffChecklist?.preflightStatus ??
+        hostedIdentityEvidence.status ??
+        "unknown",
+    ),
+    command: String(
+      hostedIdentityEvidence.hostedHandoffChecklist?.command ??
+        hostedIdentityEvidence.nextCommand ??
+        "",
+    ),
+    proofTarget: String(
+      hostedIdentityEvidence.hostedHandoffChecklist?.proofTarget ??
+        hostedIdentityEvidence.nextProofTarget ??
+        "",
+    ),
+    inputCount: inputIds.length,
+    blockedCheckCount: blockedChecks.length,
+    inputs: Object.freeze(
+      inputIds.map((id) =>
+        Object.freeze({
+          id: String(id),
+          label: String(id),
+          value: "required",
+          required: true,
+        }),
+      ),
+    ),
+    blockedChecks: Object.freeze(
+      blockedChecks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: "blocked",
+          requiredEvidence: String(check.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
   });
 }
 

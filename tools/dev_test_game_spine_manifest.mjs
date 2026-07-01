@@ -173,6 +173,17 @@ export function buildDevTestGameSpineManifest({
         ],
         roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       },
+      hostedIdentityEvidenceAdminProof: {
+        script: "test:dev-test-game-hosted-identity-evidence-admin-proof",
+        proofArtifact:
+          "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+        dependsOn: [
+          devTestGameHostedIdentityEvidencePath,
+          "target/dev-test-game/proof-run.json",
+        ],
+        roleUrl:
+          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      },
       hostedOpsSignals: {
         script: devTestGameHostedOpsSignalsCommand,
         proofArtifact: devTestGameHostedOpsSignalsPath,
@@ -227,7 +238,11 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProof: {
         script: nextActionAdminProofCommand,
         proofArtifact: nextActionAdminProofPath,
-        dependsOn: [nextActionPath, "target/dev-test-game/proof-run.json"],
+        dependsOn: [
+          nextActionPath,
+          "target/dev-test-game/proof-run.json",
+          devTestGameProofGraphPath,
+        ],
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
       },
       proofGraph: {
@@ -274,7 +289,11 @@ export function buildDevTestGameSpineManifest({
         label: "Next action admin proof",
         command: nextActionAdminProofCommand,
         path: nextActionAdminProofPath,
-        dependsOn: [nextActionPath, "target/dev-test-game/proof-run.json"],
+        dependsOn: [
+          nextActionPath,
+          "target/dev-test-game/proof-run.json",
+          devTestGameProofGraphPath,
+        ],
         roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
         boundary:
           "Terminal local admin role proof for the generated next-action receipt. It is recorded separately from artifact freshness inputs to avoid making the receipt depend on its own browser proof.",
@@ -312,6 +331,7 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
+      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
@@ -385,6 +405,14 @@ export function buildDevTestGameSpineManifest({
         evidence: [
           devTestGameHostedIdentityEvidenceCommand,
           devTestGameHostedIdentityEvidencePath,
+        ],
+      },
+      {
+        id: "hosted-identity-evidence-admin-proof-recorded",
+        status: "passed",
+        evidence: [
+          "test:dev-test-game-hosted-identity-evidence-admin-proof",
+          "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
         ],
       },
       {
@@ -492,6 +520,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_identity_admin_proof.mjs",
+    "tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
     "tools/dev_test_game_backup_admin_proof.mjs",
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
@@ -554,6 +583,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted identity evidence artifact drifted: ${manifest.commands.hostedIdentityEvidence.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedIdentityEvidenceAdminProof?.script !==
+    "test:dev-test-game-hosted-identity-evidence-admin-proof"
+  ) {
+    throw new Error(
+      `spine manifest hosted identity evidence admin proof command drifted: ${manifest.commands?.hostedIdentityEvidenceAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedIdentityEvidenceAdminProof.proofArtifact !==
+    "target/dev-test-game/hosted-identity-evidence-admin-proof.json"
+  ) {
+    throw new Error(
+      `spine manifest hosted identity evidence admin proof artifact drifted: ${manifest.commands.hostedIdentityEvidenceAdminProof.proofArtifact}`,
     );
   }
   if (manifest.commands?.hostedOpsSignals?.script !== devTestGameHostedOpsSignalsCommand) {
@@ -684,6 +729,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameHostedIdentityEvidencePath,
+    "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     devTestGameHostedTargetPreflightPath,
     devTestGameHostedEvidenceLanePath,
     devTestGameHostedEvidenceLaneDemoProofPath,
@@ -722,6 +768,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
     "hosted-identity-evidence-recorded",
+    "hosted-identity-evidence-admin-proof-recorded",
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
     "hosted-evidence-lane-demo-proof-recorded",
@@ -763,7 +810,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     adminProof.path !== nextActionAdminProofPath ||
     adminProof.roleUrl !== "/admin/audit/local-next-action?game=<seeded-game>" ||
     !Array.isArray(adminProof.dependsOn) ||
-    !adminProof.dependsOn.includes(nextActionPath)
+    !adminProof.dependsOn.includes(nextActionPath) ||
+    !adminProof.dependsOn.includes(devTestGameProofGraphPath)
   ) {
     throw new Error("spine manifest next-action admin terminal artifact drifted");
   }
@@ -958,6 +1006,8 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
   "hosted-identity-evidence":
     "npm run test:dev-test-game-hosted-identity-evidence",
+  "hosted-identity-evidence-admin":
+    "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
   "hosted-target-preflight": "npm run test:dev-test-game-hosted-target-preflight",
   "hosted-evidence-lane": "npm run test:dev-test-game-hosted-evidence-lane",
   "hosted-evidence-lane-demo":

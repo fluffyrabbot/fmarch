@@ -26,6 +26,10 @@ import {
   hostedOpsSignalCheckStatusRows,
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceInputIds,
+} from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
+import {
   releaseReadinessUnprovenItem,
   releaseReadinessUnprovenStatusRows,
 } from "../../../../tools/dev_test_game_release_readiness_cases.mjs";
@@ -45,6 +49,8 @@ const HOSTED_TARGET_PREFLIGHT_PROOF_TARGET =
   "target/dev-test-game/hosted-target-preflight.json";
 const HOSTED_EVIDENCE_LANE_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane.json";
+const HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET =
+  "target/dev-test-game/hosted-identity-evidence.json";
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
@@ -747,6 +753,53 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.syntheticExternalTarget, true);
   assert.equal(lane.artifactSummary.demoBlockedLaneStatus, "blocked");
   assert.equal(lane.artifactSummary.demoPassedLaneStatus, "passed");
+});
+
+test("admin route data exposes hosted identity evidence as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedIdentityEvidence: localHostedIdentityEvidenceFixture(),
+  });
+
+  const identity = data.audit.find(
+    (item) => item.id === "local-hosted-identity-evidence",
+  );
+  assert.equal(identity.label, "Hosted identity evidence");
+  assert.equal(identity.status, "blocked: 0 passed, 10 blocked");
+  assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    identity.inspectHref,
+    "/admin/audit/local-hosted-identity-evidence?game=midsummer",
+  );
+  assert.deepEqual(
+    identity.checks.map((check) => check.id),
+    hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.deepEqual(
+    identity.unproven.map((item) => item.id),
+    hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.deepEqual(
+    identity.relatedLinks.map((link) => link.id),
+    ["local-identity-adapter", "local-next-action"],
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.inputs.map((input) => input.id),
+    hostedIdentityEvidenceInputIds,
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.blockedChecks.map((check) => check.id),
+    hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.equal(
+    identity.artifactSummary.nextProofTarget,
+    HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+  );
+  assert.equal(
+    identity.artifactSummary.nextCommand,
+    "npm run test:dev-test-game-hosted-identity-evidence",
+  );
 });
 
 test("admin route data exposes local spine manifest as a native audit row", async () => {
@@ -3392,6 +3445,43 @@ function localHostedTargetPreflightFixture() {
     ],
     nextCommand: "npm run test:dev-test-game-hosted-target-preflight",
     nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+  };
+}
+
+function localHostedIdentityEvidenceFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-identity-evidence",
+    status: "blocked",
+    releaseReady: false,
+    productionReady: false,
+    scope: "hosted-identity-evidence-handoff",
+    proofBoundary: "Hosted identity evidence without hosted identity claims.",
+    requiredEvidence:
+      "Set FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH to a hosted identity evidence JSON file.",
+    target: {
+      rawEvidencePath: null,
+      rawEvidenceStatus: "blocked",
+    },
+    checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
+      id: check.id,
+      status: "blocked",
+      requiredEvidence: check.requiredEvidence,
+    })),
+    hostedHandoffChecklist: {
+      status: "blocked",
+      preflightStatus: "blocked",
+      command: "npm run test:dev-test-game-hosted-identity-evidence",
+      proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+      inputIds: [...hostedIdentityEvidenceInputIds],
+      blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
+        ...check,
+        status: "blocked",
+      })),
+    },
+    nextCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+    nextProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
   };
 }
 

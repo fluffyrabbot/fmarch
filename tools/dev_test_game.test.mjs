@@ -306,6 +306,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
       "target/dev-test-game/identity-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
+      "target/dev-test-game/hosted-identity-evidence.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
+      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
       "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -556,6 +560,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     dependsOn: [
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/proof-run.json",
+      devTestGameProofGraphPath,
     ],
     roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
   });
@@ -878,8 +883,8 @@ test("dev test-game next-action derives one local recovery command from the mani
       buildSlice:
         "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
       proofTarget: devTestGameHostedIdentityEvidencePath,
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:identity",
+      roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-identity-evidence",
       productionFeatureSpineTarget:
         productionFeatureSpineTargetFixture("identity-adapter"),
       spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
@@ -939,8 +944,9 @@ test("dev test-game next-action derives one local recovery command from the mani
         buildSlice:
           "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
         proofTarget: devTestGameHostedIdentityEvidencePath,
-        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-        proofGraphNodeId: "admin-proof:identity",
+        roleUrl:
+          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        proofGraphNodeId: "admin-proof:hosted-identity-evidence",
         productionFeatureSpineTarget:
           productionFeatureSpineTargetFixture("identity-adapter"),
         spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
@@ -1793,8 +1799,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph);
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 18);
-  assert.equal(graph.summary.roleUrlCount, 18);
+  assert.equal(graph.summary.nodeCount, 19);
+  assert.equal(graph.summary.roleUrlCount, 19);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -8550,7 +8556,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    14,
+    15,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -8560,6 +8566,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     "core-loop",
     "hardening",
     "identity",
+    "hosted-identity-evidence",
     "backup",
     "ops",
     "seed",
@@ -14049,6 +14056,54 @@ function hostedTargetPreflightAdminProofFixture() {
   };
 }
 
+function hostedIdentityEvidenceAdminProofFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-identity-evidence-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-identity-evidence-admin-surface",
+    proofBoundary: "Local admin hosted identity evidence proof only.",
+    generatedFrom: {
+      hostedIdentityEvidence: "target/dev-test-game/hosted-identity-evidence.json",
+      proofRun: "target/dev-test-game/proof-run.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      status: "blocked",
+      rawEvidenceStatus: "blocked",
+      checkIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      checkStatuses: Object.fromEntries(
+        hostedIdentityEvidenceBlockedChecks.map((check) => [check.id, "blocked"]),
+      ),
+      blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      hostedHandoffInputIds: [...hostedIdentityEvidenceInputIds],
+      hostedHandoffBlockedCheckIds: hostedIdentityEvidenceBlockedChecks.map(
+        (check) => check.id,
+      ),
+      relatedAuditIds: ["local-identity-adapter", "local-next-action"],
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl:
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-hosted-identity-evidence",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      visibleUnproven: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      visibleHostedHandoffInputs: [...hostedIdentityEvidenceInputIds],
+      visibleHostedHandoffBlockedChecks: hostedIdentityEvidenceBlockedChecks.map(
+        (check) => check.id,
+      ),
+      visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function hostedEvidenceLaneAdminProofFixture() {
   return {
     version: 1,
@@ -14275,6 +14330,7 @@ function adminSpineAdminProofFixture() {
         "core-loop",
         "hardening",
         "identity",
+        "hosted-identity-evidence",
         "backup",
         "ops",
         "seed",
@@ -14324,6 +14380,7 @@ function adminSpineProofFixture() {
     ["core-loop", coreLoopAdminProofFixture()],
     ["hardening", hardeningAdminProofFixture()],
     ["identity", identityAdminProofFixture()],
+    ["hosted-identity-evidence", hostedIdentityEvidenceAdminProofFixture()],
     ["backup", backupAdminProofFixture()],
     ["ops", opsAdminProofFixture()],
     ["seed", seedAdminProofFixture()],

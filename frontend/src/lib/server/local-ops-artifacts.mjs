@@ -27,6 +27,8 @@ const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
   "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE =
   "target/dev-test-game/hosted-identity-evidence.json";
+const DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF =
+  "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
 const DEFAULT_HOSTED_OPS_SIGNALS =
   "target/dev-test-game/hosted-ops-signals.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT =
@@ -196,6 +198,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE,
   }),
   Object.freeze({
+    id: "hosted-identity-evidence-admin",
+    label: "Hosted identity evidence admin proof",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
+    fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF,
+  }),
+  Object.freeze({
     id: "hosted-ops-signals",
     label: "Hosted ops signals",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
@@ -270,6 +278,15 @@ export async function readLocalHostedEvidenceLane({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE,
     fallback: DEFAULT_HOSTED_EVIDENCE_LANE,
+  });
+}
+
+export async function readLocalHostedIdentityEvidence({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE,
+    fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE,
   });
 }
 

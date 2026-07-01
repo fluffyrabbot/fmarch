@@ -313,8 +313,8 @@ function hostedProductionIdentityBuildable() {
     buildSlice:
       "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
     proofTarget: devTestGameHostedIdentityEvidencePath,
-    roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-    proofGraphNodeId: "admin-proof:identity",
+    roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    proofGraphNodeId: "admin-proof:hosted-identity-evidence",
     productionFeatureSpineTarget:
       releaseReadinessProductionFeatureSpineTargets.identityAdapter,
     proofBoundary:

@@ -9,6 +9,7 @@ import {
   validateDevTestGameHardeningAdminProof,
   validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
   validateDevTestGameHostedEvidenceLaneAdminProof,
+  validateDevTestGameHostedIdentityEvidenceAdminProof,
   validateDevTestGameHostedOpsSignalsAdminProof,
   validateDevTestGameHostedTargetPreflightAdminProof,
   validateDevTestGameIdentityAdminProof,
@@ -48,6 +49,15 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-identity-admin-proof",
     path: "target/dev-test-game/identity-admin-proof.json",
     validate: validateDevTestGameIdentityAdminProof,
+  },
+  {
+    id: "hosted-identity-evidence",
+    label: "Hosted identity evidence admin role surface",
+    script: "tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
+    rerunCommand:
+      "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
+    path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    validate: validateDevTestGameHostedIdentityEvidenceAdminProof,
   },
   {
     id: "backup",
