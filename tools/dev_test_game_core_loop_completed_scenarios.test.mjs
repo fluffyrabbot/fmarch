@@ -207,29 +207,45 @@ test("completed-game scenario module derives shared hardening lane groups", () =
 });
 
 test("completed-game production harness callers use the shared scenario facade", async () => {
-  const callerPaths = [
+  const scenarioCallerPaths = [
     "tools/dev_test_game_core_loop_admin_proof.mjs",
-    "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ];
 
-  for (const callerPath of callerPaths) {
+  for (const callerPath of scenarioCallerPaths) {
     const source = await readFile(callerPath, "utf8");
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       ),
-      `${callerPath} should import completed-game definitions through the shared scenario/assertion facade`,
+      `${callerPath} should import completed recovery cases through the shared scenario/assertion module`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),
       `${callerPath} should not import completed-game recovery definitions directly`,
     );
     assert(
+      !source.includes(
+        "./dev_test_game_core_loop_completed_endgame_scenarios.mjs",
+      ),
+      `${callerPath} should not import completed recovery definitions through the endgame adapter`,
+    );
+    assert(
       !source.includes("./dev_test_game_core_loop_completed_game_cases.mjs"),
       `${callerPath} should not import completed-game assertion helpers directly`,
     );
   }
+
+  const proofContractSource = await readFile(
+    "tools/dev_test_game_proof_contract.mjs",
+    "utf8",
+  );
+  assert(
+    proofContractSource.includes(
+      "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+    ),
+    "proof contract should keep using the completed-game public scenario facade",
+  );
 });
 
 test("completed-game proof contract uses shared hardening lane metadata", async () => {

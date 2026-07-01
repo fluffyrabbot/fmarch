@@ -58,7 +58,7 @@ import {
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   completedGameEndgameScenarioCaseFamilies,
-} from "./dev_test_game_core_loop_completed_endgame_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,

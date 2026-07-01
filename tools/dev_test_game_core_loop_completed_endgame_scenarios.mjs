@@ -1,230 +1,35 @@
 import {
-  completedDeadPlayerStaleVoteCase,
-  completedDeadPlayerStaleVoteCaseDefinition,
-  completedHostStaleCommandCaseDefinitions,
-  completedHostStaleCommandCases,
-  completedPlayerReloadCaseDefinitions,
   completedPlayerReloadAssertionCases,
-  completedPlayerReloadCases,
-  completedPlayerReloadProofCases,
-  staleCompletedGamePlayerCommandCaseDefinitions,
-  staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
+  completedGameEndgameScenarioCaseFamilies,
+  completedGameEndgameStaleRejectAssertionCases,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 
 export {
+  assertCompletedGameEndgameTransition,
+  assertCompletedPlayerReloadCases,
+  completedDeadPlayerStaleVoteAssertionCase,
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
+  completedDeadPlayerStaleVoteProofArgs,
+  completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilies,
+  completedGameEndgameStaleRejectAssertionCases,
+  completedGameEndgameTransition,
+  completedGameEndgameTransitionTokens,
+  completedHostStaleCommandAssertionCases,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedHostStaleCommandProofArgs,
+  completedPlayerReloadAssertionCases,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
+  completedPlayerReloadCommandState,
+  completedPlayerReloadProofCases,
+  staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
-
-export function completedGameEndgameScenarioCaseFamilies({
-  hostStaleCommandCases = completedHostStaleCommandCases(),
-  playerReloadCases = completedPlayerReloadCases(),
-  deadPlayerStaleVoteCase = completedDeadPlayerStaleVoteCase(),
-  playerStaleCommandCases = staleCompletedGamePlayerCommandCases(),
-} = {}) {
-  return {
-    completedHostStaleCommandCases: hostStaleCommandCases,
-    completedPlayerReloadCases: playerReloadCases,
-    completedDeadPlayerStaleVoteCase: deadPlayerStaleVoteCase,
-    staleCompletedGamePlayerCommandCases: playerStaleCommandCases,
-  };
-}
-
-export function completedGameEndgameProofScenarioCases({
-  actionPlayerRoleUrl,
-  normalPlayerRoleUrl,
-  deadPlayerRoleUrl,
-  commandStateBuilders,
-}) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
-  return {
-    completedHostStaleCommandCases:
-      scenarioFamilies.completedHostStaleCommandCases,
-    completedPlayerReloadCases: completedPlayerReloadProofCases({
-      actionPlayerRoleUrl,
-      normalPlayerRoleUrl,
-      deadPlayerRoleUrl,
-      commandStateBuilders,
-      cases: scenarioFamilies.completedPlayerReloadCases,
-    }),
-    completedDeadPlayerStaleVoteCase:
-      scenarioFamilies.completedDeadPlayerStaleVoteCase,
-    staleCompletedGamePlayerCommandCases:
-      scenarioFamilies.staleCompletedGamePlayerCommandCases,
-  };
-}
-
-export function completedGameEndgameTransitionTokens({
-  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
-} = {}) {
-  return [
-    "host:N05:complete_game:ack:921",
-    "host:reload:complete",
-    ...scenarioFamilies.completedHostStaleCommandCases.map(
-      (scenario) => scenario.transitionToken,
-    ),
-    "actionPlayer:endgame:complete",
-    ...scenarioFamilies.completedPlayerReloadCases.map(
-      (scenario) => scenario.transitionToken,
-    ),
-    scenarioFamilies.completedDeadPlayerStaleVoteCase.transitionToken,
-    ...scenarioFamilies.staleCompletedGamePlayerCommandCases.map(
-      (scenario) => scenario.transitionToken,
-    ),
-  ];
-}
-
-export function completedGameEndgameTransition({
-  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
-} = {}) {
-  return completedGameEndgameTransitionTokens({ scenarioFamilies }).join(" -> ");
-}
-
-export function assertCompletedGameEndgameTransition({
-  transition,
-  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
-  failureMessage = "completed-game endgame transition missing shared scenario tokens",
-}) {
-  const transitionText = String(transition ?? "");
-  const missingTokens = completedGameEndgameTransitionTokens({
-    scenarioFamilies,
-  }).filter((token) => !transitionText.includes(token));
-  if (missingTokens.length > 0) {
-    throw new Error(`${failureMessage}: ${missingTokens.join(", ")}`);
-  }
-}
-
-export function completedGameEndgameStaleRejectAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-  sourceHostRoleUrl,
-  sourceDeadPlayerRoleUrl,
-  sourceActionPlayerRoleUrl,
-  assertCompletedHostStaleCommandRecoveryProof,
-  assertCompletedDeadPlayerStaleVoteRecoveryProof,
-  assertStaleCompletedGamePlayerCommandRecoveryProof,
-  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
-}) {
-  return [
-    ...completedHostStaleCommandAssertionCases({
-      completedGameEndgameSurface,
-      expectedGame,
-      sourceHostRoleUrl,
-      assertCompletedHostStaleCommandRecoveryProof,
-      cases: scenarioFamilies.completedHostStaleCommandCases,
-    }),
-    completedDeadPlayerStaleVoteAssertionCase({
-      completedGameEndgameSurface,
-      expectedGame,
-      sourceRoleUrl: sourceDeadPlayerRoleUrl,
-      assertCompletedDeadPlayerStaleVoteRecoveryProof,
-      scenario: scenarioFamilies.completedDeadPlayerStaleVoteCase,
-    }),
-    ...staleCompletedGamePlayerCommandAssertionCases({
-      completedGameEndgameSurface,
-      expectedGame,
-      sourceActionPlayerRoleUrl,
-      assertStaleCompletedGamePlayerCommandRecoveryProof,
-      cases: scenarioFamilies.staleCompletedGamePlayerCommandCases,
-    }),
-  ];
-}
-
-export function completedHostStaleCommandAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-  sourceHostRoleUrl,
-  assertCompletedHostStaleCommandRecoveryProof,
-  cases = completedHostStaleCommandCases(),
-}) {
-  return cases.map((scenario) => ({
-    assertProof: assertCompletedHostStaleCommandRecoveryProof,
-    proof: completedGameEndgameSurface[scenario.proofField],
-    ...completedHostStaleCommandProofArgs({
-      expectedGame,
-      sourceHostRoleUrl,
-      scenario,
-    }),
-  }));
-}
-
-export function completedHostStaleCommandProofArgs({
-  expectedGame,
-  sourceHostRoleUrl,
-  scenario,
-}) {
-  return {
-    expectedGame,
-    sourceRoleUrl: sourceHostRoleUrl,
-    expectedCommandKind: scenario.commandKind,
-  };
-}
-
-export function completedDeadPlayerStaleVoteAssertionCase({
-  completedGameEndgameSurface,
-  expectedGame,
-  sourceRoleUrl,
-  assertCompletedDeadPlayerStaleVoteRecoveryProof,
-  scenario = completedDeadPlayerStaleVoteCase(),
-}) {
-  return {
-    assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
-    proof: completedGameEndgameSurface[scenario.proofField],
-    ...completedDeadPlayerStaleVoteProofArgs({
-      expectedGame,
-      sourceRoleUrl,
-      scenario,
-    }),
-  };
-}
-
-export function completedDeadPlayerStaleVoteProofArgs({
-  expectedGame,
-  sourceRoleUrl,
-  scenario = completedDeadPlayerStaleVoteCase(),
-}) {
-  return {
-    expectedGame,
-    sourceRoleUrl,
-    scenario,
-  };
-}
-
-export function staleCompletedGamePlayerCommandAssertionCases({
-  completedGameEndgameSurface,
-  expectedGame,
-  sourceActionPlayerRoleUrl,
-  assertStaleCompletedGamePlayerCommandRecoveryProof,
-  cases = staleCompletedGamePlayerCommandCases(),
-}) {
-  return cases.map((scenario) => ({
-    assertProof: assertStaleCompletedGamePlayerCommandRecoveryProof,
-    proof: completedGameEndgameSurface[scenario.proofField],
-    ...staleCompletedGamePlayerCommandProofArgs({
-      expectedGame,
-      sourceActionPlayerRoleUrl,
-      scenario,
-    }),
-  }));
-}
-
-export function staleCompletedGamePlayerCommandProofArgs({
-  expectedGame,
-  sourceActionPlayerRoleUrl,
-  scenario,
-}) {
-  return {
-    expectedGame,
-    sourceRoleUrl: sourceActionPlayerRoleUrl,
-    scenario,
-  };
-}
+  staleCompletedGamePlayerCommandProofArgs,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 
 export function completedActionPlayerSurfaceProofArgs({
   expectedGame,
