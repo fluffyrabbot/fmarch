@@ -1145,12 +1145,16 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     href: "target/dev-test-game/proof-graph.json",
     inspectHref: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
     checks: Object.freeze(
-      nodes.map((node) =>
-        Object.freeze({
+      [
+        ...nodes.map((node) => ({
           id: String(node.id),
           status: String(node.status ?? "recorded"),
-        }),
-      ),
+        })),
+        ...edges.map((edge) => ({
+          id: proofGraphEdgeCheckId(edge),
+          status: String(edge.relationship ?? "recorded"),
+        })),
+      ].map((check) => Object.freeze(check)),
     ),
     relatedLinks: Object.freeze(
       roleNodes.map((node) =>
@@ -1172,6 +1176,12 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
       productionReady: proofGraph.productionReady === true,
     }),
   });
+}
+
+function proofGraphEdgeCheckId(edge) {
+  return `edge:${String(edge?.from ?? "")}:${String(
+    edge?.relationship ?? "related",
+  )}:${String(edge?.to ?? "")}`;
 }
 
 export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = null }) {

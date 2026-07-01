@@ -93,7 +93,10 @@ await runAdminAuditProof({
       frontendBaseUrl,
       game: source.proofRun.session.game,
       auditId: "local-proof-graph",
-      requiredChecks: source.proofGraph.nodes.map((node) => node.id),
+      requiredChecks: [
+        ...source.proofGraph.nodes.map((node) => node.id),
+        ...source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
+      ],
       requiredRelatedLinks: source.proofGraph.nodes
         .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
         .map((node) => node.id),
@@ -122,6 +125,7 @@ await runAdminAuditProof({
       hostedEvidenceLane: hostedEvidenceLaneRelativePath,
       game: source.proofRun.session.game,
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
+      edgeRowIds: source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
       edgeCount: source.proofGraph.edges.length,
       adminProofSurfaceIds: source.adminSpineProof.proofIds,
       adminProofRoleHandoffs: adminProofGraphRoleHandoffs({
@@ -157,6 +161,11 @@ export function assertProofGraphAdminProof(evidence) {
       throw new Error(`proof graph admin proof missing visible node: ${nodeId}`);
     }
   }
+  for (const edgeRowId of evidence.generatedFrom?.edgeRowIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(edgeRowId)) {
+      throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
+    }
+  }
   const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
   for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
     if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
@@ -177,4 +186,10 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
   });
   return evidence;
+}
+
+function proofGraphEdgeCheckId(edge) {
+  return `edge:${String(edge?.from ?? "")}:${String(
+    edge?.relationship ?? "related",
+  )}:${String(edge?.to ?? "")}`;
 }

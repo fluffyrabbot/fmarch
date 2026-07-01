@@ -6464,6 +6464,11 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
       );
     }
   }
+  for (const edgeRowId of proof.generatedFrom?.edgeRowIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(edgeRowId)) {
+      throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
+    }
+  }
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];

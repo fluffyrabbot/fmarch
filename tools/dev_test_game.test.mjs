@@ -1722,6 +1722,85 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         edge.relationship === "recovers-through",
     ),
   );
+  const seedDriftManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+    adminSpineProof,
+  });
+  const seedDriftNextAction = buildDevTestGameNextAction(seedDriftManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      seedProofLaneCoverage: seedProofLaneCoverageFixture({
+        unclassifiedLaneIds: ["new-production-proof-lane"],
+      }),
+      unproven: [
+        {
+          id: "hosted-concurrent-race-matrix",
+          status: "unproven",
+          requiredEvidence: "Hosted concurrent matrix evidence",
+        },
+      ],
+    }),
+  });
+  const seedDriftGraph = buildDevTestGameProofGraph(
+    {
+      spineManifest: seedDriftManifest,
+      adminSpineProof,
+      nextAction: seedDriftNextAction,
+    },
+    {
+      generatedAt: "2026-06-26T00:00:02.000Z",
+    },
+  );
+  assertDevTestGameProofGraph(seedDriftGraph);
+  assert.deepEqual(
+    seedDriftGraph.edges.find(
+      (edge) =>
+        edge.from === "next-action" &&
+        edge.to === "admin-proof:seed" &&
+        edge.relationship === "recovery-target",
+    ),
+    {
+      from: "next-action",
+      to: "admin-proof:seed",
+      relationship: "recovery-target",
+      reason: "seed-proof-lane-coverage-drift",
+      command: devTestGameSeedFixtureCommand,
+      roleUrl: devTestGameSeedFixtureRoleUrl,
+      proofTarget: devTestGameSeedFixturePath,
+      buildSlice:
+        "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
+      unclassifiedLaneCount: 1,
+      unclassifiedLaneIds: ["new-production-proof-lane"],
+    },
+  );
+  assert.equal(seedDriftGraph.generatedFrom.nextAction, nextActionPath);
   assert.throws(
     () =>
       assertDevTestGameProofGraphCoversAdminSpine(

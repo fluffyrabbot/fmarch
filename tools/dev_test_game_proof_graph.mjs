@@ -2,6 +2,13 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
+import {
+  assertDevTestGameNextAction,
+  devTestGameNextActionPath,
+  devTestGameSeedFixtureCommand,
+  devTestGameSeedFixturePath,
+  devTestGameSeedFixtureRoleUrl,
+} from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
@@ -17,20 +24,23 @@ export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
 
 export function buildDevTestGameProofGraph(
-  { spineManifest, adminSpineProof },
+  { spineManifest, adminSpineProof, nextAction = null },
   {
     generatedAt = new Date().toISOString(),
     spineManifestSource = "target/dev-test-game/spine-manifest.json",
     adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
+    nextActionSource = devTestGameNextActionPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
   validateDevTestGameAdminSpineProof(adminSpineProof, {
     path: adminSpineProofSource,
   });
+  const nextActionEvidence =
+    nextAction === null ? null : assertDevTestGameNextAction(nextAction);
   const adminSpine = adminSpineProof;
   const nodes = buildProofGraphNodes({ manifest, adminSpine });
-  const edges = buildProofGraphEdges({ nodes });
+  const edges = buildProofGraphEdges({ nodes, nextAction: nextActionEvidence });
   const evidence = {
     version: DEV_TEST_GAME_PROOF_GRAPH_VERSION,
     proof: "dev-test-game-proof-graph",
@@ -44,8 +54,12 @@ export function buildDevTestGameProofGraph(
     generatedFrom: {
       spineManifest: spineManifestSource,
       adminSpineProof: adminSpineProofSource,
+      ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       manifestGeneratedAt: manifest.generatedAt,
       adminSpineGeneratedAt: adminSpine.generatedAt,
+      ...(nextActionEvidence === null
+        ? {}
+        : { nextActionGeneratedAt: nextActionEvidence.generatedAt }),
     },
     summary: {
       nodeCount: nodes.length,
@@ -100,6 +114,26 @@ export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) 
   for (const edge of evidence.edges) {
     if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
       throw new Error(`proof graph edge has an unknown endpoint: ${edge.from}->${edge.to}`);
+    }
+    if (edge.roleUrl !== undefined && !edge.roleUrl.includes("?game=<seeded-game>")) {
+      throw new Error(`proof graph edge ${edge.from}->${edge.to} role URL is not seeded`);
+    }
+  }
+  const seedCoverageRecoveryEdge = evidence.edges.find(
+    (edge) =>
+      edge.from === "next-action" &&
+      edge.to === "admin-proof:seed" &&
+      edge.relationship === "recovery-target",
+  );
+  if (seedCoverageRecoveryEdge !== undefined) {
+    if (
+      seedCoverageRecoveryEdge.reason !== "seed-proof-lane-coverage-drift" ||
+      seedCoverageRecoveryEdge.command !== devTestGameSeedFixtureCommand ||
+      seedCoverageRecoveryEdge.roleUrl !== devTestGameSeedFixtureRoleUrl ||
+      seedCoverageRecoveryEdge.proofTarget !== devTestGameSeedFixturePath ||
+      !Array.isArray(seedCoverageRecoveryEdge.unclassifiedLaneIds)
+    ) {
+      throw new Error("proof graph seed coverage recovery edge is malformed");
     }
   }
   if (adminSpineProof !== undefined) {
@@ -175,17 +209,22 @@ export async function writeDevTestGameProofGraph({
     "target/dev-test-game/spine-manifest.json",
   adminSpineProofPath = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
     "target/dev-test-game/admin-spine-proof.json",
+  nextActionPath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
+    devTestGameNextActionPath,
 } = {}) {
   const absoluteSpineManifestPath = path.resolve(repoRoot, spineManifestPath);
   const absoluteAdminSpineProofPath = path.resolve(repoRoot, adminSpineProofPath);
+  const absoluteNextActionPath = path.resolve(repoRoot, nextActionPath);
   const spineManifest = JSON.parse(await readFile(absoluteSpineManifestPath, "utf8"));
   const adminSpineProof = JSON.parse(await readFile(absoluteAdminSpineProofPath, "utf8"));
+  const nextAction = JSON.parse(await readFile(absoluteNextActionPath, "utf8"));
   const evidence = buildDevTestGameProofGraph(
-    { spineManifest, adminSpineProof },
+    { spineManifest, adminSpineProof, nextAction },
     {
       generatedAt,
       spineManifestSource: path.relative(repoRoot, absoluteSpineManifestPath),
       adminSpineProofSource: path.relative(repoRoot, absoluteAdminSpineProofPath),
+      nextActionSource: path.relative(repoRoot, absoluteNextActionPath),
     },
   );
   await mkdir(path.dirname(proofGraphJsonPath), { recursive: true });
@@ -260,20 +299,50 @@ function buildProofGraphNodes({ manifest, adminSpine }) {
   );
 }
 
-function buildProofGraphEdges({ nodes }) {
+function buildProofGraphEdges({ nodes, nextAction = null }) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = [
     ["admin-spine", "spine-manifest", "aggregates"],
     ["spine-manifest", "proof-freshness", "records"],
     ["spine-manifest", "next-action", "records"],
     ["proof-freshness", "next-action", "recovers-through"],
+    ...nextActionRecoveryEdges(nextAction),
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
   ];
   return edges
     .filter(([from, to]) => nodeIds.has(from) && nodeIds.has(to))
-    .map(([from, to, relationship]) => ({ from, to, relationship }));
+    .map(([from, to, relationship, metadata = {}]) =>
+      Object.fromEntries(
+        Object.entries({ from, to, relationship, ...metadata }).filter(
+          ([, value]) => value !== undefined && value !== "",
+        ),
+      ),
+    );
+}
+
+function nextActionRecoveryEdges(nextAction) {
+  if (nextAction?.nextAction?.reason !== "seed-proof-lane-coverage-drift") {
+    return [];
+  }
+  const seedCoverage = nextAction.nextAction.seedProofLaneCoverage;
+  return [
+    [
+      "next-action",
+      "admin-proof:seed",
+      "recovery-target",
+      {
+        reason: nextAction.nextAction.reason,
+        command: nextAction.nextAction.command,
+        roleUrl: seedCoverage?.roleUrl,
+        proofTarget: seedCoverage?.proofTarget,
+        buildSlice: seedCoverage?.buildSlice,
+        unclassifiedLaneCount: seedCoverage?.unclassifiedLaneCount,
+        unclassifiedLaneIds: seedCoverage?.unclassifiedLaneIds,
+      },
+    ],
+  ];
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

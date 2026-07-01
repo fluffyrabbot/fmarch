@@ -931,7 +931,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
 
   const graph = data.audit.find((item) => item.id === "local-proof-graph");
   assert.equal(graph.label, "Local proof graph");
-  assert.equal(graph.status, "5 proof nodes, 5 edges");
+  assert.equal(graph.status, "6 proof nodes, 6 edges");
   assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
   assert.equal(graph.inspectHref, "/admin/audit/local-proof-graph?game=midsummer");
   assert.deepEqual(
@@ -941,7 +941,17 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "passed"],
       ["proof-freshness", "passed"],
       ["next-action", "recorded"],
+      ["admin-proof:seed", "passed"],
       ["admin-proof:hosted-concurrent-race-matrix", "passed"],
+      ["edge:admin-spine:aggregates:spine-manifest", "aggregates"],
+      ["edge:spine-manifest:records:proof-freshness", "records"],
+      ["edge:spine-manifest:records:next-action", "records"],
+      ["edge:proof-freshness:recovers-through:next-action", "recovers-through"],
+      ["edge:next-action:recovery-target:admin-proof:seed", "recovery-target"],
+      [
+        "edge:admin-spine:aggregates:admin-proof:hosted-concurrent-race-matrix",
+        "aggregates",
+      ],
     ],
   );
   assert.deepEqual(
@@ -951,6 +961,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      ["admin-proof:seed", "/admin/audit/local-seed-fixtures?game=midsummer"],
       [
         "admin-proof:hosted-concurrent-race-matrix",
         "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
@@ -958,10 +969,10 @@ test("admin route data exposes local proof graph as a native audit row", async (
     ],
   );
   assert.deepEqual(graph.artifactSummary, {
-    nodeCount: 5,
-    edgeCount: 5,
-    roleUrlCount: 5,
-    recoveryTargetCount: 5,
+    nodeCount: 6,
+    edgeCount: 6,
+    roleUrlCount: 6,
+    recoveryTargetCount: 6,
     releaseReady: false,
     productionReady: false,
   });
@@ -985,7 +996,17 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "passed"],
       ["proof-freshness", "passed"],
       ["next-action", "recorded"],
+      ["admin-proof:seed", "passed"],
       ["admin-proof:hosted-concurrent-race-matrix", "passed"],
+      ["edge:admin-spine:aggregates:spine-manifest", "aggregates"],
+      ["edge:spine-manifest:records:proof-freshness", "records"],
+      ["edge:spine-manifest:records:next-action", "records"],
+      ["edge:proof-freshness:recovers-through:next-action", "recovers-through"],
+      ["edge:next-action:recovery-target:admin-proof:seed", "recovery-target"],
+      [
+        "edge:admin-spine:aggregates:admin-proof:hosted-concurrent-race-matrix",
+        "aggregates",
+      ],
     ],
   );
   assert.deepEqual(
@@ -995,6 +1016,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      ["admin-proof:seed", "/admin/audit/local-seed-fixtures?game=midsummer"],
       [
         "admin-proof:hosted-concurrent-race-matrix",
         "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
@@ -3799,10 +3821,10 @@ function proofGraphFixture() {
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
     },
     summary: {
-      nodeCount: 5,
-      edgeCount: 5,
-      roleUrlCount: 5,
-      recoveryTargetCount: 5,
+      nodeCount: 6,
+      edgeCount: 6,
+      roleUrlCount: 6,
+      recoveryTargetCount: 6,
     },
     nodes: [
       proofGraphNode({
@@ -3838,6 +3860,14 @@ function proofGraphFixture() {
         recoveryCommand: "test:dev-test-game-next-action",
       }),
       proofGraphNode({
+        id: "admin-proof:seed",
+        label: "Seed fixture admin proof",
+        status: "passed",
+        artifact: "target/dev-test-game/seed-admin-proof.json",
+        roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+        recoveryCommand: "npm run test:dev-test-game-seed-fixture",
+      }),
+      proofGraphNode({
         id: "admin-proof:hosted-concurrent-race-matrix",
         label: "Hosted concurrent race matrix admin proof",
         status: "passed",
@@ -3854,6 +3884,15 @@ function proofGraphFixture() {
       { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
       { from: "spine-manifest", to: "next-action", relationship: "records" },
       { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
+      {
+        from: "next-action",
+        to: "admin-proof:seed",
+        relationship: "recovery-target",
+        reason: "seed-proof-lane-coverage-drift",
+        command: "npm run test:dev-test-game-seed-fixture",
+        roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+        proofTarget: "target/dev-test-game/seed-fixture-summary.json",
+      },
       {
         from: "admin-spine",
         to: "admin-proof:hosted-concurrent-race-matrix",
