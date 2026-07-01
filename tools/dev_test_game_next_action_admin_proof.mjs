@@ -18,7 +18,7 @@ import {
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
   assertAdminAuditRelatedHandoff,
-  requiredRelatedDestinationsForHandoff,
+  requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
   hostedMatrixHandoffSummary,
@@ -84,9 +84,10 @@ await runAdminAuditProof({
       ),
       requiredHostedHandoffBlockedChecks:
         requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
-      requiredRelatedDestinations: requiredRelatedDestinationsForHandoff(
-        hostedMatrixHandoffSummary({
+      requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
+        relatedHandoffsForNextAction({
           nextAction: source.nextAction,
+          proofGraph: source.proofGraph,
           hostedMatrix: source.hostedMatrix,
         }),
       ),
@@ -135,8 +136,9 @@ await runAdminAuditProof({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
       }),
-      relatedHandoff: hostedMatrixHandoffSummary({
+      relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
+        proofGraph: source.proofGraph,
         hostedMatrix: source.hostedMatrix,
       }),
       stabilityStatus: source.nextAction.stabilityTrace.status,
@@ -473,6 +475,24 @@ export function assertNextActionAdminProof(evidence) {
     throw new Error("next-action admin proof missing selected graph node row");
   }
   if (
+    evidence.generatedFrom?.selectedProofGraphNode !== null &&
+    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
+    !evidence.adminRoleSurface?.visibleChecks?.includes(
+      "selected-proof-graph-destination",
+    )
+  ) {
+    throw new Error("next-action admin proof missing selected graph destination row");
+  }
+  if (
+    evidence.generatedFrom?.selectedProofGraphNode !== null &&
+    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+      "selected-proof-graph-node",
+    )
+  ) {
+    throw new Error("next-action admin proof missing selected graph destination link");
+  }
+  if (
     evidence.generatedFrom?.unprovenSpineTarget !== null &&
     evidence.generatedFrom?.unprovenSpineTarget !== undefined
   ) {
@@ -545,12 +565,13 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing seed coverage role URL");
   }
-  const relatedHandoff = evidence.generatedFrom?.relatedHandoff;
-  assertAdminAuditRelatedHandoff({
-    adminRoleSurface: evidence.adminRoleSurface,
-    handoff: relatedHandoff,
-    proofName: "next-action admin proof",
-  });
+  for (const relatedHandoff of evidence.generatedFrom?.relatedHandoffs ?? []) {
+    assertAdminAuditRelatedHandoff({
+      adminRoleSurface: evidence.adminRoleSurface,
+      handoff: relatedHandoff,
+      proofName: "next-action admin proof",
+    });
+  }
   const checklist = evidence.generatedFrom?.unprovenHostedHandoffChecklist;
   if (checklist !== null && checklist !== undefined) {
     if (
@@ -599,6 +620,7 @@ function requiredChecksForNextAction(nextAction) {
     checks.push(
       nextAction.nextAction.unproven.id,
       "selected-proof-graph-node",
+      "selected-proof-graph-destination",
       "release-readiness-selection-trace",
     );
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
@@ -666,6 +688,9 @@ function requiredRelatedLinksForNextAction(nextAction) {
     nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
   return [
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
+      ? ["selected-proof-graph-node"]
+      : []),
+    ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? [proofGraphNodeId]
       : []),
     ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
@@ -702,6 +727,30 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
       };
 }
 
+function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
+  return [
+    selectedProofGraphHandoffSummary({ nextAction, proofGraph }),
+    hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
+  ].filter((handoff) => handoff !== null);
+}
+
+function selectedProofGraphHandoffSummary({ nextAction, proofGraph }) {
+  const selectedNode = selectedNextActionProofGraphNodeSummary({
+    nextAction,
+    proofGraph,
+  });
+  if (selectedNode === null) {
+    return null;
+  }
+  return {
+    linkId: "selected-proof-graph-node",
+    auditId: "local-proof-graph",
+    requiredCheckIds: [selectedNode.id],
+    requiredRelatedLinkIds:
+      selectedNode.roleUrl === "" ? [] : [selectedNode.id],
+  };
+}
+
 function requiredChecksForEvidence(evidence) {
   return [
     "next-command",
@@ -720,6 +769,7 @@ function requiredChecksForEvidence(evidence) {
       ? [
           evidence.generatedFrom.unprovenId,
           "selected-proof-graph-node",
+          "selected-proof-graph-destination",
           "release-readiness-selection-trace",
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined

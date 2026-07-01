@@ -1341,6 +1341,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             id: "selected-proof-graph-node",
             status: selectedProofGraphNodeStatus,
           }),
+          Object.freeze({
+            id: "selected-proof-graph-destination",
+            status: `${selectedProofGraphNode.id}:${
+              selectedProofGraphNode.auditId || "unknown"
+            }`,
+          }),
         ]),
     ...(selectedSpineTarget.checkpointId === ""
       ? []
@@ -1536,9 +1542,21 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     relatedLinks:
       unprovenRoleUrl === "" &&
       localCheckRoleUrl === "" &&
-      seedProofLaneCoverageRoleUrl === ""
+      seedProofLaneCoverageRoleUrl === "" &&
+      selectedProofGraphNode === null
         ? Object.freeze([])
         : Object.freeze([
+            ...(selectedProofGraphNode === null
+              ? []
+              : [
+                  Object.freeze({
+                    id: "selected-proof-graph-node",
+                    label: selectedProofGraphNode.id,
+                    href: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+                    status: selectedProofGraphNode.status,
+                    command: selectedProofGraphNode.proofCommand,
+                  }),
+                ]),
             ...(unprovenRoleUrl === ""
               ? []
               : [
@@ -1662,6 +1680,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedProofGraphNodeProofCommand: String(
         selectedProofGraphNode?.proofCommand ?? "",
       ),
+      selectedProofGraphNodeRoleUrl: String(selectedProofGraphNode?.roleUrl ?? ""),
+      selectedProofGraphNodeAuditId: String(selectedProofGraphNode?.auditId ?? ""),
+      selectedProofGraphNodeHref:
+        selectedProofGraphNode === null
+          ? ""
+          : adminAuditInspectHref({ game, audit: "local-proof-graph" }),
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),

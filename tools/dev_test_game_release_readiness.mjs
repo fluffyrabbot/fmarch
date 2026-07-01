@@ -6636,6 +6636,44 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       throw new Error("next-action admin proof missing selected spine target");
     }
   }
+  const selectedProofGraphNode = proof.generatedFrom?.selectedProofGraphNode;
+  if (
+    selectedProofGraphNode !== null &&
+    selectedProofGraphNode !== undefined &&
+    selectedProofGraphNode.id !== undefined
+  ) {
+    if (
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-proof-graph-node",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-proof-graph-destination",
+      ) ||
+      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+        "selected-proof-graph-node",
+      )
+    ) {
+      throw new Error(
+        "next-action admin proof missing selected proof graph destination",
+      );
+    }
+    const graphDestination =
+      proof.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (item) =>
+          item?.linkId === "selected-proof-graph-node" &&
+          item.auditId === "local-proof-graph",
+      ) ?? null;
+    if (
+      graphDestination === null ||
+      graphDestination.detailRoleUrl !==
+        "/admin/audit/local-proof-graph?game=<seeded-game>" ||
+      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id))
+    ) {
+      throw new Error(
+        "next-action admin proof did not prove selected proof graph destination",
+      );
+    }
+  }
   const localTrace = proof.generatedFrom?.localReadinessDependencyTrace;
   if (
     localTrace?.strategy !== "local-readiness-dependency-before-hosted-work" ||
@@ -6726,6 +6764,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleRelatedDestinations:
+      proof.adminRoleSurface.visibleRelatedDestinations ?? [],
     visibleHostedHandoffInputs:
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
     visibleHostedHandoffBlockedChecks:

@@ -1428,6 +1428,10 @@ test("admin route data exposes local next action as a native audit row", async (
         "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       ],
       [
+        "selected-proof-graph-destination",
+        "admin-proof:hosted-concurrent-race-matrix:local-hosted-concurrent-race-matrix",
+      ],
+      [
         "selected-feature-spine-declaration",
         "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
       ],
@@ -1462,6 +1466,14 @@ test("admin route data exposes local next action as a native audit row", async (
     ],
   );
   assert.deepEqual(nextAction.relatedLinks, [
+    {
+      id: "selected-proof-graph-node",
+      label: "admin-proof:hosted-concurrent-race-matrix",
+      href: "/admin/audit/local-proof-graph?game=midsummer",
+      status: "passed",
+      command:
+        "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    },
     {
       id: "admin-proof:hosted-concurrent-race-matrix",
       label: "hosted-concurrent-race-matrix",
@@ -1533,6 +1545,10 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedProofGraphNodeStatus: "passed",
     selectedProofGraphNodeProofCommand:
       "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    selectedProofGraphNodeRoleUrl:
+      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    selectedProofGraphNodeAuditId: "local-hosted-concurrent-race-matrix",
+    selectedProofGraphNodeHref: "/admin/audit/local-proof-graph?game=midsummer",
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",

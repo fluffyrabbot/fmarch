@@ -9,6 +9,8 @@ export function selectedNextActionProofGraphNodeSummary({
     : {
         id: String(node.id),
         status: String(node.status ?? "unknown"),
+        auditId: auditIdFromProofGraphNodeRoleUrl(node.roleUrl),
+        roleUrl: typeof node.roleUrl === "string" ? node.roleUrl : "",
         proofCommand: proofGraphNodeProofCommand(node),
       };
 }
@@ -96,4 +98,12 @@ function proofGraphNodeById(proofGraph, proofGraphNodeId) {
 
 function proofGraphNodeProofCommand(node) {
   return String(node?.proofCommand ?? node?.recoveryCommand ?? "");
+}
+
+function auditIdFromProofGraphNodeRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string") {
+    return "";
+  }
+  const match = roleUrl.match(/\/admin\/audit\/([^/?#]+)/);
+  return match?.[1] ?? "";
 }

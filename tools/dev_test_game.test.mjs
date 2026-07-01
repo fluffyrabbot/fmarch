@@ -13321,7 +13321,32 @@ function nextActionAdminProofFixture() {
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
         status: "ready",
+        auditId: "local-hosted-concurrent-race-matrix",
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        proofCommand:
+          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       },
+      relatedHandoffs: [
+        {
+          linkId: "selected-proof-graph-node",
+          auditId: "local-proof-graph",
+          requiredCheckIds: ["admin-proof:hosted-concurrent-race-matrix"],
+          requiredRelatedLinkIds: ["admin-proof:hosted-concurrent-race-matrix"],
+        },
+        {
+          linkId: "admin-proof:hosted-concurrent-race-matrix",
+          auditId: "local-hosted-concurrent-race-matrix",
+          requiredCheckIds: ["hosted-like-api-frontend-target"],
+          requiredCheckStatuses: {
+            "real-hosted-deployment": "unproven",
+          },
+          requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
+          requiredReconnectLaneIds: [],
+          requiredStaleConflictLaneIds: [],
+          requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
+        },
+      ],
       selectionTrace: {
         strategy: "development-spine-priority",
         candidateCount: 0,
@@ -13361,6 +13386,7 @@ function nextActionAdminProofFixture() {
         "selection-trace",
         "hosted-concurrent-race-matrix",
         "selected-proof-graph-node",
+        "selected-proof-graph-destination",
         "selected-feature-spine-declaration",
         "selected-spine-target",
         "selected-spine-drilldown",
@@ -13370,7 +13396,28 @@ function nextActionAdminProofFixture() {
         "seed-proof-lane-coverage-trace",
         "release-readiness-selection-trace",
       ],
-      visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
+      visibleRelatedLinks: [
+        "selected-proof-graph-node",
+        "admin-proof:hosted-concurrent-race-matrix",
+      ],
+      visibleRelatedDestinations: [
+        {
+          linkId: "selected-proof-graph-node",
+          auditId: "local-proof-graph",
+          detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          visibleChecks: ["admin-proof:hosted-concurrent-race-matrix"],
+          visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
+        },
+        {
+          linkId: "admin-proof:hosted-concurrent-race-matrix",
+          auditId: "local-hosted-concurrent-race-matrix",
+          detailRoleUrl:
+            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+          visibleChecks: ["hosted-like-api-frontend-target"],
+          visibleUnproven: ["hosted-concurrent-race-matrix"],
+          visibleRelatedLinks: ["local-race-coverage", "local-next-action"],
+        },
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
