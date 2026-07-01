@@ -2170,6 +2170,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
+      ["stale-host-advance", "passed: Reject InvalidTarget, role URL true, locked false"],
       ["replacement-incoming-player", "passed"],
     ].map(([id, status]) => [id, status, checkStatusById[id]]),
     [
@@ -2212,6 +2213,11 @@ test("admin local core loop detail data carries lane rows", async () => {
         "private-channel",
         "passed: private:mafia_day_chat, denied 403",
         "passed: private:mafia_day_chat, denied 403",
+      ],
+      [
+        "stale-host-advance",
+        "passed: Reject InvalidTarget, role URL true, locked false",
+        "passed: Reject InvalidTarget, role URL true, locked false",
       ],
       ["replacement-incoming-player", "passed", "passed"],
     ],
@@ -3137,6 +3143,14 @@ function proofRunFixture() {
       recoveredPhase: "D02",
       recoveredLocked: true,
       phaseActions: ["unlock_thread", "advance_phase"],
+    },
+    "stale-host-advance": {
+      rejectError: "InvalidTarget",
+      roleUrl: "http://127.0.0.1:5173/g/midsummer/host",
+      stalePhase: "D02",
+      phaseId: "D02",
+      locked: false,
+      phaseActions: ["resolve_phase", "lock_thread"],
     },
     "stale-host-advance-reconnect-recovery": {
       reconnectingState: "reconnecting",

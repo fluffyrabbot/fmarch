@@ -14,6 +14,7 @@ import {
   hostPromptStaleControlLaneIds,
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
+  hostStaleAdvanceControlLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   playerActionConflictRecoveryLaneIds,
@@ -100,6 +101,7 @@ const requiredLaneIds = Object.freeze([
   ...playerActionConflictRecoveryLaneIds,
   ...hostRaceReloadLaneIds,
   ...hostGenericStaleControlLaneIds,
+  hostStaleAdvanceControlLaneId,
   ...hostPhaseStaleRecoveryLaneIds,
   "stale-cohost-deadline",
   ...cohostDeadlineRecoveryLaneIds,

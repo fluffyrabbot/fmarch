@@ -494,6 +494,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "dev:test-game:prebuild",
     "tools/dev_test_game_live_proof.mjs",
     "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "backup-restore",
     "identity",

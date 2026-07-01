@@ -8,6 +8,7 @@ export const devTestGameLiveSpinePlan = [
   { kind: "npm", script: "dev:test-game:prebuild" },
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
+  { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
   { kind: "spine", script: "backup-restore" },
   { kind: "spine", script: "identity" },

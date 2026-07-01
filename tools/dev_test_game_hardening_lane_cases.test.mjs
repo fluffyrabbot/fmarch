@@ -7,6 +7,7 @@ import {
   cohostDeadlineStaleControlCaseDefinitions,
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
+  hostPhaseStaleControlCase,
   hostStaleControlLaneIds,
   hostPhaseStaleControlCases,
   hostPhaseStaleControlCaseDefinitions,
@@ -15,6 +16,8 @@ import {
   hostPromptStaleControlLaneIds,
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
+  hostStaleAdvanceControlCase,
+  hostStaleAdvanceControlLaneId,
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
@@ -76,6 +79,7 @@ test("host stale-control production callers use the shared scenario module", asy
     "tools/dev_test_game_next_action.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_core_loop_scenarios.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_seed_scenario_cases.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
@@ -259,6 +263,9 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
     hostPhaseStaleControlCases()[0],
     hostPhaseStaleControlCaseDefinitions[0],
   );
+  assert.equal(hostPhaseStaleControlCase("advance").baseLaneId, "stale-host-advance");
+  assert.equal(hostStaleAdvanceControlCase().rejectError, "InvalidTarget");
+  assert.equal(hostStaleAdvanceControlLaneId, "stale-host-advance");
 });
 
 function hardeningLaneImportBlocks(source) {

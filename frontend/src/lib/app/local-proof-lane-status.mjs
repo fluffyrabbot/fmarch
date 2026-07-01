@@ -6,6 +6,7 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "resolution-receipts",
   "player-action-boundary",
   "private-channel",
+  "stale-host-advance",
 ]);
 
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
@@ -79,6 +80,8 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
     case "resolution-receipts":
       return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
+    case "stale-host-advance":
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     default:
       return status;
   }

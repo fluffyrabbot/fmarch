@@ -116,6 +116,23 @@ export function hostPhaseStaleControlCases() {
   return hostPhaseStaleControlCaseDefinitions.map(cloneScenarioCase);
 }
 
+export function hostPhaseStaleControlCase(key) {
+  const scenario = hostPhaseStaleControlCaseDefinitions.find(
+    (candidate) => candidate.key === key,
+  );
+  if (scenario === undefined) {
+    throw new Error(`unknown host phase stale-control case: ${key}`);
+  }
+  return cloneScenarioCase(scenario);
+}
+
+export function hostStaleAdvanceControlCase() {
+  return hostPhaseStaleControlCase("advance");
+}
+
+export const hostStaleAdvanceControlLaneId =
+  hostStaleAdvanceControlCase().baseLaneId;
+
 export const hostPhaseStaleControlLaneIds = Object.freeze(
   hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
     scenario.baseLaneId,

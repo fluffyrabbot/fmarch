@@ -37,6 +37,18 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
+      id: "stale-host-advance",
+      status: "passed",
+      evidence: {
+        rejectError: "InvalidTarget",
+        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+        locked: false,
+      },
+    }),
+    "passed: Reject InvalidTarget, role URL true, locked false",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
       id: "action-loop",
       status: "passed",
       evidence: {
@@ -361,6 +373,10 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
     "passed: Reject InvalidTarget, legal action visible true",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance"],
+    "passed: Reject InvalidTarget, role URL true, locked false",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-conflict-message"],

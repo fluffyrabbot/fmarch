@@ -6171,6 +6171,9 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   const coreLoopCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === "local-core-loop-proof",
   );
+  if (!sameStringArray(coreLoopCheck?.laneIds, coreLoopAuditLaneIds)) {
+    throw new Error("dev-test-game core-loop readiness check lane list drifted");
+  }
   if (
     coreLoopCheck?.spineTargets !== undefined &&
     !validCoreLoopSpineTargets(coreLoopCheck.spineTargets)
