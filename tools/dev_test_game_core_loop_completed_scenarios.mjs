@@ -83,6 +83,41 @@ export function completedPlayerReloadAssertionCases({
   }));
 }
 
+export function completedPlayerReloadProofCases({
+  actionPlayerRoleUrl,
+  normalPlayerRoleUrl,
+  deadPlayerRoleUrl,
+  commandStateBuilders,
+  cases = completedPlayerReloadCases(),
+}) {
+  const roleUrlsByField = {
+    sourceActionPlayerRoleUrl: actionPlayerRoleUrl,
+    sourceNormalPlayerRoleUrl: normalPlayerRoleUrl,
+    sourceDeadPlayerRoleUrl: deadPlayerRoleUrl,
+  };
+  return cases.map((scenario) => ({
+    ...scenario,
+    roleUrl: roleUrlsByField[scenario.sourceRoleUrlField],
+    commandState: completedPlayerReloadCommandState({
+      scenario,
+      commandStateBuilders,
+    }),
+  }));
+}
+
+export function completedPlayerReloadCommandState({
+  scenario,
+  commandStateBuilders,
+}) {
+  const builder = commandStateBuilders?.[scenario.commandStateKind];
+  if (typeof builder !== "function") {
+    throw new Error(
+      `unknown completed player reload command state: ${scenario.commandStateKind}`,
+    );
+  }
+  return builder({ boundary: scenario.boundary });
+}
+
 export function assertCompletedPlayerReloadCases(
   cases,
   assertCompletedPlayerReloadProof,

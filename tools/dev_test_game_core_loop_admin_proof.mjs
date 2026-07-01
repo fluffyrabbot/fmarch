@@ -12,6 +12,7 @@ import {
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
+  completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -1763,6 +1764,7 @@ async function proveCompletedGameEndgameSurface({
       actionPlayerRoleUrl,
       normalPlayerRoleUrl,
       deadPlayerRoleUrl,
+      commandStateBuilders: completedPlayerReloadCommandStateBuilders(),
     }),
   });
   const completedDeadPlayerStaleVoteRecoveryProof =
@@ -2853,42 +2855,12 @@ async function proveStaleCompletedGamePlayerCommandRecovery({
   }
 }
 
-function completedPlayerReloadProofCases({
-  actionPlayerRoleUrl,
-  normalPlayerRoleUrl,
-  deadPlayerRoleUrl,
-}) {
-  const roleUrlsByField = {
-    sourceActionPlayerRoleUrl: actionPlayerRoleUrl,
-    sourceNormalPlayerRoleUrl: normalPlayerRoleUrl,
-    sourceDeadPlayerRoleUrl: deadPlayerRoleUrl,
+function completedPlayerReloadCommandStateBuilders() {
+  return {
+    "action-player": seededCompletedActionPlayerCommandState,
+    "normal-player": seededCompletedNormalPlayerCommandState,
+    "dead-player": seededCompletedDeadPlayerCommandState,
   };
-  return completedPlayerReloadCases().map((scenario) => ({
-    ...scenario,
-    roleUrl: roleUrlsByField[scenario.sourceRoleUrlField],
-    commandState: completedPlayerReloadCommandState(scenario),
-  }));
-}
-
-function completedPlayerReloadCommandState(scenario) {
-  if (scenario.commandStateKind === "action-player") {
-    return seededCompletedActionPlayerCommandState({
-      boundary: scenario.boundary,
-    });
-  }
-  if (scenario.commandStateKind === "normal-player") {
-    return seededCompletedNormalPlayerCommandState({
-      boundary: scenario.boundary,
-    });
-  }
-  if (scenario.commandStateKind === "dead-player") {
-    return seededCompletedDeadPlayerCommandState({
-      boundary: scenario.boundary,
-    });
-  }
-  throw new Error(
-    `unknown completed player reload command state: ${scenario.commandStateKind}`,
-  );
 }
 
 async function proveCompletedPlayerRoleReloadCases({
