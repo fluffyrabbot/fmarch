@@ -30,6 +30,7 @@ import {
   privateReceiptScenario,
   assertCompletedPrivateChannelReloadProofCase,
   assertCompletedPrivateChannelProofCases,
+  assertPrivateChannelSubmitPostProofCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
   assertStaleCompletedPrivatePostRecoveryProofCase,
   completedPrivateChannelProofAssertionCases,
@@ -12699,43 +12700,12 @@ function assertPrivateChannelRoleSurface(privateChannelRoleSurface) {
       )}`,
     );
   }
-  if (
-    submitPostProof?.status !== "passed" ||
-    submitPostProof.clickedAction !== submitPostScenario.clickedAction ||
-    submitPostProof.commandKind !== submitPostScenario.commandKind ||
-    submitPostProof.command?.game !== expectedGame ||
-    submitPostProof.command.channel_id !== submitPostScenario.channelId ||
-    submitPostProof.command.actor_slot !== submitPostScenario.actorSlot ||
-    submitPostProof.command.body !== submitPostProof.privatePostBody ||
-    submitPostProof.privatePostBody !== submitPostScenario.postBody ||
-    submitPostProof.commandStatus?.state !== "ack" ||
-    !submitPostProof.commandStatus?.message?.includes(
-      `Ack: stream seqs ${submitPostScenario.ackSeq}`,
-    ) ||
-    submitPostProof.bridgePlan?.role !== "player" ||
-    submitPostProof.bridgePlan.commandKind !== submitPostScenario.commandKind ||
-    submitPostProof.bridgePlan.commandEndpoint !== "/commands" ||
-    submitPostProof.bridgePlan.finalState !== "ack" ||
-    !sameStringArray(
-      submitPostProof.bridgePlan.projectionRefreshKeys,
-      submitPostScenario.expectedRefreshKeys,
-    ) ||
-    submitPostProof.receipts?.at?.(-1)?.state !== "ack" ||
-    submitPostProof.projectionThread?.posts?.at?.(-1)?.body !==
-      submitPostProof.privatePostBody ||
-    submitPostProof.receiptCount !== 1 ||
-    !String(submitPostProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(`ack: stream seqs ${submitPostScenario.ackSeq}`) ||
-    submitPostProof.receiptRefreshKeys !==
-      submitPostScenario.expectedRefreshKeys.join(",")
-  ) {
-    throw new Error(
-      `core-loop admin proof missing private channel SubmitPost ACK: ${JSON.stringify(
-        submitPostProof,
-      )}`,
-    );
-  }
+  assertPrivateChannelSubmitPostProofCase({
+    proof: submitPostProof,
+    expectedGame,
+    scenario: submitPostScenario,
+    includeEvidenceInError: true,
+  });
   assertStalePrivateChannelPostPhaseLockedProofCase({
     proof: stalePostProof,
     expectedGame,

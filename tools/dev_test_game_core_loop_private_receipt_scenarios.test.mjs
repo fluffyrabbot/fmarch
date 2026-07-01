@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
+  assertPrivateChannelSubmitPostProofCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
   completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
+  privateChannelSubmitPostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -258,6 +260,61 @@ test("stale private-channel PhaseLocked assertion covers refreshed private post 
         visitedRolePath: proof.visitedRolePath,
       }),
     /private channel stale post recovery/,
+  );
+});
+
+test("private-channel SubmitPost ACK assertion covers projected private post", () => {
+  const scenario = privateChannelSubmitPostScenario();
+  const proof = {
+    status: "passed",
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    command: {
+      game: "game-a",
+      channel_id: scenario.channelId,
+      actor_slot: scenario.actorSlot,
+      body: scenario.postBody,
+    },
+    commandStatus: {
+      state: "ack",
+      message: `Ack: stream seqs ${scenario.ackSeq}`,
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
+      finalState: "ack",
+      projectionRefreshKeys: scenario.expectedRefreshKeys,
+    },
+    receipts: [{ state: "ack" }],
+    projectionThread: {
+      posts: [{ body: scenario.postBody }],
+    },
+    privatePostBody: scenario.postBody,
+    receiptCount: 1,
+    receiptStatusText: `Ack: stream seqs ${scenario.ackSeq}`,
+    receiptRefreshKeys: scenario.expectedRefreshKeys.join(","),
+  };
+
+  assert.doesNotThrow(() =>
+    assertPrivateChannelSubmitPostProofCase({
+      proof,
+      expectedGame: "game-a",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertPrivateChannelSubmitPostProofCase({
+        proof: {
+          ...proof,
+          bridgePlan: {
+            ...proof.bridgePlan,
+            projectionRefreshKeys: ["thread"],
+          },
+        },
+        expectedGame: "game-a",
+      }),
+    /private channel SubmitPost ACK/,
   );
 });
 

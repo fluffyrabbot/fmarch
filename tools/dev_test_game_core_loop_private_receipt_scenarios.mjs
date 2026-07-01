@@ -393,6 +393,49 @@ export function assertCompletedPrivateChannelProofCases({
   }
 }
 
+export function assertPrivateChannelSubmitPostProofCase({
+  proof,
+  expectedGame,
+  scenario = privateChannelSubmitPostScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.channel_id !== scenario.channelId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.body !== proof.privatePostBody ||
+    proof.privatePostBody !== scenario.postBody ||
+    proof.commandStatus?.state !== "ack" ||
+    !String(proof.commandStatus?.message ?? "").includes(
+      `Ack: stream seqs ${scenario.ackSeq}`,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "ack" ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== "ack" ||
+    proof.projectionThread?.posts?.at?.(-1)?.body !== proof.privatePostBody ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.ackSeq}`) ||
+    proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",")
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing private channel SubmitPost ACK",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
 export function assertStalePrivateChannelPostPhaseLockedProofCase({
   proof,
   expectedGame,
