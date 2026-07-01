@@ -5576,6 +5576,17 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         );
       }
     }
+    const summary = proof.adminRoleSurface?.visibleHostedHandoffSummary;
+    if (
+      summary?.status !== checklist.status ||
+      summary?.preflightStatus !== checklist.preflightStatus ||
+      summary?.command !== checklist.command ||
+      summary?.proofTarget !== checklist.proofTarget
+    ) {
+      throw new Error(
+        "next-action admin proof missing hosted handoff blocked summary",
+      );
+    }
   }
   return {
     status: "passed",
@@ -5591,6 +5602,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffSummary:
+      proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
     command: String(proof.generatedFrom?.command ?? ""),
     reason: String(proof.generatedFrom?.reason ?? ""),
     unprovenProductionFeatureSpineTarget:

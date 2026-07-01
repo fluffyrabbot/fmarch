@@ -12906,6 +12906,10 @@ function proofFreshnessAdminProofFixture() {
 }
 
 function nextActionAdminProofFixture() {
+  const hostedHandoffChecklist = hostedEvidenceBlockedHandoffChecklistFixture({
+    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+    proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
+  });
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
@@ -12933,6 +12937,7 @@ function nextActionAdminProofFixture() {
       unprovenProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
       unprovenSpineDrilldown: featureSpineDrilldownFixture(),
       unprovenSpineTarget: resolvedFeatureSpineTargetFixture(),
+      unprovenHostedHandoffChecklist: hostedHandoffChecklist,
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
         status: "ready",
@@ -13015,6 +13020,14 @@ function nextActionAdminProofFixture() {
         "selected-proof-graph-node",
         "admin-proof:hosted-concurrent-race-matrix",
       ],
+      visibleHostedHandoffInputs: hostedHandoffChecklist.inputIds,
+      visibleHostedHandoffBlockedChecks: hostedHandoffChecklist.blockedCheckIds,
+      visibleHostedHandoffSummary: {
+        status: hostedHandoffChecklist.status,
+        preflightStatus: hostedHandoffChecklist.preflightStatus,
+        command: hostedHandoffChecklist.command,
+        proofTarget: hostedHandoffChecklist.proofTarget,
+      },
       visibleRelatedDestinations: [
         {
           linkId: "selected-proof-graph-node",

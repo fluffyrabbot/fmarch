@@ -84,6 +84,8 @@ await runAdminAuditProof({
       ),
       requiredHostedHandoffBlockedChecks:
         requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
+      requiredHostedHandoffSummary:
+        requiredHostedHandoffSummaryForNextAction(source.nextAction),
       requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
         relatedHandoffsForNextAction({
           nextAction: source.nextAction,
@@ -601,6 +603,17 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    const summary = evidence.adminRoleSurface?.visibleHostedHandoffSummary;
+    if (
+      summary?.status !== checklist.status ||
+      summary?.preflightStatus !== checklist.preflightStatus ||
+      summary?.command !== checklist.command ||
+      summary?.proofTarget !== checklist.proofTarget
+    ) {
+      throw new Error(
+        "next-action admin proof missing hosted handoff blocked summary",
+      );
+    }
   }
   return evidence;
 }
@@ -713,6 +726,18 @@ function requiredHostedHandoffBlockedCheckIdsForNextAction(nextAction) {
   const blockedCheckIds =
     nextAction.nextAction.unproven?.hostedHandoffChecklist?.blockedCheckIds;
   return Array.isArray(blockedCheckIds) ? blockedCheckIds : [];
+}
+
+function requiredHostedHandoffSummaryForNextAction(nextAction) {
+  const checklist = nextAction.nextAction.unproven?.hostedHandoffChecklist;
+  return checklist === null || checklist === undefined
+    ? null
+    : {
+        status: checklist.status,
+        preflightStatus: checklist.preflightStatus,
+        command: checklist.command,
+        proofTarget: checklist.proofTarget,
+      };
 }
 
 function requiredCheckStatusesForNextAction(nextAction, proofGraph) {

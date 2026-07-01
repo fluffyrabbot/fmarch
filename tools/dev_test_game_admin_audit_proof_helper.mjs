@@ -117,6 +117,7 @@ export async function proveAdminAuditDetail({
   requiredRealHostedEvidenceInputs = [],
   requiredHostedHandoffInputs = [],
   requiredHostedHandoffBlockedChecks = [],
+  requiredHostedHandoffSummary = null,
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   forbiddenText = [],
@@ -245,6 +246,10 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-blocked-check",
       ids: requiredHostedHandoffBlockedChecks,
+    });
+    const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
+      page,
+      expected: requiredHostedHandoffSummary,
     });
     const visibleRelatedLinks = await waitForRows({
       page,
@@ -477,6 +482,9 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedHandoffBlockedChecks.length === 0
         ? {}
         : { visibleHostedHandoffBlockedChecks }),
+      ...(visibleHostedHandoffSummary === null
+        ? {}
+        : { visibleHostedHandoffSummary }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       ...(visibleRelatedDestinations.length === 0
         ? {}
@@ -520,6 +528,32 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
     visible.push(id);
   }
   return visible;
+}
+
+async function waitForHostedHandoffSummary({ page, expected }) {
+  if (expected === null || expected === undefined) {
+    return null;
+  }
+  const row = page.getByTestId("admin-audit-hosted-handoff-summary");
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  const summary = {
+    status: String(expected.status ?? ""),
+    preflightStatus: String(expected.preflightStatus ?? ""),
+    command: String(expected.command ?? ""),
+    proofTarget: String(expected.proofTarget ?? ""),
+  };
+  for (const value of Object.values(summary)) {
+    if (value === "" || !text.includes(value)) {
+      throw new Error(
+        `admin-audit-hosted-handoff-summary missing expected text ${value}: ${text}`,
+      );
+    }
+  }
+  return summary;
 }
 
 async function waitForLocalPrerequisiteRoleUrls({ page, ids }) {
