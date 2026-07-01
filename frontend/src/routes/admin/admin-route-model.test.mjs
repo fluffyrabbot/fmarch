@@ -2229,19 +2229,25 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["public-player-complete-reload", "passed"],
       ["stale-player-complete", "passed"],
       ["stale-player-complete-reload", "passed"],
-      ["stale-same-action-recovery", "passed: Reject ActionAlreadySubmitted, visible false"],
+      [
+        "stale-same-action-recovery",
+        "passed: Reject ActionAlreadySubmitted, role URL true, visible false",
+      ],
       [
         "stale-dead-action-conflict",
         "passed: Reject SlotNotAlive, role URL true, actor dead",
       ],
-      ["stale-action-conflict", "passed: Reject PhaseLocked, refreshed D02"],
+      [
+        "stale-action-conflict",
+        "passed: Reject PhaseLocked, role URL true, refreshed D02",
+      ],
       [
         "stale-action-conflict-message",
-        "passed: Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
       ],
       [
         "stale-action-reconnect-recovery",
-        "passed: reconnecting -> recovered, phase D02",
+        "passed: role URL true, reconnecting -> recovered, phase D02",
       ],
       ["stale-host-control", "passed: Reject PhaseLocked, current D02"],
       ["concurrent-host-resolve-race", "passed: ack resolve, reject PhaseLocked"],
@@ -2991,6 +2997,8 @@ function proofRunFixture() {
       recoveredSnapshotContainsPost: true,
     },
     "stale-same-action-recovery": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer",
+      visitedRolePath: "/g/midsummer",
       rejectError: "ActionAlreadySubmitted",
       rejectMessage:
         "Reject ActionAlreadySubmitted: action already submitted; refresh and use current controls",
@@ -3008,6 +3016,8 @@ function proofRunFixture() {
       actionVisibleAfterRefresh: false,
     },
     "stale-action-conflict": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer",
+      visitedRolePath: "/g/midsummer",
       rejectError: "PhaseLocked",
       rejectMessage:
         "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
@@ -3016,11 +3026,15 @@ function proofRunFixture() {
       actionVisibleAfterRefresh: false,
     },
     "stale-action-conflict-message": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer",
+      visitedRolePath: "/g/midsummer",
       rejectError: "PhaseLocked",
       receiptStatusText:
         "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
     },
     "stale-action-reconnect-recovery": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer",
+      visitedRolePath: "/g/midsummer",
       reconnectingState: "reconnecting",
       recoveryState: "recovered",
       recoveredPhase: "D02",

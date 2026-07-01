@@ -6074,6 +6074,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane("stale-same-action-recovery", "Stale duplicate player action rejects and refreshes", {
+      roleUrl: hardening.staleSameActionRecovery?.sourceRoleUrl ?? null,
+      visitedRolePath: hardening.staleSameActionRecovery?.visitedRolePath ?? null,
       rejectError: hardening.staleSameActionRecovery?.reject?.error ?? null,
       rejectMessage: hardening.staleSameActionRecovery?.reject?.message ?? null,
       stalePhase: hardening.staleSameActionRecovery?.staleN01Phase?.phaseId ?? null,
@@ -6093,6 +6095,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleSameActionRecovery?.actionVisibleAfterRefresh ?? null,
       passed:
         hardening.staleSameActionRecovery?.status === "passed" &&
+        typeof hardening.staleSameActionRecovery?.sourceRoleUrl === "string" &&
+        hardening.staleSameActionRecovery.sourceRoleUrl.includes("/g/") &&
+        typeof hardening.staleSameActionRecovery?.visitedRolePath === "string" &&
+        hardening.staleSameActionRecovery.visitedRolePath.includes("/g/") &&
         hardening.staleSameActionRecovery?.reject?.state === "reject" &&
         hardening.staleSameActionRecovery?.reject?.error ===
           "ActionAlreadySubmitted" &&
@@ -6218,6 +6224,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true,
     }),
     lane("stale-action-conflict", "Stale player action rejects and refreshes command state", {
+      roleUrl: hardening.staleActionConflict?.sourceRoleUrl ?? null,
+      visitedRolePath: hardening.staleActionConflict?.visitedRolePath ?? null,
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,
       rejectMessage: hardening.staleActionConflict?.reject?.message ?? null,
       stalePhase: hardening.staleActionConflict?.staleN01Phase?.phaseId ?? null,
@@ -6234,6 +6242,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict?.actionVisibleAfterRefresh ?? null,
       passed:
         hardening.staleActionConflict?.status === "passed" &&
+        typeof hardening.staleActionConflict?.sourceRoleUrl === "string" &&
+        hardening.staleActionConflict.sourceRoleUrl.includes("/g/") &&
+        typeof hardening.staleActionConflict?.visitedRolePath === "string" &&
+        hardening.staleActionConflict.visitedRolePath.includes("/g/") &&
         hardening.staleActionConflict?.reject?.state === "reject" &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
         hardening.staleActionConflict?.reject?.serverEnvelope?.body?.kind ===
@@ -6303,6 +6315,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-action-conflict-message", "Stale player action conflict message is explicit", {
+      roleUrl: hardening.staleActionConflict?.sourceRoleUrl ?? null,
+      visitedRolePath: hardening.staleActionConflict?.visitedRolePath ?? null,
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,
       rejectMessage: hardening.staleActionConflict?.reject?.message ?? null,
       templateId: hardening.staleActionConflict?.actionConfig?.templateId ?? null,
@@ -6311,6 +6325,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
       receiptStatusText: hardening.staleActionConflict?.receiptStatusText ?? null,
       passed:
         hardening.staleActionConflict?.status === "passed" &&
+        typeof hardening.staleActionConflict?.sourceRoleUrl === "string" &&
+        hardening.staleActionConflict.sourceRoleUrl.includes("/g/") &&
+        typeof hardening.staleActionConflict?.visitedRolePath === "string" &&
+        hardening.staleActionConflict.visitedRolePath.includes("/g/") &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
         hardening.staleActionConflict?.reject?.message?.includes(
           "stale action state",
@@ -6341,6 +6359,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-action-reconnect-recovery", "Stale player action reconnect recovers current state", {
+      roleUrl: hardening.staleActionConflict?.sourceRoleUrl ?? null,
+      visitedRolePath: hardening.staleActionConflict?.visitedRolePath ?? null,
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,
       reconnectingState:
         hardening.staleActionConflict?.reconnectAfterReject?.reconnectingStatus?.state ??
@@ -6359,6 +6379,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.recoveredSnapshotContainsPost ?? null,
       passed:
         hardening.staleActionConflict?.status === "passed" &&
+        typeof hardening.staleActionConflict?.sourceRoleUrl === "string" &&
+        hardening.staleActionConflict.sourceRoleUrl.includes("/g/") &&
+        typeof hardening.staleActionConflict?.visitedRolePath === "string" &&
+        hardening.staleActionConflict.visitedRolePath.includes("/g/") &&
         hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
         hardening.staleActionConflict?.reconnectAfterReject?.status === "passed" &&
         hardening.staleActionConflict?.reconnectAfterReject?.reconnectingStatus

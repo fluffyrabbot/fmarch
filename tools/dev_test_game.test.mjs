@@ -5721,6 +5721,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       staleSameActionRecovery: {
         status: "passed",
+        sourceRoleUrl: "http://127.0.0.1:5173/g/midsummer",
+        visitedRolePath: "/g/midsummer",
         actionConfig: {
           templateId: "factional_kill",
         },
@@ -5817,6 +5819,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       staleActionConflict: {
         status: "passed",
+        sourceRoleUrl: "http://127.0.0.1:5173/g/midsummer",
+        visitedRolePath: "/g/midsummer",
         actionConfig: {
           templateId: "factional_kill",
         },

@@ -4490,6 +4490,8 @@ async function submitStaleSameActionRecovery({
   }
   return {
     status: "passed",
+    sourceRoleUrl: staleSameActionSetup.roleUrl,
+    visitedRolePath: staleSameActionSetup.visitedRolePath,
     staleN01Phase: staleSameActionSetup.staleN01Phase,
     actionConfig: staleSameActionSetup.actionConfig,
     closedStatus: staleSameActionSetup.closedStatus,
@@ -4632,6 +4634,8 @@ async function submitStaleActionConflict({
   }
   return {
     status: "passed",
+    sourceRoleUrl: staleActionSetup.roleUrl,
+    visitedRolePath: staleActionSetup.visitedRolePath,
     staleN01Phase: staleActionSetup.staleN01Phase,
     actionConfig: staleActionSetup.actionConfig,
     closedStatus: staleActionSetup.closedStatus,

@@ -90,11 +90,12 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
       id: "stale-action-conflict-message",
       status: "passed",
       evidence: {
+        roleUrl: "http://127.0.0.1:5173/g/game-id",
         receiptStatusText:
           "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
       },
     }),
-    "passed: Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
   );
   assert.equal(
     hardeningLaneStatus({
@@ -113,12 +114,13 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
       id: "stale-action-reconnect-recovery",
       status: "passed",
       evidence: {
+        roleUrl: "http://127.0.0.1:5173/g/game-id",
         reconnectingState: "reconnecting",
         recoveryState: "recovered",
         recoveredPhase: "D02",
       },
     }),
-    "passed: reconnecting -> recovered, phase D02",
+    "passed: role URL true, reconnecting -> recovered, phase D02",
   );
   assert.equal(
     hardeningLaneStatus({
@@ -259,6 +261,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         id: "stale-action-conflict-message",
         status: "passed",
         evidence: {
+          roleUrl: "http://127.0.0.1:5173/g/game-id",
           receiptStatusText:
             "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
         },
@@ -267,6 +270,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         id: "stale-action-reconnect-recovery",
         status: "passed",
         evidence: {
+          roleUrl: "http://127.0.0.1:5173/g/game-id",
           reconnectingState: "reconnecting",
           recoveryState: "recovered",
           recoveredPhase: "D02",
@@ -360,11 +364,11 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-conflict-message"],
-    "passed: Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-reconnect-recovery"],
-    "passed: reconnecting -> recovered, phase D02",
+    "passed: role URL true, reconnecting -> recovered, phase D02",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)[

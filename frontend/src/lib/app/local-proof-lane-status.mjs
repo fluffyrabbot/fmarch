@@ -95,15 +95,15 @@ export function hardeningLaneStatus(lane) {
     case "reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
     case "stale-same-action-recovery":
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
     case "stale-dead-action-conflict":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
     case "stale-action-conflict":
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
     case "stale-action-conflict-message":
-      return `${status}: ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
+      return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
     case "stale-action-reconnect-recovery":
-      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
+      return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
     case "stale-host-complete-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;
     case "stale-host-control":
