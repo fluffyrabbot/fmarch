@@ -518,17 +518,17 @@ const PLAYER_FIXTURE_COLD_LOAD = Object.freeze({
             alt: "Tablet-safe vote receipt",
             variants: Object.freeze({
               tablet: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-tablet.jpg",
+                url: "/media/midsummer/thread/receipt-442-tablet.png",
                 width: 960,
                 height: 720,
               }),
               small: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-small.jpg",
+                url: "/media/midsummer/thread/receipt-442-small.png",
                 width: 480,
                 height: 360,
               }),
               original: Object.freeze({
-                url: "/media/midsummer/thread/receipt-442-original.jpg",
+                url: "/media/midsummer/thread/receipt-442-original.png",
                 width: 4000,
                 height: 3000,
               }),

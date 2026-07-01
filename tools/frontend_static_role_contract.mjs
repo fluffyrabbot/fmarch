@@ -1515,17 +1515,17 @@ async function provePlayerSurface() {
   assert.equal(mediaPost.media.items[0].variant, "tablet");
   assert.equal(
     mediaPost.media.items[0].src,
-    "/media/midsummer/thread/receipt-442-tablet.jpg",
+    "/media/midsummer/thread/receipt-442-tablet.png",
   );
   assert.equal(
-    mediaPost.media.items[0].srcset.includes("/media/midsummer/thread/receipt-442-small.jpg"),
+    mediaPost.media.items[0].srcset.includes("/media/midsummer/thread/receipt-442-small.png"),
     true,
   );
   assert.equal(mediaPost.media.items[0].src.includes("original"), false);
   assert.equal(mediaPost.media.items[0].srcset.includes("original"), false);
   assert.equal(
     data.thread.posts[0].media[0].variants.original.url,
-    "/media/midsummer/thread/receipt-442-original.jpg",
+    "/media/midsummer/thread/receipt-442-original.png",
   );
   const originalOnlyMedia = buildPlayerThreadViewModel({
     posts: [
@@ -1556,6 +1556,8 @@ async function provePlayerSurface() {
     channelLabel: "Main thread",
     capabilityLabel: "SlotOccupant or ChannelMember(main)",
     slotId: "slot-7",
+    actorAlive: "unknown",
+    actorStatus: "",
     label: "Posting target",
     value: "Main thread as slot-7",
   });
@@ -1641,7 +1643,7 @@ async function provePlayerSurface() {
     },
   });
   assert.equal(privatePost.commandStatus.state, "ack");
-  assert.deepEqual(postRefreshed, [["thread", "votecount"]]);
+  assert.deepEqual(postRefreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
 
   const refreshed = [];
   const projectionStore = {

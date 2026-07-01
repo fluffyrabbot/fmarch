@@ -348,7 +348,7 @@ async function proveRenderedPlayerCommandReceipt(bundle) {
     actionId: "submit_vote",
     statusKey: "submit_vote",
     dispatchKind: "submit_vote",
-    refreshKeys: "votecount",
+    refreshKeys: "votecount,commandState",
   });
   return {
     role: "player",
@@ -1505,17 +1505,17 @@ async function proveRenderedPlayerSurface(bundle) {
   );
   assertIncludes(
     html,
-    'src="/media/midsummer/thread/receipt-442-tablet.jpg"',
+    'src="/media/midsummer/thread/receipt-442-tablet.png"',
     "player thread tablet image src",
   );
   assertIncludes(
     html,
-    "/media/midsummer/thread/receipt-442-small.jpg 480w",
+    "/media/midsummer/thread/receipt-442-small.png 480w",
     "player thread small image srcset",
   );
   assertExcludes(
     html,
-    "/media/midsummer/thread/receipt-442-original.jpg",
+    "/media/midsummer/thread/receipt-442-original.png",
     "player thread original image URL",
   );
 
@@ -1557,7 +1557,7 @@ async function proveRenderedPlayerSurface(bundle) {
       component: PLAYER_THREAD_MEDIA_CONTRACT.component,
       renderedTestId: "thread-post-media-receipt-442",
       renderedVariant: "tablet",
-      renderedSrc: "/media/midsummer/thread/receipt-442-tablet.jpg",
+      renderedSrc: "/media/midsummer/thread/receipt-442-tablet.png",
       originalUrlRendered: false,
       preferredVariants: PLAYER_THREAD_MEDIA_CONTRACT.preferredVariants,
       forbiddenVariants: PLAYER_THREAD_MEDIA_CONTRACT.forbiddenVariants,
@@ -1709,9 +1709,11 @@ async function proveRenderedModeratorSurface(bundle) {
   }
   for (const actionId of [
     "critical-host-action-extend_deadline",
+    "critical-host-action-resolve_phase",
     "critical-host-action-lock_thread",
-    "critical-host-action-advance_phase",
     "critical-host-action-publish_votecount",
+    "critical-host-action-process_replacement",
+    "critical-host-action-mark_dead",
     "critical-host-action-modkill_slot",
     "critical-host-action-complete_game",
     "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",
@@ -1761,9 +1763,11 @@ async function proveRenderedModeratorSurface(bundle) {
     ),
     criticalActionTestIds: [
       "critical-host-action-extend_deadline",
+      "critical-host-action-resolve_phase",
       "critical-host-action-lock_thread",
-      "critical-host-action-advance_phase",
       "critical-host-action-publish_votecount",
+      "critical-host-action-process_replacement",
+      "critical-host-action-mark_dead",
       "critical-host-action-modkill_slot",
       "critical-host-action-complete_game",
       "critical-host-action-resolve_host_prompt-D01-skip_next_day-slot_1",

@@ -73,11 +73,11 @@ test("player route data exposes thread, channel, votecount, and touch command la
   assert.equal(data.thread.posts[1].body, "##vote slot-2");
   assert.equal(
     data.thread.posts[0].media[0].variants.tablet.url,
-    "/media/midsummer/thread/receipt-442-tablet.jpg",
+    "/media/midsummer/thread/receipt-442-tablet.png",
   );
   assert.equal(
     data.thread.posts[0].media[0].variants.original.url,
-    "/media/midsummer/thread/receipt-442-original.jpg",
+    "/media/midsummer/thread/receipt-442-original.png",
   );
   assert.equal(data.composer.voteCommandLabel, "Vote slot-2");
   assert.deepEqual(data.composer.voteCommands, [
