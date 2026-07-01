@@ -182,6 +182,41 @@ export function seededCoreLoopPlayerSurfaceFixture({
   });
 }
 
+export function seededCoreLoopHostSurfaceFixture({
+  game,
+  setupResyncFromSeq,
+  setupPhaseId,
+  setupPhaseState,
+  setupSnapshotHost,
+  ...proofs
+}) {
+  const surface = {
+    status: "passed",
+    sourceRoleUrl: seededCoreLoopRoleUrl({ game, suffix: "/host" }),
+    visitedRolePath: seededCoreLoopRolePath({ game, suffix: "/host" }),
+    surfaceTestId: "host-console-surface",
+    clickedThroughFromRoleUrl: true,
+    ...proofs,
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+  if (setupResyncFromSeq !== undefined) {
+    surface.setupResyncFromSeq = setupResyncFromSeq;
+  }
+  if (setupSnapshotHost !== undefined) {
+    surface.setupSnapshotHost = setupSnapshotHost;
+  } else if (setupPhaseId !== undefined || setupPhaseState !== undefined) {
+    surface.setupSnapshotHost = {
+      phase: {
+        id: setupPhaseId,
+        state: setupPhaseState,
+      },
+    };
+  }
+  return surface;
+}
+
 export function seededCoreLoopRoleUrl({ game, suffix = "" }) {
   return `http://127.0.0.1:5173/g/${game}${suffix}`;
 }

@@ -36,6 +36,7 @@ import {
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
   hostPhaseTransitionActionFixture,
+  seededCoreLoopHostSurfaceFixture,
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
@@ -11020,12 +11021,8 @@ function dayThreeVoteResolutionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    hostResolutionProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostResolutionProof: seededCoreLoopHostSurfaceFixture({
+      game,
       resolveProof: {
         ...hostPhaseTransitionActionFixture({
           actionId: "resolve_phase",
@@ -11068,10 +11065,7 @@ function dayThreeVoteResolutionSurfaceFixture() {
         { phaseId: "D02", status: "Lynch" },
         { phaseId: "D03", status: "Lynch", winnerSlot: "slot-4" },
       ],
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     releaseReady: false,
     productionReady: false,
   };
@@ -11123,19 +11117,11 @@ function postDayThreeResolutionSurfaceFixture() {
         "Seeded browser action player stayed alive with no target-only D03 receipt after host resolved Day 3.",
       resyncFromSeq: 908,
     }),
-    hostAdvanceProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 908,
-      setupSnapshotHost: {
-        phase: {
-          id: "D03",
-          state: "locked",
-        },
-      },
+      setupPhaseId: "D03",
+      setupPhaseState: "locked",
       advanceProof: hostPhaseTransitionActionFixture({
         actionId: "advance_phase",
         commandKind: "AdvancePhase",
@@ -11148,10 +11134,7 @@ function postDayThreeResolutionSurfaceFixture() {
           game,
         },
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     actionPlayerNightThreeProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       slotField: "actionPlayerSlot",
@@ -11201,19 +11184,11 @@ function nightThreeEmptyResolutionSurfaceFixture() {
         "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
       resyncFromSeq: 909,
     }),
-    hostTransitionProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 909,
-      setupSnapshotHost: {
-        phase: {
-          id: "N03",
-          state: "open",
-        },
-      },
+      setupPhaseId: "N03",
+      setupPhaseState: "open",
       resolveProof: hostPhaseTransitionActionFixture({
         actionId: "resolve_phase",
         commandKind: "ResolvePhase",
@@ -11244,10 +11219,7 @@ function nightThreeEmptyResolutionSurfaceFixture() {
           game,
         },
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     actionPlayerDayFourProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       slotField: "actionPlayerSlot",
@@ -11375,19 +11347,11 @@ function nightFourActionSubmissionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    hostTransitionProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 912,
-      setupSnapshotHost: {
-        phase: {
-          id: "D04",
-          state: "open",
-        },
-      },
+      setupPhaseId: "D04",
+      setupPhaseState: "open",
       resolveProof: {
         ...hostPhaseTransitionActionFixture({
           actionId: "resolve_phase",
@@ -11426,10 +11390,7 @@ function nightFourActionSubmissionSurfaceFixture() {
           game,
         },
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     nightFourActionProof: {
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
@@ -11503,19 +11464,11 @@ function nightFourResolutionReceiptSurfaceFixture() {
     clickedThroughFromRoleUrl: true,
     transition:
       "host:N04:resolve_phase:ack:916 -> survivor:N04:factional_kill_receipt -> actionPlayer:N04:privacy",
-    hostResolutionProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostResolutionProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 915,
-      setupSnapshotHost: {
-        phase: {
-          id: "N04",
-          state: "open",
-        },
-      },
+      setupPhaseId: "N04",
+      setupPhaseState: "open",
       resolveProof: hostPhaseTransitionActionFixture({
         actionId: "resolve_phase",
         commandKind: "ResolvePhase",
@@ -11534,10 +11487,7 @@ function nightFourResolutionReceiptSurfaceFixture() {
           seed: 918273,
         },
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     survivorReceiptProof: nightFourResolutionPlayerSurfaceFixture({
       sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
       visitedRolePath: `/g/${game}?private=notification-1`,
@@ -11590,19 +11540,11 @@ function postNightFourTransitionSurfaceFixture() {
     clickedThroughFromRoleUrl: true,
     transition:
       "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
-    hostAdvanceProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 916,
-      setupSnapshotHost: {
-        phase: {
-          id: "N04",
-          state: "locked",
-        },
-      },
+      setupPhaseId: "N04",
+      setupPhaseState: "locked",
       advanceProof: hostPhaseTransitionActionFixture({
         actionId: "advance_phase",
         commandKind: "AdvancePhase",
@@ -11620,10 +11562,7 @@ function postNightFourTransitionSurfaceFixture() {
           { phaseId: "D04", status: "NoLynch" },
         ],
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     survivorDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       roleUrlSuffix: "?private=notification-1",
@@ -11811,19 +11750,11 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    hostTransitionProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 918,
-      setupSnapshotHost: {
-        phase: {
-          id: "D05",
-          state: "open",
-        },
-      },
+      setupPhaseId: "D05",
+      setupPhaseState: "open",
       resolveProof: {
         ...hostPhaseTransitionActionFixture({
           actionId: "resolve_phase",
@@ -11858,10 +11789,7 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
           game,
         },
       }),
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     actionPlayerNightFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       slotField: "actionPlayerSlot",
@@ -11967,13 +11895,11 @@ function completedGameEndgameSurfaceFixture() {
     ...completedRoleUrls,
     clickedThroughFromRoleUrl: true,
     transition: completedGameEndgameTransition(),
-    hostCompleteProof: {
-      status: "passed",
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      surfaceTestId: "host-console-surface",
-      clickedThroughFromRoleUrl: true,
+    hostCompleteProof: seededCoreLoopHostSurfaceFixture({
+      game,
       setupResyncFromSeq: 920,
+      setupPhaseId: "N05",
+      setupPhaseState: "open",
       setupSnapshotHost: {
         completed: false,
         phase: {
@@ -12009,10 +11935,7 @@ function completedGameEndgameSurfaceFixture() {
           ],
         },
       },
-      rawInviteTokensVisible: false,
-      releaseReady: false,
-      productionReady: false,
-    },
+    }),
     completedHostReloadProof: completedHostReloadProofFixture({
       sourceRoleUrl: `${baseRoleUrl}/host`,
       visitedRolePath: `/g/${game}/host`,

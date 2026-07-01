@@ -9,6 +9,7 @@ import {
 import {
   hostPhaseTransitionActionFixture,
   postDayThreePlayerSurfaceFixture,
+  seededCoreLoopHostSurfaceFixture,
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
@@ -314,6 +315,29 @@ test("core-loop proof fixture module derives seeded role URLs and endpoints", ()
     "/games/game-a/notifications?principal_user_id=player_sage",
   );
   assert.equal(proof.privateNotice.detailText, "Phase N04");
+});
+
+test("core-loop proof fixture module derives seeded host proof shells", () => {
+  const proof = seededCoreLoopHostSurfaceFixture({
+    game: "game-a",
+    setupResyncFromSeq: 920,
+    setupSnapshotHost: {
+      completed: false,
+      phase: { id: "N05", state: "open" },
+    },
+    completeProof: { id: "complete-game-proof" },
+  });
+
+  assert.equal(proof.sourceRoleUrl, "http://127.0.0.1:5173/g/game-a/host");
+  assert.equal(proof.visitedRolePath, "/g/game-a/host");
+  assert.equal(proof.surfaceTestId, "host-console-surface");
+  assert.equal(proof.setupResyncFromSeq, 920);
+  assert.deepEqual(proof.setupSnapshotHost, {
+    completed: false,
+    phase: { id: "N05", state: "open" },
+  });
+  assert.deepEqual(proof.completeProof, { id: "complete-game-proof" });
+  assert.equal(proof.rawInviteTokensVisible, false);
 });
 
 test("completed-game scenario module derives shared assertion cases", () => {
