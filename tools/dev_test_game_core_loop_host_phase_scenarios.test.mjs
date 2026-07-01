@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertHostPhaseTransitionActionProofCase,
+  assertHostStaleAdvanceAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 test("host phase transition ACK assertion covers resolve projection refresh", () => {
@@ -74,5 +75,68 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
         expectedRefreshKeys: ["host", "votecount"],
       }),
     /host resolve_phase transition ACK/,
+  );
+});
+
+test("host stale advance recovery assertion covers refreshed host controls", () => {
+  const proof = {
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    setupResyncFromSeq: 801,
+    setupSnapshotHost: {
+      phase: { id: "D02", state: "locked" },
+    },
+    clickedAction: "advance_phase",
+    commandKind: "AdvancePhase",
+    command: { game: "game-a" },
+    commandStatus: {
+      state: "reject",
+      error: "InvalidTarget",
+      message: "stale phase state, refresh and use current controls",
+    },
+    commandOutcome: {
+      state: "reject",
+      error: "InvalidTarget",
+      message: "stale phase state, refresh and use current controls",
+    },
+    bridgePlan: {
+      role: "moderator",
+      commandKind: "AdvancePhase",
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: ["host"],
+    },
+    projection: {
+      phase: { id: "N02", state: "open", locked: false },
+    },
+    checkpointPhaseIdAfterReject: "N02",
+    checkpointPhaseStateAfterReject: "open",
+    checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+    activityStatusText: "Reject InvalidTarget: invalid target",
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostStaleAdvanceAfterTransitionProofCase({
+      proof,
+      expectedGame: "game-a",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostStaleAdvanceAfterTransitionProofCase({
+        proof: {
+          ...proof,
+          bridgePlan: {
+            ...proof.bridgePlan,
+            projectionRefreshKeys: [],
+          },
+        },
+        expectedGame: "game-a",
+      }),
+    /host stale advance recovery after transition/,
   );
 });

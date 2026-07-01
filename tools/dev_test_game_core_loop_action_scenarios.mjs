@@ -178,6 +178,107 @@ export function assertPlayerInvalidActionRecoveryProofCase({
   }
 }
 
+export function assertPlayerStaleVoteAfterTransitionProofCase({
+  proof,
+  expectedGame,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== "submit_vote" ||
+    proof.commandKind !== "SubmitVote" ||
+    proof.setupResyncFromSeq !== 801 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D02" ||
+    proof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !== "slot-2" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.target?.Slot !== "slot-2" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "PhaseLocked" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "stale vote state, refresh and use current vote controls",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !proof.bridgePlan.projectionRefreshKeys?.includes("votecount") ||
+    !proof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    !proof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    proof.checkpointPhaseIdAfterReject !== "N02" ||
+    proof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    proof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("stale vote state")
+  ) {
+    throwActionScenarioAssertionError({
+      message:
+        "core-loop admin proof missing stale player vote recovery after transition",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertPlayerStaleActionAfterTransitionProofCase({
+  proof,
+  expectedGame,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== "submit_action:factional_kill" ||
+    proof.commandKind !== "SubmitAction" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.action_id !== "factional_kill" ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.command.template_id !== "factional_kill" ||
+    proof.command.targets?.[0] !== "slot-3" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "PhaseLocked" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "stale action state, refresh and use current action controls",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== "SubmitAction" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !proof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N02" ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "PhaseLocked recovery",
+    ) ||
+    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
+    proof.checkpointPhaseIdAfterReject !== "N02" ||
+    proof.checkpointActionStateAfterReject !==
+      "enabled:submit_action:factional_kill" ||
+    proof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+    !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
+    proof.receiptCount !== 2 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject phaselocked: phase locked")
+  ) {
+    throwActionScenarioAssertionError({
+      message:
+        "core-loop admin proof missing stale player action recovery after transition",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
 function throwActionScenarioAssertionError({
   message,
   evidence,

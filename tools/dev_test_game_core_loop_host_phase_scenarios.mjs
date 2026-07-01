@@ -43,6 +43,61 @@ export function assertHostPhaseTransitionActionProofCase({
   }
 }
 
+export function assertHostStaleAdvanceAfterTransitionProofCase({
+  proof,
+  expectedGame,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    typeof proof.sourceRoleUrl !== "string" ||
+    !proof.sourceRoleUrl.endsWith("/host") ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 801 ||
+    proof.setupSnapshotHost?.phase?.id !== "D02" ||
+    proof.setupSnapshotHost?.phase?.state !== "locked" ||
+    proof.clickedAction !== "advance_phase" ||
+    proof.commandKind !== "AdvancePhase" ||
+    proof.command?.game !== expectedGame ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "InvalidTarget" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    proof.commandOutcome?.state !== "reject" ||
+    proof.commandOutcome.error !== "InvalidTarget" ||
+    !String(proof.commandOutcome.message ?? "").includes(
+      "stale phase state, refresh and use current controls",
+    ) ||
+    proof.bridgePlan?.role !== "moderator" ||
+    proof.bridgePlan.commandKind !== "AdvancePhase" ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, ["host"]) ||
+    proof.projection?.phase?.id !== "N02" ||
+    proof.projection?.phase?.state !== "open" ||
+    proof.projection?.phase?.locked !== false ||
+    proof.checkpointPhaseIdAfterReject !== "N02" ||
+    proof.checkpointPhaseStateAfterReject !== "open" ||
+    proof.checkpointDeadlineAffordanceAfterReject !==
+      "resolve_phase,lock_thread" ||
+    !String(proof.activityStatusText ?? "")
+      .toLowerCase()
+      .includes("reject invalidtarget: invalid target")
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message:
+        "core-loop admin proof missing host stale advance recovery after transition",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
 function throwHostPhaseScenarioAssertionError({
   message,
   evidence,
