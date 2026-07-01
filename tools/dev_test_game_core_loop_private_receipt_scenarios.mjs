@@ -559,17 +559,43 @@ export function completedPrivateChannelReloadSnapshotAssertionCases({
   scenario = completedPrivateChannelReloadScenario(),
 }) {
   return [
-    {
-      label: "initial",
-      snapshot: proof?.initialSnapshot,
-      expectedBoundary: scenario.expectedBoundary,
-    },
-    {
-      label: "reloaded",
-      snapshot: proof?.reloadedSnapshot,
-      expectedBoundary: scenario.expectedBoundary,
-    },
+    completedPrivateChannelReloadInitialSnapshotCase({ proof, scenario }),
+    completedPrivateChannelReloadedSnapshotCase({ proof, scenario }),
   ];
+}
+
+export function completedPrivateChannelReloadInitialSnapshotCase({
+  proof,
+  scenario = completedPrivateChannelReloadScenario(),
+}) {
+  return completedPrivateChannelReloadSnapshotCase({
+    label: "initial",
+    snapshot: proof?.initialSnapshot,
+    scenario,
+  });
+}
+
+export function completedPrivateChannelReloadedSnapshotCase({
+  proof,
+  scenario = completedPrivateChannelReloadScenario(),
+}) {
+  return completedPrivateChannelReloadSnapshotCase({
+    label: "reloaded",
+    snapshot: proof?.reloadedSnapshot,
+    scenario,
+  });
+}
+
+export function completedPrivateChannelReloadSnapshotCase({
+  label,
+  snapshot,
+  scenario = completedPrivateChannelReloadScenario(),
+}) {
+  return {
+    label,
+    snapshot,
+    expectedBoundary: scenario.expectedBoundary,
+  };
 }
 
 export function staleCompletedPrivatePostSnapshotAssertionCases({
@@ -577,19 +603,47 @@ export function staleCompletedPrivatePostSnapshotAssertionCases({
   scenario = staleCompletedPrivatePostScenario(),
 }) {
   return [
-    {
-      label: "afterReject",
-      snapshot: proof?.snapshotAfterReject,
-      expectedBoundary: scenario.expectedBoundary,
-      rejectedBody: proof?.stalePrivatePostBody,
-    },
-    {
-      label: "afterReload",
-      snapshot: proof?.snapshotAfterReload,
-      expectedBoundary: scenario.expectedBoundary,
-      rejectedBody: proof?.stalePrivatePostBody,
-    },
+    staleCompletedPrivatePostAfterRejectSnapshotCase({ proof, scenario }),
+    staleCompletedPrivatePostAfterReloadSnapshotCase({ proof, scenario }),
   ];
+}
+
+export function staleCompletedPrivatePostAfterRejectSnapshotCase({
+  proof,
+  scenario = staleCompletedPrivatePostScenario(),
+}) {
+  return staleCompletedPrivatePostSnapshotCase({
+    label: "afterReject",
+    snapshot: proof?.snapshotAfterReject,
+    rejectedBody: proof?.stalePrivatePostBody,
+    scenario,
+  });
+}
+
+export function staleCompletedPrivatePostAfterReloadSnapshotCase({
+  proof,
+  scenario = staleCompletedPrivatePostScenario(),
+}) {
+  return staleCompletedPrivatePostSnapshotCase({
+    label: "afterReload",
+    snapshot: proof?.snapshotAfterReload,
+    rejectedBody: proof?.stalePrivatePostBody,
+    scenario,
+  });
+}
+
+export function staleCompletedPrivatePostSnapshotCase({
+  label,
+  snapshot,
+  rejectedBody,
+  scenario = staleCompletedPrivatePostScenario(),
+}) {
+  return {
+    label,
+    snapshot,
+    expectedBoundary: scenario.expectedBoundary,
+    rejectedBody,
+  };
 }
 
 export function assertCompletedPrivateChannelReloadProofCase({

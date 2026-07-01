@@ -7,17 +7,25 @@ import {
   assertPrivateChannelSubmitPostProofCase,
   assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
+  completedPrivateChannelReloadInitialSnapshotCase,
   completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadAssertionCase,
   completedPrivateChannelReloadProofArgs,
+  completedPrivateChannelReloadedSnapshotCase,
   completedPrivateChannelReloadScenario,
+  completedPrivateChannelReloadSnapshotAssertionCases,
+  completedPrivateChannelReloadSnapshotCase,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptScenario,
+  staleCompletedPrivatePostAfterRejectSnapshotCase,
+  staleCompletedPrivatePostAfterReloadSnapshotCase,
   staleCompletedPrivatePostAssertionCase,
   staleCompletedPrivatePostProofArgs,
+  staleCompletedPrivatePostSnapshotAssertionCases,
+  staleCompletedPrivatePostSnapshotCase,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -148,6 +156,64 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
   };
   const asserted = [];
   const assertProofFixture = () => {};
+  assert.deepEqual(
+    completedPrivateChannelReloadSnapshotAssertionCases({
+      proof: proof.reloadProof,
+      scenario: reloadScenario,
+    }),
+    [
+      completedPrivateChannelReloadInitialSnapshotCase({
+        proof: proof.reloadProof,
+        scenario: reloadScenario,
+      }),
+      completedPrivateChannelReloadedSnapshotCase({
+        proof: proof.reloadProof,
+        scenario: reloadScenario,
+      }),
+    ],
+  );
+  assert.deepEqual(
+    completedPrivateChannelReloadSnapshotCase({
+      label: "initial",
+      snapshot: completedPrivateReloadSnapshot,
+      scenario: reloadScenario,
+    }),
+    {
+      label: "initial",
+      snapshot: completedPrivateReloadSnapshot,
+      expectedBoundary: reloadScenario.expectedBoundary,
+    },
+  );
+  assert.deepEqual(
+    staleCompletedPrivatePostSnapshotAssertionCases({
+      proof: proof.staleCompletedPostRecoveryProof,
+      scenario: staleScenario,
+    }),
+    [
+      staleCompletedPrivatePostAfterRejectSnapshotCase({
+        proof: proof.staleCompletedPostRecoveryProof,
+        scenario: staleScenario,
+      }),
+      staleCompletedPrivatePostAfterReloadSnapshotCase({
+        proof: proof.staleCompletedPostRecoveryProof,
+        scenario: staleScenario,
+      }),
+    ],
+  );
+  assert.deepEqual(
+    staleCompletedPrivatePostSnapshotCase({
+      label: "afterReject",
+      snapshot: completedPrivateRejectSnapshot,
+      rejectedBody: staleScenario.stalePostBody,
+      scenario: staleScenario,
+    }),
+    {
+      label: "afterReject",
+      snapshot: completedPrivateRejectSnapshot,
+      expectedBoundary: staleScenario.expectedBoundary,
+      rejectedBody: staleScenario.stalePostBody,
+    },
+  );
   assert.deepEqual(
     completedPrivateChannelReloadProofArgs({
       sourceRoleUrl: proof.sourceRoleUrl,
