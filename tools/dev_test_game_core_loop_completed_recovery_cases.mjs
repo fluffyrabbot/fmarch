@@ -204,46 +204,55 @@ export const completedGameHardeningLaneCaseDefinitions = Object.freeze([
     id: "stale-host-complete",
     label: "Stale complete-game reveal rejects after live completion",
     family: "completed-host-stale-command",
+    seedGroup: "demo-only",
   }),
   Object.freeze({
     id: "stale-host-complete-reload",
     label: "Stale host complete recovery reloads revealed console",
     family: "completed-host-stale-command",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "stale-host-complete-reconnect-recovery",
     label: "Stale host complete recovery reconnects revealed console",
     family: "completed-host-stale-command",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "concurrent-host-complete-race",
     label: "Concurrent complete-game commands converge",
     family: "completed-host-race",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "concurrent-host-complete-race-reload",
     label: "Concurrent complete-game race reloads revealed host consoles",
     family: "completed-host-race",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "concurrent-player-complete-race",
     label: "Concurrent player command and completion converge",
     family: "completed-player-stale-command",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "public-player-complete-reload",
     label: "Public player board reloads completed game truth",
     family: "completed-player-reload",
+    seedGroup: "required",
   }),
   Object.freeze({
     id: "stale-player-complete",
     label: "Stale player command rejects after live completion",
     family: "completed-player-stale-command",
+    seedGroup: "demo-only",
   }),
   Object.freeze({
     id: "stale-player-complete-reload",
     label: "Stale public player complete recovery reloads completed board",
     family: "completed-player-reload",
+    seedGroup: "required",
   }),
 ]);
 
@@ -255,14 +264,85 @@ export function completedGameHardeningLaneIds() {
   return completedGameHardeningLaneCases().map((scenario) => scenario.id);
 }
 
-export function completedHostStaleCommandHardeningLaneIds() {
+export function completedGameHardeningLaneIdsFor({
+  families,
+  seedGroups,
+} = {}) {
+  const familySet =
+    families === undefined ? null : new Set([families].flat());
+  const seedGroupSet =
+    seedGroups === undefined ? null : new Set([seedGroups].flat());
   return completedGameHardeningLaneCases()
-    .filter((scenario) => scenario.family === "completed-host-stale-command")
+    .filter(
+      (scenario) =>
+        (familySet === null || familySet.has(scenario.family)) &&
+        (seedGroupSet === null || seedGroupSet.has(scenario.seedGroup)),
+    )
     .map((scenario) => scenario.id);
 }
 
+export function completedHostStaleCommandHardeningLaneIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-host-stale-command",
+  });
+}
+
+export function completedHostRaceHardeningLaneIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-host-race",
+  });
+}
+
+export function completedHostStaleCommandSeedRecoveryLaneIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-host-stale-command",
+    seedGroups: "required",
+  });
+}
+
+export function completedHostSeedDemoOnlyScenarioIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-host-stale-command",
+    seedGroups: "demo-only",
+  });
+}
+
+export function completedPlayerRecoveryLaneIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: [
+      "completed-player-stale-command",
+      "completed-player-reload",
+    ],
+  });
+}
+
 export function completedPlayerHardeningReloadLaneIds() {
-  return completedGameHardeningLaneCases()
-    .filter((scenario) => scenario.family === "completed-player-reload")
-    .map((scenario) => scenario.id);
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-player-reload",
+  });
+}
+
+export function completedPlayerSeedRequiredScenarioIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: [
+      "completed-player-stale-command",
+      "completed-player-reload",
+    ],
+    seedGroups: "required",
+  });
+}
+
+export function completedPlayerSeedDemoOnlyScenarioIds() {
+  return completedGameHardeningLaneIdsFor({
+    families: "completed-player-stale-command",
+    seedGroups: "demo-only",
+  });
+}
+
+export function completedGameSeedRequiredScenarioIds() {
+  return completedGameHardeningLaneIdsFor({ seedGroups: "required" });
+}
+
+export function completedGameSeedDemoOnlyScenarioIds() {
+  return completedGameHardeningLaneIdsFor({ seedGroups: "demo-only" });
 }

@@ -97,6 +97,19 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
   assert.deepEqual(seedScenarioCoverageGroups.demoOnly, seedDemoOnlyScenarioIds);
   assert.deepEqual(seedScenarioCoverageGroups.allDemo, seedDemoScenarioIds);
+  assert.deepEqual(seedScenarioCoverageGroups.completedGameRequired, [
+    "stale-host-complete-reload",
+    "stale-host-complete-reconnect-recovery",
+    "concurrent-host-complete-race",
+    "concurrent-host-complete-race-reload",
+    "concurrent-player-complete-race",
+    "public-player-complete-reload",
+    "stale-player-complete-reload",
+  ]);
+  assert.deepEqual(seedScenarioCoverageGroups.completedGameDemoOnly, [
+    "stale-host-complete",
+    "stale-player-complete",
+  ]);
   assert.equal(new Set(seedDemoScenarioIds).size, seedDemoScenarioIds.length);
   assert.deepEqual(seedDemoScenarioIds.slice(0, 6), [
     "host-phase-controls",

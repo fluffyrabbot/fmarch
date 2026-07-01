@@ -1,4 +1,13 @@
 import {
+  completedHostRaceHardeningLaneIds,
+  completedHostSeedDemoOnlyScenarioIds,
+  completedHostStaleCommandSeedRecoveryLaneIds,
+  completedPlayerSeedDemoOnlyScenarioIds,
+  completedPlayerSeedRequiredScenarioIds,
+  completedGameSeedDemoOnlyScenarioIds,
+  completedGameSeedRequiredScenarioIds,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   hostCohostRaceRecoveryLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 
@@ -36,14 +45,10 @@ export const seedRequiredScenarioIds = Object.freeze([
   ...hostCohostRaceRecoveryLaneIds.slice(0, 14),
   "concurrent-host-lifecycle-race",
   "concurrent-host-lifecycle-race-reload",
-  "concurrent-host-complete-race",
-  "concurrent-host-complete-race-reload",
+  ...completedHostRaceHardeningLaneIds(),
   "stale-host-prompt-reload",
-  "stale-host-complete-reload",
-  "stale-host-complete-reconnect-recovery",
-  "concurrent-player-complete-race",
-  "public-player-complete-reload",
-  "stale-player-complete-reload",
+  ...completedHostStaleCommandSeedRecoveryLaneIds(),
+  ...completedPlayerSeedRequiredScenarioIds(),
   ...hostCohostRaceRecoveryLaneIds.slice(14),
   "stale-same-action-recovery",
   "host-replacement-console",
@@ -93,7 +98,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-host-modkill",
   "stale-host-modkill-reload",
   "stale-host-prompt",
-  "stale-host-complete",
+  ...completedHostSeedDemoOnlyScenarioIds(),
   "stale-host-control",
   "stale-host-resolve",
   "stale-host-advance",
@@ -105,7 +110,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-player-withdraw-after-change",
   "stale-player-withdraw-after-phase-closure",
   "stale-player-vote-after-phase-closure",
-  "stale-player-complete",
+  ...completedPlayerSeedDemoOnlyScenarioIds(),
   "stale-dead-target-vote",
   "dead-current-vote",
   "concurrent-vote-race",
@@ -124,6 +129,12 @@ export const seedScenarioCoverageGroups = Object.freeze({
   required: seedRequiredScenarioIds,
   demoOnly: seedDemoOnlyScenarioIds,
   allDemo: seedDemoScenarioIds,
+  completedGameRequired: Object.freeze([
+    ...completedGameSeedRequiredScenarioIds(),
+  ]),
+  completedGameDemoOnly: Object.freeze([
+    ...completedGameSeedDemoOnlyScenarioIds(),
+  ]),
 });
 
 const seedScenarioRoleOverrides = new Map([

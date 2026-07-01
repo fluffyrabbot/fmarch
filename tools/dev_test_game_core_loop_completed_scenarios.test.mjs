@@ -30,19 +30,29 @@ import {
   completedGameEndgameProofScenarioCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
+  completedGameHardeningLaneIds,
+  completedGameHardeningLaneIdsFor,
+  completedGameSeedDemoOnlyScenarioIds,
+  completedGameSeedRequiredScenarioIds,
+  completedHostRaceHardeningLaneIds,
   completedHostReloadProofFixture,
   completedHostReloadSnapshotFixture,
+  completedHostSeedDemoOnlyScenarioIds,
   completedHostStaleCommandProofFixtures,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
   completedHostStaleCommandAssertionCases,
+  completedHostStaleCommandSeedRecoveryLaneIds,
   completedHostStaleCommandProofArgs,
+  completedPlayerRecoveryLaneIds,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
   completedPlayerReloadProofFixtures,
   completedPlayerReloadProofCases,
   completedPlayerReloadSnapshotsFixture,
+  completedPlayerSeedDemoOnlyScenarioIds,
+  completedPlayerSeedRequiredScenarioIds,
   staleCompletedPlayerCommandProofFixtures,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
@@ -123,6 +133,65 @@ test("completed-game scenario module groups shared recovery case families", () =
   assert.notEqual(
     scenarioFamilies.completedDeadPlayerStaleVoteCase,
     completedDeadPlayerStaleVoteCaseDefinition,
+  );
+});
+
+test("completed-game scenario module derives shared hardening lane groups", () => {
+  assert.deepEqual(completedGameHardeningLaneIds(), [
+    "stale-host-complete",
+    "stale-host-complete-reload",
+    "stale-host-complete-reconnect-recovery",
+    "concurrent-host-complete-race",
+    "concurrent-host-complete-race-reload",
+    "concurrent-player-complete-race",
+    "public-player-complete-reload",
+    "stale-player-complete",
+    "stale-player-complete-reload",
+  ]);
+  assert.deepEqual(completedHostRaceHardeningLaneIds(), [
+    "concurrent-host-complete-race",
+    "concurrent-host-complete-race-reload",
+  ]);
+  assert.deepEqual(completedHostStaleCommandSeedRecoveryLaneIds(), [
+    "stale-host-complete-reload",
+    "stale-host-complete-reconnect-recovery",
+  ]);
+  assert.deepEqual(completedHostSeedDemoOnlyScenarioIds(), [
+    "stale-host-complete",
+  ]);
+  assert.deepEqual(completedPlayerRecoveryLaneIds(), [
+    "concurrent-player-complete-race",
+    "public-player-complete-reload",
+    "stale-player-complete",
+    "stale-player-complete-reload",
+  ]);
+  assert.deepEqual(completedPlayerSeedRequiredScenarioIds(), [
+    "concurrent-player-complete-race",
+    "public-player-complete-reload",
+    "stale-player-complete-reload",
+  ]);
+  assert.deepEqual(completedPlayerSeedDemoOnlyScenarioIds(), [
+    "stale-player-complete",
+  ]);
+  assert.deepEqual(completedGameSeedRequiredScenarioIds(), [
+    "stale-host-complete-reload",
+    "stale-host-complete-reconnect-recovery",
+    "concurrent-host-complete-race",
+    "concurrent-host-complete-race-reload",
+    "concurrent-player-complete-race",
+    "public-player-complete-reload",
+    "stale-player-complete-reload",
+  ]);
+  assert.deepEqual(completedGameSeedDemoOnlyScenarioIds(), [
+    "stale-host-complete",
+    "stale-player-complete",
+  ]);
+  assert.deepEqual(
+    completedGameHardeningLaneIdsFor({
+      families: "completed-player-reload",
+      seedGroups: "required",
+    }),
+    ["public-player-complete-reload", "stale-player-complete-reload"],
   );
 });
 

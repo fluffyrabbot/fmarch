@@ -1,3 +1,7 @@
+import {
+  completedPlayerRecoveryLaneIds as completedGamePlayerRecoveryLaneIds,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+
 export const playerActionFoundationLaneIds = Object.freeze([
   "idempotent-retry",
   "action-idempotent-retry",
@@ -36,10 +40,7 @@ export const playerRecoveryRaceLaneIds = Object.freeze([
 ]);
 
 export const completedPlayerRecoveryLaneIds = Object.freeze([
-  "concurrent-player-complete-race",
-  "public-player-complete-reload",
-  "stale-player-complete",
-  "stale-player-complete-reload",
+  ...completedGamePlayerRecoveryLaneIds(),
 ]);
 
 export const playerActionConflictRecoveryLaneIds = Object.freeze([
